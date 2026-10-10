@@ -1,0 +1,19 @@
+pub mod audio;
+pub mod catalog;
+pub mod compat;
+pub mod effects;
+pub mod engine;
+pub mod legacy_mix;
+pub mod library;
+pub mod mixjam;
+pub mod packed;
+pub mod preservation;
+pub mod products;
+pub mod project_io;
+pub mod recording;
+pub mod sample_edit;
+pub mod synth;
+#[cfg(feature = "gui")]
+pub mod ui;
+#[cfg(feature = "gui")]
+mod ui_icons;

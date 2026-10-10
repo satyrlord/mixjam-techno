@@ -1,0 +1,42 @@
+# Tooling
+.impeccable/
+.toolchain/
+
+# Build artifacts
+/out/
+/target/
+
+# Runtime and local data
+.original-runtime/
+/local-data/
+
+# Temporary files
+/temp/
+/tmp/
+
+# Research notes, original-format tooling, and local agent instructions
+/AGENTS.md
+/PRODUCT.md
+/COMPATIBILITY.md
+/RECONSTRUCTION.md
+/docs/
+/examples/
+/tools/assets/inspect_assets.py
+/tools/migration/
+/tools/runtime/*
+!/tools/runtime/cargo.ps1
+!/tools/runtime/install-rust.ps1
+
+# Samples and evidence
+/evidence/
+/samples/
+
+# Private research crate and locally generated sample catalogs
+/crates/*
+!/crates/legacy-format/
+/assets/catalog/
+
+# Generated audio and Python cache
+*.wav
+__pycache__/
+*.pyc

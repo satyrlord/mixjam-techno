@@ -1,0 +1,334 @@
+{
+  "renderer": "resvg-py 0.3.1",
+  "pillow": "12.3.0",
+  "view_box": [
+    0,
+    0,
+    24,
+    24
+  ],
+  "stroke_width": 1.7,
+  "stroke_colour": "#05092a",
+  "icons": [
+    {
+      "name": "open",
+      "svg_sha256": "2b93b3520352bb032f27e56dc2728bfcd3b0f852b1123a71bc8fae2a5deeb195",
+      "png_sha256": "a602525ca4aea52f32198c43e3d5d74c775c8b65a5cdfeb65fb2a1a891c5e93f",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2503,
+      "opaque_pixels": 1896,
+      "transparent_pixels": 6713,
+      "alpha_bounds": [
+        8,
+        12,
+        88,
+        84
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "save",
+      "svg_sha256": "ba10be309639550b19ec0e6c4f92e541662cd2384b9ef5f9fe55955672ea1f23",
+      "png_sha256": "48a45c5b4c299582ebcf718c4d0cbd4fa7442c77d09511811e67db7dd50dcf2e",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2894,
+      "opaque_pixels": 2197,
+      "transparent_pixels": 6322,
+      "alpha_bounds": [
+        16,
+        12,
+        80,
+        84
+      ],
+      "preserved_path": "save"
+    },
+    {
+      "name": "save-as",
+      "svg_sha256": "20d1e34beb79fe61d0bb3b49f21d24c3efb414b70c72b65d81b201063c945ebd",
+      "png_sha256": "6cb4f2f161bb7c982157d4f782bba4cb5780d76a8eec4413cb1d7c47745bb526",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2962,
+      "opaque_pixels": 2287,
+      "transparent_pixels": 6254,
+      "alpha_bounds": [
+        16,
+        12,
+        92,
+        84
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "export",
+      "svg_sha256": "d6df00e7657aed46a8de29c8bf09bed7c5b323336548315fff821d049bb3fe57",
+      "png_sha256": "b88d475dd182353fa7ba69af797b1ae9556186fa49909d4f8f746c704f124520",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1534,
+      "opaque_pixels": 1142,
+      "transparent_pixels": 7682,
+      "alpha_bounds": [
+        16,
+        12,
+        80,
+        80
+      ],
+      "preserved_path": "export"
+    },
+    {
+      "name": "import",
+      "svg_sha256": "cd788d61ddffcbdd94dda0f2ca47ac333aa393c0ea29e8f79d7423f1d9c53979",
+      "png_sha256": "9ac4a1d83218aa9b62a2a2ee2982acdd475c81a8242be38a2f348a8dc715a19a",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1534,
+      "opaque_pixels": 1142,
+      "transparent_pixels": 7682,
+      "alpha_bounds": [
+        16,
+        12,
+        80,
+        80
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "libraries",
+      "svg_sha256": "e6f31e1c78f84fefa94e215c33c2c8a15cc0fd2153665011c5aebbf68ff52941",
+      "png_sha256": "1f5cc705bac5c99eafceb38405c398e23131337a2628eca69eb086bf87f5a900",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 3472,
+      "opaque_pixels": 2669,
+      "transparent_pixels": 5744,
+      "alpha_bounds": [
+        8,
+        12,
+        92,
+        84
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "new",
+      "svg_sha256": "22af76f5131fb148f729f76f98bb2e2f8cb48356d98d90b2744f9a62845ad0f3",
+      "png_sha256": "5c1f38f3a355d5c518598d57dbcdeed21020f4067492300ca358a307c6566e40",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2632,
+      "opaque_pixels": 1980,
+      "transparent_pixels": 6584,
+      "alpha_bounds": [
+        16,
+        8,
+        80,
+        88
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "mixer",
+      "svg_sha256": "fdc024b0ef995cabcc7133ee01d0d3722b87bfe52076993ca464e8ffea520c6b",
+      "png_sha256": "25fdd0e1c42de3fd3d86e34cfaba1bd05a0d02b88baf06484014240c7d48ffa4",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2040,
+      "opaque_pixels": 1476,
+      "transparent_pixels": 7176,
+      "alpha_bounds": [
+        12,
+        12,
+        84,
+        84
+      ],
+      "preserved_path": "mixer"
+    },
+    {
+      "name": "erase",
+      "svg_sha256": "14a5a436ff798e77bbc25b58fa986ef681e7ab9033f7ed6a3226c251f5bc7931",
+      "png_sha256": "a677f2c5a7db8f1e0fa01db7581f561b115c028f6358af01216784ea5778a899",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2306,
+      "opaque_pixels": 1765,
+      "transparent_pixels": 6910,
+      "alpha_bounds": [
+        8,
+        8,
+        88,
+        88
+      ],
+      "preserved_path": "erase"
+    },
+    {
+      "name": "delete",
+      "svg_sha256": "fb2421c776191974dce60cc3ff60a6b2bcfbcc5f60fadec2f959ba653cb024e4",
+      "png_sha256": "2b51bb5f6829d3bde6c2add8246287b5644620a5048543c8927b01dfa9c5b6fb",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2408,
+      "opaque_pixels": 1820,
+      "transparent_pixels": 6808,
+      "alpha_bounds": [
+        12,
+        12,
+        84,
+        84
+      ],
+      "preserved_path": "trash"
+    },
+    {
+      "name": "effects",
+      "svg_sha256": "452c2fcf73a5d342bffc39854af63a71f8697d1a37b5b267b41e616b52eca3a9",
+      "png_sha256": "24d26d8974bb0e41b18ff86dd15bd9007c89d7fa3d061cfee4c8fc3fcf0f3996",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1290,
+      "opaque_pixels": 971,
+      "transparent_pixels": 7926,
+      "alpha_bounds": [
+        8,
+        20,
+        88,
+        76
+      ],
+      "preserved_path": "inspector"
+    },
+    {
+      "name": "step-synth",
+      "svg_sha256": "7091905c8ec8284bec9b44000112132b05e232e5b960877c7f5a22f41cc454b5",
+      "png_sha256": "36668749cc784920ef3cc3416cdc6f27ab56fe8e89cfbe0829b8c816d8d7aa40",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1630,
+      "opaque_pixels": 1227,
+      "transparent_pixels": 7586,
+      "alpha_bounds": [
+        16,
+        8,
+        80,
+        88
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "edit",
+      "svg_sha256": "b7537b5d586dea705e2bd775a3031efbea0a66e7cc7e77f58e0869687ca7c1cc",
+      "png_sha256": "b855f910b68619fce902ba0a0f3d1952bdb2f7bbe418a2c420af2a821b060263",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2156,
+      "opaque_pixels": 1748,
+      "transparent_pixels": 7060,
+      "alpha_bounds": [
+        12,
+        8,
+        88,
+        84
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "stretch",
+      "svg_sha256": "b9102d0d34c605170760c09c7eb87a68e1f8133b978c89b84315a475462dd2eb",
+      "png_sha256": "c536515664dcb3ac8dd54829f10c10601301da8af78095de970763c24e9a993d",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2004,
+      "opaque_pixels": 1528,
+      "transparent_pixels": 7212,
+      "alpha_bounds": [
+        8,
+        20,
+        88,
+        76
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "record",
+      "svg_sha256": "7d43519d6d3e20175808b582ce56324af30c0765583554d9729d6b0a1f848019",
+      "png_sha256": "98c7aaa1f43aa70010001c9d5097dc5e1426564bb888e28d6d06b28b588c9367",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2006,
+      "opaque_pixels": 1493,
+      "transparent_pixels": 7210,
+      "alpha_bounds": [
+        20,
+        8,
+        76,
+        88
+      ],
+      "preserved_path": null
+    },
+    {
+      "name": "mix",
+      "svg_sha256": "aac271e1af5513cec281df8a51f260f9a48f7bc32126980a0f17303ca3bb36c5",
+      "png_sha256": "a06263a6f15fd235df23b6f88b4ba32729f3224dc7ef99a758f104f589b978d5",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2148,
+      "opaque_pixels": 1600,
+      "transparent_pixels": 7068,
+      "alpha_bounds": [
+        8,
+        4,
+        88,
+        92
+      ],
+      "preserved_path": null
+    }
+  ]
+}
