@@ -1,0 +1,88 @@
+{
+  "fonttools": "4.66.1",
+  "brotli": "1.2.0",
+  "source_package": "@fontsource-variable/space-grotesk@5.3.0",
+  "files": [
+    {
+      "file": "SpaceGrotesk-Regular-latin.ttf",
+      "weight": 400,
+      "subset": "latin",
+      "bytes": 31968,
+      "sha256": "88e5ec8c6191e3147e92617aeafab5051edf82f5f19735966f4a95caf1869420",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-wght-normal.woff2",
+      "source_sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+    },
+    {
+      "file": "SpaceGrotesk-Regular-latin-ext.ttf",
+      "weight": 400,
+      "subset": "latin-ext",
+      "bytes": 30400,
+      "sha256": "71d08333de06575ba0207e5e084cf064aba68b754101d3e38fcf88db303ec95c",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-ext-wght-normal.woff2",
+      "source_sha256": "952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166"
+    },
+    {
+      "file": "SpaceGrotesk-Regular-vietnamese.ttf",
+      "weight": 400,
+      "subset": "vietnamese",
+      "bytes": 11104,
+      "sha256": "b3dd0e2c41b23aef644f12edfe10bcd996f60b447739c09bb4b9ffb1a865e1f2",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-vietnamese-wght-normal.woff2",
+      "source_sha256": "8895e3d49825128bfa5238e4c96e9b432d7a3dadbe5c17c6081267398305dc71"
+    },
+    {
+      "file": "SpaceGrotesk-Medium-latin.ttf",
+      "weight": 500,
+      "subset": "latin",
+      "bytes": 31984,
+      "sha256": "f3b576e658783fca26ac6aca1bd1fec0be05c079ead45b764d57e6fcb9c4f7d4",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-wght-normal.woff2",
+      "source_sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+    },
+    {
+      "file": "SpaceGrotesk-Medium-latin-ext.ttf",
+      "weight": 500,
+      "subset": "latin-ext",
+      "bytes": 30404,
+      "sha256": "4d854f677756115165cfdc7b781b917ff25370b11fc532232aa696c1b4ccca0b",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-ext-wght-normal.woff2",
+      "source_sha256": "952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166"
+    },
+    {
+      "file": "SpaceGrotesk-Medium-vietnamese.ttf",
+      "weight": 500,
+      "subset": "vietnamese",
+      "bytes": 11100,
+      "sha256": "94121b37ee849c44a5e34158c987c6f4c9d3a489100a355c0d576df4230279d8",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-vietnamese-wght-normal.woff2",
+      "source_sha256": "8895e3d49825128bfa5238e4c96e9b432d7a3dadbe5c17c6081267398305dc71"
+    },
+    {
+      "file": "SpaceGrotesk-Bold-latin.ttf",
+      "weight": 700,
+      "subset": "latin",
+      "bytes": 31920,
+      "sha256": "2d57ba459d23338c010969c25606be8e28893be748da4bc625411d578e15a07f",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-wght-normal.woff2",
+      "source_sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+    },
+    {
+      "file": "SpaceGrotesk-Bold-latin-ext.ttf",
+      "weight": 700,
+      "subset": "latin-ext",
+      "bytes": 30372,
+      "sha256": "1de846291d8d3de7c811e6bb8476bfb28c578b5fff212a2ef493e2e4db03b900",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-latin-ext-wght-normal.woff2",
+      "source_sha256": "952dddb45d2f96f71cbf3b7f510b24379afc3c89ea02fcf89d377b45d62c0166"
+    },
+    {
+      "file": "SpaceGrotesk-Bold-vietnamese.ttf",
+      "weight": 700,
+      "subset": "vietnamese",
+      "bytes": 11076,
+      "sha256": "8fdb52914e72f61fad6b65a66712537c1e2b0406cad9091900567a9e781b9ef6",
+      "source": "assets/donors/ravefold/fonts/space-grotesk/files/space-grotesk-vietnamese-wght-normal.woff2",
+      "source_sha256": "8895e3d49825128bfa5238e4c96e9b432d7a3dadbe5c17c6081267398305dc71"
+    }
+  ]
+}

@@ -1,3 +1,8 @@
+#[cfg(feature = "gui")]
+mod ui;
+#[cfg(feature = "gui")]
+mod ui_icons;
+
 use mixjam_techno::{
     audio,
     engine::Project,
@@ -265,8 +270,10 @@ fn run() -> Result<(), String> {
                     "MixJam Techno",
                     options,
                     Box::new(move |cc| {
-                        let mut app =
-                            mixjam_techno::ui::MixJamApp::new(cc, Arc::new(library), project);
+                        let mut app = ui::MixJamApp::new(
+                            cc,
+                            mixjam_techno::application::Session::new(Arc::new(library), project)?,
+                        );
                         app.set_startup_messages(&startup_messages);
                         Ok(Box::new(app))
                     }),

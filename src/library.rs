@@ -50,7 +50,7 @@ enum AudioSource {
 }
 
 impl Library {
-    #[cfg(all(test, feature = "gui"))]
+    #[cfg(test)]
     pub(crate) fn fixture(samples: Vec<Sample>) -> Self {
         let by_id = samples
             .iter()
@@ -1057,7 +1057,7 @@ impl Library {
     }
 }
 
-#[cfg(all(test, feature = "gui"))]
+#[cfg(test)]
 fn samples_sources(samples: &[Sample]) -> HashMap<u32, AudioSource> {
     samples
         .iter()

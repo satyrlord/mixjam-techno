@@ -69,7 +69,7 @@ pub struct Recorder {
     sample_rate: u32,
 }
 impl Recorder {
-    #[cfg(all(test, feature = "gui"))]
+    #[cfg(test)]
     pub(crate) fn fixture() -> Self {
         Self {
             stream: None,

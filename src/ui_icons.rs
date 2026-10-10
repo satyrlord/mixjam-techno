@@ -98,11 +98,15 @@ impl RailIcons {
         let textures = RailIcon::ALL
             .into_iter()
             .map(|icon| {
-                let image = image::load_from_memory(icon.bytes())
+                let mut image = image::load_from_memory(icon.bytes())
                     .map_err(|error| {
                         format!("Cannot load the bundled {} icon: {error}", icon.label())
                     })?
                     .into_rgba8();
+                // Use the preserved artwork as an alpha mask. The view owns its color.
+                for pixel in image.pixels_mut() {
+                    pixel.0[..3].fill(255);
+                }
                 let size = [image.width() as usize, image.height() as usize];
                 Ok(ctx.load_texture(
                     format!("rail-{}", icon.label()),

@@ -4,6 +4,10 @@ A native Rust loop sequencer for Windows. Arrange WAV samples on up to 64 tracks
 at 120, 140, 160, or 180 BPM, mix them, and export stereo WAV. The editor also
 opens MixJam v7 `.mixjam` projects and several classic `.mix` song formats.
 
+The interface uses a dark graphite workspace and bundled Space Grotesk fonts.
+Transport sits above the arrangement. Sounds and Mixer share the lower panel;
+sample categories, search, and library filters stay together.
+
 ## Run
 
 Open `Start MixJam Techno.cmd`, or run from this folder:
@@ -69,7 +73,14 @@ the user PATH; `tools/runtime/cargo.ps1` runs that toolchain.
 ~~~powershell
 .\tools\runtime\cargo.ps1 build --release --locked
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --locked
+.\tools\runtime\cargo.ps1 test --workspace --all-targets --no-default-features --locked
+.\tools\runtime\cargo.ps1 -CargoArguments @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
+.\tools\runtime\cargo.ps1 fmt --all -- --check
 ~~~
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
+boundary. `tools/verify-ui.ps1` captures the built native interface at all three
+supported window sizes with isolated synthetic fixtures and settings.
 
 ## Headless commands
 

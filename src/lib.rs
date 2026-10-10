@@ -1,3 +1,4 @@
+pub mod application;
 pub mod audio;
 pub mod catalog;
 pub mod compat;
@@ -13,7 +14,13 @@ pub mod project_io;
 pub mod recording;
 pub mod sample_edit;
 pub mod synth;
-#[cfg(feature = "gui")]
-pub mod ui;
-#[cfg(feature = "gui")]
+
+#[cfg(all(test, feature = "gui"))]
+extern crate self as mixjam_techno;
+#[cfg(all(test, feature = "gui"))]
 mod ui_icons;
+#[cfg(all(test, feature = "gui"))]
+mod ui_test_harness {
+    include!("ui.rs");
+    include!("ui/tests.rs");
+}
