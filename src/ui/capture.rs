@@ -2,6 +2,18 @@
 use eframe::egui;
 use std::{io::Write, path::Path};
 
+/// Write a screenshot for an agent. Agents read PNG, not BMP.
+pub(super) fn write_png(path: &Path, image: &egui::ColorImage) -> Result<(), String> {
+    image::save_buffer(
+        path,
+        image.as_raw(),
+        image.width() as u32,
+        image.height() as u32,
+        image::ExtendedColorType::Rgba8,
+    )
+    .map_err(|error| format!("Cannot save the screenshot: {error}"))
+}
+
 pub(super) fn write_bmp(path: &Path, image: &egui::ColorImage) -> std::io::Result<()> {
     let width = image.width() as u32;
     let height = image.height() as u32;

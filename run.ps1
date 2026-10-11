@@ -3,7 +3,10 @@ param(
     [string]$Mix = '',
     [string]$Samples = '',
     [double]$SourceBpm = 140,
-    [switch]$Build
+    [switch]$Build,
+    # Let a local agent operate the window. See "Agent control" in README.md.
+    [switch]$Agent,
+    [int]$AgentPort = 0
 )
 $ErrorActionPreference = 'Stop'
 $executable = Join-Path $PSScriptRoot 'target\release\mixjam-techno.exe'
@@ -22,6 +25,7 @@ try {
     if ($App) { $arguments += @('--app',$App) }
     if ($Samples) { $arguments += @('--samples',$Samples,'--source-bpm',$SourceBpm.ToString([Globalization.CultureInfo]::InvariantCulture)) }
     if ($Mix) { $arguments += @('--mix',$Mix) }
+    if ($AgentPort) { $arguments += @('--agent-port',$AgentPort) } elseif ($Agent) { $arguments += '--agent' }
     & $executable @arguments
     if ($LASTEXITCODE -ne 0) { throw 'The application reported an error.' }
 } finally { Pop-Location }

@@ -4,7 +4,7 @@ mod ui;
 mod ui_icons;
 
 use mixjam_techno::{
-    audio,
+    agent, audio,
     engine::Project,
     legacy_mix,
     library::Library,
@@ -19,7 +19,10 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{e}");
+            // A failed agent request has already printed its reply.
+            if !e.is_empty() {
+                eprintln!("{e}");
+            }
             ExitCode::FAILURE
         }
     }
@@ -48,8 +51,24 @@ fn run() -> Result<(), String> {
     let mut command = "gui".to_string();
     let mut output = None;
     let mut additional_libraries = Vec::new();
+    let mut agent_port: Option<u16> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            // The rest of the line is a request for a running application.
+            "agent" => {
+                return match agent::run_client(&args.collect::<Vec<_>>())? {
+                    true => Ok(()),
+                    false => Err(String::new()),
+                };
+            }
+            "--agent" => agent_port = agent_port.or(Some(agent::DEFAULT_PORT)),
+            "--agent-port" => {
+                agent_port = Some(
+                    args.next()
+                        .and_then(|port| port.parse().ok())
+                        .ok_or("--agent-port needs a port number.")?,
+                );
+            }
             "--app" => {
                 app = Some(PathBuf::from(
                     args.next().ok_or("--app needs a provider path.")?,
@@ -91,7 +110,7 @@ fn run() -> Result<(), String> {
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
@@ -292,6 +311,14 @@ fn run() -> Result<(), String> {
                         }
                     })
                     .unwrap_or([1440.0, 1000.0]);
+                // Claim the port before the window opens, so that a port in
+                // use is a startup error.
+                let agent_server = agent_port
+                    .map(|port| agent::Server::start(port, &project_io::data_root()))
+                    .transpose()?;
+                if let Some(server) = &agent_server {
+                    println!("Agent control: 127.0.0.1:{}", server.port());
+                }
                 let options = eframe::NativeOptions {
                     viewport: eframe::egui::ViewportBuilder::default()
                         .with_icon(
@@ -325,6 +352,9 @@ fn run() -> Result<(), String> {
                             }
                         }
                         let mut app = ui::MixJamApp::new(cc, session);
+                        if let Some(server) = agent_server {
+                            app.attach_agent(server, &cc.egui_ctx);
+                        }
                         app.set_fallback_bpm(source_bpm);
                         app.set_startup_messages(&messages);
                         Ok(Box::new(app))
@@ -335,6 +365,7 @@ fn run() -> Result<(), String> {
             #[cfg(not(feature = "gui"))]
             {
                 let _ = (
+                    agent_port,
                     project,
                     library,
                     startup_messages,

@@ -4,6 +4,10 @@ use capture::write_bmp;
 #[path = "ui/view.rs"]
 mod view;
 use view::*;
+#[path = "ui/agent.rs"]
+mod agent;
+#[path = "ui/stretch.rs"]
+mod stretch;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -50,6 +54,79 @@ enum PendingAction {
     New,
     Open,
     Close,
+}
+
+/// What a chosen path is for. While an agent drives the application, the
+/// request waits in the Choose path modal instead of a native file dialog.
+enum FileRequest {
+    OpenSong,
+    SaveSong,
+    ExportMix,
+    ImportSound,
+    SaveSound {
+        pcm: Pcm,
+        name: String,
+        group: &'static str,
+        source_bpm: f64,
+    },
+    SaveTake,
+    SampleFolder,
+    ProviderFolder(Product),
+    SynthSource,
+    SavePattern,
+    LoadPattern,
+    ResolveMissing(u32),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum PathKind {
+    OpenFile,
+    SaveFile,
+    Folder,
+}
+
+/// How to ask for the path of a file request, natively or in the modal.
+struct PathSpec {
+    title: String,
+    kind: PathKind,
+    filter: Option<(&'static str, &'static [&'static str])>,
+    file_name: Option<String>,
+    folder: Option<PathBuf>,
+}
+
+impl PathSpec {
+    /// The path that a typed entry names, or why it cannot be used.
+    fn checked(&self, text: &str) -> Result<PathBuf, String> {
+        let mut path = PathBuf::from(text.trim().trim_matches('"'));
+        if !path.is_absolute() {
+            return Err("Enter a full path, such as C:\\Music\\song.mixjam.".into());
+        }
+        match self.kind {
+            PathKind::OpenFile if !path.is_file() => Err("That file does not exist.".into()),
+            PathKind::Folder if !path.is_dir() => Err("That folder does not exist.".into()),
+            PathKind::SaveFile if path.is_dir() => {
+                Err("That path is a folder. Add a file name.".into())
+            }
+            PathKind::SaveFile => {
+                // A native save dialog adds the extension of its filter.
+                if path.extension().is_none()
+                    && let Some((_, [extension, ..])) = self.filter
+                {
+                    path.set_extension(extension);
+                }
+                Ok(path)
+            }
+            PathKind::OpenFile | PathKind::Folder => Ok(path),
+        }
+    }
+}
+
+/// A file request that waits for a typed path.
+struct PathPrompt {
+    request: FileRequest,
+    text: String,
+    error: Option<String>,
+    focused: bool,
 }
 
 /// Native frontend. It owns view state and submits commands to the headless session.
@@ -122,6 +199,11 @@ pub struct MixJamApp {
     import_bpm: f64,
     /// The tempo for unrecognized WAVs in the next sample folder scan.
     fallback_bpm: f64,
+    /// The agent control channel, when the application was started with one.
+    agent: Option<agent::Driver>,
+    path_prompt: Option<PathPrompt>,
+    /// A typed path finished one save of the unsaved-changes modal.
+    resume_save_changes: bool,
 }
 
 /// The first status line: a startup notice, or the idle text.
@@ -319,6 +401,9 @@ impl MixJamApp {
             palette_cache: None,
             import_bpm: 140.0,
             fallback_bpm: 140.0,
+            agent: None,
+            path_prompt: None,
+            resume_save_changes: false,
         }
     }
 
@@ -462,15 +547,9 @@ impl MixJamApp {
     }
 
     fn resolve_missing_sample(&mut self, sample_id: u32) {
-        let Some(missing) = self.session.missing_sample(sample_id) else {
-            return;
-        };
-        let title = format!("Resolve missing sample: {}", missing.name);
-        let path = rfd::FileDialog::new()
-            .set_title(title_text(&title))
-            .add_filter("WAV audio", &["wav"])
-            .pick_file();
-        self.resolve_missing_sample_with(sample_id, path);
+        if self.session.missing_sample(sample_id).is_some() {
+            self.ask_path(FileRequest::ResolveMissing(sample_id));
+        }
     }
 
     /// A cancelled picker leaves the project unchanged. The application
@@ -497,31 +576,39 @@ impl MixJamApp {
         }
     }
 
+    fn try_place(&mut self, sample_id: u32, track: usize, tick: u32) -> Result<u64, String> {
+        let id = self.session.place(sample_id, track, tick)?;
+        self.selected_clip = Some(id);
+        self.selected_clips = [id].into_iter().collect();
+        self.sync_notice();
+        Ok(id)
+    }
+
     fn place(&mut self, sample_id: u32, track: usize, tick: u32) {
-        match self.session.place(sample_id, track, tick) {
-            Ok(id) => {
-                self.selected_clip = Some(id);
-                self.selected_clips = [id].into_iter().collect();
-                self.sync_notice();
-            }
-            Err(error) => self.error(error),
+        if let Err(error) = self.try_place(sample_id, track, tick) {
+            self.error(error);
         }
     }
 
-    fn open(&mut self) {
-        let folder = self
+    /// Move or copy clips and select the result.
+    fn try_move_clips(
+        &mut self,
+        ids: &[u64],
+        track_delta: i32,
+        tick_delta: i64,
+        copy: bool,
+    ) -> Result<Vec<u64>, String> {
+        let ids = self
             .session
-            .song_folder()
-            .unwrap_or_else(|| self.default_song_folder());
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Songs", &["mixjam", "mix", "json"])
-            .set_directory(folder)
-            .pick_file()
-        else {
-            return;
-        };
-        self.session.remember_song_folder(&path);
-        self.open_path(&path);
+            .move_clips(ids, track_delta, tick_delta, copy)?;
+        self.selected_clip = ids.first().copied();
+        self.selected_clips = ids.iter().copied().collect();
+        self.sync_notice();
+        Ok(ids)
+    }
+
+    fn open(&mut self) {
+        self.ask_path(FileRequest::OpenSong);
     }
 
     /// The mix folder of the sample library, until the user has chosen a song.
@@ -567,40 +654,21 @@ impl MixJamApp {
     }
 
     fn save(&mut self, choose_path: bool) {
-        let path = if choose_path || self.session.file().is_none() {
-            let mut dialog = rfd::FileDialog::new()
-                .add_filter("MixJam song", &["mixjam"])
-                .set_file_name(format!("{}.mixjam", self.session.project().title));
-            if let Some(folder) = self.session.song_folder() {
-                dialog = dialog.set_directory(folder);
-            }
-            let path = dialog.save_file();
-            if let Some(path) = &path {
-                self.session.remember_song_folder(path);
-            }
-            path
-        } else {
-            self.session.file().map(Path::to_path_buf)
-        };
-        let Some(path) = path else {
-            return;
-        };
-        match self.session.save(&path) {
+        match self.session.file().map(Path::to_path_buf) {
+            Some(path) if !choose_path => self.save_to(&path),
+            _ => self.ask_path(FileRequest::SaveSong),
+        }
+    }
+
+    fn save_to(&mut self, path: &Path) {
+        match self.session.save(path) {
             Ok(()) => self.message(format!("Saved {}.", path.display())),
             Err(error) => self.error(format!("Cannot save mix: {error}")),
         }
     }
 
     fn export(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Stereo WAV", &["wav"])
-            .set_file_name(format!("{}.wav", self.session.project().title))
-            .save_file()
-        else {
-            return;
-        };
-        let result = self.session.start_export(&path);
-        self.apply(result);
+        self.ask_path(FileRequest::ExportMix);
     }
 
     fn new_mix(&mut self) {
@@ -955,13 +1023,9 @@ impl MixJamApp {
                         let start = i64::from(anchor.start_tick);
                         let dragged = i64::from(pointer_tick) - i64::from(offset) - start;
                         let tick_delta = ((dragged + step / 2).div_euclid(step) * step).max(-start);
-                        match self.session.move_clips(&ids, track_delta, tick_delta, copy) {
-                            Ok(ids) => {
-                                self.selected_clip = ids.first().copied();
-                                self.selected_clips = ids.into_iter().collect();
-                                self.sync_notice();
-                            }
-                            Err(error) => self.error(error),
+                        if let Err(error) = self.try_move_clips(&ids, track_delta, tick_delta, copy)
+                        {
+                            self.error(error);
                         }
                     }
                 }
@@ -980,8 +1044,14 @@ impl MixJamApp {
     }
 
     fn dialogs(&mut self, ctx: &egui::Context) {
+        if std::mem::take(&mut self.resume_save_changes)
+            && let Some(action) = self.pending_action
+        {
+            self.save_changes(action, ctx);
+        }
         if let Some(action) = self.pending_action {
             egui::Modal::new(egui::Id::new("unsaved_changes")).show(ctx, |ui| {
+                name_dialog(ui, "Save your changes?");
                 ui.heading("SAVE YOUR CHANGES?");
                 ui.label(
                     if self.session.has_recorded_take() && self.session.unsaved() {
@@ -994,15 +1064,7 @@ impl MixJamApp {
                 );
                 ui.horizontal(|ui| {
                     if ui.button("Save changes").clicked() {
-                        if self.session.has_recorded_take() {
-                            self.save_recorded_take();
-                        }
-                        if !self.session.has_recorded_take() && self.session.unsaved() {
-                            self.save(false);
-                        }
-                        if !self.session.unsaved() && !self.session.has_recorded_take() {
-                            self.run_action(action, ctx);
-                        }
+                        self.save_changes(action, ctx);
                     }
                     if ui.button("Discard changes").clicked() {
                         self.run_action(action, ctx);
@@ -1064,6 +1126,7 @@ impl MixJamApp {
         let mut choice = None;
         let mut confirm = false;
         let response = egui::Modal::new(egui::Id::new("sample_conflicts")).show(ctx, |ui| {
+            name_dialog(ui, "Sample conflicts");
             ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 700.0));
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
             ui.heading(title_text("Sample conflicts"));
@@ -1243,36 +1306,17 @@ impl MixJamApp {
     }
 
     fn import_wav(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("WAV audio", &["wav"])
-            .pick_file()
-        else {
-            return;
-        };
-        self.import_path = Some(path);
-        self.import_bpm = 140.0;
+        self.ask_path(FileRequest::ImportSound);
     }
 
-    fn save_pcm(
-        &mut self,
-        pcm: &Pcm,
-        name: &str,
-        group: &str,
-        source_bpm: f64,
-    ) -> Result<Option<u32>, String> {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("WAV audio", &["wav"])
-            .set_file_name(format!("{name}.wav"))
-            .save_file()
-        else {
-            return Ok(None);
-        };
-        let id = self.session.save_pcm(pcm, &path, group, source_bpm)?;
-        self.group = Some(group.into());
-        self.palette_product = None;
-        self.selected_sample = Some(id);
-        self.message(format!("Saved {} and added it to {group}.", path.display()));
-        Ok(Some(id))
+    /// Ask where to save `pcm`, then add the saved WAV to `group`.
+    fn save_pcm(&mut self, pcm: Pcm, name: &str, group: &'static str, source_bpm: f64) {
+        self.ask_path(FileRequest::SaveSound {
+            pcm,
+            name: name.into(),
+            group,
+            source_bpm,
+        });
     }
 
     fn start_recording(&mut self) {
@@ -1281,29 +1325,308 @@ impl MixJamApp {
     }
 
     fn save_recorded_take(&mut self) {
-        if !self.session.has_recorded_take() {
-            return;
+        if self.session.has_recorded_take() {
+            self.ask_path(FileRequest::SaveTake);
         }
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("WAV audio", &["wav"])
-            .set_file_name("Recording.wav")
-            .save_file()
-        else {
-            self.message("Unsaved take: stored in memory. Save it before closing.");
+    }
+
+    fn path_spec(&self, request: &FileRequest) -> PathSpec {
+        use PathKind::{Folder, OpenFile, SaveFile};
+        type Filter = Option<(&'static str, &'static [&'static str])>;
+        const WAV: Filter = Some(("WAV audio", &["wav"]));
+        const PATTERN: Filter = Some(("Step synth pattern", &["json"]));
+        let song = &self.session.project().title;
+        let (title, kind, filter, file_name, folder): (String, _, Filter, _, _) = match request {
+            FileRequest::OpenSong => (
+                "Open song".into(),
+                OpenFile,
+                Some(("Songs", &["mixjam", "mix", "json"])),
+                None,
+                Some(
+                    self.session
+                        .song_folder()
+                        .unwrap_or_else(|| self.default_song_folder()),
+                ),
+            ),
+            FileRequest::SaveSong => (
+                "Save song".into(),
+                SaveFile,
+                Some(("MixJam song", &["mixjam"])),
+                Some(format!("{song}.mixjam")),
+                self.session.song_folder(),
+            ),
+            FileRequest::ExportMix => (
+                "Export mix".into(),
+                SaveFile,
+                Some(("Stereo WAV", &["wav"])),
+                Some(format!("{song}.wav")),
+                None,
+            ),
+            FileRequest::ImportSound => ("Import sound".into(), OpenFile, WAV, None, None),
+            FileRequest::SaveSound { name, .. } => (
+                "Save sound".into(),
+                SaveFile,
+                WAV,
+                Some(format!("{name}.wav")),
+                None,
+            ),
+            FileRequest::SaveTake => (
+                "Save recorded take".into(),
+                SaveFile,
+                WAV,
+                Some("Recording.wav".into()),
+                None,
+            ),
+            FileRequest::SampleFolder => ("Choose WAV folder".into(), Folder, None, None, None),
+            FileRequest::ProviderFolder(product) => (
+                format!("Choose {} folder", product.label()),
+                Folder,
+                None,
+                None,
+                None,
+            ),
+            FileRequest::SynthSource => (
+                "Choose source file".into(),
+                OpenFile,
+                Some(("Generator sound / WAV", &["\x70xd", "wav"])),
+                None,
+                Some(
+                    self.session
+                        .library()
+                        .wav_root()
+                        .or_else(|| self.session.library().source_root(Product::T2))
+                        .unwrap_or_else(|| Path::new("."))
+                        .to_path_buf(),
+                ),
+            ),
+            FileRequest::SavePattern => (
+                "Save pattern".into(),
+                SaveFile,
+                PATTERN,
+                Some("Step synth pattern.json".into()),
+                None,
+            ),
+            FileRequest::LoadPattern => ("Load pattern".into(), OpenFile, PATTERN, None, None),
+            FileRequest::ResolveMissing(id) => (
+                format!(
+                    "Resolve missing sample: {}",
+                    self.session
+                        .missing_sample(*id)
+                        .map_or("", |missing| missing.name.as_str())
+                ),
+                OpenFile,
+                WAV,
+                None,
+                None,
+            ),
+        };
+        PathSpec {
+            title,
+            kind,
+            filter,
+            file_name,
+            folder,
+        }
+    }
+
+    fn native_path(request: &FileRequest, spec: &PathSpec) -> Option<PathBuf> {
+        let mut dialog = rfd::FileDialog::new();
+        if matches!(request, FileRequest::ResolveMissing(_)) {
+            dialog = dialog.set_title(title_text(&spec.title));
+        }
+        if let Some((name, extensions)) = spec.filter {
+            dialog = dialog.add_filter(name, extensions);
+        }
+        if let Some(name) = &spec.file_name {
+            dialog = dialog.set_file_name(name);
+        }
+        if let Some(folder) = &spec.folder {
+            dialog = dialog.set_directory(folder);
+        }
+        match spec.kind {
+            PathKind::OpenFile => dialog.pick_file(),
+            PathKind::SaveFile => dialog.save_file(),
+            PathKind::Folder => dialog.pick_folder(),
+        }
+    }
+
+    /// Ask for the path of `request`, then carry the request out. An agent
+    /// cannot operate a native dialog, so its session types the path instead.
+    fn ask_path(&mut self, request: FileRequest) {
+        if self.agent.is_some() {
+            self.path_prompt = Some(PathPrompt {
+                request,
+                text: String::new(),
+                error: None,
+                focused: false,
+            });
+        } else {
+            let path = Self::native_path(&request, &self.path_spec(&request));
+            self.finish_path(request, path);
+        }
+    }
+
+    /// Carry out a file request with its chosen path. `None` is a cancelled choice.
+    fn finish_path(&mut self, request: FileRequest, path: Option<PathBuf>) {
+        let Some(path) = path else {
+            if matches!(request, FileRequest::SaveTake) {
+                self.message("Unsaved take: stored in memory. Save it before closing.");
+            }
             return;
         };
-        match self.session.save_recorded_take(&path) {
-            Ok(clip) => {
-                self.group = Some("Wave".into());
-                self.palette_product = None;
-                if let Some(id) = clip {
-                    self.select_clip(id, false);
-                    self.message(format!("Saved {}.", path.display()));
-                } else {
-                    self.sync_notice();
+        match request {
+            FileRequest::OpenSong => {
+                self.session.remember_song_folder(&path);
+                self.open_path(&path);
+            }
+            FileRequest::SaveSong => {
+                self.session.remember_song_folder(&path);
+                self.save_to(&path);
+            }
+            FileRequest::ExportMix => {
+                let result = self.session.start_export(&path);
+                self.apply(result);
+            }
+            FileRequest::ImportSound => {
+                self.import_path = Some(path);
+                self.import_bpm = 140.0;
+            }
+            FileRequest::SaveSound {
+                pcm,
+                group,
+                source_bpm,
+                ..
+            } => match self.session.save_pcm(&pcm, &path, group, source_bpm) {
+                Ok(id) => {
+                    self.group = Some(group.into());
+                    self.palette_product = None;
+                    self.selected_sample = Some(id);
+                    self.message(format!("Saved {} and added it to {group}.", path.display()));
+                }
+                Err(error) => self.error(error),
+            },
+            FileRequest::SaveTake => match self.session.save_recorded_take(&path) {
+                Ok(clip) => {
+                    self.group = Some("Wave".into());
+                    self.palette_product = None;
+                    if let Some(id) = clip {
+                        self.select_clip(id, false);
+                        self.message(format!("Saved {}.", path.display()));
+                    } else {
+                        self.sync_notice();
+                    }
+                }
+                Err(error) => self.error(error),
+            },
+            FileRequest::SampleFolder => self.select_wave_folder(&path),
+            FileRequest::ProviderFolder(product) => self.add_library(product, &path),
+            FileRequest::SynthSource => self.step_synth_file = Some(path),
+            FileRequest::SavePattern => match self.session.save_pattern(&path, &self.step_synth) {
+                Ok(()) => self.message("Saved Step synth pattern."),
+                Err(error) => self.error(error),
+            },
+            FileRequest::LoadPattern => match self.session.load_pattern(&path) {
+                Ok(state) => {
+                    self.step_synth = state;
+                    self.message("Loaded Step synth pattern.");
+                }
+                Err(error) => self.error(error),
+            },
+            FileRequest::ResolveMissing(id) => self.resolve_missing_sample_with(id, Some(path)),
+        }
+    }
+
+    /// Save what is unsaved, then run `action`. A cancelled or failed save
+    /// leaves the unsaved-changes modal open.
+    fn save_changes(&mut self, action: PendingAction, ctx: &egui::Context) {
+        if self.session.has_recorded_take() {
+            self.save_recorded_take();
+        }
+        // A typed path arrives in a later frame. `path_prompt_dialog` then resumes here.
+        if self.path_prompt.is_none() && !self.session.has_recorded_take() && self.session.unsaved()
+        {
+            self.save(false);
+        }
+        if self.path_prompt.is_none()
+            && !self.session.unsaved()
+            && !self.session.has_recorded_take()
+        {
+            self.run_action(action, ctx);
+        }
+    }
+
+    /// The file choice of an agent-driven session, in place of a native dialog.
+    fn path_prompt_dialog(&mut self, ctx: &egui::Context) {
+        let Some(mut prompt) = self.path_prompt.take() else {
+            return;
+        };
+        let spec = self.path_spec(&prompt.request);
+        let mut confirm = false;
+        let mut cancel = false;
+        let modal = egui::Modal::new(egui::Id::new("path_prompt")).show(ctx, |ui| {
+            name_dialog(ui, "Choose path");
+            ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 620.0));
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            ui.heading(title_text(&spec.title));
+            ui.label(match spec.kind {
+                PathKind::OpenFile => "Enter the full path of the file to open.",
+                PathKind::SaveFile => {
+                    "Enter the full path of the file to save. An existing file is replaced."
+                }
+                PathKind::Folder => "Enter the full path of the folder.",
+            });
+            if let Some((name, extensions)) = spec.filter {
+                let extensions: Vec<_> = extensions
+                    .iter()
+                    .map(|extension| format!(".{extension}"))
+                    .collect();
+                ui.label(
+                    egui::RichText::new(format!("{name}: {}", extensions.join(", "))).color(MUTED),
+                );
+            }
+            if let Some(name) = &spec.file_name {
+                ui.label(egui::RichText::new(format!("Suggested name: {name}")).color(MUTED));
+            }
+            let path = name_control(
+                ui.add(
+                    egui::TextEdit::singleline(&mut prompt.text)
+                        .hint_text("Path")
+                        .desired_width(f32::INFINITY),
+                ),
+                "Path",
+            );
+            if !prompt.focused {
+                path.request_focus();
+                prompt.focused = true;
+            }
+            confirm = path.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if let Some(error) = &prompt.error {
+                ui.colored_label(CORAL, error);
+            }
+            ui.horizontal(|ui| {
+                confirm |= ui.button("Confirm path").clicked();
+                cancel = ui.button("Cancel").clicked();
+            });
+        });
+        if confirm {
+            match spec.checked(&prompt.text) {
+                Ok(path) => {
+                    let saves = matches!(
+                        prompt.request,
+                        FileRequest::SaveSong | FileRequest::SaveTake
+                    );
+                    self.finish_path(prompt.request, Some(path));
+                    self.resume_save_changes = saves && self.pending_action.is_some();
+                }
+                Err(error) => {
+                    prompt.error = Some(error);
+                    self.path_prompt = Some(prompt);
                 }
             }
-            Err(error) => self.error(error),
+        } else if cancel || modal.should_close() {
+            self.finish_path(prompt.request, None);
+        } else {
+            self.path_prompt = Some(prompt);
         }
     }
 
@@ -1320,7 +1643,10 @@ impl MixJamApp {
                     let scan = self.session.wave_scan();
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
-                        ui.add(egui::DragValue::new(&mut self.fallback_bpm).range(1.0..=999.0))
+                        name_control(
+                            ui.add(egui::DragValue::new(&mut self.fallback_bpm).range(1.0..=999.0)),
+                            "Fallback BPM",
+                        )
                             .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
                         if ui
                             .add_enabled(
@@ -1333,9 +1659,8 @@ impl MixJamApp {
                                 "Stop recording before you change the sample folder."
                             })
                             .clicked()
-                            && let Some(path) = rfd::FileDialog::new().pick_folder()
                         {
-                            self.select_wave_folder(&path);
+                            self.ask_path(FileRequest::SampleFolder);
                         }
                     });
                     if let Some(scan) = &scan {
@@ -1384,7 +1709,7 @@ impl MixJamApp {
                     egui::CollapsingHeader::new("Optional product providers")
                         .default_open(self.capture_view_is("library-providers")).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        egui::ComboBox::from_id_salt("library_product")
+                        let products = egui::ComboBox::from_id_salt("library_product")
                             .selected_text(self.library_product.label())
                             .show_ui(ui, |ui| {
                                 for product in Product::ALL {
@@ -1394,11 +1719,11 @@ impl MixJamApp {
                                         product.label(),
                                     );
                                 }
-                            });
-                        if ui.button("Choose folder").clicked()
-                            && let Some(path) = rfd::FileDialog::new().pick_folder()
-                        {
-                            self.add_library(self.library_product, &path);
+                            })
+                            .response;
+                        name_control(products, "Provider product");
+                        if ui.button("Choose folder").clicked() {
+                            self.ask_path(FileRequest::ProviderFolder(self.library_product));
                         }
                     });
                     ui.separator();
@@ -1482,13 +1807,17 @@ impl MixJamApp {
         }
         if let Some(path) = self.import_path.clone() {
             egui::Modal::new(egui::Id::new("import_sound")).show(ctx, |ui| {
+                name_dialog(ui, "Import sound");
                 ui.heading("IMPORT SOUND");
                 ui.label(path.file_name().unwrap_or_default().to_string_lossy())
                     .on_hover_text(display_paths(&path.to_string_lossy()));
                 ui.horizontal(|ui| {
                     ui.label("Source BPM");
-                    ui.add(egui::DragValue::new(&mut self.import_bpm).range(7.5..=1200.0))
-                        .on_hover_text("The sound's original tempo, separate from project BPM.");
+                    name_control(
+                        ui.add(egui::DragValue::new(&mut self.import_bpm).range(7.5..=1200.0)),
+                        "Source BPM",
+                    )
+                    .on_hover_text("The sound's original tempo, separate from project BPM.");
                 });
                 ui.horizontal(|ui| {
                     if ui.button("Import into Wave").clicked() {
@@ -1534,11 +1863,7 @@ impl MixJamApp {
                             match result {
                                 Ok(pcm) => {
                                     let name = format!("{} - effect", self.source_name());
-                                    if let Err(error) =
-                                        self.save_pcm(&pcm, &name, "Effect", self.source_bpm())
-                                    {
-                                        self.error(error);
-                                    }
+                                    self.save_pcm(pcm, &name, "Effect", self.source_bpm());
                                 }
                                 Err(error) => self.error(error),
                             }
@@ -1572,19 +1897,8 @@ impl MixJamApp {
                             ))
                             .strong(),
                         );
-                        if ui.button("Choose source file").clicked()
-                            && let Some(path) = rfd::FileDialog::new()
-                                .add_filter("Generator sound / WAV", &["\x70xd", "wav"])
-                                .set_directory(
-                                    self.session
-                                        .library()
-                                        .wav_root()
-                                        .or_else(|| self.session.library().source_root(Product::T2))
-                                        .unwrap_or_else(|| Path::new(".")),
-                                )
-                                .pick_file()
-                        {
-                            self.step_synth_file = Some(path);
+                        if ui.button("Choose source file").clicked() {
+                            self.ask_path(FileRequest::SynthSource);
                         }
                         if ui.button("Use palette sound").clicked() {
                             self.step_synth_file = None;
@@ -1618,7 +1932,10 @@ impl MixJamApp {
                         ui.checkbox(&mut self.step_synth.cut_sixteenth, "1/16 cut");
                         ui.checkbox(&mut self.step_synth.loop_source, "Loop source");
                         ui.label("BPM");
-                        bpm_picker(ui, "step_synth_bpm", &mut self.step_synth.bpm);
+                        name_control(
+                            bpm_picker(ui, "step_synth_bpm", &mut self.step_synth.bpm),
+                            "Step synth BPM",
+                        );
                         if ui.button("Clear bar").clicked() {
                             self.step_synth.steps
                                 [self.step_synth_bar * 16..self.step_synth_bar * 16 + 16]
@@ -1697,16 +2014,12 @@ impl MixJamApp {
                             .clicked()
                         {
                             match self.step_synth_pcm() {
-                                Ok(pcm) => {
-                                    if let Err(error) = self.save_pcm(
-                                        &pcm,
-                                        "Step synth sequence",
-                                        "Step synth",
-                                        self.step_synth.bpm,
-                                    ) {
-                                        self.error(error);
-                                    }
-                                }
+                                Ok(pcm) => self.save_pcm(
+                                    pcm,
+                                    "Step synth sequence",
+                                    "Step synth",
+                                    self.step_synth.bpm,
+                                ),
                                 Err(error) => self.error(error),
                             }
                         }
@@ -1714,28 +2027,11 @@ impl MixJamApp {
                             .button("Save pattern")
                             .on_hover_text("Save the editable pattern as JSON.")
                             .clicked()
-                            && let Some(path) = rfd::FileDialog::new()
-                                .add_filter("Step synth pattern", &["json"])
-                                .set_file_name("Step synth pattern.json")
-                                .save_file()
                         {
-                            match self.session.save_pattern(&path, &self.step_synth) {
-                                Ok(()) => self.message("Saved Step synth pattern."),
-                                Err(error) => self.error(error),
-                            }
+                            self.ask_path(FileRequest::SavePattern);
                         }
-                        if ui.button("Load pattern").clicked()
-                            && let Some(path) = rfd::FileDialog::new()
-                                .add_filter("Step synth pattern", &["json"])
-                                .pick_file()
-                        {
-                            match self.session.load_pattern(&path) {
-                                Ok(state) => {
-                                    self.step_synth = state;
-                                    self.message("Loaded Step synth pattern.");
-                                }
-                                Err(error) => self.error(error),
-                            }
+                        if ui.button("Load pattern").clicked() {
+                            self.ask_path(FileRequest::LoadPattern);
                         }
                     });
                     if self.capture_path.is_some() && self.step_synth_effects_expanded {
@@ -1773,16 +2069,22 @@ impl MixJamApp {
                     }
                     ui.horizontal(|ui| {
                         ui.label("Start frame");
-                        ui.add(
-                            egui::DragValue::new(&mut self.edit_start)
-                                .range(0..=frames.saturating_sub(1))
-                                .speed(100),
+                        name_control(
+                            ui.add(
+                                egui::DragValue::new(&mut self.edit_start)
+                                    .range(0..=frames.saturating_sub(1))
+                                    .speed(100),
+                            ),
+                            "Start frame",
                         );
                         ui.label("End frame");
-                        ui.add(
-                            egui::DragValue::new(&mut self.edit_end)
-                                .range(1..=frames.max(1))
-                                .speed(100),
+                        name_control(
+                            ui.add(
+                                egui::DragValue::new(&mut self.edit_end)
+                                    .range(1..=frames.max(1))
+                                    .speed(100),
+                            ),
+                            "End frame",
                         );
                     });
                     ui.add(
@@ -1801,11 +2103,7 @@ impl MixJamApp {
                             match self.edited_pcm() {
                                 Ok(pcm) => {
                                     let name = format!("{} - edit", self.source_name());
-                                    if let Err(error) =
-                                        self.save_pcm(&pcm, &name, "Wave", self.source_bpm())
-                                    {
-                                        self.error(error);
-                                    }
+                                    self.save_pcm(pcm, &name, "Wave", self.source_bpm());
                                 }
                                 Err(error) => self.error(error),
                             }
@@ -1815,47 +2113,45 @@ impl MixJamApp {
             self.show_sample_edit = open;
         }
         if self.show_stretch {
-            let mut open = true;
-            titled_window("Time Stretcher")
-                .open(&mut open)
-                .default_width(470.0)
-                .show(ctx, |ui| {
-                    ui.label(egui::RichText::new(self.source_name()).strong());
-                    if self.show_missing_source(ui) {
-                        return;
+            let source = self.source_id();
+            let source_name = self.source_name();
+            let missing = source.is_some_and(|id| self.session.missing_sample(id).is_some());
+            match stretch::show(
+                ctx,
+                &mut self.show_stretch,
+                stretch::Source {
+                    name: &source_name,
+                    id: source,
+                    samples: self.session.library().samples,
+                    missing,
+                },
+                &mut self.stretch_source_bpm,
+                &mut self.stretch_target_bpm,
+            ) {
+                Ok(action) => match action {
+                    stretch::Action::Select(id) => {
+                        self.selected_sample = Some(id);
+                        self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
                     }
-                    ui.horizontal(|ui| {
-                        ui.label("Original BPM");
-                        ui.add(
-                            egui::DragValue::new(&mut self.stretch_source_bpm).range(30.0..=300.0),
-                        );
-                        ui.label("Target BPM");
-                        bpm_picker(ui, "stretch_bpm", &mut self.stretch_target_bpm);
-                    });
-                    ui.small("Pitch preservation is approximate.");
-                    ui.horizontal(|ui| {
-                        if ui.button("Listen stretch").clicked() {
-                            match self.stretched_pcm() {
-                                Ok(pcm) => self.play_pcm(pcm, "Listening to the stretched sound."),
-                                Err(error) => self.error(error),
-                            }
+                    stretch::Action::Listen => match self.stretched_pcm() {
+                        Ok(pcm) => self.play_pcm(pcm, "Listening to the stretched sound."),
+                        Err(error) => self.error(error),
+                    },
+                    stretch::Action::Save => match self.stretched_pcm() {
+                        Ok(pcm) => {
+                            let name = format!("{} - stretch", self.source_name());
+                            self.save_pcm(pcm, &name, "Wave", self.stretch_target_bpm);
                         }
-                        if ui.button("Save stretched sound").clicked() {
-                            match self.stretched_pcm() {
-                                Ok(pcm) => {
-                                    let name = format!("{} - stretch", self.source_name());
-                                    if let Err(error) =
-                                        self.save_pcm(&pcm, &name, "Wave", self.stretch_target_bpm)
-                                    {
-                                        self.error(error);
-                                    }
-                                }
-                                Err(error) => self.error(error),
-                            }
-                        }
-                    });
-                });
-            self.show_stretch = open;
+                        Err(error) => self.error(error),
+                    },
+                    stretch::Action::Details => self.show_import_details = true,
+                    stretch::Action::None => {}
+                },
+                Err(error) => {
+                    self.show_stretch = false;
+                    self.error(error);
+                }
+            }
         }
         if (self.session.has_recorded_take() && !self.session.is_recording())
             || self.capture_view_is("recorded-take")
@@ -1940,5 +2236,9 @@ fn with_import_summary(text: String, project: &Project) -> String {
 impl eframe::App for MixJamApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.draw(ctx);
+    }
+
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.agent_frame(ctx, raw_input);
     }
 }

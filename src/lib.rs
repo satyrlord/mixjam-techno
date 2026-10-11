@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod application;
 mod atomic_file;
 pub mod audio;

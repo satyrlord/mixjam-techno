@@ -41,6 +41,135 @@ mod tests {
     }
 
     #[test]
+    fn stretch_hover_does_not_change_tempo_and_wheel_input_changes_it_once() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for label in ["Original BPM knob", "Target BPM knob"] {
+            let bounds = accessible_node(&output, label).1.bounds().unwrap();
+            let position = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0);
+            let before = (app.stretch_source_bpm, app.stretch_target_bpm);
+            for _ in 0..12 {
+                output = frame(&ctx, &mut app, vec![egui::Event::PointerMoved(position)], egui::Modifiers::NONE);
+                assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), before, "Hovering {label} must not change its value.");
+            }
+            frame(&ctx, &mut app, vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: Vec2::new(0.0, 20.0),
+                modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE);
+            let expected = if label == "Original BPM knob" { (141.0, 140.0) } else { (141.0, 160.0) };
+            assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), expected);
+            for _ in 0..20 {
+                output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), expected, "A wheel event must not keep changing {label} on later frames.");
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_opens_with_source_tempo_and_accepts_accessible_adjustments() {
+        let (ctx, mut app) = fixture();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.source_bpm = 160.0;
+        app.session = Session::headless(Arc::new(Library::fixture(vec![sample])), app.session.project().clone()).unwrap();
+        app.selected_sample = Some(1);
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Stretch").1.bounds().unwrap();
+        click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0), egui::Modifiers::NONE);
+        assert!(app.show_stretch);
+        assert_eq!(app.stretch_source_bpm, 160.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (node_id, node) = accessible_node(&output, "Target BPM knob");
+        assert_eq!(node.min_numeric_value(), Some(120.0));
+        assert_eq!(node.max_numeric_value(), Some(180.0));
+        frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::SetValue,
+            target: node_id,
+            data: Some(egui::accesskit::ActionData::NumericValue(155.0)),
+        })], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_target_bpm, 160.0);
+        frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Decrement,
+            target: node_id,
+            data: None,
+        })], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_target_bpm, 140.0);
+    }
+
+    #[test]
+    fn stretch_artwork_uses_one_texel_per_physical_pixel_at_all_prepared_densities() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            app.show_stretch = true;
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let panel = output.shapes.iter().find_map(|shape| {
+                if let egui::Shape::Mesh(mesh) = &shape.shape {
+                    let rect = mesh.calc_bounds();
+                    if (rect.width() - 640.0).abs() < 0.1 && (rect.height() - 320.0).abs() < 0.1 { return Some(rect); }
+                }
+                None
+            }).expect("The compact panel must retain its logical size.");
+            assert!((panel.left() * density - (panel.left() * density).round()).abs() < 0.001);
+            assert!((panel.top() * density - (panel.top() * density).round()).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn stretch_rotaries_accept_keyboard_input_and_keep_supported_target_tempos() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Original BPM knob");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_source_bpm, 141.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Target BPM knob");
+        let focused_knob = ctx.memory(|memory| memory.focused());
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowRight, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_target_bpm, 160.0);
+        assert_eq!(ctx.memory(|memory| memory.focused()), focused_knob, "Arrow keys must keep focus on the target knob.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::End, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_target_bpm, 180.0);
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(!app.show_stretch);
+    }
+
+    #[test]
+    fn stretch_actions_fit_supported_windows_and_require_an_available_source() {
+        for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0), Vec2::new(1440.0, 1000.0)] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.show_stretch = true;
+            app.selected_sample = Some(1);
+            for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            for text in ["TIME STRETCHER", "Original BPM", "Target BPM", "Listen stretch", "Save stretched sound", "Pitch preservation is approximate."] {
+                let text_bounds = text_rect(&output, text);
+                assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(text_bounds), "{text} outside {size:?}: {text_bounds:?}");
+            }
+            for label in ["Listen stretch", "Save stretched sound"] {
+                assert!(!accessible_node(&output, label).1.is_disabled());
+            }
+            app.selected_sample = None;
+            app.selected_clip = None;
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            for label in ["Listen stretch", "Save stretched sound"] {
+                assert!(accessible_node(&output, label).1.is_disabled());
+            }
+        }
+    }
+
+    #[test]
     fn app_version_stays_at_the_bottom_right_with_long_status_and_notices() {
         let (context, mut app) = fixture();
         let mut project = app.session.project().clone();
@@ -2512,5 +2641,270 @@ mod tests {
         app.poll_application(&context);
         assert_eq!(app.status, status);
         std::fs::remove_file(path).unwrap();
+    }
+
+    fn agent_fixture() -> (egui::Context, MixJamApp, (u16, String)) {
+        let (context, mut app) = fixture();
+        let folder = std::env::temp_dir().join(format!("mixjam-ui-agent-key-{}", std::process::id()));
+        let server = crate::agent::Server::start(0, &folder).unwrap();
+        let port = (server.port(), server.key().to_string());
+        app.attach_agent(server, &context);
+        (context, app, port)
+    }
+
+    /// Send one request through the control channel, as the `agent` command
+    /// does, and run frames until the window has replied.
+    fn agent(context: &egui::Context, app: &mut MixJamApp, port: &(u16, String), words: &[&str]) -> serde_json::Value {
+        let words: Vec<String> = words.iter().map(|word| (*word).to_string()).collect();
+        let (port, key) = port.clone();
+        let client = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            crate::agent::send(port, &key, [crate::agent::request_line(&words)], &mut output).unwrap();
+            String::from_utf8(output).unwrap()
+        });
+        let started = std::time::Instant::now();
+        while !client.is_finished() {
+            assert!(started.elapsed() < Duration::from_secs(60), "The window did not reply.");
+            let mut input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                ..Default::default()
+            };
+            app.agent_frame(context, &mut input);
+            let _ = context.run(input, |ctx| app.draw(ctx));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        serde_json::from_str(&client.join().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+
+        let reply = send(&mut app, &["ui"]);
+        let nodes = reply["nodes"].as_array().unwrap();
+        for (label, role) in [
+            ("Play / pause (Space)", "button"),
+            ("Project BPM", "combo_box"),
+            ("Zoom", "slider"),
+            ("Find a sound", "text_input"),
+            ("Library filter", "combo_box"),
+            ("Category filter", "combo_box"),
+            ("Recording track", "combo_box"),
+            ("Record on track 1", "radio"),
+            ("Arrangement lanes", "other"),
+            ("Bar ruler", "other"),
+            ("good grasp 2", "button"),
+        ] {
+            assert!(nodes.iter().any(|node| node["label"] == label && node["role"] == role), "Missing {role} {label}");
+        }
+        assert!(nodes.iter().all(|node| node["role"] != "label" && node["enabled"] == true));
+        let reply = send(&mut app, &["ui", "all=true", "contains=ui fixture"]);
+        assert!(reply["nodes"].as_array().unwrap().iter().any(|node| node["role"] == "label" && node["label"] == "UI fixture"), "{reply}");
+
+        let reply = send(&mut app, &["click", "target=Effects"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.show_effects);
+        assert_eq!(reply["windows"], serde_json::json!(["Effect Studio"]));
+        let reply = send(&mut app, &["set", "target=Filter", "value=true", "window=Effect Studio"]);
+        assert_eq!(reply["control"]["checked"], true, "{reply}");
+        assert!(app.effects.filter.is_some());
+        let reply = send(&mut app, &["set", "target=Cutoff", "value=1000"]);
+        assert_eq!(reply["control"]["number"], 1000.0, "{reply}");
+        assert_eq!(app.effects.filter.as_ref().unwrap().cutoff_hz, 1000.0);
+        let reply = send(&mut app, &["set", "target=Filter", "value=false"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.effects.filter.is_none());
+
+        let reply = send(&mut app, &["set", "target=Project BPM", "value=160"]);
+        assert_eq!(reply["control"]["text"], "160", "{reply}");
+        assert_eq!(app.session.project().bpm, 160.0);
+        assert!(!egui::Popup::is_any_open(&context));
+        let reply = send(&mut app, &["set", "target=Project BPM", "value=150"]);
+        assert_eq!(reply["ok"], false);
+        assert!(reply["error"].as_str().unwrap().contains("120, 140, 160, 180"), "{reply}");
+        assert!(!egui::Popup::is_any_open(&context));
+        assert_eq!(app.session.project().bpm, 160.0);
+
+        // The Sounds panel has its own names for its Mixer and Step synth buttons.
+        let reply = send(&mut app, &["click", "target=Step synth"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.show_step_synth && app.group.is_none());
+        send(&mut app, &["click", "target=Show Step synth sounds"]);
+        assert_eq!(app.group.as_deref(), Some("Step synth"));
+        send(&mut app, &["click", "target=Show All sounds"]);
+        let reply = send(&mut app, &["set", "target=Mixer", "value=true"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.show_mixer);
+        // A name that several controls contain needs a selector.
+        let reply = send(&mut app, &["click", "target=gain"]);
+        assert!(reply["error"].as_str().unwrap().contains("index="), "{reply}");
+        // A choice can be named by its distinct word.
+        send(&mut app, &["select", "sample=1"]);
+        send(&mut app, &["click", "target=Stretch"]);
+        let reply = send(&mut app, &["set", "target=Target BPM", "value=180"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.stretch_target_bpm, 180.0);
+        let reply = send(&mut app, &["ui", "window=Time Stretcher"]);
+        assert!(reply["nodes"].as_array().unwrap().iter().any(|node| node["label"] == "Source sound"), "{reply}");
+        send(&mut app, &["click", "target=Close Time Stretcher"]);
+        let reply = send(&mut app, &["set", "target=Track 1 gain", "value=0.5"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.session.project().tracks[0].gain, 0.5);
+        send(&mut app, &["click", "target=Undo"]);
+        assert_eq!(app.session.project().tracks[0].gain, Project::default().tracks[0].gain);
+
+        send(&mut app, &["click", "target=Sounds"]);
+        let reply = send(&mut app, &["set", "target=Find a sound", "value=grasp"]);
+        assert_eq!(reply["control"]["text"], "grasp", "{reply}");
+        assert_eq!(app.search, "grasp");
+        send(&mut app, &["set", "target=Find a sound", "value="]);
+        assert_eq!(app.search, "");
+
+        let reply = send(&mut app, &["click", "target=No such control"]);
+        assert_eq!(reply["ok"], false);
+        let reply = send(&mut app, &["key", "key=Escape"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+    }
+
+    #[test]
+    fn agent_arranges_clips_by_command_and_by_pointer() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+
+        let reply = send(&mut app, &["samples", "search=GRASP"]);
+        assert_eq!(reply["total"], 1, "{reply}");
+        assert_eq!(reply["samples"][0]["id"], 1);
+        let reply = send(&mut app, &["place", "sample=good grasp 2", "track=3", "bar=5"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let placed = reply["clips"][0].as_u64().unwrap();
+        let clip = app.session.project().clips.iter().find(|clip| clip.id == placed).unwrap();
+        assert_eq!((clip.track, clip.start_tick), (2, 4 * TICKS_PER_BAR));
+        assert_eq!(app.selected_clips, [placed].into_iter().collect());
+        for words in [
+            &["place", "sample=1", "track=0", "bar=1"][..],
+            &["place", "sample=1", "track=65", "bar=1"],
+            &["place", "sample=nothing", "track=1", "bar=1"],
+            &["place", "sample=1", "track=3", "bar=5"],
+            &["delete_clips", "clips=[999]"],
+            &["select", "clips=[999]"],
+        ] {
+            let reply = send(&mut app, words);
+            assert_eq!(reply["ok"], false, "{words:?}: {reply}");
+        }
+        let count = app.session.project().clips.len();
+        let reply = send(&mut app, &["move_clips", &format!("clips=[{placed}]"), "tracks=1", "bars=2", "copy=true"]);
+        let copy = reply["clips"][0].as_u64().unwrap();
+        assert_ne!(copy, placed);
+        let clip = app.session.project().clips.iter().find(|clip| clip.id == copy).unwrap();
+        assert_eq!((clip.track, clip.start_tick), (3, 6 * TICKS_PER_BAR));
+        let reply = send(&mut app, &["delete_clips", &format!("clips=[{copy}]")]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.session.project().clips.len(), count);
+
+        send(&mut app, &["seek", "bar=3"]);
+        assert_eq!(app.session.cursor_tick(), 2 * TICKS_PER_BAR);
+        send(&mut app, &["set_loop", "first_bar=2", "last_bar=3"]);
+        assert_eq!(app.session.project().loop_region, Some([TICKS_PER_BAR, 3 * TICKS_PER_BAR]));
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["loop_bars"], serde_json::json!([2, 3]));
+        send(&mut app, &["set_loop"]);
+        assert_eq!(app.session.project().loop_region, None);
+
+        // The state gives each clip's place in the window for pointer input.
+        send(&mut app, &["select"]);
+        assert!(app.selected_clips.is_empty() && app.selected_sample.is_none());
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["tracks"].as_array().unwrap().len(), 3);
+        assert_eq!(state["arrangement"]["tracks"], serde_json::json!([1, 2, 3, 4]));
+        let second = state["song"]["clips"].as_array().unwrap().iter().find(|clip| clip["track"] == 2).unwrap();
+        let rect: Vec<f32> = second["rect"].as_array().unwrap().iter().map(|value| value.as_f64().unwrap() as f32).collect();
+        let (x, y) = (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
+        let reply = send(&mut app, &["pointer", "action=click", &format!("x={x}"), &format!("y={y}")]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let id = second["id"].as_u64().unwrap();
+        assert_eq!(app.selected_clips, [id].into_iter().collect());
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["selection"], serde_json::json!({"sample": 1, "clips": [id]}));
+        // Dragging the clip to the Add row and two bars right moves it, as a person's drag does.
+        let bar_width = state["arrangement"]["bar_width"].as_f64().unwrap() as f32;
+        let row_height = state["arrangement"]["row_height"].as_f64().unwrap() as f32;
+        let reply = send(&mut app, &[
+            "pointer", "action=drag", &format!("x={x}"), &format!("y={y}"),
+            &format!("to_x={}", x + 2.0 * bar_width), &format!("to_y={}", y + 2.0 * row_height),
+        ]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let clip = app.session.project().clips.iter().find(|clip| clip.id == id).unwrap();
+        assert_eq!((clip.track, clip.start_tick), (3, 3 * TICKS_PER_BAR));
+        let reply = send(&mut app, &["pointer", "action=click", "x=-5", "y=10"]);
+        assert_eq!(reply["ok"], false);
+    }
+
+    #[test]
+    fn agent_types_file_paths_in_the_choose_path_modal_and_resumes_a_pending_save() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-agent-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let reply = send(&mut app, &["click", "target=Export"]);
+        assert_eq!(reply["modal"], "Choose path", "{reply}");
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["path_prompt"]["kind"], "save_file");
+        assert_eq!(state["path_prompt"]["extensions"], serde_json::json!(["wav"]));
+        let reply = send(&mut app, &["click", "target=Undo"]);
+        assert!(reply["error"].as_str().unwrap().contains("Choose path modal"), "{reply}");
+        let reply = send(&mut app, &["click", "target=Cancel"]);
+        assert_eq!(reply["modal"], serde_json::Value::Null, "{reply}");
+        assert!(!app.session.is_exporting());
+
+        // An edit, then New: the unsaved-changes modal saves through a typed path.
+        send(&mut app, &["place", "sample=1", "track=5", "bar=1"]);
+        let reply = send(&mut app, &["click", "target=New"]);
+        assert_eq!(reply["modal"], "Save your changes?", "{reply}");
+        let reply = send(&mut app, &["click", "target=Save changes"]);
+        assert_eq!(reply["modal"], "Choose path", "{reply}");
+        send(&mut app, &["set", "target=Path", "value=song"]);
+        let reply = send(&mut app, &["click", "target=Confirm path"]);
+        assert_eq!(reply["modal"], "Choose path", "A relative path must be refused: {reply}");
+        let reply = send(&mut app, &["ui", "all=true", "contains=full path"]);
+        assert!(reply["nodes"].as_array().unwrap().len() >= 2, "{reply}");
+        // The extension of the file type is added, as a native dialog adds it.
+        let song = dir.join("agent song");
+        let reply = send(&mut app, &["set", "target=Path", &format!("value={}", song.display())]);
+        assert_eq!(reply["control"]["text"], song.display().to_string(), "{reply}");
+        let reply = send(&mut app, &["click", "target=Confirm path"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let song = dir.join("agent song.mixjam");
+        assert!(song.is_file(), "{reply}");
+        let reply = send(&mut app, &["state"]);
+        assert_eq!(reply["modal"], serde_json::Value::Null, "{reply}");
+        assert_eq!(reply["status"]["text"], "New mix.");
+        assert!(app.session.project().clips.is_empty());
+
+        let reply = send(&mut app, &["click", "target=Open"]);
+        assert_eq!(reply["modal"], "Choose path", "{reply}");
+        send(&mut app, &["set", "target=Path", &format!("value={}", song.display())]);
+        send(&mut app, &["key", "key=Enter"]);
+        assert_eq!(app.session.file(), Some(song.as_path()));
+        assert_eq!(app.session.project().clips.len(), 3);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agent_quit_asks_about_unsaved_work_and_replies_before_the_window_closes() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        send(&mut app, &["place", "sample=1", "track=5", "bar=1"]);
+        let reply = send(&mut app, &["quit"]);
+        assert_eq!(reply["modal"], "Save your changes?", "{reply}");
+        assert!(reply.get("closing").is_none() && !app.allow_close);
+        // Controls behind the modal stay out of reach, as they are for a pointer.
+        let reply = send(&mut app, &["click", "target=Undo"]);
+        assert!(reply["error"].as_str().unwrap().contains("Save your changes? modal"), "{reply}");
+        assert!(app.session.unsaved());
+        let reply = send(&mut app, &["click", "target=Discard changes"]);
+        assert_eq!(reply["closing"], true, "{reply}");
+        assert!(app.allow_close);
     }
 }

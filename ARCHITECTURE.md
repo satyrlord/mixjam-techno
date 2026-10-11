@@ -6,7 +6,8 @@ window, file-dialog, or screenshot dependency.
 
 ```text
 Native views and input                  Headless application
-src/ui/view.rs + src/ui.rs               src/application.rs
+src/ui/view.rs + src/ui/stretch.rs       src/application.rs
+             + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
         | typed edits and service calls         | Library and project files
@@ -73,6 +74,13 @@ snap their bounds to the pixel grid and do not resize them.
 Sample-processing forms hold drafts until the user requests playback or saving.
 The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
+`src/ui/stretch.rs` owns Time Stretcher's hardware-panel presentation and native
+control responses. Its prepared skin lives in `assets/stretch/{100,150,200}/`.
+Text, values, knob pointers, and interaction feedback remain native painting.
+`src/ui.rs` adapts its source selections, Listen, Save, and Import details
+requests to existing application operations; the panel does not render audio or
+write files. Opening it from the tool rail initializes the original BPM draft
+from the selected sample's source tempo.
 
 Missing audio is explicit project state. The renderer leaves those placements
 silent. The frontend reads the retained source metadata and sends a chosen WAV
@@ -102,9 +110,51 @@ new probes change it. `source_tempo.rs` resolves folder tempo from matching
 original audio before the duration-based fallback is used. Optional supplemental
 tempo identities are embedded at build time, like the native identity catalogs.
 
+## Agent control
+
+`gui --agent` lets a local program operate the window. The channel has two parts
+on the two sides of the application boundary.
+
+`src/agent.rs` is backend code without GUI dependencies. It defines the typed
+requests and replies, encodes them as JSON lines, serves them on the loopback
+interface, and contains the `agent` command-line client. It queues each request
+for the frontend and wakes it. It does not interpret a request. Each session
+has a new key in `agent-PORT.key` in the data folder, which only the user can
+read. A connection that does not start with the key, or that sends a malformed
+line, is closed. A request from another user, or one that another program was
+tricked into sending, such as an HTTP form post, never reaches the queue. A request that the
+window does not take within 30 seconds fails and can no longer run.
+
+`src/ui/agent.rs` is the frontend driver. `eframe` calls it before each frame.
+It reads the controls from the accessibility tree that egui produced for the
+previous frame, and it acts through that frame's input: an accessibility action
+for a named control, or pointer and keyboard events for a position. A request
+replies after the frames that show its result. Arrangement requests call the
+same `Session` operations as the lane gestures, because the lanes are one painted
+surface without separate controls. The driver holds no project state and
+reaches the backend only through `application.rs`; the source guard covers it.
+
+egui does not mark the controls behind a modal as disabled, and an
+accessibility action reaches them. Each modal therefore names itself with
+`name_dialog`, and the driver refuses a control outside the open modal.
+
+Every file choice is a `FileRequest`. Without an agent, `ask_path` shows the
+native dialog and carries the request out at once. With an agent, the request
+waits in the Choose path modal, because an agent cannot operate a native dialog
+and a blocked window cannot reply. A typed path gets the same result as a
+chosen one, including the file extension that a save dialog adds.
+
+A control is usable by an agent, and by a screen reader, only when it has an
+accessible name. Give a new control visible label text, `widget_info`, or
+`name_control`. Keep each name unique among the controls that can be on screen
+together: the Sounds panel names its buttons `Show Mixer` and
+`Show Step synth sounds` because the tool rail has `Mixer` and `Step synth`. Add a control that is painted on a shared surface to the
+arrangement requests instead.
+
 ## Safe frontend iteration
 
-Change layout, typography, colors, and controls in `src/ui/view.rs`. Keep tool
+Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
+Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs`. Keep tool
 input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.
@@ -127,6 +177,8 @@ GUI dependencies. The source guard does not check the full dependency graph.
 
 PowerShell removes a bare `--` from positional script arguments. Use the
 `-CargoArguments` form for any command that passes arguments after `--`.
+
+Run `python tools/assets/check-raster-assets.py` after asset or source changes.
 
 `tools/verify-ui.ps1` checks the built native executable at 1440 by 1000,
 1024 by 768, and 960 by 720. It creates synthetic WAV/project fixtures and uses

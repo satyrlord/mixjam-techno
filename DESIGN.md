@@ -21,6 +21,8 @@ colors:
   effect: "#d99192"
   voice: "#b99ecb"
   other-sample: "#bbb39f"
+  stretch-cream: "#f5e8cd"
+  stretch-ink: "#181917"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -62,6 +64,11 @@ typography:
     fontFamily: "Inter"
     fontSize: "10px"
     fontWeight: 500
+  stretch-title:
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
+    fontSize: "29.09px"
+    fontWeight: 700
 rounded:
   clip: "3px"
   control: "5px"
@@ -111,6 +118,13 @@ components:
     rounded: "{rounded.control}"
     width: "48px"
     height: "30px"
+  stretch-panel:
+    width: "640px"
+    height: "320px"
+  stretch-listen:
+    textColor: "{colors.stretch-cream}"
+  stretch-save:
+    textColor: "{colors.stretch-ink}"
 ---
 
 # Design System: MixJam Techno
@@ -126,6 +140,9 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
+Time Stretcher is the owner's scoped exception: a compact teal textured metal
+hardware panel with cream labels, dark displays, rotary controls, and lamped
+Listen and Save buttons. This treatment does not change the shared studio theme.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -137,7 +154,8 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 - Lime primary actions, category-colored clips, and coral recording signals.
 
 The implementation is native Windows Rust with eframe/egui. Tokens and painting
-live in `src/ui/view.rs`; native dialogs and input live in `src/ui.rs`. Application
+live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`;
+native dialogs and input adapters live in `src/ui.rs`. Application
 state and behavior live in `src/application.rs`. Sizes here use portable `px`
 labels for egui logical points. The sidecar records native component metadata;
 it does not define browser components or application behavior.
@@ -165,6 +183,11 @@ Canvas is the deepest structural surface. Panel supports transport, browser,
 mixer, and floating tools. Raised and Hover distinguish controls and interaction
 states. Text carries primary labels; Muted carries counts, metadata, and status.
 Line separates surfaces. Selection and Warning retain their native widget roles.
+
+Stretch Cream and Stretch Ink apply only to Time Stretcher. Cream carries its
+title, labels, values, and Listen text. Ink carries Save text on the ivory
+button. The panel's teal, black, ivory, amber, and green material colors come
+from the prepared skin; they do not replace shared palette tokens.
 
 ## Typography
 
@@ -195,6 +218,11 @@ The bar-and-beat readout uses Inter Medium at 23 points in a fixed
 112 by 42-point container. Changes to digit widths or bar count must not move
 the adjacent transport controls. Status text
 uses Inter Medium at 12 points. These are local sizes within the same text family.
+
+Time Stretcher uses a live uppercase Syncopate title at 40 × (640/880), about
+29.09 logical points at the supported display scales. Its other text uses Inter
+Medium. Text is rendered over the skin, so source names, BPM values, warnings,
+and control labels stay current.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -247,6 +275,12 @@ large expanded Folder tempos list must leave the provider controls reachable.
 Its note grid uses 33 by 16-point cells with 2-point gaps; this compact density is
 scoped to the grid. Other tool controls retain the shared control spacing.
 
+Time Stretcher uses a fixed 2:1 panel, 640 by 320 logical points at the supported
+100%, 150%, and 200% display scales. The source selector spans the panel above
+the paired Original BPM and Target BPM controls. Listen and Save occupy the
+bottom row. Collapse clips the panel to its title strip. This compact hardware
+layout is local to the tool.
+
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases
 are defined by `tools/verify-ui.ps1`; execution results belong in evidence reports.
@@ -254,8 +288,11 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 ## Elevation & Depth
 
 Flat color layers and thin borders separate controls from the work area. The
-application has no custom gradient, metal bevel, waveform decoration, or shadow
-scale. Floating windows use the default shadow from the pinned egui dark theme.
+shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
+scale. Shared floating windows use the default shadow from the pinned egui dark theme.
+Time Stretcher alone uses textured metal, inset displays, knobs, screws, and
+button depth from its prepared PNG skin. Its hover, focus, pressed, and disabled
+feedback remains native painting over that skin.
 Hover and focus states change immediately. The application has no motion tokens.
 
 ## Shapes
@@ -340,9 +377,30 @@ confirmation is an undoable project change; Esc hides it without an edit and
 the status bar reopens it.
 The idle status reads Ready. Errors and application notices remain visible.
 The empty mixer has one instruction for adding a sound to the arrangement.
-Floating libraries, sample editing, effects, tempo
-stretch, and Step synth use the same native widget theme. The frontend submits
+Floating libraries, sample editing, effects, and Step synth use the same native
+widget theme. Time Stretcher uses the scoped hardware panel described below.
+The frontend submits
 edits to the application layer; visual changes must preserve those commands.
+
+### Time Stretcher
+
+`src/ui/stretch.rs` paints `assets/stretch/{100,150,200}/panel.png`, prepared at
+640 by 320, 960 by 480, and 1280 by 640 pixels. Select the nearest density and
+paint one texel per physical pixel with aligned bounds, as for shared artwork.
+The skin supplies the material finish and static hardware forms. The title,
+source selector, values, labels, knob pointers, and input states remain live.
+Black Listen and ivory Save buttons pair their action labels with amber and
+green lamps; lamp color does not replace an action name.
+
+Original BPM supports 30-300; Target BPM offers 120, 140, 160, and 180.
+  Knobs support pointer and keyboard input. Hover does not change either BPM.
+  Each wheel event adjusts one step; later frames do not repeat the adjustment.
+  Listen and Save require an available
+source. Missing audio exposes Import details and a concise warning. With an
+available source, retain the approximate pitch-preservation warning. Esc and the
+close control close the tool; the title triangle collapses or expands it.
+The form sends selections and action requests through `src/ui.rs` to the
+existing application operations. It does not process audio or write files.
 
 ### Empty states and feedback
 
@@ -374,7 +432,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Do not add decorative metal bevels or repeated waveform traces.
+- Do not extend Time Stretcher's metal treatment to the shared studio or other
+  tools. Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

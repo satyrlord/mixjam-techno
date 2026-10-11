@@ -1,6 +1,6 @@
 //! Headless application boundary. UI clients read immutable views and submit typed commands.
 pub use crate::{
-    APP_VERSION,
+    APP_VERSION, agent,
     audio::Pcm,
     effects::EffectsState,
     engine::{
@@ -3279,6 +3279,8 @@ mod boundary_tests {
         for (name, source) in [
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
+            ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/agent.rs", include_str!("ui/agent.rs")),
         ] {
             for forbidden in [
                 ".editor",
@@ -3309,6 +3311,8 @@ mod boundary_tests {
         for (name, source) in [
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
+            ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
         ] {

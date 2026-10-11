@@ -65,6 +65,24 @@ fn heading(text: impl Into<String>, size: f32) -> egui::RichText {
         .color(TEXT)
 }
 
+/// Name a control whose visible label is separate text, for assistive
+/// technology and agents.
+pub(super) fn name_control(response: Response, name: &str) -> Response {
+    response
+        .ctx
+        .accesskit_node_builder(response.id, |node| node.set_label(name));
+    response
+}
+
+/// Group the controls of a modal under its title, for assistive technology
+/// and agents.
+pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_role(egui::accesskit::Role::Dialog);
+        node.set_label(title);
+    });
+}
+
 pub(super) fn titled_window(title: &str) -> egui::Window<'_> {
     // Keep widget identity independent of visible title formatting.
     egui::Window::new(title_text(title)).id(egui::Id::new(title))
@@ -195,6 +213,7 @@ impl MixJamApp {
                         self.edit_end = 0;
                     }
                     if rail_button(ui, &icons, RailIcon::Stretch, false).clicked() {
+                        self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
                         self.show_stretch = true;
                     }
                     ui.add_space(8.0);
@@ -370,16 +389,19 @@ impl MixJamApp {
             ui.add_space(12.0);
             ui.label(egui::RichText::new("BPM").color(MUTED));
             let mut bpm = self.session.project().bpm;
-            if bpm_picker(ui, "project_bpm", &mut bpm).changed() {
+            if name_control(bpm_picker(ui, "project_bpm", &mut bpm), "Project BPM").changed() {
                 let result = self.session.edit(EditCommand::SetTempo(bpm));
                 self.apply(result);
             }
             ui.add_space(10.0);
             ui.label("Zoom");
-            ui.add(
-                egui::Slider::new(&mut self.zoom, 0.55..=2.0)
-                    .show_value(false)
-                    .clamping(egui::SliderClamping::Always),
+            name_control(
+                ui.add(
+                    egui::Slider::new(&mut self.zoom, 0.55..=2.0)
+                        .show_value(false)
+                        .clamping(egui::SliderClamping::Always),
+                ),
+                "Zoom",
             );
             if ui
                 .toggle_value(&mut self.follow_playhead, "Follow")
@@ -395,16 +417,20 @@ impl MixJamApp {
         let (samples, groups) = self.palette_view();
         ui.horizontal(|ui| {
             ui.label(heading("Sounds", 18.0));
-            if action_button(ui, "Mixer", false).clicked() {
+            // The tool rail has the Mixer toggle. Each control needs its own name.
+            if name_control(action_button(ui, "Mixer", false), "Show Mixer").clicked() {
                 self.show_mixer = true;
             }
             ui.add_space(12.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search)
-                    .hint_text("Find a sound")
-                    .desired_width(170.0),
+            name_control(
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.search)
+                        .hint_text("Find a sound")
+                        .desired_width(170.0),
+                ),
+                "Find a sound",
             );
-            egui::ComboBox::from_id_salt("palette_product")
+            let libraries = egui::ComboBox::from_id_salt("palette_product")
                 .selected_text(self.palette_product.map_or("All libraries", Product::label))
                 .width(145.0)
                 .show_ui(ui, |ui| {
@@ -416,11 +442,13 @@ impl MixJamApp {
                             product.label(),
                         );
                     }
-                });
+                })
+                .response;
+            name_control(libraries, "Library filter");
             let group_label = self.group.as_deref().map_or("All sounds", |g| {
                 if g.is_empty() { "Uncategorized" } else { g }
             });
-            egui::ComboBox::from_id_salt("palette_category")
+            let categories = egui::ComboBox::from_id_salt("palette_category")
                 .selected_text(group_label)
                 .width(105.0)
                 .show_ui(ui, |ui| {
@@ -436,7 +464,9 @@ impl MixJamApp {
                             },
                         );
                     }
-                });
+                })
+                .response;
+            name_control(categories, "Category filter");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new(format!("{} sounds", samples.len()))
@@ -731,26 +761,32 @@ impl MixJamApp {
             ui.label(egui::RichText::new(name).color(ACCENT).strong());
             ui.add_space(12.0);
             ui.label("Gain");
-            let mut change = ui
-                .add(egui::DragValue::new(&mut gain).range(0.0..=2.0).speed(0.01))
-                .changed();
+            let mut change = name_control(
+                ui.add(egui::DragValue::new(&mut gain).range(0.0..=2.0).speed(0.01)),
+                "Clip gain",
+            )
+            .changed();
             ui.label("Trim start (frames)");
-            change |= ui
-                .add(
+            change |= name_control(
+                ui.add(
                     egui::DragValue::new(&mut offset)
                         .range(0..=max_frames.saturating_sub(1))
                         .speed(100),
-                )
-                .changed();
+                ),
+                "Clip trim start (frames)",
+            )
+            .changed();
             ui.label("Length (bars)");
             let mut bars = length as f64 / TICKS_PER_BAR as f64;
-            if ui
-                .add(
+            if name_control(
+                ui.add(
                     egui::DragValue::new(&mut bars)
                         .range(1.0 / 16.0..=256.0)
                         .speed(1.0 / 16.0),
-                )
-                .changed()
+                ),
+                "Clip length (bars)",
+            )
+            .changed()
             {
                 length = (bars * TICKS_PER_BAR as f64).round().max(1.0) as u32;
                 change = true;
@@ -870,8 +906,10 @@ impl MixJamApp {
                 egui::UiBuilder::new().max_rect(rect).id_salt("lanes"),
                 |ui| {
                     ui.set_clip_rect(canvas_clip);
-                    let response =
-                        ui.interact(rect, ui.id().with("canvas"), Sense::click_and_drag());
+                    let response = name_control(
+                        ui.interact(rect, ui.id().with("canvas"), Sense::click_and_drag()),
+                        "Arrangement lanes",
+                    );
                     self.timeline_rect = Some(rect);
                     if response.hovered()
                         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
@@ -1119,6 +1157,13 @@ impl MixJamApp {
                                 ui.id().with(("add_track", index)),
                                 Sense::click(),
                             );
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Button,
+                                    ui.is_enabled(),
+                                    format!("Add track {}", index + 1),
+                                )
+                            });
                             if response.clicked() {
                                 self.armed_track = index;
                                 self.message(format!("Recording will create track {}.", index + 1));
@@ -1149,6 +1194,14 @@ impl MixJamApp {
                             ui.id().with(("arm", index)),
                             Sense::click(),
                         );
+                        arm.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::RadioButton,
+                                ui.is_enabled(),
+                                self.armed_track == index,
+                                format!("Record on track {}", index + 1),
+                            )
+                        });
                         if self.armed_track == index {
                             ui.painter().circle_filled(
                                 rect.center() + Vec2::new(0.0, 9.0),
@@ -1208,10 +1261,13 @@ impl MixJamApp {
             ruler_strip.min + Vec2::new(lane_inset - painted_offset_x, 0.0),
             Vec2::new(width, 26.0),
         );
-        let ruler_response = ui.interact(
-            ruler_clip,
-            ui.id().with("bar_ruler"),
-            Sense::click_and_drag(),
+        let ruler_response = name_control(
+            ui.interact(
+                ruler_clip,
+                ui.id().with("bar_ruler"),
+                Sense::click_and_drag(),
+            ),
+            "Bar ruler",
         );
         let ruler_painter = ui.painter().with_clip_rect(ruler_clip);
         ruler_painter.rect_filled(ruler, 0.0, PANEL);
@@ -1302,6 +1358,7 @@ impl MixJamApp {
         if self.pending_action.is_none()
             && !self.sample_conflicts_open()
             && self.import_path.is_none()
+            && self.path_prompt.is_none()
         {
             self.keyboard(ctx);
         }
@@ -1319,6 +1376,7 @@ impl MixJamApp {
         self.dialogs(ctx);
         self.tool_windows(ctx);
         self.sample_conflicts_dialog(ctx);
+        self.path_prompt_dialog(ctx);
         self.capture(ctx);
     }
 }
@@ -1586,7 +1644,7 @@ pub(super) fn recording_destination(
     selected: &mut usize,
     occupied: &[usize],
 ) -> Response {
-    egui::ComboBox::from_id_salt("record_destination")
+    let response = egui::ComboBox::from_id_salt("record_destination")
         .selected_text(format!("{}", *selected + 1))
         .width(48.0)
         .show_ui(ui, |ui| {
@@ -1599,10 +1657,10 @@ pub(super) fn recording_destination(
                 ui.selectable_value(selected, index, label);
             }
         })
-        .response
-        .on_hover_text(
-            "Choose a track for recording. Unused tracks appear only when you add a sound.",
-        )
+        .response;
+    name_control(response, "Recording track").on_hover_text(
+        "Choose a track for recording. Unused tracks appear only when you add a sound.",
+    )
 }
 
 pub(super) fn configure_style(ctx: &egui::Context) {
@@ -1772,13 +1830,18 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
 }
 
 pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
-    ui.add(
-        egui::Button::new(egui::RichText::new(label).color(if active { TEXT } else { MUTED }))
-            .fill(if active { HOVER } else { PANEL })
-            .stroke(Stroke::new(1.0_f32, if active { MUTED } else { PANEL }))
-            .min_size(Vec2::new(40.0, 26.0)),
+    // A category can have the name of a tool, such as Step synth.
+    let action = format!("Show {label} sounds");
+    name_control(
+        ui.add(
+            egui::Button::new(egui::RichText::new(label).color(if active { TEXT } else { MUTED }))
+                .fill(if active { HOVER } else { PANEL })
+                .stroke(Stroke::new(1.0_f32, if active { MUTED } else { PANEL }))
+                .min_size(Vec2::new(40.0, 26.0)),
+        ),
+        &action,
     )
-    .on_hover_text(format!("Show {label} sounds"))
+    .on_hover_text(action)
 }
 
 pub(super) fn group_color(group: &str) -> Color32 {

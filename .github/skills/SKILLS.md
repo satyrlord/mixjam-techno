@@ -13,5 +13,6 @@ behavior. Historical donor instructions do not apply to this workspace.
 | [full-code-review](full-code-review/SKILL.md) | Review changes and repair confirmed findings when requested. |
 | [grill-me](grill-me/SKILL.md) | Resolve open product or design decisions before implementation. |
 | [improve-codebase-architecture](improve-codebase-architecture/SKILL.md) | Improve application ownership boundaries. |
+| [operate-app](operate-app/SKILL.md) | Operate the running application through its agent control channel. |
 | [refactor](refactor/SKILL.md) | Improve structure while preserving behavior. |
 | [run-quality-gate](run-quality-gate/SKILL.md) | Run or repair documented Rust and native checks. |
