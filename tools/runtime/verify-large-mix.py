@@ -22,6 +22,8 @@ import tempfile
 import time
 import wave
 
+from mixjam_song import read_song
+
 
 LIMIT = 500_000_000
 BLOCK = 1024 * 1024
@@ -138,6 +140,8 @@ def main():
         root = args.artifacts.resolve()
         if root.exists():
             parser.error(f'Artifact folder already exists: {root}')
+        if args.clean and root in report_path.parents:
+            parser.error('--clean would delete a report inside the artifact folder.')
         root.mkdir(parents=True)
     env = os.environ.copy()
     # Host reference media and REA settings must not reach the copied executable.
@@ -158,7 +162,7 @@ def main():
         'scope': 'Copied executable, independent cwd, isolated user data, no host provider '
                  'environment. Synthetic exact-limit import contains three WAVs totaling over '
                  '256 MiB; the over-limit file is one byte larger. Optional real MIX files are '
-                 'converted once with the explicit WAV provider, then saved JSON is reopened; '
+                 'converted once with the explicit WAV provider, then the saved .mixjam song is reopened; '
                  'their verdict is separate. Render checks use one selected clip, moved to '
                  'zero, limited to 256 ticks.',
         'limitations': ['Host installations remain visible; no filesystem sandbox is used.',
@@ -219,11 +223,11 @@ def main():
     def convert_and_reopen(song, destination, provider=None):
         provider_args = ['--samples', provider] if provider else []
         run('convert', *provider_args, '--mix', song, '--output', destination)
-        project = json.loads(destination.read_text(encoding='utf-8'))
-        reopened = destination.with_name(destination.stem + '-reopened.json')
+        project = read_song(destination)
+        reopened = destination.with_name(destination.stem + '-reopened.mixjam')
         run('convert', *provider_args, '--mix', destination, '--output', reopened)
-        require(json.loads(reopened.read_text(encoding='utf-8')) == project,
-                'Saved and reopened project JSON differ.')
+        require(read_song(reopened) == project,
+                'Saved and reopened songs differ.')
         return project
 
     def render_short(project, label, provider=None):
@@ -261,7 +265,7 @@ def main():
         expected = write_exact_fixture(song)
         report['synthetic_fixture'] = {'path': str(song), 'bytes': song.stat().st_size,
                                        'sha256': sha256(song), 'waves': expected}
-        project = convert_and_reopen(song, root / 'exact-500MB.json')
+        project = convert_and_reopen(song, root / 'exact-500MB.mixjam')
         require(len(project['clips']) == 3, 'Exact-limit fixture did not preserve three clips.')
         require(len(project['imported_samples']) == 3,
                 'Exact-limit fixture did not preserve three distinct imported WAVs.')
@@ -281,7 +285,7 @@ def main():
             output.write(struct.pack('<I', 0x2571))
             output.seek(LIMIT)
             output.write(b'\0')
-        destination = root / 'over-500MB.json'
+        destination = root / 'over-500MB.mixjam'
         result = run('convert', '--mix', song, '--output', destination, success=False)
         require('500 MB' in result.stdout + result.stderr, 'Size-limit diagnostic is missing.')
         require(not destination.exists(), 'Rejected file created an output project.')
@@ -300,7 +304,7 @@ def main():
 
             def verify_song():
                 record['sha256'] = sha256(song)
-                destination = root / f'real-{index:03d}.json'
+                destination = root / f'real-{index:03d}.mixjam'
                 project = convert_and_reopen(song, destination, samples)
                 record.update(clips=len(project['clips']),
                               imported_wavs=len(project['imported_samples']),

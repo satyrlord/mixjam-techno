@@ -1,0 +1,662 @@
+//! The application's own `.mixjam` song format, format version 8.
+//!
+//! It adapts the preserved version-7 document to this editor. The envelope is
+//! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
+//! timestamps, `song`, and lanes that own their placements in visible order.
+//! Version 8 differs where the editor does:
+//! - Ticks are the editor's 256 per bar, not MixJam's 32.
+//! - `lanes` always has 64 entries with gain, pan, and two channel switches.
+//!   Master processors, return buses, and sends do not exist here.
+//! - A placement names its audio by `sampleId`. Product catalog IDs resolve
+//!   through `libraries`; other IDs resolve through `samples`, which link WAV
+//!   files by path. Placements also keep their trim offset and gain.
+//! - Missing sources, conflict choices, and import notices are saved, so an
+//!   imported song reopens without its original file.
+use super::{Header, MAX_SONG_BYTES, text};
+use crate::{
+    engine::{
+        Clip, ImportNotice, ImportedSample, MissingReference, MissingSample,
+        PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, Track,
+    },
+    products::{LibraryBinding, Product},
+};
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, fs, io::Read, path::Path, path::PathBuf};
+
+pub(super) const FORMAT_VERSION: u32 = 8;
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Document {
+    format_version: u32,
+    app_version: String,
+    created_at: String,
+    modified_at: String,
+    song: Song,
+    lanes: Vec<Lane>,
+    samples: Vec<Sample>,
+    missing_samples: Vec<Missing>,
+    sample_conflicts: Vec<Conflict>,
+    import_notices: Vec<Notice>,
+    source_notices: Vec<String>,
+    libraries: Vec<LibraryBinding>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Song {
+    title: String,
+    author: String,
+    bpm: f64,
+    master_gain: f32,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    loop_region: Option<[u32; 2]>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Lane {
+    gain: f32,
+    pan: f32,
+    left_enabled: bool,
+    right_enabled: bool,
+    placements: Vec<Placement>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Placement {
+    id: u64,
+    sample_id: u32,
+    start_tick: u32,
+    duration_ticks: u32,
+    offset_frames: u32,
+    gain: f32,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Sample {
+    id: u32,
+    name: String,
+    group_name: String,
+    path: PathBuf,
+    source_bpm: f64,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    source_sample_rate: Option<u32>,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    origin: Option<Product>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Missing {
+    id: u32,
+    name: String,
+    source_bpm: f64,
+    sample_rate: u32,
+    nominal_ticks: u32,
+    length_inferred: bool,
+    reference: Reference,
+    reason: String,
+    metadata: BTreeMap<String, String>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
+enum Reference {
+    Native {
+        product: Product,
+        #[serde(rename = "nativeId")]
+        native_id: u32,
+    },
+    External {
+        path: PathBuf,
+        #[serde(deserialize_with = "Deserialize::deserialize")]
+        origin: Option<Product>,
+    },
+    Generated {
+        product: Product,
+        kind: String,
+        data: serde_json::Value,
+    },
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Conflict {
+    reference: String,
+    sample_ids: Vec<u32>,
+    candidates: Vec<PathBuf>,
+    selected: usize,
+    confirmed: bool,
+    source_spans: BTreeMap<u32, u32>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Notice {
+    source_bpm: f64,
+    target_bpm: f64,
+}
+
+impl Document {
+    fn new(project: &Project, created_at: String, modified_at: String) -> Self {
+        let mut lanes: Vec<Lane> = project
+            .tracks
+            .iter()
+            .map(|track| Lane {
+                gain: track.gain,
+                pan: track.pan,
+                left_enabled: track.left_enabled,
+                right_enabled: track.right_enabled,
+                placements: Vec::new(),
+            })
+            .collect();
+        for clip in &project.clips {
+            lanes[clip.track].placements.push(Placement {
+                id: clip.id,
+                sample_id: clip.sample_id,
+                start_tick: clip.start_tick,
+                duration_ticks: clip.length_ticks,
+                offset_frames: clip.offset_frames,
+                gain: clip.gain,
+            });
+        }
+        Self {
+            format_version: FORMAT_VERSION,
+            app_version: crate::APP_VERSION.into(),
+            created_at,
+            modified_at,
+            song: Song {
+                title: project.title.clone(),
+                author: project.author.clone(),
+                bpm: project.bpm,
+                master_gain: project.master_gain,
+                loop_region: project.loop_region,
+            },
+            lanes,
+            samples: project
+                .imported_samples
+                .iter()
+                .map(|sample| Sample {
+                    id: sample.id,
+                    name: sample.name.clone(),
+                    group_name: sample.group_name.clone(),
+                    path: sample.path.clone(),
+                    source_bpm: sample.source_bpm,
+                    source_sample_rate: sample.source_sample_rate,
+                    origin: sample.origin,
+                })
+                .collect(),
+            missing_samples: project
+                .missing_samples
+                .iter()
+                .map(|sample| Missing {
+                    id: sample.id,
+                    name: sample.name.clone(),
+                    source_bpm: sample.source_bpm,
+                    sample_rate: sample.sample_rate,
+                    nominal_ticks: sample.nominal_ticks,
+                    length_inferred: sample.length_inferred,
+                    reference: match sample.reference.clone() {
+                        MissingReference::Native { product, native_id } => {
+                            Reference::Native { product, native_id }
+                        }
+                        MissingReference::External { path, origin } => {
+                            Reference::External { path, origin }
+                        }
+                        MissingReference::Generated {
+                            product,
+                            kind,
+                            data,
+                        } => Reference::Generated {
+                            product,
+                            kind,
+                            data,
+                        },
+                    },
+                    reason: sample.reason.clone(),
+                    metadata: sample.metadata.clone(),
+                })
+                .collect(),
+            sample_conflicts: project
+                .sample_conflicts
+                .iter()
+                .map(|conflict| Conflict {
+                    reference: conflict.reference.clone(),
+                    sample_ids: conflict.sample_ids.clone(),
+                    candidates: conflict.candidates.clone(),
+                    selected: conflict.selected,
+                    confirmed: conflict.confirmed,
+                    source_spans: conflict.source_spans.clone(),
+                })
+                .collect(),
+            import_notices: project
+                .import_notices
+                .iter()
+                .map(|notice| Notice {
+                    source_bpm: notice.source_bpm,
+                    target_bpm: notice.target_bpm,
+                })
+                .collect(),
+            source_notices: project.source_notices.clone(),
+            libraries: project.libraries.clone(),
+        }
+    }
+
+    fn into_project(self) -> Result<Project, String> {
+        if self.format_version != FORMAT_VERSION {
+            return Err("This MixJam format version is not supported.".into());
+        }
+        if !text(&self.app_version) || !text(&self.created_at) || !text(&self.modified_at) {
+            return Err("The MixJam document metadata is invalid.".into());
+        }
+        if self.lanes.len() != TRACK_COUNT {
+            return Err("The MixJam song must have 64 lanes.".into());
+        }
+        let mut tracks = Vec::with_capacity(TRACK_COUNT);
+        let mut clips = Vec::new();
+        for (track, lane) in self.lanes.into_iter().enumerate() {
+            tracks.push(Track {
+                gain: lane.gain,
+                pan: lane.pan,
+                left_enabled: lane.left_enabled,
+                right_enabled: lane.right_enabled,
+            });
+            clips.extend(lane.placements.into_iter().map(|placement| Clip {
+                id: placement.id,
+                sample_id: placement.sample_id,
+                track,
+                start_tick: placement.start_tick,
+                length_ticks: placement.duration_ticks,
+                offset_frames: placement.offset_frames,
+                gain: placement.gain,
+            }));
+        }
+        // Lanes group the placements. Identity order restores one arrangement
+        // order for every lane layout, which is also the order of an import.
+        clips.sort_by_key(|clip| clip.id);
+        let project = Project {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            title: self.song.title,
+            author: self.song.author,
+            bpm: self.song.bpm,
+            master_gain: self.song.master_gain,
+            pitch_ratio: 1.0,
+            tracks,
+            clips,
+            loop_region: self.song.loop_region,
+            imported_samples: self
+                .samples
+                .into_iter()
+                .map(|sample| ImportedSample {
+                    id: sample.id,
+                    name: sample.name,
+                    group_name: sample.group_name,
+                    path: sample.path,
+                    source_bpm: sample.source_bpm,
+                    source_sample_rate: sample.source_sample_rate,
+                    origin: sample.origin,
+                })
+                .collect(),
+            missing_samples: self
+                .missing_samples
+                .into_iter()
+                .map(|sample| MissingSample {
+                    id: sample.id,
+                    name: sample.name,
+                    source_bpm: sample.source_bpm,
+                    sample_rate: sample.sample_rate,
+                    nominal_ticks: sample.nominal_ticks,
+                    length_inferred: sample.length_inferred,
+                    reference: match sample.reference {
+                        Reference::Native { product, native_id } => {
+                            MissingReference::Native { product, native_id }
+                        }
+                        Reference::External { path, origin } => {
+                            MissingReference::External { path, origin }
+                        }
+                        Reference::Generated {
+                            product,
+                            kind,
+                            data,
+                        } => MissingReference::Generated {
+                            product,
+                            kind,
+                            data,
+                        },
+                    },
+                    reason: sample.reason,
+                    metadata: sample.metadata,
+                })
+                .collect(),
+            sample_conflicts: self
+                .sample_conflicts
+                .into_iter()
+                .map(|conflict| SampleConflict {
+                    reference: conflict.reference,
+                    sample_ids: conflict.sample_ids,
+                    candidates: conflict.candidates,
+                    selected: conflict.selected,
+                    confirmed: conflict.confirmed,
+                    source_spans: conflict.source_spans,
+                })
+                .collect(),
+            import_notices: self
+                .import_notices
+                .into_iter()
+                .map(|notice| ImportNotice {
+                    source_bpm: notice.source_bpm,
+                    target_bpm: notice.target_bpm,
+                })
+                .collect(),
+            source_notices: self.source_notices,
+            libraries: self.libraries,
+        };
+        project.validate()?;
+        Ok(project)
+    }
+}
+
+pub(super) fn parse(bytes: &[u8]) -> Result<Project, String> {
+    serde_json::from_slice::<Document>(bytes)
+        .map_err(|e| format!("Cannot read the MixJam song: {e}"))?
+        .into_project()
+}
+
+pub(super) fn save(project: &Project, path: &Path) -> Result<(), String> {
+    save_with_limit(project, path, MAX_SONG_BYTES)
+}
+
+fn save_with_limit(project: &Project, path: &Path, byte_limit: u64) -> Result<(), String> {
+    project.validate()?;
+    let now = timestamp(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs()),
+    );
+    // A song saved again keeps the creation time of the file that it replaces.
+    let created_at = existing_creation_time(path).unwrap_or_else(|| now.clone());
+    let mut bytes = serde_json::to_vec_pretty(&Document::new(project, created_at, now))
+        .map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    if bytes.len() as u64 > byte_limit {
+        return Err("The MixJam project exceeds the 1 GiB limit.".into());
+    }
+    crate::atomic_file::write(path, &bytes)
+}
+
+fn existing_creation_time(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    if file.metadata().ok()?.len() > MAX_SONG_BYTES {
+        return None;
+    }
+    // Skip unrelated fields as a stream. Save can replace a large destination
+    // without allocating its entire contents just to keep its creation time.
+    let header: Header =
+        serde_json::from_reader(std::io::BufReader::new(file.take(MAX_SONG_BYTES + 1))).ok()?;
+    (header.format_version == FORMAT_VERSION && text(&header.created_at))
+        .then_some(header.created_at)
+}
+
+/// ISO 8601 UTC time for seconds since the Unix epoch.
+fn timestamp(seconds: u64) -> String {
+    let (days, rest) = ((seconds / 86_400) as i64, seconds % 86_400);
+    // Days to a Gregorian date, counted in 400-year eras that start on 1 March.
+    let shifted = days + 719_468;
+    let (era, day_of_era) = (shifted.div_euclid(146_097), shifted.rem_euclid(146_097));
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        rest / 3_600,
+        rest % 3_600 / 60,
+        rest % 60
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::Library;
+
+    fn project() -> Project {
+        let imported = ImportedSample {
+            id: crate::products::IMPORTED_ID_START,
+            name: "Lead".into(),
+            group_name: "Wave".into(),
+            path: PathBuf::from("waves/lead.wav"),
+            source_bpm: 140.0,
+            source_sample_rate: Some(22_050),
+            origin: Some(Product::T2),
+        };
+        let mut lost = imported.clone();
+        lost.id += 1;
+        let mut missing = MissingSample::external(&lost, 512, "Missing file.".into());
+        missing
+            .metadata
+            .insert("Playback timing policy".into(), "mixjam-span".into());
+        let clip = |id, sample_id, track| Clip {
+            id,
+            sample_id,
+            track,
+            start_tick: 256,
+            length_ticks: 512,
+            offset_frames: 4_410,
+            gain: 0.75,
+        };
+        let mut project = Project {
+            title: "Night drive".into(),
+            author: "Owner".into(),
+            bpm: 160.0,
+            master_gain: 0.5,
+            loop_region: Some([256, 1_024]),
+            imported_samples: vec![imported.clone()].into(),
+            missing_samples: vec![
+                missing,
+                MissingSample::native(
+                    Product::T2,
+                    7,
+                    "Kick".into(),
+                    140.0,
+                    256,
+                    false,
+                    "No library.".into(),
+                )
+                .unwrap(),
+            ],
+            // Arrangement order differs from lane order.
+            clips: vec![
+                clip(1, imported.id, 63),
+                clip(2, lost.id, 0),
+                clip(3, Product::T2.global_sample_id(7).unwrap(), 5),
+            ],
+            sample_conflicts: vec![SampleConflict {
+                reference: "lead.wav".into(),
+                sample_ids: vec![imported.id],
+                candidates: vec!["a/lead.wav".into(), "b/lead.wav".into()],
+                selected: 1,
+                confirmed: true,
+                source_spans: BTreeMap::from([(imported.id, 512)]),
+            }],
+            import_notices: vec![ImportNotice {
+                source_bpm: 155.0,
+                target_bpm: 160.0,
+            }],
+            source_notices: vec!["Imported.".into()],
+            libraries: vec![LibraryBinding {
+                product: Product::T2,
+                root: "library".into(),
+            }],
+            ..Project::default()
+        };
+        project.tracks[5] = Track {
+            gain: 0.25,
+            pan: -0.5,
+            left_enabled: false,
+            right_enabled: true,
+        };
+        project
+    }
+
+    #[test]
+    fn timestamps_follow_the_gregorian_calendar() {
+        assert_eq!(timestamp(0), "1970-01-01T00:00:00Z");
+        assert_eq!(timestamp(951_782_400 + 86_399), "2000-02-29T23:59:59Z");
+        assert_eq!(timestamp(1_791_676_800), "2026-10-11T00:00:00Z");
+    }
+
+    #[test]
+    fn saved_song_is_a_version_8_document_that_reopens_unchanged() {
+        let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("song.mixjam");
+        let project = project();
+        save(&project, &path).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(document["formatVersion"], 8);
+        assert_eq!(document["appVersion"], crate::APP_VERSION);
+        assert_eq!(document["song"]["masterGain"], 0.5);
+        assert_eq!(document["lanes"].as_array().unwrap().len(), 64);
+        assert_eq!(document["lanes"][63]["placements"][0]["durationTicks"], 512);
+        assert_eq!(document["lanes"][5]["leftEnabled"], false);
+        assert_eq!(document["missingSamples"][1]["reference"]["nativeId"], 7);
+        assert_eq!(
+            document.as_object().unwrap().keys().collect::<Vec<_>>(),
+            [
+                "appVersion",
+                "createdAt",
+                "formatVersion",
+                "importNotices",
+                "lanes",
+                "libraries",
+                "missingSamples",
+                "modifiedAt",
+                "sampleConflicts",
+                "samples",
+                "song",
+                "sourceNotices"
+            ]
+        );
+        assert!(text.ends_with(
+            "}
+"
+        ));
+        assert_eq!(
+            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            project
+        );
+
+        // The creation time belongs to the file; later saves change only modifiedAt.
+        document["createdAt"] = "2020-01-02T03:04:05Z".into();
+        document["modifiedAt"] = "2020-01-02T03:04:05Z".into();
+        fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        save(&project, &path).unwrap();
+        let resaved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(resaved["createdAt"], "2020-01-02T03:04:05Z");
+        assert_ne!(resaved["modifiedAt"], "2020-01-02T03:04:05Z");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_unknown_keys_missing_lanes_and_invalid_arrangement_data() {
+        let document =
+            serde_json::to_value(Document::new(&project(), timestamp(0), timestamp(0))).unwrap();
+        for (pointer, value, expected) in [
+            ("/song/pitchRatio", serde_json::json!(1.0), "unknown field"),
+            (
+                "/lanes/0/sends",
+                serde_json::json!([0, 0, 0, 0]),
+                "unknown field",
+            ),
+            ("/lanes", serde_json::json!([]), "64 lanes"),
+            ("/song/bpm", serde_json::json!(127), "Tempo"),
+            ("/lanes/0/placements/0/id", serde_json::json!(1), "unique"),
+            ("/createdAt", serde_json::json!(""), "metadata"),
+        ] {
+            let mut changed = document.clone();
+            match changed.pointer_mut(pointer) {
+                Some(target) => *target = value,
+                None => {
+                    let (parent, key) = pointer.rsplit_once('/').unwrap();
+                    changed.pointer_mut(parent).unwrap()[key] = value;
+                }
+            }
+            let error = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
+            assert!(error.contains(expected), "{pointer}: {error}");
+        }
+    }
+
+    #[test]
+    fn nullable_fields_are_required_but_accept_null() {
+        let document =
+            serde_json::to_value(Document::new(&project(), timestamp(0), timestamp(0))).unwrap();
+        for (parent, key) in [
+            ("/song", "loopRegion"),
+            ("/samples/0", "sourceSampleRate"),
+            ("/samples/0", "origin"),
+            ("/missingSamples/0/reference", "origin"),
+        ] {
+            let mut changed = document.clone();
+            changed.pointer_mut(parent).unwrap()[key] = serde_json::Value::Null;
+            parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
+            changed
+                .pointer_mut(parent)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(key);
+            let error = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
+            assert!(error.contains("missing field"), "{parent}/{key}: {error}");
+        }
+    }
+
+    #[test]
+    fn saving_over_an_oversized_destination_does_not_read_its_contents() {
+        let path = std::env::temp_dir().join(format!(
+            "mixjam-oversized-save-{}.mixjam",
+            std::process::id()
+        ));
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_SONG_BYTES + 1).unwrap();
+        drop(file);
+        assert!(existing_creation_time(&path).is_none());
+        save(&Project::default(), &path).unwrap();
+        assert_eq!(
+            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            Project::default()
+        );
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn serialized_song_limit_includes_formatting_and_preserves_the_destination() {
+        let path =
+            std::env::temp_dir().join(format!("mixjam-save-limit-{}.mixjam", std::process::id()));
+        let project = Project::default();
+        save(&project, &path).unwrap();
+        let saved_length = fs::metadata(&path).unwrap().len();
+        let compact =
+            serde_json::to_vec(&Document::new(&project, timestamp(0), timestamp(0))).unwrap();
+        assert!((compact.len() as u64) < saved_length);
+
+        fs::write(&path, b"previous song").unwrap();
+        for limit in [compact.len() as u64, saved_length - 1] {
+            assert!(
+                save_with_limit(&project, &path, limit)
+                    .unwrap_err()
+                    .contains("limit")
+            );
+            assert_eq!(fs::read(&path).unwrap(), b"previous song");
+        }
+        save_with_limit(&project, &path, saved_length).unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().len(), saved_length);
+        assert_eq!(parse(&fs::read(&path).unwrap()).unwrap(), project);
+        fs::remove_file(&path).unwrap();
+        assert!(save_with_limit(&project, &path, saved_length - 1).is_err());
+        assert!(!path.exists());
+    }
+}

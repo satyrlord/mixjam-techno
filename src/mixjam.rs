@@ -1,6 +1,7 @@
-//! Bounded import of the preserved MixJam JSON v7 format.
+//! `.mixjam` songs: the application's own format version 8 (`song`) and a
+//! bounded import of the preserved MixJam JSON v7 format.
 //!
-//! This imports an arrangement into the shared renderer; it is not MixJam DSP
+//! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
 //! emulation. Master processors, return effects and edge fades remain serialized
 //! in source notices and are not rendered; the importer states this sound change.
 //! Muting/solo becomes channel routing, and later same-lane triggers truncate
@@ -9,6 +10,7 @@
 //! nativeBPM is not the arrangement playback-rate authority. UI names, palette,
 //! generator metadata and bypassed processor settings are not native controls.
 mod references;
+mod song;
 pub(crate) use references::ReferenceResolver;
 
 use crate::{
@@ -25,6 +27,8 @@ use std::{
 };
 
 const MAX_BYTES: usize = 16 * 1024 * 1024;
+// Guards against a file that is not a song. A valid song stays far below it.
+const MAX_SONG_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_SOURCE_TICKS: u32 = 999 * 32;
 const PROCESSORS: [&str; 10] = [
     "clip", "tube", "subeq", "comp", "max", "addeq", "tape", "width", "mbc", "lim",
@@ -105,19 +109,55 @@ struct MasterBus {
     preset: Option<String>,
 }
 
-pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
+/// The fields that both format versions share, read before the strict parse.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Header {
+    format_version: u32,
+    created_at: String,
+}
+
+fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     let mut bytes = Vec::new();
     fs::File::open(path)
         .map_err(|e| format!("Cannot open the MixJam project: {e}"))?
-        .take(MAX_BYTES as u64 + 1)
+        .take(MAX_SONG_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() > MAX_BYTES {
-        return Err("The MixJam project exceeds the 16 MiB limit.".into());
+    if bytes.len() as u64 > MAX_SONG_BYTES {
+        return Err("The MixJam project exceeds the 1 GiB limit.".into());
     }
-    let document: Document = serde_json::from_slice(&bytes)
+    let header = serde_json::from_slice(&bytes)
         .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
-    convert(document, path, library)
+    Ok((header, bytes))
+}
+
+pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
+    load_song(path, library).map(|(project, _)| project)
+}
+
+/// Open a version 8 song or import a version 7 project. The flag is true for
+/// a song, which Save can replace; a version 7 project is an import and stays
+/// unchanged. The file is read once.
+pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
+    let (header, bytes) = read(path)?;
+    match header.format_version {
+        song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
+        7 => {
+            if bytes.len() > MAX_BYTES {
+                return Err("The MixJam project exceeds the 16 MiB limit.".into());
+            }
+            let document: Document = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
+            convert(document, path, library).map(|project| (project, false))
+        }
+        _ => Err("Only MixJam format versions 7 and 8 are supported.".into()),
+    }
+}
+
+/// Write the song as a format version 8 document.
+pub fn save(project: &Project, path: &Path) -> Result<(), String> {
+    song::save(project, path)
 }
 
 fn text(value: &str) -> bool {
@@ -190,7 +230,6 @@ fn validate(document: &Document) -> Result<(), String> {
         {
             return Err("The MixJam return bus settings are invalid.".into());
         }
-        let _ = bus.limiter_enabled;
     }
     let mut lane_ids = HashSet::new();
     let mut placement_ids = HashSet::new();
@@ -294,12 +333,14 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
             let sample_id = if let Some(id) = imported_paths.get(&key) {
                 *id
             } else {
-                let pcm = resolved.and_then(|source| crate::audio::read_wav(&source));
-                let tempo = match &pcm {
-                    Ok(pcm) if pcm.frames() > 0 => {
+                // Only the duration is needed here; the renderer decodes the audio.
+                let wave =
+                    resolved.and_then(|source| crate::audio::visit_wav_samples(&source, |_, _| {}));
+                let tempo = match &wave {
+                    Ok((spec, frames)) if *frames > 0 => {
                         f64::from(placement.duration_ticks) * 240.0
                             / 32.0
-                            / (pcm.frames() as f64 / f64::from(pcm.sample_rate))
+                            / (f64::from(*frames) / f64::from(spec.sample_rate))
                     }
                     _ => placement
                         .duration_seconds
@@ -319,12 +360,12 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
                     group_name: "MixJam".into(),
                     path: source.clone(),
                     source_bpm: tempo,
-                    source_sample_rate: pcm.as_ref().ok().map(|pcm| pcm.sample_rate),
+                    source_sample_rate: wave.as_ref().ok().map(|(spec, _)| spec.sample_rate),
                     origin: None,
                 };
                 crate::engine::validate_import_metadata(&imported)?;
-                match pcm {
-                    Ok(pcm) if pcm.frames() > 0 => project.imported_samples.push(imported),
+                match wave {
+                    Ok((_, frames)) if frames > 0 => project.imported_samples.push(imported),
                     result => {
                         let reason = result
                             .err()
@@ -548,7 +589,7 @@ mod tests {
         assert_eq!(audio.source_bpm, 120.0);
         assert_eq!(opened.clips[1].sample_id, id);
 
-        let saved = root.join("saved.json");
+        let saved = root.join("saved.mixjam");
         crate::project_io::save(&opened, &saved).unwrap();
         let (reopened, _) = crate::project_io::open(&saved, &library).unwrap();
         assert_eq!(reopened.clips, opened.clips);

@@ -34,7 +34,7 @@ Read [REFERENCE.md](REFERENCE.md) for applicability and stop conditions.
 
 Use the current commands in `README.md` and `ARCHITECTURE.md`:
 
-1. Run `cargo.ps1 fmt --all -- --check`.
+1. Run `cargo.ps1 -CargoArguments @('fmt','--all','--','--check')`.
    Completion criterion: The format check has a current result.
 2. Run Clippy with warnings denied.
    Completion criterion: The documented Clippy check has a current result.
@@ -46,6 +46,10 @@ Use the current commands in `README.md` and `ARCHITECTURE.md`:
    Completion criterion: The release build has a current result or is not applicable.
 6. Run `python tools/assets/prepare-fonts.py --check` for native font assets.
    Completion criterion: The font check has a current result.
+   Run `python tools/assets/check-raster-assets.py`,
+   `python tools/assets/render-rail-icons.py --check`, and
+   `python tools/assets/render-app-icon.py --check` for visual assets.
+   Completion criterion: The tree contains no SVG assets and PNG variants match.
 7. For UI changes, run `tools/verify-ui.ps1` against the release build.
    Completion criterion: The native capture procedure has a current result.
 8. For UI changes, inspect the captures at the documented sizes.

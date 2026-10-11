@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -59,6 +59,82 @@ pub struct ImportedSample {
 }
 fn default_source_bpm() -> f64 {
     SOURCE_BPM
+}
+
+/// A project's imported samples. A selected WAV folder can supply thousands of
+/// them, so project copies share one list until an edit changes it: history
+/// entries and render requests then cost the same for any palette size.
+#[derive(Clone, Debug, Default)]
+pub struct ImportedSamples(std::sync::Arc<Vec<ImportedSample>>);
+
+impl ImportedSamples {
+    /// Whether both lists are one allocation, as project copies are until
+    /// an edit changes the imports.
+    pub fn is_shared_with(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl std::ops::Deref for ImportedSamples {
+    type Target = Vec<ImportedSample>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl std::ops::DerefMut for ImportedSamples {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        std::sync::Arc::make_mut(&mut self.0)
+    }
+}
+impl PartialEq for ImportedSamples {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0) || self.0 == other.0
+    }
+}
+impl PartialEq<Vec<ImportedSample>> for ImportedSamples {
+    fn eq(&self, other: &Vec<ImportedSample>) -> bool {
+        *self.0 == *other
+    }
+}
+impl From<Vec<ImportedSample>> for ImportedSamples {
+    fn from(samples: Vec<ImportedSample>) -> Self {
+        Self(std::sync::Arc::new(samples))
+    }
+}
+impl FromIterator<ImportedSample> for ImportedSamples {
+    fn from_iter<I: IntoIterator<Item = ImportedSample>>(samples: I) -> Self {
+        Vec::from_iter(samples).into()
+    }
+}
+impl IntoIterator for ImportedSamples {
+    type Item = ImportedSample;
+    type IntoIter = std::vec::IntoIter<ImportedSample>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::sync::Arc::unwrap_or_clone(self.0).into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a ImportedSamples {
+    type Item = &'a ImportedSample;
+    type IntoIter = std::slice::Iter<'a, ImportedSample>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+impl<'a> IntoIterator for &'a mut ImportedSamples {
+    type Item = &'a mut ImportedSample;
+    type IntoIter = std::slice::IterMut<'a, ImportedSample>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::sync::Arc::make_mut(&mut self.0).iter_mut()
+    }
+}
+impl Serialize for ImportedSamples {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for ImportedSamples {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Vec::deserialize(deserializer).map(Self::from)
+    }
 }
 
 /// A retained source reference whose audio is currently unavailable.
@@ -254,7 +330,7 @@ pub struct Project {
     pub clips: Vec<Clip>,
     pub loop_region: Option<[u32; 2]>,
     #[serde(default)]
-    pub imported_samples: Vec<ImportedSample>,
+    pub imported_samples: ImportedSamples,
     #[serde(default)]
     pub missing_samples: Vec<MissingSample>,
     #[serde(default)]
@@ -291,7 +367,7 @@ impl Default for Project {
             tracks: vec![Track::default(); TRACK_COUNT],
             clips: Vec::new(),
             loop_region: None,
-            imported_samples: Vec::new(),
+            imported_samples: ImportedSamples::default(),
             missing_samples: Vec::new(),
             sample_conflicts: Vec::new(),
             import_notices: Vec::new(),
@@ -303,6 +379,9 @@ impl Default for Project {
 impl Project {
     /// Remove choices that no longer affect the arrangement before saving or relinking.
     pub fn prune_sample_conflicts(&mut self) {
+        if self.sample_conflicts.is_empty() {
+            return;
+        }
         let used: HashSet<_> = self.clips.iter().map(|clip| clip.sample_id).collect();
         for conflict in &mut self.sample_conflicts {
             conflict.sample_ids.retain(|id| used.contains(id));
@@ -427,7 +506,9 @@ impl Project {
             }
         }
         for c in &self.clips {
-            if c.sample_id >= 1_000_000 && !imported_ids.contains(&c.sample_id) {
+            if c.sample_id >= crate::products::IMPORTED_ID_START
+                && !imported_ids.contains(&c.sample_id)
+            {
                 return Err(format!("Clip {} has no imported sample reference.", c.id));
             }
             if !ids.insert(c.id) {
@@ -453,34 +534,15 @@ impl Project {
         }
         Ok(())
     }
+    /// Write the earlier JSON project format. The application saves `.mixjam`
+    /// songs; tests use this to make JSON projects to open.
+    #[cfg(test)]
     pub fn save(&self, path: &Path) -> Result<(), String> {
         self.validate()?;
         let bytes = serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_PROJECT_BYTES {
-            return Err("The project file exceeds the 16 MiB limit. Use a smaller project.".into());
-        }
-        let filename = path
-            .file_name()
-            .ok_or("Select a project file.")?
-            .to_string_lossy();
-        let temp = path.with_file_name(format!(".{filename}.{}.tmp", std::process::id()));
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp)
-            .map_err(|e| e.to_string())?;
-        let result = (|| -> Result<(), String> {
-            file.write_all(&bytes)
-                .and_then(|_| file.sync_all())
-                .map_err(|e| e.to_string())?;
-            drop(file);
-            fs::rename(&temp, path).map_err(|e| e.to_string())
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temp);
-        }
-        result
+        crate::atomic_file::write(path, &bytes)
     }
+    /// Read the earlier JSON project format.
     pub fn load(path: &Path) -> Result<Self, String> {
         let file = fs::File::open(path).map_err(|e| e.to_string())?;
         if file.metadata().map_err(|e| e.to_string())?.len() > MAX_PROJECT_BYTES as u64 {
@@ -599,9 +661,10 @@ fn valid_gain(g: f32) -> bool {
 }
 
 pub struct Editor {
-    pub project: Project,
+    project: Project,
     undo: Vec<Project>,
     redo: Vec<Project>,
+    generation: u64,
 }
 impl Editor {
     pub fn new(project: Project) -> Self {
@@ -609,9 +672,34 @@ impl Editor {
             project,
             undo: Vec::new(),
             redo: Vec::new(),
+            generation: 0,
         }
     }
+    pub fn project(&self) -> &Project {
+        &self.project
+    }
+    pub fn into_project(self) -> Project {
+        self.project
+    }
+    /// A count that advances with every change to the project, including
+    /// undo and redo. A rejected or no-op transaction leaves it unchanged.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
     pub fn transact(&mut self, change: impl FnOnce(&mut Project)) -> Result<(), String> {
+        self.transact_step(false, change)
+    }
+    /// Apply a change that continues the previous transaction's gesture, such
+    /// as one more frame of a slider drag. Undo then returns to the state
+    /// before the gesture instead of stepping through each frame.
+    pub fn transact_continuing(&mut self, change: impl FnOnce(&mut Project)) -> Result<(), String> {
+        self.transact_step(true, change)
+    }
+    fn transact_step(
+        &mut self,
+        continuing: bool,
+        change: impl FnOnce(&mut Project),
+    ) -> Result<(), String> {
         let previous = self.project.clone();
         change(&mut self.project);
         self.project.prune_sample_conflicts();
@@ -620,17 +708,26 @@ impl Editor {
             return Err(e);
         }
         if previous != self.project {
-            self.undo.push(previous);
-            if self.undo.len() > 100 {
-                self.undo.remove(0);
+            if !continuing || self.undo.is_empty() {
+                self.undo.push(previous);
+                if self.undo.len() > 100 {
+                    self.undo.remove(0);
+                }
             }
             self.redo.clear();
+            self.generation += 1;
         }
         Ok(())
+    }
+    /// Record current library bindings. They follow the selected providers
+    /// and are not an edit, so history does not change.
+    pub fn set_libraries(&mut self, libraries: Vec<crate::products::LibraryBinding>) {
+        self.project.libraries = libraries;
     }
     pub fn undo(&mut self) -> bool {
         if let Some(p) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.project, p));
+            self.generation += 1;
             true
         } else {
             false
@@ -639,6 +736,7 @@ impl Editor {
     pub fn redo(&mut self) -> bool {
         if let Some(p) = self.redo.pop() {
             self.undo.push(std::mem::replace(&mut self.project, p));
+            self.generation += 1;
             true
         } else {
             false
@@ -674,12 +772,7 @@ impl Editor {
         })?;
         Ok(id)
     }
-    pub fn delete(&mut self, id: u64) -> Result<(), String> {
-        if !self.project.clips.iter().any(|c| c.id == id) {
-            return Err("The clip does not exist.".into());
-        }
-        self.transact(|p| p.clips.retain(|c| c.id != id))
-    }
+    #[cfg(test)]
     pub fn move_clip(&mut self, id: u64, track: usize, start_tick: u32) -> Result<(), String> {
         let c = self
             .project
@@ -694,26 +787,6 @@ impl Editor {
             c.start_tick = start_tick;
         })
     }
-    pub fn duplicate(&mut self, id: u64, track: usize, start_tick: u32) -> Result<(), String> {
-        let c = self
-            .project
-            .clips
-            .iter()
-            .find(|c| c.id == id)
-            .ok_or("The clip does not exist.")?
-            .clone();
-        let new_id = self.place(c.sample_id, track, start_tick, c.length_ticks)?;
-        // One undo entry must cover the complete duplicate, including its trim and volume.
-        let new = self
-            .project
-            .clips
-            .iter_mut()
-            .find(|c| c.id == new_id)
-            .unwrap();
-        new.offset_frames = c.offset_frames;
-        new.gain = c.gain;
-        Ok(())
-    }
     pub fn move_clips(
         &mut self,
         ids: &[u64],
@@ -727,23 +800,26 @@ impl Editor {
         }
         let mut additions = Vec::with_capacity(ids.len());
         let mut next_id = self.project.clips.iter().map(|c| c.id).max().unwrap_or(0);
+        let by_id: std::collections::HashMap<_, _> =
+            self.project.clips.iter().map(|c| (c.id, c)).collect();
         for id in ids {
-            let mut c = self
-                .project
-                .clips
-                .iter()
-                .find(|c| c.id == *id)
-                .ok_or("A selected clip does not exist.")?
-                .clone();
+            let mut c = (*by_id.get(id).ok_or("A selected clip does not exist.")?).clone();
             c.track = usize::try_from(c.track as i64 + track_delta as i64)
                 .map_err(|_| "The selection is outside the timeline.")?;
-            c.start_tick = u32::try_from(c.start_tick as i64 + tick_delta)
-                .map_err(|_| "The selection is outside the timeline.")?;
+            c.start_tick = (c.start_tick as i64)
+                .checked_add(tick_delta)
+                .and_then(|tick| u32::try_from(tick).ok())
+                .ok_or("The selection is outside the timeline.")?;
             if copy {
                 next_id = next_id.checked_add(1).ok_or("Clip ID limit reached.")?;
                 c.id = next_id;
             }
             additions.push(c);
+        }
+        // Keep ordering and history intact when a drag ends at its starting
+        // position. Resolve every selected ID above before accepting the move.
+        if !copy && track_delta == 0 && tick_delta == 0 {
+            return Ok(ids.to_vec());
         }
         let mut proposed = self.project.clone();
         if !copy {
@@ -758,7 +834,7 @@ impl Editor {
         Ok(result)
     }
 }
-fn ensure_space(
+pub(crate) fn ensure_space(
     p: &Project,
     except: Option<u64>,
     track: usize,
@@ -797,7 +873,7 @@ mod tests {
             origin: None,
         };
         let mut project = Project {
-            imported_samples: vec![source],
+            imported_samples: vec![source].into(),
             sample_conflicts: vec![SampleConflict {
                 reference: "Old/lead.wav".into(),
                 sample_ids: vec![1_000_000],
@@ -901,25 +977,6 @@ mod tests {
         assert!(project.validate().is_err());
     }
 
-    #[test]
-    fn oversized_save_leaves_the_existing_project_and_directory_unchanged() {
-        let directory = std::env::temp_dir().join(format!(
-            "mixjam-techno-oversized-save-{}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&directory).unwrap();
-        let path = directory.join("project.json");
-        fs::write(&path, b"existing project").unwrap();
-        let project = Project {
-            title: "x".repeat(MAX_PROJECT_BYTES),
-            ..Project::default()
-        };
-        assert!(project.save(&path).is_err());
-        assert_eq!(fs::read(&path).unwrap(), b"existing project");
-        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
-        fs::remove_file(path).unwrap();
-        fs::remove_dir(directory).unwrap();
-    }
     #[test]
     fn last_of_sixty_four_tracks_supports_edit_undo_and_redo() {
         let mut editor = Editor::new(Project::default());
@@ -1325,7 +1382,8 @@ mod tests {
                 source_bpm: 180.0,
                 source_sample_rate: None,
                 origin: Some(Product::T1),
-            }],
+            }]
+            .into(),
             ..Project::default()
         };
         project.validate().unwrap();
@@ -1375,21 +1433,79 @@ mod tests {
         assert!((p.frames_per_tick(44100) * 256.0 - 75600.0).abs() < 1e-8);
     }
     #[test]
-    fn save_preserves_an_existing_temporary_file() {
+    fn save_replaces_the_project_beside_an_existing_temporary_file() {
         let directory =
             std::env::temp_dir().join(format!("mixjam-techno-save-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let path = directory.join("mix.json");
         let temp = directory.join(format!(".mix.json.{}.tmp", std::process::id()));
         fs::write(&temp, b"unrelated existing file").unwrap();
-        assert!(Project::default().save(&path).is_err());
-        assert_eq!(fs::read(&temp).unwrap(), b"unrelated existing file");
-        fs::remove_file(&temp).unwrap();
         let p = Project::default();
         p.save(&path).unwrap();
+        assert_eq!(fs::read(&temp).unwrap(), b"unrelated existing file");
         assert_eq!(Project::load(&path).unwrap(), p);
+        fs::remove_file(&temp).unwrap();
         fs::remove_file(&path).unwrap();
         fs::remove_dir(&directory).unwrap();
+    }
+    #[test]
+    fn history_entries_share_the_import_list_until_an_edit_changes_it() {
+        let sample = |id| ImportedSample {
+            id,
+            name: "Palette sound".into(),
+            group_name: "Wave".into(),
+            path: PathBuf::from("palette.wav"),
+            source_bpm: 140.0,
+            source_sample_rate: None,
+            origin: None,
+        };
+        let mut e = Editor::new(Project {
+            imported_samples: vec![sample(1_000_000)].into(),
+            ..Project::default()
+        });
+        e.place(1, 0, 0, 256).unwrap();
+        e.transact(|p| p.master_gain = 1.0).unwrap();
+        assert!(e.undo.iter().all(|snapshot| {
+            snapshot
+                .imported_samples
+                .is_shared_with(&e.project.imported_samples)
+        }));
+        e.transact(|p| p.imported_samples.push(sample(1_000_001)))
+            .unwrap();
+        let before = e.undo.last().unwrap();
+        assert!(
+            !before
+                .imported_samples
+                .is_shared_with(&e.project.imported_samples)
+        );
+        assert_eq!(before.imported_samples.len(), 1);
+        assert_eq!(e.project.imported_samples.len(), 2);
+    }
+    #[test]
+    fn zero_move_preserves_clip_order_history_and_redo_and_checks_ids() {
+        let mut editor = Editor::new(Project::default());
+        let first = editor.place(1, 0, 0, 256).unwrap();
+        let second = editor.place(2, 0, 256, 256).unwrap();
+        editor
+            .transact(|project| project.master_gain = 1.0)
+            .unwrap();
+        assert!(editor.undo());
+        let before = editor.project.clone();
+        let generation = editor.generation();
+        let undo_count = editor.undo.len();
+        let redo = editor.redo.clone();
+        assert_eq!(editor.move_clips(&[first], 0, 0, false).unwrap(), [first]);
+        assert_eq!(
+            editor.move_clips(&[second, first], 0, 0, false).unwrap(),
+            [second, first]
+        );
+        assert!(editor.move_clips(&[first, u64::MAX], 0, 0, false).is_err());
+        assert_eq!(editor.project, before);
+        assert_eq!(editor.generation(), generation);
+        assert_eq!(editor.undo.len(), undo_count);
+        assert_eq!(editor.redo, redo);
+        assert!(editor.redo());
+        assert_eq!(editor.project.master_gain, 1.0);
     }
     #[test]
     fn group_moves_validate_final_positions_and_undo_once() {

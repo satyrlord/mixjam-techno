@@ -33,11 +33,19 @@ pub fn resolve_asset(path: &Path) -> Result<PathBuf, String> {
         "mixjam-electron",
     ]
     .map(|name| (name, base.join(name)));
-    resolve_asset_in(
-        path,
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("local-data/legacy"),
-        &old_roots,
-    )
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let support = std::env::var_os("MIXJAM_TECHNO_SUPPORT_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            workspace.parent().unwrap().join(format!(
+                "{}-support",
+                workspace.file_name().unwrap().to_string_lossy()
+            ))
+        });
+    if !support.is_absolute() {
+        return Err("The support folder must use an absolute path.".into());
+    }
+    resolve_asset_in(path, &support.join("legacy"), &old_roots)
 }
 
 fn resolve_asset_in(

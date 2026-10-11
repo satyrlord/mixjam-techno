@@ -8,6 +8,7 @@ use view::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     time::Duration,
 };
@@ -16,11 +17,29 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Response, Sense, S
 
 use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
-    Clip, EditCommand, EffectsState, MissingReference, MissingSample, Pcm, Product, Project,
-    SUPPORTED_BPMS, Sample, Session, StepSynthState, TICKS_PER_BAR, TRACK_COUNT,
+    Clip, EditCommand, EffectsState, LibraryView, MissingReference, MissingSample, Pcm, Product,
+    Project, SUPPORTED_BPMS, Sample, Session, StepSynthState, TICKS_PER_BAR, TRACK_COUNT,
 };
 
-#[derive(Clone)]
+/// What the filtered palette depends on.
+#[derive(PartialEq)]
+struct PaletteKey {
+    catalog_revision: u64,
+    /// The catalog's address and size also tell one session from another.
+    catalog: (usize, usize),
+    imported: usize,
+    search: String,
+    group: Option<String>,
+    product: Option<Product>,
+}
+
+/// The filtered sample indices and the category names of one catalog.
+struct PaletteCache {
+    key: PaletteKey,
+    indices: Rc<Vec<usize>>,
+    groups: Rc<Vec<String>>,
+}
+
 enum DragItem {
     Sample(u32),
     Clip { id: u64, offset: u32, copy: bool },
@@ -92,12 +111,17 @@ pub struct MixJamApp {
     step_synth_effects_expanded: bool,
     edit_start: u64,
     edit_end: u64,
+    /// The sound and catalog revision that the edit range was last set for.
+    edit_source: Option<(u32, u64)>,
     edit_pitch: f64,
     stretch_source_bpm: f64,
     stretch_target_bpm: f64,
     armed_track: usize,
     import_path: Option<PathBuf>,
+    palette_cache: Option<PaletteCache>,
     import_bpm: f64,
+    /// The tempo for unrecognized WAVs in the next sample folder scan.
+    fallback_bpm: f64,
 }
 
 /// The first status line: a startup notice, or the idle text.
@@ -132,9 +156,20 @@ impl MixJamApp {
         app
     }
 
+    /// Show the fallback tempo that the current sample folder was scanned with.
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn set_fallback_bpm(&mut self, bpm: f64) {
+        self.fallback_bpm = bpm;
+    }
+
     pub fn set_startup_messages(&mut self, messages: &[String]) {
         if !messages.is_empty() {
-            self.status = format!("{} {}", self.status, messages.join(" "));
+            let messages = messages.join(" ");
+            self.status = if self.status == DEFAULT_STATUS {
+                messages
+            } else {
+                format!("{} {messages}", self.status)
+            };
             self.status_error = true;
         }
     }
@@ -271,6 +306,7 @@ impl MixJamApp {
             step_synth_effects_expanded: capture_view == "step-synth-effects",
             edit_start: 0,
             edit_end: 0,
+            edit_source: None,
             edit_pitch: 0.0,
             stretch_source_bpm: 140.0,
             stretch_target_bpm: 140.0,
@@ -280,7 +316,9 @@ impl MixJamApp {
                 0
             },
             import_path,
+            palette_cache: None,
             import_bpm: 140.0,
+            fallback_bpm: 140.0,
         }
     }
 
@@ -471,6 +509,23 @@ impl MixJamApp {
     }
 
     fn open(&mut self) {
+        let folder = self
+            .session
+            .song_folder()
+            .unwrap_or_else(|| self.default_song_folder());
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Songs", &["mixjam", "mix", "json"])
+            .set_directory(folder)
+            .pick_file()
+        else {
+            return;
+        };
+        self.session.remember_song_folder(&path);
+        self.open_path(&path);
+    }
+
+    /// The mix folder of the sample library, until the user has chosen a song.
+    fn default_song_folder(&self) -> PathBuf {
         let root = self
             .session
             .library()
@@ -485,28 +540,23 @@ impl MixJamApp {
                     .map(|binding| binding.root.clone())
             })
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-        let folder = [
+        [
             root.join("\x65Jay/mix"),
             root.join("MIX"),
             root.join("D2/MIX"),
         ]
         .into_iter()
         .find(|path| path.is_dir())
-        .unwrap_or(root);
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Songs", &["mix", "mixjam", "json"])
-            .set_directory(folder)
-            .pick_file()
-        else {
-            return;
-        };
-        self.open_path(&path);
+        .unwrap_or(root)
     }
 
     fn open_path(&mut self, path: &Path) {
         match self.session.open(path) {
             Ok(()) => {
                 self.clear_selection();
+                // A gesture begun on the previous mix names clips that are gone.
+                self.drag = None;
+                self.selection_origin = None;
                 self.message(with_import_summary(
                     format!("Opened {}.", path.display()),
                     self.session.project(),
@@ -518,10 +568,17 @@ impl MixJamApp {
 
     fn save(&mut self, choose_path: bool) {
         let path = if choose_path || self.session.file().is_none() {
-            rfd::FileDialog::new()
-                .add_filter("MixJam Techno project", &["json"])
-                .set_file_name(format!("{}.json", self.session.project().title))
-                .save_file()
+            let mut dialog = rfd::FileDialog::new()
+                .add_filter("MixJam song", &["mixjam"])
+                .set_file_name(format!("{}.mixjam", self.session.project().title));
+            if let Some(folder) = self.session.song_folder() {
+                dialog = dialog.set_directory(folder);
+            }
+            let path = dialog.save_file();
+            if let Some(path) = &path {
+                self.session.remember_song_folder(path);
+            }
+            path
         } else {
             self.session.file().map(Path::to_path_buf)
         };
@@ -542,10 +599,8 @@ impl MixJamApp {
         else {
             return;
         };
-        match self.session.export(&path) {
-            Ok(()) => self.message(format!("Exported {}.", path.display())),
-            Err(error) => self.error(format!("Cannot export mix: {error}")),
-        }
+        let result = self.session.start_export(&path);
+        self.apply(result);
     }
 
     fn new_mix(&mut self) {
@@ -570,7 +625,7 @@ impl MixJamApp {
     }
 
     fn select_wave_folder(&mut self, root: &Path) {
-        match self.session.start_wave_scan(root, self.import_bpm) {
+        match self.session.start_wave_scan(root, self.fallback_bpm) {
             Ok(()) => {
                 self.clear_selection();
                 self.message(format!("Scanning {}…", root.display()));
@@ -668,7 +723,19 @@ impl MixJamApp {
         if ctx.wants_keyboard_input() {
             return;
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+        // Held keys repeat. A toggle or a file action must run once per press.
+        let pressed_once = |key: egui::Key| {
+            ctx.input(|i| {
+                i.events.iter().any(|event| {
+                    matches!(
+                        event,
+                        egui::Event::Key { key: pressed, pressed: true, repeat: false, .. }
+                            if *pressed == key
+                    )
+                })
+            })
+        };
+        if pressed_once(egui::Key::Space) {
             if self.session.wants_playback() {
                 self.pause();
             } else {
@@ -682,10 +749,10 @@ impl MixJamApp {
             let redo = ctx.input(|i| i.modifiers.shift);
             self.history_step(redo);
         }
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::S)) {
+        if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::S) {
             self.save(false);
         }
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
+        if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::O) {
             self.request_action(PendingAction::Open, ctx);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -707,8 +774,58 @@ impl MixJamApp {
             })
     }
 
+    /// The filtered palette and its category names. Both scan the whole
+    /// catalog, so they are kept until a filter or the catalog changes.
+    fn palette_view(&mut self) -> (Rc<Vec<usize>>, Rc<Vec<String>>) {
+        let key = PaletteKey {
+            catalog_revision: self.session.catalog_revision(),
+            catalog: {
+                let samples = self.session.library().samples;
+                (samples.as_ptr() as usize, samples.len())
+            },
+            imported: self.session.project().imported_samples.len(),
+            search: self.search.clone(),
+            group: self.group.clone(),
+            product: self.palette_product,
+        };
+        if let Some(cache) = &self.palette_cache
+            && cache.key == key
+        {
+            return (cache.indices.clone(), cache.groups.clone());
+        }
+        let indices = Rc::new(self.palette_indices());
+        let groups: BTreeMap<String, &str> = self
+            .session
+            .library()
+            .samples
+            .iter()
+            .map(|sample| sample.group_name.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(|name| (name.to_lowercase(), name))
+            .collect();
+        let groups = Rc::new(groups.into_values().map(str::to_owned).collect());
+        self.palette_cache = Some(PaletteCache {
+            key,
+            indices: Rc::clone(&indices),
+            groups: Rc::clone(&groups),
+        });
+        (indices, groups)
+    }
+
     fn palette_indices(&self) -> Vec<usize> {
         let query = self.search.to_lowercase();
+        // One lookup table for the whole palette, not one search per sample.
+        let origins: std::collections::HashMap<u32, Product> = if self.palette_product.is_some() {
+            self.session
+                .project()
+                .imported_samples
+                .iter()
+                .filter_map(|sample| Some((sample.id, sample.origin?)))
+                .collect()
+        } else {
+            Default::default()
+        };
         self.session
             .library()
             .samples
@@ -719,9 +836,12 @@ impl MixJamApp {
                     .group
                     .as_deref()
                     .is_none_or(|group| sample.group_name.eq_ignore_ascii_case(group))
-                    && self
-                        .palette_product
-                        .is_none_or(|product| self.sample_product(sample.id) == Some(product))
+                    && self.palette_product.is_none_or(|product| {
+                        Product::sample_key(sample.id)
+                            .map(|(product, _)| product)
+                            .or_else(|| origins.get(&sample.id).copied())
+                            == Some(product)
+                    })
                     && (query.is_empty() || sample.name.to_lowercase().contains(&query)))
                 .then_some(index)
             })
@@ -820,17 +940,21 @@ impl MixJamApp {
                     self.place(id, track, self.position_tick(pos.x, rect, fine))
                 }
                 DragItem::Clip { id, offset, copy } => {
-                    let raw_tick = self.position_tick(pos.x, rect, true).saturating_sub(offset);
-                    let step = if fine {
+                    let pointer_tick = self.position_tick(pos.x, rect, true);
+                    let step = i64::from(if fine {
                         TICKS_PER_BAR / 16
                     } else {
                         TICKS_PER_BAR
-                    };
-                    let tick = raw_tick / step * step;
+                    });
                     if let Some(anchor) = self.session.project().clips.iter().find(|c| c.id == id) {
                         let ids: Vec<_> = self.selected_clips.iter().copied().collect();
                         let track_delta = track as i32 - anchor.track as i32;
-                        let tick_delta = i64::from(tick) - i64::from(anchor.start_tick);
+                        // Snap the distance dragged to the nearest step. Flooring
+                        // the position would move a clip a whole bar for a slight
+                        // leftward drift, and shift an off-bar clip on a track change.
+                        let start = i64::from(anchor.start_tick);
+                        let dragged = i64::from(pointer_tick) - i64::from(offset) - start;
+                        let tick_delta = ((dragged + step / 2).div_euclid(step) * step).max(-start);
                         match self.session.move_clips(&ids, track_delta, tick_delta, copy) {
                             Ok(ids) => {
                                 self.selected_clip = ids.first().copied();
@@ -903,7 +1027,7 @@ impl MixJamApp {
                         ("Seek / loop", "Click a bar number to seek. Drag the ruler to loop."),
                         ("Play / pause", "Space"),
                         ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z"),
-                        ("Open / save", "Ctrl+O / Ctrl+S. Open MIX, MIXJAM, or JSON; save JSON."),
+                        ("Open / save", "Ctrl+O / Ctrl+S. Open MIX, MIXJAM, or JSON; save MIXJAM."),
                         ("Export", "Stereo WAV"),
                     ] {
                         ui.label(action);
@@ -1196,7 +1320,7 @@ impl MixJamApp {
                     let scan = self.session.wave_scan();
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
-                        ui.add(egui::DragValue::new(&mut self.import_bpm).range(1.0..=999.0))
+                        ui.add(egui::DragValue::new(&mut self.fallback_bpm).range(1.0..=999.0))
                             .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
                         if ui
                             .add_enabled(
@@ -1637,7 +1761,14 @@ impl MixJamApp {
                         .source_id()
                         .and_then(|id| self.session.library().sample_by_id(id))
                         .map_or(0, |s| u64::from(s.frame_count));
-                    if self.edit_end == 0 {
+                    // A replacement can keep its source ID. Do not apply the
+                    // previous audio's draft range after a catalog change.
+                    let source = self
+                        .source_id()
+                        .map(|id| (id, self.session.catalog_revision()));
+                    if self.edit_end == 0 || self.edit_source != source {
+                        self.edit_source = source;
+                        self.edit_start = 0;
                         self.edit_end = frames;
                     }
                     ui.horizontal(|ui| {

@@ -19,7 +19,8 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     )
 }
 
-pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
+#[cfg(test)]
+pub(crate) fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
     load_named_bytes(Path::new("original.mix"), bytes, library)
 }
 

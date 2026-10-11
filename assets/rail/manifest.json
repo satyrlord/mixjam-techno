@@ -1,18 +1,107 @@
 {
-  "renderer": "resvg-py 0.3.1",
+  "source": "Canonical 96 by 96 RGBA PNG files in this directory",
   "pillow": "12.3.0",
-  "view_box": [
-    0,
-    0,
-    24,
-    24
-  ],
-  "stroke_width": 1.7,
   "stroke_colour": "#05092a",
+  "historical_provenance": {
+    "description": "Hashes of the earlier authoring sources. These are historical records, not required asset inputs.",
+    "donor_commit": "5965621be6ac2ea5330db9fb231755860617a285",
+    "donor_icon_source_sha256": "f7e2791cb0c9641a654d219be24619d01070983b7732eb4a424a89644d65ba9b",
+    "icons": [
+      {
+        "name": "open",
+        "source_sha256": "2b93b3520352bb032f27e56dc2728bfcd3b0f852b1123a71bc8fae2a5deeb195",
+        "donor_symbol": null
+      },
+      {
+        "name": "save",
+        "source_sha256": "ba10be309639550b19ec0e6c4f92e541662cd2384b9ef5f9fe55955672ea1f23",
+        "donor_symbol": "save"
+      },
+      {
+        "name": "save-as",
+        "source_sha256": "20d1e34beb79fe61d0bb3b49f21d24c3efb414b70c72b65d81b201063c945ebd",
+        "donor_symbol": null
+      },
+      {
+        "name": "export",
+        "source_sha256": "d6df00e7657aed46a8de29c8bf09bed7c5b323336548315fff821d049bb3fe57",
+        "donor_symbol": "export"
+      },
+      {
+        "name": "import",
+        "source_sha256": "cd788d61ddffcbdd94dda0f2ca47ac333aa393c0ea29e8f79d7423f1d9c53979",
+        "donor_symbol": null
+      },
+      {
+        "name": "libraries",
+        "source_sha256": "e6f31e1c78f84fefa94e215c33c2c8a15cc0fd2153665011c5aebbf68ff52941",
+        "donor_symbol": null
+      },
+      {
+        "name": "new",
+        "source_sha256": "22af76f5131fb148f729f76f98bb2e2f8cb48356d98d90b2744f9a62845ad0f3",
+        "donor_symbol": null
+      },
+      {
+        "name": "mixer",
+        "source_sha256": "fdc024b0ef995cabcc7133ee01d0d3722b87bfe52076993ca464e8ffea520c6b",
+        "donor_symbol": "mixer"
+      },
+      {
+        "name": "erase",
+        "source_sha256": "14a5a436ff798e77bbc25b58fa986ef681e7ab9033f7ed6a3226c251f5bc7931",
+        "donor_symbol": "erase"
+      },
+      {
+        "name": "delete",
+        "source_sha256": "fb2421c776191974dce60cc3ff60a6b2bcfbcc5f60fadec2f959ba653cb024e4",
+        "donor_symbol": "trash"
+      },
+      {
+        "name": "effects",
+        "source_sha256": "452c2fcf73a5d342bffc39854af63a71f8697d1a37b5b267b41e616b52eca3a9",
+        "donor_symbol": "inspector"
+      },
+      {
+        "name": "step-synth",
+        "source_sha256": "7091905c8ec8284bec9b44000112132b05e232e5b960877c7f5a22f41cc454b5",
+        "donor_symbol": null
+      },
+      {
+        "name": "edit",
+        "source_sha256": "b7537b5d586dea705e2bd775a3031efbea0a66e7cc7e77f58e0869687ca7c1cc",
+        "donor_symbol": null
+      },
+      {
+        "name": "stretch",
+        "source_sha256": "b9102d0d34c605170760c09c7eb87a68e1f8133b978c89b84315a475462dd2eb",
+        "donor_symbol": null
+      },
+      {
+        "name": "record",
+        "source_sha256": "7d43519d6d3e20175808b582ce56324af30c0765583554d9729d6b0a1f848019",
+        "donor_symbol": null
+      },
+      {
+        "name": "mix",
+        "source_sha256": "aac271e1af5513cec281df8a51f260f9a48f7bc32126980a0f17303ca3bb36c5",
+        "donor_symbol": null
+      },
+      {
+        "name": "undo",
+        "source_sha256": "9113a7e1b2b2ac781415f5b83beb8d05b085044b0e48232d3c32879cd2ca406b",
+        "donor_symbol": "undo"
+      },
+      {
+        "name": "redo",
+        "source_sha256": "3eeb549f4e45b3558fa38b90a8c9d11fa5f20d6b6db45e976d9e6109253c86e3",
+        "donor_symbol": "redo"
+      }
+    ]
+  },
   "icons": [
     {
       "name": "open",
-      "svg_sha256": "2b93b3520352bb032f27e56dc2728bfcd3b0f852b1123a71bc8fae2a5deeb195",
       "png_sha256": "a602525ca4aea52f32198c43e3d5d74c775c8b65a5cdfeb65fb2a1a891c5e93f",
       "size": [
         96,
@@ -22,17 +111,30 @@
       "visible_pixels": 2503,
       "opaque_pixels": 1896,
       "transparent_pixels": 6713,
+      "antialiased_pixels": 607,
       "alpha_bounds": [
         8,
         12,
         88,
         84
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "ccfee0fd325560bf65b1def69d6ae1b76d11e46468517d19241ea4f887fe2551"
+        },
+        {
+          "size": 30,
+          "png_sha256": "d82e9e404eecab76e716b01cff849798cc507627a9fc871ece58b3d2f3fc92e6"
+        },
+        {
+          "size": 40,
+          "png_sha256": "733d1ec69f36a9b70c340e50ac10869cbb77cb12a35031f7846706d0eb4360b8"
+        }
+      ]
     },
     {
       "name": "save",
-      "svg_sha256": "ba10be309639550b19ec0e6c4f92e541662cd2384b9ef5f9fe55955672ea1f23",
       "png_sha256": "48a45c5b4c299582ebcf718c4d0cbd4fa7442c77d09511811e67db7dd50dcf2e",
       "size": [
         96,
@@ -42,17 +144,30 @@
       "visible_pixels": 2894,
       "opaque_pixels": 2197,
       "transparent_pixels": 6322,
+      "antialiased_pixels": 697,
       "alpha_bounds": [
         16,
         12,
         80,
         84
       ],
-      "preserved_path": "save"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "15624604d1c6ed9984c7ce463e462622bbd75b87ea844324508b4500f58ab23e"
+        },
+        {
+          "size": 30,
+          "png_sha256": "64fd0221bbe2c180f45d8b20ffd2fa3ecd958f06a85018e930cda175d8960a7c"
+        },
+        {
+          "size": 40,
+          "png_sha256": "292d46dbf2aa6915abce4ab8775559e1bea3d50b91e1e73d593b0cf259c2e714"
+        }
+      ]
     },
     {
       "name": "save-as",
-      "svg_sha256": "20d1e34beb79fe61d0bb3b49f21d24c3efb414b70c72b65d81b201063c945ebd",
       "png_sha256": "6cb4f2f161bb7c982157d4f782bba4cb5780d76a8eec4413cb1d7c47745bb526",
       "size": [
         96,
@@ -62,17 +177,30 @@
       "visible_pixels": 2962,
       "opaque_pixels": 2287,
       "transparent_pixels": 6254,
+      "antialiased_pixels": 675,
       "alpha_bounds": [
         16,
         12,
         92,
         84
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "79e8da7db678613ad29bbf88dd2c3ad274e2a0b2b3d67a2ff498b4145c923e86"
+        },
+        {
+          "size": 30,
+          "png_sha256": "b040f5dce086b53356dd7abe39a67ffee29fbed302cefa65c2ae9058f29ad9cb"
+        },
+        {
+          "size": 40,
+          "png_sha256": "6360783b76e44c3a05075c055b3b456d7a31dd0ca296b505c865766f30469ebd"
+        }
+      ]
     },
     {
       "name": "export",
-      "svg_sha256": "d6df00e7657aed46a8de29c8bf09bed7c5b323336548315fff821d049bb3fe57",
       "png_sha256": "b88d475dd182353fa7ba69af797b1ae9556186fa49909d4f8f746c704f124520",
       "size": [
         96,
@@ -82,17 +210,30 @@
       "visible_pixels": 1534,
       "opaque_pixels": 1142,
       "transparent_pixels": 7682,
+      "antialiased_pixels": 392,
       "alpha_bounds": [
         16,
         12,
         80,
         80
       ],
-      "preserved_path": "export"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "9cb63b3468b2bd458fd76b579052e5987e15399eb9bbdfcbb3ccb16848c49af2"
+        },
+        {
+          "size": 30,
+          "png_sha256": "566b3e5cdb6d1ac3aa1ca3a0092bfcaf7610ff80bd694000562c2879e9db1b95"
+        },
+        {
+          "size": 40,
+          "png_sha256": "38956136c241438a3496b8ac04d8cc0b898645b35a00d24c87a016c525c6089c"
+        }
+      ]
     },
     {
       "name": "import",
-      "svg_sha256": "cd788d61ddffcbdd94dda0f2ca47ac333aa393c0ea29e8f79d7423f1d9c53979",
       "png_sha256": "9ac4a1d83218aa9b62a2a2ee2982acdd475c81a8242be38a2f348a8dc715a19a",
       "size": [
         96,
@@ -102,17 +243,30 @@
       "visible_pixels": 1534,
       "opaque_pixels": 1142,
       "transparent_pixels": 7682,
+      "antialiased_pixels": 392,
       "alpha_bounds": [
         16,
         12,
         80,
         80
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "1da75769c133e2b3b9f129a0fbc4acdf65c726eee0ea261503f3ba18c537e447"
+        },
+        {
+          "size": 30,
+          "png_sha256": "a9e7e9ef7362d7279018e56db35605bb27f559ba2c4f2e9cee97653db53ab193"
+        },
+        {
+          "size": 40,
+          "png_sha256": "08ff22e8ee6e856cd17cdcc506c533558a203eb2fc164da33e2cdb3eddc0e687"
+        }
+      ]
     },
     {
       "name": "libraries",
-      "svg_sha256": "e6f31e1c78f84fefa94e215c33c2c8a15cc0fd2153665011c5aebbf68ff52941",
       "png_sha256": "1f5cc705bac5c99eafceb38405c398e23131337a2628eca69eb086bf87f5a900",
       "size": [
         96,
@@ -122,17 +276,30 @@
       "visible_pixels": 3472,
       "opaque_pixels": 2669,
       "transparent_pixels": 5744,
+      "antialiased_pixels": 803,
       "alpha_bounds": [
         8,
         12,
         92,
         84
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "165dca63f1b0f17ad52bd5a8993e60090c82527c82f48f828261c1e6bd8e8a1e"
+        },
+        {
+          "size": 30,
+          "png_sha256": "58eeb572fbbe003922bde00e5459a3b345a6d63957892651c7f995f5363b6232"
+        },
+        {
+          "size": 40,
+          "png_sha256": "3eadb8135745d49789e4afd633205c3d4a5c316b4e8df364c1410ede69d17fd4"
+        }
+      ]
     },
     {
       "name": "new",
-      "svg_sha256": "22af76f5131fb148f729f76f98bb2e2f8cb48356d98d90b2744f9a62845ad0f3",
       "png_sha256": "5c1f38f3a355d5c518598d57dbcdeed21020f4067492300ca358a307c6566e40",
       "size": [
         96,
@@ -142,17 +309,30 @@
       "visible_pixels": 2632,
       "opaque_pixels": 1980,
       "transparent_pixels": 6584,
+      "antialiased_pixels": 652,
       "alpha_bounds": [
         16,
         8,
         80,
         88
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "8acde1b85c3eb72d4c9e0ac7cad5de1f288cd8e70822e1456f7c19efbe439253"
+        },
+        {
+          "size": 30,
+          "png_sha256": "553186021bea205a509ed7dc79980d398334b4b1f9eb4c80786617f77dc88b1f"
+        },
+        {
+          "size": 40,
+          "png_sha256": "b18cd51e6185f62da71aa13ff0d705b027e4728fdb9666aac609344c48795130"
+        }
+      ]
     },
     {
       "name": "mixer",
-      "svg_sha256": "fdc024b0ef995cabcc7133ee01d0d3722b87bfe52076993ca464e8ffea520c6b",
       "png_sha256": "25fdd0e1c42de3fd3d86e34cfaba1bd05a0d02b88baf06484014240c7d48ffa4",
       "size": [
         96,
@@ -162,17 +342,30 @@
       "visible_pixels": 2040,
       "opaque_pixels": 1476,
       "transparent_pixels": 7176,
+      "antialiased_pixels": 564,
       "alpha_bounds": [
         12,
         12,
         84,
         84
       ],
-      "preserved_path": "mixer"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "6c51632259f867d65fc379c10bc57fda9d0bd6f6a6603fec2283044ecf8fdedc"
+        },
+        {
+          "size": 30,
+          "png_sha256": "985b64d330deaeff109351354b9393c15dac23a0b7cafd898c6203d8746407be"
+        },
+        {
+          "size": 40,
+          "png_sha256": "c119ba0b68fdaf317a3c740eaff9198a4cb35e5a1dcf7885c6d6a00e85746b69"
+        }
+      ]
     },
     {
       "name": "erase",
-      "svg_sha256": "14a5a436ff798e77bbc25b58fa986ef681e7ab9033f7ed6a3226c251f5bc7931",
       "png_sha256": "a677f2c5a7db8f1e0fa01db7581f561b115c028f6358af01216784ea5778a899",
       "size": [
         96,
@@ -182,17 +375,30 @@
       "visible_pixels": 2306,
       "opaque_pixels": 1765,
       "transparent_pixels": 6910,
+      "antialiased_pixels": 541,
       "alpha_bounds": [
         8,
         8,
         88,
         88
       ],
-      "preserved_path": "erase"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "9e621ef6c1cf5004ade514383e9fc627179a9853883ef0ca78c1304c1540f9b6"
+        },
+        {
+          "size": 30,
+          "png_sha256": "1921e17fcb4861124b34b83abd3621e241a6f41402fb97aeff20e192f486b1c8"
+        },
+        {
+          "size": 40,
+          "png_sha256": "6107ad9df6bfc130da8df8ccc74622ed20bb8ae315213611cadcea5b6305ce7f"
+        }
+      ]
     },
     {
       "name": "delete",
-      "svg_sha256": "fb2421c776191974dce60cc3ff60a6b2bcfbcc5f60fadec2f959ba653cb024e4",
       "png_sha256": "2b51bb5f6829d3bde6c2add8246287b5644620a5048543c8927b01dfa9c5b6fb",
       "size": [
         96,
@@ -202,17 +408,30 @@
       "visible_pixels": 2408,
       "opaque_pixels": 1820,
       "transparent_pixels": 6808,
+      "antialiased_pixels": 588,
       "alpha_bounds": [
         12,
         12,
         84,
         84
       ],
-      "preserved_path": "trash"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "1de2c147372247bec430955e9709e0f712d91de1f88b58b30ccd0bbe9ae8a602"
+        },
+        {
+          "size": 30,
+          "png_sha256": "e2420ba1677f099f565314ed0d4f384dc97bc09b76d040558b184693d5c663fc"
+        },
+        {
+          "size": 40,
+          "png_sha256": "6121c70098bbcd962fe90f6ec577872e724bf0d8a61cd00e0e085f7726956c07"
+        }
+      ]
     },
     {
       "name": "effects",
-      "svg_sha256": "452c2fcf73a5d342bffc39854af63a71f8697d1a37b5b267b41e616b52eca3a9",
       "png_sha256": "24d26d8974bb0e41b18ff86dd15bd9007c89d7fa3d061cfee4c8fc3fcf0f3996",
       "size": [
         96,
@@ -222,17 +441,30 @@
       "visible_pixels": 1290,
       "opaque_pixels": 971,
       "transparent_pixels": 7926,
+      "antialiased_pixels": 319,
       "alpha_bounds": [
         8,
         20,
         88,
         76
       ],
-      "preserved_path": "inspector"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "ad3c429113bf5e140115567cc6af8a97557df8d868441978d7788af4a3223cab"
+        },
+        {
+          "size": 30,
+          "png_sha256": "c18af2cdfe63c73bf68e87088dfe6f78cccf26d6a5b0c6c7778c1d206419d86c"
+        },
+        {
+          "size": 40,
+          "png_sha256": "fe1fb7d5f0fa3bd3906a3fa5d82458bc4357be1212a96dcd94e71baabc7785a0"
+        }
+      ]
     },
     {
       "name": "step-synth",
-      "svg_sha256": "7091905c8ec8284bec9b44000112132b05e232e5b960877c7f5a22f41cc454b5",
       "png_sha256": "36668749cc784920ef3cc3416cdc6f27ab56fe8e89cfbe0829b8c816d8d7aa40",
       "size": [
         96,
@@ -242,17 +474,30 @@
       "visible_pixels": 1630,
       "opaque_pixels": 1227,
       "transparent_pixels": 7586,
+      "antialiased_pixels": 403,
       "alpha_bounds": [
         16,
         8,
         80,
         88
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "899b9fb49c14060ffcdc32f431c189e84e3f9fe5c7bb65578528577a4fb1b015"
+        },
+        {
+          "size": 30,
+          "png_sha256": "67abc6d62563a3ab905a667d454eee5d67c1bd46d59c1336d2150b7745c657de"
+        },
+        {
+          "size": 40,
+          "png_sha256": "822cccf15e8c9f528a88b3835692829c318760cf9f9d90e60247949a7ac1385d"
+        }
+      ]
     },
     {
       "name": "edit",
-      "svg_sha256": "b7537b5d586dea705e2bd775a3031efbea0a66e7cc7e77f58e0869687ca7c1cc",
       "png_sha256": "b855f910b68619fce902ba0a0f3d1952bdb2f7bbe418a2c420af2a821b060263",
       "size": [
         96,
@@ -262,17 +507,30 @@
       "visible_pixels": 2156,
       "opaque_pixels": 1748,
       "transparent_pixels": 7060,
+      "antialiased_pixels": 408,
       "alpha_bounds": [
         12,
         8,
         88,
         84
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "32f0f69ccfeab90e5cbf0085538288283e2811f49184fc9102981bf76a501fa5"
+        },
+        {
+          "size": 30,
+          "png_sha256": "096a6527d5b12d7cc4b6cbf709fffdd3cc3e94298a2eb02449b160f6205d9234"
+        },
+        {
+          "size": 40,
+          "png_sha256": "e006cc67f10611e645a63dd4e8c098876c38f0e8d7cff14ddd92a4a9e0eb1c4a"
+        }
+      ]
     },
     {
       "name": "stretch",
-      "svg_sha256": "b9102d0d34c605170760c09c7eb87a68e1f8133b978c89b84315a475462dd2eb",
       "png_sha256": "c536515664dcb3ac8dd54829f10c10601301da8af78095de970763c24e9a993d",
       "size": [
         96,
@@ -282,17 +540,30 @@
       "visible_pixels": 2004,
       "opaque_pixels": 1528,
       "transparent_pixels": 7212,
+      "antialiased_pixels": 476,
       "alpha_bounds": [
         8,
         20,
         88,
         76
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "ed4aeb90c0309eacd4a2564a763a1b0dc4545821fb30105ee2fb6243048adc2c"
+        },
+        {
+          "size": 30,
+          "png_sha256": "d4597a0aaf9ccc030f5b8892f870d8f99705dc7ebf32be740754c7a64e01762a"
+        },
+        {
+          "size": 40,
+          "png_sha256": "2b8988e89a6fac354f691532249918a4f9c2fc36554092e518e4a1d4e1aad0a8"
+        }
+      ]
     },
     {
       "name": "record",
-      "svg_sha256": "7d43519d6d3e20175808b582ce56324af30c0765583554d9729d6b0a1f848019",
       "png_sha256": "98c7aaa1f43aa70010001c9d5097dc5e1426564bb888e28d6d06b28b588c9367",
       "size": [
         96,
@@ -302,17 +573,30 @@
       "visible_pixels": 2006,
       "opaque_pixels": 1493,
       "transparent_pixels": 7210,
+      "antialiased_pixels": 513,
       "alpha_bounds": [
         20,
         8,
         76,
         88
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "c82bddeafe8ab99da6df18ec4c394917ac9e2fc227a56193e94a5caf7d2547f0"
+        },
+        {
+          "size": 30,
+          "png_sha256": "d14b932fd99c2847c3ce1c1c29c0ede78376b1f28e73189f43ea0846d47b63ff"
+        },
+        {
+          "size": 40,
+          "png_sha256": "96c469b0f6f9f5041e284f6c356e9601b75e8eb5b77f3889bab7f71aba17df65"
+        }
+      ]
     },
     {
       "name": "mix",
-      "svg_sha256": "aac271e1af5513cec281df8a51f260f9a48f7bc32126980a0f17303ca3bb36c5",
       "png_sha256": "a06263a6f15fd235df23b6f88b4ba32729f3224dc7ef99a758f104f589b978d5",
       "size": [
         96,
@@ -322,17 +606,30 @@
       "visible_pixels": 2148,
       "opaque_pixels": 1600,
       "transparent_pixels": 7068,
+      "antialiased_pixels": 548,
       "alpha_bounds": [
         8,
         4,
         88,
         92
       ],
-      "preserved_path": null
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "a7b741d2beb8cc6f3c0b4cb4f79eab09af07245fb779a9c3bf1ec6e0415ff7bf"
+        },
+        {
+          "size": 30,
+          "png_sha256": "84b11a906438cad3dcf44bc2f7ce8d2ff4b5b568b03fdd44dbc825b0d105982c"
+        },
+        {
+          "size": 40,
+          "png_sha256": "9308c67bbc2e941bc23879e2d530941ace83cdb5a8af1f1e85a6bbba959bc346"
+        }
+      ]
     },
     {
       "name": "undo",
-      "svg_sha256": "9113a7e1b2b2ac781415f5b83beb8d05b085044b0e48232d3c32879cd2ca406b",
       "png_sha256": "5b356406dda229c6db597a6f362e7d236bb0af8b32e3b15faf6e663d98466d7e",
       "size": [
         96,
@@ -342,17 +639,30 @@
       "visible_pixels": 1791,
       "opaque_pixels": 1324,
       "transparent_pixels": 7425,
+      "antialiased_pixels": 467,
       "alpha_bounds": [
         12,
         12,
         82,
         90
       ],
-      "preserved_path": "undo"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "d1e90c60b10d58263d3cc160e866af8b4497515b22dc18851a380662368b2653"
+        },
+        {
+          "size": 30,
+          "png_sha256": "0bd8991aa8d9597270605ff5cbb185703504fdb8be3204914c6859a5767cd45b"
+        },
+        {
+          "size": 40,
+          "png_sha256": "1f768d209cae020a81e0cbc17a75324979f2d3b0c44978d96bc4e1e200deaf63"
+        }
+      ]
     },
     {
       "name": "redo",
-      "svg_sha256": "3eeb549f4e45b3558fa38b90a8c9d11fa5f20d6b6db45e976d9e6109253c86e3",
       "png_sha256": "364c0a7da307f0853fb2f94664fc766907e4819b1f8a9965b550eb93271bb544",
       "size": [
         96,
@@ -362,13 +672,27 @@
       "visible_pixels": 1790,
       "opaque_pixels": 1326,
       "transparent_pixels": 7426,
+      "antialiased_pixels": 464,
       "alpha_bounds": [
         14,
         12,
         84,
         90
       ],
-      "preserved_path": "redo"
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "42295afd0d20e5f9df6107ac5d9bc562fe16a0cc119a9eb1cac738849a4ba0f1"
+        },
+        {
+          "size": 30,
+          "png_sha256": "eb8d5081590632784b761e4d5f6096fc3489b6eebe2d7c2b4fd251a281943012"
+        },
+        {
+          "size": 40,
+          "png_sha256": "a5a62b210352befb776148581f92c66d178e3e8d04072d6d484e987f672d8898"
+        }
+      ]
     }
   ]
 }

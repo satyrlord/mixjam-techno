@@ -38,8 +38,10 @@ struct Buffer {
     error: Option<String>,
 }
 impl Buffer {
-    fn push(&mut self, data: &[f32]) {
-        for frame in data.chunks_exact(self.channels) {
+    /// Mix interleaved input frames to mono. A trailing partial frame is dropped.
+    fn push(&mut self, mut data: impl ExactSizeIterator<Item = f32>) {
+        for _ in 0..data.len() / self.channels {
+            let sum: f32 = data.by_ref().take(self.channels).sum();
             if self.skip > 0 {
                 self.skip -= 1;
                 continue;
@@ -47,7 +49,7 @@ impl Buffer {
             if self.samples.len() >= self.limit {
                 break;
             }
-            let value = frame.iter().copied().sum::<f32>() / self.channels as f32;
+            let value = sum / self.channels as f32;
             self.samples.push(if value.is_finite() {
                 value.clamp(-1.0, 1.0)
             } else {
@@ -104,11 +106,14 @@ impl Recorder {
             return Err("The audio input settings are not supported.".into());
         }
         let sample_rate = config.sample_rate.0;
+        let limit = sample_rate as usize * 600;
         let buffer = Arc::new(Mutex::new(Buffer {
             channels: config.channels as usize,
             skip: (sample_rate as f64 * 480.0 / bpm).round() as u64,
-            limit: sample_rate as usize * 600,
-            samples: Vec::new(),
+            limit,
+            // Reserve the first minute, so that a short take does not
+            // reallocate inside the input callback.
+            samples: Vec::with_capacity(limit / 10),
             error: None,
         }));
         let capture = buffer.clone();
@@ -123,7 +128,7 @@ impl Recorder {
                 &config,
                 move |data: &[f32], _| {
                     if let Ok(mut b) = capture.lock() {
-                        b.push(data);
+                        b.push(data.iter().copied());
                     }
                 },
                 on_error,
@@ -132,9 +137,8 @@ impl Recorder {
             cpal::SampleFormat::I16 => device.build_input_stream(
                 &config,
                 move |data: &[i16], _| {
-                    let converted: Vec<_> = data.iter().map(|x| *x as f32 / 32768.0).collect();
                     if let Ok(mut b) = capture.lock() {
-                        b.push(&converted);
+                        b.push(data.iter().map(|x| *x as f32 / 32768.0));
                     }
                 },
                 on_error,
@@ -143,12 +147,8 @@ impl Recorder {
             cpal::SampleFormat::U16 => device.build_input_stream(
                 &config,
                 move |data: &[u16], _| {
-                    let converted: Vec<_> = data
-                        .iter()
-                        .map(|x| (*x as f32 - 32768.0) / 32768.0)
-                        .collect();
                     if let Ok(mut b) = capture.lock() {
-                        b.push(&converted);
+                        b.push(data.iter().map(|x| (*x as f32 - 32768.0) / 32768.0));
                     }
                 },
                 on_error,
@@ -190,11 +190,12 @@ impl Recorder {
             .buffer
             .lock()
             .map_err(|_| "The recording buffer is unavailable.")?;
-        if let Some(e) = &b.error {
-            return Err(e.clone());
-        }
+        // A failed input keeps the audio that it captured before the failure.
         if b.samples.is_empty() {
-            return Err("No audio was recorded after the count-in.".into());
+            return Err(b
+                .error
+                .clone()
+                .unwrap_or_else(|| "No audio was recorded after the count-in.".into()));
         }
         Ok(Pcm {
             sample_rate: self.sample_rate,
@@ -215,9 +216,22 @@ mod tests {
             samples: Vec::new(),
             error: None,
         };
-        b.push(&[1.0, 1.0, 0.5, 0.5, 0.2, 0.6, 0.0, 0.2, 1.0, 1.0]);
+        b.push([1.0, 1.0, 0.5, 0.5, 0.2, 0.6, 0.0, 0.2, 1.0, 1.0].into_iter());
         assert_eq!(b.skip, 0);
         assert_eq!(b.samples, vec![0.4, 0.1]);
+    }
+    #[test]
+    fn a_failed_input_keeps_the_audio_captured_before_the_failure() {
+        let recorder = Recorder::fixture();
+        recorder.buffer.lock().unwrap().error = Some("Audio input failed.".into());
+        assert_eq!(recorder.finish().unwrap().samples, vec![0.25, -0.25]);
+        let recorder = Recorder::fixture();
+        {
+            let mut buffer = recorder.buffer.lock().unwrap();
+            buffer.samples.clear();
+            buffer.error = Some("Audio input failed.".into());
+        }
+        assert_eq!(recorder.finish().unwrap_err(), "Audio input failed.");
     }
     #[test]
     fn metronome_has_eight_beats_and_two_bars() {

@@ -30,7 +30,7 @@ mod tests {
         editor.place(1, 0, 0, TICKS_PER_BAR).unwrap();
         editor.place(1, 1, TICKS_PER_BAR, TICKS_PER_BAR).unwrap();
         let mut app = MixJamApp::from_session(
-            Session::headless(library, editor.project).unwrap(),
+            Session::headless(library, editor.into_project()).unwrap(),
             "UI fixture".into(),
             false,
         );
@@ -38,6 +38,67 @@ mod tests {
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         (context, app)
+    }
+
+    #[test]
+    fn app_version_stays_at_the_bottom_right_with_long_status_and_notices() {
+        let (context, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.source_notices.push("Imported source notice".into());
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+        app.status = "A long status message with a saved sample path. ".repeat(100);
+        for (width, height) in [(1440.0, 1000.0), (1024.0, 768.0), (960.0, 720.0)] {
+            let size = Vec2::new(width, height);
+            frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            let bounds = |label: &str| {
+                output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == label => {
+                        let rect = text.galley.rect.translate(text.pos.to_vec2());
+                        assert!(shape.clip_rect.contains_rect(rect), "Clipped {label}: {rect:?} in {:?}", shape.clip_rect);
+                        Some(rect)
+                    }
+                    _ => None,
+                }).unwrap_or_else(|| panic!("Missing status label: {label}"))
+            };
+            let version = bounds(&format!("v{}", mixjam_techno::APP_VERSION));
+            // The bottom bar ends before the 64-point tool rail.
+            assert!((version.right() - (width - 64.0 - 18.0)).abs() <= 1.0);
+            assert!(version.top() >= height - 30.0);
+            assert!(version.bottom() <= height);
+            assert!(bounds(&app.status).right() < version.left());
+            assert!(bounds("Import details").right() < version.left());
+        }
+    }
+
+    #[test]
+    fn version_link_opens_the_repository_through_the_system_browser() {
+        let (context, mut app) = fixture();
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let version = output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if text.galley.job.text == format!("v{}", mixjam_techno::APP_VERSION) =>
+            {
+                assert!(text.galley.job.sections.iter().all(|section| section.format.color == ACCENT));
+                Some(text.galley.rect.translate(text.pos.to_vec2()))
+            }
+            _ => None,
+        }).expect("The version link must be visible.");
+        pointer(&context, &mut app, version.center(), true, egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![egui::Event::PointerButton {
+            pos: version.center(),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }], egui::Modifiers::NONE);
+        assert!(output.platform_output.commands.iter().any(|command| matches!(
+            command,
+            egui::OutputCommand::OpenUrl(url)
+                if url.url == "https://github.com/satyrlord/mixjam-techno" && url.new_tab
+        )));
     }
 
     #[test]
@@ -388,6 +449,33 @@ mod tests {
             frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         }
         (context, app, dir)
+    }
+
+    #[test]
+    fn sample_editor_resets_its_range_when_a_conflict_replaces_the_same_source_id() {
+        let (context, mut app, dir) = sample_conflicts_fixture("edit-range");
+        app.session.confirm_sample_conflicts().unwrap();
+        app.show_sample_conflicts = false;
+        app.selected_sample = Some(1_000_000);
+        app.show_sample_edit = true;
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!((app.edit_start, app.edit_end), (0, 2000));
+        app.edit_start = 200;
+        app.edit_end = 600;
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!((app.edit_start, app.edit_end), (200, 600));
+
+        app.session.resolve_sample_conflict(0, 1).unwrap();
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.source_id(), Some(1_000_000));
+        assert_eq!((app.edit_start, app.edit_end), (0, 2000));
+
+        app.edit_start = 300;
+        app.edit_end = 800;
+        app.history_step(false);
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!((app.edit_start, app.edit_end), (0, 2000));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -993,6 +1081,57 @@ mod tests {
     }
 
     #[test]
+    fn mixer_gain_labels_use_one_decimal_without_changing_precision() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.tracks[0].gain = -0.7533;
+        project.tracks[1].gain = 0.3333;
+        project.master_gain = 0.7777;
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+        ctx.enable_accesskit();
+        app.show_mixer = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for label in ["-0.8", "+0.3", "+0.8"] {
+            text_rect(&output, label);
+        }
+        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        assert_eq!(app.session.project().tracks[1].gain, 0.3333);
+        assert_eq!(app.session.project().master_gain, 0.7777);
+        assert!(!app.session.unsaved());
+
+        // Entering the rounded value is a real edit, even though the passive
+        // label stays the same. Merely focusing must retain the full value.
+        focus_control(&ctx, &mut app, &output, "Track 2 gain value");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "+0.3333");
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("+0.3".into()),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[1].gain, 0.3);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "+0.3");
+        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        assert_eq!(app.session.project().master_gain, 0.7777);
+    }
+
+    #[test]
     fn mixer_gain_pan_and_routes_support_accessibility_and_keyboard_input() {
         let (ctx, mut app) = fixture();
         let mut project = app.session.project().clone();
@@ -1414,6 +1553,65 @@ mod tests {
         );
         app.history_step(false);
         assert_eq!(app.session.project().clips.len(), 2);
+    }
+
+    #[test]
+    fn a_short_drag_keeps_the_bar_and_an_erased_clip_leaves_the_selection() {
+        let (ctx, mut app) = fixture();
+        let canvas = app.timeline_rect.unwrap();
+        let bar = app.timeline_bar_width;
+        let first = app
+            .clip_rect(&app.session.project().clips[0], canvas)
+            .center();
+        let second = app
+            .clip_rect(&app.session.project().clips[1], canvas)
+            .center();
+        let starts = |app: &MixJamApp| {
+            app.session
+                .project()
+                .clips
+                .iter()
+                .map(|clip| clip.start_tick)
+                .collect::<Vec<_>>()
+        };
+        let before = starts(&app);
+        // The nearest bar decides, to the left as well as to the right.
+        for (distance, bars) in [(-0.3, 0), (0.3, 0), (0.7, 1), (-0.7, -1)] {
+            let from = app
+                .clip_rect(&app.session.project().clips[1], canvas)
+                .center();
+            let target = from + Vec2::new(bar * distance, 0.0);
+            pointer(&ctx, &mut app, from, true, egui::Modifiers::NONE);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(target)],
+                egui::Modifiers::NONE,
+            );
+            pointer(&ctx, &mut app, target, false, egui::Modifiers::NONE);
+            let expected = before[1] as i64 + bars * i64::from(TICKS_PER_BAR);
+            assert_eq!(
+                i64::from(app.session.project().clips[1].start_tick),
+                expected,
+                "A drag of {distance} bars must move the clip {bars} bars."
+            );
+            if bars != 0 {
+                app.history_step(false);
+            }
+        }
+        assert_eq!(starts(&app), before);
+        click(&ctx, &mut app, first, egui::Modifiers::NONE);
+        click(&ctx, &mut app, second, egui::Modifiers::SHIFT);
+        let erased = app.session.project().clips[0].id;
+        app.erase = true;
+        click(&ctx, &mut app, first, egui::Modifiers::NONE);
+        app.erase = false;
+        assert!(!app.selected_clips.contains(&erased));
+        app.delete_selection();
+        assert!(
+            app.session.project().clips.is_empty(),
+            "Delete must still remove the rest of the selection."
+        );
     }
 
     #[test]

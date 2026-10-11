@@ -9,7 +9,7 @@ impl SourceTempos {
     pub(crate) fn bundled() -> Result<Self, String> {
         let mut result = Self::default();
         for product in Product::ALL {
-            for entry in catalog::wave_metadata(product)? {
+            for entry in catalog::bundled_wave_metadata(product)? {
                 if let Some(digest) = entry.pcm_identity().filter(|_| entry.frame_count > 2) {
                     result.insert(digest, entry.source_bpm);
                 }

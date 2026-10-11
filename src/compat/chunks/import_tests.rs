@@ -607,7 +607,7 @@ fn missing_framed_wave_keeps_exact_span_and_all_saved_metadata() {
     assert_eq!(missing.metadata["Native label 2"], "Source label");
     assert_eq!(missing.metadata["Saved sample ID"], "10193");
     assert_eq!(missing.metadata["Declared bars"], "3");
-    let saved = scratch.root.join("saved.json");
+    let saved = scratch.root.join("saved.mixjam");
     crate::project_io::save(&project, &saved).unwrap();
     let (reopened, _) = crate::project_io::open(&saved, &library).unwrap();
     assert_eq!(reopened.missing_samples, project.missing_samples);
@@ -691,4 +691,79 @@ fn conflicting_placement_metadata_keeps_every_tuple_within_field_limits() {
         .collect();
     assert_eq!(rows.len(), 100_000);
     assert!(rows.contains("256, 99999, 512, 1"));
+}
+
+#[test]
+fn an_embedded_wave_payload_cannot_hold_further_records() {
+    fn riff(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend_from_slice(&(payload.len() as u32 + 4).to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+    fn record(path: &str, wave: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        wrapped(&mut bytes, path);
+        bytes.extend_from_slice(&(wave.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(wave);
+        bytes
+    }
+    let nested = record(r"C:\nested.wav", &riff(&[0; 64]));
+    let mut bytes = record(r"C:\outer.wav", &riff(&[nested, vec![0; 64]].concat()));
+    bytes.extend(record(r"C:\next.wav", &riff(&[0; 64])));
+    bytes.extend_from_slice(&[0; 16]);
+    let paths: Vec<_> = embedded_wave_records(&bytes)
+        .unwrap()
+        .into_iter()
+        .map(|source| source.path)
+        .collect();
+    assert_eq!(paths, [r"C:\outer.wav", r"C:\next.wav"]);
+}
+
+#[test]
+fn resolved_wave_aliases_retain_one_owned_payload_within_the_asset_budget() {
+    let bytes = wave(0.1749);
+    let mut pending = Vec::new();
+    // Only one payload fits. Aliases must neither consume that budget again
+    // nor keep an uncounted audio copy in the resolution cache.
+    let mut total = MAX_PENDING_ASSET_BYTES - bytes.len();
+    let mut resolved = HashMap::new();
+    for alias in 0..32 {
+        let path = format!(r"C:\old-{alias}\take.wav");
+        let retained = retain_wave(
+            Wave {
+                source_path: path.clone(),
+                bytes: Cow::Owned(bytes.clone()),
+                frames: 4,
+                sample_rate: 44100,
+            },
+            &mut pending,
+            &mut total,
+        )
+        .unwrap();
+        resolved.insert(path, retained);
+    }
+    assert_eq!(total, MAX_PENDING_ASSET_BYTES);
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].1.as_ref(), bytes);
+    for retained in resolved.values() {
+        assert_eq!(retained.path, pending[0].0);
+        assert_eq!((retained.frames, retained.sample_rate), (4, 44100));
+    }
+    assert!(
+        retain_wave(
+            Wave {
+                source_path: "different.wav".into(),
+                bytes: Cow::Owned(wave(0.1748)),
+                frames: 4,
+                sample_rate: 44100,
+            },
+            &mut pending,
+            &mut total,
+        )
+        .unwrap_err()
+        .contains("500 MB")
+    );
+    assert_eq!(pending.len(), 1);
 }

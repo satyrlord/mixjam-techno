@@ -31,12 +31,12 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     let root = library.source_root(Product::T1);
     let native = root
         .filter(|_| !library.is_wav_product(Product::T1))
-        .map(|root| {
+        // Without readable catalogs, spans come from the registered samples.
+        .and_then(|root| {
             legacy_format::library::Library::load(root)
+                .ok()
                 .map(|native| (root, native))
-                .map_err(|error| format!("Cannot read the T1 sample catalogs: {error}"))
-        })
-        .and_then(Result::ok);
+        });
     convert(&mix, path, library, |native_id| {
         let global_id = Product::T1.global_sample_id(u32::from(native_id))?;
         let sample = library

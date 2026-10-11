@@ -10,7 +10,8 @@ $executable = Join-Path $PSScriptRoot 'target\release\mixjam-techno.exe'
 Push-Location $PSScriptRoot
 try {
     if ($Build -or -not (Test-Path -LiteralPath $executable)) {
-        if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '.toolchain\cargo\bin\cargo.exe')) {
+        $supportRoot = & (Join-Path $PSScriptRoot 'tools\runtime\support-root.ps1')
+        if (Test-Path -LiteralPath (Join-Path $supportRoot 'toolchain\cargo\bin\cargo.exe')) {
             & (Join-Path $PSScriptRoot 'tools\runtime\cargo.ps1') -CargoArguments @('build','--release','--locked')
         } else {
             & cargo build --release --locked

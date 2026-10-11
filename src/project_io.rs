@@ -5,6 +5,7 @@ use crate::{
     products::{LibraryBinding, Product},
 };
 use std::{
+    collections::HashSet,
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -68,7 +69,7 @@ pub(crate) fn retain_manual_wave(path: &Path, root: &Path) -> Result<PathBuf, St
         target.sync_all().map_err(|error| error.to_string())?;
         drop(target);
         // Validate the retained bytes, including changes made during the source copy.
-        crate::audio::read_wav(&temporary)?;
+        crate::audio::visit_wav_samples(&temporary, |_, _| {})?;
         let digest = hash.finalize();
         let retained = folder.join(format!("{digest:x}.wav"));
         if retained.exists() {
@@ -144,42 +145,8 @@ pub fn load_scan_cache(data_root: &Path) -> crate::library::ScanCache {
 
 pub fn save_scan_cache(data_root: &Path, cache: &crate::library::ScanCache) -> Result<(), String> {
     let bytes = serde_json::to_vec(cache).map_err(|e| e.to_string())?;
-    write_atomically(&data_root.join("wav-scan-cache.json"), &bytes)
-}
-
-fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let parent = path.parent().ok_or("The settings path has no folder.")?;
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    // Unique per write: an interrupted or concurrent save never blocks this one.
-    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_nanos());
-    let temp = path.with_extension(format!(
-        "{}-{stamp}-{}.tmp",
-        std::process::id(),
-        WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    use std::io::Write;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)
-        .map_err(|e| e.to_string())?;
-    let result = (|| {
-        file.write_all(bytes).map_err(|e| e.to_string())?;
-        file.sync_all().map_err(|e| e.to_string())?;
-        drop(file);
-        fs::rename(&temp, path).map_err(|e| e.to_string())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temp);
-    }
-    result
-}
-
-pub fn save_wave_config(root: &Path, source_bpm: f64) -> Result<(), String> {
-    save_wave_config_in(&data_root(), root, source_bpm)
+    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
+    crate::atomic_file::write(&data_root.join("wav-scan-cache.json"), &bytes)
 }
 
 pub fn save_wave_config_in(data_root: &Path, root: &Path, source_bpm: f64) -> Result<(), String> {
@@ -188,28 +155,24 @@ pub fn save_wave_config_in(data_root: &Path, root: &Path, source_bpm: f64) -> Re
     }
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
-    let path = data_root.join("sample-folder.json");
-    let temp = path.with_extension(format!("{}.tmp", std::process::id()));
-    use std::io::Write;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)
+    let bytes = serde_json::to_vec_pretty(&WaveFolderConfig { root, source_bpm })
         .map_err(|e| e.to_string())?;
-    let result = (|| {
-        file.write_all(
-            &serde_json::to_vec_pretty(&WaveFolderConfig { root, source_bpm })
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
-        file.sync_all().map_err(|e| e.to_string())?;
-        drop(file);
-        fs::rename(&temp, &path).map_err(|e| e.to_string())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temp);
-    }
-    result
+    crate::atomic_file::write(&data_root.join("sample-folder.json"), &bytes)
+}
+
+/// The folder of the song last chosen in a file dialog, while that folder exists.
+pub fn load_song_folder(data_root: &Path) -> Option<PathBuf> {
+    let file = fs::File::open(data_root.join("song-folder.json")).ok()?;
+    let mut bytes = Vec::new();
+    file.take(1024 * 1024).read_to_end(&mut bytes).ok()?;
+    let folder: PathBuf = serde_json::from_slice(&bytes).ok()?;
+    folder.is_dir().then_some(folder)
+}
+
+pub fn save_song_folder(data_root: &Path, folder: &Path) -> Result<(), String> {
+    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(folder).map_err(|e| e.to_string())?;
+    crate::atomic_file::write(&data_root.join("song-folder.json"), &bytes)
 }
 
 pub fn reference_samples_root() -> PathBuf {
@@ -229,17 +192,26 @@ pub fn reference_samples_root() -> PathBuf {
 }
 
 pub fn load_library_config() -> Result<Vec<LibraryBinding>, String> {
-    let path = data_root().join("libraries.json");
-    match fs::read(&path) {
-        Ok(bytes) if bytes.len() <= 1024 * 1024 => serde_json::from_slice(&bytes)
-            .map_err(|e| format!("Cannot read the library settings: {e}")),
-        Ok(_) => Err("The library settings exceed the 1 MiB limit.".into()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(format!("Cannot read the library settings: {error}")),
+    const LIMIT: u64 = 1024 * 1024;
+    let file = match fs::File::open(data_root().join("libraries.json")) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("Cannot read the library settings: {error}")),
+    };
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Cannot read the library settings: {error}"))?;
+    if bytes.len() as u64 > LIMIT {
+        return Err("The library settings exceed the 1 MiB limit.".into());
     }
+    let bindings: Vec<LibraryBinding> = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("Cannot read the library settings: {e}"))?;
+    validate_library_config(&bindings)?;
+    Ok(bindings)
 }
 
-pub fn save_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
+fn validate_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
     let mut products = std::collections::HashSet::new();
     if bindings.len() > Product::ALL.len()
         || bindings
@@ -248,27 +220,14 @@ pub fn save_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
     {
         return Err("Library settings require distinct products and absolute folder paths.".into());
     }
+    Ok(())
+}
+
+pub fn save_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
+    validate_library_config(bindings)?;
     fs::create_dir_all(data_root()).map_err(|e| e.to_string())?;
-    let path = data_root().join("libraries.json");
-    let temp = data_root().join(format!(".libraries.{}.tmp", std::process::id()));
     let bytes = serde_json::to_vec_pretty(bindings).map_err(|e| e.to_string())?;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)
-        .map_err(|e| e.to_string())?;
-    use std::io::Write;
-    let result = (|| {
-        file.write_all(&bytes)
-            .and_then(|_| file.sync_all())
-            .map_err(|e| e.to_string())?;
-        drop(file);
-        fs::rename(&temp, &path).map_err(|e| e.to_string())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temp);
-    }
-    result
+    crate::atomic_file::write(&data_root().join("libraries.json"), &bytes)
 }
 
 pub fn default_root(product: Product) -> Option<PathBuf> {
@@ -295,8 +254,15 @@ pub fn default_root(product: Product) -> Option<PathBuf> {
 }
 
 pub fn open(path: &Path, library: &Library) -> Result<(Project, Library), String> {
+    open_song(path, library).map(|(project, library, _)| (project, library))
+}
+
+/// Open a song, a `.mix` or v7 `.mixjam` import, or an earlier JSON project.
+/// The flag says whether Save can replace the file: only a format version 8
+/// song. Imports and earlier JSON projects need a new `.mixjam` path.
+pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bool), String> {
     let candidate = library.clone();
-    let project = if path
+    let (project, song) = if path
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("mix"))
     {
@@ -308,28 +274,27 @@ pub fn open(path: &Path, library: &Library) -> Result<(Project, Library), String
             _ => crate::compat::chunks::load(path, product, &candidate)?,
         };
         project.libraries = candidate.bindings().to_vec();
-        project
-    } else if path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("mixjam"))
-    {
-        crate::mixjam::load(path, &candidate)?
+        (project, false)
+    } else if has_song_extension(path) {
+        crate::mixjam::load_song(path, &candidate)?
     } else {
-        Project::load(path)?
+        (Project::load(path)?, false)
     };
-    resolve(project, &candidate)
+    let (project, library) = resolve(project, &candidate)?;
+    Ok((project, library, song))
 }
 
 pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Library), String> {
     project.validate()?;
     project.prune_sample_conflicts();
     let mut candidate = library.clone();
+    let used: HashSet<_> = project.clips.iter().map(|clip| clip.sample_id).collect();
     project
         .imported_samples
-        .retain(|sample| project.clips.iter().any(|clip| clip.sample_id == sample.id));
+        .retain(|sample| used.contains(&sample.id));
     project
         .missing_samples
-        .retain(|sample| project.clips.iter().any(|clip| clip.sample_id == sample.id));
+        .retain(|sample| used.contains(&sample.id));
     for binding in project.libraries.clone() {
         // A selected WAV provider takes precedence over paths saved on another machine.
         if candidate.source_root(binding.product).is_some() || candidate.wav_root().is_some() {
@@ -725,8 +690,16 @@ fn rebase_asset(
     Ok(Vec::new())
 }
 
+fn has_song_extension(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("mixjam"))
+}
+
 /// A saved song references its used audio, not every sound in the browser palette.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
+    if !has_song_extension(path) {
+        return Err("Save the song with the .mixjam extension.".into());
+    }
     let mut saved = project.clone();
     saved.prune_sample_conflicts();
     for imported in &mut saved.imported_samples {
@@ -736,24 +709,39 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
             imported.source_sample_rate = Some(ready.sample_rate);
         }
     }
+    let used: HashSet<_> = saved.clips.iter().map(|clip| clip.sample_id).collect();
     saved
         .imported_samples
-        .retain(|sample| saved.clips.iter().any(|clip| clip.sample_id == sample.id));
+        .retain(|sample| used.contains(&sample.id));
     saved
         .missing_samples
-        .retain(|sample| saved.clips.iter().any(|clip| clip.sample_id == sample.id));
+        .retain(|sample| used.contains(&sample.id));
     saved.libraries.retain(|binding| {
         saved.clips.iter().any(|clip| {
             Product::sample_key(clip.sample_id)
                 .is_some_and(|(product, _)| product == binding.product)
         })
     });
-    saved.save(path)
+    crate::mixjam::save(&saved, path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn song_folder_is_remembered_until_the_folder_disappears() {
+        let root = std::env::temp_dir().join(format!("mixjam-song-folder-{}", std::process::id()));
+        let settings = root.join("settings");
+        let songs = root.join("songs");
+        fs::create_dir_all(&songs).unwrap();
+        assert_eq!(load_song_folder(&settings), None);
+        save_song_folder(&settings, &songs).unwrap();
+        assert_eq!(load_song_folder(&settings), Some(songs.clone()));
+        fs::remove_dir(&songs).unwrap();
+        assert_eq!(load_song_folder(&settings), None);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn manual_wave_retention_rejects_oversized_files_before_creating_staging_files() {
@@ -790,7 +778,7 @@ mod tests {
         let imported = library.import_wav(&original, None, "Lead").unwrap();
         assert_eq!(imported.source_sample_rate, Some(22_050));
         let project = Project {
-            imported_samples: vec![imported.clone()],
+            imported_samples: vec![imported.clone()].into(),
             clips: vec![crate::engine::Clip {
                 id: 1,
                 sample_id: imported.id,
@@ -802,10 +790,13 @@ mod tests {
             }],
             ..Project::default()
         };
-        let song = root.join("song.json");
+        let song = root.join("song.mixjam");
         save(&project, &song).unwrap();
         assert_eq!(
-            Project::load(&song).unwrap().imported_samples[0].source_sample_rate,
+            crate::mixjam::load(&song, &Library::empty())
+                .unwrap()
+                .imported_samples[0]
+                .source_sample_rate,
             Some(22_050)
         );
         fs::remove_file(&original).unwrap();
@@ -926,7 +917,7 @@ mod tests {
         let mut imported = library.imported_samples().remove(0);
         imported.path = root.join("old/Drums/my-own-kick.wav");
         let mut project = Project {
-            imported_samples: vec![imported.clone()],
+            imported_samples: vec![imported.clone()].into(),
             libraries: vec![LibraryBinding {
                 product: Product::T2,
                 root: root.join("absent-installation"),
@@ -956,9 +947,22 @@ mod tests {
         assert!(opened.libraries.is_empty());
         let audio = crate::audio::render_project(&opened, &ready).unwrap();
         assert!(audio.samples.iter().any(|sample| *sample != 0.0));
-        save(&opened, &file).unwrap();
-        assert_eq!(Project::load(&file).unwrap().imported_samples.len(), 1);
-        assert_eq!(open(&file, &library).unwrap().0, opened);
+        assert!(save(&opened, &file).unwrap_err().contains(".mixjam"));
+        let song = root.join("song.mixjam");
+        save(&opened, &song).unwrap();
+        assert_eq!(
+            crate::mixjam::load(&song, &Library::empty())
+                .unwrap()
+                .imported_samples
+                .len(),
+            1
+        );
+        // The one read that opens a file also reports whether Save can replace it.
+        let (reopened, _, replaceable) = open_song(&song, &library).unwrap();
+        assert_eq!(reopened, opened);
+        assert!(replaceable);
+        assert!(!open_song(&file, &library).unwrap().2);
+        fs::remove_file(song).unwrap();
         fs::remove_file(file).unwrap();
         fs::remove_file(waves.join("my-own-kick.wav")).unwrap();
         fs::remove_file(root.join("old/Drums/my-own-kick.wav")).unwrap();
@@ -992,7 +996,7 @@ mod tests {
             origin: None,
         };
         let mut project = Project {
-            imported_samples: vec![imported.clone()],
+            imported_samples: vec![imported.clone()].into(),
             ..Project::default()
         };
         project.clips.push(crate::engine::Clip {
@@ -1048,7 +1052,7 @@ mod tests {
             .find(|sample| sample.id == imported.id)
             .unwrap()
             .path = conflict.candidates[1].clone();
-        let chosen_file = root.join("chosen.json");
+        let chosen_file = root.join("chosen.mixjam");
         save(&chosen, &chosen_file).unwrap();
         let (reopened, _) = open(&chosen_file, &library).unwrap();
         assert_eq!(reopened.sample_conflicts, chosen.sample_conflicts);
@@ -1094,7 +1098,7 @@ mod tests {
             origin: None,
         };
         let mut project = Project {
-            imported_samples: vec![imported.clone()],
+            imported_samples: vec![imported.clone()].into(),
             ..Project::default()
         };
         project.clips.push(crate::engine::Clip {
@@ -1212,7 +1216,7 @@ mod tests {
             offset_frames: 4410,
             gain: 0.75,
         });
-        let path = root.join("song.json");
+        let path = root.join("song.mixjam");
         save(&project, &path).unwrap();
         let (opened, empty) = open(&path, &Library::empty()).unwrap();
         assert_eq!(opened.clips, project.clips);
@@ -1271,7 +1275,7 @@ mod tests {
             .import_wav_with_tempo(&wave, Some("Lost sound"), "Original group", 160.0)
             .unwrap();
         let mut project = Project {
-            imported_samples: vec![imported.clone()],
+            imported_samples: vec![imported.clone()].into(),
             ..Project::default()
         };
         project.clips.push(crate::engine::Clip {

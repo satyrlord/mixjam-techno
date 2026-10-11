@@ -8,6 +8,8 @@ The interface uses a dark graphite workspace, bundled Syncopate in uppercase
 for branding and titles, and Inter Medium for all other application text.
 Transport sits above the arrangement. Sounds and Mixer share the lower panel;
 sample categories, search, and library filters stay together.
+The title branding, window, taskbar, and Windows executable use the tribal mask.
+See [the icon assets](assets/app/README.md) for source and regeneration details.
 
 ## Run
 
@@ -75,14 +77,16 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Use Step synth to sequence one note per sixteenth step across up to four bars.
 - Select a recording track and press Record. Recording starts after an eight-beat
   count-in. Stop and save the take as a WAV file.
-- Save songs as native JSON. Export writes stereo PCM16 WAV at 44.1 kHz.
+- Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-Native JSON links to WAV files; it is not a portable audio bundle. After moving
-the sample folder, select its new location before opening the project.
+A `.mixjam` song is JSON, format version 8. It links to WAV files; it is not a
+portable audio bundle. After moving the sample folder, select its new location
+before opening the song.
 
 ## Song import
 
-**Open** accepts native JSON, MixJam v7 `.mixjam`, and eight classic `.mix`
+**Open** accepts `.mixjam` songs, MixJam v7 `.mixjam` projects, JSON projects
+from earlier builds, and eight classic `.mix`
 profiles, named `d1`, `d2`, `d3`, `d4`, `h1`, `t1`, `t2`, and `t3`. Import selects
 the nearest project tempo and shows a notice when the tempo changes. Songs that
 use more than 64 tracks are rejected.
@@ -108,8 +112,9 @@ and a **Sample conflicts** modal shows the choices. Select another path to updat
 all instances in the song immediately. Use **Play song** to compare the result,
 then **Keep choices**. Esc hides the window without confirming. Reopen the
 resolver from **Sample conflicts** in the status bar. This conflict behavior applies to every supported project format and
-supports undo/redo and native JSON save/reopen.
-Resolved paths survive native JSON save/reopen. The original `.mixjam` is unchanged.
+supports undo/redo and `.mixjam` save/reopen.
+Resolved paths survive `.mixjam` save/reopen. An imported v7 `.mixjam`, `.mix`,
+or JSON file is unchanged: **Save** asks for a new `.mixjam` file.
 
 Dance 2 imports can also contain packed PXD samples. The reader decodes embedded
 PXD data and retains it as WAV audio. Select the common parent sample folder when
@@ -128,7 +133,7 @@ its available digest differs, even if its name and length match. The import
 error names that WAV.
 
 Without catalogs, the build embeds empty catalogs. WAV folders, MixJam projects,
-and native JSON still work; unresolved `.mix` sources open as placeholders. To
+and saved songs still work; unresolved `.mix` sources open as placeholders. To
 embed catalogs, put `d1.json` through `t3.json` in `assets/catalog/` and rebuild.
 The optional `source-tempos.json` adds HipHop 2/3 tempo identities. It is
 generated from the original media by the owner-local
@@ -139,16 +144,32 @@ evidence; it does not add HipHop song-format support.
 
 ## Build and checks
 
-The build needs Rust, the Visual Studio C++ build tools, and the Windows SDK.
-`tools/runtime/install-rust.ps1` installs Rust into `.toolchain/` without changing
-the user PATH; `tools/runtime/cargo.ps1` runs that toolchain.
+The build needs Git with a complete checkout history, Rust, the Visual Studio
+C++ build tools, and the Windows SDK. For a shallow clone, run
+`git fetch --unshallow` before building.
+`tools/runtime/install-rust.ps1` installs Rust outside the repository, in the
+sibling `<checkout-name>-support/toolchain/` directory, without changing the user
+PATH. `tools/runtime/cargo.ps1` runs that toolchain. Set
+`MIXJAM_TECHNO_SUPPORT_ROOT` to use another external support directory.
+
+The bottom bar shows the application version with a `v` prefix, such as
+`v1.005`, at its right margin. Select it to
+open the GitHub repository in the operating system's default browser. The link
+requests a new tab; the browser controls tab or window placement. `build.rs`
+combines the manually maintained `APP_MAJOR_VERSION` (currently 1) with
+`git rev-list --count HEAD`, padded to at least three digits. Five commits gives
+`1.005`. Cargo recalculates it when Git references change. Saved `.mixjam` songs
+use the same version. The installed application does not need Git. Cargo needs a
+semantic package version, so `tools/runtime/cargo.ps1` writes the same version to
+`Cargo.toml` and `Cargo.lock` in that form before each run: `1.005` is `1.5.0`.
+The major of the package version must equal `APP_MAJOR_VERSION`.
 
 ~~~powershell
 .\tools\runtime\cargo.ps1 build --release --locked
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --locked
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --no-default-features --locked
 .\tools\runtime\cargo.ps1 -CargoArguments @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
-.\tools\runtime\cargo.ps1 fmt --all -- --check
+.\tools\runtime\cargo.ps1 -CargoArguments @('fmt','--all','--','--check')
 ~~~
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
@@ -159,18 +180,24 @@ The capture set also covers every in-app dialog and tool window, expanded effect
 and provider settings, and missing-source processing states. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.
 
+Visual assets are transparent PNGs painted at one image pixel per screen pixel.
+Prepared density variants support Windows scaling. SVG files and embedded SVG
+artwork are prohibited in this working tree. Run
+`python tools/assets/check-raster-assets.py` as part of the quality gate. Original
+legacy archives and dependency caches stay in the external support directory.
+
 ## Headless commands
 
 ~~~powershell
 .\target\release\mixjam-techno.exe inspect --samples '.\samples'
-.\target\release\mixjam-techno.exe convert --samples '.\samples' --mix 'song.mix' --output 'song.json'
+.\target\release\mixjam-techno.exe convert --samples '.\samples' --mix 'song.mix' --output 'song.mixjam'
 .\target\release\mixjam-techno.exe render --samples '.\samples' --mix 'song.mixjam' --output 'song.wav'
 ~~~
 
 `--samples PATH` selects a WAV folder. `--source-bpm BPM` supplies the fallback
 tempo for unrecognized WAVs in folders whose loop lengths do not agree on one.
 `inspect` reports how many identities the audio verified and lists WAVs whose
-audio differs from the sample they are named after. `convert` saves native JSON;
+audio differs from the sample they are named after. `convert` saves a `.mixjam` song;
 `render` writes stereo WAV.
 
 ## Known limits
@@ -179,4 +206,3 @@ audio differs from the sample they are named after. `convert` saves native JSON;
 - Imported songs do not reproduce every effect or level curve of their source
   programs. MixJam master processing, return effects, and clip fades are not
   rendered; the importer shows a notice.
-- Full-song playback and export are limited to about 12 minutes at 44.1 kHz.

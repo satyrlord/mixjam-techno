@@ -26,14 +26,13 @@ const KIT_REGIONS: [(u16, u16); 3] = [(3400, 3899), (3900, 4499), (4500, 5199)];
 
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     let bytes = super::song_file::read_song_file(path)?;
+    let wav_product = library.is_wav_product(Product::D1);
     convert(&bytes, path, library, |native_id| {
         let id = Product::D1.global_sample_id(u32::from(native_id))?;
         let sample = library
             .sample_by_id(id)
             .ok_or_else(|| library.describe_missing(Product::D1, u32::from(native_id)))?;
-        if sample.source_bpm != 140.0
-            || (!library.is_wav_product(Product::D1) && sample.sample_rate != 44_100)
-        {
+        if sample.source_bpm != 140.0 || (!wav_product && sample.sample_rate != 44_100) {
             return Err("The D1 sample library has incompatible source timing.".into());
         }
         Ok((id, sample.bars, sample.code.clone()))

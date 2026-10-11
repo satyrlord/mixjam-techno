@@ -113,6 +113,25 @@ pub fn pcm_identity_hex(samples: &[i16]) -> String {
 }
 
 pub fn wave_metadata(product: Product) -> Result<Vec<WaveMetadata>, String> {
+    bundled_wave_metadata(product).map(<[WaveMetadata]>::to_vec)
+}
+
+/// The bundled identities of one product. They are parsed once per process:
+/// a folder scan consults every catalog several times.
+pub fn bundled_wave_metadata(product: Product) -> Result<&'static [WaveMetadata], String> {
+    type Parsed = std::sync::OnceLock<Result<Vec<WaveMetadata>, String>>;
+    static CATALOGS: [Parsed; Product::ALL.len()] = [const { Parsed::new() }; Product::ALL.len()];
+    let index = Product::ALL
+        .iter()
+        .position(|known| *known == product)
+        .ok_or("The product has no bundled sample identities.")?;
+    CATALOGS[index]
+        .get_or_init(|| parse_wave_metadata(product))
+        .as_deref()
+        .map_err(Clone::clone)
+}
+
+fn parse_wave_metadata(product: Product) -> Result<Vec<WaveMetadata>, String> {
     let text = match product {
         Product::D1 => include_str!(concat!(env!("OUT_DIR"), "/d1.json")),
         Product::D2 => include_str!(concat!(env!("OUT_DIR"), "/d2.json")),
@@ -500,7 +519,7 @@ fn read_text(path: &Path) -> Result<String, String> {
         return Err("The sample catalog exceeds its size limit.".into());
     }
     fs::read(path)
-        .map(|bytes| crate::library::decode_1252(&bytes))
+        .map(|bytes| decode_1252(&bytes))
         .map_err(|e| e.to_string())
 }
 
@@ -545,6 +564,24 @@ fn relative_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
         path = matches.into_iter().next().unwrap();
     }
     Ok(path)
+}
+
+pub(crate) fn decode_1252(bytes: &[u8]) -> String {
+    const C1: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž',
+        '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}',
+        'ž', 'Ÿ',
+    ];
+    bytes
+        .iter()
+        .map(|b| {
+            if (0x80..0xa0).contains(b) {
+                C1[(b - 0x80) as usize]
+            } else {
+                *b as char
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

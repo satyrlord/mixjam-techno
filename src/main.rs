@@ -43,7 +43,7 @@ fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let mut app: Option<PathBuf> = None;
     let mut samples: Option<PathBuf> = None;
-    let mut source_bpm = 140.0f64;
+    let mut source_bpm: Option<f64> = None;
     let mut mix = None;
     let mut command = "gui".to_string();
     let mut output = None;
@@ -71,11 +71,12 @@ fn run() -> Result<(), String> {
                 ))
             }
             "--source-bpm" => {
-                source_bpm = args
-                    .next()
-                    .ok_or("--source-bpm needs a tempo.")?
-                    .parse()
-                    .map_err(|_| "The source tempo must be a number.")?;
+                source_bpm = Some(
+                    args.next()
+                        .ok_or("--source-bpm needs a tempo.")?
+                        .parse()
+                        .map_err(|_| "The source tempo must be a number.")?,
+                );
             }
             "--mix" => {
                 mix = Some(PathBuf::from(
@@ -90,14 +91,14 @@ fn run() -> Result<(), String> {
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves native JSON.\nverify-fixtures reads T2 demos."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos."
                 );
                 return Ok(());
             }
             _ => return Err(format!("Unknown argument: {arg}. Use --help for usage.")),
         }
     }
-    if !source_bpm.is_finite() || source_bpm <= 0.0 {
+    if source_bpm.is_some_and(|bpm| !bpm.is_finite() || bpm <= 0.0) {
         return Err("The source tempo must be finite and positive.".into());
     }
     let mut library = Library::empty();
@@ -106,12 +107,14 @@ fn run() -> Result<(), String> {
         match project_io::load_wave_config() {
             Ok(Some(config)) => {
                 samples = Some(config.root);
-                source_bpm = config.source_bpm;
+                // A tempo given on the command line overrides the saved one.
+                source_bpm = source_bpm.or(Some(config.source_bpm));
             }
             Ok(None) => {}
             Err(error) => startup_messages.push(error),
         }
     }
+    let source_bpm = source_bpm.unwrap_or(140.0);
     // The window opens at once and scans its sample folder in the background.
     // Interface captures keep the synchronous scan so that they are complete.
     let background_scan = command == "gui"
@@ -230,7 +233,7 @@ fn run() -> Result<(), String> {
         }
         "convert" => {
             let path = mix.ok_or("convert requires --mix PATH.")?;
-            let target = output.ok_or("convert requires --output JSON.")?;
+            let target = output.ok_or("convert requires --output FILE.mixjam.")?;
             let (project, _) = project_io::open(&path, &library)?;
             project_io::save(&project, &target)?;
             println!(
@@ -250,12 +253,12 @@ fn run() -> Result<(), String> {
                     notice.source_bpm, notice.target_bpm
                 );
             }
-            let pcm = audio::render_project(&p, &library)?;
-            pcm.write_wav(&target)?;
+            let mix = audio::prepare_project(&p, &library)?;
+            mix.write_wav(&target)?;
             println!(
                 "Wrote {} stereo frames at {} Hz to {}",
-                pcm.frames(),
-                pcm.sample_rate,
+                mix.frames(),
+                audio::Mix::SAMPLE_RATE,
                 target.display()
             );
             Ok(())
@@ -270,7 +273,7 @@ fn run() -> Result<(), String> {
             } else {
                 Project {
                     libraries: library.bindings().to_vec(),
-                    imported_samples: library.imported_samples(),
+                    imported_samples: library.imported_samples().into(),
                     ..Project::default()
                 }
             };
@@ -291,6 +294,14 @@ fn run() -> Result<(), String> {
                     .unwrap_or([1440.0, 1000.0]);
                 let options = eframe::NativeOptions {
                     viewport: eframe::egui::ViewportBuilder::default()
+                        .with_icon(
+                            eframe::icon_data::from_png_bytes(include_bytes!(
+                                "../assets/app/mixjam-techno.png"
+                            ))
+                            .map_err(|error| {
+                                format!("Cannot load the application icon: {error}")
+                            })?,
+                        )
                         .with_inner_size(size)
                         .with_min_inner_size([960.0, 720.0]),
                     ..Default::default()
@@ -314,6 +325,7 @@ fn run() -> Result<(), String> {
                             }
                         }
                         let mut app = ui::MixJamApp::new(cc, session);
+                        app.set_fallback_bpm(source_bpm);
                         app.set_startup_messages(&messages);
                         Ok(Box::new(app))
                     }),
@@ -322,7 +334,14 @@ fn run() -> Result<(), String> {
             }
             #[cfg(not(feature = "gui"))]
             {
-                let _ = (project, library, startup_messages, background_scan, mix);
+                let _ = (
+                    project,
+                    library,
+                    startup_messages,
+                    background_scan,
+                    mix,
+                    source_bpm,
+                );
                 Err("This build has no GUI. Rebuild with the default features.".into())
             }
         }

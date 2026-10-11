@@ -74,7 +74,11 @@ impl MixJamApp {
     /// Load the bundled artwork once. A failure is reported once; the header
     /// then falls back to text actions and the tool rail stays hidden.
     fn icons(&mut self, ctx: &egui::Context) -> Option<Arc<RailIcons>> {
-        if self.rail_icons.is_none() {
+        if self.rail_icons.as_ref().is_none_or(|loaded| {
+            loaded
+                .as_ref()
+                .is_ok_and(|icons| !icons.matches_density(ctx))
+        }) {
             let loaded = RailIcons::load(ctx).map(Arc::new);
             if let Err(error) = &loaded {
                 self.error(error.clone());
@@ -99,6 +103,9 @@ impl MixJamApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
+                    if let Some(icons) = &icons {
+                        icons.brand_image(ui);
+                    }
                     ui.label(heading("MixJam", 27.0));
                     ui.label(heading("Techno", 14.0).color(MUTED));
                     ui.add_space(24.0);
@@ -207,31 +214,43 @@ impl MixJamApp {
                     .inner_margin(egui::Margin::symmetric(18, 6)),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if !self.session.sample_conflicts().is_empty()
-                        && ui.small_button("Sample conflicts").clicked()
-                    {
-                        self.show_sample_conflicts = true;
-                        self.sample_conflict_error = None;
-                    }
-                    if (!self.session.project().import_notices.is_empty()
-                        || !self.session.project().source_notices.is_empty()
-                        || !self.session.missing_samples().is_empty())
-                        && ui.small_button("Import details").clicked()
-                    {
-                        self.show_import_details = true;
-                    }
-                    if !self.session.missing_samples().is_empty() {
-                        ui.label(egui::RichText::new(format!("{} missing · silent", self.session.missing_samples().len())).size(12.0).color(CORAL))
-                            .on_hover_text("Missing samples play silence. Open Import details to see their saved references.");
-                    }
-                    let color = if self.status_error { CORAL } else { MUTED };
-                    let status = display_paths(&self.status);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add(
-                        egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
-                            .truncate(),
+                        egui::Hyperlink::from_label_and_url(
+                            egui::RichText::new(format!("v{}", mixjam_techno::application::APP_VERSION))
+                                .size(12.0)
+                                .color(ACCENT),
+                            "https://github.com/satyrlord/mixjam-techno",
+                        )
+                        .open_in_new_tab(true),
                     )
-                    .on_hover_text(&status);
+                    .on_hover_text("Open MixJam Techno on GitHub");
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        if !self.session.sample_conflicts().is_empty()
+                            && ui.small_button("Sample conflicts").clicked()
+                        {
+                            self.show_sample_conflicts = true;
+                            self.sample_conflict_error = None;
+                        }
+                        if (!self.session.project().import_notices.is_empty()
+                            || !self.session.project().source_notices.is_empty()
+                            || !self.session.missing_samples().is_empty())
+                            && ui.small_button("Import details").clicked()
+                        {
+                            self.show_import_details = true;
+                        }
+                        if !self.session.missing_samples().is_empty() {
+                            ui.label(egui::RichText::new(format!("{} missing · silent", self.session.missing_samples().len())).size(12.0).color(CORAL))
+                                .on_hover_text("Missing samples play silence. Open Import details to see their saved references.");
+                        }
+                        let color = if self.status_error { CORAL } else { MUTED };
+                        let status = display_paths(&self.status);
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
+                                .truncate(),
+                        )
+                        .on_hover_text(&status);
+                    });
                 });
             });
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
@@ -373,18 +392,7 @@ impl MixJamApp {
     }
 
     pub(super) fn palette(&mut self, ui: &mut egui::Ui) {
-        let samples = self.palette_indices();
-        let group_names: BTreeSet<&str> = self
-            .session
-            .library()
-            .samples
-            .iter()
-            .map(|s| s.group_name.as_str())
-            .collect();
-        let groups: BTreeMap<String, &str> = group_names
-            .into_iter()
-            .map(|name| (name.to_lowercase(), name))
-            .collect();
+        let (samples, groups) = self.palette_view();
         ui.horizontal(|ui| {
             ui.label(heading("Sounds", 18.0));
             if action_button(ui, "Mixer", false).clicked() {
@@ -417,7 +425,7 @@ impl MixJamApp {
                 .width(105.0)
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.group, None, "All sounds");
-                    for name in groups.values() {
+                    for name in groups.iter() {
                         ui.selectable_value(
                             &mut self.group,
                             Some((*name).to_owned()),
@@ -486,32 +494,35 @@ impl MixJamApp {
                             for &sample_index in
                                 &samples[row * count..((row + 1) * count).min(samples.len())]
                             {
-                                let sample = self.session.library().samples[sample_index].clone();
-                                let product = self.sample_product(sample.id);
-                                let response = ui
-                                    .push_id(sample.id, |ui| {
-                                        sample_button(
-                                            ui,
-                                            &sample,
-                                            product,
-                                            self.selected_sample == Some(sample.id),
-                                        )
-                                    })
-                                    .inner;
-                                if self.capture_view_is("sample-details")
-                                    && self.selected_sample == Some(sample.id)
-                                {
-                                    response.show_tooltip_text(sample_details(&sample, product));
-                                }
+                                let (id, response) = {
+                                    let sample = &self.session.library().samples[sample_index];
+                                    let product = self.sample_product(sample.id);
+                                    let response = ui
+                                        .push_id(sample.id, |ui| {
+                                            sample_button(
+                                                ui,
+                                                sample,
+                                                product,
+                                                self.selected_sample == Some(sample.id),
+                                            )
+                                        })
+                                        .inner;
+                                    if self.capture_view_is("sample-details")
+                                        && self.selected_sample == Some(sample.id)
+                                    {
+                                        response.show_tooltip_text(sample_details(sample, product));
+                                    }
+                                    (sample.id, response)
+                                };
                                 if response.clicked() {
-                                    self.selected_sample = Some(sample.id);
+                                    self.selected_sample = Some(id);
                                 }
                                 if response.double_clicked() {
-                                    self.preview(sample.id);
+                                    self.preview(id);
                                 }
                                 if response.drag_started() {
-                                    self.selected_sample = Some(sample.id);
-                                    self.drag = Some(DragItem::Sample(sample.id));
+                                    self.selected_sample = Some(id);
+                                    self.drag = Some(DragItem::Sample(id));
                                 }
                             }
                             ui.end_row();
@@ -586,7 +597,7 @@ impl MixJamApp {
                                                     );
                                                     let (summary, detail) = mixer_sample_summary(
                                                         self.session.project(),
-                                                        self.session.library().samples,
+                                                        self.session.library(),
                                                         index,
                                                     );
                                                     ui.add(
@@ -980,6 +991,8 @@ impl MixJamApp {
                         if let Some(clip) = hit {
                             if self.erase {
                                 let result = self.session.delete(clip.id);
+                                // The erased clip may be part of the selection.
+                                self.reconcile_selection();
                                 self.apply(result);
                             } else {
                                 self.select_clip(clip.id, ui.input(|i| i.modifiers.shift));
@@ -1286,7 +1299,10 @@ impl MixJamApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request_action(PendingAction::Close, ctx);
         }
-        if self.pending_action.is_none() && !self.sample_conflicts_open() {
+        if self.pending_action.is_none()
+            && !self.sample_conflicts_open()
+            && self.import_path.is_none()
+        {
             self.keyboard(ctx);
         }
         self.header(ctx);
@@ -1419,7 +1435,7 @@ pub(super) fn pan_description(pan: f32) -> String {
 
 pub(super) fn mixer_sample_summary(
     project: &Project,
-    samples: &[Sample],
+    library: LibraryView<'_>,
     index: usize,
 ) -> (String, String) {
     let ids: BTreeSet<u32> = project
@@ -1438,7 +1454,7 @@ pub(super) fn mixer_sample_summary(
             {
                 return format!("Missing: {}", missing.name);
             }
-            samples.iter().find(|sample| sample.id == *id).map_or_else(
+            library.sample_by_id(*id).map_or_else(
                 || format!("Missing sound {id}"),
                 |sample| sample.name.clone(),
             )
@@ -1485,25 +1501,30 @@ pub(super) fn gain_control(
         }
         changed |= slider
             .on_hover_text(format!(
-                "{label}: {gain:+.2}. 0 is silence; +1 is unity. Negative gain inverts polarity."
+                "{label}: {gain:+.1}. 0 is silence; +1 is unity. Negative gain inverts polarity."
             ))
             .changed();
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Gain").size(11.0).color(MUTED));
+            let value_id = ui.next_auto_id();
+            let context = ui.ctx().clone();
             let value = ui.add(
                 egui::DragValue::new(gain)
                     .range(range)
                     .speed(0.01)
-                    .custom_formatter(|value, _| {
-                        // Keep the f32 value round-trippable: focusing and then
-                        // leaving DragValue parses this text even without edits.
+                    .custom_formatter(move |value, _| {
                         let value = value as f32;
-                        if value == value.trunc() {
-                            format!("{value:+.2}")
-                        } else if value.abs() < 0.001 {
-                            format!("{value:+e}")
+                        if context.memory(|memory| memory.has_focus(value_id)) {
+                            // DragValue parses the draft on blur, even without
+                            // edits. Keep precision while editing so focus alone
+                            // cannot change saved gain or audio.
+                            if value != 0.0 && value.abs() < 0.001 {
+                                format!("{value:+e}")
+                            } else {
+                                format!("{value:+}")
+                            }
                         } else {
-                            format!("{value:+}")
+                            format!("{value:+.1}")
                         }
                     }),
             );
@@ -1523,7 +1544,7 @@ pub(super) fn gain_control(
                     format!("Reset {label} to unity"),
                 )
             });
-            if reset.on_hover_text("Reset gain to +1.00 (unity)").clicked() {
+            if reset.on_hover_text("Reset gain to +1.0 (unity)").clicked() {
                 changed |= *gain != 1.0;
                 *gain = 1.0;
             }
@@ -1667,10 +1688,16 @@ fn action_icon_button(
     label: &str,
 ) -> Response {
     let response = ui.add(
-        egui::Button::new(egui::Image::new((icons.texture_id(icon), Vec2::splat(20.0))).tint(TEXT))
+        egui::Button::new("")
             .fill(RAISED)
             .stroke(Stroke::NONE)
             .min_size(Vec2::new(48.0, 30.0)),
+    );
+    ui.painter().image(
+        icons.texture_id(icon),
+        icons.icon_rect(ui.ctx(), response.rect.center()),
+        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+        TEXT,
     );
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
@@ -1711,7 +1738,7 @@ pub(super) fn rail_button(
     };
     ui.painter().image(
         icons.texture_id(icon),
-        Rect::from_center_size(rect.center(), Vec2::splat(20.0)),
+        icons.icon_rect(ui.ctx(), rect.center()),
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
         color,
     );
@@ -1734,7 +1761,7 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
     let (rect, response) = ui.allocate_exact_size(Vec2::new(48.0, 20.0), Sense::hover());
     ui.painter().image(
         icons.texture_id(icon),
-        Rect::from_center_size(rect.center(), Vec2::splat(18.0)),
+        icons.icon_rect(ui.ctx(), rect.center()),
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
         MUTED,
     );
@@ -1816,7 +1843,10 @@ pub(super) fn sample_button(
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &sample.name)
     });
-    response.on_hover_text(sample_details(sample, product))
+    // Build the details only for the tile under the pointer.
+    response.on_hover_ui(|ui| {
+        ui.label(sample_details(sample, product));
+    })
 }
 
 pub(super) fn sample_details(sample: &Sample, product: Option<Product>) -> String {

@@ -1,8 +1,9 @@
+#requires -Version 7.0
 param([string]$Toolchain = 'stable')
 
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$localRoot = Join-Path $workspace '.toolchain'
+$localRoot = Join-Path (& (Join-Path $PSScriptRoot 'support-root.ps1')) 'toolchain'
 $evidence = Join-Path $workspace 'evidence\runtime\toolchain'
 $null = New-Item -ItemType Directory -Path $localRoot,$evidence -Force
 $installer = Join-Path $localRoot 'rustup-init.exe'
@@ -23,7 +24,9 @@ try {
     & $installer -y --no-modify-path --profile minimal --component rustfmt --component clippy --default-host x86_64-pc-windows-msvc --default-toolchain $Toolchain 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'install.log')
     if ($LASTEXITCODE -ne 0) { throw 'The local Rust installation failed.' }
     & (Join-Path $env:CARGO_HOME 'bin\rustc.exe') --version --verbose | Tee-Object -FilePath (Join-Path $evidence 'rustc-version.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'The installed Rust compiler does not run.' }
     & (Join-Path $env:CARGO_HOME 'bin\cargo.exe') --version --verbose | Tee-Object -FilePath (Join-Path $evidence 'cargo-version.txt')
+    if ($LASTEXITCODE -ne 0) { throw 'The installed Cargo does not run.' }
 } finally {
     $env:CARGO_HOME = $savedCargo
     $env:RUSTUP_HOME = $savedRustup

@@ -100,7 +100,10 @@ impl<'a> ReferenceResolver<'a> {
             }
             match self.parent.as_ref().unwrap() {
                 Ok(index) => candidates.extend(index.get(&name).into_iter().flatten().cloned()),
-                Err(error) => return Err(error.clone()),
+                // The selected folder's own matches remain usable without the
+                // containing-directory scan.
+                Err(error) if candidates.is_empty() => return Err(error.clone()),
+                Err(_) => {}
             }
         }
         let mut best_score = 0;

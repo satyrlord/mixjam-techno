@@ -252,6 +252,10 @@ fn read_timeline(bytes: &[u8], lower_bound: usize, product: Product) -> Result<T
     let mut payload_index = 0;
     // Audio payloads can contain the marker bytes. Match a complete counted
     // timeline to its own length and marker, not the last marker in the file.
+    // Each rejected candidate can cost a full timeline parse, so a file made
+    // of candidates must not be searched without limit.
+    const MAX_REJECTED_CANDIDATES: usize = 4096;
+    let mut rejected = 0;
     let mut cursor = lower_bound;
     while cursor < last_marker.saturating_sub(4) {
         while payload_index < payload_ranges.len() && payload_ranges[payload_index].end <= cursor {
@@ -296,7 +300,13 @@ fn read_timeline(bytes: &[u8], lower_bound: usize, product: Product) -> Result<T
                     events,
                 });
             }
-            Err(error) => last_error = Some(error),
+            Err(error) => {
+                last_error = Some(error);
+                rejected += 1;
+                if rejected > MAX_REJECTED_CANDIDATES {
+                    return Err("The native song has too many invalid timeline records.".into());
+                }
+            }
         }
     }
     result.ok_or_else(|| {
@@ -561,6 +571,32 @@ struct Wave<'a> {
     sample_rate: u32,
 }
 
+#[derive(Clone, Debug)]
+struct RetainedWave {
+    path: PathBuf,
+    frames: u32,
+    sample_rate: u32,
+}
+
+fn retain_wave<'a>(
+    wave: Wave<'a>,
+    pending: &mut Vec<(PathBuf, Cow<'a, [u8]>)>,
+    total_bytes: &mut usize,
+) -> Result<RetainedWave, String> {
+    let hash = format!("{:x}", Sha256::digest(&wave.bytes));
+    let path = crate::project_io::data_root()
+        .join("imported-audio")
+        .join(format!("{hash}.wav"));
+    if !pending.iter().any(|(existing, _)| *existing == path) {
+        queue_asset(pending, total_bytes, path.clone(), wave.bytes)?;
+    }
+    Ok(RetainedWave {
+        path,
+        frames: wave.frames,
+        sample_rate: wave.sample_rate,
+    })
+}
+
 fn wave_info(bytes: &[u8]) -> Result<(u32, u32), String> {
     let mut reader = hound::WavReader::new(Cursor::new(bytes))
         .map_err(|error| format!("The imported WAV is invalid: {error}"))?;
@@ -600,12 +636,26 @@ fn wave_info(bytes: &[u8]) -> Result<(u32, u32), String> {
 
 fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'_>>, String> {
     let mut sources = Vec::new();
+    // A record's audio payload cannot hold further records. Without this
+    // bound, nested headers would each be decoded as a complete WAV.
+    let mut payload_end = 0;
     for riff in 0..bytes.len().saturating_sub(12) {
-        if &bytes[riff..riff + 4] != b"RIFF" || &bytes[riff + 8..riff + 12] != b"WAVE" {
+        if riff < payload_end
+            || &bytes[riff..riff + 4] != b"RIFF"
+            || &bytes[riff + 8..riff + 12] != b"WAVE"
+        {
             continue;
         }
         let size = u32::from_le_bytes(bytes[riff + 4..riff + 8].try_into().unwrap()) as usize + 8;
         if size < 44 || riff.checked_add(size).is_none_or(|end| end > bytes.len()) {
+            continue;
+        }
+        // Every record ends with its marker and the WAV size, just before the
+        // WAV. Check those fixed bytes once before searching for the path.
+        if riff < 6
+            || bytes[riff - 6..riff - 4] != [0, 1]
+            || u32::from_le_bytes(bytes[riff - 4..riff].try_into().unwrap()) as usize != size
+        {
             continue;
         }
         let mut source_path = None;
@@ -646,6 +696,7 @@ fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'_>>, String
                 bytes: wav,
                 range: riff..riff + size,
             });
+            payload_end = riff + size;
         }
     }
     Ok(sources)
@@ -1022,7 +1073,14 @@ pub(crate) fn build_project(
     let mut pending_waves = Vec::new();
     let mut pending_bytes = 0;
     let mut drum_cache: HashMap<drums::Pattern, (u32, u32)> = HashMap::new();
+    // Each generated pattern records the song's hash. Hash the song once.
+    let mut mix_hash: Option<String> = None;
     let mut wave_cache = HashMap::new();
+    // Events can name one path with different labels. Each path is resolved,
+    // decoded, and hashed once; later references reuse that validated source.
+    // The cache holds metadata only. Owned audio belongs to the bounded,
+    // content-deduplicated pending assets, including when many paths match it.
+    let mut resolved_waves: HashMap<String, Result<RetainedWave, String>> = HashMap::new();
     let mut catalogs: HashMap<Product, Vec<crate::catalog::WaveMetadata>> = HashMap::new();
     // D3 keeps the earlier Dance 2 catalog IDs. T2's original loader admits
     // the D2 kind-2 catalog: the contiguous IDs 1..=1957. Do not search other
@@ -1122,10 +1180,23 @@ pub(crate) fn build_project(
                 let (id, frames, sample_rate) = if let Some(cached) = wave_cache.get(&key) {
                     *cached
                 } else {
-                    let wave = if product == Product::D2 {
-                        d2_source_wave(&source_path, &d2_embedded, library)
-                    } else {
-                        source_wave(&source_path, &embedded, library)
+                    let wave = match resolved_waves.get(&key.path) {
+                        Some(resolved) => resolved.clone(),
+                        None => {
+                            let wave = if product == Product::D2 {
+                                d2_source_wave(&source_path, &d2_embedded, library)
+                            } else {
+                                source_wave(&source_path, &embedded, library)
+                            };
+                            let resolved = match wave {
+                                Ok(wave) => {
+                                    Ok(retain_wave(wave, &mut pending_waves, &mut pending_bytes)?)
+                                }
+                                Err(error) => Err(error),
+                            };
+                            resolved_waves.insert(key.path.clone(), resolved.clone());
+                            resolved
+                        }
                     };
                     let has_embedded = d2_embedded
                         .iter()
@@ -1201,10 +1272,7 @@ pub(crate) fn build_project(
                         }
                     };
                     if let Some(wave) = wave {
-                        let hash = format!("{:x}", Sha256::digest(&wave.bytes));
-                        let destination = crate::project_io::data_root()
-                            .join("imported-audio")
-                            .join(format!("{hash}.wav"));
+                        let destination = wave.path;
                         let id = if let Some(existing) =
                             project.imported_samples.iter().find(|sample| {
                                 sample.path == destination
@@ -1226,14 +1294,6 @@ pub(crate) fn build_project(
                                 source_sample_rate: Some(wave.sample_rate),
                                 origin: Some(product),
                             });
-                            if !pending_waves.iter().any(|(path, _)| *path == destination) {
-                                queue_asset(
-                                    &mut pending_waves,
-                                    &mut pending_bytes,
-                                    destination,
-                                    wave.bytes,
-                                )?;
-                            }
                             id
                         };
                         crate::library::record_wav_conflict(
@@ -1341,7 +1401,8 @@ pub(crate) fn build_project(
                         let provenance = serde_json::json!({
                             "schema_version": 1, "product": product,
                             "source_mix_name": path.file_name().unwrap_or_default().to_string_lossy(),
-                            "source_mix_sha256": format!("{:x}", Sha256::digest(bytes)),
+                            "source_mix_sha256": mix_hash
+                                .get_or_insert_with(|| format!("{:x}", Sha256::digest(bytes))),
                             "source_bpm": header.bpm, "native_units_per_bar": 128,
                             "pattern": &pattern, "kit": &kit,
                             "rendered_audio_sha256": hash, "renderer_policy": drums::renderer_policy(product),
@@ -2429,7 +2490,7 @@ mod tests {
         };
         crate::engine::validate_import_metadata(&sample).unwrap();
         let project = Project {
-            imported_samples: vec![sample],
+            imported_samples: vec![sample].into(),
             ..Project::default()
         };
         project.validate().unwrap();

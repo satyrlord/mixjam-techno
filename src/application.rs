@@ -1,5 +1,6 @@
 //! Headless application boundary. UI clients read immutable views and submit typed commands.
 pub use crate::{
+    APP_VERSION,
     audio::Pcm,
     effects::EffectsState,
     engine::{
@@ -75,8 +76,7 @@ struct RenderRequest {
 
 struct RenderResult {
     revision: u64,
-    frames_per_tick: f64,
-    pcm: Result<Arc<Pcm>, String>,
+    mix: Result<Arc<audio::Mix>, String>,
 }
 
 struct RenderWorker {
@@ -89,22 +89,42 @@ struct RenderWorker {
 
 impl RenderWorker {
     fn new() -> Self {
+        let (sender, receiver) = Self::spawn();
+        Self {
+            sender,
+            receiver,
+            in_flight: false,
+            current_revision: None,
+            pending: None,
+        }
+    }
+
+    fn spawn() -> (mpsc::Sender<RenderRequest>, mpsc::Receiver<RenderResult>) {
         let (sender, requests) = mpsc::channel::<RenderRequest>();
         let (results, receiver) = mpsc::channel();
         std::thread::Builder::new()
             .name("mixjam-techno-render".into())
             .spawn(move || {
+                // An edit rarely changes which sounds a mix uses. Keep their
+                // decoded audio for the next render of the same library.
+                let mut decoded = std::collections::HashMap::new();
+                let mut decoded_from = std::sync::Weak::new();
                 while let Ok(request) = requests.recv() {
-                    let pcm =
-                        audio::render_project(&request.project, &request.library).map(Arc::new);
-                    let frames_per_tick = pcm
-                        .as_ref()
-                        .map_or(1.0, |pcm| request.project.frames_per_tick(pcm.sample_rate));
+                    let library = Arc::downgrade(&request.library);
+                    if !decoded_from.ptr_eq(&library) {
+                        decoded.clear();
+                        decoded_from = library;
+                    }
+                    let mix = audio::prepare_project_reusing(
+                        &request.project,
+                        &request.library,
+                        &mut decoded,
+                    )
+                    .map(Arc::new);
                     if results
                         .send(RenderResult {
                             revision: request.revision,
-                            frames_per_tick,
-                            pcm,
+                            mix,
                         })
                         .is_err()
                     {
@@ -113,13 +133,7 @@ impl RenderWorker {
                 }
             })
             .expect("Cannot create the audio render worker.");
-        Self {
-            sender,
-            receiver,
-            in_flight: false,
-            current_revision: None,
-            pending: None,
-        }
+        (sender, receiver)
     }
 
     fn request(&mut self, request: RenderRequest) -> Result<(), String> {
@@ -139,7 +153,19 @@ impl RenderWorker {
     }
 
     fn poll(&mut self) -> Option<RenderResult> {
-        let result = self.receiver.try_recv().ok()?;
+        let result = match self.receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                // The worker died during a render. Report that render as failed
+                // and replace the worker, so later requests are not stranded.
+                (self.sender, self.receiver) = Self::spawn();
+                RenderResult {
+                    revision: self.current_revision?,
+                    mix: Err("The audio render worker stopped.".into()),
+                }
+            }
+        };
         self.in_flight = false;
         self.current_revision = None;
         if let Some(request) = self.pending.take() {
@@ -166,6 +192,13 @@ struct WaveScan {
     receiver: mpsc::Receiver<Result<Library, String>>,
 }
 
+/// A mix export running on its own thread.
+struct Export {
+    path: PathBuf,
+    receiver: mpsc::Receiver<Result<(), String>>,
+    thread: std::thread::JoinHandle<()>,
+}
+
 /// What a frontend may show about a running sample folder scan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveScanStatus {
@@ -178,6 +211,7 @@ pub struct WaveScanStatus {
 /// No mutable project, catalog, device, or renderer is exposed to a frontend.
 pub struct Session {
     library: Arc<Library>,
+    catalog_revision: u64,
     wave_scan: Option<WaveScan>,
     /// A song to open once the startup folder scan has replaced the library.
     pending_open: Option<(PathBuf, u64)>,
@@ -185,13 +219,15 @@ pub struct Session {
     opened_after_scan: Option<PathBuf>,
     /// A successful folder adoption, until the frontend resets its source selection.
     wave_folder_adopted: bool,
+    export: Option<Export>,
     /// Products whose provider replaces the same product found in a WAV folder.
     preferred_providers: Vec<Product>,
     /// Where the sample folder setting and scan cache live.
     settings_root: PathBuf,
     editor: Editor,
     player: Option<Player>,
-    render: Option<Arc<Pcm>>,
+    /// The prepared mix of the current revision; it is rendered on demand.
+    render: Option<Arc<audio::Mix>>,
     render_dirty: bool,
     render_worker: RenderWorker,
     revision: u64,
@@ -209,7 +245,96 @@ pub struct Session {
     recorder: Option<crate::recording::Recorder>,
     record_start_tick: u32,
     record_mix_started: bool,
-    recorded_take: Option<Pcm>,
+    recorded_take: Option<Arc<Pcm>>,
+    /// The control changed by the last edit, while later edits may continue it.
+    gesture: Option<(Gesture, std::time::Instant)>,
+}
+
+/// One continuously adjustable control. Edits of the same control in quick
+/// succession, such as the frames of a slider drag, form one undo step.
+#[derive(Clone, Copy, PartialEq)]
+enum Gesture {
+    Master,
+    Track(usize, TrackControl),
+    Clip(u64, ClipControl),
+}
+#[derive(Clone, Copy, PartialEq)]
+enum TrackControl {
+    Gain,
+    Pan,
+}
+#[derive(Clone, Copy, PartialEq)]
+enum ClipControl {
+    Gain,
+    Trim,
+    Length,
+}
+const GESTURE_GAP: std::time::Duration = std::time::Duration::from_millis(400);
+
+impl Gesture {
+    /// The control a command adjusts, when it adjusts exactly one.
+    fn of(command: &EditCommand, project: &Project) -> Option<Self> {
+        match command {
+            EditCommand::SetClip {
+                id,
+                gain,
+                offset_frames,
+                length_ticks,
+            } => {
+                let clip = project.clips.iter().find(|clip| clip.id == *id)?;
+                let mut controls = Vec::new();
+                if clip.gain != *gain {
+                    controls.push(ClipControl::Gain);
+                }
+                if clip.offset_frames != *offset_frames {
+                    controls.push(ClipControl::Trim);
+                }
+                if clip.length_ticks != *length_ticks {
+                    controls.push(ClipControl::Length);
+                }
+                match controls[..] {
+                    [control] => Some(Self::Clip(*id, control)),
+                    _ => None,
+                }
+            }
+            EditCommand::SetMixer {
+                tracks,
+                master_gain,
+            } if tracks.len() == project.tracks.len() => {
+                let mut controls = Vec::new();
+                for (index, (old, new)) in project.tracks.iter().zip(tracks).enumerate() {
+                    if old.left_enabled != new.left_enabled
+                        || old.right_enabled != new.right_enabled
+                    {
+                        return None;
+                    }
+                    if old.gain != new.gain {
+                        controls.push(Self::Track(index, TrackControl::Gain));
+                    }
+                    if old.pan != new.pan {
+                        controls.push(Self::Track(index, TrackControl::Pan));
+                    }
+                }
+                if project.master_gain != *master_gain {
+                    controls.push(Self::Master);
+                }
+                match controls[..] {
+                    [control] => Some(control),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Drop for Session {
+    /// Let a running export finish its file before the application exits.
+    fn drop(&mut self) {
+        if let Some(export) = self.export.take() {
+            let _ = export.thread.join();
+        }
+    }
 }
 
 impl Session {
@@ -217,10 +342,12 @@ impl Session {
         project.validate()?;
         Ok(Self {
             library,
+            catalog_revision: 0,
             wave_scan: None,
             pending_open: None,
             opened_after_scan: None,
             wave_folder_adopted: false,
+            export: None,
             preferred_providers: Vec::new(),
             settings_root: crate::project_io::data_root(),
             editor: Editor::new(project),
@@ -244,6 +371,7 @@ impl Session {
             record_start_tick: 0,
             record_mix_started: false,
             recorded_take: None,
+            gesture: None,
         })
     }
     /// Keep settings and the scan cache in `root` instead of the user's data folder.
@@ -261,7 +389,7 @@ impl Session {
         Ok(session)
     }
     pub fn project(&self) -> &Project {
-        &self.editor.project
+        self.editor.project()
     }
     pub fn missing_samples(&self) -> &[MissingSample] {
         &self.project().missing_samples
@@ -291,15 +419,7 @@ impl Session {
         let path = std::fs::canonicalize(path)
             .map_err(|error| format!("Cannot open the selected sample: {error}"))?;
         let mut project = self.project().clone();
-        let mut next_id = project
-            .imported_samples
-            .iter()
-            .map(|sample| sample.id)
-            .chain(project.missing_samples.iter().map(|sample| sample.id))
-            .chain(self.library.samples.iter().map(|sample| sample.id))
-            .max()
-            .unwrap_or(0)
-            .max(crate::products::IMPORTED_ID_START - 1);
+        let mut next_id = last_imported_id(&project, &self.library);
         for id in &conflict.sample_ids {
             let missing = project.missing_sample(*id);
             let original = project
@@ -322,6 +442,7 @@ impl Session {
                         group_name: source
                             .metadata
                             .get("group_name")
+                            .filter(|name| !name.trim().is_empty())
                             .cloned()
                             .unwrap_or_else(|| "Resolved samples".into()),
                         path: path.clone(),
@@ -413,7 +534,7 @@ impl Session {
         library.apply_imports(&project.imported_samples)?;
         library.reserve_missing_samples(&project.missing_samples);
         self.editor.transact(|current| *current = project)?;
-        self.library = Arc::new(library);
+        self.set_library(library);
         self.changed();
         Ok(())
     }
@@ -453,15 +574,7 @@ impl Session {
             .filter(|sample| same_missing_reference(&selected.reference, &sample.reference))
             .cloned()
             .collect();
-        let mut next_id = project
-            .imported_samples
-            .iter()
-            .map(|sample| sample.id)
-            .chain(project.missing_samples.iter().map(|sample| sample.id))
-            .chain(self.library.samples.iter().map(|sample| sample.id))
-            .max()
-            .unwrap_or(0)
-            .max(crate::products::IMPORTED_ID_START - 1);
+        let mut next_id = last_imported_id(&project, &self.library);
         for missing in matched {
             let new_id = if missing.id >= crate::products::IMPORTED_ID_START {
                 missing.id
@@ -532,9 +645,18 @@ impl Session {
         library.apply_imports(&project.imported_samples)?;
         library.reserve_missing_samples(&project.missing_samples);
         self.editor.transact(|current| *current = project)?;
-        self.library = Arc::new(library);
+        self.set_library(library);
         self.changed();
         Ok(())
+    }
+    fn set_library(&mut self, library: Library) {
+        self.library = Arc::new(library);
+        self.catalog_revision += 1;
+    }
+    /// A count that advances whenever the sample catalog is replaced. Views
+    /// can keep work derived from `library()` until it changes.
+    pub fn catalog_revision(&self) -> u64 {
+        self.catalog_revision
     }
     pub fn library(&self) -> LibraryView<'_> {
         LibraryView {
@@ -563,9 +685,19 @@ impl Session {
     pub fn file(&self) -> Option<&Path> {
         self.file.as_deref()
     }
-    pub fn record_bpm(&self) -> f64 {
-        self.record_bpm
+
+    /// Where a song file dialog starts: the folder of the song last chosen in one.
+    pub fn song_folder(&self) -> Option<PathBuf> {
+        crate::project_io::load_song_folder(&self.settings_root)
     }
+    /// Start later song file dialogs in the folder of `song`. A failed write
+    /// only loses that convenience.
+    pub fn remember_song_folder(&self, song: &Path) {
+        if let Some(folder) = song.parent().filter(|folder| folder.is_dir()) {
+            let _ = crate::project_io::save_song_folder(&self.settings_root, folder);
+        }
+    }
+
     pub fn take_notice(&mut self) -> Option<(String, bool)> {
         self.notice.take()
     }
@@ -576,6 +708,7 @@ impl Session {
         self.notice = Some((text.into(), true));
     }
     fn changed(&mut self) {
+        self.gesture = None;
         self.unsaved = true;
         self.render_dirty = true;
         self.revision = self.revision.wrapping_add(1);
@@ -587,7 +720,10 @@ impl Session {
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
         match &command {
             EditCommand::SetClip {
-                id, offset_frames, ..
+                id,
+                offset_frames,
+                length_ticks,
+                ..
             } => {
                 let clip = self
                     .project()
@@ -609,20 +745,38 @@ impl Session {
                 if *offset_frames > max_offset.saturating_sub(1) {
                     return Err("The trim start must be within the source audio.".into());
                 }
+                // A longer clip must not cover its neighbor. Other clip edits
+                // stay available for imported arrangements that already overlap.
+                if *length_ticks > clip.length_ticks {
+                    crate::engine::ensure_space(
+                        self.project(),
+                        Some(*id),
+                        clip.track,
+                        clip.start_tick,
+                        *length_ticks,
+                    )?;
+                }
             }
             EditCommand::SetRouting { track, .. } if *track >= TRACK_COUNT => {
                 return Err("The track is outside the project.".into());
             }
-            EditCommand::DeleteClips(ids)
-                if ids
-                    .iter()
-                    .any(|id| !self.project().clips.iter().any(|c| c.id == *id)) =>
-            {
-                return Err("A selected clip does not exist.".into());
+            EditCommand::DeleteClips(ids) => {
+                let existing: std::collections::HashSet<_> =
+                    self.project().clips.iter().map(|clip| clip.id).collect();
+                if ids.iter().any(|id| !existing.contains(id)) {
+                    return Err("A selected clip does not exist.".into());
+                }
             }
             _ => {}
         }
-        self.editor.transact(|project| match command {
+        let gesture = Gesture::of(&command, self.project());
+        let now = std::time::Instant::now();
+        let continuing = gesture.is_some()
+            && self.gesture.is_some_and(|(previous, at)| {
+                Some(previous) == gesture && now.duration_since(at) < GESTURE_GAP
+            });
+        let generation = self.editor.generation();
+        let apply = |project: &mut Project| match command {
             EditCommand::SetTempo(bpm) => project.bpm = bpm,
             EditCommand::SetLoop(region) => project.loop_region = region,
             EditCommand::SetMixer {
@@ -659,8 +813,17 @@ impl Session {
                 let ids: BTreeSet<_> = ids.into_iter().collect();
                 project.clips.retain(|clip| !ids.contains(&clip.id));
             }
-        })?;
-        self.changed();
+        };
+        if continuing {
+            self.editor.transact_continuing(apply)?;
+        } else {
+            self.editor.transact(apply)?;
+        }
+        // An accepted command that changes nothing is not an edit.
+        if self.editor.generation() != generation {
+            self.changed();
+            self.gesture = gesture.map(|gesture| (gesture, now));
+        }
         Ok(())
     }
     pub fn place(&mut self, sample_id: u32, track: usize, tick: u32) -> Result<u64, String> {
@@ -691,8 +854,11 @@ impl Session {
         tick_delta: i64,
         copy: bool,
     ) -> Result<Vec<u64>, String> {
+        let generation = self.editor.generation();
         let ids = self.editor.move_clips(ids, track_delta, tick_delta, copy)?;
-        self.changed();
+        if self.editor.generation() != generation {
+            self.changed();
+        }
         Ok(ids)
     }
     pub fn history_step(&mut self, redo: bool) -> Result<bool, String> {
@@ -707,11 +873,29 @@ impl Session {
         if !changed {
             return Ok(false);
         }
-        let mut library = (*self.library).clone();
-        let result = library.apply_imports(&self.project().imported_samples).and_then(|()| {
-            if let Some(clip) = self.project().clips.iter().find(|clip| library.sample_by_id(clip.sample_id).is_none() && self.project().missing_sample(clip.sample_id).is_none()) {
-                return Err(format!("Cannot restore this edit because sample {} is unavailable. Add its sample library and try again.", clip.sample_id));
-            } Ok(())
+        // Most steps leave the imported sources as they are. Rebuild the
+        // catalog only for a step that adds, removes, or relinks one.
+        let mut library = if self.library.has_imports(&self.project().imported_samples) {
+            None
+        } else {
+            Some((*self.library).clone())
+        };
+        let result = match &mut library {
+            Some(library) => library.apply_imports(&self.project().imported_samples),
+            None => Ok(()),
+        }
+        .and_then(|()| {
+            let library = library.as_ref().unwrap_or(&self.library);
+            match self.project().clips.iter().find(|clip| {
+                library.sample_by_id(clip.sample_id).is_none()
+                    && self.project().missing_sample(clip.sample_id).is_none()
+            }) {
+                Some(clip) => Err(format!(
+                    "Cannot restore this edit because sample {} is unavailable. Add its sample library and try again.",
+                    clip.sample_id
+                )),
+                None => Ok(()),
+            }
         });
         if let Err(error) = result {
             if redo {
@@ -721,43 +905,109 @@ impl Session {
             }
             return Err(error);
         }
-        self.editor.project.libraries = library.bindings().to_vec();
-        library.reserve_missing_samples(&self.project().missing_samples);
-        self.library = Arc::new(library);
+        if let Some(library) = library {
+            self.set_library(library);
+        }
+        self.editor.set_libraries(self.library.bindings().to_vec());
+        // Replacing the library discards the render worker's decoded sources.
+        if !self
+            .library
+            .has_reserved_missing_samples(&self.editor.project().missing_samples)
+        {
+            Arc::make_mut(&mut self.library)
+                .reserve_missing_samples(&self.editor.project().missing_samples);
+        }
         self.changed();
         Ok(true)
     }
     pub fn open(&mut self, path: &Path) -> Result<(), String> {
         self.require_idle_recording()?;
-        let (project, library) = crate::project_io::open(path, &self.library)?;
+        let (project, library, song) = crate::project_io::open_song(path, &self.library)?;
         self.stop();
-        self.library = Arc::new(library);
+        self.set_library(library);
         self.editor = Editor::new(project);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.render_dirty = true;
         self.unsaved = false;
-        self.file = path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            .then(|| path.to_path_buf());
+        // Save replaces a song. An import or earlier JSON project asks for a new file.
+        self.file = song.then(|| path.to_path_buf());
         Ok(())
     }
     pub fn save(&mut self, path: &Path) -> Result<(), String> {
         crate::project_io::save(self.project(), path)?;
+        // An edit after Save must be undoable back to the saved state.
+        self.gesture = None;
         self.file = Some(path.to_path_buf());
         self.unsaved = false;
         Ok(())
     }
+    /// Render and write the mix on this thread. Headless callers use this;
+    /// the GUI calls `start_export` so that the window stays responsive.
     pub fn export(&self, path: &Path) -> Result<(), String> {
-        audio::render_project(self.project(), &self.library)?.write_wav(path)
+        // Playback already rendered an unchanged mix; write that audio.
+        match &self.render {
+            Some(mix) if !self.render_dirty => mix.write_wav(path),
+            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path),
+        }
+    }
+
+    /// Export the mix as it is now on another thread. `poll` reports the
+    /// result as a notice. Later edits do not change the exported audio.
+    pub fn start_export(&mut self, path: &Path) -> Result<(), String> {
+        if self.export.is_some() {
+            return Err("Wait for the current export to finish.".into());
+        }
+        let rendered = self.render.clone().filter(|_| !self.render_dirty);
+        let project = self.project().clone();
+        let library = self.library.clone();
+        let target = path.to_path_buf();
+        let (sender, receiver) = mpsc::channel();
+        let thread = std::thread::Builder::new()
+            .name("mixjam-techno-export".into())
+            .spawn(move || {
+                let result = match rendered {
+                    Some(mix) => mix.write_wav(&target),
+                    None => audio::prepare_project(&project, &library)
+                        .and_then(|mix| mix.write_wav(&target)),
+                };
+                let _ = sender.send(result);
+            })
+            .map_err(|error| format!("Cannot start the export: {error}"))?;
+        self.message(format!("Exporting {}.", path.display()));
+        self.export = Some(Export {
+            path: path.to_path_buf(),
+            receiver,
+            thread,
+        });
+        Ok(())
+    }
+
+    pub fn is_exporting(&self) -> bool {
+        self.export.is_some()
+    }
+
+    fn poll_export(&mut self) -> Option<u64> {
+        let export = self.export.as_ref()?;
+        let result = match export.receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return Some(100),
+            Err(mpsc::TryRecvError::Disconnected) => Err("The export stopped unexpectedly.".into()),
+        };
+        let export = self.export.take()?;
+        let _ = export.thread.join();
+        match result {
+            Ok(()) => self.message(format!("Exported {}.", export.path.display())),
+            Err(error) => self.error(format!("Cannot export mix: {error}")),
+        }
+        None
     }
     pub fn new_mix(&mut self) -> Result<(), String> {
         self.require_idle_recording()?;
         self.stop();
         self.editor = Editor::new(Project {
             libraries: self.library.bindings().to_vec(),
-            imported_samples: self.library.imported_samples(),
+            imported_samples: self.library.imported_samples().into(),
             ..Project::default()
         });
         self.revision = self.revision.wrapping_add(1);
@@ -785,8 +1035,8 @@ impl Session {
             .cloned()
             .collect();
         crate::project_io::save_library_config(&persisted)?;
-        self.editor.project.libraries = bindings;
-        self.library = Arc::new(library);
+        self.editor.set_libraries(bindings);
+        self.set_library(library);
         self.changed();
         Ok(())
     }
@@ -854,11 +1104,21 @@ impl Session {
                 }
                 candidate.remove_product(binding.product)?;
             }
-            match candidate.register(
-                binding.product,
-                &binding.root,
-                &crate::project_io::reference_samples_root(),
-            ) {
+            // The current library already holds this provider. Read it from
+            // disk again only when its folder is gone, to report that.
+            let kept = candidate
+                .register_loaded(binding.product, &self.library)
+                .and_then(|kept| {
+                    if kept {
+                        return Ok(());
+                    }
+                    candidate.register(
+                        binding.product,
+                        &binding.root,
+                        &crate::project_io::reference_samples_root(),
+                    )
+                });
+            match kept {
                 Ok(()) => library = candidate,
                 Err(error) => warnings.push(error),
             }
@@ -868,7 +1128,7 @@ impl Session {
         self.stop();
         // New sample sources are not an edit: a saved or untouched mix stays so.
         let unsaved = self.unsaved;
-        self.library = Arc::new(library);
+        self.set_library(library);
         self.editor = Editor::new(project);
         self.changed();
         self.unsaved = unsaved;
@@ -1056,7 +1316,7 @@ impl Session {
                 project.imported_samples.push(imported);
             }
         })?;
-        self.library = Arc::new(library);
+        self.set_library(library);
         self.changed();
         Ok(id)
     }
@@ -1145,7 +1405,7 @@ impl Session {
     pub fn save_pattern(&self, path: &Path, state: &StepSynthState) -> Result<(), String> {
         state.validate()?;
         let bytes = serde_json::to_vec_pretty(state).map_err(|error| error.to_string())?;
-        std::fs::write(path, bytes).map_err(|error| error.to_string())
+        crate::atomic_file::write(path, &bytes)
     }
     pub fn load_pattern(&self, path: &Path) -> Result<StepSynthState, String> {
         use std::io::Read;
@@ -1168,7 +1428,7 @@ impl Session {
     }
 
     fn tick_to_frame(&self, tick: u32, rate: u32) -> u64 {
-        (tick as f64 * self.editor.project.frames_per_tick(rate)).round() as u64
+        (tick as f64 * self.editor.project().frames_per_tick(rate)).round() as u64
     }
 
     pub fn start_playback(&mut self) {
@@ -1176,7 +1436,7 @@ impl Session {
             self.error("Audio output is unavailable. You can still edit and export your mix.");
             return;
         }
-        if self.editor.project.clips.is_empty() {
+        if self.editor.project().clips.is_empty() {
             self.pause();
             self.message("Add a sound to a track before you press Play.");
             return;
@@ -1184,16 +1444,8 @@ impl Session {
         self.wants_playback = true;
         if self.render_dirty || self.render.is_none() {
             if self.requested_revision != Some(self.revision) {
-                let request = RenderRequest {
-                    revision: self.revision,
-                    project: self.editor.project.clone(),
-                    library: self.library.clone(),
-                };
-                match self.render_worker.request(request) {
-                    Ok(()) => {
-                        self.requested_revision = Some(self.revision);
-                        self.message("Preparing mix audio.");
-                    }
+                match self.request_render() {
+                    Ok(()) => self.message("Preparing mix audio."),
                     Err(error) => {
                         self.wants_playback = false;
                         self.error(error);
@@ -1205,17 +1457,34 @@ impl Session {
         self.apply_playback_buffer();
     }
 
+    /// Queue a render of the current revision. `poll_render` stores the result.
+    fn request_render(&mut self) -> Result<(), String> {
+        self.render_worker.request(RenderRequest {
+            revision: self.revision,
+            project: self.editor.project().clone(),
+            library: self.library.clone(),
+        })?;
+        self.requested_revision = Some(self.revision);
+        Ok(())
+    }
+
+    fn cancel_playback_request(&mut self) {
+        self.wants_playback = false;
+        self.render_worker.cancel_pending();
+        self.requested_revision = None;
+    }
+
     fn apply_playback_buffer(&mut self) {
-        let pcm = self.render.as_ref().unwrap().clone();
-        self.playback_frames_per_tick = self.editor.project.frames_per_tick(pcm.sample_rate);
-        let start = self.tick_to_frame(self.cursor_tick, pcm.sample_rate);
-        let region = self.editor.project.loop_region.map(|[a, b]| {
-            [
-                self.tick_to_frame(a, pcm.sample_rate),
-                self.tick_to_frame(b, pcm.sample_rate),
-            ]
-        });
-        match self.player.as_mut().unwrap().play(pcm, start, region) {
+        let mix = self.render.as_ref().unwrap().clone();
+        let rate = audio::Mix::SAMPLE_RATE;
+        self.playback_frames_per_tick = self.editor.project().frames_per_tick(rate);
+        let start = self.tick_to_frame(self.cursor_tick, rate);
+        let region = self
+            .editor
+            .project()
+            .loop_region
+            .map(|[a, b]| [self.tick_to_frame(a, rate), self.tick_to_frame(b, rate)]);
+        match self.player.as_mut().unwrap().play(mix, start, region) {
             Ok(()) => {
                 self.previewing = false;
                 self.seek_pending = false;
@@ -1236,17 +1505,16 @@ impl Session {
             return;
         }
         self.requested_revision = None;
-        match result.pcm {
-            Ok(pcm) => {
+        match result.mix {
+            Ok(mix) => {
                 if self.playing_mix() && !self.seek_pending {
                     self.cursor_tick = (self.player.as_ref().unwrap().position_frames() as f64
                         / self.playback_frames_per_tick)
                         as u32;
                 }
-                self.render = Some(pcm);
+                self.render = Some(mix);
                 self.render_dirty = false;
                 if self.wants_playback {
-                    self.playback_frames_per_tick = result.frames_per_tick;
                     self.apply_playback_buffer();
                 }
             }
@@ -1258,9 +1526,7 @@ impl Session {
     }
 
     pub fn pause(&mut self) {
-        self.wants_playback = false;
-        self.render_worker.cancel_pending();
-        self.requested_revision = None;
+        self.cancel_playback_request();
         if let Some(player) = &mut self.player {
             player.pause();
         }
@@ -1278,16 +1544,17 @@ impl Session {
     }
 
     pub fn preview(&mut self, sample_id: u32) {
-        self.wants_playback = false;
-        self.render_worker.cancel_pending();
-        self.requested_revision = None;
+        self.cancel_playback_request();
         let Some(sample) = self.library.sample_by_id(sample_id) else {
             return;
         };
         let name = sample.name.clone();
         match self.library.read_pcm(sample_id) {
             Ok(pcm) => match self.player.as_mut() {
-                Some(player) => match player.play(Arc::new(pcm), 0, None) {
+                Some(player) => match pcm
+                    .validate()
+                    .and_then(|()| player.play(Arc::new(pcm), 0, None))
+                {
                     Ok(()) => {
                         self.previewing = true;
                         self.message(format!("Listening: {name}"));
@@ -1301,14 +1568,15 @@ impl Session {
     }
 
     pub fn play_pcm(&mut self, pcm: Pcm, label: &str) {
-        self.wants_playback = false;
-        self.render_worker.cancel_pending();
-        self.requested_revision = None;
+        self.play_shared_pcm(Arc::new(pcm), label);
+    }
+    fn play_shared_pcm(&mut self, pcm: Arc<Pcm>, label: &str) {
+        self.cancel_playback_request();
         let result = self
             .player
             .as_mut()
             .ok_or("Audio output is unavailable.".to_string())
-            .and_then(|p| p.play(Arc::new(pcm), 0, None));
+            .and_then(|p| pcm.validate().and_then(|()| p.play(pcm, 0, None)));
         match result {
             Ok(()) => {
                 self.previewing = true;
@@ -1318,9 +1586,7 @@ impl Session {
         }
     }
     pub fn stop(&mut self) {
-        self.wants_playback = false;
-        self.render_worker.cancel_pending();
-        self.requested_revision = None;
+        self.cancel_playback_request();
         if let Some(player) = &mut self.player {
             player.stop();
         }
@@ -1328,7 +1594,7 @@ impl Session {
         self.cursor_tick = 0;
         if let Some(recorder) = self.recorder.take() {
             match recorder.finish() {
-                Ok(pcm) => self.recorded_take = Some(pcm),
+                Ok(pcm) => self.recorded_take = Some(Arc::new(pcm)),
                 Err(error) => self.error(error),
             }
         } else {
@@ -1337,7 +1603,10 @@ impl Session {
     }
     /// Advances devices and the render queue. Returns a suggested polling delay in milliseconds.
     pub fn poll(&mut self) -> Option<u64> {
-        let scan_delay = self.poll_wave_scan();
+        let scan_delay = match (self.poll_wave_scan(), self.poll_export()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         self.poll_render();
         if self.wants_playback
             && !self.render_dirty
@@ -1391,6 +1660,14 @@ impl Session {
             ),
             Err(error) => self.error(error),
         }
+        // Render an edited mix during the count-in, so that it starts with the take.
+        if self.render_dirty
+            && !self.project().clips.is_empty()
+            && self.player.is_some()
+            && let Err(error) = self.request_render()
+        {
+            self.error(error);
+        }
         Ok(())
     }
     fn poll_recording(&mut self) {
@@ -1399,7 +1676,13 @@ impl Session {
         };
         let status = recorder.status();
         if let Some(error) = status.error {
-            self.error(error);
+            // The input cannot recover. Keep what it captured as the take.
+            self.stop();
+            self.error(if self.recorded_take.is_some() {
+                format!("{error} Recording stopped. The audio captured before that is kept.")
+            } else {
+                error
+            });
             return;
         }
         if status.limit_reached {
@@ -1429,7 +1712,7 @@ impl Session {
     }
     pub fn preview_recorded_take(&mut self) {
         if let Some(pcm) = self.recorded_take.clone() {
-            self.play_pcm(pcm, "Listening to the recorded take.");
+            self.play_shared_pcm(pcm, "Listening to the recorded take.");
         }
     }
     pub fn discard_recorded_take(&mut self) {
@@ -1460,6 +1743,19 @@ impl Session {
             }
         }
     }
+}
+
+/// The highest imported sample ID in use; new imports follow it.
+fn last_imported_id(project: &Project, library: &Library) -> u32 {
+    project
+        .imported_samples
+        .iter()
+        .map(|sample| sample.id)
+        .chain(project.missing_samples.iter().map(|sample| sample.id))
+        .chain(library.samples.iter().map(|sample| sample.id))
+        .max()
+        .unwrap_or(0)
+        .max(crate::products::IMPORTED_ID_START - 1)
 }
 
 fn same_missing_reference(left: &MissingReference, right: &MissingReference) -> bool {
@@ -1563,7 +1859,7 @@ mod tests {
         let mut library = Library::empty();
         library.apply_imports(&sources).unwrap();
         let project = Project {
-            imported_samples: sources,
+            imported_samples: sources.into(),
             sample_conflicts: vec![SampleConflict {
                 reference: "Old/lead.wav".into(),
                 sample_ids: vec![1_000_000, 1_000_001],
@@ -1859,7 +2155,7 @@ mod tests {
         let mut editor = Editor::new(Project::default());
         editor.place(1, 0, 0, TICKS_PER_BAR).unwrap();
         editor.place(1, 1, TICKS_PER_BAR, TICKS_PER_BAR).unwrap();
-        Session::headless(library, editor.project).unwrap()
+        Session::headless(library, editor.into_project()).unwrap()
     }
     #[test]
     fn manual_resolution_is_atomic_updates_all_exact_references_and_supports_history() {
@@ -2126,7 +2422,7 @@ mod tests {
             std::fs::read(outside.join("lead.wav")).unwrap()
         );
         std::fs::remove_file(outside.join("lead.wav")).unwrap();
-        let saved = root.join("song.json");
+        let saved = root.join("song.mixjam");
         session.save(&saved).unwrap();
         let (reopened, ready) = crate::project_io::open(&saved, &library).unwrap();
         assert_eq!(reopened.imported_samples[0].path, retained);
@@ -2152,7 +2448,7 @@ mod tests {
             .unwrap();
         app.cursor_tick = TICKS_PER_BAR;
         app.recorder = Some(crate::recording::Recorder::fixture());
-        let project = app.editor.project.clone();
+        let project = app.editor.project().clone();
         let library = app.library.clone();
         let revision = app.revision;
         let unsaved = app.unsaved;
@@ -2161,7 +2457,7 @@ mod tests {
         let error = app.select_wave_folder(Path::new(""), 140.0).unwrap_err();
 
         assert_eq!(error, "Stop recording before you change the sample folder.");
-        assert_eq!(app.editor.project, project);
+        assert_eq!(*app.editor.project(), project);
         assert!(Arc::ptr_eq(&app.library, &library));
         assert_eq!(app.revision, revision);
         assert_eq!(app.unsaved, unsaved);
@@ -2192,7 +2488,7 @@ mod tests {
         };
         let request = |revision| RenderRequest {
             revision,
-            project: app.editor.project.clone(),
+            project: app.editor.project().clone(),
             library: app.library.clone(),
         };
         worker.request(request(1)).unwrap();
@@ -2203,8 +2499,7 @@ mod tests {
         results
             .send(RenderResult {
                 revision: 1,
-                frames_per_tick: 1.0,
-                pcm: Err("Fixture result".into()),
+                mix: Err("Fixture result".into()),
             })
             .unwrap();
         assert_eq!(worker.poll().unwrap().revision, 1);
@@ -2218,13 +2513,48 @@ mod tests {
         results
             .send(RenderResult {
                 revision: 3,
-                frames_per_tick: 1.0,
-                pcm: Err("Fixture result".into()),
+                mix: Err("Fixture result".into()),
             })
             .unwrap();
         worker.poll().unwrap();
         assert!(requests.try_recv().is_err());
         assert!(!worker.in_flight);
+    }
+
+    #[test]
+    fn a_stopped_render_worker_fails_its_render_and_is_replaced() {
+        let app = fixture();
+        let (sender, requests) = mpsc::channel();
+        let (results, receiver) = mpsc::channel::<RenderResult>();
+        let mut worker = RenderWorker {
+            sender,
+            receiver,
+            in_flight: false,
+            current_revision: None,
+            pending: None,
+        };
+        let request = |revision| RenderRequest {
+            revision,
+            project: app.editor.project().clone(),
+            library: app.library.clone(),
+        };
+        worker.request(request(1)).unwrap();
+        worker.request(request(2)).unwrap();
+        // The worker thread ends without a result, as it does after a panic.
+        drop((requests, results));
+        let failed = worker.poll().unwrap();
+        assert_eq!(failed.revision, 1);
+        assert!(failed.mix.is_err());
+        // The replacement worker renders the request that was waiting.
+        let finished = loop {
+            if let Some(result) = worker.poll() {
+                break result;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+        assert_eq!(finished.revision, 2);
+        assert!(!worker.in_flight);
+        assert!(worker.poll().is_none());
     }
 
     #[test]
@@ -2242,16 +2572,11 @@ mod tests {
         app.revision = 5;
         app.wants_playback = true;
         app.pause();
-        let pcm = Arc::new(Pcm {
-            sample_rate: 1000,
-            channels: 2,
-            samples: vec![0.0; 20],
-        });
+        let mix = Arc::new(audio::prepare_project(&Project::default(), &Library::empty()).unwrap());
         results
             .send(RenderResult {
                 revision: 5,
-                frames_per_tick: 1.0,
-                pcm: Ok(pcm.clone()),
+                mix: Ok(mix.clone()),
             })
             .unwrap();
         app.poll_render();
@@ -2264,8 +2589,7 @@ mod tests {
         results
             .send(RenderResult {
                 revision: 5,
-                frames_per_tick: 1.0,
-                pcm: Ok(pcm),
+                mix: Ok(mix),
             })
             .unwrap();
         app.poll_render();
@@ -2281,7 +2605,7 @@ mod tests {
         let mut app = fixture();
         let original_library = app.library.clone();
         app.edit(EditCommand::DeleteClips(vec![1, 2])).unwrap();
-        let empty_project = app.editor.project.clone();
+        let empty_project = app.editor.project().clone();
         assert!(empty_project.clips.is_empty());
         let mut removed = (*app.library).clone();
         removed.remove_product(Product::T2).unwrap();
@@ -2289,7 +2613,7 @@ mod tests {
         let removed_library = app.library.clone();
         let error = app.history_step(false).unwrap_err();
         assert!(error.contains("sample 1 is unavailable"));
-        assert_eq!(app.editor.project, empty_project);
+        assert_eq!(*app.editor.project(), empty_project);
         assert!(Arc::ptr_eq(&removed_library, &app.library));
         assert!(
             !app.editor.redo(),
@@ -2297,10 +2621,10 @@ mod tests {
         );
         app.library = original_library;
         app.history_step(false).unwrap();
-        assert_eq!(app.editor.project.clips.len(), 2);
+        assert_eq!(app.editor.project().clips.len(), 2);
         assert!(app.library.sample_by_id(1).is_some());
         app.history_step(true).unwrap();
-        assert!(app.editor.project.clips.is_empty());
+        assert!(app.editor.project().clips.is_empty());
     }
 }
 
@@ -2378,7 +2702,7 @@ mod boundary_tests {
             Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
         let source = session.register_file(&wave, "Wave", 140.0).unwrap();
         let clip = session.place(source, 0, 0).unwrap();
-        session.save(&dir.join("project.json")).unwrap();
+        session.save(&dir.join("project.mixjam")).unwrap();
         let before = session.project().clone();
         let revision = session.revision;
         let command = |offset| EditCommand::SetClip {
@@ -2395,6 +2719,163 @@ mod boundary_tests {
         assert_eq!(session.project().clips[0].offset_frames, 999);
         session.history_step(false).unwrap();
         assert_eq!(session.project(), &before);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn accepted_commands_that_change_nothing_are_not_edits() {
+        let dir = fixture_dir();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        let clip = session.place(source, 0, 0).unwrap();
+        session.place(source, 1, 0).unwrap();
+        session.save(&dir.join("project.mixjam")).unwrap();
+        let revision = session.revision;
+        session.move_clips(&[clip], 0, 0, false).unwrap();
+        session
+            .edit(EditCommand::SetMixer {
+                tracks: session.project().tracks.clone(),
+                master_gain: session.project().master_gain,
+            })
+            .unwrap();
+        session
+            .edit(EditCommand::SetTempo(session.project().bpm))
+            .unwrap();
+        assert!(!session.unsaved());
+        assert_eq!(session.revision, revision);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn saving_ends_a_control_gesture_before_the_next_edit() {
+        let dir = fixture_dir();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let set_master = |session: &mut Session, master_gain| {
+            session.edit(EditCommand::SetMixer {
+                tracks: session.project().tracks.clone(),
+                master_gain,
+            })
+        };
+        set_master(&mut session, 0.5).unwrap();
+        session.save(&dir.join("gesture.mixjam")).unwrap();
+        let saved = session.project().clone();
+        set_master(&mut session, 0.75).unwrap();
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &saved);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &Project::default());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn one_control_drag_is_one_undo_step_and_keeps_earlier_history() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        let mixer = |session: &Session, track: usize, gain: f32, pan: f32| {
+            let mut tracks = session.project().tracks.clone();
+            tracks[track].gain = gain;
+            tracks[track].pan = pan;
+            EditCommand::SetMixer {
+                tracks,
+                master_gain: session.project().master_gain,
+            }
+        };
+        // More frames than the history holds: the tempo edit must survive them.
+        for frame in 0..150 {
+            let command = mixer(&session, 3, 1.0 + (frame + 1) as f32 * 0.01, 0.0);
+            session.edit(command).unwrap();
+        }
+        // Another control, and the same control after a pause, start new steps.
+        let command = mixer(&session, 3, 2.5, 0.5);
+        session.edit(command).unwrap();
+        session.gesture = session
+            .gesture
+            .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
+        let command = mixer(&session, 3, 2.5, -0.5);
+        session.edit(command).unwrap();
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[3].pan, 0.5);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[3].pan, 0.0);
+        assert_eq!(session.project().tracks[3].gain, 2.5);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[3].gain, 1.0);
+        assert_eq!(session.project().bpm, 160.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &Project::default());
+        assert!(!session.history_step(false).unwrap());
+    }
+    #[test]
+    fn a_longer_clip_cannot_cover_the_next_clip_on_its_track() {
+        let dir = fixture_dir();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        let first = session.place(source, 0, 0).unwrap();
+        let length = session.project().clips[0].length_ticks;
+        session.place(source, 0, length + 16).unwrap();
+        let before = session.project().clone();
+        let resize = |length_ticks| EditCommand::SetClip {
+            id: first,
+            gain: 1.0,
+            offset_frames: 0,
+            length_ticks,
+        };
+        assert!(session.edit(resize(length + 17)).is_err());
+        assert_eq!(session.project(), &before);
+        session.edit(resize(length + 16)).unwrap();
+        assert_eq!(session.project().clips[0].length_ticks, length + 16);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn each_clip_control_drag_is_its_own_undo_step() {
+        let dir = fixture_dir();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        let clip = session.place(source, 0, 0).unwrap();
+        let length = session.project().clips[0].length_ticks;
+        let set = |gain, offset_frames, length_ticks| EditCommand::SetClip {
+            id: clip,
+            gain,
+            offset_frames,
+            length_ticks,
+        };
+        // Frames of a gain drag, then at once frames of a trim drag: two
+        // controls, so two steps.
+        session.edit(set(0.5, 0, length)).unwrap();
+        session.edit(set(0.6, 0, length)).unwrap();
+        session.edit(set(0.6, 10, length)).unwrap();
+        session.edit(set(0.6, 20, length)).unwrap();
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().clips[0].offset_frames, 0);
+        assert_eq!(session.project().clips[0].gain, 0.6);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().clips[0].gain, 1.0);
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
@@ -2582,16 +3063,16 @@ mod boundary_tests {
                 "edit" => session.edit(EditCommand::SetTempo(160.0)).unwrap(),
                 "edit_then_save" => {
                     session.edit(EditCommand::SetTempo(160.0)).unwrap();
-                    session.save(&dir.join("saved.json")).unwrap();
+                    session.save(&dir.join("saved.mixjam")).unwrap();
                 }
                 "new" => session.new_mix().unwrap(),
                 "open" => session.open(&other).unwrap(),
                 "take" => {
-                    session.recorded_take = Some(Pcm {
+                    session.recorded_take = Some(Arc::new(Pcm {
                         sample_rate: 44_100,
                         channels: 1,
                         samples: vec![0.25; 32],
-                    })
+                    }))
                 }
                 _ => unreachable!(),
             }
@@ -2628,7 +3109,7 @@ mod boundary_tests {
             .write_wav(&dir.join(name))
             .unwrap();
         }
-        let song = dir.join("song.json");
+        let song = dir.join("song.mixjam");
         let data = dir.join("data");
         let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
             .unwrap()
@@ -2656,7 +3137,7 @@ mod boundary_tests {
         assert_eq!(session.library().folder_tempos().len(), 1);
         let (notice, error) = session.take_notice().unwrap();
         // The pending song did not exist: the folder loaded, the open failed visibly.
-        assert!(error && notice.contains("song.json"), "{notice}");
+        assert!(error && notice.contains("song.mixjam"), "{notice}");
         assert_eq!(crate::project_io::load_scan_cache(&data).len(), 4);
         let cache_path = data.join("wav-scan-cache.json");
         let cache_modified = std::fs::metadata(&cache_path).unwrap().modified().unwrap();
@@ -2668,7 +3149,7 @@ mod boundary_tests {
         session.cancel_wave_scan();
         assert!(session.wave_scan().is_none());
         let (notice, error) = session.take_notice().unwrap();
-        assert!(!error && notice.contains("song.json"), "{notice}");
+        assert!(!error && notice.contains("song.mixjam"), "{notice}");
         std::thread::sleep(std::time::Duration::from_millis(200));
         assert_eq!(session.poll(), None);
         assert_eq!(session.library().samples.len(), before);
@@ -2712,7 +3193,7 @@ mod boundary_tests {
     fn headless_session_import_save_reopen_render_and_processing_work_without_gui() {
         let dir = fixture_dir();
         let wave = dir.join("source.wav");
-        let project = dir.join("song.json");
+        let project = dir.join("song.mixjam");
         Pcm {
             sample_rate: 1000,
             channels: 1,
@@ -2737,6 +3218,46 @@ mod boundary_tests {
         session.export(&dir.join("export.wav")).unwrap();
         let rendered = audio::read_wav(&dir.join("export.wav")).unwrap();
         assert!(rendered.samples.iter().any(|sample| sample.abs() > 0.1));
+        // The background export writes the same audio and reports through `poll`.
+        let background = dir.join("background.wav");
+        session.start_export(&background).unwrap();
+        assert!(session.start_export(&background).is_err());
+        while session.is_exporting() {
+            session.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(
+            session.take_notice(),
+            Some((format!("Exported {}.", background.display()), false))
+        );
+        assert_eq!(
+            audio::read_wav(&background).unwrap().samples,
+            rendered.samples
+        );
+        // A render reuses decoded sources and drops those no longer used.
+        let mut decoded = std::collections::HashMap::new();
+        let first =
+            audio::prepare_project_reusing(session.project(), &session.library, &mut decoded)
+                .unwrap();
+        assert_eq!(decoded.keys().copied().collect::<Vec<_>>(), [source]);
+        std::fs::remove_file(&wave).unwrap();
+        let again =
+            audio::prepare_project_reusing(session.project(), &session.library, &mut decoded)
+                .unwrap();
+        assert_eq!(
+            again.to_pcm().unwrap().samples,
+            first.to_pcm().unwrap().samples
+        );
+        let empty = Project::default();
+        audio::prepare_project_reusing(&empty, &session.library, &mut decoded).unwrap();
+        assert!(decoded.is_empty());
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.25; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
         assert_eq!(
             session
                 .edited_pcm(Some(source), 10, 20, 0.0)
@@ -2782,13 +3303,20 @@ mod boundary_tests {
                     "{name} bypasses the application boundary through {forbidden}"
                 );
             }
-            for line in source
-                .lines()
-                .filter(|line| line.trim_start().starts_with("use mixjam_techno::"))
-            {
-                assert!(
-                    line.contains("use mixjam_techno::application::"),
-                    "{name} imports a backend implementation directly"
+        }
+        // The native binary names the backend as `mixjam_techno`. Every such
+        // path, in an import or inline, must go through the application API.
+        for (name, source) in [
+            ("ui.rs", include_str!("ui.rs")),
+            ("ui/view.rs", include_str!("ui/view.rs")),
+            ("ui/capture.rs", include_str!("ui/capture.rs")),
+            ("ui_icons.rs", include_str!("ui_icons.rs")),
+        ] {
+            for line in source.lines() {
+                assert_eq!(
+                    line.matches("mixjam_techno::").count(),
+                    line.matches("mixjam_techno::application::").count(),
+                    "{name} reaches a backend implementation directly: {line}"
                 );
             }
         }
@@ -2830,11 +3358,11 @@ mod boundary_tests {
         session.edit(EditCommand::SetTempo(160.0)).unwrap();
         assert!(session.needs_save_confirmation());
         session.unsaved = false;
-        session.recorded_take = Some(Pcm {
+        session.recorded_take = Some(Arc::new(Pcm {
             sample_rate: 1000,
             channels: 1,
             samples: vec![0.0; 10],
-        });
+        }));
         assert!(session.needs_save_confirmation());
         assert!(session.has_recorded_take());
         session.discard_recorded_take();

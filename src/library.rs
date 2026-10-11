@@ -1,3 +1,4 @@
+pub(crate) use crate::catalog::decode_1252;
 use crate::products::{IMPORTED_ID_START, LibraryBinding, Product};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -119,9 +120,16 @@ impl ScanCache {
         Some((metadata.len(), modified))
     }
 
+    /// A damaged or edited cache file must not supply what a decode would reject.
     fn get(&self, path: &Path, stamp: (u64, u128)) -> Option<&WavProbe> {
         let entry = self.entries.get(path.to_str()?)?;
-        (entry.length == stamp.0 && entry.modified == stamp.1).then_some(&entry.probe)
+        let probe = &entry.probe;
+        (entry.length == stamp.0
+            && entry.modified == stamp.1
+            && probe.frame_count > 0
+            && (1..=384_000).contains(&probe.sample_rate)
+            && (1..=2).contains(&probe.channels))
+        .then_some(probe)
     }
 
     fn insert(&mut self, path: &Path, stamp: (u64, u128), probe: WavProbe) {
@@ -167,7 +175,6 @@ pub struct Sample {
 pub struct Library {
     pub samples: Vec<Sample>,
     pub archive_path: PathBuf,
-    pub unresolved_samples: Vec<u32>,
     by_id: HashMap<u32, usize>,
     sources: HashMap<u32, AudioSource>,
     bindings: Vec<LibraryBinding>,
@@ -204,16 +211,10 @@ impl Library {
             .enumerate()
             .map(|(index, sample)| (sample.id, index))
             .collect();
-        let unresolved_samples = samples
-            .iter()
-            .filter(|sample| sample.wav_path.is_none())
-            .map(|sample| sample.id)
-            .collect();
         let sources = samples_sources(&samples);
         Self {
             samples,
             archive_path: PathBuf::new(),
-            unresolved_samples,
             by_id,
             sources,
             bindings: Vec::new(),
@@ -240,7 +241,6 @@ impl Library {
         Self {
             samples: Vec::new(),
             archive_path: PathBuf::new(),
-            unresolved_samples: Vec::new(),
             by_id: HashMap::new(),
             sources: HashMap::new(),
             bindings: Vec::new(),
@@ -264,9 +264,13 @@ impl Library {
 
     /// WAVs that carry a native sample's name and duration but different audio.
     pub fn unverified_waves(&self) -> impl Iterator<Item = (u32, &Path)> {
-        self.unverified
+        let mut waves: Vec<_> = self
+            .unverified
             .iter()
             .map(|(id, path)| (*id, path.as_path()))
+            .collect();
+        waves.sort();
+        waves.into_iter()
     }
 
     /// Explain an unresolved native identity in a song import error.
@@ -325,12 +329,24 @@ impl Library {
 
     /// Keep unresolved project identities out of later file and palette imports.
     pub(crate) fn reserve_missing_samples(&mut self, samples: &[crate::engine::MissingSample]) {
-        self.reserved_import_id = samples
+        self.reserved_import_id = Self::last_missing_id(samples);
+    }
+
+    /// Whether `reserve_missing_samples` would change nothing.
+    pub(crate) fn has_reserved_missing_samples(
+        &self,
+        samples: &[crate::engine::MissingSample],
+    ) -> bool {
+        self.reserved_import_id == Self::last_missing_id(samples)
+    }
+
+    fn last_missing_id(samples: &[crate::engine::MissingSample]) -> u32 {
+        samples
             .iter()
             .map(|sample| sample.id)
             .max()
             .unwrap_or(0)
-            .max(IMPORTED_ID_START - 1);
+            .max(IMPORTED_ID_START - 1)
     }
 
     /// Probe current bytes even when an older palette entry has the same path.
@@ -423,7 +439,7 @@ impl Library {
             library.register_wav_product(
                 product,
                 &root,
-                &crate::catalog::wave_metadata(product)?,
+                crate::catalog::bundled_wave_metadata(product)?,
             )?;
         }
         // A display label and duration cannot distinguish different native IDs.
@@ -527,13 +543,10 @@ impl Library {
         }
         // A copy in another product's folder serves only when this product has none.
         let foreign = |sample: &Sample| {
-            sample.wav_path.as_ref().is_some_and(|path| {
-                path.ancestors()
-                    .skip(1)
-                    .filter_map(Path::file_name)
-                    .find_map(|name| product_folder_hint(&name.to_string_lossy()))
-                    .is_some_and(|hint| hint != product)
-            })
+            sample
+                .wav_path
+                .as_ref()
+                .is_some_and(|path| in_foreign_product_folder(path, &root, product))
         };
         for files in by_digest.values_mut() {
             files.sort_by_cached_key(|sample| (foreign(sample), sample.wav_path.clone()));
@@ -617,14 +630,7 @@ impl Library {
                     if claimed.contains(path) {
                         continue;
                     }
-                    if score < 2
-                        && path
-                            .ancestors()
-                            .skip(1)
-                            .filter_map(Path::file_name)
-                            .find_map(|name| product_folder_hint(&name.to_string_lossy()))
-                            .is_some_and(|hint| hint != product)
-                    {
+                    if score < 2 && in_foreign_product_folder(path, &root, product) {
                         continue;
                     }
                     let category_matches = score == 2
@@ -682,6 +688,9 @@ impl Library {
             return Err("The WAV folder contains a conflicting sample identity.".into());
         }
         let count = resolved.len();
+        // Audio matches were grouped in a hash map. Keep the palette in
+        // catalog order, the same on every scan.
+        resolved.sort_by_key(|(sample, _, _)| sample.id);
         for (sample, path, _) in resolved {
             unverified.remove(&sample.id);
             self.sources
@@ -708,7 +717,8 @@ impl Library {
             .iter()
             .filter(|sample| Product::sample_key(sample.id).is_some_and(|(p, _)| p == product))
             .count();
-        crate::catalog::wave_metadata(product).is_ok_and(|entries| found * 2 < entries.len())
+        crate::catalog::bundled_wave_metadata(product)
+            .is_ok_and(|entries| found * 2 < entries.len())
     }
 
     pub fn source_root(&self, product: Product) -> Option<&Path> {
@@ -724,8 +734,6 @@ impl Library {
         self.sources
             .retain(|id, _| Product::sample_key(*id).is_none_or(|(p, _)| p != product));
         self.bindings.retain(|binding| binding.product != product);
-        self.unresolved_samples
-            .retain(|id| Product::sample_key(*id).is_none_or(|(p, _)| p != product));
         self.verified
             .retain(|id| Product::sample_key(*id).is_none_or(|(p, _)| p != product));
         self.unverified
@@ -759,8 +767,11 @@ impl Library {
         let other = if !crate::catalog::has_native_catalog(product, &root) {
             let mut wav = Self::empty();
             wav.import_wav_folder(&root, 140.0)?;
-            if wav.register_wav_product(product, &root, &crate::catalog::wave_metadata(product)?)?
-                == 0
+            if wav.register_wav_product(
+                product,
+                &root,
+                crate::catalog::bundled_wave_metadata(product)?,
+            )? == 0
             {
                 return Err(format!(
                     "The WAV folder has no identified {} samples.",
@@ -785,6 +796,11 @@ impl Library {
                 _ => Self::from_catalog(product, &root)?,
             }
         };
+        self.add_provider(other)
+    }
+
+    /// Add one provider's samples. Conflicting identities leave this library unchanged.
+    fn add_provider(&mut self, other: Self) -> Result<(), String> {
         if other
             .samples
             .iter()
@@ -798,13 +814,67 @@ impl Library {
         }
         self.sources.extend(other.sources);
         self.bindings.extend(other.bindings);
-        self.unresolved_samples.extend(other.unresolved_samples);
         self.verified.extend(other.verified);
         self.unverified.extend(other.unverified);
         if self.archive_path.as_os_str().is_empty() {
             self.archive_path = other.archive_path;
         }
         Ok(())
+    }
+
+    /// Take a product's provider from a library that already loaded it, in
+    /// place of reading its catalog or decoding its WAV folder again.
+    /// Returns false when `loaded` has no usable provider for the product.
+    pub(crate) fn register_loaded(
+        &mut self,
+        product: Product,
+        loaded: &Self,
+    ) -> Result<bool, String> {
+        let Some(binding) = loaded
+            .bindings
+            .iter()
+            .find(|binding| binding.product == product && binding.root.is_dir())
+        else {
+            return Ok(false);
+        };
+        if self.source_root(product).is_some() {
+            return Err(format!(
+                "{} already has a sample provider.",
+                product.label()
+            ));
+        }
+        let owned = |id: u32| Product::sample_key(id).is_some_and(|(owner, _)| owner == product);
+        let mut provider = Self::empty();
+        provider.samples = loaded
+            .samples
+            .iter()
+            .filter(|sample| owned(sample.id))
+            .cloned()
+            .collect();
+        provider.sources = loaded
+            .sources
+            .iter()
+            .filter(|(id, _)| owned(**id))
+            .map(|(id, source)| (*id, source.clone()))
+            .collect();
+        provider.bindings = vec![binding.clone()];
+        provider.verified = loaded
+            .verified
+            .iter()
+            .copied()
+            .filter(|id| owned(*id))
+            .collect();
+        provider.unverified = loaded
+            .unverified
+            .iter()
+            .filter(|(id, _)| owned(**id))
+            .map(|(id, path)| (*id, path.clone()))
+            .collect();
+        if loaded.archive_path.starts_with(&binding.root) {
+            provider.archive_path = loaded.archive_path.clone();
+        }
+        self.add_provider(provider)?;
+        Ok(true)
     }
 
     fn from_catalog(product: Product, root: &Path) -> Result<Self, String> {
@@ -1003,11 +1073,6 @@ impl Library {
         if samples_root.join("metadata.json").exists() {
             map_waves(&mut samples, &embedded_names, samples_root)?;
         }
-        let unresolved_samples = samples
-            .iter()
-            .filter(|s| s.wav_path.is_none())
-            .map(|s| s.id)
-            .collect();
         let sources = samples
             .iter()
             .map(|sample| {
@@ -1022,7 +1087,6 @@ impl Library {
         Ok(Self {
             samples,
             archive_path,
-            unresolved_samples,
             by_id,
             sources,
             bindings: vec![LibraryBinding { product, root }],
@@ -1206,12 +1270,13 @@ impl Library {
             for entry in fs::read_dir(&folder)
                 .map_err(|e| format!("Cannot read {}: {e}", folder.display()))?
             {
-                let entry = entry.map_err(|e| e.to_string())?;
+                let entry = entry.map_err(|e| format!("Cannot read {}: {e}", folder.display()))?;
                 entries_seen += 1;
                 if entries_seen > 100_000 {
                     return Err("The WAV folder exceeds the 100,000-item limit.".into());
                 }
-                let path = fs::canonicalize(entry.path()).map_err(|e| e.to_string())?;
+                let path = fs::canonicalize(entry.path())
+                    .map_err(|e| format!("Cannot read {}: {e}", entry.path().display()))?;
                 if !path.starts_with(&root) {
                     return Err("A WAV folder link points outside the selected folder.".into());
                 }
@@ -1351,14 +1416,10 @@ impl Library {
     /// Resolve a moved WAV by its longest matching path suffix. Ties use the
     /// first canonical path; importers retain all candidates for user review.
     pub fn resolve_wav_reference(&self, reference: &str) -> Result<PathBuf, String> {
-        self.find_wav_reference(reference)?
+        self.find_wav_candidates(reference)?
+            .into_iter()
+            .next()
             .ok_or_else(|| format!("WAV sample {reference} is missing from the selected folder."))
-    }
-
-    /// Return no match separately from invalid references so callers
-    /// can retain an existing external sample only when this folder lacks it.
-    pub(crate) fn find_wav_reference(&self, reference: &str) -> Result<Option<PathBuf>, String> {
-        Ok(self.find_wav_candidates(reference)?.into_iter().next())
     }
 
     /// Return canonical, unique best-suffix matches in stable path order.
@@ -1377,6 +1438,14 @@ impl Library {
             let Some(path) = &sample.wav_path else {
                 continue;
             };
+            // Most samples have another file name: skip them without allocating.
+            if !path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case(parts[parts.len() - 1]))
+            {
+                continue;
+            }
             let candidate = path.to_string_lossy().replace('\\', "/");
             let score = parts
                 .iter()
@@ -1428,14 +1497,25 @@ impl Library {
     /// An import whose metadata and file path match its current catalog entry
     /// keeps that validated entry. Undo and redo of a large WAV palette must not
     /// decode every file again.
-    fn unchanged_import(&self, imported: &crate::engine::ImportedSample) -> Option<Sample> {
+    fn unchanged_import(&self, imported: &crate::engine::ImportedSample) -> Option<&Sample> {
         crate::engine::validate_import_metadata(imported).ok()?;
         let sample = self.sample_by_id(imported.id)?;
         let AudioSource::Wave { path, origin } = self.sources.get(&imported.id)? else {
             return None;
         };
-        (sample.wav_path.as_deref() == Some(imported.path.as_path())
-            && *path == imported.path
+        // The catalog holds canonical paths. A project can name the same file
+        // without the verbatim prefix that canonical Windows paths carry.
+        let same_file = |known: &Path| {
+            known == imported.path
+                || known
+                    .to_str()
+                    .and_then(|known| known.strip_prefix(r"\\?\"))
+                    .is_some_and(|known| {
+                        !known.starts_with("UNC\\") && Path::new(known) == imported.path
+                    })
+        };
+        (sample.wav_path.as_deref().is_some_and(same_file)
+            && same_file(path)
             && sample.name == imported.name
             && sample.group_name == imported.group_name
             && sample.source_bpm == imported.source_bpm
@@ -1443,7 +1523,20 @@ impl Library {
                 .source_sample_rate
                 .is_none_or(|rate| sample.sample_rate == rate)
             && *origin == imported.origin)
-            .then(|| sample.clone())
+            .then_some(sample)
+    }
+
+    /// Whether the catalog already holds exactly these imports, in this order.
+    /// `apply_imports` would then change nothing.
+    pub(crate) fn has_imports(&self, imports: &[crate::engine::ImportedSample]) -> bool {
+        self.samples
+            .iter()
+            .filter(|sample| sample.id >= IMPORTED_ID_START)
+            .map(|sample| sample.id)
+            .eq(imports.iter().map(|imported| imported.id))
+            && imports
+                .iter()
+                .all(|imported| self.unchanged_import(imported).is_some())
     }
 
     /// Resolve all files before replacing the imported part of the catalog.
@@ -1454,14 +1547,18 @@ impl Library {
     ) -> Result<(), String> {
         let mut resolved = Vec::with_capacity(imports.len());
         let mut ids = HashSet::new();
-        let mut sources = self.sources.clone();
-        sources.retain(|id, _| *id < IMPORTED_ID_START);
+        let mut sources: HashMap<_, _> = self
+            .sources
+            .iter()
+            .filter(|(id, _)| **id < IMPORTED_ID_START)
+            .map(|(id, source)| (*id, source.clone()))
+            .collect();
         for imported in imports {
             if !ids.insert(imported.id) {
                 return Err("The project has duplicate imported sample IDs.".into());
             }
             let sample = match self.unchanged_import(imported) {
-                Some(sample) => sample,
+                Some(sample) => sample.clone(),
                 None => {
                     let path = fs::canonicalize(&imported.path).map_err(|e| {
                         format!("Cannot open imported sample {}: {e}", imported.name)
@@ -1481,7 +1578,7 @@ impl Library {
             );
             resolved.push(sample);
         }
-        self.samples.retain(|sample| sample.id < 1_000_000);
+        self.samples.retain(|sample| sample.id < IMPORTED_ID_START);
         self.samples.extend(resolved);
         self.sources = sources;
         self.by_id = self
@@ -1489,12 +1586,6 @@ impl Library {
             .iter()
             .enumerate()
             .map(|(index, sample)| (sample.id, index))
-            .collect();
-        self.unresolved_samples = self
-            .samples
-            .iter()
-            .filter(|sample| sample.wav_path.is_none())
-            .map(|sample| sample.id)
             .collect();
         Ok(())
     }
@@ -1673,7 +1764,13 @@ fn probe_all(
     }
     let failed = first_failure.load(Ordering::Relaxed);
     if let Some(Some(Err(error))) = probes.get(failed) {
-        return Err(error.clone());
+        // Name the file: a large folder gives no other way to find it.
+        let path = paths[failed].display().to_string();
+        return Err(if error.contains(&path) {
+            error.clone()
+        } else {
+            format!("{path}: {error}")
+        });
     }
     probes
         .into_iter()
@@ -1944,6 +2041,17 @@ fn canonical_group(group: &str) -> String {
     }
 }
 
+/// Whether the nearest product-named folder, from the file up to the
+/// selected folder, names another product.
+fn in_foreign_product_folder(path: &Path, root: &Path, product: Product) -> bool {
+    path.ancestors()
+        .skip(1)
+        .take_while(|folder| folder.starts_with(root))
+        .filter_map(Path::file_name)
+        .find_map(|name| product_folder_hint(&name.to_string_lossy()))
+        .is_some_and(|hint| hint != product)
+}
+
 fn product_folder_hint(name: &str) -> Option<Product> {
     match compact_name(name).as_str() {
         "\x64ance1" | "\x64ance\x65jay1" => Some(Product::D1),
@@ -1999,29 +2107,24 @@ fn compact_name(name: &str) -> String {
     result
 }
 
-pub(crate) fn decode_1252(bytes: &[u8]) -> String {
-    const C1: [char; 32] = [
-        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž',
-        '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}',
-        'ž', 'Ÿ',
-    ];
-    bytes
-        .iter()
-        .map(|b| {
-            if (0x80..0xa0).contains(b) {
-                C1[(b - 0x80) as usize]
-            } else {
-                *b as char
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn product_folder_hints_come_from_the_selected_folder_and_below() {
+        let hinted = |path: &str, root: &str| {
+            in_foreign_product_folder(Path::new(path), Path::new(root), Product::D1)
+        };
+        // A product name above the selected folder says nothing about its files.
+        assert!(!hinted(r"C:\Techno2\packs\kick.wav", r"C:\Techno2\packs"));
+        assert!(hinted(r"C:\packs\Techno2\kick.wav", r"C:\packs"));
+        assert!(hinted(r"C:\packs\Techno2\kick.wav", r"C:\packs\Techno2"));
+        // The nearest product folder decides.
+        assert!(!hinted(r"C:\packs\Techno2\Dance1\kick.wav", r"C:\packs"));
+    }
     struct Folder(PathBuf);
     impl Folder {
         fn new() -> Self {

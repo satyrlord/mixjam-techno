@@ -211,7 +211,11 @@ its height for the current session, with a minimum of 180 points for Sounds and
 310 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
 The maximum height leaves 220 points for the arrangement plus 68 points for
 transport. Status
-occupies 30 points below it. Sounds and Mixer share this panel size.
+occupies 30 points below it. Its application version, prefixed with `v`, stays at the right inner
+margin, with space reserved before status text is truncated. Use 12-point Inter
+Medium and the theme's hyperlink color. Hover and keyboard focus show the link
+underline. The version opens the GitHub repository in the system browser.
+Sounds and Mixer share this panel size.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. Original track numbers remain stable. Rows are
@@ -268,9 +272,9 @@ Play/Pause button and Accent on secondary controls.
 ### Actions and transport
 
 Primary action buttons use Accent with Canvas text. Secondary buttons use Raised
-with Text. Undo and Redo use SVG-derived arrow icons from the shared artwork
+with Text. Undo and Redo use transparent PNG arrow icons from the shared artwork
 cache, with action names in tooltips and accessibility labels.
-Help uses the shared SVG-derived library icon with Help as its tooltip and
+Help uses the shared PNG library icon with Help as its tooltip and
 accessibility label.
 Export WAV is available through the Export icon in the right-hand tool rail.
 Play/Pause stays prominent in the transport; other transport controls
@@ -280,11 +284,28 @@ action names.
 
 ### Tool rail
 
-Preserved SVG-derived PNG artwork supplies alpha masks. `src/ui_icons.rs` retains
+The header places a 40-point tribal mask before the MixJam Techno title.
+The artwork retains its original colors and transparent background. The native
+window, taskbar, and Windows executable use the same preserved mask.
+`assets/app/` contains its PNG and multiple-size ICO. The viewport embeds
+the PNG; `build.rs` links the ICO into the executable.
+
+Transparent PNG artwork supplies alpha masks. `src/ui_icons.rs` retains
 their alpha and normalizes RGB to white; the view applies text, muted, or accent
 tints. Textures are cached per egui context. Action names are available through
 tooltips and accessibility labels. Recording destination remains a visible
-track number. Source artwork and provenance remain in `assets/rail/`.
+track number. Canonical PNG artwork and provenance remain in `assets/rail/`.
+SVG files and embedded SVG artwork are not allowed anywhere in the repository.
+Original vector preservation material stays in the external support directory.
+
+Control icons use prepared 20-pixel PNGs and the title mask uses a 40-pixel PNG
+at 100% Windows scaling. Three display variants cover 100%, 150%, and 200%:
+20/30/40-pixel controls and 40/60/80-pixel title artwork.
+Each image texel maps to exactly one physical screen pixel, with
+pixel-aligned bounds and no runtime resizing. At other scale factors, select
+the nearest prepared size; its logical size can differ slightly. Reload cached
+textures when the required density changes. Windows ICO packaging is generated
+from the canonical PNG for the shell icon.
 
 ### Sounds and clips
 
@@ -302,7 +323,10 @@ waveform. A selected clip can show a gain line; it is a control indicator.
 Mixer shares the graphite shell and type hierarchy. Track identity and gain lead
 the hierarchy; L/R routing uses compact checkboxes with a check mark and named
 enabled state. Both outputs off shows Muted. Gain is a signed multiplier with
-visible values, silence and unity marks, an exact-entry field, and a Unity reset.
+values rounded to one decimal place, silence and unity marks, an exact-entry
+field, and a Unity reset. Both track and Master values use this format, including
+gain tooltips. Only the active entry field shows full precision. Display rounding
+and focus without an edit must not change the saved gain or audio.
 Negative values show Inverted. The header and Help explain polarity inversion.
 Pan has a readable left/center/right value and a Center reset. Every control has
 a track-specific accessible name; Master has its own gain labels.

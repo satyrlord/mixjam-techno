@@ -1,4 +1,5 @@
 pub mod application;
+mod atomic_file;
 pub mod audio;
 pub mod catalog;
 pub mod compat;
@@ -15,6 +16,9 @@ pub mod recording;
 pub mod sample_edit;
 mod source_tempo;
 pub mod synth;
+
+/// Application version: manual major and build-time Git commit count.
+pub const APP_VERSION: &str = env!("MIXJAM_APP_VERSION");
 
 #[cfg(all(test, feature = "gui"))]
 extern crate self as mixjam_techno;

@@ -1,4 +1,4 @@
-"""Render and check the native UI's SVG sources and transparent PNG assets."""
+"""Prepare rail display PNGs and check their sources, manifest, and variants."""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +8,6 @@ from io import BytesIO
 import json
 from pathlib import Path
 import sys
-import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "assets" / "rail"
@@ -19,60 +18,30 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 SIZE = (96, 96)
+DISPLAY_SIZES = (20, 30, 40)
 INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "libraries", "new", "mixer",
     "erase", "delete", "effects", "step-synth", "edit", "stretch", "record", "mix",
     "undo", "redo",
 )
-EXACT_DONOR_PATHS = {
-    "save": "save",
-    "export": "export",
-    "mixer": "mixer",
-    "erase": "erase",
-    "delete": "trash",
-    "effects": "inspector",
-    "undo": "undo",
-    "redo": "redo",
-}
-
-
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def check_source(name: str) -> None:
-    source = ET.parse(ASSETS / f"{name}.svg").getroot()
-    expected = {
-        "width": "96", "height": "96", "viewBox": "0 0 24 24",
-        "fill": "none", "stroke": "#05092a", "stroke-width": "1.7",
-        "stroke-linecap": "round", "stroke-linejoin": "round",
-    }
-    for key, value in expected.items():
-        if source.get(key) != value:
-            raise ValueError(f"{name}: expected {key}={value}")
-    paths = source.findall("{http://www.w3.org/2000/svg}path")
-    if len(paths) != 1 or not paths[0].get("d"):
-        raise ValueError(f"{name}: expected one nonempty path")
-    donor_name = EXACT_DONOR_PATHS.get(name)
-    if donor_name:
-        donor = ROOT / "assets/donors/ravefold/icons/tracker-icons.tsx"
-        marker = f'{donor_name}: "{paths[0].get("d")}",'
-        if marker not in donor.read_text(encoding="utf-8"):
-            raise ValueError(f"{name}: path differs from preserved {donor_name}")
 
 
 def check_png(name: str) -> dict:
     path = ASSETS / f"{name}.png"
     with Image.open(path) as source:
-        if source.size != SIZE or source.mode != "RGBA":
+        if source.format != "PNG" or source.size != SIZE or source.mode != "RGBA":
             raise ValueError(f"{name}: expected a 96 by 96 RGBA PNG")
-        pixels = list(source.get_flattened_data())
+        # Pillow before 11.3 has only getdata; later versions deprecate it.
+        pixels = list(getattr(source, "get_flattened_data", source.getdata)())
         visible = [pixel for pixel in pixels if pixel[3] > 0]
         opaque = [pixel for pixel in pixels if pixel[3] == 255]
         transparent = sum(pixel[3] == 0 for pixel in pixels)
-        if not visible or not opaque or not transparent:
-            raise ValueError(f"{name}: expected artwork and transparency")
+        antialiased = sum(0 < pixel[3] < 255 for pixel in pixels)
+        if not visible or not opaque or not transparent or not antialiased:
+            raise ValueError(f"{name}: expected opaque artwork, transparency, and antialiased edges")
         if any(pixel[:3] != INK for pixel in visible):
             raise ValueError(f"{name}: all visible artwork must use #05092a")
         bounds = source.getchannel("A").getbbox()
@@ -80,15 +49,14 @@ def check_png(name: str) -> dict:
             raise ValueError(f"{name}: artwork touches an image edge")
     return {
         "name": name,
-        "svg_sha256": sha256(ASSETS / f"{name}.svg"),
         "png_sha256": sha256(path),
         "size": list(SIZE),
         "mode": "RGBA",
         "visible_pixels": len(visible),
         "opaque_pixels": len(opaque),
         "transparent_pixels": transparent,
+        "antialiased_pixels": antialiased,
         "alpha_bounds": list(bounds),
-        "preserved_path": EXACT_DONOR_PATHS.get(name),
     }
 
 
@@ -112,48 +80,52 @@ def contact_sheet() -> None:
     sheet.save(ASSETS / "contact-sheet.png")
 
 
+def variants(name: str, check: bool) -> list[dict]:
+    result = []
+    with Image.open(ASSETS / f"{name}.png") as source:
+        for size in DISPLAY_SIZES:
+            # Resize offline. Keep coverage and the exact tintable artwork color.
+            alpha = source.getchannel("A").resize((size, size), Image.Resampling.LANCZOS)
+            resized = Image.new("RGBA", (size, size), (*INK, 0))
+            resized.putalpha(alpha)
+            output = BytesIO()
+            resized.save(output, format="PNG")
+            data = output.getvalue()
+            path = ASSETS / str(size) / f"{name}.png"
+            if check:
+                if path.read_bytes() != data:
+                    raise ValueError(f"{name}: {size}-pixel variant differs from its canonical PNG")
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            result.append({"size": size, "png_sha256": hashlib.sha256(data).hexdigest()})
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true",
-                        help="Check existing source and PNG files without writing")
+                        help="Check canonical PNG files and their manifest without writing")
     args = parser.parse_args()
-    for name in NAMES:
-        check_source(name)
-    if not args.check:
-        import resvg_py
-        for name in NAMES:
-            data = resvg_py.svg_to_bytes(
-                svg_string=(ASSETS / f"{name}.svg").read_text(encoding="utf-8"),
-                width=SIZE[0], height=SIZE[1],
-                skip_system_fonts=True,
-            )
-            # Keep resvg's coverage. Use exact ink RGB at antialias edges to
-            # remove rounding from its premultiplied-colour conversion.
-            with Image.open(BytesIO(data)) as rendered:
-                icon = Image.new("RGBA", SIZE, (*INK, 0))
-                icon.putalpha(rendered.getchannel("A"))
-                icon.save(ASSETS / f"{name}.png")
     results = [check_png(name) for name in NAMES]
     if len({result["png_sha256"] for result in results}) != len(NAMES):
         raise ValueError("Two UI icons have identical PNG bytes")
+    for result in results:
+        result["variants"] = variants(result["name"], args.check)
+    manifest = json.loads((ASSETS / "manifest.json").read_text(encoding="utf-8"))
     if args.check:
-        manifest = json.loads((ASSETS / "manifest.json").read_text(encoding="utf-8"))
         if manifest.get("icons") != results:
             raise ValueError("The asset hashes or pixel checks differ from the manifest")
     else:
-        manifest = {
-            "renderer": f"resvg-py {importlib.metadata.version('resvg-py')}",
-            "pillow": importlib.metadata.version("Pillow"),
-            "view_box": [0, 0, 24, 24], "stroke_width": 1.7,
-            "stroke_colour": "#05092a", "icons": results,
-        }
+        manifest["pillow"] = importlib.metadata.version("Pillow")
+        manifest["icons"] = results
         (ASSETS / "manifest.json").write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )
         contact_sheet()
     print(json.dumps({"checked_icons": len(results), "size": list(SIZE),
-                      "transparent": True, "distinct": True,
-                      "preserved_paths": len(EXACT_DONOR_PATHS)}))
+                      "transparent": True, "antialiased": True, "distinct": True,
+                      "display_sizes": DISPLAY_SIZES, "variants": len(results) * len(DISPLAY_SIZES)}))
 
 
 if __name__ == "__main__":
