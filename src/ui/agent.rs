@@ -697,6 +697,11 @@ impl MixJamApp {
                 if !path.is_absolute() {
                     return Err("Give the full path of the PNG file.".into());
                 }
+                // A minimized window has no framebuffer; the GL backend
+                // panics when it reads one.
+                if ctx.input(|input| input.viewport().minimized == Some(true)) {
+                    return Err("The window is minimized. Restore it before a screenshot.".into());
+                }
                 Start::run(vec![Step::Shoot(path)])
             }
             Request::Click {

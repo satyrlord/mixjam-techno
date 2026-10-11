@@ -26,6 +26,7 @@ request per call: `mixjam-techno agent COMMAND [name=value ...]`. A value is
 JSON when it parses as JSON, otherwise text. `agent -` reads requests from
 standard input, one per line, and stops at the first failure. A line can also
 be a JSON object: {\"command\":\"place\",\"sample\":12,\"track\":1,\"bar\":1}.
+Quote a value that has spaces: target=\"Track 5 gain\", clips=\"[1, 2]\".
 Each reply is one JSON object with \"ok\". Tracks and bars count from 1.
 One bar has 256 ticks. Screen positions are in points from the top left.
 

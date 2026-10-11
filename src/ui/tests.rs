@@ -2892,6 +2892,35 @@ mod tests {
     }
 
     #[test]
+    fn agent_refuses_a_screenshot_of_a_minimized_window() {
+        let (context, mut app, (port, key)) = agent_fixture();
+        let client = std::thread::spawn(move || {
+            let mut output = Vec::new();
+            let words = ["screenshot", r"path=C:\Temp\window.png"].map(str::to_string);
+            crate::agent::send(port, &key, [crate::agent::request_line(&words)], &mut output).unwrap();
+            String::from_utf8(output).unwrap()
+        });
+        // The platform reports a minimized window with each frame's input.
+        while !client.is_finished() {
+            let info = egui::ViewportInfo {
+                minimized: Some(true),
+                ..Default::default()
+            };
+            let mut input = egui::RawInput {
+                viewports: [(egui::ViewportId::ROOT, info)].into_iter().collect(),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                ..Default::default()
+            };
+            app.agent_frame(&context, &mut input);
+            let _ = context.run(input, |ctx| app.draw(ctx));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let reply: serde_json::Value = serde_json::from_str(&client.join().unwrap()).unwrap();
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert!(reply["error"].as_str().unwrap().contains("minimized"), "{reply}");
+    }
+
+    #[test]
     fn agent_quit_asks_about_unsaved_work_and_replies_before_the_window_closes() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
