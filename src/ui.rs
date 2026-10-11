@@ -16,8 +16,8 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Response, Sense, S
 
 use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
-    Clip, EditCommand, EffectsState, Pcm, Product, Project, SUPPORTED_BPMS, Sample, Session,
-    StepSynthState, TICKS_PER_BAR, TRACK_COUNT,
+    Clip, EditCommand, EffectsState, MissingReference, MissingSample, Pcm, Product, Project,
+    SUPPORTED_BPMS, Sample, Session, StepSynthState, TICKS_PER_BAR, TRACK_COUNT,
 };
 
 #[derive(Clone)]
@@ -39,6 +39,7 @@ pub struct MixJamApp {
     selected_sample: Option<u32>,
     selected_clip: Option<u64>,
     selected_clips: BTreeSet<u64>,
+    context_missing_sample: Option<u32>,
     group: Option<String>,
     palette_product: Option<Product>,
     search: String,
@@ -46,6 +47,10 @@ pub struct MixJamApp {
     show_help: bool,
     show_libraries: bool,
     show_import_details: bool,
+    show_sample_conflicts: bool,
+    /// Escape hid the resolver without confirming; the status bar reopens it.
+    sample_conflicts_dismissed: bool,
+    sample_conflict_error: Option<String>,
     library_product: Product,
     rail_icons: Option<Result<Arc<RailIcons>, String>>,
     erase: bool,
@@ -95,13 +100,18 @@ pub struct MixJamApp {
     import_bpm: f64,
 }
 
+/// The first status line: a startup notice, or the idle text.
+fn startup_status(session: &mut Session) -> (String, bool) {
+    session
+        .take_notice()
+        .unwrap_or_else(|| (DEFAULT_STATUS.into(), false))
+}
+
 impl MixJamApp {
     #[cfg_attr(test, allow(dead_code))]
     pub fn new(cc: &eframe::CreationContext<'_>, mut session: Session) -> Self {
         configure_style(&cc.egui_ctx);
-        let (status, status_error) = session
-            .take_notice()
-            .unwrap_or_else(|| (DEFAULT_STATUS.into(), false));
+        let (status, status_error) = startup_status(&mut session);
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
             if std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok("library-expanded") {
@@ -140,22 +150,60 @@ impl MixJamApp {
         if capture_view == "follow" {
             session.seek(40 * TICKS_PER_BAR);
         }
-        let needs_sample_folder = session.library().samples.is_empty();
-        let selected_sample = (!capture_view.is_empty())
-            .then(|| session.library().samples.first().map(|sample| sample.id))
+        if capture_view == "unsaved" {
+            let bpm = if session.project().bpm == 160.0 {
+                140.0
+            } else {
+                160.0
+            };
+            let _ = session.edit(EditCommand::SetTempo(bpm));
+        }
+        let import_path = (capture_view == "import")
+            .then(|| {
+                session
+                    .library()
+                    .samples
+                    .first()
+                    .and_then(|sample| sample.wav_path.clone())
+            })
             .flatten();
+        let needs_sample_folder =
+            session.library().samples.is_empty() && session.project().clips.is_empty();
+        let selected_sample = if capture_view.starts_with("missing") {
+            session.missing_samples().first().map(|sample| sample.id)
+        } else if capture_view == "sample-details" {
+            session
+                .project()
+                .imported_samples
+                .first()
+                .map(|sample| sample.id)
+        } else {
+            (!capture_view.is_empty())
+                .then(|| session.library().samples.first().map(|sample| sample.id))
+                .flatten()
+        };
         Self {
             session,
             selected_sample,
             selected_clip: None,
             selected_clips: BTreeSet::new(),
+            context_missing_sample: None,
             group: None,
             palette_product: None,
             search: String::new(),
             show_mixer: capture_view.starts_with("mixer"),
-            show_help: false,
-            show_libraries: capture_view == "libraries" || needs_sample_folder,
-            show_import_details: false,
+            show_help: capture_view == "help",
+            show_libraries: matches!(
+                capture_view.as_str(),
+                "libraries" | "library-providers" | "library-tempos"
+            ) || needs_sample_folder,
+            show_import_details: matches!(
+                capture_view.as_str(),
+                "missing-details" | "import-details"
+            ),
+            show_sample_conflicts: capture_view == "sample-conflicts",
+            sample_conflicts_dismissed: false,
+            sample_conflict_error: None,
             library_product: Product::T1,
             rail_icons: None,
             erase: false,
@@ -175,7 +223,7 @@ impl MixJamApp {
             status,
             status_error,
             scan_status: None,
-            pending_action: None,
+            pending_action: (capture_view == "unsaved").then_some(PendingAction::New),
             allow_close: false,
             selection_origin: None,
             selection_base: BTreeSet::new(),
@@ -185,11 +233,26 @@ impl MixJamApp {
             capture_last_track: capture_view == "track64",
             capture_transport_focus: capture_view == "transport-focus",
             capture_focus_ready: false,
-            show_effects: capture_view == "effects",
-            show_step_synth: capture_view == "step-synth" || capture_view == "step-synth-effects",
-            show_sample_edit: capture_view == "edit",
-            show_stretch: capture_view == "stretch",
-            effects: Default::default(),
+            show_effects: matches!(
+                capture_view.as_str(),
+                "effects" | "effects-expanded" | "missing-effects"
+            ),
+            show_step_synth: matches!(
+                capture_view.as_str(),
+                "step-synth" | "step-synth-effects" | "missing-step-synth"
+            ),
+            show_sample_edit: matches!(capture_view.as_str(), "edit" | "missing-edit"),
+            show_stretch: matches!(capture_view.as_str(), "stretch" | "missing-stretch"),
+            effects: if capture_view == "effects-expanded" {
+                EffectsState {
+                    filter: Some(Default::default()),
+                    echo: Some(Default::default()),
+                    robotize: Some(Default::default()),
+                    ..Default::default()
+                }
+            } else {
+                Default::default()
+            },
             step_synth: if capture_view == "step-synth-effects" {
                 StepSynthState {
                     effects: EffectsState {
@@ -216,15 +279,24 @@ impl MixJamApp {
             } else {
                 0
             },
-            import_path: None,
+            import_path,
             import_bpm: 140.0,
         }
+    }
+
+    fn capture_view_is(&self, view: &str) -> bool {
+        self.capture_path.is_some()
+            && std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok(view)
     }
 
     fn clear_selection(&mut self) {
         self.selected_sample = None;
         self.selected_clip = None;
         self.selected_clips.clear();
+        self.context_missing_sample = None;
+        self.show_sample_conflicts = false;
+        self.sample_conflicts_dismissed = false;
+        self.sample_conflict_error = None;
     }
     fn reconcile_selection(&mut self) {
         self.selected_clips.retain(|id| {
@@ -235,10 +307,10 @@ impl MixJamApp {
                 .any(|clip| clip.id == *id)
         });
         self.selected_clip = self.selected_clips.iter().next().copied();
-        if self
-            .selected_sample
-            .is_some_and(|id| self.session.library().sample_by_id(id).is_none())
-        {
+        if self.selected_sample.is_some_and(|id| {
+            self.session.library().sample_by_id(id).is_none()
+                && self.session.missing_sample(id).is_none()
+        }) {
             self.selected_sample = None;
         }
     }
@@ -340,8 +412,43 @@ impl MixJamApp {
     }
 
     fn preview(&mut self, sample_id: u32) {
+        if let Some(missing) = self.session.missing_sample(sample_id) {
+            self.error(format!(
+                "Cannot preview missing sample {}. Open Import details to see its saved reference.",
+                missing.name
+            ));
+            return;
+        }
         self.session.preview(sample_id);
         self.sync_notice();
+    }
+
+    fn resolve_missing_sample(&mut self, sample_id: u32) {
+        let Some(missing) = self.session.missing_sample(sample_id) else {
+            return;
+        };
+        let title = format!("Resolve missing sample: {}", missing.name);
+        let path = rfd::FileDialog::new()
+            .set_title(title_text(&title))
+            .add_filter("WAV audio", &["wav"])
+            .pick_file();
+        self.resolve_missing_sample_with(sample_id, path);
+    }
+
+    /// A cancelled picker leaves the project unchanged. The application
+    /// validates the chosen audio and rejects a reference that no longer exists.
+    fn resolve_missing_sample_with(&mut self, sample_id: u32, path: Option<PathBuf>) {
+        let Some(path) = path else {
+            return;
+        };
+        match self.session.resolve_missing_sample(sample_id, &path) {
+            Ok(_) => {
+                self.context_missing_sample = None;
+                self.reconcile_selection();
+                self.sync_notice();
+            }
+            Err(error) => self.error(error),
+        }
     }
 
     fn apply(&mut self, result: Result<(), String>) {
@@ -446,7 +553,7 @@ impl MixJamApp {
             Ok(()) => {
                 self.clear_selection();
                 self.pending_action = None;
-                self.message("New mix. Choose a sound and drag it onto a track.");
+                self.message("New mix.");
             }
             Err(error) => self.error(error),
         }
@@ -751,8 +858,16 @@ impl MixJamApp {
     fn dialogs(&mut self, ctx: &egui::Context) {
         if let Some(action) = self.pending_action {
             egui::Modal::new(egui::Id::new("unsaved_changes")).show(ctx, |ui| {
-                ui.heading("Save your changes?");
-                ui.label("The current mix or recorded take has unsaved changes.");
+                ui.heading("SAVE YOUR CHANGES?");
+                ui.label(
+                    if self.session.has_recorded_take() && self.session.unsaved() {
+                        "The mix and recorded take are unsaved."
+                    } else if self.session.has_recorded_take() {
+                        "The recorded take is unsaved."
+                    } else {
+                        "The mix is unsaved."
+                    },
+                );
                 ui.horizontal(|ui| {
                     if ui.button("Save changes").clicked() {
                         if self.session.has_recorded_take() {
@@ -774,25 +889,144 @@ impl MixJamApp {
                 });
             });
         }
-        egui::Window::new("Using MixJam Techno").open(&mut self.show_help).resizable(false).default_width(450.0).show(ctx, |ui| {
-            ui.label("Drag a sound from the palette onto one of up to 64 tracks. You can also select a sound and click an empty part of a track.");
-            ui.add_space(8.0);
-            for text in [
-                "Double-click a sound or clip to listen to it.",
-                "Drag a clip to move it. Hold Alt while dragging to copy.",
-                "Hold Shift to select several clips. Drag on an empty track area to select a group.",
-                "Hold Ctrl for placement at sixteenth-note intervals.",
-                "Select a clip and press Delete to remove it.",
-                "Click a bar number to seek. Drag across bar numbers to set a loop.",
-                "L and R control each track's left and right output. Turn both off to mute.",
-                "Mixer opens track volume, pan, routing, and master volume controls.",
-                "Gain 0 is silence. Gain +1 is unity (unchanged level). Negative track gain inverts polarity; its magnitude controls level.",
-                "Click a gain value to enter an exact setting, then press Enter. Unity resets gain to +1. Center resets pan.",
-                "Use Tab to focus mixer controls, arrow keys to adjust sliders, and Space to toggle an output. Master stays visible while you scroll tracks.",
-                "Space plays or pauses. Ctrl+Z undoes. Ctrl+Shift+Z redoes.",
-                "Open accepts supported original song files and saved JSON mixes. Save writes JSON; Export writes stereo WAV.",
-            ] { ui.label(text); ui.add_space(4.0); }
+        titled_window("Help").open(&mut self.show_help).resizable(false).default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0)).vscroll(true).show(ctx, |ui| {
+                egui::Grid::new("help_gestures").num_columns(2).spacing(Vec2::new(18.0, 8.0)).show(ui, |ui| {
+                    for (action, gesture) in [
+                        ("Place sound", "Drag to a track, or select a sound and click a track. Up to 64 tracks."),
+                        ("Preview", "Double-click a sound or clip."),
+                        ("Move / copy", "Drag a clip. Alt-drag copies."),
+                        ("Select group", "Shift-click clips or drag an empty area."),
+                        ("Fine snap", "Hold Ctrl for sixteenth-note positions."),
+                        ("Delete", "Select clips, then press Delete."),
+                        ("Seek / loop", "Click a bar number to seek. Drag the ruler to loop."),
+                        ("Play / pause", "Space"),
+                        ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z"),
+                        ("Open / save", "Ctrl+O / Ctrl+S. Open MIX, MIXJAM, or JSON; save JSON."),
+                        ("Export", "Stereo WAV"),
+                    ] {
+                        ui.label(action);
+                        ui.add(egui::Label::new(gesture).wrap());
+                        ui.end_row();
+                    }
+                });
+                ui.separator();
+                ui.label("Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.");
+                ui.label("Gain: 0 is silence; +1 is unity (unchanged level). Negative gain inverts polarity; its magnitude controls level.");
+                ui.label("Click a gain value for exact entry, then Enter. Unity resets gain; Center resets pan. Master stays visible while tracks scroll.");
+                ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.");
+            });
+    }
+
+    fn sample_conflicts_open(&self) -> bool {
+        !self.session.sample_conflicts().is_empty()
+            && (self.show_sample_conflicts
+                || (!self.sample_conflicts_dismissed
+                    && self
+                        .session
+                        .sample_conflicts()
+                        .iter()
+                        .any(|conflict| !conflict.confirmed)))
+    }
+
+    fn sample_conflicts_dialog(&mut self, ctx: &egui::Context) {
+        if !self.sample_conflicts_open() || self.pending_action.is_some() {
+            return;
+        }
+        self.show_sample_conflicts = true;
+        let conflicts = self.session.sample_conflicts().to_vec();
+        let recording = self.session.is_recording();
+        let mut choice = None;
+        let mut confirm = false;
+        let response = egui::Modal::new(egui::Id::new("sample_conflicts")).show(ctx, |ui| {
+            ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 700.0));
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            ui.heading(title_text("Sample conflicts"));
+            ui.label("Several files match a saved sample. The first match is selected until you choose another.");
+            ui.label("Each choice updates every instance of that source in this song.");
+            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .id_salt("sample_conflict_choices")
+                .max_height((ctx.viewport_rect().height() - 310.0).max(160.0))
+                .show(ui, |ui| {
+                    for (index, conflict) in conflicts.iter().enumerate() {
+                        ui.push_id(index, |ui| {
+                            if index > 0 {
+                                ui.add_space(8.0);
+                                ui.separator();
+                                ui.add_space(8.0);
+                            }
+                            ui.add(egui::Label::new(display_paths(&conflict.reference)).wrap().selectable(true));
+                            let instances = self.session.project().clips.iter()
+                                .filter(|clip| conflict.sample_ids.contains(&clip.sample_id)).count();
+                            ui.label(egui::RichText::new(format!("{instances} instances · {} matches", conflict.candidates.len())).color(MUTED));
+                            ui.add_enabled_ui(!recording, |ui| {
+                                for (candidate_index, path) in conflict.candidates.iter().enumerate() {
+                                    let path = display_paths(&path.to_string_lossy());
+                                    let selected = candidate_index == conflict.selected;
+                                    let label = format!("{}{}\n{path}",
+                                        if selected { "Selected match " } else { "Use match " },
+                                        candidate_index + 1);
+                                    if ui.add(egui::RadioButton::new(selected, label)).clicked() && !selected {
+                                        choice = Some((index, candidate_index));
+                                    }
+                                }
+                            });
+                        });
+                    }
+                });
+            ui.add_space(10.0);
+            if recording {
+                ui.colored_label(CORAL, "Stop recording before changing or confirming sample choices.");
+                if ui.button("Stop recording").clicked() {
+                    self.stop();
+                }
+            }
+            if let Some(error) = &self.sample_conflict_error {
+                ui.colored_label(CORAL, display_paths(error));
+            }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(!recording, egui::Button::new("Keep choices")).clicked() {
+                    confirm = true;
+                }
+                let playing = self.session.wants_playback();
+                if ui.add_enabled(!recording, egui::Button::new(if playing { "Pause song" } else { "Play song" })).clicked() {
+                    if playing { self.pause(); } else { self.start_playback(); }
+                }
+            });
+            ui.small("Esc closes this window without confirming. Reopen from Sample conflicts in the status bar.");
         });
+        if let Some((conflict, candidate)) = choice {
+            match self.session.resolve_sample_conflict(conflict, candidate) {
+                Ok(()) => {
+                    self.sample_conflict_error = None;
+                    self.reconcile_selection();
+                    self.message("Updated all instances of the selected source.");
+                }
+                Err(error) => self.sample_conflict_error = Some(error),
+            }
+        }
+        if confirm && !recording {
+            match self.session.confirm_sample_conflicts() {
+                Ok(()) => {
+                    self.show_sample_conflicts = false;
+                    self.sample_conflicts_dismissed = false;
+                    self.sample_conflict_error = None;
+                    self.message("Sample choices retained.");
+                }
+                Err(error) => self.sample_conflict_error = Some(error),
+            }
+        } else if response.should_close() {
+            // Escape or a click outside only hides the window. Confirmation is
+            // an undoable project change, so it needs the explicit button.
+            self.show_sample_conflicts = false;
+            self.sample_conflicts_dismissed = true;
+            self.sample_conflict_error = None;
+            self.message(
+                "Sample choices are not confirmed. Reopen from Sample conflicts in the status bar.",
+            );
+        }
     }
 
     fn capture(&mut self, ctx: &egui::Context) {
@@ -840,16 +1074,34 @@ impl MixJamApp {
     }
 
     fn source_name(&self) -> String {
+        if let Some(missing) = self
+            .source_id()
+            .and_then(|id| self.session.missing_sample(id))
+        {
+            return format!("Missing: {}", missing.name);
+        }
         self.source_id()
             .and_then(|id| self.session.library().sample_by_id(id))
-            .map_or_else(
-                || "Choose a sound in the palette.".into(),
-                |s| s.name.clone(),
-            )
+            .map_or_else(|| "Select a sound".into(), |s| s.name.clone())
     }
 
     fn source_bpm(&self) -> f64 {
         self.session.source_bpm(self.source_id())
+    }
+
+    fn show_missing_source(&mut self, ui: &mut egui::Ui) -> bool {
+        if self
+            .source_id()
+            .and_then(|id| self.session.missing_sample(id))
+            .is_none()
+        {
+            return false;
+        }
+        ui.label("Missing audio: clips play silence; processing is unavailable.");
+        if ui.button("Import details").clicked() {
+            self.show_import_details = true;
+        }
+        true
     }
 
     fn play_pcm(&mut self, pcm: Pcm, label: &str) {
@@ -913,7 +1165,7 @@ impl MixJamApp {
             .set_file_name("Recording.wav")
             .save_file()
         else {
-            self.message("The recorded take is kept in memory. Save it before you close the app.");
+            self.message("Unsaved take: stored in memory. Save it before closing.");
             return;
         };
         match self.session.save_recorded_take(&path) {
@@ -934,16 +1186,18 @@ impl MixJamApp {
     fn tool_windows(&mut self, ctx: &egui::Context) {
         if self.show_libraries {
             let mut open = true;
-            egui::Window::new("Sample libraries")
+            titled_window("Sample libraries")
                 .open(&mut open)
                 .default_width(540.0)
+                .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+                .constrain_to(ctx.viewport_rect().shrink(12.0))
+                .vscroll(true)
                 .show(ctx, |ui| {
-                    ui.label("Choose a folder of WAV files. No original installation is required.");
                     let scan = self.session.wave_scan();
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
                         ui.add(egui::DragValue::new(&mut self.import_bpm).range(1.0..=999.0))
-                            .on_hover_text("The tempo of folders whose loop lengths do not agree on one. Loops that fit both a tempo and its half or double are read between 88 and 176 BPM unless this value names the other one.");
+                            .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
                         if ui
                             .add_enabled(
                                 !self.session.is_recording() && scan.is_none(),
@@ -985,14 +1239,13 @@ impl MixJamApp {
                     } else if let Some(root) = self.session.library().wav_root() {
                         ui.label(display_paths(&root.to_string_lossy()));
                     }
-                    ui.label("Extracted product samples are recognized by their audio and keep their original tempo. Each other folder uses the tempo its loop lengths agree on, or the fallback BPM above.");
                     let library = self.session.library();
                     if let Some(root) = library.wav_root()
                         && !library.folder_tempos().is_empty()
                     {
-                        ui.collapsing(
-                            format!("Folder tempos ({})", library.folder_tempos().len()),
-                            |ui| {
+                        egui::CollapsingHeader::new(format!("Folder tempos ({})", library.folder_tempos().len()))
+                            .default_open(self.capture_view_is("library-tempos"))
+                            .show(ui, |ui| {
                                 for (folder, bpm, count) in library.folder_tempos() {
                                     let relative = folder.strip_prefix(root).unwrap_or(folder);
                                     let name = if relative.as_os_str().is_empty() {
@@ -1002,10 +1255,10 @@ impl MixJamApp {
                                     };
                                     ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
                                 }
-                            },
-                        );
+                            });
                     }
-                    ui.collapsing("Optional product providers", |ui| {
+                    egui::CollapsingHeader::new("Optional product providers")
+                        .default_open(self.capture_view_is("library-providers")).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         egui::ComboBox::from_id_salt("library_product")
                             .selected_text(self.library_product.label())
@@ -1027,7 +1280,7 @@ impl MixJamApp {
                     ui.separator();
                     let bindings = self.session.library().bindings().to_vec();
                     if bindings.is_empty() {
-                        ui.label("No recognized product samples are configured.");
+                        ui.label("No providers");
                     }
                     for binding in bindings {
                         ui.horizontal(|ui| {
@@ -1047,11 +1300,44 @@ impl MixJamApp {
         }
         if self.show_import_details {
             let mut open = true;
-            egui::Window::new("Import details")
+            titled_window("Import details")
                 .open(&mut open)
                 .default_width(540.0)
+                .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+                .constrain_to(ctx.viewport_rect().shrink(12.0))
                 .vscroll(true)
                 .show(ctx, |ui| {
+                    if !self.session.missing_samples().is_empty() {
+                        ui.heading("MISSING SAMPLES");
+                        ui.label("Missing samples play silence. Select details to copy.");
+                        for missing in self.session.missing_samples() {
+                            let selected = self.source_id() == Some(missing.id);
+                            egui::CollapsingHeader::new(format!("Missing: {}", missing.name))
+                                .id_salt(("missing_sample", missing.id))
+                                .default_open(selected || self.session.missing_samples().len() == 1)
+                                .show(ui, |ui| {
+                                    ui.add(
+                                        egui::Label::new(missing_sample_details(missing))
+                                            .wrap()
+                                            .selectable(true),
+                                    );
+                                    for clip in self
+                                        .session
+                                        .project()
+                                        .clips
+                                        .iter()
+                                        .filter(|clip| clip.sample_id == missing.id)
+                                    {
+                                        ui.add(
+                                            egui::Label::new(missing_clip_details(clip))
+                                                .wrap()
+                                                .selectable(true),
+                                        );
+                                    }
+                                });
+                        }
+                        ui.separator();
+                    }
                     for notice in &self.session.project().import_notices {
                         ui.label(format!(
                             "{} BPM changed to {} BPM.",
@@ -1067,21 +1353,19 @@ impl MixJamApp {
                             ui.label(display_paths(notice));
                         }
                     }
-                    ui.small("These changes are saved with the mix.");
                 });
             self.show_import_details = open;
         }
         if let Some(path) = self.import_path.clone() {
             egui::Modal::new(egui::Id::new("import_sound")).show(ctx, |ui| {
-                ui.heading("Import sound");
-                ui.label(path.file_name().unwrap_or_default().to_string_lossy());
+                ui.heading("IMPORT SOUND");
+                ui.label(path.file_name().unwrap_or_default().to_string_lossy())
+                    .on_hover_text(display_paths(&path.to_string_lossy()));
                 ui.horizontal(|ui| {
                     ui.label("Source BPM");
-                    ui.add(egui::DragValue::new(&mut self.import_bpm).range(7.5..=1200.0));
+                    ui.add(egui::DragValue::new(&mut self.import_bpm).range(7.5..=1200.0))
+                        .on_hover_text("The sound's original tempo, separate from project BPM.");
                 });
-                ui.label(
-                    "Enter the sound's known source tempo. Project tempo is selected separately.",
-                );
                 ui.horizontal(|ui| {
                     if ui.button("Import into Wave").clicked() {
                         match self.register_file(&path, "Wave", self.import_bpm) {
@@ -1100,11 +1384,14 @@ impl MixJamApp {
         }
         if self.show_effects {
             let mut open = true;
-            egui::Window::new("Effect Studio")
+            titled_window("Effect Studio")
                 .open(&mut open)
                 .default_width(560.0)
                 .show(ctx, |ui| {
                     ui.label(egui::RichText::new(self.source_name()).strong().color(TEXT));
+                    if self.show_missing_source(ui) {
+                        return;
+                    }
                     effects_controls(ui, &mut self.effects);
                     ui.horizontal(|ui| {
                         if ui.button("Listen").clicked() {
@@ -1113,7 +1400,11 @@ impl MixJamApp {
                                 Err(error) => self.error(error),
                             }
                         }
-                        if ui.button("Save sound").clicked() {
+                        if ui
+                            .button("Save sound")
+                            .on_hover_text("Save a new WAV and add it to Effect.")
+                            .clicked()
+                        {
                             let result =
                                 self.session.processed_pcm(self.source_id(), &self.effects);
                             match result {
@@ -1132,13 +1423,12 @@ impl MixJamApp {
                             self.effects = Default::default();
                         }
                     });
-                    ui.small("Save the processed sound as a WAV to use it in the arrangement.");
                 });
             self.show_effects = open;
         }
         if self.show_step_synth {
             let mut open = true;
-            egui::Window::new("Step synth")
+            titled_window("Step synth")
                 .open(&mut open)
                 .default_width(820.0)
                 .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
@@ -1176,6 +1466,9 @@ impl MixJamApp {
                             self.step_synth_file = None;
                         }
                     });
+                    if self.step_synth_file.is_none() && self.show_missing_source(ui) {
+                        return;
+                    }
                     ui.horizontal(|ui| {
                         ui.label("View bar");
                         for bar in 0..4 {
@@ -1274,7 +1567,11 @@ impl MixJamApp {
                                 Err(error) => self.error(error),
                             }
                         }
-                        if ui.button("Save sequence").clicked() {
+                        if ui
+                            .button("Save sequence")
+                            .on_hover_text("Save a WAV and add it to Step synth.")
+                            .clicked()
+                        {
                             match self.step_synth_pcm() {
                                 Ok(pcm) => {
                                     if let Err(error) = self.save_pcm(
@@ -1289,7 +1586,10 @@ impl MixJamApp {
                                 Err(error) => self.error(error),
                             }
                         }
-                        if ui.button("Save pattern").clicked()
+                        if ui
+                            .button("Save pattern")
+                            .on_hover_text("Save the editable pattern as JSON.")
+                            .clicked()
                             && let Some(path) = rfd::FileDialog::new()
                                 .add_filter("Step synth pattern", &["json"])
                                 .set_file_name("Step synth pattern.json")
@@ -1314,7 +1614,6 @@ impl MixJamApp {
                             }
                         }
                     });
-                    ui.small("Save the sequence as a WAV to use it in the arrangement.");
                     if self.capture_path.is_some() && self.step_synth_effects_expanded {
                         ui.scroll_to_cursor_animation(
                             Some(egui::Align::BOTTOM),
@@ -1326,11 +1625,14 @@ impl MixJamApp {
         }
         if self.show_sample_edit {
             let mut open = true;
-            egui::Window::new("Sample editor")
+            titled_window("Sample editor")
                 .open(&mut open)
                 .default_width(510.0)
                 .show(ctx, |ui| {
                     ui.label(egui::RichText::new(self.source_name()).strong());
+                    if self.show_missing_source(ui) {
+                        return;
+                    }
                     let frames = self
                         .source_id()
                         .and_then(|id| self.session.library().sample_by_id(id))
@@ -1355,8 +1657,8 @@ impl MixJamApp {
                     ui.add(
                         egui::Slider::new(&mut self.edit_pitch, -24.0..=24.0)
                             .text("Pitch (semitones)"),
-                    );
-                    ui.small("Pitch changes playback speed and sample length.");
+                    )
+                    .on_hover_text("Pitch changes playback speed and sample length.");
                     ui.horizontal(|ui| {
                         if ui.button("Listen edit").clicked() {
                             match self.edited_pcm() {
@@ -1383,23 +1685,55 @@ impl MixJamApp {
         }
         if self.show_stretch {
             let mut open = true;
-            egui::Window::new("Time Stretcher").open(&mut open).default_width(470.0).show(ctx, |ui| {
-                ui.label(egui::RichText::new(self.source_name()).strong());
-                ui.horizontal(|ui| { ui.label("Original BPM"); ui.add(egui::DragValue::new(&mut self.stretch_source_bpm).range(30.0..=300.0)); ui.label("Target BPM"); bpm_picker(ui, "stretch_bpm", &mut self.stretch_target_bpm); });
-                ui.small("Enter the known source tempo. This conversion approximates pitch preservation.");
-                ui.horizontal(|ui| {
-                    if ui.button("Listen stretch").clicked() { match self.stretched_pcm() { Ok(pcm) => self.play_pcm(pcm, "Listening to the stretched sound."), Err(error) => self.error(error) } }
-                    if ui.button("Save stretched sound").clicked() { match self.stretched_pcm() { Ok(pcm) => { let name = format!("{} - stretch", self.source_name()); if let Err(error) = self.save_pcm(&pcm, &name, "Wave", self.stretch_target_bpm) { self.error(error); } }, Err(error) => self.error(error) } }
+            titled_window("Time Stretcher")
+                .open(&mut open)
+                .default_width(470.0)
+                .show(ctx, |ui| {
+                    ui.label(egui::RichText::new(self.source_name()).strong());
+                    if self.show_missing_source(ui) {
+                        return;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Original BPM");
+                        ui.add(
+                            egui::DragValue::new(&mut self.stretch_source_bpm).range(30.0..=300.0),
+                        );
+                        ui.label("Target BPM");
+                        bpm_picker(ui, "stretch_bpm", &mut self.stretch_target_bpm);
+                    });
+                    ui.small("Pitch preservation is approximate.");
+                    ui.horizontal(|ui| {
+                        if ui.button("Listen stretch").clicked() {
+                            match self.stretched_pcm() {
+                                Ok(pcm) => self.play_pcm(pcm, "Listening to the stretched sound."),
+                                Err(error) => self.error(error),
+                            }
+                        }
+                        if ui.button("Save stretched sound").clicked() {
+                            match self.stretched_pcm() {
+                                Ok(pcm) => {
+                                    let name = format!("{} - stretch", self.source_name());
+                                    if let Err(error) =
+                                        self.save_pcm(&pcm, &name, "Wave", self.stretch_target_bpm)
+                                    {
+                                        self.error(error);
+                                    }
+                                }
+                                Err(error) => self.error(error),
+                            }
+                        }
+                    });
                 });
-            });
             self.show_stretch = open;
         }
-        if self.session.has_recorded_take() && !self.session.is_recording() {
-            egui::Window::new("Recorded take")
+        if (self.session.has_recorded_take() && !self.session.is_recording())
+            || self.capture_view_is("recorded-take")
+        {
+            titled_window("Recorded take")
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
-                    ui.label("Your take is kept in memory until you save or discard it.");
+                    ui.label("Unsaved take: stored in memory.");
                     ui.horizontal(|ui| {
                         if ui.button("Listen").clicked() {
                             self.session.preview_recorded_take();

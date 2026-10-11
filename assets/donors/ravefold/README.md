@@ -24,8 +24,9 @@ icons from `assets/rail/`. This reference source is outside the Rust build.
 
 The font package supplies three variable WOFF2 subsets: Latin, extended Latin
 and Vietnamese. Its CSS declares weights from 300 to 700. The preserved WOFF2
-files are sources for the static TrueType fonts in `assets/fonts/`.
-`tools/assets/prepare-fonts.py` creates and checks those native assets.
+files supplied the earlier native Space Grotesk assets. They remain preservation
+sources. The current application embeds Syncopate and Inter from their own
+upstream sources; `tools/assets/prepare-fonts.py` verifies those active assets.
 
 ## License notices
 

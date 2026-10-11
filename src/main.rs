@@ -296,7 +296,7 @@ fn run() -> Result<(), String> {
                     ..Default::default()
                 };
                 eframe::run_native(
-                    "MixJam Techno",
+                    "MIXJAM TECHNO",
                     options,
                     Box::new(move |cc| {
                         let mut session =

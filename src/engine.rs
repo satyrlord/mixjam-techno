@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
 
-pub const PROJECT_SCHEMA_VERSION: u32 = 2;
+pub const PROJECT_SCHEMA_VERSION: u32 = 3;
 pub const TRACK_COUNT: usize = 64;
 pub const SUPPORTED_BPMS: [f64; 4] = [120.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
@@ -52,11 +52,140 @@ pub struct ImportedSample {
     pub path: PathBuf,
     #[serde(default = "default_source_bpm")]
     pub source_bpm: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_sample_rate: Option<u32>,
     #[serde(default)]
     pub origin: Option<crate::products::Product>,
 }
 fn default_source_bpm() -> f64 {
     SOURCE_BPM
+}
+
+/// A retained source reference whose audio is currently unavailable.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum MissingReference {
+    Native {
+        product: crate::products::Product,
+        native_id: u32,
+    },
+    External {
+        path: PathBuf,
+        origin: Option<crate::products::Product>,
+    },
+    Generated {
+        product: crate::products::Product,
+        kind: String,
+        data: serde_json::Value,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MissingSample {
+    pub id: u32,
+    pub name: String,
+    pub source_bpm: f64,
+    pub sample_rate: u32,
+    pub nominal_ticks: u32,
+    pub length_inferred: bool,
+    pub reference: MissingReference,
+    pub reason: String,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
+}
+
+impl MissingSample {
+    pub fn native(
+        product: crate::products::Product,
+        native_id: u32,
+        name: String,
+        source_bpm: f64,
+        nominal_ticks: u32,
+        length_inferred: bool,
+        reason: String,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            id: product.global_sample_id(native_id)?,
+            name,
+            source_bpm,
+            sample_rate: 44_100,
+            nominal_ticks,
+            length_inferred,
+            reference: MissingReference::Native { product, native_id },
+            reason,
+            metadata: BTreeMap::new(),
+        })
+    }
+
+    pub fn external(sample: &ImportedSample, nominal_ticks: u32, reason: String) -> Self {
+        Self {
+            id: sample.id,
+            name: sample.name.clone(),
+            source_bpm: sample.source_bpm,
+            sample_rate: sample.source_sample_rate.unwrap_or(44_100),
+            nominal_ticks,
+            length_inferred: true,
+            reference: MissingReference::External {
+                path: sample.path.clone(),
+                origin: sample.origin,
+            },
+            reason,
+            metadata: BTreeMap::from([("group_name".into(), sample.group_name.clone())]),
+        }
+    }
+
+    pub fn resolved_source_bpm(&self, frames: u32, sample_rate: u32) -> Result<f64, String> {
+        let bpm = if self
+            .metadata
+            .get("Playback timing policy")
+            .is_some_and(|policy| policy == "mixjam-span")
+        {
+            f64::from(self.nominal_ticks) * 240.0 * f64::from(sample_rate)
+                / (f64::from(TICKS_PER_BAR) * f64::from(frames))
+        } else {
+            self.source_bpm
+        };
+        if !bpm.is_finite() || bpm <= 0.0 {
+            return Err("The restored sample has no valid playback tempo.".into());
+        }
+        Ok(bpm)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        let valid_text =
+            |text: &str| !text.trim().is_empty() && text.len() <= 65_536 && !text.contains('\0');
+        if !valid_text(&self.name)
+            || !valid_text(&self.reason)
+            || !self.source_bpm.is_finite()
+            || self.source_bpm <= 0.0
+            || !(1..=384_000).contains(&self.sample_rate)
+            || !(1..=MAX_TICKS).contains(&self.nominal_ticks)
+            || self.metadata.len() > 256
+            || self.metadata.iter().any(|(key, value)| {
+                !valid_text(key) || value.len() > 65_536 || value.contains('\0')
+            })
+        {
+            return Err("The missing sample has invalid metadata or timing.".into());
+        }
+        match &self.reference {
+            MissingReference::Native { product, native_id }
+                if product.global_sample_id(*native_id)? == self.id => {}
+            MissingReference::External { path, .. }
+                if self.id >= crate::products::IMPORTED_ID_START
+                    && !path.as_os_str().is_empty() => {}
+            MissingReference::Generated { kind, data, .. }
+                if self.id >= crate::products::IMPORTED_ID_START
+                    && valid_text(kind)
+                    && data.is_object() => {}
+            _ => {
+                return Err(
+                    "The missing sample identity does not match its source reference.".into(),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Preserve both bounded original wrapped labels, including non-ASCII text.
@@ -79,6 +208,12 @@ pub fn validate_import_metadata(sample: &ImportedSample) -> Result<(), String> {
     if !sample.source_bpm.is_finite() || sample.source_bpm <= 0.0 {
         return Err("The imported sample needs a finite positive source tempo.".into());
     }
+    if sample
+        .source_sample_rate
+        .is_some_and(|rate| !(1..=384_000).contains(&rate))
+    {
+        return Err("The imported sample has an invalid source sample rate.".into());
+    }
     Ok(())
 }
 
@@ -87,6 +222,22 @@ pub fn validate_import_metadata(sample: &ImportedSample) -> Result<(), String> {
 pub struct ImportNotice {
     pub source_bpm: f64,
     pub target_bpm: f64,
+}
+
+/// A source reference with several WAV choices, shared by all its placements.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SampleConflict {
+    pub reference: String,
+    pub sample_ids: Vec<u32>,
+    pub candidates: Vec<PathBuf>,
+    #[serde(default)]
+    pub selected: usize,
+    #[serde(default)]
+    pub confirmed: bool,
+    /// MixJam source spans use shared ticks and determine playback tempo.
+    #[serde(default)]
+    pub source_spans: BTreeMap<u32, u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -104,6 +255,10 @@ pub struct Project {
     pub loop_region: Option<[u32; 2]>,
     #[serde(default)]
     pub imported_samples: Vec<ImportedSample>,
+    #[serde(default)]
+    pub missing_samples: Vec<MissingSample>,
+    #[serde(default)]
+    pub sample_conflicts: Vec<SampleConflict>,
     #[serde(default)]
     pub import_notices: Vec<ImportNotice>,
     #[serde(default)]
@@ -137,6 +292,8 @@ impl Default for Project {
             clips: Vec::new(),
             loop_region: None,
             imported_samples: Vec::new(),
+            missing_samples: Vec::new(),
+            sample_conflicts: Vec::new(),
             import_notices: Vec::new(),
             source_notices: Vec::new(),
             libraries: Vec::new(),
@@ -144,6 +301,20 @@ impl Default for Project {
     }
 }
 impl Project {
+    /// Remove choices that no longer affect the arrangement before saving or relinking.
+    pub fn prune_sample_conflicts(&mut self) {
+        let used: HashSet<_> = self.clips.iter().map(|clip| clip.sample_id).collect();
+        for conflict in &mut self.sample_conflicts {
+            conflict.sample_ids.retain(|id| used.contains(id));
+            conflict.source_spans.retain(|id, _| used.contains(id));
+        }
+        self.sample_conflicts
+            .retain(|conflict| !conflict.sample_ids.is_empty());
+    }
+
+    pub fn missing_sample(&self, id: u32) -> Option<&MissingSample> {
+        self.missing_samples.iter().find(|sample| sample.id == id)
+    }
     pub fn end_tick(&self) -> u32 {
         self.clips
             .iter()
@@ -210,6 +381,49 @@ impl Project {
             validate_import_metadata(sample)?;
             if !imported_ids.insert(sample.id) {
                 return Err("Imported sample IDs must be unique.".into());
+            }
+        }
+        if self.missing_samples.len() > 100_000 {
+            return Err("The project has too many missing samples.".into());
+        }
+        for sample in &self.missing_samples {
+            sample.validate()?;
+            if !imported_ids.insert(sample.id) {
+                return Err("Resolved and missing sample IDs must be unique.".into());
+            }
+        }
+        if self.sample_conflicts.len() > 100_000 {
+            return Err("The project has too many sample conflicts.".into());
+        }
+        let mut conflict_ids = HashSet::new();
+        for conflict in &self.sample_conflicts {
+            let mut paths = HashSet::new();
+            let source_ids: HashSet<_> = conflict.sample_ids.iter().copied().collect();
+            if conflict.reference.trim().is_empty()
+                || conflict.reference.len() > 65_536
+                || conflict.reference.contains('\0')
+                || conflict.sample_ids.is_empty()
+                || conflict.sample_ids.len() > 100_000
+                || !(2..=100_000).contains(&conflict.candidates.len())
+                || conflict.selected >= conflict.candidates.len()
+                || conflict.candidates.iter().any(|path| {
+                    path.as_os_str().is_empty()
+                        || path.to_string_lossy().contains('\0')
+                        || !paths.insert(path)
+                })
+                || conflict.sample_ids.iter().any(|id| {
+                    !conflict_ids.insert(*id)
+                        || (!imported_ids.contains(id)
+                            && crate::products::Product::sample_key(*id).is_none())
+                })
+                || conflict
+                    .source_spans
+                    .iter()
+                    .any(|(id, ticks)| !source_ids.contains(id) || !(1..=MAX_TICKS).contains(ticks))
+            {
+                return Err(
+                    "The sample conflict has invalid references, choices, or timing.".into(),
+                );
             }
         }
         for c in &self.clips {
@@ -288,6 +502,12 @@ impl Project {
             PROJECT_SCHEMA_VERSION => {
                 project.validate()?;
                 Ok(project)
+            }
+            2 => {
+                let mut migrated = project;
+                migrated.schema_version = PROJECT_SCHEMA_VERSION;
+                migrated.validate()?;
+                Ok(migrated)
             }
             1 => {
                 // Schema 1 already uses the common 256-tick clock and fixed tempos.
@@ -394,6 +614,7 @@ impl Editor {
     pub fn transact(&mut self, change: impl FnOnce(&mut Project)) -> Result<(), String> {
         let previous = self.project.clone();
         change(&mut self.project);
+        self.project.prune_sample_conflicts();
         if let Err(e) = self.project.validate() {
             self.project = previous;
             return Err(e);
@@ -565,6 +786,97 @@ fn ensure_space(
 mod tests {
     use super::*;
     #[test]
+    fn sample_conflict_choices_persist_validate_and_prune_after_clip_deletion() {
+        let source = ImportedSample {
+            id: 1_000_000,
+            name: "Lead".into(),
+            group_name: "MixJam".into(),
+            path: "A/lead.wav".into(),
+            source_bpm: 120.0,
+            source_sample_rate: Some(44_100),
+            origin: None,
+        };
+        let mut project = Project {
+            imported_samples: vec![source],
+            sample_conflicts: vec![SampleConflict {
+                reference: "Old/lead.wav".into(),
+                sample_ids: vec![1_000_000],
+                candidates: vec!["A/lead.wav".into(), "B/lead.wav".into()],
+                selected: 0,
+                confirmed: false,
+                source_spans: BTreeMap::from([(1_000_000, 256)]),
+            }],
+            ..Project::default()
+        };
+        project.validate().unwrap();
+        let bytes = serde_json::to_vec(&project).unwrap();
+        let reopened: Project = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(reopened, project);
+        let mut old = serde_json::to_value(&project).unwrap();
+        old.as_object_mut().unwrap().remove("sample_conflicts");
+        assert!(
+            serde_json::from_value::<Project>(old)
+                .unwrap()
+                .sample_conflicts
+                .is_empty()
+        );
+        for case in 0..6 {
+            let mut invalid = project.clone();
+            let conflict = &mut invalid.sample_conflicts[0];
+            match case {
+                0 => conflict.selected = 2,
+                1 => conflict.sample_ids.push(1_000_000),
+                2 => conflict.candidates[1] = conflict.candidates[0].clone(),
+                3 => conflict.sample_ids[0] = 1_000_099,
+                4 => {
+                    conflict.source_spans.insert(1_000_001, 256);
+                }
+                _ => {
+                    conflict.source_spans.insert(1_000_000, 0);
+                }
+            }
+            assert!(invalid.validate().is_err(), "case {case}");
+        }
+        // Deleting the last placement is valid while its import metadata remains.
+        project.validate().unwrap();
+        project.prune_sample_conflicts();
+        assert!(project.sample_conflicts.is_empty());
+    }
+
+    #[test]
+    fn recovered_mixjam_source_tempos_survive_json_without_float_drift() {
+        for tempo in [
+            124.999_999_999_999_99,
+            151.964_162_646_450_75,
+            113.562_231_759_656_65,
+        ] {
+            let source = ImportedSample {
+                id: 1_000_000,
+                name: "Recovered source".into(),
+                group_name: "MixJam".into(),
+                path: "Genre/source.wav".into(),
+                source_bpm: tempo,
+                source_sample_rate: Some(44100),
+                origin: None,
+            };
+            let mut project = Project::default();
+            project.missing_samples.push(MissingSample::external(
+                &source,
+                256,
+                "Unavailable".into(),
+            ));
+            let mut ready = source;
+            ready.id += 1;
+            project.imported_samples.push(ready);
+            project.validate().unwrap();
+            let bytes = serde_json::to_vec(&project).unwrap();
+            let reopened: Project = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(reopened, project);
+            assert_eq!(serde_json::to_vec(&reopened).unwrap(), bytes);
+        }
+    }
+
+    #[test]
     fn paired_native_labels_and_signed_track_levels_survive_json() {
         let mut project = Project::default();
         project.tracks[31].gain = -2.0 / 65536.0;
@@ -575,6 +887,7 @@ mod tests {
             group_name: "Wave".into(),
             path: "source.wav".into(),
             source_bpm: 2000.0,
+            source_sample_rate: None,
             origin: None,
         });
         project.validate().unwrap();
@@ -734,6 +1047,7 @@ mod tests {
             group_name: "Imported".into(),
             path: PathBuf::from("source.wav"),
             source_bpm: 0.001,
+            source_sample_rate: None,
             origin: None,
         });
         project.validate().unwrap();
@@ -816,7 +1130,7 @@ mod tests {
         });
         let mut value = serde_json::to_value(&original).unwrap();
         let migrated = Project::parse_json(&serde_json::to_vec(&value).unwrap()).unwrap();
-        assert_eq!(migrated.schema_version, 2);
+        assert_eq!(migrated.schema_version, PROJECT_SCHEMA_VERSION);
         assert_eq!(migrated.tracks.len(), 64);
         assert_eq!(migrated.tracks[..32], original.tracks);
         assert_eq!(migrated.clips, original.clips);
@@ -839,6 +1153,64 @@ mod tests {
     }
 
     #[test]
+    fn schema_two_migration_preserves_the_arrangement_and_adds_empty_missing_sources() {
+        let mut value = serde_json::to_value(Project::default()).unwrap();
+        value["schema_version"] = 2.into();
+        value.as_object_mut().unwrap().remove("missing_samples");
+        let migrated = Project::parse_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(migrated, Project::default());
+    }
+
+    #[test]
+    fn placeholder_validation_rejects_conflicting_identities_and_invalid_metadata() {
+        let imported = ImportedSample {
+            id: 1_000_000,
+            name: "Lead".into(),
+            group_name: "Wave".into(),
+            path: PathBuf::from("missing.wav"),
+            source_bpm: 140.0,
+            source_sample_rate: None,
+            origin: None,
+        };
+        let missing = MissingSample::external(&imported, 256, "File is missing.".into());
+        let mut project = Project {
+            missing_samples: vec![missing.clone()],
+            ..Project::default()
+        };
+        project.clips.push(Clip {
+            id: 1,
+            sample_id: imported.id,
+            track: 0,
+            start_tick: 0,
+            length_ticks: 256,
+            offset_frames: 0,
+            gain: 1.0,
+        });
+        project.validate().unwrap();
+        assert_eq!(
+            Project::parse_json(&serde_json::to_vec(&project).unwrap()).unwrap(),
+            project
+        );
+        project.imported_samples.push(imported);
+        assert!(project.validate().is_err());
+        project.imported_samples.clear();
+        project.missing_samples.push(missing.clone());
+        assert!(project.validate().is_err());
+        project.missing_samples.pop();
+        project.missing_samples[0].sample_rate = 0;
+        assert!(project.validate().is_err());
+        project.missing_samples[0] = missing.clone();
+        project.missing_samples[0].nominal_ticks = 0;
+        assert!(project.validate().is_err());
+        project.missing_samples[0] = missing;
+        project.missing_samples[0].reference = MissingReference::Native {
+            product: crate::products::Product::T2,
+            native_id: 7,
+        };
+        assert!(project.validate().is_err());
+    }
+
+    #[test]
     fn old_sixteen_track_json_migrates_saves_and_reopens_with_one_notice() {
         let mut old_project = Project {
             title: "Original arrangement".into(),
@@ -857,6 +1229,7 @@ mod tests {
             group_name: "Imported".into(),
             path: PathBuf::from("original-source.wav"),
             source_bpm: 127.0,
+            source_sample_rate: None,
             origin: None,
         });
         old_project.clips.push(Clip {
@@ -950,6 +1323,7 @@ mod tests {
                 group_name: "Imported".into(),
                 path: PathBuf::from("original.wav"),
                 source_bpm: 180.0,
+                source_sample_rate: None,
                 origin: Some(Product::T1),
             }],
             ..Project::default()

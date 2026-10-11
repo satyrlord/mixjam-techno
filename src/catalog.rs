@@ -73,12 +73,36 @@ impl WaveMetadata {
 /// tools hold the last value; neither changes this digest. Any other change to
 /// the samples does.
 pub fn pcm_identity(samples: &[i16]) -> [u8; 16] {
-    use sha2::Digest;
-    let mut hasher = sha2::Sha256::new();
-    for pair in samples[..samples.len().saturating_sub(1)].windows(2) {
-        hasher.update(pair[1].wrapping_sub(pair[0]).to_le_bytes());
+    let mut identity = PcmIdentity::default();
+    for &sample in samples {
+        identity.push(sample);
     }
-    hasher.finalize()[..16].try_into().unwrap()
+    identity.finish()
+}
+
+/// Streaming identity retains one pending difference so the final frame is omitted.
+#[derive(Default)]
+pub(crate) struct PcmIdentity {
+    hasher: sha2::Sha256,
+    previous: Option<i16>,
+    pending: Option<[u8; 2]>,
+}
+
+impl PcmIdentity {
+    pub(crate) fn push(&mut self, sample: i16) {
+        use sha2::Digest;
+        if let Some(difference) = self.pending.take() {
+            self.hasher.update(difference);
+        }
+        if let Some(previous) = self.previous.replace(sample) {
+            self.pending = Some(sample.wrapping_sub(previous).to_le_bytes());
+        }
+    }
+
+    pub(crate) fn finish(self) -> [u8; 16] {
+        use sha2::Digest;
+        self.hasher.finalize()[..16].try_into().unwrap()
+    }
 }
 
 pub fn pcm_identity_hex(samples: &[i16]) -> String {

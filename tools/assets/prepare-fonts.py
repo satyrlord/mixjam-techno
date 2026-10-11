@@ -1,100 +1,81 @@
-"""Prepare native static TTF files from the preserved Space Grotesk WOFF2 files.
+"""Verify bundled native fonts offline and write their provenance manifest.
 
-Requires fonttools[woff]==4.66.1 and Brotli==1.2.0. No network access is used.
-Run without arguments to generate assets, or with --check to verify exact bytes.
+Requires fonttools. Run with --check to verify the manifest without writing.
+The original font and license files are copied unchanged from pinned releases.
 """
 from __future__ import annotations
 
 import argparse
 from hashlib import sha256
-from io import BytesIO
 import json
 from pathlib import Path
 
-import brotli
-import fontTools
 from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
-
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "assets/donors/ravefold/fonts/space-grotesk"
 DESTINATION = ROOT / "assets/fonts"
-WEIGHTS = {"Regular": 400, "Medium": 500, "Bold": 700}
-SUBSETS = ("latin", "latin-ext", "vietnamese")
-REQUIRED_CHARACTERS = set(range(32, 127)) | {ord(c) for c in "ĂăÂâÎîȘșȚț"}
-
-
-def convert(source: Path, style: str, weight: int) -> bytes:
-    font = TTFont(source, recalcTimestamp=False)
-    timestamp = font["head"].modified
-    font = instantiateVariableFont(font, {"wght": weight}, inplace=True)
-    font.flavor = None
-    # Keep the family and static face names explicit after variable instancing.
-    names = {
-        1: "Space Grotesk",
-        2: style,
-        3: f"SpaceGrotesk-{style}-MixJamNative",
-        4: f"Space Grotesk {style}",
-        6: f"SpaceGrotesk-{style}",
-        16: "Space Grotesk",
-        17: style,
-    }
-    for name_id, value in names.items():
-        font["name"].setName(value, name_id, 3, 1, 0x409)
-    font["head"].modified = timestamp
-    result = BytesIO()
-    font.save(result)
-    return result.getvalue()
+ASCII = set(range(32, 127))
+SYNCOPATE_SOURCE = "https://raw.githubusercontent.com/google/fonts/bd8f81ddb5c74d5c8897b36ad88b440266245103/apache/syncopate/"
+FONTS = (
+    {
+        "file": "Syncopate-Bold.ttf",
+        "family": "Syncopate",
+        "weight": 700,
+        "sha256": "c71f5a40a83115518443c13474e5132804f4a91ce26e26fd9718cd3814ad4b2e",
+        "source": SYNCOPATE_SOURCE + "Syncopate-Bold.ttf",
+        "license": "LICENSE-Syncopate.txt",
+        "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "license_source": SYNCOPATE_SOURCE + "LICENSE.txt",
+    },
+    {
+        "file": "Inter-Medium.ttf",
+        "family": "Inter Medium",
+        "weight": 500,
+        "sha256": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+        "source": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+        "archive_path": "extras/ttf/Inter-Medium.ttf",
+        "license": "LICENSE-Inter.txt",
+        "license_sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+        "license_archive_path": "LICENSE.txt",
+    },
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    if (fontTools.__version__, brotli.__version__) != ("4.66.1", "1.2.0"):
-        raise SystemExit("Use fonttools[woff]==4.66.1 and Brotli==1.2.0 for reproducible assets.")
-    outputs: dict[str, bytes] = {}
     records = []
-    for style, weight in WEIGHTS.items():
-        coverage: set[int] = set()
-        for subset in SUBSETS:
-            source = SOURCE / "files" / f"space-grotesk-{subset}-wght-normal.woff2"
-            name = f"SpaceGrotesk-{style}-{subset}.ttf"
-            data = convert(source, style, weight)
-            font = TTFont(BytesIO(data))
-            coverage.update(font.getBestCmap())
-            assert "fvar" not in font and data[:4] == b"\x00\x01\x00\x00", name
-            assert font["OS/2"].usWeightClass == weight, name
-            assert font["name"].getDebugName(2) == style, name
-            outputs[name] = data
-            records.append({
-                "file": name,
-                "weight": weight,
-                "subset": subset,
-                "bytes": len(data),
-                "sha256": sha256(data).hexdigest(),
-                "source": source.relative_to(ROOT).as_posix(),
-                "source_sha256": sha256(source.read_bytes()).hexdigest(),
-            })
-        assert REQUIRED_CHARACTERS <= coverage, f"Missing ASCII or Romanian characters in {style}."
-    outputs["LICENSE"] = (SOURCE / "LICENSE").read_bytes()
-    outputs["manifest.json"] = (json.dumps({
-        "fonttools": fontTools.__version__,
-        "brotli": brotli.__version__,
-        "source_package": "@fontsource-variable/space-grotesk@5.3.0",
+    coverage = {}
+    for record in FONTS:
+        for filename, digest in ((record["file"], record["sha256"]),
+                                 (record["license"], record["license_sha256"])):
+            path = DESTINATION / filename
+            if not path.is_file() or sha256(path.read_bytes()).hexdigest() != digest:
+                raise SystemExit(f"Bundled font asset differs: {path.relative_to(ROOT)}")
+        path = DESTINATION / record["file"]
+        with TTFont(path) as font:
+            if "fvar" in font or font["OS/2"].usWeightClass != record["weight"]:
+                raise SystemExit(f"Unexpected native font weight: {record['file']}")
+            if font["name"].getDebugName(1) != record["family"]:
+                raise SystemExit(f"Unexpected native font family: {record['file']}")
+            coverage[record["family"]] = set(font.getBestCmap())
+        if not ASCII <= coverage[record["family"]]:
+            raise SystemExit(f"Missing ASCII characters: {record['file']}")
+        records.append(dict(record, bytes=path.stat().st_size))
+    data = {
         "files": records,
-    }, indent=2) + "\n").encode()
-    if not args.check:
-        DESTINATION.mkdir(parents=True, exist_ok=True)
-    for name, data in outputs.items():
-        path = DESTINATION / name
-        if args.check:
-            if not path.is_file() or path.read_bytes() != data:
-                raise SystemExit(f"Native font asset differs: {path.relative_to(ROOT)}")
-        else:
-            path.write_bytes(data)
-    print(f"{'Verified' if args.check else 'Prepared'} 9 static TTF faces; ASCII and Romanian coverage passed.")
+        "title_case": "Latin transliteration and uppercase presentation; saved text retains its original spelling",
+        "title_fallback": "egui proportional fallbacks for symbols; title letters use Latin counterparts",
+    }
+    encoded = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode()
+    manifest = DESTINATION / "manifest.json"
+    if args.check:
+        if not manifest.is_file() or manifest.read_bytes() != encoded:
+            raise SystemExit("Native font manifest differs: assets/fonts/manifest.json")
+    else:
+        manifest.write_bytes(encoded)
+    print("Verified Syncopate Bold 700 and Inter Medium 500, licenses and ASCII title coverage.")
 
 
 if __name__ == "__main__":

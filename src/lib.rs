@@ -13,6 +13,7 @@ pub mod products;
 pub mod project_io;
 pub mod recording;
 pub mod sample_edit;
+mod source_tempo;
 pub mod synth;
 
 #[cfg(all(test, feature = "gui"))]

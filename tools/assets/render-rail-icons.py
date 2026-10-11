@@ -1,4 +1,4 @@
-"""Render and check the native rail's SVG sources and transparent PNG assets."""
+"""Render and check the native UI's SVG sources and transparent PNG assets."""
 from __future__ import annotations
 
 import argparse
@@ -23,6 +23,7 @@ INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "libraries", "new", "mixer",
     "erase", "delete", "effects", "step-synth", "edit", "stretch", "record", "mix",
+    "undo", "redo",
 )
 EXACT_DONOR_PATHS = {
     "save": "save",
@@ -31,6 +32,8 @@ EXACT_DONOR_PATHS = {
     "erase": "erase",
     "delete": "trash",
     "effects": "inspector",
+    "undo": "undo",
+    "redo": "redo",
 }
 
 
@@ -91,7 +94,8 @@ def check_png(name: str) -> dict:
 
 def contact_sheet() -> None:
     cell_width, cell_height = 200, 146
-    sheet = Image.new("RGB", (4 * cell_width, 4 * cell_height), "#bed6eb")
+    rows = (len(NAMES) + 3) // 4
+    sheet = Image.new("RGB", (4 * cell_width, rows * cell_height), "#bed6eb")
     draw = ImageDraw.Draw(sheet)
     font = ImageFont.load_default(size=14)
     small_font = ImageFont.load_default(size=11)
@@ -131,7 +135,7 @@ def main() -> None:
                 icon.save(ASSETS / f"{name}.png")
     results = [check_png(name) for name in NAMES]
     if len({result["png_sha256"] for result in results}) != len(NAMES):
-        raise ValueError("Two rail icons have identical PNG bytes")
+        raise ValueError("Two UI icons have identical PNG bytes")
     if args.check:
         manifest = json.loads((ASSETS / "manifest.json").read_text(encoding="utf-8"))
         if manifest.get("icons") != results:

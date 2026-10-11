@@ -23,41 +23,45 @@ colors:
   other-sample: "#bbb39f"
 typography:
   display:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
     fontSize: "27px"
     fontWeight: 700
   headline:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
     fontSize: "20px"
     fontWeight: 700
   section:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
     fontSize: "18px"
     fontWeight: 700
   title:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
     fontSize: "15px"
     fontWeight: 700
   body:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Inter"
     fontSize: "13px"
-    fontWeight: 400
+    fontWeight: 500
   button:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Inter"
     fontSize: "13px"
     fontWeight: 500
   clip:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Inter"
     fontSize: "12px"
-    fontWeight: 400
+    fontWeight: 500
   small:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Inter"
     fontSize: "11px"
-    fontWeight: 400
+    fontWeight: 500
   metadata:
-    fontFamily: "Space Grotesk"
+    fontFamily: "Inter"
     fontSize: "10px"
-    fontWeight: 400
+    fontWeight: 500
 rounded:
   clip: "3px"
   control: "5px"
@@ -120,14 +124,15 @@ track numbers, and playback controls. Lime marks primary actions. Category
 colors identify the same sounds in the browser and arrangement.
 
 The owner selected this design for the classic loop sequencer. It uses imported
-Space Grotesk, flat controls, and consistent spacing.
+Syncopate branding and titles, Inter Medium interface text, flat controls,
+and consistent spacing.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
 **Key Characteristics:**
 
 - Graphite surfaces with off-white text and restrained borders.
-- Space Grotesk headings, controls, and sample labels.
+- Syncopate branding and titles in uppercase; Inter Medium for all other text.
 - A wide arrangement with transport above and sound discovery below.
 - Lime primary actions, category-colored clips, and coral recording signals.
 
@@ -141,15 +146,15 @@ it does not define browser components or application behavior.
 
 ### Primary
 
-Accent lime identifies Play/Pause, Export WAV, primary empty-state actions,
+Accent lime identifies Play/Pause, primary empty-state actions,
 the playhead, enabled routing controls, and focus or active-state outlines.
 Coral identifies recording, errors, and selected synth notes.
 
 ### Secondary
 
 Loop, Drum, Bass, Sequence, Sphere/Wave, Effect, Voice, and Other Sample colors
-identify sounds. Tiles use a small category dot; arrangement clips use the full
-category fill with canvas-colored text. Selection adds a text-colored clip border.
+identify sounds. Tiles use a 20% category-color overlay; arrangement clips use the
+full category fill with canvas-colored text. Selection adds a text-colored clip border.
 
 **The Shared Category Rule.** Use the same category color for a sound in the
 browser and arrangement. Pair color with its name or category label.
@@ -163,22 +168,33 @@ Line separates surfaces. Selection and Warning retain their native widget roles.
 
 ## Typography
 
-The native build embeds Space Grotesk Regular 400, Medium 500, and Bold 700 from
-`assets/fonts/`. Each face includes Latin, extended Latin, and Vietnamese subsets,
-followed by egui's bundled proportional fallbacks for missing glyphs. The assets
-are derived offline from the preserved WOFF2 package. Keep their OFL license and
+The native build embeds Syncopate Bold 700 for branding and titles, and
+Inter Medium 500 for all other application text. Render branding and every
+project, section, window, modal, and empty-state title in uppercase Latin text.
+Transliterate special letters to their Latin counterparts before uppercase
+layout, including Ș/Ş to S, Ț/Ţ to T, Â/Ă to A, and Î to I. Keep stored
+project titles and other user data in their original case. Window IDs retain
+their original identity independently of visible title formatting.
+
+Syncopate is unchanged from the pinned Google Fonts source. Title letters use
+their Latin counterparts instead of a Romanian fallback face. Inter is the
+unchanged static text face from the official 4.1 release. Both families include
+ASCII.
+Egui's bundled proportional fonts follow the primary families for remaining
+missing glyphs. Keep Syncopate's Apache 2.0 license, Inter's OFL license, and
 provenance with the application; see `assets/fonts/README.md`.
 
 Display is the MixJam name. Headline is the standard native heading. Section
 labels identify Arrangement, Sounds, and Mixer. Title names the project. Body
-serves fields and explanatory text; Button uses the Medium face. Clip labels use
+serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
+use Inter Medium 500. Track labels and numeric controls also use Inter. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
-The bar-and-beat readout uses strong proportional text at 23 points in a fixed
+The bar-and-beat readout uses Inter Medium at 23 points in a fixed
 112 by 42-point container. Changes to digit widths or bar count must not move
 the adjacent transport controls. Status text
-uses 12 points. These are local roles, not a second font family.
+uses Inter Medium at 12 points. These are local sizes within the same text family.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -222,6 +238,8 @@ several distinct sounds shows their count and lists their names on hover.
 Faders are at least 74 points high at the minimum window size.
 
 Step synth constrains its floating window to the viewport and scrolls vertically.
+Sample libraries uses the same viewport constraint and vertical scrolling. A
+large expanded Folder tempos list must leave the provider controls reachable.
 Its note grid uses 33 by 16-point cells with 2-point gaps; this compact density is
 scoped to the grid. Other tool controls retain the shared control spacing.
 
@@ -250,7 +268,12 @@ Play/Pause button and Accent on secondary controls.
 ### Actions and transport
 
 Primary action buttons use Accent with Canvas text. Secondary buttons use Raised
-with Text. Play/Pause stays prominent in the transport; other transport controls
+with Text. Undo and Redo use SVG-derived arrow icons from the shared artwork
+cache, with action names in tooltips and accessibility labels.
+Help uses the shared SVG-derived library icon with Help as its tooltip and
+accessibility label.
+Export WAV is available through the Export icon in the right-hand tool rail.
+Play/Pause stays prominent in the transport; other transport controls
 use raised surfaces and hover fills. Record uses a coral circle with a white ring
 during capture. Symbols are painted native geometry with tooltips and accessible
 action names.
@@ -265,8 +288,12 @@ track number. Source artwork and provenance remain in `assets/rail/`.
 
 ### Sounds and clips
 
-Sound tiles show the name above a category dot, category label, and bar count.
+Sound tiles show the name above the category label and bar count. A 20% overlay
+of the category color tints the whole tile; there is no category dot.
 Hover or selection uses Hover; selection adds a category-colored border.
+One tooltip groups the full name, product, category, code, sample IDs, source
+tempo, nominal bars, actual audio duration, frames, rate, channels, and WAV path
+when available. Nominal bars and audio duration remain separate facts.
 Arrangement clips use flat category fills and names. They do not display a
 waveform. A selected clip can show a gain line; it is a control indicator.
 
@@ -279,18 +306,31 @@ visible values, silence and unity marks, an exact-entry field, and a Unity reset
 Negative values show Inverted. The header and Help explain polarity inversion.
 Pan has a readable left/center/right value and a Center reset. Every control has
 a track-specific accessible name; Master has its own gain labels.
-The default status hint explains mixer input when Mixer is open, without hiding
-errors or application notices. The empty mixer explains how to add a track.
+Arrangement and mixer L/R labels use Accent when enabled and Muted when off.
+Both expose the same checked state and a track-specific on/off tooltip. Lane
+controls show keyboard focus. A lane edit requests a repaint so the already
+drawn mixer refreshes even if the pointer stops. Pan remains independent of L/R.
+The sample-conflict modal confirms only through Keep choices, because
+confirmation is an undoable project change; Esc hides it without an edit and
+the status bar reopens it.
+The idle status reads Ready. Errors and application notices remain visible.
+The empty mixer has one instruction for adding a sound to the arrangement.
 Floating libraries, sample editing, effects, tempo
 stretch, and Step synth use the same native widget theme. The frontend submits
 edits to the application layer; visual changes must preserve those commands.
 
 ### Empty states and feedback
 
-The empty sound browser directs the user to choose a WAV folder. Filtered empty
+The empty sound browser offers Choose WAV folder. Filtered empty
 results offer Clear filters. The status strip truncates long messages and gives
 the full text on hover. Import details remain available when a project carries
 compatibility notices.
+
+Keep task guidance in Help and control tooltips. Do not repeat drag, preview,
+tempo, or save instructions across the workspace and tool windows. Keep concise
+warnings for missing audio, unsaved recordings, polarity inversion, and approximate
+pitch preservation. Import details retain all saved source and placement metadata
+as selectable text. Help groups gestures by action and scrolls within the viewport.
 
 Display full filesystem paths without the Windows extended-length prefix.
 Show network paths as `\\server\share`. Apply this presentation rule to folder
@@ -301,7 +341,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Use
 
-- Preserve the graphite surfaces, Space Grotesk type, and lime primary actions.
+- Preserve graphite surfaces, Syncopate branding and titles, Inter Medium
+  interface text, and lime primary actions.
 - Use the same category and sample names across views.
 - Keep track numbers stable and give actions accessible names.
 - Check native layouts at the supported minimum size after changes.

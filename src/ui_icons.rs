@@ -1,4 +1,4 @@
-//! Bundled rail artwork. Texture handles live for one native egui context.
+//! Bundled action artwork. Texture handles live for one native egui context.
 use eframe::egui::{self, TextureHandle, TextureId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,10 +20,12 @@ pub(crate) enum RailIcon {
     Stretch,
     Record,
     Mix,
+    Undo,
+    Redo,
 }
 
 impl RailIcon {
-    pub(crate) const ALL: [Self; 16] = [
+    pub(crate) const ALL: [Self; 18] = [
         Self::Open,
         Self::Save,
         Self::SaveAs,
@@ -40,6 +42,8 @@ impl RailIcon {
         Self::Stretch,
         Self::Record,
         Self::Mix,
+        Self::Undo,
+        Self::Redo,
     ];
 
     pub(crate) fn label(self) -> &'static str {
@@ -60,6 +64,8 @@ impl RailIcon {
             Self::Stretch => "Stretch",
             Self::Record => "Recording destination",
             Self::Mix => "Mix tools",
+            Self::Undo => "Undo",
+            Self::Redo => "Redo",
         }
     }
 
@@ -85,6 +91,8 @@ impl RailIcon {
             Self::Stretch => include_bytes!("../assets/rail/stretch.png"),
             Self::Record => include_bytes!("../assets/rail/record.png"),
             Self::Mix => include_bytes!("../assets/rail/mix.png"),
+            Self::Undo => include_bytes!("../assets/rail/undo.png"),
+            Self::Redo => include_bytes!("../assets/rail/redo.png"),
         }
     }
 }

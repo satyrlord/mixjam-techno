@@ -34,20 +34,11 @@ pub(super) const PANEL: Color32 = Color32::from_rgb(28, 32, 37);
 pub(super) const TEXT: Color32 = Color32::from_rgb(233, 237, 238);
 pub(super) const ACCENT: Color32 = Color32::from_rgb(184, 227, 126);
 pub(super) const CORAL: Color32 = Color32::from_rgb(255, 130, 130);
-const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
+pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
 const LINE: Color32 = Color32::from_rgb(58, 65, 72);
 const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
 const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
-pub(super) const DEFAULT_STATUS: &str =
-    "Choose a sound, then drag it onto a track. Double-click to listen.";
-
-pub(super) fn mixer_status(status: &str, error: bool, mixer: bool) -> &str {
-    if mixer && !error && status == DEFAULT_STATUS {
-        "Adjust gain, pan, and outputs. Click a gain value to enter an exact setting."
-    } else {
-        status
-    }
-}
+pub(super) const DEFAULT_STATUS: &str = "Ready";
 const GROUPS: [&str; 10] = [
     "Loop",
     "Drum",
@@ -61,17 +52,44 @@ const GROUPS: [&str; 10] = [
     "Step synth",
 ];
 
+pub(super) fn title_text(text: &str) -> String {
+    deunicode::deunicode(text).to_ascii_uppercase()
+}
+
 fn heading(text: impl Into<String>, size: f32) -> egui::RichText {
-    egui::RichText::new(text)
+    egui::RichText::new(title_text(&text.into()))
         .font(FontId::new(
             size,
-            egui::FontFamily::Name("Space Grotesk Bold".into()),
+            egui::FontFamily::Name("Syncopate Bold".into()),
         ))
         .color(TEXT)
 }
 
+pub(super) fn titled_window(title: &str) -> egui::Window<'_> {
+    // Keep widget identity independent of visible title formatting.
+    egui::Window::new(title_text(title)).id(egui::Id::new(title))
+}
+
 impl MixJamApp {
+    /// Load the bundled artwork once. A failure is reported once; the header
+    /// then falls back to text actions and the tool rail stays hidden.
+    fn icons(&mut self, ctx: &egui::Context) -> Option<Arc<RailIcons>> {
+        if self.rail_icons.is_none() {
+            let loaded = RailIcons::load(ctx).map(Arc::new);
+            if let Err(error) = &loaded {
+                self.error(error.clone());
+            }
+            self.rail_icons = Some(loaded);
+        }
+        self.rail_icons.as_ref()?.as_ref().ok().cloned()
+    }
+
     pub(super) fn header(&mut self, ctx: &egui::Context) {
+        let icons = self.icons(ctx);
+        let action = |ui: &mut egui::Ui, icon: RailIcon, label: &str| match &icons {
+            Some(icons) => action_icon_button(ui, icons, icon, label),
+            None => action_button(ui, label, false).on_hover_text(label),
+        };
         egui::TopBottomPanel::top("header")
             .exact_height(66.0)
             .frame(
@@ -82,7 +100,7 @@ impl MixJamApp {
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.label(heading("MixJam", 27.0));
-                    ui.label(egui::RichText::new("Techno").size(14.0).color(MUTED));
+                    ui.label(heading("Techno", 14.0).color(MUTED));
                     ui.add_space(24.0);
                     ui.separator();
                     ui.add_space(18.0);
@@ -91,23 +109,20 @@ impl MixJamApp {
                     } else {
                         self.session.project().title.clone()
                     };
-                    let title_width = (ui.available_width() - 290.0).max(40.0);
+                    let title_width = (ui.available_width() - 190.0).max(40.0);
                     ui.add_sized(
                         [title_width, 30.0],
                         egui::Label::new(heading(title, 15.0)).truncate(),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if action_button(ui, "Export WAV", true).clicked() {
-                            self.export();
-                        }
-                        if action_button(ui, "Help", false).clicked() {
+                        if action(ui, RailIcon::Libraries, "Help").clicked() {
                             self.show_help = !self.show_help;
                         }
                         ui.add_space(8.0);
-                        if action_button(ui, "Redo", false).clicked() {
+                        if action(ui, RailIcon::Redo, "Redo").clicked() {
                             self.history_step(true);
                         }
-                        if action_button(ui, "Undo", false).clicked() {
+                        if action(ui, RailIcon::Undo, "Undo").clicked() {
                             self.history_step(false);
                         }
                     });
@@ -116,16 +131,8 @@ impl MixJamApp {
     }
 
     pub(super) fn side_rail(&mut self, ctx: &egui::Context) {
-        let icons = self
-            .rail_icons
-            .get_or_insert_with(|| RailIcons::load(ctx).map(Arc::new))
-            .clone();
-        let icons = match icons {
-            Ok(icons) => icons,
-            Err(error) => {
-                self.error(error);
-                return;
-            }
+        let Some(icons) = self.icons(ctx) else {
+            return;
         };
         egui::SidePanel::right("tools")
             .exact_width(64.0)
@@ -201,18 +208,25 @@ impl MixJamApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    if !self.session.sample_conflicts().is_empty()
+                        && ui.small_button("Sample conflicts").clicked()
+                    {
+                        self.show_sample_conflicts = true;
+                        self.sample_conflict_error = None;
+                    }
                     if (!self.session.project().import_notices.is_empty()
-                        || !self.session.project().source_notices.is_empty())
+                        || !self.session.project().source_notices.is_empty()
+                        || !self.session.missing_samples().is_empty())
                         && ui.small_button("Import details").clicked()
                     {
                         self.show_import_details = true;
                     }
+                    if !self.session.missing_samples().is_empty() {
+                        ui.label(egui::RichText::new(format!("{} missing · silent", self.session.missing_samples().len())).size(12.0).color(CORAL))
+                            .on_hover_text("Missing samples play silence. Open Import details to see their saved references.");
+                    }
                     let color = if self.status_error { CORAL } else { MUTED };
-                    let status = display_paths(mixer_status(
-                        &self.status,
-                        self.status_error,
-                        self.show_mixer,
-                    ));
+                    let status = display_paths(&self.status);
                     ui.add(
                         egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
                             .truncate(),
@@ -444,20 +458,12 @@ impl MixJamApp {
             ui.add_space(12.0);
             ui.label(heading(
                 if self.session.library().samples.is_empty() {
-                    "Your next mix starts with a sound."
+                    "No sounds"
                 } else {
                     "No matching sounds"
                 },
                 17.0,
             ));
-            ui.label(
-                egui::RichText::new(if self.session.library().samples.is_empty() {
-                    "Choose a WAV folder, then drag sounds into the arrangement."
-                } else {
-                    "Try another category or library, or clear your search."
-                })
-                .color(MUTED),
-            );
             if self.session.library().samples.is_empty() {
                 if action_button(ui, "Choose WAV folder", true).clicked() {
                     self.show_libraries = true;
@@ -481,19 +487,22 @@ impl MixJamApp {
                                 &samples[row * count..((row + 1) * count).min(samples.len())]
                             {
                                 let sample = self.session.library().samples[sample_index].clone();
-                                let source = self
-                                    .sample_product(sample.id)
-                                    .map_or("User WAV", Product::label);
+                                let product = self.sample_product(sample.id);
                                 let response = ui
                                     .push_id(sample.id, |ui| {
                                         sample_button(
                                             ui,
                                             &sample,
+                                            product,
                                             self.selected_sample == Some(sample.id),
                                         )
                                     })
-                                    .inner
-                                    .on_hover_text(format!("{} / {}", source, sample.group_name));
+                                    .inner;
+                                if self.capture_view_is("sample-details")
+                                    && self.selected_sample == Some(sample.id)
+                                {
+                                    response.show_tooltip_text(sample_details(&sample, product));
+                                }
                                 if response.clicked() {
                                     self.selected_sample = Some(sample.id);
                                 }
@@ -521,7 +530,7 @@ impl MixJamApp {
             });
         });
         ui.label(
-            egui::RichText::new("Gain: 0 = silence · +1 = unity · Negative values invert polarity")
+            egui::RichText::new("0 = silence · +1 = unity · Negative gain inverts polarity")
                 .size(11.0)
                 .color(MUTED),
         );
@@ -541,58 +550,117 @@ impl MixJamApp {
                     ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
                     egui::ScrollArea::horizontal()
                         .id_salt("mixer_scroll")
-                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
                         .auto_shrink([false, false])
                         .max_height(strip_height + 16.0)
                         .show(ui, |ui| {
                             if occupied.is_empty() {
                                 ui.add_space(22.0);
-                                ui.label(heading("Add a sound to start mixing", 15.0));
-                                ui.label("Open Sounds and place a clip in the arrangement.");
-                                ui.label(egui::RichText::new("A mixer strip appears for each track that contains a clip.").color(MUTED));
+                                ui.label(heading("No tracks", 15.0));
+                                ui.label("Place a sound in the arrangement.");
                                 return;
                             }
                             ui.horizontal_top(|ui| {
                                 for &index in &occupied {
-                                    ui.scope_builder(egui::UiBuilder::new().id(("mixer_track", index)), |ui| {
-                                        ui.allocate_ui_with_layout(
-                                            Vec2::new(124.0, strip_height),
-                                            egui::Layout::top_down(egui::Align::Min),
-                                            |ui| {
-                                                ui.set_width(124.0);
-                                                ui.spacing_mut().item_spacing = Vec2::new(5.0, 3.0);
-                                                ui.spacing_mut().interact_size.y = 22.0;
-                                                ui.spacing_mut().button_padding = Vec2::new(6.0, 3.0);
-                                                let track = &mut tracks[index];
-                                                let track_name = format!("Track {}", index + 1);
-                                                ui.label(heading(&track_name, 13.0));
-                                                let (summary, detail) = mixer_sample_summary(
-                                                    self.session.project(), self.session.library().samples, index,
-                                                );
-                                                ui.add(egui::Label::new(egui::RichText::new(summary).size(11.0).color(MUTED)).truncate())
+                                    ui.scope_builder(
+                                        egui::UiBuilder::new().id(("mixer_track", index)),
+                                        |ui| {
+                                            ui.allocate_ui_with_layout(
+                                                Vec2::new(124.0, strip_height),
+                                                egui::Layout::top_down(egui::Align::Min),
+                                                |ui| {
+                                                    ui.set_width(124.0);
+                                                    ui.spacing_mut().item_spacing =
+                                                        Vec2::new(5.0, 3.0);
+                                                    ui.spacing_mut().interact_size.y = 22.0;
+                                                    ui.spacing_mut().button_padding =
+                                                        Vec2::new(6.0, 3.0);
+                                                    let track = &mut tracks[index];
+                                                    let track_name = format!("Track {}", index + 1);
+                                                    ui.label(
+                                                        egui::RichText::new(&track_name)
+                                                            .size(13.0)
+                                                            .color(TEXT),
+                                                    );
+                                                    let (summary, detail) = mixer_sample_summary(
+                                                        self.session.project(),
+                                                        self.session.library().samples,
+                                                        index,
+                                                    );
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            egui::RichText::new(summary)
+                                                                .size(11.0)
+                                                                .color(MUTED),
+                                                        )
+                                                        .truncate(),
+                                                    )
                                                     .on_hover_text(detail);
-                                                change |= gain_control(ui, &format!("{track_name} gain"), &mut track.gain, -2.0..=4.0, fader_height);
-                                                ui.spacing_mut().slider_width = 124.0;
-                                                change |= pan_control(ui, index, &mut track.pan).changed();
-                                                ui.horizontal(|ui| {
-                                                    ui.label(egui::RichText::new(pan_description(track.pan)).size(11.0));
-                                                    let reset = ui.small_button("Center");
-                                                    reset.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), format!("Center {track_name} pan")));
-                                                    if reset.on_hover_text("Reset pan to center").clicked() {
-                                                        change |= track.pan != 0.0;
-                                                        track.pan = 0.0;
-                                                    }
-                                                });
-                                                ui.horizontal(|ui| {
-                                                    change |= route_button(ui, "L", &format!("{track_name} left output"), &mut track.left_enabled).changed();
-                                                    change |= route_button(ui, "R", &format!("{track_name} right output"), &mut track.right_enabled).changed();
-                                                    if !track.left_enabled && !track.right_enabled {
-                                                        ui.label(egui::RichText::new("Muted").size(11.0).color(CORAL));
-                                                    }
-                                                });
-                                            },
-                                        );
-                                    });
+                                                    change |= gain_control(
+                                                        ui,
+                                                        &format!("{track_name} gain"),
+                                                        &mut track.gain,
+                                                        -2.0..=4.0,
+                                                        fader_height,
+                                                    );
+                                                    ui.spacing_mut().slider_width = 124.0;
+                                                    change |=
+                                                        pan_control(ui, index, &mut track.pan)
+                                                            .changed();
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(pan_description(
+                                                                track.pan,
+                                                            ))
+                                                            .size(11.0),
+                                                        );
+                                                        let reset = ui.small_button("Center");
+                                                        reset.widget_info(|| {
+                                                            egui::WidgetInfo::labeled(
+                                                                egui::WidgetType::Button,
+                                                                ui.is_enabled(),
+                                                                format!("Center {track_name} pan"),
+                                                            )
+                                                        });
+                                                        if reset
+                                                            .on_hover_text("Reset pan to center")
+                                                            .clicked()
+                                                        {
+                                                            change |= track.pan != 0.0;
+                                                            track.pan = 0.0;
+                                                        }
+                                                    });
+                                                    ui.horizontal(|ui| {
+                                                        change |= route_button(
+                                                            ui,
+                                                            "L",
+                                                            &format!("{track_name} left output"),
+                                                            &mut track.left_enabled,
+                                                        )
+                                                        .changed();
+                                                        change |= route_button(
+                                                            ui,
+                                                            "R",
+                                                            &format!("{track_name} right output"),
+                                                            &mut track.right_enabled,
+                                                        )
+                                                        .changed();
+                                                        if !track.left_enabled
+                                                            && !track.right_enabled
+                                                        {
+                                                            ui.label(
+                                                                egui::RichText::new("Muted")
+                                                                    .size(11.0)
+                                                                    .color(CORAL),
+                                                            );
+                                                        }
+                                                    });
+                                                },
+                                            );
+                                        },
+                                    );
                                     ui.separator();
                                 }
                             });
@@ -609,9 +677,10 @@ impl MixJamApp {
                         ui.spacing_mut().item_spacing = Vec2::new(5.0, 3.0);
                         ui.spacing_mut().interact_size.y = 22.0;
                         ui.spacing_mut().button_padding = Vec2::new(6.0, 3.0);
-                        ui.label(heading("Master", 13.0));
-                        ui.label(egui::RichText::new("All tracks").size(11.0).color(MUTED));
-                        change |= gain_control(ui, "Master gain", &mut gain, 0.0..=2.0, fader_height);
+                        ui.label(egui::RichText::new("Master").size(13.0).color(TEXT));
+                        ui.add_space(14.0);
+                        change |=
+                            gain_control(ui, "Master gain", &mut gain, 0.0..=2.0, fader_height);
                     },
                 );
             });
@@ -622,6 +691,7 @@ impl MixJamApp {
                 master_gain: gain,
             });
             self.apply(result);
+            ui.ctx().request_repaint();
         }
     }
 
@@ -699,13 +769,6 @@ impl MixJamApp {
                 .size(12.0)
                 .color(MUTED),
             );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new("Drag sounds here  ·  Ctrl: fine snap")
-                        .size(12.0)
-                        .color(MUTED),
-                );
-            });
         });
         ui.add_space(12.0);
         self.timeline_rect = None;
@@ -808,9 +871,18 @@ impl MixJamApp {
                             .iter()
                             .rev()
                             .find(|clip| self.clip_rect(clip, rect).contains(pos))
-                        && let Some(sample) = self.session.library().sample_by_id(clip.sample_id)
                     {
-                        response.clone().on_hover_text(&sample.name);
+                        if let Some(missing) = self.session.missing_sample(clip.sample_id) {
+                            response.clone().on_hover_text(format!(
+                                "{}\n{}\nRight-click to resolve. Import details has copyable metadata.",
+                                missing_sample_details(missing),
+                                missing_clip_details(clip)
+                            ));
+                        } else if let Some(sample) =
+                            self.session.library().sample_by_id(clip.sample_id)
+                        {
+                            response.clone().on_hover_text(&sample.name);
+                        }
                     }
                     self.timeline_drop_rect = Some(rect.intersect(ui.clip_rect()));
                     let painter = ui.painter_at(rect).with_clip_rect(canvas_clip);
@@ -834,7 +906,7 @@ impl MixJamApp {
                             Stroke::new(1.0_f32, LINE.gamma_multiply(0.6)),
                         );
                     }
-                    if let Some(track) = add_track {
+                    if add_track.is_some() {
                         let target = Rect::from_min_size(
                             Pos2::new(rect.left(), rect.top() + occupied_count as f32 * row_height),
                             Vec2::new(width, row_height),
@@ -844,7 +916,7 @@ impl MixJamApp {
                             painter.text(
                                 target.center(),
                                 Align2::CENTER_CENTER,
-                                format!("Drop a sound to add track {}", track + 1),
+                                "Drop a sound here",
                                 FontId::proportional(13.0),
                                 MUTED,
                             );
@@ -879,6 +951,7 @@ impl MixJamApp {
                                 &painter,
                                 clip_rect,
                                 sample,
+                                self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
                                 clip.gain,
                             );
@@ -930,6 +1003,22 @@ impl MixJamApp {
                                 self.selected_clips.clear();
                             }
                         }
+                    }
+                    if response.secondary_clicked() {
+                        self.context_missing_sample = response.interact_pointer_pos().and_then(|pos| {
+                            self.session.project().clips.iter().rev()
+                                .find(|clip| self.clip_rect(clip, rect).contains(pos))
+                                .and_then(|clip| self.session.missing_sample(clip.sample_id))
+                                .map(|missing| missing.id)
+                        });
+                    }
+                    if let Some(sample_id) = self.context_missing_sample {
+                        response.context_menu(|ui| {
+                            if ui.button("Resolve manually").clicked() {
+                                ui.close();
+                                self.resolve_missing_sample(sample_id);
+                            }
+                        });
                     }
                     if response.drag_started()
                         && let Some(pos) = ui.input(|i| i.pointer.press_origin())
@@ -1072,20 +1161,26 @@ impl MixJamApp {
                                 Pos2::new(x, rect.center().y),
                                 Vec2::new(19.0, row_height - 3.0),
                             );
-                            let response = ui.interact(
+                            let mut response = ui.interact(
                                 button,
                                 ui.id().with(("route", index, left)),
                                 Sense::click(),
                             );
-                            speaker(ui.painter(), button, enabled, left);
+                            let mut enabled = enabled;
                             if response.clicked() {
-                                route_change = Some((index, left, !enabled));
+                                enabled = !enabled;
+                                route_change = Some((index, left, enabled));
+                                response.mark_changed();
                             }
-                            response.on_hover_text(if left {
-                                "Left output"
-                            } else {
-                                "Right output"
+                            let label = format!("Arrangement track {} {} output", index + 1, if left { "left" } else { "right" });
+                            response.widget_info(|| {
+                                egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), enabled, &label)
                             });
+                            speaker(ui.painter(), button, enabled, left);
+                            if response.has_focus() {
+                                ui.painter().rect_stroke(button.shrink(1.0), 2.0, Stroke::new(1.0_f32, ACCENT), egui::StrokeKind::Inside);
+                            }
+                            response.on_hover_text(route_hint(&label, enabled));
                         }
                     }
                 },
@@ -1172,6 +1267,9 @@ impl MixJamApp {
                 enabled,
             });
             self.apply(result);
+            // The mixer is laid out before the arrangement. Redraw it with the
+            // new routing state even when the pointer stops after this click.
+            ui.ctx().request_repaint();
         }
         ui.add_space(3.0);
         self.selected_inspector(ui);
@@ -1188,7 +1286,7 @@ impl MixJamApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request_action(PendingAction::Close, ctx);
         }
-        if self.pending_action.is_none() {
+        if self.pending_action.is_none() && !self.sample_conflicts_open() {
             self.keyboard(ctx);
         }
         self.header(ctx);
@@ -1204,6 +1302,7 @@ impl MixJamApp {
         self.finish_drag(ctx);
         self.dialogs(ctx);
         self.tool_windows(ctx);
+        self.sample_conflicts_dialog(ctx);
         self.capture(ctx);
     }
 }
@@ -1236,7 +1335,7 @@ fn transport_position(ui: &mut egui::Ui, tick: u32) -> Response {
             rect.center(),
             Align2::CENTER_CENTER,
             &text,
-            FontId::new(23.0, egui::FontFamily::Name("Space Grotesk Bold".into())),
+            FontId::proportional(23.0),
             TEXT,
         );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
@@ -1300,7 +1399,7 @@ pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Res
         info
     });
     response.on_hover_text(format!(
-        "Track {} pan: {}",
+        "Track {} pan: {}. Pan does not enable a disabled L/R output.",
         index + 1,
         pan_description(*pan)
     ))
@@ -1332,6 +1431,13 @@ pub(super) fn mixer_sample_summary(
     let names: Vec<String> = ids
         .iter()
         .map(|id| {
+            if let Some(missing) = project
+                .missing_samples
+                .iter()
+                .find(|sample| sample.id == *id)
+            {
+                return format!("Missing: {}", missing.name);
+            }
             samples.iter().find(|sample| sample.id == *id).map_or_else(
                 || format!("Missing sound {id}"),
                 |sample| sample.name.clone(),
@@ -1521,16 +1627,18 @@ pub(super) fn configure_style(ctx: &egui::Context) {
     style
         .text_styles
         .insert(egui::TextStyle::Body, FontId::proportional(13.0));
-    style.text_styles.insert(
-        egui::TextStyle::Button,
-        FontId::new(13.0, egui::FontFamily::Name("Space Grotesk Medium".into())),
-    );
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, FontId::proportional(13.0));
     style
         .text_styles
         .insert(egui::TextStyle::Small, FontId::proportional(11.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Monospace, FontId::proportional(13.0));
     style.text_styles.insert(
         egui::TextStyle::Heading,
-        FontId::new(20.0, egui::FontFamily::Name("Space Grotesk Bold".into())),
+        FontId::new(20.0, egui::FontFamily::Name("Syncopate Bold".into())),
     );
     ctx.set_style(style);
 }
@@ -1550,6 +1658,24 @@ pub(super) fn action_button(ui: &mut egui::Ui, label: &str, active: bool) -> Res
             .stroke(Stroke::NONE)
             .min_size(Vec2::new(48.0, 30.0)),
     )
+}
+
+fn action_icon_button(
+    ui: &mut egui::Ui,
+    icons: &RailIcons,
+    icon: RailIcon,
+    label: &str,
+) -> Response {
+    let response = ui.add(
+        egui::Button::new(egui::Image::new((icons.texture_id(icon), Vec2::splat(20.0))).tint(TEXT))
+            .fill(RAISED)
+            .stroke(Stroke::NONE)
+            .min_size(Vec2::new(48.0, 30.0)),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
+    });
+    response.on_hover_text(label)
 }
 
 pub(super) fn rail_button(
@@ -1641,7 +1767,12 @@ pub(super) fn group_color(group: &str) -> Color32 {
     }
 }
 
-pub(super) fn sample_button(ui: &mut egui::Ui, sample: &Sample, selected: bool) -> Response {
+pub(super) fn sample_button(
+    ui: &mut egui::Ui,
+    sample: &Sample,
+    product: Option<Product>,
+    selected: bool,
+) -> Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::new(148.0, 46.0), Sense::click_and_drag());
     let color = group_color(&sample.group_name);
     let painter = ui.painter_at(rect);
@@ -1654,6 +1785,11 @@ pub(super) fn sample_button(ui: &mut egui::Ui, sample: &Sample, selected: bool) 
             RAISED
         },
     );
+    painter.rect_filled(
+        rect,
+        5.0,
+        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 51),
+    );
     if selected || response.has_focus() {
         painter.rect_stroke(
             rect.shrink(0.5),
@@ -1665,9 +1801,8 @@ pub(super) fn sample_button(ui: &mut egui::Ui, sample: &Sample, selected: bool) 
     let text = painter.layout_no_wrap(sample.name.clone(), FontId::proportional(12.0), TEXT);
     let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(10.0, 3.0)));
     clip.galley(rect.min + Vec2::new(10.0, 5.0), text, TEXT);
-    clip.circle_filled(rect.min + Vec2::new(12.5, 32.0), 2.5, color);
     clip.text(
-        rect.min + Vec2::new(21.0, 32.0),
+        rect.min + Vec2::new(10.0, 32.0),
         Align2::LEFT_CENTER,
         format!(
             "{}  /  {} bar{}",
@@ -1676,26 +1811,72 @@ pub(super) fn sample_button(ui: &mut egui::Ui, sample: &Sample, selected: bool) 
             if sample.bars == 1 { "" } else { "s" }
         ),
         FontId::proportional(10.0),
-        MUTED,
+        TEXT.gamma_multiply(0.8),
     );
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &sample.name)
     });
-    response.on_hover_text(format!(
-        "{}\n{} bars | {} Hz\nDouble-click to listen. Drag to a track.",
-        sample.name, sample.bars, sample.sample_rate
-    ))
+    response.on_hover_text(sample_details(sample, product))
+}
+
+pub(super) fn sample_details(sample: &Sample, product: Option<Product>) -> String {
+    let mut rows = vec![
+        sample.name.clone(),
+        format!(
+            "{} / {}",
+            product.map_or("User WAV", Product::label),
+            sample.group_name
+        ),
+        format!(
+            "{} bar{} · {} BPM",
+            sample.bars,
+            if sample.bars == 1 { "" } else { "s" },
+            sample.source_bpm
+        ),
+        format!(
+            "{} Hz · {} channel{} · {} frames",
+            sample.sample_rate,
+            sample.channels,
+            if sample.channels == 1 { "" } else { "s" },
+            sample.frame_count
+        ),
+    ];
+    if sample.sample_rate > 0 {
+        rows.push(format!(
+            "Audio duration: {:.3} s",
+            f64::from(sample.frame_count) / f64::from(sample.sample_rate)
+        ));
+    }
+    if !sample.code.is_empty() {
+        rows.push(format!("Code: {}", sample.code));
+    }
+    rows.push(format!("Project sample ID: {}", sample.id));
+    if let Some((_, native_id)) = Product::sample_key(sample.id) {
+        rows.push(format!("Native sample ID: {native_id}"));
+    }
+    if let Some(path) = &sample.wav_path {
+        rows.push(format!("WAV: {}", path.display()));
+    }
+    display_paths(&rows.join("\n"))
 }
 
 pub(super) fn draw_clip(
     painter: &egui::Painter,
     rect: Rect,
     sample: Option<&Sample>,
+    missing: Option<&MissingSample>,
     selected: bool,
     gain: f32,
 ) {
-    let color = sample.map(|s| group_color(&s.group_name)).unwrap_or(MUTED);
+    let color = if missing.is_some() {
+        RAISED
+    } else {
+        sample.map(|s| group_color(&s.group_name)).unwrap_or(MUTED)
+    };
     painter.rect_filled(rect, 3.0, color);
+    if missing.is_some() {
+        outline(painter, rect.shrink(0.5), CORAL, 1.0);
+    }
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)));
     if selected {
         painter.rect_stroke(
@@ -1705,11 +1886,15 @@ pub(super) fn draw_clip(
             egui::StrokeKind::Inside,
         );
     }
-    if let Some(sample) = sample {
+    let label = missing
+        .map(|missing| format!("Missing: {}", missing.name))
+        .or_else(|| sample.map(|sample| sample.name.clone()));
+    if let Some(label) = label {
+        let text_color = if missing.is_some() { TEXT } else { CANVAS };
         let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
         let text = clipped.layout(
             visible_clip_label(
-                &sample.name,
+                &label,
                 rect.width() - 12.0,
                 size,
                 if rect.height() < 38.0 {
@@ -1719,10 +1904,10 @@ pub(super) fn draw_clip(
                 },
             ),
             FontId::proportional(size),
-            CANVAS,
+            text_color,
             (rect.width() - 12.0).max(1.0),
         );
-        clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, CANVAS);
+        clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, text_color);
     }
     if selected {
         let y = rect.bottom() - (gain.min(2.0) / 2.0 * rect.height()).max(2.0);
@@ -1734,6 +1919,64 @@ pub(super) fn draw_clip(
             Stroke::new(1.0_f32, Color32::from_black_alpha(100)),
         );
     }
+}
+
+pub(super) fn missing_clip_details(clip: &Clip) -> String {
+    format!(
+        "Track {}: start {} ticks; length {} ticks ({:.3} bars); source offset {} frames; gain {}.",
+        clip.track + 1,
+        clip.start_tick,
+        clip.length_ticks,
+        clip.length_ticks as f64 / TICKS_PER_BAR as f64,
+        clip.offset_frames,
+        clip.gain
+    )
+}
+
+pub(super) fn missing_sample_details(missing: &MissingSample) -> String {
+    let mut rows = vec![
+        format!("Missing: {}", missing.name),
+        "Playback: silence".into(),
+        format!("Reason: {}", missing.reason),
+        format!("Project sample ID: {}", missing.id),
+    ];
+    match &missing.reference {
+        MissingReference::Native { product, native_id } => {
+            rows.push(format!("Original product: {}", product.label()));
+            rows.push(format!("Native sample ID: {native_id}"));
+        }
+        MissingReference::External { path, origin } => {
+            rows.push(format!("Original path: {}", path.display()));
+            if let Some(product) = origin {
+                rows.push(format!("Original product: {}", product.label()));
+            }
+        }
+        MissingReference::Generated {
+            product,
+            kind,
+            data,
+        } => {
+            rows.push(format!("Original product: {}", product.label()));
+            rows.push(format!("Generator: {kind}"));
+            rows.push(format!("Generator data: {data}"));
+        }
+    }
+    rows.push(format!("Source tempo: {} BPM", missing.source_bpm));
+    rows.push(format!("Trim reference rate: {} Hz", missing.sample_rate));
+    rows.push(format!(
+        "Source length: {} ticks ({:.3} bars; {})",
+        missing.nominal_ticks,
+        missing.nominal_ticks as f64 / TICKS_PER_BAR as f64,
+        if missing.length_inferred {
+            "inferred"
+        } else {
+            "known"
+        }
+    ));
+    for (name, value) in &missing.metadata {
+        rows.push(format!("{name}: {value}"));
+    }
+    display_paths(&rows.join("\n"))
 }
 
 pub(super) fn clip_label(name: &str, width: f32, font_size: f32) -> String {
@@ -1791,7 +2034,7 @@ pub(super) fn route_button(
     label: &str,
     active: &mut bool,
 ) -> Response {
-    let color = if *active { ACCENT } else { MUTED };
+    let color = route_color(*active);
     let response = ui.add(egui::Checkbox::new(
         active,
         egui::RichText::new(text).color(color),
@@ -1799,10 +2042,18 @@ pub(super) fn route_button(
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *active, label)
     });
-    response.on_hover_text(format!(
+    response.on_hover_text(route_hint(label, *active))
+}
+
+fn route_hint(label: &str, active: bool) -> String {
+    format!(
         "{label}: {}. Turn both outputs off to mute this track.",
-        if *active { "on" } else { "off" }
-    ))
+        if active { "on" } else { "off" }
+    )
+}
+
+fn route_color(active: bool) -> Color32 {
+    if active { ACCENT } else { MUTED }
 }
 
 pub(super) fn speaker(painter: &egui::Painter, rect: Rect, enabled: bool, left: bool) {
@@ -1811,7 +2062,7 @@ pub(super) fn speaker(painter: &egui::Painter, rect: Rect, enabled: bool, left: 
         Align2::CENTER_CENTER,
         if left { "L" } else { "R" },
         FontId::proportional(10.0),
-        if enabled { MUTED } else { LINE },
+        route_color(enabled),
     );
 }
 
@@ -1952,35 +2203,19 @@ pub(super) fn transport_button(
 fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     let fallback = fonts.families[&egui::FontFamily::Proportional].clone();
-    let families: [(&str, [&[u8]; 3]); 3] = [
+    let families: [(&str, &[&[u8]]); 2] = [
         (
-            "Space Grotesk",
-            [
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Regular-latin.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Regular-latin-ext.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Regular-vietnamese.ttf"),
-            ],
+            "Inter Medium",
+            &[include_bytes!("../../assets/fonts/Inter-Medium.ttf")],
         ),
         (
-            "Space Grotesk Medium",
-            [
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Medium-latin.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Medium-latin-ext.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Medium-vietnamese.ttf"),
-            ],
-        ),
-        (
-            "Space Grotesk Bold",
-            [
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Bold-latin.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Bold-latin-ext.ttf"),
-                include_bytes!("../../assets/fonts/SpaceGrotesk-Bold-vietnamese.ttf"),
-            ],
+            "Syncopate Bold",
+            &[include_bytes!("../../assets/fonts/Syncopate-Bold.ttf")],
         ),
     ];
     for (family, subsets) in families {
         let mut names = Vec::new();
-        for (index, bytes) in subsets.into_iter().enumerate() {
+        for (index, &bytes) in subsets.iter().enumerate() {
             let name = format!("{family}-{index}");
             fonts
                 .font_data
@@ -1991,8 +2226,11 @@ fn configure_fonts(ctx: &egui::Context) {
         fonts
             .families
             .insert(egui::FontFamily::Name(family.into()), names.clone());
-        if family == "Space Grotesk" {
-            fonts.families.insert(egui::FontFamily::Proportional, names);
+        if family == "Inter Medium" {
+            fonts
+                .families
+                .insert(egui::FontFamily::Proportional, names.clone());
+            fonts.families.insert(egui::FontFamily::Monospace, names);
         }
     }
     ctx.set_fonts(fonts);

@@ -1,10 +1,12 @@
-# Native rail icons
+# Native UI icons
 
-The native right-hand rail uses the PNG files in this directory. Each PNG is
-96 by 96 pixels with a transparent background and navy (`#05092a`) strokes.
+The native right-hand rail and the header Undo, Redo, and Help actions use the PNG
+files in this directory. Each PNG is 96 by 96 pixels with a transparent
+background and navy (`#05092a`) strokes.
 The SVG files are the editable source. All use a `0 0 24 24` view box,
 1.7-point strokes, round caps and round joins. The UI supplies each action's
 name as a tooltip and accessible name.
+Help reuses the library artwork and retains its own action name.
 
 ## Origin
 
@@ -22,6 +24,8 @@ license status. This adaptation does not assign a new license to donor work.
 | `erase` | Exact donor `erase` path |
 | `delete` | Exact donor `trash` path |
 | `effects` | Exact donor `inspector` waveform path |
+| `undo` | Exact donor `undo` path |
+| `redo` | Exact donor `redo` path |
 | `save-as` | Donor `save` outline, opened at lower right for a new pencil |
 | `import` | Donor `export` tray with its arrow reversed |
 | `open` | New open-folder path in the donor family |

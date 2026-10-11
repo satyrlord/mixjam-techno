@@ -26,6 +26,7 @@
 /tools/runtime/*
 !/tools/runtime/cargo.ps1
 !/tools/runtime/install-rust.ps1
+!/tools/runtime/verify-large-mix.py
 
 # Samples and evidence
 /evidence/

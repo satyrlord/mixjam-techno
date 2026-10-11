@@ -4,7 +4,8 @@ A native Rust loop sequencer for Windows. Arrange WAV samples on up to 64 tracks
 at 120, 140, 160, or 180 BPM, mix them, and export stereo WAV. The editor also
 opens MixJam v7 `.mixjam` projects and several classic `.mix` song formats.
 
-The interface uses a dark graphite workspace and bundled Space Grotesk fonts.
+The interface uses a dark graphite workspace, bundled Syncopate in uppercase
+for branding and titles, and Inter Medium for all other application text.
 Transport sits above the arrangement. Sounds and Mixer share the lower panel;
 sample categories, search, and library filters stay together.
 
@@ -23,11 +24,16 @@ On first launch, select **Libraries → Choose WAV folder**. The folder can have
 WAV files in subfolders. The scan runs in the background. The Libraries window
 shows progress and has a Cancel button. You can use the window during the scan.
 The application changes the active folder when the scan is complete. It caches
-decoded results and decodes changed files again on a later scan.
+probe results and decodes changed files again on a later scan. Unchanged scans
+leave the cache file intact. Scans process WAV audio as a stream to limit memory
+use. Expand **Folder tempos** to see each folder's source tempo; long lists scroll.
 
 The application identifies extracted product samples by their audio, regardless
-of filename. These samples keep their original tempo and length. For other WAVs,
-the application uses loop lengths to find a tempo for each folder. If it cannot
+of filename. These samples keep their original tempo and length. A folder also
+uses original source tempo evidence when at least three WAVs, covering at least
+75% of the folder, match original audio and all known tempos agree. This resolves
+the Rave 180 BPM and HipHop 2/3 90 BPM octave ambiguity without using folder names.
+For other folders, the application uses loop lengths to find a tempo. If it cannot
 find a tempo, it uses the fallback BPM from Libraries (140 by default). A loop
 length can fit half or double its actual tempo. The application then prefers
 88 to 176 BPM unless the fallback names the other tempo. Set the fallback to
@@ -61,6 +67,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   reverse polarity. Edit the gain value for an exact setting, or select Unity
   to reset it. Pan shows left, center, or right; select Center to reset it.
   L and R enable each output. Both off shows Muted.
+  The lane and mixer L/R controls mirror each other. Changing these controls
+  does not change pan.
 - Use Import for WAV files and enter the known source tempo.
 - Use the sample tools to trim, change pitch, stretch tempo, or apply effects.
   Save the result as a new WAV sample.
@@ -79,6 +87,35 @@ profiles, named `d1`, `d2`, `d3`, `d4`, `h1`, `t1`, `t2`, and `t3`. Import selec
 the nearest project tempo and shows a notice when the tempo changes. Songs that
 use more than 64 tracks are rejected.
 
+Classic `.mix` files can be up to 500 MB (500,000,000 bytes). Supported embedded
+WAVs are imported automatically, so their original external files are not needed.
+Songs can also reference factory samples from the selected library. Unavailable
+audio appears as silent missing-sample placeholders at the saved or catalog length.
+An inferred length is marked when the source duration is unknown. Hover over a
+placeholder or open Import details to inspect the original metadata and reason.
+Right-click a placeholder and select **Resolve manually** to choose a WAV file.
+The choice resolves every identical missing reference across all tracks. Original
+positions, spans, and musical trim offsets are retained. Cancel makes no change.
+Imported audio is retained in the application's data folder for saved projects.
+Keep that folder available when you reopen them. File size alone does not show
+whether a song contains embedded audio.
+
+Older app releases also saved version-7 `.mixjam` files with genre-based sample
+paths. If the selected folder is `eJay\_original`, the importer can recover those
+references from the containing `eJay` folder, including moved category folders.
+Exact relative paths take priority. If several files match, the first match loads
+and a **Sample conflicts** modal shows the choices. Select another path to update
+all instances in the song immediately. Use **Play song** to compare the result,
+then **Keep choices**. Esc hides the window without confirming. Reopen the
+resolver from **Sample conflicts** in the status bar. This conflict behavior applies to every supported project format and
+supports undo/redo and native JSON save/reopen.
+Resolved paths survive native JSON save/reopen. The original `.mixjam` is unchanged.
+
+Dance 2 imports can also contain packed PXD samples. The reader decodes embedded
+PXD data and retains it as WAV audio. Select the common parent sample folder when
+a song uses sounds from earlier products. Dance 3 can reference Dance 2 sounds;
+the supported Techno 2 compatibility bank uses Dance 2 IDs 1 through 1957.
+
 A `.mix` song stores numeric sample IDs. The application needs locally generated
 sample identity catalogs to resolve them. This repository does not contain those
 catalogs. Each catalog entry has a digest of the original sample's audio. The
@@ -91,8 +128,14 @@ its available digest differs, even if its name and length match. The import
 error names that WAV.
 
 Without catalogs, the build embeds empty catalogs. WAV folders, MixJam projects,
-and native JSON still work, but `.mix` import cannot resolve its samples. To
+and native JSON still work; unresolved `.mix` sources open as placeholders. To
 embed catalogs, put `d1.json` through `t3.json` in `assets/catalog/` and rebuild.
+The optional `source-tempos.json` adds HipHop 2/3 tempo identities. It is
+generated from the original media by the owner-local
+`examples/export_source_tempos.rs` (the `examples/` folder is not published),
+with `MIXJAM_TECHNO_MEDIA_ROOT` set, then rebuilt into the executable. The source products' shipped help
+states that all their samples were recorded at 90 BPM. This metadata adds tempo
+evidence; it does not add HipHop song-format support.
 
 ## Build and checks
 
@@ -112,6 +155,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
 Mixer cases cover ordinary, 64-track, empty, and signed-gain/routing states.
+The capture set also covers every in-app dialog and tool window, expanded effects
+and provider settings, and missing-source processing states. Recorded-take captures
+check the window layout with a synthetic presentation state; they do not record audio.
 
 ## Headless commands
 

@@ -2,7 +2,10 @@
 pub use crate::{
     audio::Pcm,
     effects::EffectsState,
-    engine::{Clip, Project, SUPPORTED_BPMS, TICKS_PER_BAR, TRACK_COUNT, Track},
+    engine::{
+        Clip, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
+        TICKS_PER_BAR, TRACK_COUNT, Track,
+    },
     library::Sample,
     products::Product,
     synth::StepSynthState,
@@ -260,6 +263,279 @@ impl Session {
     pub fn project(&self) -> &Project {
         &self.editor.project
     }
+    pub fn missing_samples(&self) -> &[MissingSample] {
+        &self.project().missing_samples
+    }
+    pub fn missing_sample(&self, id: u32) -> Option<&MissingSample> {
+        self.project().missing_sample(id)
+    }
+    pub fn sample_conflicts(&self) -> &[SampleConflict] {
+        &self.project().sample_conflicts
+    }
+    /// Replace every placement of one ambiguous reference with the chosen WAV.
+    pub fn resolve_sample_conflict(
+        &mut self,
+        conflict_index: usize,
+        candidate_index: usize,
+    ) -> Result<(), String> {
+        self.require_idle_recording()?;
+        let conflict = self
+            .sample_conflicts()
+            .get(conflict_index)
+            .ok_or("The sample conflict no longer exists.")?
+            .clone();
+        let path = conflict
+            .candidates
+            .get(candidate_index)
+            .ok_or("The selected sample choice no longer exists.")?;
+        let path = std::fs::canonicalize(path)
+            .map_err(|error| format!("Cannot open the selected sample: {error}"))?;
+        let mut project = self.project().clone();
+        let mut next_id = project
+            .imported_samples
+            .iter()
+            .map(|sample| sample.id)
+            .chain(project.missing_samples.iter().map(|sample| sample.id))
+            .chain(self.library.samples.iter().map(|sample| sample.id))
+            .max()
+            .unwrap_or(0)
+            .max(crate::products::IMPORTED_ID_START - 1);
+        for id in &conflict.sample_ids {
+            let missing = project.missing_sample(*id);
+            let original = project
+                .imported_samples
+                .iter()
+                .find(|sample| sample.id == *id);
+            let known = self.library.sample_by_id(*id);
+            let (mut imported, previous_rate, preserve_frames) = if let Some(source) = original {
+                let rate = source.source_sample_rate.or_else(|| {
+                    known
+                        .filter(|sample| sample.wav_path.as_deref() == Some(source.path.as_path()))
+                        .map(|sample| sample.sample_rate)
+                });
+                (source.clone(), rate.unwrap_or(44_100), rate.is_none())
+            } else if let Some(source) = missing {
+                (
+                    crate::engine::ImportedSample {
+                        id: *id,
+                        name: source.name.clone(),
+                        group_name: source
+                            .metadata
+                            .get("group_name")
+                            .cloned()
+                            .unwrap_or_else(|| "Resolved samples".into()),
+                        path: path.clone(),
+                        source_bpm: source.source_bpm,
+                        source_sample_rate: Some(source.sample_rate),
+                        origin: match &source.reference {
+                            MissingReference::External { origin, .. } => *origin,
+                            _ => None,
+                        },
+                    },
+                    source.sample_rate,
+                    source
+                        .metadata
+                        .get("Trim rate policy")
+                        .is_some_and(|policy| policy == "preserve-frames"),
+                )
+            } else if let Some(source) = known {
+                (
+                    crate::engine::ImportedSample {
+                        id: *id,
+                        name: source.name.clone(),
+                        group_name: source.group_name.clone(),
+                        path: path.clone(),
+                        source_bpm: source.source_bpm,
+                        source_sample_rate: Some(source.sample_rate),
+                        origin: None,
+                    },
+                    source.sample_rate,
+                    false,
+                )
+            } else {
+                return Err("The sample conflict source is unavailable.".into());
+            };
+            let previous_bpm = imported.source_bpm;
+            if *id < crate::products::IMPORTED_ID_START {
+                next_id = next_id
+                    .checked_add(1)
+                    .ok_or("Imported sample ID limit reached.")?;
+                imported.id = next_id;
+            }
+            imported.path = path.clone();
+            let ready = Library::check_import(&imported)?;
+            if let Some(ticks) = conflict.source_spans.get(id) {
+                imported.source_bpm = f64::from(*ticks) * 240.0 * f64::from(ready.sample_rate)
+                    / (f64::from(TICKS_PER_BAR) * f64::from(ready.frame_count));
+            }
+            imported.source_sample_rate = Some(ready.sample_rate);
+            for clip in project
+                .clips
+                .iter_mut()
+                .filter(|clip| clip.sample_id == *id)
+            {
+                let offset = if preserve_frames {
+                    f64::from(clip.offset_frames)
+                } else {
+                    (f64::from(clip.offset_frames) * f64::from(ready.sample_rate)
+                        / f64::from(previous_rate)
+                        * previous_bpm
+                        / imported.source_bpm)
+                        .round()
+                };
+                if !offset.is_finite() || !(0.0..=f64::from(u32::MAX)).contains(&offset) {
+                    return Err(
+                        "The selected sample trim exceeds the supported frame range.".into(),
+                    );
+                }
+                clip.sample_id = imported.id;
+                clip.offset_frames = offset as u32;
+            }
+            let updated = &mut project.sample_conflicts[conflict_index];
+            for source_id in &mut updated.sample_ids {
+                if source_id == id {
+                    *source_id = imported.id;
+                }
+            }
+            if imported.id != *id
+                && let Some(span) = updated.source_spans.remove(id)
+            {
+                updated.source_spans.insert(imported.id, span);
+            }
+            project.imported_samples.retain(|sample| sample.id != *id);
+            project.missing_samples.retain(|sample| sample.id != *id);
+            project.imported_samples.push(imported);
+        }
+        project.sample_conflicts[conflict_index].selected = candidate_index;
+        project.sample_conflicts[conflict_index].confirmed = true;
+        project.validate()?;
+        let mut library = (*self.library).clone();
+        library.apply_imports(&project.imported_samples)?;
+        library.reserve_missing_samples(&project.missing_samples);
+        self.editor.transact(|current| *current = project)?;
+        self.library = Arc::new(library);
+        self.changed();
+        Ok(())
+    }
+    /// Accept the current choices as one undoable action.
+    pub fn confirm_sample_conflicts(&mut self) -> Result<(), String> {
+        self.require_idle_recording()?;
+        if self
+            .sample_conflicts()
+            .iter()
+            .all(|conflict| conflict.confirmed)
+        {
+            return Ok(());
+        }
+        self.editor.transact(|project| {
+            for conflict in &mut project.sample_conflicts {
+                conflict.confirmed = true;
+            }
+        })?;
+        self.changed();
+        Ok(())
+    }
+    /// Bind every occurrence of one retained source to an explicitly chosen WAV.
+    /// Manual choices receive imported identities, never verified factory identities.
+    pub fn resolve_missing_sample(&mut self, id: u32, path: &Path) -> Result<(), String> {
+        self.require_idle_recording()?;
+        let selected = self
+            .missing_sample(id)
+            .ok_or("The missing sample no longer exists.")?
+            .clone();
+        let path = std::fs::canonicalize(path)
+            .map_err(|error| format!("Cannot open the selected sample: {error}"))?;
+        let path = crate::project_io::retain_manual_wave(&path, &self.settings_root)?;
+        let mut project = self.project().clone();
+        let matched: Vec<_> = project
+            .missing_samples
+            .iter()
+            .filter(|sample| same_missing_reference(&selected.reference, &sample.reference))
+            .cloned()
+            .collect();
+        let mut next_id = project
+            .imported_samples
+            .iter()
+            .map(|sample| sample.id)
+            .chain(project.missing_samples.iter().map(|sample| sample.id))
+            .chain(self.library.samples.iter().map(|sample| sample.id))
+            .max()
+            .unwrap_or(0)
+            .max(crate::products::IMPORTED_ID_START - 1);
+        for missing in matched {
+            let new_id = if missing.id >= crate::products::IMPORTED_ID_START {
+                missing.id
+            } else {
+                next_id = next_id
+                    .checked_add(1)
+                    .ok_or("Imported sample ID limit reached.")?;
+                next_id
+            };
+            let mut imported = crate::engine::ImportedSample {
+                id: new_id,
+                name: missing.name.clone(),
+                group_name: missing
+                    .metadata
+                    .get("group_name")
+                    .filter(|name| !name.trim().is_empty())
+                    .cloned()
+                    .unwrap_or_else(|| "Resolved samples".into()),
+                path: path.clone(),
+                source_bpm: missing.source_bpm,
+                source_sample_rate: None,
+                origin: None,
+            };
+            let ready = Library::check_import(&imported)?;
+            imported.source_bpm =
+                missing.resolved_source_bpm(ready.frame_count, ready.sample_rate)?;
+            imported.source_sample_rate = Some(ready.sample_rate);
+            for clip in project
+                .clips
+                .iter_mut()
+                .filter(|clip| clip.sample_id == missing.id)
+            {
+                let offset = if clip.offset_frames == 0
+                    || missing
+                        .metadata
+                        .get("Trim rate policy")
+                        .is_some_and(|policy| policy == "preserve-frames")
+                {
+                    f64::from(clip.offset_frames)
+                } else {
+                    (f64::from(clip.offset_frames) * f64::from(ready.sample_rate)
+                        / f64::from(missing.sample_rate)
+                        * (missing.source_bpm / imported.source_bpm))
+                        .round()
+                };
+                if !offset.is_finite() || !(0.0..=f64::from(u32::MAX)).contains(&offset) {
+                    return Err(
+                        "The selected sample trim exceeds the supported frame range.".into(),
+                    );
+                }
+                clip.sample_id = new_id;
+                clip.offset_frames = offset as u32;
+            }
+            project.imported_samples.push(imported);
+            project
+                .missing_samples
+                .retain(|sample| sample.id != missing.id);
+            for conflict in &mut project.sample_conflicts {
+                conflict.sample_ids.retain(|id| *id != missing.id);
+                conflict.source_spans.remove(&missing.id);
+            }
+        }
+        project
+            .sample_conflicts
+            .retain(|conflict| !conflict.sample_ids.is_empty());
+        project.validate()?;
+        let mut library = (*self.library).clone();
+        library.apply_imports(&project.imported_samples)?;
+        library.reserve_missing_samples(&project.missing_samples);
+        self.editor.transact(|current| *current = project)?;
+        self.library = Arc::new(library);
+        self.changed();
+        Ok(())
+    }
     pub fn library(&self) -> LibraryView<'_> {
         LibraryView {
             samples: &self.library.samples,
@@ -319,11 +595,18 @@ impl Session {
                     .iter()
                     .find(|clip| clip.id == *id)
                     .ok_or("The clip does not exist.")?;
-                let sample = self
-                    .library
-                    .sample_by_id(clip.sample_id)
-                    .ok_or("The sample is unavailable.")?;
-                if *offset_frames > sample.frame_count.saturating_sub(1) {
+                let max_offset = if let Some(sample) = self.missing_sample(clip.sample_id) {
+                    (f64::from(sample.nominal_ticks) * f64::from(sample.sample_rate) * 240.0
+                        / sample.source_bpm
+                        / f64::from(TICKS_PER_BAR))
+                    .ceil() as u32
+                } else {
+                    self.library
+                        .sample_by_id(clip.sample_id)
+                        .ok_or("The sample is unavailable.")?
+                        .frame_count
+                };
+                if *offset_frames > max_offset.saturating_sub(1) {
                     return Err("The trim start must be within the source audio.".into());
                 }
             }
@@ -426,7 +709,7 @@ impl Session {
         }
         let mut library = (*self.library).clone();
         let result = library.apply_imports(&self.project().imported_samples).and_then(|()| {
-            if let Some(clip) = self.project().clips.iter().find(|clip| library.sample_by_id(clip.sample_id).is_none()) {
+            if let Some(clip) = self.project().clips.iter().find(|clip| library.sample_by_id(clip.sample_id).is_none() && self.project().missing_sample(clip.sample_id).is_none()) {
                 return Err(format!("Cannot restore this edit because sample {} is unavailable. Add its sample library and try again.", clip.sample_id));
             } Ok(())
         });
@@ -439,6 +722,7 @@ impl Session {
             return Err(error);
         }
         self.editor.project.libraries = library.bindings().to_vec();
+        library.reserve_missing_samples(&self.project().missing_samples);
         self.library = Arc::new(library);
         self.changed();
         Ok(true)
@@ -625,7 +909,9 @@ impl Session {
                 );
                 // Keep the probes of a failed or cancelled scan for the next one.
                 // A cache that cannot be written only costs that scan time.
-                let _ = crate::project_io::save_scan_cache(&settings_root, &cache);
+                if cache.has_changes() {
+                    let _ = crate::project_io::save_scan_cache(&settings_root, &cache);
+                }
                 let _ = sender.send(result);
             })
             .map_err(|error| format!("Cannot start the sample folder scan: {error}"))?;
@@ -724,7 +1010,7 @@ impl Session {
                 if let Some((path, _)) = pending {
                     if project_changed {
                         notice.push_str(&format!(
-                            " {} was not opened because the current mix changed or has an unsaved take. Open the song when you are ready.",
+                            " {} was not opened because the current mix changed or has an unsaved take.",
                             path.display()
                         ));
                     } else {
@@ -737,8 +1023,6 @@ impl Session {
                             }
                         }
                     }
-                } else if warnings.is_empty() {
-                    notice.push_str(" Choose a sound or open a song.");
                 }
                 self.notice = Some((notice, error));
             }
@@ -758,6 +1042,7 @@ impl Session {
         source_bpm: f64,
     ) -> Result<u32, String> {
         let mut library = (*self.library).clone();
+        library.reserve_missing_samples(&self.project().missing_samples);
         let imported = library.import_wav_with_tempo(path, None, group, source_bpm)?;
         let id = imported.id;
         self.editor.transact(|project| {
@@ -794,6 +1079,7 @@ impl Session {
             group_name: group.trim().to_string(),
             path: path.to_path_buf(),
             source_bpm,
+            source_sample_rate: None,
             origin: None,
         })?;
         if pcm.frames() == 0 {
@@ -803,6 +1089,9 @@ impl Session {
         self.register_file(path, group, source_bpm)
     }
     pub fn source_pcm(&self, id: Option<u32>) -> Result<Pcm, String> {
+        if id.is_some_and(|id| self.missing_sample(id).is_some()) {
+            return Err("This sample is missing. Select a folder with its source audio.".into());
+        }
         self.library
             .read_pcm(id.ok_or("Choose a sound in the palette first.")?)
     }
@@ -903,7 +1192,7 @@ impl Session {
                 match self.render_worker.request(request) {
                     Ok(()) => {
                         self.requested_revision = Some(self.revision);
-                        self.message("Preparing mix audio. You can continue editing.");
+                        self.message("Preparing mix audio.");
                     }
                     Err(error) => {
                         self.wants_playback = false;
@@ -930,7 +1219,7 @@ impl Session {
             Ok(()) => {
                 self.previewing = false;
                 self.seek_pending = false;
-                self.message("Playing mix. Space pauses playback.");
+                self.message("Playing mix.");
             }
             Err(error) => {
                 self.wants_playback = false;
@@ -1173,6 +1462,30 @@ impl Session {
     }
 }
 
+fn same_missing_reference(left: &MissingReference, right: &MissingReference) -> bool {
+    match (left, right) {
+        (
+            MissingReference::External { path: left, .. },
+            MissingReference::External { path: right, .. },
+        ) => {
+            let normalized = |path: &Path| {
+                let path = path.to_string_lossy().replace('\\', "/").to_lowercase();
+                let path = if let Some(unc) = path.strip_prefix("//?/unc/") {
+                    format!("//{unc}")
+                } else {
+                    path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+                };
+                path.split('/')
+                    .filter(|part| !part.is_empty() && *part != ".")
+                    .collect::<Vec<_>>()
+                    .join("/")
+            };
+            normalized(left) == normalized(right)
+        }
+        _ => left == right,
+    }
+}
+
 fn duration_ticks(frames: u64, rate: u32, bpm: f64) -> u32 {
     (frames as f64 * bpm / rate as f64 / 240.0 * TICKS_PER_BAR as f64)
         .round()
@@ -1182,6 +1495,349 @@ fn duration_ticks(frames: u64, rate: u32, bpm: f64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identical_missing_paths_include_windows_verbatim_spellings() {
+        let reference = |path: &str| MissingReference::External {
+            path: path.into(),
+            origin: None,
+        };
+        assert!(same_missing_reference(
+            &reference(r"C:\Lost\Lead.wav"),
+            &reference(r"\\?\c:\lost\lead.WAV")
+        ));
+        assert!(same_missing_reference(
+            &reference(r"\\server\share\Lead.wav"),
+            &reference(r"\\?\UNC\SERVER\SHARE\lead.wav")
+        ));
+        assert!(!same_missing_reference(
+            &reference(r"C:\Lost\Lead.wav"),
+            &reference(r"C:\Other\Lead.wav")
+        ));
+    }
+    fn manual_fixture_dir() -> PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "mixjam-manual-resolution-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+    fn conflict_fixture() -> (Session, PathBuf) {
+        let root = manual_fixture_dir();
+        let first = root.join("first.wav");
+        let second = root.join("second.wav");
+        for (path, rate, frames, value) in [
+            (&first, 22_050, 22_050, 0.25),
+            (&second, 44_100, 88_200, -0.25),
+        ] {
+            Pcm {
+                sample_rate: rate,
+                channels: 1,
+                samples: vec![value; frames],
+            }
+            .write_wav(path)
+            .unwrap();
+        }
+        let first = std::fs::canonicalize(first).unwrap();
+        let second = std::fs::canonicalize(second).unwrap();
+        let sources: Vec<_> = [256, 512]
+            .into_iter()
+            .enumerate()
+            .map(|(index, ticks)| crate::engine::ImportedSample {
+                id: 1_000_000 + index as u32,
+                name: "Lead".into(),
+                group_name: "MixJam".into(),
+                path: first.clone(),
+                source_bpm: f64::from(ticks) * 240.0 / f64::from(TICKS_PER_BAR),
+                source_sample_rate: Some(22_050),
+                origin: None,
+            })
+            .collect();
+        let mut library = Library::empty();
+        library.apply_imports(&sources).unwrap();
+        let project = Project {
+            imported_samples: sources,
+            sample_conflicts: vec![SampleConflict {
+                reference: "Old/lead.wav".into(),
+                sample_ids: vec![1_000_000, 1_000_001],
+                candidates: vec![first, second],
+                selected: 0,
+                confirmed: false,
+                source_spans: [(1_000_000, 256), (1_000_001, 512)].into(),
+            }],
+            clips: [1_000_000, 1_000_001, 1_000_000]
+                .into_iter()
+                .enumerate()
+                .map(|(index, id)| Clip {
+                    id: index as u64 + 1,
+                    sample_id: id,
+                    track: index * 4,
+                    start_tick: 17,
+                    length_ticks: 256,
+                    offset_frames: 11_025,
+                    gain: 0.75,
+                })
+                .collect(),
+            ..Project::default()
+        };
+        (Session::headless(Arc::new(library), project).unwrap(), root)
+    }
+    #[test]
+    fn conflict_switch_updates_all_instances_and_preserves_musical_trims_with_history() {
+        let (mut session, root) = conflict_fixture();
+        let original = session.project().clone();
+        assert_eq!(session.sample_conflicts()[0].selected, 0);
+        assert!(!session.sample_conflicts()[0].confirmed);
+        assert!(
+            audio::render_project(session.project(), &session.library)
+                .unwrap()
+                .samples
+                .iter()
+                .any(|sample| *sample > 0.0)
+        );
+        let revision = session.revision;
+        session.resolve_sample_conflict(0, 1).unwrap();
+        assert!(session.unsaved());
+        assert!(session.revision > revision);
+        assert!(session.render_dirty);
+        let chosen = &session.sample_conflicts()[0];
+        assert_eq!(chosen.selected, 1);
+        assert!(chosen.confirmed);
+        for source in &session.project().imported_samples {
+            assert_eq!(source.path, chosen.candidates[1]);
+            assert_eq!(source.source_sample_rate, Some(44_100));
+            assert_eq!(
+                source.source_bpm,
+                if source.id == 1_000_000 { 120.0 } else { 240.0 }
+            );
+        }
+        for (before, after) in original.clips.iter().zip(&session.project().clips) {
+            assert_eq!(after.offset_frames, 44_100);
+            let mut expected = before.clone();
+            expected.offset_frames = 44_100;
+            assert_eq!(after, &expected);
+        }
+        assert!(
+            audio::render_project(session.project(), &session.library)
+                .unwrap()
+                .samples
+                .iter()
+                .any(|sample| *sample < 0.0)
+        );
+        let changed = session.project().clone();
+        let encoded = serde_json::to_vec(&changed).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Project>(&encoded).unwrap(),
+            changed
+        );
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &original);
+        assert!(session.history_step(true).unwrap());
+        assert_eq!(session.project(), &changed);
+        session.resolve_sample_conflict(0, 0).unwrap();
+        assert_eq!(session.project().clips, original.clips);
+        for path in &original.sample_conflicts[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(root).unwrap();
+    }
+    #[test]
+    fn t1_conflict_switch_preserves_decoder_on_return_and_missing_source_recovery() {
+        let (base, root) = conflict_fixture();
+        let mut project = base.project().clone();
+        let candidates = project.sample_conflicts[0].candidates.clone();
+        // Distinct stereo lanes and source rates exercise the T1 WAV decoder.
+        for (path, rate, left, right) in [
+            (&candidates[0], 22_050, 0.25, -0.75),
+            (&candidates[1], 44_100, -0.5, 0.125),
+        ] {
+            Pcm {
+                sample_rate: rate,
+                channels: 2,
+                samples: [left, right].repeat(rate as usize),
+            }
+            .write_wav(path)
+            .unwrap();
+        }
+        project.sample_conflicts[0].source_spans.clear();
+        for source in &mut project.imported_samples {
+            source.group_name = "Techno 1".into();
+            source.source_bpm = 140.0;
+            source.source_sample_rate = Some(44_100);
+            source.origin = Some(Product::T1);
+        }
+        let mut library = Library::empty();
+        library.apply_imports(&project.imported_samples).unwrap();
+        let mut session = Session::headless(Arc::new(library), project.clone()).unwrap();
+        let original = audio::render_project(session.project(), &session.library).unwrap();
+        assert!(original.samples.iter().any(|sample| *sample != 0.0));
+        session.resolve_sample_conflict(0, 1).unwrap();
+        assert!(
+            session
+                .project()
+                .imported_samples
+                .iter()
+                .all(|source| source.origin == Some(Product::T1))
+        );
+        let alternative = audio::render_project(session.project(), &session.library).unwrap();
+        assert_ne!(alternative.samples, original.samples);
+        session.resolve_sample_conflict(0, 0).unwrap();
+        assert_eq!(session.project().clips, project.clips);
+        let returned = audio::render_project(session.project(), &session.library).unwrap();
+        assert_eq!(returned.sample_rate, original.sample_rate);
+        assert_eq!(returned.channels, original.channels);
+        assert_eq!(returned.samples, original.samples);
+
+        let mut missing_project = session.project().clone();
+        let unavailable = missing_project.imported_samples.remove(0);
+        missing_project
+            .missing_samples
+            .push(MissingSample::external(
+                &unavailable,
+                256,
+                "Unavailable source.".into(),
+            ));
+        let mut missing_library = Library::empty();
+        missing_library
+            .apply_imports(&missing_project.imported_samples)
+            .unwrap();
+        missing_library.reserve_missing_samples(&missing_project.missing_samples);
+        let mut missing_session =
+            Session::headless(Arc::new(missing_library), missing_project).unwrap();
+        missing_session.resolve_sample_conflict(0, 1).unwrap();
+        assert!(missing_session.missing_samples().is_empty());
+        assert!(
+            missing_session
+                .project()
+                .imported_samples
+                .iter()
+                .all(|source| source.origin == Some(Product::T1))
+        );
+        for path in &candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn deleting_conflict_placements_prunes_choices_and_spans_with_history() {
+        let (mut session, root) = conflict_fixture();
+        let original = session.project().clone();
+        session.delete(2).unwrap();
+        assert_eq!(session.sample_conflicts().len(), 1);
+        assert_eq!(session.sample_conflicts()[0].sample_ids, vec![1_000_000]);
+        assert_eq!(
+            session.sample_conflicts()[0].source_spans,
+            [(1_000_000, 256)].into()
+        );
+        assert!(!session.sample_conflicts()[0].confirmed);
+        let partial = session.project().clone();
+        session.edit(EditCommand::DeleteClips(vec![1, 3])).unwrap();
+        assert!(session.project().clips.is_empty());
+        assert!(session.sample_conflicts().is_empty());
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &partial);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &original);
+        assert!(session.history_step(true).unwrap());
+        assert_eq!(session.project(), &partial);
+        assert!(session.history_step(true).unwrap());
+        assert!(session.sample_conflicts().is_empty());
+        for path in &original.sample_conflicts[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_conflict_choice_is_atomic_and_accepting_defaults_is_undoable() {
+        let (mut session, root) = conflict_fixture();
+        let original = session.project().clone();
+        let revision = session.revision;
+        assert!(session.resolve_sample_conflict(9, 0).is_err());
+        assert!(session.resolve_sample_conflict(0, 9).is_err());
+        std::fs::write(&original.sample_conflicts[0].candidates[1], b"invalid WAV").unwrap();
+        assert!(session.resolve_sample_conflict(0, 1).is_err());
+        assert_eq!(session.project(), &original);
+        assert_eq!(session.revision, revision);
+        assert!(!session.unsaved());
+        assert!(!session.history_step(false).unwrap());
+        session.confirm_sample_conflicts().unwrap();
+        assert!(session.sample_conflicts()[0].confirmed);
+        assert_eq!(session.sample_conflicts()[0].selected, 0);
+        assert_eq!(session.project().clips, original.clips);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &original);
+        assert!(session.history_step(true).unwrap());
+        assert!(session.sample_conflicts()[0].confirmed);
+        for path in &original.sample_conflicts[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(root).unwrap();
+    }
+    #[test]
+    fn conflict_choice_restores_native_missing_source_as_import_without_copying() {
+        let (base, root) = conflict_fixture();
+        let mut missing = MissingSample::native(
+            Product::T2,
+            42,
+            "Lead".into(),
+            140.0,
+            256,
+            false,
+            "Missing source.".into(),
+        )
+        .unwrap();
+        missing.sample_rate = 22_050;
+        let candidates = base.sample_conflicts()[0].candidates.clone();
+        let project = Project {
+            missing_samples: vec![missing],
+            sample_conflicts: vec![SampleConflict {
+                reference: "Native lead".into(),
+                sample_ids: vec![42],
+                candidates: candidates.clone(),
+                selected: 0,
+                confirmed: false,
+                source_spans: Default::default(),
+            }],
+            clips: vec![Clip {
+                id: 1,
+                sample_id: 42,
+                track: 0,
+                start_tick: 17,
+                length_ticks: 256,
+                offset_frames: 11_025,
+                gain: 0.75,
+            }],
+            ..Project::default()
+        };
+        let mut session = Session::headless(Arc::new(Library::empty()), project.clone()).unwrap();
+        session.resolve_sample_conflict(0, 1).unwrap();
+        assert!(session.missing_samples().is_empty());
+        let imported = &session.project().imported_samples[0];
+        assert!(imported.id >= crate::products::IMPORTED_ID_START);
+        assert_eq!(imported.path, candidates[1]);
+        assert_eq!(imported.source_bpm, 140.0);
+        assert_eq!(imported.origin, None);
+        assert_eq!(session.sample_conflicts()[0].sample_ids, vec![imported.id]);
+        assert_eq!(session.project().clips[0].sample_id, imported.id);
+        assert_eq!(session.project().clips[0].offset_frames, 22_050);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &project);
+        assert!(session.history_step(true).unwrap());
+        for path in &candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(root).unwrap();
+    }
+
     fn fixture() -> Session {
         let sample = Sample {
             id: 1,
@@ -1205,6 +1861,289 @@ mod tests {
         editor.place(1, 1, TICKS_PER_BAR, TICKS_PER_BAR).unwrap();
         Session::headless(library, editor.project).unwrap()
     }
+    #[test]
+    fn manual_resolution_is_atomic_updates_all_exact_references_and_supports_history() {
+        let root = manual_fixture_dir();
+        let imported = crate::engine::ImportedSample {
+            id: 1_000_000,
+            name: "Missing lead".into(),
+            group_name: "Leads".into(),
+            path: PathBuf::from("C:\\Old\\Leads\\lead.wav"),
+            source_bpm: 120.0,
+            source_sample_rate: None,
+            origin: None,
+        };
+        let first = MissingSample::external(&imported, 512, "File is missing.".into());
+        let mut second = first.clone();
+        second.id += 1;
+        second.reference = MissingReference::External {
+            path: PathBuf::from("c:/old/leads/LEAD.wav"),
+            origin: Some(Product::D3),
+        };
+        let mut unrelated = first.clone();
+        unrelated.id += 2;
+        unrelated.reference = MissingReference::External {
+            path: PathBuf::from("C:\\Other\\lead.wav"),
+            origin: None,
+        };
+        let mut project = Project {
+            missing_samples: vec![first, second, unrelated],
+            ..Project::default()
+        };
+        for (index, (sample_id, track)) in [
+            (1_000_000, 0),
+            (1_000_000, 4),
+            (1_000_001, 7),
+            (1_000_002, 9),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            project.clips.push(Clip {
+                id: index as u64 + 1,
+                sample_id,
+                track,
+                start_tick: 17,
+                length_ticks: 256,
+                offset_frames: 4410,
+                gain: 0.75,
+            });
+        }
+        let mut session = Session::headless(Arc::new(Library::empty()), project.clone())
+            .unwrap()
+            .with_settings_root(root.join("settings"));
+        let revision = session.revision;
+        let bad = root.join("bad.wav");
+        std::fs::write(&bad, b"not audio").unwrap();
+        assert!(session.resolve_missing_sample(1_000_000, &bad).is_err());
+        assert_eq!(session.project(), &project);
+        assert_eq!(session.revision, revision);
+        assert!(!session.unsaved());
+        assert!(!session.history_step(false).unwrap());
+
+        let wave = root.join("chosen.wav");
+        Pcm {
+            sample_rate: 22_050,
+            channels: 1,
+            samples: vec![0.5; 22_050],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        session.resolve_missing_sample(1_000_000, &wave).unwrap();
+        assert_eq!(session.missing_samples().len(), 1);
+        assert_eq!(session.missing_samples()[0].id, 1_000_002);
+        assert!(session.unsaved());
+        assert!(session.revision > revision);
+        for (index, clip) in session.project().clips.iter().enumerate() {
+            assert_eq!(clip.start_tick, 17);
+            assert_eq!(clip.length_ticks, 256);
+            assert_eq!(clip.gain, 0.75);
+            assert_eq!(clip.track, project.clips[index].track);
+            assert_eq!(clip.offset_frames, if index < 3 { 2205 } else { 4410 });
+        }
+        let resolved = session.project().clone();
+        assert!(
+            audio::render_project(&resolved, &session.library)
+                .unwrap()
+                .samples
+                .iter()
+                .any(|sample| *sample != 0.0)
+        );
+        session.history_step(false).unwrap();
+        assert_eq!(session.project(), &project);
+        assert!(
+            audio::render_project(session.project(), &session.library)
+                .unwrap()
+                .samples
+                .iter()
+                .all(|sample| *sample == 0.0)
+        );
+        session.history_step(true).unwrap();
+        assert_eq!(session.project(), &resolved);
+        std::fs::remove_file(&resolved.imported_samples[0].path).unwrap();
+        std::fs::remove_file(wave).unwrap();
+        std::fs::remove_file(bad).unwrap();
+        std::fs::remove_dir(root.join("settings/manual-samples")).unwrap();
+        std::fs::remove_dir(root.join("settings")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn manual_resolution_uses_saved_rate_and_actual_mixjam_wave_duration() {
+        let root = manual_fixture_dir();
+        let wave = root.join("chosen.wav");
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.5; 88_200],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let imported = crate::engine::ImportedSample {
+            id: 1_000_000,
+            name: "Missing lead".into(),
+            group_name: "Lead".into(),
+            path: PathBuf::from("lost.wav"),
+            source_bpm: 140.0,
+            source_sample_rate: Some(22_050),
+            origin: None,
+        };
+        let mut missing = MissingSample::external(&imported, 256, "Missing audio.".into());
+        missing
+            .metadata
+            .insert("Playback timing policy".into(), "mixjam-span".into());
+        missing
+            .metadata
+            .insert("durationSeconds".into(), "99".into());
+        let project = Project {
+            missing_samples: vec![missing],
+            clips: vec![Clip {
+                id: 1,
+                sample_id: imported.id,
+                track: 0,
+                start_tick: 0,
+                length_ticks: 256,
+                offset_frames: 11_025,
+                gain: 1.0,
+            }],
+            ..Project::default()
+        };
+        let mut session = Session::headless(Arc::new(Library::empty()), project)
+            .unwrap()
+            .with_settings_root(root.join("settings"));
+        session.resolve_missing_sample(imported.id, &wave).unwrap();
+        assert_eq!(session.project().clips[0].offset_frames, 25_725);
+        assert_eq!(session.project().imported_samples[0].source_bpm, 120.0);
+        assert_eq!(
+            session.project().imported_samples[0].source_sample_rate,
+            Some(44_100)
+        );
+        std::fs::remove_file(&session.project().imported_samples[0].path).unwrap();
+        std::fs::remove_file(wave).unwrap();
+        std::fs::remove_dir(root.join("settings/manual-samples")).unwrap();
+        std::fs::remove_dir(root.join("settings")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn manual_native_resolution_uses_imported_identity_without_factory_identity() {
+        let root = manual_fixture_dir();
+        let missing = MissingSample::native(
+            Product::T2,
+            42,
+            "Native lead".into(),
+            140.0,
+            256,
+            false,
+            "Missing library.".into(),
+        )
+        .unwrap();
+        let mut project = Project {
+            missing_samples: vec![missing],
+            ..Project::default()
+        };
+        project.clips.push(Clip {
+            id: 1,
+            sample_id: 42,
+            track: 0,
+            start_tick: 0,
+            length_ticks: 256,
+            offset_frames: 0,
+            gain: 1.0,
+        });
+        let wave = root.join("chosen.wav");
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session = Session::headless(Arc::new(Library::empty()), project)
+            .unwrap()
+            .with_settings_root(root.join("settings"));
+        session.resolve_missing_sample(42, &wave).unwrap();
+        assert!(session.missing_samples().is_empty());
+        assert!(session.project().clips[0].sample_id >= crate::products::IMPORTED_ID_START);
+        assert!(session.library.sample_by_id(42).is_none());
+        assert_eq!(session.library.verified_count(), 0);
+        std::fs::remove_file(&session.project().imported_samples[0].path).unwrap();
+        std::fs::remove_file(wave).unwrap();
+        std::fs::remove_dir(root.join("settings/manual-samples")).unwrap();
+        std::fs::remove_dir(root.join("settings")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn manual_choice_survives_same_basename_palette_and_original_file_loss() {
+        let root = manual_fixture_dir();
+        let selected = root.join("selected");
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&selected).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        for (folder, value) in [(&selected, -0.5), (&outside, 0.5)] {
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![value; 1000],
+            }
+            .write_wav(&folder.join("lead.wav"))
+            .unwrap();
+        }
+        let library = Library::open_wav_folder(&selected, 140.0).unwrap();
+        let missing = MissingSample::native(
+            Product::T2,
+            42,
+            "Native lead".into(),
+            140.0,
+            256,
+            false,
+            "Missing source.".into(),
+        )
+        .unwrap();
+        let project = Project {
+            missing_samples: vec![missing],
+            clips: vec![Clip {
+                id: 1,
+                sample_id: 42,
+                track: 0,
+                start_tick: 0,
+                length_ticks: 256,
+                offset_frames: 0,
+                gain: 1.0,
+            }],
+            ..Project::default()
+        };
+        let mut session = Session::headless(Arc::new(library.clone()), project)
+            .unwrap()
+            .with_settings_root(root.join("settings"));
+        session
+            .resolve_missing_sample(42, &outside.join("lead.wav"))
+            .unwrap();
+        let retained = session.project().imported_samples[0].path.clone();
+        assert_eq!(
+            std::fs::read(&retained).unwrap(),
+            std::fs::read(outside.join("lead.wav")).unwrap()
+        );
+        std::fs::remove_file(outside.join("lead.wav")).unwrap();
+        let saved = root.join("song.json");
+        session.save(&saved).unwrap();
+        let (reopened, ready) = crate::project_io::open(&saved, &library).unwrap();
+        assert_eq!(reopened.imported_samples[0].path, retained);
+        assert!(reopened.missing_samples.is_empty());
+        let rendered = audio::render_project(&reopened, &ready).unwrap();
+        assert!(rendered.samples.iter().any(|sample| *sample > 0.0));
+        assert!(rendered.samples.iter().all(|sample| *sample >= 0.0));
+        std::fs::remove_file(retained).unwrap();
+        std::fs::remove_file(saved).unwrap();
+        std::fs::remove_file(selected.join("lead.wav")).unwrap();
+        std::fs::remove_dir(selected).unwrap();
+        std::fs::remove_dir(outside).unwrap();
+        std::fs::remove_dir(root.join("settings/manual-samples")).unwrap();
+        std::fs::remove_dir(root.join("settings")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
     #[test]
     fn recording_blocks_sample_folder_changes_before_scanning_or_replacing_state() {
         let mut app = fixture();
@@ -1459,6 +2398,100 @@ mod boundary_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
+    #[cfg_attr(
+        not(bundled_catalog),
+        ignore = "Needs the locally generated sample catalogs."
+    )]
+    fn folder_adoption_keeps_optional_providers_and_respects_explicit_priority() {
+        let dir = fixture_dir();
+        let provider_root = dir.join("provider");
+        let packed = provider_root.join("eJay/PXD");
+        std::fs::create_dir_all(&packed).unwrap();
+        // A complete one-record native House provider, with five silent frames.
+        let mut record = b"tPxD\x02\0\0T".to_vec();
+        record.extend(5_u32.to_le_bytes());
+        record.extend([0, 0, 0]);
+        std::fs::write(packed.join("house10"), &record).unwrap();
+        std::fs::write(
+            packed.join("house10.inf"),
+            format!(
+                "[SAMPLES]\n1\n6\n\"HOUSE\"\n0\n{}\n\"House sound\"\n\"1\"\n1\n18\n\"\"\n0\n\"\"\n",
+                record.len()
+            ),
+        )
+        .unwrap();
+        let mut provider = Library::empty();
+        provider
+            .register(Product::H1, &provider_root, &dir)
+            .unwrap();
+        let house_id = Product::H1.global_sample_id(1).unwrap();
+        assert_eq!(provider.read_pcm(house_id).unwrap().samples, vec![0.0; 5]);
+        let folder = dir.join("Dance4");
+        std::fs::create_dir_all(&folder).unwrap();
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.0; 5],
+        }
+        .write_wav(&folder.join("sound.wav"))
+        .unwrap();
+        let identity = |native_id| crate::catalog::WaveMetadata {
+            native_id,
+            code: format!("WAVE{native_id}"),
+            name: "Folder sound".into(),
+            group_name: "Wave".into(),
+            bars: 1,
+            source_bpm: 140.0,
+            frame_count: 5,
+            pcm_digest: Some(crate::catalog::pcm_identity_hex(&[0; 5])),
+        };
+        let complete_count = crate::catalog::wave_metadata(Product::H1).unwrap().len();
+        for (house_count, preferred, expect_provider) in [
+            (0, false, true), // A Dance 4 only folder must keep House.
+            (1, false, true), // Shared audio must not displace House.
+            (complete_count, false, false),
+            (complete_count, true, true),
+        ] {
+            let mut scanned = Library::open_wav_folder(&folder, 140.0).unwrap();
+            scanned
+                .register_wav_product(Product::D4, &folder, &[identity(1)])
+                .unwrap();
+            if house_count > 0 {
+                let entries: Vec<_> = (1..=house_count as u32).map(identity).collect();
+                scanned
+                    .register_wav_product(Product::H1, &folder, &entries)
+                    .unwrap();
+            }
+            let mut session = Session::headless(Arc::new(provider.clone()), Project::default())
+                .unwrap()
+                .with_settings_root(dir.join("settings"));
+            if preferred {
+                session.prefer_providers(&[Product::H1]);
+            }
+            assert!(
+                session
+                    .adopt_wave_folder(scanned, &folder, 140.0)
+                    .unwrap()
+                    .is_empty()
+            );
+            let source = session.library().sample_by_id(house_id).unwrap();
+            assert_eq!(
+                source.wav_path.is_none(),
+                expect_provider,
+                "count={house_count}, preferred={preferred}"
+            );
+            assert!(
+                session
+                    .library()
+                    .sample_by_id(Product::D4.global_sample_id(1).unwrap())
+                    .is_some()
+            );
+            assert!(!session.unsaved());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn unavailable_optional_provider_keeps_scanned_product_and_reports_warning() {
         let dir = fixture_dir();
         let old = dir.join("provider");
@@ -1625,6 +2658,8 @@ mod boundary_tests {
         // The pending song did not exist: the folder loaded, the open failed visibly.
         assert!(error && notice.contains("song.json"), "{notice}");
         assert_eq!(crate::project_io::load_scan_cache(&data).len(), 4);
+        let cache_path = data.join("wav-scan-cache.json");
+        let cache_modified = std::fs::metadata(&cache_path).unwrap().modified().unwrap();
         assert!(data.join("sample-folder.json").is_file());
         // A cancelled scan never replaces the library, even after its thread ends.
         let before = session.library().samples.len();
@@ -1651,6 +2686,11 @@ mod boundary_tests {
         };
         session.start_wave_scan(&dir, 120.0).unwrap();
         finish(&mut session);
+        assert_eq!(
+            std::fs::metadata(&cache_path).unwrap().modified().unwrap(),
+            cache_modified,
+            "An unchanged cached scan must not rewrite its cache."
+        );
         let (notice, error) = session.take_notice().unwrap();
         assert!(
             !error && notice.starts_with("Sample folder loaded"),

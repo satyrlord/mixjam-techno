@@ -52,6 +52,20 @@ fn float_to_i16(x: f32) -> i16 {
 }
 
 pub fn read_wav(path: &Path) -> Result<Pcm, String> {
+    let mut samples = Vec::new();
+    let (spec, _) = visit_wav_samples(path, |_, sample| samples.push(sample))?;
+    Ok(Pcm {
+        sample_rate: spec.sample_rate,
+        channels: spec.channels,
+        samples,
+    })
+}
+
+/// Validate and normalize WAV samples without retaining decoded audio.
+pub(crate) fn visit_wav_samples(
+    path: &Path,
+    mut visit: impl FnMut(hound::WavSpec, f32),
+) -> Result<(hound::WavSpec, u32), String> {
     let mut reader =
         hound::WavReader::open(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
     let spec = reader.spec();
@@ -65,34 +79,50 @@ pub fn read_wav(path: &Path) -> Result<Pcm, String> {
                 .into(),
         );
     }
-    let samples = match spec.sample_format {
-        hound::SampleFormat::Float if spec.bits_per_sample == 32 => reader
-            .samples::<f32>()
-            .map(|r| r.map(|v| if v.is_finite() { v.clamp(-1.0, 1.0) } else { v }))
-            .collect::<Result<Vec<_>, _>>(),
+    let mut count = 0_u32;
+    let mut accept = |value: Result<f32, hound::Error>| -> Result<(), String> {
+        let value = value.map_err(|e| e.to_string())?;
+        if !value.is_finite() || value.abs() > 1.0 {
+            return Err(
+                "The audio must contain normalized finite mono or stereo PCM samples.".into(),
+            );
+        }
+        visit(spec, value);
+        count += 1;
+        Ok(())
+    };
+    match spec.sample_format {
+        hound::SampleFormat::Float if spec.bits_per_sample == 32 => {
+            for value in reader.samples::<f32>() {
+                accept(value.map(|v| if v.is_finite() { v.clamp(-1.0, 1.0) } else { v }))?;
+            }
+        }
         hound::SampleFormat::Int if (8..=32).contains(&spec.bits_per_sample) => {
             let divisor = (1_u64 << (spec.bits_per_sample - 1)) as f32;
-            reader
-                .samples::<i32>()
-                .map(|r| r.map(|v| v as f32 / divisor))
-                .collect::<Result<Vec<_>, _>>()
+            for value in reader.samples::<i32>() {
+                accept(value.map(|v| v as f32 / divisor))?;
+            }
         }
         _ => return Err("This WAV encoding is not supported.".into()),
-    }
-    .map_err(|e| e.to_string())?;
-    let pcm = Pcm {
-        sample_rate: spec.sample_rate,
-        channels: spec.channels,
-        samples,
     };
-    pcm.validate()?;
-    Ok(pcm)
+    if !count.is_multiple_of(u32::from(spec.channels)) {
+        return Err("The audio must contain normalized finite mono or stereo PCM samples.".into());
+    }
+    Ok((spec, count / u32::from(spec.channels)))
 }
 
 pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, String> {
     project.validate()?;
     let mut cache = HashMap::new();
+    let missing: std::collections::HashSet<_> = project
+        .missing_samples
+        .iter()
+        .map(|sample| sample.id)
+        .collect();
     for clip in &project.clips {
+        if missing.contains(&clip.sample_id) {
+            continue;
+        }
         if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(clip.sample_id) {
             e.insert(library.read_pcm(clip.sample_id)?);
         }
@@ -135,7 +165,15 @@ fn render_with_tempos(
         );
     }
     let mut out = vec![0.0_f32; frames * 2];
+    let missing: std::collections::HashSet<_> = project
+        .missing_samples
+        .iter()
+        .map(|sample| sample.id)
+        .collect();
     for clip in &project.clips {
+        if missing.contains(&clip.sample_id) {
+            continue;
+        }
         let source = samples
             .get(&clip.sample_id)
             .ok_or_else(|| format!("Sample {} is missing.", clip.sample_id))?;
@@ -358,6 +396,36 @@ mod tests {
         }
     }
     #[test]
+    fn explicit_missing_source_is_silent_even_when_cached_audio_has_the_same_id() {
+        let mut project = song();
+        project.missing_samples.push(
+            crate::engine::MissingSample::native(
+                crate::products::Product::T2,
+                5,
+                "Missing sound".into(),
+                140.0,
+                TICKS_PER_BAR,
+                false,
+                "The referenced sound is unavailable.".into(),
+            )
+            .unwrap(),
+        );
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.5; 75600],
+            },
+        )]);
+        let rendered = render_with_samples(&project, &samples).unwrap();
+        assert_eq!(rendered.frames(), 151200);
+        assert!(rendered.samples.iter().all(|sample| *sample == 0.0));
+        project.missing_samples.clear();
+        assert!(render_with_samples(&project, &HashMap::new()).is_err());
+    }
+
+    #[test]
     fn last_track_preserves_scheduled_offset_gain_and_channel_routing() {
         let mut p = song();
         p.clips[0].track = 63;
@@ -449,6 +517,7 @@ mod tests {
             group_name: "Wave".into(),
             path: "take.wav".into(),
             source_bpm: 180.0,
+            source_sample_rate: Some(44100),
             origin: None,
         });
         let pcm = Pcm {
@@ -479,6 +548,7 @@ mod tests {
                     group_name: "Wave".into(),
                     path: "source.wav".into(),
                     source_bpm: bpm,
+                    source_sample_rate: Some(44100),
                     origin: None,
                 });
             let samples = HashMap::from([(

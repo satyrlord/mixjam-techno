@@ -3,8 +3,8 @@ param(
     [string]$OutputDirectory = '',
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    [ValidateSet('arrangement', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')]
-    [string[]]$Views = @('arrangement', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')
+    [ValidateSet('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')]
+    [string[]]$Views = @('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,6 +98,39 @@ def write_project(name, value):
     return path
 
 arrangement = write_project('arrangement', project)
+metadata_project = deepcopy(project)
+metadata_project['imported_samples'][0]['name'] = 'Știință și ritm — atmosphère originală pentru o noapte foarte lungă'
+metadata_details = write_project('sample-details', metadata_project)
+import_details_project = deepcopy(project)
+import_details_project['title'] = 'Imported song details'
+import_details_project['import_notices'] = [dict(source_bpm=146, target_bpm=140)]
+import_details_project['source_notices'] = [
+    'MixJam v7: saved master processing is unavailable; arrangement and source references are retained.',
+    'MixJam v7 source controls: source 1; saved gain trim 0.75; edge fade 12 ms.',
+]
+import_details = write_project('import-details', import_details_project)
+missing_project = deepcopy(project)
+missing_project.update(schema_version=3, title='Missing source recovery', loop_region=[0, 16 * 256])
+missing_project['missing_samples'] = [dict(id=1001000, name='Original tape atmosphere', source_bpm=140,
+    sample_rate=44100, nominal_ticks=4 * 256, length_inferred=False,
+    reference=dict(type='external', path=r'Z:\Original sessions\Dance3\MIXWAVES\atmosphere.wav', origin='d3'),
+    reason='The original WAV file is unavailable.',
+    metadata={'Native label 1':'Original tape', 'Native label 2':'atmosphere',
+              'Saved sample ID':'10204', 'Declared bars':'4',
+              'Native metadata word 1':'12', 'Native metadata word 2':'14986'})]
+for track, start in [(0, 0), (1, 4), (6, 8)]:
+    missing_project['clips'].append(dict(id=1000+track, sample_id=1001000, track=track,
+        start_tick=start * 256, length_ticks=4 * 256, offset_frames=0, gain=1))
+missing = write_project('missing', missing_project)
+conflicts_project = deepcopy(project)
+conflicts_project.update(schema_version=3, title='Choose matching samples')
+conflicts_project['imported_samples'][2]['path'] = samples[0]['path']
+conflicts_project['sample_conflicts'] = [dict(
+    reference=r'D:\Previous sample collection\Drum\Analog kick.wav',
+    sample_ids=[samples[0]['id'], samples[2]['id']],
+    candidates=[samples[0]['path'], samples[1]['path']], selected=0, confirmed=False,
+    source_spans={})]
+sample_conflicts = write_project('sample-conflicts', conflicts_project)
 sparse_project = deepcopy(project)
 sparse_project['title'] = 'Sparse track identity'
 sparse_project['clips'] = [dict(id=i + 1, sample_id=samples[i]['id'], track=track,
@@ -121,6 +154,7 @@ for index, gain in enumerate((-0.33333334, 0, 1, 4, -2, 0.25, 0.8, 1.5)):
     mixer_project['tracks'][index]['pan'] = (-1, -0.5, 0, 0.5, 1, 0, 0, 0)[index]
 mixer_project['tracks'][1].update(left_enabled=False, right_enabled=False)
 mixer_project['tracks'][2]['right_enabled'] = False
+mixer_project['tracks'][3]['left_enabled'] = False
 mixer_project['master_gain'] = 0.7777778
 # A track can contain more than one sound; its strip must not invent one identity.
 mixer_project['clips'][0]['sample_id'] = samples[4]['id']
@@ -131,6 +165,13 @@ follow_project['loop_region'] = [32 * 256, 48 * 256]
 for clip in follow_project['clips']:
     clip['start_tick'] += 32 * 256
 follow = write_project('follow', follow_project)
+tempo_sounds = root / 'folder-tempos'
+if 'library-tempos' in views:
+    for index in range(60):
+        folder = tempo_sounds / f'Folder {index:02}'
+        folder.mkdir(parents=True)
+        for sample in samples[:3]:
+            shutil.copyfile(sample['path'], folder / Path(sample['path']).name)
 large_sounds = root / 'large-library'
 if 'library-expanded' in views:
     for index in range(128):
@@ -141,11 +182,12 @@ if 'library-expanded' in views:
 
 report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).hexdigest(),
               captured_utc=datetime.now(timezone.utc).isoformat(), platform=platform.platform(),
-              fixture='12 synthetic WAVs at 22050 Hz, schema-2 native projects, 8/2/64 used tracks; expanded library adds 128 named copies',
+              fixture='12 synthetic WAVs at 22050 Hz, schema-2 native projects, 8/2/64 used tracks; schema-3 missing sources and sample conflict choices; import notices; expanded library adds 128 named copies; library-tempos uses an empty project and 60 folders with 3 WAVs each',
               output_directory=str(root), captures=[],
               checks=['Native process exits successfully', 'BMP exists and dimensions match',
                       'Dedicated per-case user data directory'],
               gaps=['Visual content requires image review', 'No microphone or physical listening check',
+                    'Recorded-take capture checks presentation only; it does not simulate microphone input',
                     'No native file-picker or screen-reader interaction',
                     'No high-DPI or clean Windows VM check'])
 
@@ -165,9 +207,16 @@ for size in sizes:
             fixture = {
                 'sparse': sparse, 'track64': full, 'mixer-dense': full,
                 'mixer-empty': empty, 'mixer-states': mixer_states, 'follow': follow,
+                'missing': missing, 'missing-details': missing,
+                'missing-effects': missing, 'missing-edit': missing,
+                'missing-stretch': missing, 'missing-step-synth': missing,
+                'import-details': import_details, 'sample-details': metadata_details,
+                'sample-conflicts': sample_conflicts,
             }.get(view, arrangement)
-            folder = large_sounds if view == 'library-expanded' else sounds
-            command += ['--samples', str(folder), '--mix', str(fixture)]
+            folder = tempo_sounds if view == 'library-tempos' else large_sounds if view == 'library-expanded' else sounds
+            command += ['--samples', str(folder)]
+            if view != 'library-tempos':
+                command += ['--mix', str(fixture)]
         started = time.monotonic()
         entry = dict(name=name, view=view, requested_size=size, path=str(capture), command=command)
         try:

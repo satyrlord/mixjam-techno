@@ -329,6 +329,46 @@
         92
       ],
       "preserved_path": null
+    },
+    {
+      "name": "undo",
+      "svg_sha256": "9113a7e1b2b2ac781415f5b83beb8d05b085044b0e48232d3c32879cd2ca406b",
+      "png_sha256": "5b356406dda229c6db597a6f362e7d236bb0af8b32e3b15faf6e663d98466d7e",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1791,
+      "opaque_pixels": 1324,
+      "transparent_pixels": 7425,
+      "alpha_bounds": [
+        12,
+        12,
+        82,
+        90
+      ],
+      "preserved_path": "undo"
+    },
+    {
+      "name": "redo",
+      "svg_sha256": "3eeb549f4e45b3558fa38b90a8c9d11fa5f20d6b6db45e976d9e6109253c86e3",
+      "png_sha256": "364c0a7da307f0853fb2f94664fc766907e4819b1f8a9965b550eb93271bb544",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 1790,
+      "opaque_pixels": 1326,
+      "transparent_pixels": 7426,
+      "alpha_bounds": [
+        14,
+        12,
+        84,
+        90
+      ],
+      "preserved_path": "redo"
     }
   ]
 }

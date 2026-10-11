@@ -35,6 +35,19 @@ Sample-processing forms hold drafts until the user requests playback or saving.
 The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
 
+Missing audio is explicit project state. The renderer leaves those placements
+silent. The frontend reads the retained source metadata and sends a chosen WAV
+path to `Session::resolve_missing_sample`. That operation resolves every matching
+source identity in one history change, preserves musical trims, and retains the
+chosen audio. The picker and context menu remain frontend responsibilities.
+
+Duplicate file matches are stored in `Project.sample_conflicts`, with a stable
+default, candidate paths, and source IDs. Readers select the first candidate.
+`Session::resolve_sample_conflict` changes all affected placements atomically,
+and updates history and rendering. The native modal exposes choices and playback;
+confirmation and selected paths persist in the project. Transactions remove
+conflicts that no longer affect any clip.
+
 `src/main.rs` is the composition root. It resolves command-line options and builds
 the initial library/project before it creates a session. Normal GUI startup then
 scans the WAV folder through `Session`; a queued song opens only if no intervening
@@ -42,6 +55,13 @@ project change or unsaved take requires its cancellation. Successful folder
 adoption tells the frontend to clear selections and active drags. Headless CLI
 commands can use library services directly. The GUI modules are compiled into the native
 binary, not exported by the production Rust library.
+
+Folder scans stream validated WAV samples into the catalog identity hash. Each
+worker retains a reader buffer, not the decoded audio. File lists, metadata, and
+the probe cache still grow with the corpus. A scan writes the cache only after
+new probes change it. `source_tempo.rs` resolves folder tempo from matching
+original audio before the duration-based fallback is used. Optional supplemental
+tempo identities are embedded at build time, like the native identity catalogs.
 
 ## Safe frontend iteration
 
@@ -74,5 +94,10 @@ negative/zero/unity gain, pan, and output-routing states. Native egui tests chec
 control input and emitted accessibility semantics. They do not replace a screen
 reader check of the built executable.
 
-Font assets are derived from the imported Space Grotesk WOFF2 files. Run
-`python tools/assets/prepare-fonts.py --check` to verify reproducible native TTFs.
+Syncopate Bold 700 is bundled unchanged from a pinned Google Fonts commit.
+The frontend transliterates branding and title letters to Latin counterparts
+and formats them in uppercase without changing saved project names or paths.
+Inter Medium 500 serves all other text. Window IDs remain independent of visible
+title formatting.
+Run `python tools/assets/prepare-fonts.py --check` to verify both font and license
+hashes, static weights, and ASCII title coverage.

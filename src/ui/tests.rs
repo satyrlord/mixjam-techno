@@ -40,6 +40,706 @@ mod tests {
         (context, app)
     }
 
+    #[test]
+    fn syncopate_titles_are_uppercase_without_changing_saved_text_or_body_font() {
+        let (context, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.title = "Știință și ritm".into();
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+        app.show_libraries = true;
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        for label in [
+            "MIXJAM",
+            "TECHNO",
+            "STIINTA SI RITM",
+            "ARRANGEMENT",
+            "SOUNDS",
+            "SAMPLE LIBRARIES",
+        ] {
+            let text = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == label => Some(text),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("Missing title: {label}"));
+            assert!(text.galley.job.sections.iter().all(|section| {
+                section.format.font_id.family == egui::FontFamily::Name("Syncopate Bold".into())
+            }));
+        }
+        let body = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == "Mixer" => Some(text),
+                _ => None,
+            })
+            .expect("The Mixer action must stay visible.");
+        assert!(
+            body.galley
+                .job
+                .sections
+                .iter()
+                .all(|section| { section.format.font_id.family == egui::FontFamily::Proportional })
+        );
+        assert_eq!(app.session.project().title, "Știință și ritm");
+        assert_eq!(app.session.library().samples[0].name, "good grasp 2");
+    }
+
+    #[test]
+    fn title_text_transliterates_accents_ligatures_and_combining_marks() {
+        assert_eq!(title_text("Șș Şş Țț Ţţ Ââ Ăă Îî"), "SS SS TT TT AA AA II");
+        assert_eq!(
+            title_text("S\u{326}tiint\u{326}a\u{306} i\u{302}n ra\u{302}ve"),
+            "STIINTA IN RAVE"
+        );
+        assert_eq!(
+            title_text("Æther Øresund Łódź Straße"),
+            "AETHER ORESUND LODZ STRASSE"
+        );
+        assert_eq!(title_text("Mix 01 / A-B + 2.5 *"), "MIX 01 / A-B + 2.5 *");
+    }
+
+    #[test]
+    fn sound_tooltip_retains_identity_timing_audio_metadata_and_full_unicode_name() {
+        let (context, mut app) = fixture();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.id = Product::D3.global_sample_id(42).unwrap();
+        sample.code = "ORIGINAL42".into();
+        sample.name = "Știință și ritm — atmosphère originală pentru o noapte foarte lungă".into();
+        sample.group_name = "Sphere".into();
+        sample.bars = 4;
+        sample.source_bpm = 132.0;
+        sample.frame_count = 60_000;
+        sample.sample_rate = 48_000;
+        sample.channels = 2;
+        sample.wav_path = Some(PathBuf::from(r"\\?\C:\Saved sounds\Știință și ritm.wav"));
+        let mut project = app.session.project().clone();
+        for clip in &mut project.clips {
+            clip.sample_id = sample.id;
+        }
+        app.session =
+            Session::headless(Arc::new(Library::fixture(vec![sample.clone()])), project).unwrap();
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let tile = text_rect(&output, &sample.name);
+        context.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        frame(
+            &context,
+            &mut app,
+            vec![egui::Event::PointerMoved(tile.min + Vec2::new(8.0, 8.0))],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let tooltip = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.contains("ORIGINAL42") => {
+                    Some(&text.galley.job.text)
+                }
+                _ => None,
+            })
+            .expect("Hovering a sound must expose its metadata.");
+        for value in [
+            sample.name.as_str(),
+            "D3",
+            "Sphere",
+            "ORIGINAL42",
+            "400042",
+            "Native sample ID: 42",
+            "4 bars",
+            "132 BPM",
+            "48000 Hz",
+            "2 channels",
+            "60000 frames",
+            "1.250 s",
+            r"C:\Saved sounds\Știință și ritm.wav",
+        ] {
+            assert!(tooltip.contains(value), "Missing sound metadata: {value}");
+        }
+        assert!(!tooltip.contains(r"\\?\"));
+        assert_eq!(app.session.library().samples[0].wav_path, sample.wav_path);
+
+        sample.wav_path = Some(PathBuf::from(r"\\?\UNC\studio\sounds\Știință.wav"));
+        let details = sample_details(&sample, Some(Product::D3));
+        assert!(details.contains(r"\\studio\sounds\Știință.wav"));
+        assert!(!details.contains(r"\\?\"));
+    }
+
+    #[test]
+    fn sound_tiles_tint_the_full_surface_and_keep_metadata_and_selection_visible() {
+        let (_, app) = fixture();
+        let sample = &app.session.library().samples[0];
+        let category = group_color(&sample.group_name);
+        let tint = Color32::from_rgba_unmultiplied(category.r(), category.g(), category.b(), 51);
+        for selected in [false, true] {
+            let context = egui::Context::default();
+            configure_style(&context);
+            let mut tile = Rect::NOTHING;
+            let output = context.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    tile = sample_button(ui, sample, Some(Product::T2), selected).rect;
+                });
+            });
+            let tint_index = output.shapes.iter().position(|shape| {
+                matches!(&shape.shape, egui::Shape::Rect(rect) if rect.rect == tile && rect.fill == tint)
+            }).expect("The category tint must cover the full sound tile at 20% opacity.");
+            assert!(!output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Circle(circle) if tile.contains(circle.center))
+            }), "Sound tiles must not retain a category dot.");
+            let metadata = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.contains(&sample.group_name)
+                            && text.galley.job.text.contains("1 bar") =>
+                    {
+                        Some((shape, text))
+                    }
+                    _ => None,
+                })
+                .expect("The category and bar count must remain visible.");
+            let metadata_bounds = Rect::from_min_size(metadata.1.pos, metadata.1.galley.size());
+            assert!(tile.contains_rect(metadata_bounds));
+            assert!(metadata.0.clip_rect.contains_rect(metadata_bounds));
+            if selected {
+                let selection_index = output
+                    .shapes
+                    .iter()
+                    .position(|shape| {
+                        matches!(&shape.shape, egui::Shape::Rect(rect)
+                        if rect.rect == tile.shrink(0.5)
+                            && rect.stroke.color == category
+                            && rect.stroke.width > 0.0)
+                    })
+                    .expect("A selected sound must retain its category outline.");
+                assert!(
+                    selection_index > tint_index,
+                    "The tint must not cover selection."
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn help_instructions_wrap_readably_and_bottom_guidance_remains_reachable() {
+        const PLACE: &str =
+            "Drag to a track, or select a sound and click a track. Up to 64 tracks.";
+        let visible = |output: &egui::FullOutput, label: &str, viewport: Rect| {
+            output.shapes.iter().any(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == label => {
+                    let bounds = Rect::from_min_size(text.pos, text.galley.size());
+                    viewport.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds)
+                }
+                _ => false,
+            })
+        };
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            let (context, mut app) = fixture();
+            app.show_help = true;
+            for _ in 0..3 {
+                frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let mut output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            let instruction = text_rect(&output, PLACE);
+            assert!(
+                instruction.width() > 200.0,
+                "Instruction column is too narrow at {size:?}: {instruction:?}"
+            );
+            assert!(
+                instruction.height() < 80.0,
+                "Instruction wraps excessively at {size:?}: {instruction:?}"
+            );
+            assert!(visible(&output, PLACE, viewport));
+            for label in [
+                "Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.",
+                "Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.",
+            ] {
+                if !visible(&output, label, viewport) {
+                    frame_at_size(
+                        &context,
+                        &mut app,
+                        vec![
+                            egui::Event::PointerMoved(instruction.center()),
+                            egui::Event::MouseWheel {
+                                unit: egui::MouseWheelUnit::Point,
+                                delta: Vec2::new(0.0, -10_000.0),
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ],
+                        egui::Modifiers::NONE,
+                        size,
+                    );
+                    for _ in 0..12 {
+                        output =
+                            frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+                    }
+                }
+                assert!(
+                    visible(&output, label, viewport),
+                    "Help guidance is unreachable at {size:?}: {label}"
+                );
+            }
+        }
+    }
+
+    fn missing_fixture() -> (egui::Context, MixJamApp) {
+        let (context, mut app) = fixture();
+        let missing = MissingSample::native(
+            Product::T2,
+            42,
+            "Lost lead".into(),
+            132.0,
+            4 * TICKS_PER_BAR,
+            false,
+            "The original audio file is absent.".into(),
+        )
+        .unwrap();
+        let mut project = Project::default();
+        project.clips.push(Clip {
+            id: 1,
+            sample_id: missing.id,
+            track: 2,
+            start_tick: TICKS_PER_BAR,
+            length_ticks: 4 * TICKS_PER_BAR,
+            offset_frames: 150,
+            gain: 0.75,
+        });
+        project.missing_samples.push(missing);
+        app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
+        app.show_libraries = false;
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        (context, app)
+    }
+
+    fn sample_conflicts_fixture(tag: &str) -> (egui::Context, MixJamApp, PathBuf) {
+        let (context, mut app) = fixture();
+        let dir =
+            std::env::temp_dir().join(format!("mixjam-ui-conflicts-{}-{tag}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut candidates = Vec::new();
+        for (name, value) in [
+            ("First matching sample.wav", 0.1),
+            ("Other matching sample.wav", 0.3),
+        ] {
+            let path = dir.join(name);
+            Pcm {
+                sample_rate: 1000,
+                channels: 1,
+                samples: vec![value; 2000],
+            }
+            .write_wav(&path)
+            .unwrap();
+            candidates.push(std::fs::canonicalize(path).unwrap());
+        }
+        let mut project = Project::default();
+        for (index, id) in [1_000_000, 1_000_001].into_iter().enumerate() {
+            project
+                .imported_samples
+                .push(crate::engine::ImportedSample {
+                    id,
+                    name: format!("Saved source {}", index + 1),
+                    group_name: "Wave".into(),
+                    path: candidates[0].clone(),
+                    source_bpm: 140.0,
+                    source_sample_rate: Some(1000),
+                    origin: None,
+                });
+        }
+        for (index, sample_id) in [1_000_000, 1_000_001, 1_000_000].into_iter().enumerate() {
+            project.clips.push(Clip {
+                id: index as u64 + 1,
+                sample_id,
+                track: index * 4,
+                start_tick: index as u32 * TICKS_PER_BAR,
+                length_ticks: TICKS_PER_BAR,
+                offset_frames: 50,
+                gain: 0.75,
+            });
+        }
+        project
+            .sample_conflicts
+            .push(crate::engine::SampleConflict {
+                reference: r"D:\Old sample folder\Loop\Shared beat.wav".into(),
+                sample_ids: vec![1_000_000, 1_000_001],
+                candidates,
+                selected: 0,
+                confirmed: false,
+                source_spans: BTreeMap::new(),
+            });
+        let mut library = Library::fixture(vec![]);
+        library.apply_imports(&project.imported_samples).unwrap();
+        app.session = Session::headless(Arc::new(library), project).unwrap();
+        app.show_libraries = false;
+        context.enable_accesskit();
+        for _ in 0..3 {
+            frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        (context, app, dir)
+    }
+
+    #[test]
+    fn sample_conflict_modal_shows_paths_and_switches_every_instance_without_closing() {
+        let (context, mut app, dir) = sample_conflicts_fixture("switch");
+        let before = app.session.project().clips.clone();
+        let candidates = app.session.sample_conflicts()[0].candidates.clone();
+        let label = format!(
+            "Use match 2\n{}",
+            display_paths(&candidates[1].to_string_lossy())
+        );
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "SAMPLE CONFLICTS");
+        text_rect(&output, "3 instances · 2 matches");
+        let (_, control) = accessible_node(&output, &label);
+        assert_eq!(control.role(), egui::accesskit::Role::RadioButton);
+        text_rect(
+            &output,
+            &format!(
+                "Selected match 1\n{}",
+                display_paths(&candidates[0].to_string_lossy())
+            ),
+        );
+        let choice = text_rect(&output, &label);
+        click(&context, &mut app, choice.center(), egui::Modifiers::NONE);
+        assert_eq!(app.session.sample_conflicts()[0].selected, 1);
+        assert!(
+            app.session
+                .project()
+                .imported_samples
+                .iter()
+                .all(|sample| sample.path == candidates[1])
+        );
+        assert_eq!(app.session.project().clips, before);
+        assert!(
+            app.sample_conflicts_open(),
+            "Choices must remain available until the user closes the modal."
+        );
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let first = text_rect(
+            &output,
+            &format!(
+                "Use match 1\n{}",
+                display_paths(&candidates[0].to_string_lossy())
+            ),
+        );
+        click(&context, &mut app, first.center(), egui::Modifiers::NONE);
+        assert_eq!(app.session.sample_conflicts()[0].selected, 0);
+        assert!(
+            app.session
+                .project()
+                .imported_samples
+                .iter()
+                .all(|sample| sample.path == candidates[0])
+        );
+        for path in candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn escape_hides_unconfirmed_sample_conflicts_without_an_edit_until_reopened() {
+        let (context, mut app, dir) = sample_conflicts_fixture("escape");
+        let before = app.session.project().clone();
+        assert!(app.sample_conflicts_open());
+        frame(
+            &context,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(!app.sample_conflicts_open());
+        assert_eq!(app.session.project(), &before);
+        assert!(!app.session.unsaved());
+        assert!(!app.session.history_step(false).unwrap());
+        assert!(!app.session.sample_conflicts()[0].confirmed);
+        assert!(app.status.contains("not confirmed"));
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            !output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "SAMPLE CONFLICTS")
+            }),
+            "A dismissed resolver must stay hidden until it is reopened."
+        );
+        let reopen = text_rect(&output, "Sample conflicts");
+        click(&context, &mut app, reopen.center(), egui::Modifiers::NONE);
+        assert!(app.sample_conflicts_open());
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let keep = text_rect(&output, "Keep choices");
+        click(&context, &mut app, keep.center(), egui::Modifiers::NONE);
+        assert!(app.session.sample_conflicts()[0].confirmed);
+        assert!(app.session.unsaved());
+        for path in &app.session.sample_conflicts()[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn sample_conflict_confirmation_stays_closed_and_status_can_reopen_choices() {
+        let (context, mut app, dir) = sample_conflicts_fixture("confirm");
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let keep = text_rect(&output, "Keep choices");
+        click(&context, &mut app, keep.center(), egui::Modifiers::NONE);
+        assert!(!app.sample_conflicts_open());
+        assert!(
+            app.session
+                .sample_conflicts()
+                .iter()
+                .all(|conflict| conflict.confirmed)
+        );
+        for _ in 0..3 {
+            frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert!(!app.sample_conflicts_open());
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let reopen = text_rect(&output, "Sample conflicts");
+        click(&context, &mut app, reopen.center(), egui::Modifiers::NONE);
+        assert!(app.sample_conflicts_open());
+        frame(
+            &context,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(!app.sample_conflicts_open());
+        let reopened_project: Project =
+            serde_json::from_str(&serde_json::to_string(app.session.project()).unwrap()).unwrap();
+        let session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            reopened_project,
+        )
+        .unwrap();
+        let reopened = MixJamApp::from_session(session, "Reopened".into(), false);
+        assert!(
+            !reopened.sample_conflicts_open(),
+            "Confirmed choices must not warn again after reopening."
+        );
+        for path in &app.session.sample_conflicts()[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn sample_conflict_modal_keeps_actions_and_wrapped_paths_inside_supported_viewports() {
+        let (context, mut app, dir) = sample_conflicts_fixture("layout");
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            for _ in 0..3 {
+                frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            for label in ["SAMPLE CONFLICTS", "Keep choices", "Play song"] {
+                assert!(
+                    viewport.contains_rect(text_rect(&output, label)),
+                    "{label} lies outside {size:?}"
+                );
+            }
+            for (index, path) in app.session.sample_conflicts()[0]
+                .candidates
+                .iter()
+                .enumerate()
+            {
+                let label = format!(
+                    "{} match {}\n{}",
+                    if index == 0 { "Selected" } else { "Use" },
+                    index + 1,
+                    display_paths(&path.to_string_lossy())
+                );
+                assert!(viewport.contains_rect(text_rect(&output, &label)));
+            }
+        }
+        for path in &app.session.sample_conflicts()[0].candidates {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn missing_clip_keeps_full_span_label_selection_and_history() {
+        let (context, mut app) = missing_fixture();
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let label = text_rect(&output, "Missing: Lost lead");
+        let timeline = app.timeline_rect.unwrap();
+        let clip = app.session.project().clips[0].clone();
+        let rect = app.clip_rect(&clip, timeline);
+        assert!((rect.width() - (4.0 * app.timeline_bar_width - 1.0)).abs() < 0.01);
+        assert!((rect.left() - timeline.left() - app.timeline_bar_width).abs() < 0.01);
+        assert!(rect.contains(label.center()));
+        click(&context, &mut app, rect.center(), egui::Modifiers::NONE);
+        assert_eq!(app.selected_clip, Some(clip.id));
+        assert_eq!(app.source_name(), "Missing: Lost lead");
+        app.preview(clip.sample_id);
+        assert!(
+            app.status
+                .contains("Cannot preview missing sample Lost lead")
+        );
+        app.delete_selection();
+        assert!(app.session.project().clips.is_empty());
+        app.history_step(false);
+        assert_eq!(app.session.project().clips[0], clip);
+        assert_eq!(app.session.missing_samples().len(), 1);
+    }
+
+    #[test]
+    fn missing_clip_context_menu_offers_manual_resolution_without_changing_project() {
+        let (context, mut app) = missing_fixture();
+        context.enable_accesskit();
+        let before = app.session.project().clone();
+        let pos = app
+            .clip_rect(&before.clips[0], app.timeline_rect.unwrap())
+            .center();
+        for pressed in [true, false] {
+            frame(
+                &context,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+            );
+        }
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Resolve manually");
+        accessible_node(&output, "Resolve manually");
+        let id = before.clips[0].sample_id;
+        assert_eq!(app.context_missing_sample, Some(id));
+        assert_eq!(app.session.project(), &before);
+
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-resolve-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let placeholder = Session::headless(Arc::new(Library::fixture(vec![])), Project::default())
+            .unwrap();
+        app.session =
+            std::mem::replace(&mut app.session, placeholder).with_settings_root(dir.join("settings"));
+        let status = app.status.clone();
+        app.resolve_missing_sample_with(id, None);
+        assert_eq!(app.session.project(), &before);
+        assert_eq!(app.context_missing_sample, Some(id));
+        assert_eq!(app.status, status);
+        let bad = dir.join("bad.wav");
+        std::fs::write(&bad, b"not audio").unwrap();
+        app.resolve_missing_sample_with(id, Some(bad.clone()));
+        assert_eq!(app.session.project(), &before);
+        assert!(app.status_error);
+        let chosen = dir.join("chosen.wav");
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.5; 44_100],
+        }
+        .write_wav(&chosen)
+        .unwrap();
+        app.resolve_missing_sample_with(999, Some(chosen.clone()));
+        assert_eq!(app.session.project(), &before);
+        app.resolve_missing_sample_with(id, Some(chosen.clone()));
+        assert!(app.session.missing_samples().is_empty());
+        assert_eq!(app.context_missing_sample, None);
+        let resolved = &app.session.project().clips[0];
+        assert_eq!(
+            (resolved.track, resolved.start_tick, resolved.length_ticks, resolved.gain),
+            (2, TICKS_PER_BAR, 4 * TICKS_PER_BAR, 0.75)
+        );
+        assert!(app.session.history_step(false).unwrap());
+        assert_eq!(app.session.project(), &before);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn missing_metadata_keeps_original_reference_raw_fields_and_length_confidence() {
+        let (_, app) = missing_fixture();
+        let mut missing = app.session.missing_samples()[0].clone();
+        missing
+            .metadata
+            .insert("Original code".into(), "LOST42".into());
+        missing
+            .metadata
+            .insert("Saved raw flags".into(), "0x0017".into());
+        let details = missing_sample_details(&missing);
+        for value in [
+            "Missing: Lost lead",
+            "Playback: silence",
+            "Native sample ID: 42",
+            "132 BPM",
+            "1024 ticks",
+            "known",
+            "Original code: LOST42",
+            "Saved raw flags: 0x0017",
+            "The original audio file is absent.",
+        ] {
+            assert!(
+                details.contains(value),
+                "Missing retained metadata: {value}"
+            );
+        }
+        missing.length_inferred = true;
+        missing.reference = MissingReference::External {
+            path: PathBuf::from(r"C:\old sounds\Lost lead.wav"),
+            origin: Some(Product::D2),
+        };
+        let details = missing_sample_details(&missing);
+        assert!(details.contains(r"Original path: C:\old sounds\Lost lead.wav"));
+        assert!(details.contains("inferred"));
+        missing.reference = MissingReference::Generated {
+            product: Product::D2,
+            kind: "Drum".into(),
+            data: serde_json::json!({"pattern": [1, 0, 1]}),
+        };
+        assert!(missing_sample_details(&missing).contains("\"pattern\":[1,0,1]"));
+        let clip = missing_clip_details(&app.session.project().clips[0]);
+        assert!(
+            clip.contains("Track 3") && clip.contains("150 frames") && clip.contains("gain 0.75")
+        );
+    }
+
+    #[test]
+    fn missing_sample_details_are_accessible_and_processing_explains_silence() {
+        let (context, mut app) = missing_fixture();
+        context.enable_accesskit();
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Import details");
+        text_rect(&output, "1 missing · silent");
+        let button = text_rect(&output, "Import details");
+        click(&context, &mut app, button.center(), egui::Modifiers::NONE);
+        assert!(app.show_import_details);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("Native sample ID: 42"))));
+        app.show_import_details = false;
+        app.select_clip(1, false);
+        app.show_sample_edit = true;
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(
+            &output,
+            "Missing audio: clips play silence; processing is unavailable.",
+        );
+        assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "Listen edit")));
+    }
+
     fn frame(
         context: &egui::Context,
         app: &mut MixJamApp,
@@ -226,6 +926,73 @@ mod tests {
     }
 
     #[test]
+    fn arrangement_and_mixer_routes_mirror_states_edits_and_history() {
+        fn assert_routes(output: &egui::FullOutput, track: usize, left: bool, right: bool) {
+            for (side, text, enabled) in [("left", "L", left), ("right", "R", right)] {
+                for label in [format!("Arrangement track {track} {side} output"), format!("Track {track} {side} output")] {
+                    let (_, node) = accessible_node(output, &label);
+                    assert_eq!(node.toggled(), Some(if enabled { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }), "{label}");
+                    let bounds = node.bounds().unwrap();
+                    let rect = Rect::from_min_max(Pos2::new(bounds.x0 as f32, bounds.y0 as f32), Pos2::new(bounds.x1 as f32, bounds.y1 as f32));
+                    let painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(painted) if painted.galley.job.text == text && rect.contains(painted.pos) => Some(painted),
+                        _ => None,
+                    }).unwrap_or_else(|| panic!("Missing painted state for {label}"));
+                    assert_eq!(painted.galley.job.sections[0].format.color, if enabled { ACCENT } else { MUTED }, "{label}");
+                }
+            }
+        }
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.clips[1].track = 63;
+        project.tracks[0].pan = -0.75;
+        project.tracks[63].pan = 0.5;
+        project.tracks[63].gain = 1.25;
+        app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project).unwrap();
+        app.show_mixer = true;
+        ctx.enable_accesskit();
+        for (left, right) in [(true, true), (true, false), (false, false), (false, true)] {
+            for (side, enabled) in [(true, left), (false, right)] {
+                app.session.edit(EditCommand::SetRouting { track: 0, left: side, enabled }).unwrap();
+            }
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_routes(&output, 1, left, right);
+            assert_routes(&output, 64, true, true);
+        }
+        for (label, track, left) in [
+            ("Arrangement track 1 left output", 0, true),
+            ("Track 64 right output", 63, false),
+        ] {
+            let before = app.session.project().tracks[track].clone();
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let bounds = accessible_node(&output, label).1.bounds().unwrap();
+            click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 * 0.5, (bounds.y0 + bounds.y1) as f32 * 0.5), egui::Modifiers::NONE);
+            let changed = app.session.project().tracks[track].clone();
+            assert_eq!(changed.left_enabled, if left { !before.left_enabled } else { before.left_enabled });
+            assert_eq!(changed.right_enabled, if left { before.right_enabled } else { !before.right_enabled });
+            assert_eq!(changed.pan, before.pan);
+            assert_eq!(changed.gain, before.gain);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_routes(&output, track + 1, changed.left_enabled, changed.right_enabled);
+            app.history_step(false);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_routes(&output, track + 1, before.left_enabled, before.right_enabled);
+            app.history_step(true);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_routes(&output, track + 1, changed.left_enabled, changed.right_enabled);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Arrangement track 64 left output");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_routes(&output, 64, false, false);
+        assert!(!app.session.wants_playback(), "Space on a lane output must toggle routing only.");
+        assert_eq!(app.session.project().tracks[0].pan, -0.75);
+        assert_eq!(app.session.project().tracks[63].pan, 0.5);
+    }
+
+    #[test]
     fn mixer_gain_pan_and_routes_support_accessibility_and_keyboard_input() {
         let (ctx, mut app) = fixture();
         let mut project = app.session.project().clone();
@@ -279,7 +1046,10 @@ mod tests {
         );
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(!app.session.project().tracks[0].right_enabled);
-        assert!(!app.session.wants_playback(), "A routing key must not start playback.");
+        assert!(
+            !app.session.wants_playback(),
+            "A routing key must not start playback."
+        );
         text_rect(&output, "Muted");
 
         focus_control(&ctx, &mut app, &output, "Track 1 gain value");
@@ -358,7 +1128,9 @@ mod tests {
             .filter(|clip| clip.track == 0)
             .map(|clip| clip.id)
             .collect();
-        app.session.edit(EditCommand::DeleteClips(track1_ids)).unwrap();
+        app.session
+            .edit(EditCommand::DeleteClips(track1_ids))
+            .unwrap();
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(accessible_node(&output, "Track 64 gain").0, track64);
         focus_control(&ctx, &mut app, &output, "Track 64 gain");
@@ -378,19 +1150,21 @@ mod tests {
     }
 
     #[test]
-    fn empty_mixer_explains_strips_and_keeps_action_errors_visible() {
+    fn empty_mixer_keeps_guidance_master_and_action_errors_visible() {
         let (ctx, mut app) = fixture();
         app.new_mix();
         app.show_mixer = true;
-        app.message(DEFAULT_STATUS);
+        assert_eq!(DEFAULT_STATUS, "Ready");
+        let (status, status_error) = startup_status(&mut app.session);
+        assert_eq!((status.as_str(), status_error), (DEFAULT_STATUS, false));
+        app.status = status;
+        app.status_error = status_error;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        text_rect(&output, "Add a sound to start mixing");
-        text_rect(&output, "A mixer strip appears for each track that contains a clip.");
+        text_rect(&output, "NO TRACKS");
+        text_rect(&output, "Place a sound in the arrangement.");
         text_rect(&output, "Master");
-        assert!(!output.shapes.iter().any(|shape| {
-            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == DEFAULT_STATUS)
-        }));
+        text_rect(&output, DEFAULT_STATUS);
         app.error("Cannot open the selected sample.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         text_rect(&output, "Cannot open the selected sample.");
@@ -1325,20 +2099,27 @@ mod tests {
     fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         let (ctx, mut app) = fixture();
         let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap().clone();
+        // The rail paints icons as textured meshes; header buttons paint
+        // egui images as textured rectangles. Both carry the texture ID.
         let image_center = |output: &egui::FullOutput, icon: RailIcon| {
             output
                 .shapes
                 .iter()
-                .find_map(|shape| {
-                    if let egui::Shape::Mesh(mesh) = &shape.shape
-                        && mesh.texture_id == icons.texture_id(icon)
-                    {
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) if mesh.texture_id == icons.texture_id(icon) => {
                         Some(mesh.calc_bounds().center())
-                    } else {
-                        None
                     }
+                    egui::Shape::Rect(rect)
+                        if rect.brush.as_ref().is_some_and(|brush| {
+                            brush.fill_texture_id == icons.texture_id(icon)
+                                && brush.uv != Rect::ZERO
+                        }) =>
+                    {
+                        Some(rect.rect.center())
+                    }
+                    _ => None,
                 })
-                .expect("The rail must paint its bundled icon texture.")
+                .expect("The view must paint its bundled icon texture.")
         };
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(
@@ -1370,6 +2151,29 @@ mod tests {
             }),
             "The icon must preserve its action name in a hover tooltip."
         );
+        ctx.enable_accesskit();
+        let undo = image_center(&hovered, RailIcon::Undo);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(undo)],
+            egui::Modifiers::NONE,
+        );
+        // Tooltips wait until the pointer rests after leaving the rail icon.
+        for _ in 0..12 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let hovered_undo = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            hovered_undo.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "Undo")
+            }),
+            "The header icon must preserve its action name in a hover tooltip."
+        );
+        for label in ["Undo", "Redo", "Help"] {
+            let (_, node) = accessible_node(&hovered_undo, label);
+            assert_eq!(node.role(), egui::accesskit::Role::Button, "{label}");
+        }
         pointer(&ctx, &mut app, mixer, true, egui::Modifiers::NONE);
         let clicked = frame(
             &ctx,
@@ -1403,6 +2207,46 @@ mod tests {
             Arc::ptr_eq(&icons, cached),
             "Rail textures must be reused across frames and actions."
         );
+    }
+
+    #[test]
+    fn folder_tempo_list_scrolls_to_provider_controls_at_compact_size() {
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-tempos-{}", std::process::id()));
+        for index in 0..60 {
+            let folder = dir.join(format!("Folder {index:02}"));
+            std::fs::create_dir_all(&folder).unwrap();
+            for name in ["a", "b", "c"] {
+                Pcm { sample_rate: 100, channels: 1, samples: vec![0.25; 200] }
+                    .write_wav(&folder.join(format!("{name}.wav"))).unwrap();
+            }
+        }
+        let library = Library::open_wav_folder(&dir, 120.0).unwrap();
+        assert_eq!(library.folder_tempos().len(), 60);
+        let session = Session::headless(Arc::new(library), Project::default()).unwrap();
+        let mut app = MixJamApp::from_session(session, String::new(), false);
+        app.show_libraries = true;
+        let context = egui::Context::default();
+        configure_style(&context);
+        let size = Vec2::new(960.0, 720.0);
+        for _ in 0..3 { frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size); }
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let position = text_rect(&output, "Folder tempos (60)").center();
+        for pressed in [true, false] {
+            frame_at_size(&context, &mut app, vec![egui::Event::PointerMoved(position),
+                egui::Event::PointerButton { pos: position, button: egui::PointerButton::Primary,
+                    pressed, modifiers: egui::Modifiers::NONE }], egui::Modifiers::NONE, size);
+        }
+        for _ in 0..20 {
+            frame_at_size(&context, &mut app, vec![egui::Event::PointerMoved(position),
+                egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, -500.0), modifiers: egui::Modifiers::NONE }],
+                egui::Modifiers::NONE, size);
+        }
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let provider = text_rect(&output, "Optional product providers");
+        assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(provider),
+            "Provider controls must remain reachable after expanding a large tempo list: {provider:?}");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

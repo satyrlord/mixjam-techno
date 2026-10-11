@@ -10,12 +10,12 @@ resolver = "3"
 
 [features]
 default = ["gui"]
-gui = ["dep:eframe", "dep:rfd", "dep:image"]
+gui = ["dep:eframe", "dep:rfd", "dep:image", "dep:deunicode"]
 
 [dependencies]
 legacy-format = { path = "crates/legacy-format" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 hound = "3.5.1"
 rodio = { version = "=0.20.1", default-features = false }
@@ -23,6 +23,7 @@ cpal = "=0.15.3"
 eframe = { version = "=0.33.0", optional = true, default-features = false, features = ["default_fonts", "glow", "accesskit", "__screenshot"] }
 rfd = { version = "0.15", optional = true }
 image = { version = "=0.25.10", optional = true, default-features = false, features = ["png"] }
+deunicode = { version = "=1.6.2", optional = true }
 
 [profile.release]
 lto = "thin"

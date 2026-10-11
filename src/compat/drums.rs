@@ -5,7 +5,7 @@ use crate::{
     library::{Library, decode_1252},
     products::Product,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(super) const RENDERER_POLICY: &str = "dry-drum-import-v1: bit-zero-first; sixteen steps per bar; equal-temperament pitch; per-pad reverse and L/R routing; native 1.25 fader curve with Q16 truncation; independent hits; one-bar output; final saturation; opaque native effects retained without interpretation";
 const GEN3_RENDERER_POLICY: &str = "dry-drum-import-v2: bit-zero-first; sixteen pads and sixteen steps per bar; equal-temperament pitch; per-pad reverse and linear pan attenuation; explicit dry linear stored/32767 pad gain projection; independent hits; one-bar output; final saturation; opaque native effects retained without interpretation";
@@ -26,15 +26,15 @@ fn pad_count(product: Product) -> Result<usize, String> {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
-pub(super) struct Pattern {
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Pattern {
     pub native_id: u16,
     pub masks: Vec<u16>,
     pub group: String,
     pub variant: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct Pad {
     pub native_id: u16,
     pub name: String,
@@ -45,13 +45,13 @@ pub(super) struct Pad {
     pub raw_settings: [u8; 8],
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pan_native: Option<u16>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_paths: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub opaque_native_settings: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct Kit {
     pub pads: Vec<Pad>,
     pub source_offset: usize,
@@ -59,7 +59,7 @@ pub(super) struct Kit {
     pub opaque_native_settings: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_end: Option<usize>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_header: Vec<u8>,
 }
 

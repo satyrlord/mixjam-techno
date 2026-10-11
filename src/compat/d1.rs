@@ -1,14 +1,16 @@
 //! D1's observed 0x0a06 grids and its two shipped footer encodings.
 //! The common project uses ticks directly; T1's 180 BPM frame clock is not used.
 use crate::{
-    engine::{Clip, ImportedSample, Project, TICKS_PER_BAR, normalize_import},
+    engine::{
+        Clip, ImportedSample, MissingReference, MissingSample, Project, TICKS_PER_BAR,
+        normalize_import,
+    },
     library::{Library, decode_1252},
     products::{IMPORTED_ID_START, Product},
 };
 use std::{
     collections::{BTreeSet, HashMap},
     fs,
-    io::Read,
     path::{Component, Path, PathBuf},
 };
 
@@ -23,7 +25,7 @@ const KIT_FIRST: u16 = 3400;
 const KIT_REGIONS: [(u16, u16); 3] = [(3400, 3899), (3900, 4499), (4500, 5199)];
 
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
-    let bytes = read_bounded(path, 16 * 1024 * 1024)?;
+    let bytes = super::song_file::read_song_file(path)?;
     convert(&bytes, path, library, |native_id| {
         let id = Product::D1.global_sample_id(u32::from(native_id))?;
         let sample = library
@@ -48,7 +50,7 @@ struct Event {
 struct Footer {
     title: String,
     routes: [u16; TRACKS],
-    regions: Vec<(u16, u16)>,
+    regions: Vec<(u16, u16, String)>,
     imports: Vec<(u16, [String; 4])>,
 }
 
@@ -89,12 +91,8 @@ fn convert(
             offset,
         });
     }
-    let expected_imports: BTreeSet<_> = events
-        .iter()
-        .map(|e| e.sample)
-        .filter(|id| (IMPORT_FIRST..KIT_FIRST).contains(id))
-        .collect();
-    let footer = parse_footer(&bytes[TRAILER_OFFSET..], &expected_imports)?;
+    let referenced_ids: BTreeSet<_> = events.iter().map(|event| event.sample).collect();
+    let footer = parse_footer(&bytes[TRAILER_OFFSET..], &referenced_ids)?;
     let fallback_title = path.file_stem().map_or_else(
         || "Untitled".into(),
         |name| name.to_string_lossy().into_owned(),
@@ -117,22 +115,21 @@ fn convert(
         track.left_enabled = matches!(route, 0 | 1);
         track.right_enabled = matches!(route, 0 | 2);
     }
+    let catalog = crate::catalog::wave_metadata(Product::D1)?;
     let mut sources = HashMap::new();
     for (source_id, fields) in footer.imports {
-        let imported_path = resolve_path(
-            &fields[2],
-            path.parent().unwrap_or_else(|| Path::new(".")),
-            library,
-        )?;
-        let pcm = crate::audio::read_wav(&imported_path)?;
-        if pcm.frames() == 0 {
-            return Err("The D1 imported sample contains no audio.".into());
-        }
-        // New-project policy for external WAVs: retain their measured length in
-        // a whole-bar placement envelope. Original D1 import rounding is unmeasured.
-        let bars = (pcm.frames() as f64 / pcm.sample_rate as f64 * 140.0 / 240.0).ceil() as u32;
+        let base = path.parent().unwrap_or_else(|| Path::new("."));
+        let saved_path = reference_path(&fields[2], base)?;
+        let resolved = resolve_path(&fields[2], base, library).and_then(|(path, candidates)| {
+            let pcm = crate::audio::read_wav(&path)?;
+            if pcm.frames() == 0 {
+                return Err("The D1 imported sample contains no audio.".into());
+            }
+            let bars = (pcm.frames() as f64 / pcm.sample_rate as f64 * 140.0 / 240.0).ceil() as u32;
+            Ok((path, bars, pcm.sample_rate, candidates))
+        });
         let id = IMPORTED_ID_START
-            .checked_add(project.imported_samples.len() as u32)
+            .checked_add((project.imported_samples.len() + project.missing_samples.len()) as u32)
             .ok_or("Imported sample ID limit reached.")?;
         let name = format!("{} {}", fields[0], fields[1]).trim().to_owned();
         let name = if name.is_empty() {
@@ -140,7 +137,7 @@ fn convert(
         } else {
             name
         };
-        project.imported_samples.push(ImportedSample {
+        let imported = ImportedSample {
             id,
             name,
             group_name: if fields[3].is_empty() {
@@ -148,17 +145,107 @@ fn convert(
             } else {
                 fields[3].clone()
             },
-            path: imported_path,
+            path: saved_path,
             source_bpm: 140.0,
+            source_sample_rate: None,
             origin: Some(Product::D1),
-        });
+        };
+        let bars = match resolved {
+            Ok((path, bars, sample_rate, candidates)) => {
+                crate::library::record_wav_conflict(&mut project, &fields[2], id, candidates);
+                project.imported_samples.push(ImportedSample {
+                    path,
+                    source_sample_rate: Some(sample_rate),
+                    ..imported
+                });
+                bars
+            }
+            Err(reason) => {
+                let bars = inferred_bars(&events, source_id);
+                let mut missing = MissingSample::external(&imported, bars * TICKS_PER_BAR, reason);
+                for (key, value) in [
+                    ("source_id", source_id.to_string()),
+                    ("label_1", fields[0].clone()),
+                    ("label_2", fields[1].clone()),
+                    ("saved_path", fields[2].clone()),
+                    ("category", fields[3].clone()),
+                ] {
+                    missing.metadata.insert(key.into(), value);
+                }
+                project.missing_samples.push(missing);
+                bars
+            }
+        };
         sources.insert(source_id, (id, bars, String::new()));
     }
     for event in &events {
         if sources.contains_key(&event.sample) {
             continue;
         }
-        let source = resolve(event.sample)?;
+        let saved_kit = footer
+            .regions
+            .iter()
+            .enumerate()
+            .find(|(_, (first, last, _))| (*first..=*last).contains(&event.sample));
+        let unresolved_kit = saved_kit
+            .filter(|(index, (first, last, name))| {
+                let (known_first, known_last) = KIT_REGIONS[*index];
+                let known_old_last = *index == 1 && footer.regions.len() == 2 && *last == 4500;
+                *first != known_first
+                    || (*last != known_last && !known_old_last)
+                    || !known_saved_kit_name(*index, name)
+            })
+            .map(|(_, region)| region);
+        let resolved = if unresolved_kit.is_some() {
+            Err("The saved D1 expansion kit name or ID range cannot be matched to the active catalog.".into())
+        } else {
+            resolve(event.sample)
+        };
+        let source = match resolved {
+            Ok(source) => source,
+            Err(reason) => {
+                let (mut missing, bars, code) = native_placeholder(
+                    Product::D1,
+                    event.sample,
+                    inferred_bars(&events, event.sample),
+                    reason,
+                    if unresolved_kit.is_some() {
+                        None
+                    } else {
+                        catalog
+                            .iter()
+                            .find(|sample| sample.native_id == u32::from(event.sample))
+                    },
+                )?;
+                if let Some((_, (first, last, name))) = saved_kit {
+                    missing.metadata.insert("kit_name".into(), name.clone());
+                    missing
+                        .metadata
+                        .insert("source_id".into(), event.sample.to_string());
+                    missing
+                        .metadata
+                        .insert("kit_first_id".into(), first.to_string());
+                    missing
+                        .metadata
+                        .insert("kit_last_id".into(), last.to_string());
+                }
+                if let Some((first, last, name)) = unresolved_kit {
+                    missing.id = IMPORTED_ID_START
+                        .checked_add(
+                            (project.imported_samples.len() + project.missing_samples.len()) as u32,
+                        )
+                        .ok_or("Imported sample ID limit reached.")?;
+                    missing.reference = MissingReference::Generated {
+                        product: Product::D1,
+                        kind: "unresolved-kit".into(),
+                        data: serde_json::json!({"native_id": event.sample, "first_id": first, "last_id": last, "name": name}),
+                    };
+                }
+                let id = missing.id;
+                project.missing_samples.push(missing);
+                (id, bars, code)
+            }
+        };
         if source.1 == 0 || source.1 > 32766 {
             return Err("A D1 sample has an invalid native bar length.".into());
         }
@@ -166,14 +253,15 @@ fn convert(
             .regions
             .iter()
             .enumerate()
-            .find(|(_, (first, last))| (*first..=*last).contains(&event.sample))
+            .find(|(_, (first, last, _))| (*first..=*last).contains(&event.sample))
         {
             let prefix = format!("dmkit{}/", kit + 1);
-            if !source
-                .2
-                .replace('\\', "/")
-                .to_ascii_lowercase()
-                .starts_with(&prefix)
+            if !source.2.is_empty()
+                && !source
+                    .2
+                    .replace('\\', "/")
+                    .to_ascii_lowercase()
+                    .starts_with(&prefix)
             {
                 return Err(
                     "The saved D1 kit region does not match the active sample catalog.".into(),
@@ -214,7 +302,78 @@ fn convert(
     normalize_import(project)
 }
 
-fn parse_footer(bytes: &[u8], expected_imports: &BTreeSet<u16>) -> Result<Footer, String> {
+fn known_saved_kit_name(index: usize, name: &str) -> bool {
+    // These aliases occur in the shipped D1 demos. Their ordinal regions use
+    // the same dmkit1/..dmkit3/ catalogs checked below before source adoption.
+    // The first two aliases come from the older plain-footer demos; the three
+    // descriptive aliases come from dream.mix and space.mix.
+    const NAMES: [&[&str]; 3] = [
+        &[
+            "DanceMachine Sample-Kit Vol. 1",
+            "gung -SAMPLE BOX- [Raps && Vocals]",
+        ],
+        &[
+            "DanceMachine Sample-Kit Vol. 2",
+            "gung -SAMPLE BOX- [Drams && Synthies]",
+        ],
+        &["gung -SAMPLE BOX- [Space Sounds]"],
+    ];
+    name.is_empty() || NAMES.get(index).is_some_and(|names| names.contains(&name))
+}
+
+fn inferred_bars(events: &[Event], source_id: u16) -> u32 {
+    events
+        .iter()
+        .filter(|event| event.sample == source_id)
+        .map(|event| {
+            events
+                .iter()
+                .find(|next| next.track == event.track && next.row > event.row)
+                .map_or(1, |next| (next.row - event.row) as u32)
+        })
+        .max()
+        .unwrap_or(1)
+}
+
+pub(super) fn native_placeholder(
+    product: Product,
+    native_id: u16,
+    inferred_bars: u32,
+    reason: String,
+    metadata: Option<&crate::catalog::WaveMetadata>,
+) -> Result<(MissingSample, u32, String), String> {
+    let bars = metadata.map_or(inferred_bars, |sample| sample.bars);
+    let name = metadata.map_or_else(
+        || format!("{} sample {native_id}", product.label()),
+        |sample| sample.name.clone(),
+    );
+    let mut missing = MissingSample::native(
+        product,
+        u32::from(native_id),
+        name,
+        if product == Product::T1 { 180.0 } else { 140.0 },
+        bars * TICKS_PER_BAR,
+        metadata.is_none(),
+        reason,
+    )?;
+    let code = metadata.map_or_else(String::new, |sample| sample.code.clone());
+    if let Some(sample) = metadata {
+        for (key, value) in [
+            ("code", sample.code.clone()),
+            ("category", sample.group_name.clone()),
+            ("catalog_bars", sample.bars.to_string()),
+            ("catalog_frame_count", sample.frame_count.to_string()),
+        ] {
+            missing.metadata.insert(key.into(), value);
+        }
+        if let Some(digest) = &sample.pcm_digest {
+            missing.metadata.insert("pcm_digest".into(), digest.clone());
+        }
+    }
+    Ok((missing, bars, code))
+}
+
+fn parse_footer(bytes: &[u8], referenced_ids: &BTreeSet<u16>) -> Result<Footer, String> {
     let mut footer = Footer {
         title: String::new(),
         routes: [0; TRACKS],
@@ -222,7 +381,10 @@ fn parse_footer(bytes: &[u8], expected_imports: &BTreeSet<u16>) -> Result<Footer
         imports: Vec::new(),
     };
     if bytes.is_empty() {
-        if !expected_imports.is_empty() {
+        if referenced_ids
+            .iter()
+            .any(|id| (IMPORT_FIRST..KIT_FIRST).contains(id))
+        {
             return Err("The D1 MIX has imported sample IDs without saved file references.".into());
         }
         return Ok(footer);
@@ -244,20 +406,27 @@ fn parse_footer(bytes: &[u8], expected_imports: &BTreeSet<u16>) -> Result<Footer
         if count != if wrapped { 3 } else { 2 } {
             return Err("The D1 MIX has an unsupported kit table.".into());
         }
-        for (kit, &(expected_first, expected_last)) in KIT_REGIONS.iter().enumerate().take(count) {
+        let mut previous_last = IMPORT_FIRST - 1;
+        for _ in 0..count {
             let first = reader.word()?;
             let last = reader.word()?;
-            let _name = reader.text(wrapped)?;
-            let observed_old_boundary = !wrapped && kit == 1 && last == 4500;
-            if first != expected_first || (last != expected_last && !observed_old_boundary) {
-                return Err(
-                    "The D1 MIX remaps expansion-kit IDs. That kit mapping is not supported."
-                        .into(),
-                );
+            let name = reader.text(wrapped)?;
+            if first <= previous_last || last < first || last > i16::MAX as u16 {
+                return Err("The D1 expansion-kit ID ranges are invalid or overlap.".into());
             }
-            footer.regions.push((first, last));
+            previous_last = last;
+            footer.regions.push((first, last, name));
         }
     }
+    let first_kit = footer
+        .regions
+        .first()
+        .map_or(KIT_FIRST, |(first, _, _)| *first);
+    let expected_imports: BTreeSet<_> = referenced_ids
+        .iter()
+        .copied()
+        .filter(|id| (IMPORT_FIRST..first_kit).contains(id))
+        .collect();
     let count = reader.word()? as usize;
     if count != expected_imports.len() {
         return Err("The D1 imported sample count does not match the referenced IDs.".into());
@@ -265,7 +434,7 @@ fn parse_footer(bytes: &[u8], expected_imports: &BTreeSet<u16>) -> Result<Footer
     if !wrapped && count > 0 {
         return Err("Imported samples in the old plain footer are not supported.".into());
     }
-    for &source_id in expected_imports {
+    for source_id in expected_imports {
         let payload = reader.word()? as usize;
         let field_start = reader.offset;
         let fields = [
@@ -338,7 +507,7 @@ impl Reader<'_> {
     }
 }
 
-fn resolve_path(text: &str, base: &Path, library: &Library) -> Result<PathBuf, String> {
+fn reference_path(text: &str, base: &Path) -> Result<PathBuf, String> {
     if text.is_empty() || text.chars().any(char::is_control) {
         return Err("The D1 imported sample path is invalid.".into());
     }
@@ -357,23 +526,29 @@ fn resolve_path(text: &str, base: &Path, library: &Library) -> Result<PathBuf, S
         }
         base.join(path)
     };
-    let path = match crate::preservation::resolve_asset(&path) {
-        Ok(found) if found.is_file() => found,
-        _ => library.resolve_wav_reference(text)?,
-    };
-    fs::canonicalize(path).map_err(|e| format!("Cannot open the D1 imported sample: {e}"))
+    Ok(path)
 }
 
-fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut bytes = Vec::new();
-    file.take(limit as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() > limit {
-        return Err("The D1 MIX exceeds its file-size limit.".into());
-    }
-    Ok(bytes)
+fn resolve_path(
+    text: &str,
+    base: &Path,
+    library: &Library,
+) -> Result<(PathBuf, Vec<PathBuf>), String> {
+    let path = reference_path(text, base)?;
+    let (path, candidates) = match crate::preservation::resolve_asset(&path) {
+        Ok(found) if found.is_file() => (found, Vec::new()),
+        _ => {
+            let candidates = library.find_wav_candidates(text)?;
+            let path = candidates
+                .first()
+                .cloned()
+                .ok_or_else(|| format!("WAV sample {text} is missing from the selected folder."))?;
+            (path, candidates)
+        }
+    };
+    fs::canonicalize(path)
+        .map(|path| (path, candidates))
+        .map_err(|e| format!("Cannot open the D1 imported sample: {e}"))
 }
 
 #[cfg(test)]
@@ -528,6 +703,242 @@ mod tests {
         assert!(parse_footer(&footer[..footer.len() - 1], &BTreeSet::from([2083])).is_err());
         assert!(parse_footer(&footer, &BTreeSet::new()).is_err());
     }
+    #[test]
+    fn shipped_kit_names_resolve_and_unknown_names_preserve_silent_recovery_details() {
+        for (kit, names) in [
+            vec![
+                "DanceMachine Sample-Kit Vol. 1",
+                "gung -SAMPLE BOX- [Raps && Vocals]",
+            ],
+            vec![
+                "DanceMachine Sample-Kit Vol. 2",
+                "gung -SAMPLE BOX- [Drams && Synthies]",
+            ],
+            vec!["gung -SAMPLE BOX- [Space Sounds]"],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for name in names
+                .into_iter()
+                .chain(std::iter::once("Unknown replacement kit"))
+            {
+                let source_id = KIT_REGIONS[kit].0;
+                let mut bytes = mix();
+                place(&mut bytes, 0, 0, source_id, 0);
+                bytes.extend([8, 10, 2, 0]);
+                wrapped(&mut bytes, b"Kit demo");
+                bytes.extend(3u16.to_le_bytes());
+                for (index, (first, last)) in KIT_REGIONS.into_iter().enumerate() {
+                    bytes.extend(first.to_le_bytes());
+                    bytes.extend(last.to_le_bytes());
+                    wrapped(&mut bytes, if index == kit { name.as_bytes() } else { b"" });
+                }
+                bytes.extend([0, 0, 8, 0]);
+                bytes.extend([0; 16]);
+                let project = convert(&bytes, Path::new("kit.mix"), &Library::empty(), |id| {
+                    Ok((
+                        Product::D1.global_sample_id(u32::from(id))?,
+                        2,
+                        format!("dmkit{}/sample.pxd", kit + 1),
+                    ))
+                })
+                .unwrap();
+                assert_eq!(project.clips.len(), 1);
+                if name == "Unknown replacement kit" {
+                    assert_eq!(project.missing_samples.len(), 1);
+                    assert_eq!(project.missing_samples[0].metadata["kit_name"], name);
+                    assert!(matches!(&project.missing_samples[0].reference,
+                        MissingReference::Generated { kind, .. } if kind == "unresolved-kit"));
+                    assert!(project.missing_samples[0].id >= IMPORTED_ID_START);
+                } else {
+                    assert!(project.missing_samples.is_empty(), "{name}");
+                    assert_eq!(
+                        project.clips[0].sample_id,
+                        Product::D1.global_sample_id(u32::from(source_id)).unwrap()
+                    );
+                    assert_eq!(project.clips[0].length_ticks, 2 * TICKS_PER_BAR);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn remapped_kit_ranges_preserve_sources_but_invalid_ranges_reject() {
+        let build = |first: u16, last: u16| {
+            let mut bytes = mix();
+            place(&mut bytes, 0, 0, 3300, 4);
+            place(&mut bytes, 7, 0, 731, 0);
+            bytes.extend([8, 10, 2, 0]);
+            wrapped(&mut bytes, b"Remapped kit");
+            bytes.extend(3u16.to_le_bytes());
+            for (first, last) in [(first, last), (3900, 4499), (4500, 5199)] {
+                bytes.extend(first.to_le_bytes());
+                bytes.extend(last.to_le_bytes());
+                wrapped(&mut bytes, b"");
+            }
+            bytes.extend([0, 0, 8, 0]);
+            bytes.extend([0; 16]);
+            bytes
+        };
+        let project = convert(
+            &build(3300, 3899),
+            Path::new("remapped.mix"),
+            &Library::empty(),
+            resolve,
+        )
+        .unwrap();
+        assert_eq!(project.clips.len(), 2);
+        assert_eq!(project.clips[0].start_tick, 64);
+        assert_eq!(project.clips[0].length_ticks, 7 * TICKS_PER_BAR - 64);
+        let missing = &project.missing_samples[0];
+        assert_eq!(missing.metadata["source_id"], "3300");
+        assert_eq!(missing.metadata["kit_first_id"], "3300");
+        assert_eq!(missing.metadata["kit_last_id"], "3899");
+        assert!(missing.length_inferred);
+        assert!(matches!(&missing.reference,
+            MissingReference::Generated { kind, .. } if kind == "unresolved-kit"));
+        for invalid in [build(3300, 3900), build(3300, 3299), build(700, 3899)] {
+            assert!(
+                convert(
+                    &invalid,
+                    Path::new("invalid.mix"),
+                    &Library::empty(),
+                    resolve
+                )
+                .unwrap_err()
+                .contains("invalid or overlap")
+            );
+        }
+    }
+
+    #[test]
+    fn missing_catalog_audio_keeps_duration_metadata_and_every_placement() {
+        let sample = crate::catalog::wave_metadata(Product::D1)
+            .unwrap()
+            .into_iter()
+            .find(|sample| sample.native_id < u32::from(IMPORT_FIRST) && sample.bars > 1)
+            .unwrap();
+        let mut bytes = mix();
+        place(&mut bytes, 0, 0, sample.native_id as u16, 0);
+        place(&mut bytes, 12, 2, sample.native_id as u16, 4);
+        let project = convert(&bytes, Path::new("missing.mix"), &Library::empty(), |_| {
+            Err("Audio unavailable.".into())
+        })
+        .unwrap();
+        assert_eq!(project.clips.len(), 2);
+        assert_eq!(project.missing_samples.len(), 1);
+        let missing = &project.missing_samples[0];
+        assert!(!missing.length_inferred);
+        assert_eq!(missing.nominal_ticks, sample.bars * TICKS_PER_BAR);
+        assert_eq!(missing.name, sample.name);
+        assert_eq!(missing.metadata["code"], sample.code);
+        assert_eq!(missing.metadata["category"], sample.group_name);
+        assert_eq!(project.clips[0].length_ticks, sample.bars * TICKS_PER_BAR);
+        assert_eq!(project.clips[1].start_tick, 12 * TICKS_PER_BAR + 64);
+    }
+
+    #[test]
+    fn missing_external_audio_retains_labels_path_category_and_inferred_extent() {
+        let mut bytes = mix();
+        place(&mut bytes, 0, 0, IMPORT_FIRST, 0);
+        place(&mut bytes, 5, 0, 731, 0);
+        place(&mut bytes, 10, 2, IMPORT_FIRST, 8);
+        bytes.extend([8, 10, 1, 0]);
+        wrapped(&mut bytes, b"Missing take");
+        bytes.extend(1u16.to_le_bytes());
+        let fields: [&[u8]; 4] = [b"caf\xe9", b"take", b"absent/take.wav", b"Voice"];
+        bytes.extend(
+            ((8 + fields.iter().map(|field| field.len()).sum::<usize>()) as u16).to_le_bytes(),
+        );
+        for field in fields {
+            wrapped(&mut bytes, field);
+        }
+        bytes.extend(8u16.to_le_bytes());
+        bytes.extend([0; 16]);
+        let project =
+            convert(&bytes, Path::new("missing.mix"), &Library::empty(), resolve).unwrap();
+        assert_eq!(project.clips.len(), 3);
+        assert_eq!(project.missing_samples.len(), 1);
+        assert!(project.imported_samples.is_empty());
+        let missing = &project.missing_samples[0];
+        assert_eq!(missing.name, "café take");
+        assert_eq!(missing.metadata["label_1"], "café");
+        assert_eq!(missing.metadata["label_2"], "take");
+        assert_eq!(missing.metadata["saved_path"], "absent/take.wav");
+        assert_eq!(missing.metadata["category"], "Voice");
+        assert_eq!(missing.metadata["source_id"], IMPORT_FIRST.to_string());
+        assert_eq!(missing.nominal_ticks, 5 * TICKS_PER_BAR);
+        assert!(missing.length_inferred);
+        assert_eq!(project.clips[0].length_ticks, 5 * TICKS_PER_BAR);
+        assert_eq!(project.clips[2].start_tick, 10 * TICKS_PER_BAR + 128);
+        let encoded = serde_json::to_string(&project).unwrap();
+        let reopened: Project = serde_json::from_str(&encoded).unwrap();
+        reopened.validate().unwrap();
+        assert_eq!(
+            serde_json::to_value(reopened).unwrap(),
+            serde_json::to_value(project).unwrap()
+        );
+    }
+
+    #[test]
+    fn external_wave_conflict_selects_first_for_all_repeated_placements() {
+        let root = std::env::temp_dir().join(format!(
+            "d1-conflict-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for (folder, value) in [("A", 0.1), ("B", 0.2)] {
+            fs::create_dir_all(root.join(folder)).unwrap();
+            crate::audio::Pcm {
+                sample_rate: 44100,
+                channels: 1,
+                samples: vec![value; 4410],
+            }
+            .write_wav(&root.join(folder).join("take.wav"))
+            .unwrap();
+        }
+        let mut library = Library::empty();
+        library.import_wav_folder(&root, 140.0).unwrap();
+        let mut bytes = mix();
+        place(&mut bytes, 0, 0, IMPORT_FIRST, 0);
+        place(&mut bytes, 4, 1, IMPORT_FIRST, 0);
+        bytes.extend([8, 10, 1, 0]);
+        wrapped(&mut bytes, b"Conflicting take");
+        bytes.extend(1u16.to_le_bytes());
+        let fields: [&[u8]; 4] = [b"Recorded", b"take", b"old/take.wav", b"Voice"];
+        bytes.extend(
+            ((8 + fields.iter().map(|field| field.len()).sum::<usize>()) as u16).to_le_bytes(),
+        );
+        for field in fields {
+            wrapped(&mut bytes, field);
+        }
+        bytes.extend(8u16.to_le_bytes());
+        bytes.extend([0; 16]);
+        let project = convert(&bytes, &root.join("song.mix"), &library, resolve).unwrap();
+        assert!(project.missing_samples.is_empty());
+        assert_eq!(project.sample_conflicts.len(), 1);
+        let conflict = &project.sample_conflicts[0];
+        assert_eq!(conflict.candidates.len(), 2);
+        assert_eq!(conflict.selected, 0);
+        assert_eq!(conflict.sample_ids, vec![project.imported_samples[0].id]);
+        assert_eq!(
+            project.imported_samples[0].path,
+            fs::canonicalize(root.join("A/take.wav")).unwrap()
+        );
+        assert_eq!(project.clips.len(), 2);
+        assert!(
+            project
+                .clips
+                .iter()
+                .all(|clip| clip.sample_id == conflict.sample_ids[0])
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     #[ignore = "Set MIXJAM_TECHNO_COMPAT_INSTALLATIONS to the extracted five-product media directory."]
     fn all_sixteen_shipped_d1_mixes_import_with_native_ids_and_complete_footers() {

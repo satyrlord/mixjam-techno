@@ -1,23 +1,29 @@
-//! Reader for the 0x889 project profile found in the eleven installed demos.
+//! Reader for the 0x889 project profile found in factory and custom songs.
 //! Unknown preamble data is kept outside the audio arrangement decoder. A match
 //! must contain all sixteen numbered, counted track lists and the exact trailer.
 use crate::{
-    engine::{Clip, Project, TICKS_PER_BAR, Track},
+    compat::chunks::{self, Event, Header, Reference, Timeline, WaveReference},
+    engine::{MAX_TICKS, Project, TICKS_PER_BAR, Track},
     library::{Library, decode_1252},
+    products::Product,
 };
-use std::{fs, path::Path};
+use std::path::Path;
 
 const TRAILER: &[u8] = &[17, 0, 0, 0, 0, 0xa9, 0x7a, 0x8a, 1];
 
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
-    let size = fs::metadata(path).map_err(|e| e.to_string())?.len();
-    if size > 16 * 1024 * 1024 {
-        return Err("The original mix file is too large.".into());
-    }
-    load_bytes(&fs::read(path).map_err(|e| e.to_string())?, library)
+    load_named_bytes(
+        path,
+        &crate::compat::song_file::read_song_file(path)?,
+        library,
+    )
 }
 
 pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
+    load_named_bytes(Path::new("original.mix"), bytes, library)
+}
+
+fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Project, String> {
     let mut reader = Reader { bytes, offset: 0 };
     if reader.u32()? != 0x889 {
         return Err("This original mix version is not supported.".into());
@@ -56,7 +62,13 @@ pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
     // not yet reconstructed. The track lists are independently self-delimiting.
     reader.take(10)?;
     let product = reader.string()?;
-    if product.trim() != "\x54echno \x65Jay 2" {
+    // Custom 0x889 files also save the earlier label or an empty label. Admit
+    // only those observed labels, then require the entire counted arrangement
+    // and exact trailer before resolving any sample or writing imported audio.
+    if !matches!(
+        product.trim(),
+        "\x54echno \x65Jay 2" | "\x54echno \x65Jay" | ""
+    ) {
         return Err("The mix belongs to a different product.".into());
     }
     let search_start = reader.offset;
@@ -65,101 +77,55 @@ pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
         .saturating_sub(16 * 5 + TRAILER.len())
         .min(search_start + 4096);
     let mut arrangement = None;
-    // Only a complete track list with the exact trailer can identify a missing
-    // sample. Preamble bytes can also resemble the beginning of a track list.
-    let mut missing: Option<ArrangementError> = None;
+    // Preamble bytes can resemble a track list. Resolve audio only after a
+    // unique complete structural parse, independently of available samples.
     for start in search_start..=search_end {
         if bytes.get(start) != Some(&1) {
             continue;
         }
-        match parse_arrangement(bytes, start, library) {
-            Ok(clips) => {
-                if arrangement.is_some() || missing.is_some() {
-                    return Err("The original mix has ambiguous arrangement data.".into());
-                }
-                arrangement = Some(clips);
+        if let Ok(events) = parse_arrangement(bytes, start) {
+            if arrangement.is_some() {
+                return Err("The original mix has ambiguous arrangement data.".into());
             }
-            Err(error) if error.missing_sample => {
-                if arrangement.is_some() || missing.is_some() {
-                    return Err("The original mix has ambiguous arrangement data.".into());
-                }
-                missing = Some(error);
-            }
-            Err(_) => {}
+            arrangement = Some(Timeline { start, events });
         }
     }
-    let clips = match (arrangement, missing) {
-        (Some(clips), _) => clips,
-        (None, Some(error)) => return Err(error.message),
-        (None, None) => {
-            return Err("Cannot decode the original mix arrangement. The file is damaged or uses an unsupported profile.".into());
-        }
-    };
-    let project = Project {
+    let timeline = arrangement.ok_or("Cannot decode the original mix arrangement. The file is damaged or uses an unsupported profile.")?;
+    let header = Header {
         title,
         author,
         bpm: source_bpm as f64,
-        master_gain: 1.0,
-        pitch_ratio: playback_bpm as f64 / source_bpm as f64,
+        effective_bpm: playback_bpm as f64,
         tracks,
-        clips,
-        loop_region: None,
-        imported_samples: Vec::new(),
-        libraries: library.bindings().to_vec(),
-        ..Project::default()
+        source_notices: Vec::new(),
+        after_mixer: search_start,
     };
-    crate::engine::normalize_import(project)
+    chunks::build_project(path, bytes, Product::T2, library, header, timeline)
 }
 
-#[derive(Debug)]
-struct ArrangementError {
-    missing_sample: bool,
-    message: String,
-}
-
-fn parse_arrangement(
-    bytes: &[u8],
-    start: usize,
-    library: &Library,
-) -> Result<Vec<Clip>, ArrangementError> {
+fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
     let mut reader = Reader {
         bytes,
         offset: start,
     };
-    let mut clips = Vec::new();
-    match parse_tracks(&mut reader, library, &mut clips) {
-        Ok(None) => Ok(clips),
-        Ok(Some(message)) => Err(ArrangementError {
-            missing_sample: true,
-            message,
-        }),
-        Err(message) => Err(ArrangementError {
-            missing_sample: false,
-            message,
-        }),
-    }
-}
-
-fn parse_tracks(
-    reader: &mut Reader,
-    library: &Library,
-    clips: &mut Vec<Clip>,
-) -> Result<Option<String>, String> {
-    let mut missing = None;
+    let mut events = Vec::new();
     for track in 0..16 {
         if reader.u8()? as usize != track + 1 {
             return Err("Invalid track marker.".into());
         }
         let count = reader.u32()? as usize;
-        if count > 100_000 || count > reader.bytes.len().saturating_sub(reader.offset) / 7 {
+        if count > 100_000 - events.len()
+            || count > reader.bytes.len().saturating_sub(reader.offset) / 7
+        {
             return Err("Invalid clip count.".into());
         }
         for _ in 0..count {
-            if reader.u8()? != 0 {
+            let source = reader.u8()?;
+            if !matches!(source, 0 | 1) {
                 return Err("Unsupported clip source.".into());
             }
             let stored_position = reader.i32()?;
-            let sample_id = reader.u16()? as u32;
+            let sample_id = reader.u16()?;
             let native_position = if stored_position < 0 {
                 !stored_position as u32
             } else {
@@ -169,6 +135,7 @@ fn parse_tracks(
             // Common projects use 256 ticks per bar, so convert exactly once.
             let start_tick = native_position
                 .checked_mul(2)
+                .filter(|value| *value <= MAX_TICKS)
                 .ok_or("Invalid native clip position.")?;
             let (left_trim, right_trim, gain_delta) = if stored_position < 0 {
                 (0, 0, 0)
@@ -177,38 +144,27 @@ fn parse_tracks(
             };
             let left_trim = left_trim
                 .checked_mul(2)
+                .filter(|value| *value <= MAX_TICKS)
                 .ok_or("Invalid native clip trim.")?;
             let right_trim = right_trim
                 .checked_mul(2)
+                .filter(|value| *value <= MAX_TICKS)
                 .ok_or("Invalid native clip trim.")?;
-            let Some(sample) = library.sample_by_id(sample_id) else {
-                missing.get_or_insert_with(|| {
-                    library.describe_missing(crate::products::Product::T2, sample_id)
-                });
-                continue;
+            let reference = if source == 1 {
+                let mut reference = read_wave_extension(&mut reader)?;
+                reference
+                    .metadata
+                    .insert("Saved sample ID".into(), sample_id.to_string());
+                Reference::Wave(reference)
+            } else {
+                Reference::Native(sample_id)
             };
-            let full_ticks = sample
-                .bars
-                .checked_mul(TICKS_PER_BAR)
-                .ok_or("Invalid native sample span.")?;
-            let length_ticks = full_ticks
-                .checked_sub(left_trim)
-                .and_then(|n| n.checked_sub(right_trim))
-                .filter(|n| *n > 0)
-                .ok_or("Invalid clip trim.")?;
-            let offset_frames = (f64::from(left_trim) * f64::from(sample.sample_rate) * 240.0
-                / (sample.source_bpm * f64::from(TICKS_PER_BAR)))
-            .round();
-            if !offset_frames.is_finite() || !(0.0..=f64::from(u32::MAX)).contains(&offset_frames) {
-                return Err("Invalid native clip audio offset.".into());
-            }
-            clips.push(Clip {
-                id: clips.len() as u64 + 1,
-                sample_id,
+            events.push(Event {
+                reference,
                 track,
-                start_tick,
-                length_ticks,
-                offset_frames: offset_frames as u32,
+                position: start_tick,
+                left_trim,
+                right_trim,
                 gain: (32767i32 + gain_delta as i32) as f32 / 32767.0,
             });
         }
@@ -216,7 +172,42 @@ fn parse_tracks(
     if reader.bytes.get(reader.offset..) != Some(TRAILER) {
         return Err("Invalid mix trailer.".into());
     }
-    Ok(missing)
+    Ok(events)
+}
+
+fn read_wave_extension(reader: &mut Reader<'_>) -> Result<WaveReference, String> {
+    let mut metadata = std::collections::BTreeMap::new();
+    // Original writer 0x50A5B5, 0x50A602 and 0x50A650 writes three strings.
+    // 0x50A6A0..0x50A741 then writes u16/u32/u16 metadata. The middle
+    // value is the nominal bar count: 0x42FDDE..0x42FDE1 multiplies it by 128.
+    let path = reader.string()?;
+    if path.len() > 260
+        || path.as_bytes().get(1) != Some(&b':')
+        || !path.to_ascii_lowercase().ends_with(".wav")
+        || path.contains('\0')
+    {
+        return Err("The T2 WAV reference is invalid.".into());
+    }
+    for index in 0..2 {
+        let label = reader.string()?;
+        if label.len() > 260 {
+            return Err("The T2 WAV label is too long.".into());
+        }
+        metadata.insert(format!("Native label {}", index + 1), label);
+    }
+    metadata.insert("Native metadata word 1".into(), reader.u16()?.to_string());
+    let bars = reader.u32()?;
+    metadata.insert("Declared bars".into(), bars.to_string());
+    let declared_ticks = bars
+        .checked_mul(TICKS_PER_BAR)
+        .filter(|ticks| (1..=MAX_TICKS).contains(ticks))
+        .ok_or("The T2 WAV span exceeds the supported timeline.")?;
+    metadata.insert("Native metadata word 2".into(), reader.u16()?.to_string());
+    Ok(WaveReference {
+        path,
+        declared_ticks: Some(declared_ticks),
+        metadata,
+    })
 }
 
 struct Reader<'a> {
@@ -264,6 +255,173 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn text(bytes: &mut Vec<u8>, value: &str) {
+        bytes.extend_from_slice(&((value.len() + 2) as u16).to_le_bytes());
+        bytes.extend_from_slice(value.as_bytes());
+        bytes.extend_from_slice(&[0, 1]);
+    }
+
+    fn custom_song(product: &str, records: &[Vec<u8>]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&0x889u32.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&140u16.to_le_bytes());
+        bytes.extend_from_slice(&140u32.to_le_bytes());
+        text(&mut bytes, "Composer");
+        text(&mut bytes, "Custom song");
+        for _ in 0..16 {
+            bytes.extend_from_slice(&0u16.to_le_bytes());
+            bytes.extend_from_slice(&32767u16.to_le_bytes());
+        }
+        bytes.extend_from_slice(&[0; 10]);
+        text(&mut bytes, product);
+        for track in 1..=16 {
+            bytes.push(track);
+            let count = if track == 1 { records.len() as u32 } else { 0 };
+            bytes.extend_from_slice(&count.to_le_bytes());
+            if track == 1 {
+                for record in records {
+                    bytes.extend_from_slice(record);
+                }
+            }
+        }
+        bytes.extend_from_slice(TRAILER);
+        bytes
+    }
+
+    fn wave_record(path: &str, position: i32, bars: u32) -> Vec<u8> {
+        let mut bytes = vec![1];
+        bytes.extend_from_slice(&position.to_le_bytes());
+        bytes.extend_from_slice(&10200u16.to_le_bytes());
+        if position >= 0 {
+            bytes.extend_from_slice(&128u32.to_le_bytes());
+            bytes.extend_from_slice(&0u32.to_le_bytes());
+            bytes.extend_from_slice(&0i16.to_le_bytes());
+        }
+        text(&mut bytes, path);
+        text(&mut bytes, "");
+        text(&mut bytes, "");
+        bytes.extend_from_slice(&10u16.to_le_bytes());
+        bytes.extend_from_slice(&bars.to_le_bytes());
+        bytes.extend_from_slice(&0u16.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn observed_product_labels_require_a_complete_supported_arrangement() {
+        for label in ["Techno eJay 2 ", "Techno eJay ", ""] {
+            let bytes = custom_song(label, &[]);
+            assert!(load_bytes(&bytes, &Library::empty()).is_ok(), "{label:?}");
+            let mut invalid = bytes.clone();
+            *invalid.last_mut().unwrap() = 0;
+            assert!(load_bytes(&invalid, &Library::empty()).is_err());
+            let mut unknown_source = vec![2];
+            unknown_source.extend_from_slice(&(-1i32).to_le_bytes());
+            unknown_source.extend_from_slice(&174u16.to_le_bytes());
+            assert!(load_bytes(&custom_song(label, &[unknown_source]), &Library::empty()).is_err());
+        }
+        for label in ["Dance eJay 2", "Another product", "Techno eJay 3"] {
+            assert_eq!(
+                load_bytes(&custom_song(label, &[]), &Library::empty()).unwrap_err(),
+                "The mix belongs to a different product."
+            );
+        }
+    }
+
+    #[test]
+    fn framed_wave_records_preserve_nominal_span_trim_and_source_identity() {
+        let root = std::env::temp_dir().join(format!(
+            "t2-custom-wave-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("custom-take.wav");
+        let mut samples = vec![0; 37_800];
+        samples.extend(vec![8192; 37_800]);
+        fs::write(
+            &path,
+            legacy_format::wav::PcmWave {
+                sample_rate: 22_050,
+                channels: 1,
+                samples,
+            }
+            .encode()
+            .unwrap(),
+        )
+        .unwrap();
+        let mut library = Library::empty();
+        library.import_wav_folder(&root, 140.0).unwrap();
+        let records = [
+            wave_record(r"C:\old\custom-take.wav", 0, 2),
+            wave_record(r"C:\old\custom-take.wav", -129, 3),
+        ];
+        let bytes = custom_song("", &records);
+        let project = load_bytes(&bytes, &library).unwrap();
+        assert_eq!(project.imported_samples.len(), 1);
+        assert_eq!(project.imported_samples[0].origin, Some(Product::T2));
+        assert_eq!(project.clips[0].sample_id, project.clips[1].sample_id);
+        assert_eq!(project.clips[0].offset_frames, 37_800);
+        assert_eq!(project.clips[0].length_ticks, 256);
+        assert_eq!(project.clips[1].start_tick, 256);
+        assert_eq!(project.clips[1].length_ticks, 768);
+        let saved = root.join("saved.json");
+        project.save(&saved).unwrap();
+        fs::remove_file(&path).unwrap();
+        let (reopened, restored_library) =
+            crate::project_io::open(&saved, &Library::empty()).unwrap();
+        assert_eq!(reopened, project);
+        let pcm = crate::audio::render_project(&reopened, &restored_library).unwrap();
+        assert!(
+            pcm.samples[..75_600 * 2]
+                .iter()
+                .all(|value| (*value - 0.25).abs() < 0.0001)
+        );
+        // The second record has two bars of PCM in a nominal three-bar tile.
+        assert!(
+            pcm.samples[3 * 75_600 * 2..]
+                .iter()
+                .all(|value| *value == 0.0)
+        );
+        fs::remove_file(saved).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn missing_wave_diagnostic_requires_the_complete_arrangement() {
+        let bytes = custom_song(
+            "Techno eJay ",
+            &[wave_record(r"C:\absent\missing-t2-take.wav", -1, 2)],
+        );
+        let project = load_bytes(&bytes, &Library::empty()).unwrap();
+        assert_eq!(project.clips.len(), 1);
+        assert_eq!(project.clips[0].length_ticks, 512);
+        assert_eq!(project.missing_samples.len(), 1);
+        assert!(
+            project.missing_samples[0]
+                .reason
+                .contains("missing-t2-take.wav")
+        );
+        assert_eq!(project.missing_samples[0].metadata["Declared bars"], "2");
+        for end in [bytes.len() - 1, bytes.len() - TRAILER.len()] {
+            let error = load_bytes(&bytes[..end], &Library::empty()).unwrap_err();
+            assert!(
+                error.contains("Cannot decode the original mix arrangement"),
+                "{error}"
+            );
+        }
+        let record = wave_record(r"C:\absent\missing-t2-take.wav", -1, 0);
+        let error = load_bytes(&custom_song("", &[record]), &Library::empty()).unwrap_err();
+        assert!(
+            error.contains("Cannot decode the original mix arrangement"),
+            "{error}"
+        );
+    }
 
     fn song_with_missing_sample(preamble: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -303,11 +461,14 @@ mod tests {
         preamble.extend_from_slice(&(-129i32).to_le_bytes());
         preamble.extend_from_slice(&9999u16.to_le_bytes());
         let library = Library::empty();
-        let expected = library.describe_missing(crate::products::Product::T2, 174);
+        let expected = library.describe_missing(crate::products::Product::D2, 174);
         for prefix in [&[][..], preamble.as_slice()] {
+            let project = load_bytes(&song_with_missing_sample(prefix), &library).unwrap();
+            assert_eq!(project.missing_samples.len(), 1);
+            assert_eq!(project.missing_samples[0].reason, expected);
             assert_eq!(
-                load_bytes(&song_with_missing_sample(prefix), &library).unwrap_err(),
-                expected
+                project.clips[0].sample_id,
+                Product::D2.global_sample_id(174).unwrap()
             );
         }
     }
@@ -459,14 +620,26 @@ mod tests {
                 }
             }
             bytes.extend_from_slice(TRAILER);
-            let clips = parse_arrangement(&bytes, 0, &library).unwrap();
-            assert_eq!(clips[0].offset_frames as usize, bar_frames);
-            assert_eq!(clips[0].length_ticks, TICKS_PER_BAR);
-            let project = Project {
-                clips,
-                master_gain: 1.0,
-                ..Project::default()
-            };
+            let events = parse_arrangement(&bytes, 0).unwrap();
+            let project = chunks::build_project(
+                Path::new("trim.mix"),
+                &bytes,
+                Product::T2,
+                &library,
+                Header {
+                    title: "Trim".into(),
+                    author: String::new(),
+                    bpm: 140.0,
+                    effective_bpm: 140.0,
+                    tracks: vec![Track::default(); 16],
+                    source_notices: Vec::new(),
+                    after_mixer: 0,
+                },
+                Timeline { start: 0, events },
+            )
+            .unwrap();
+            assert_eq!(project.clips[0].offset_frames as usize, bar_frames);
+            assert_eq!(project.clips[0].length_ticks, TICKS_PER_BAR);
             let pcm = crate::audio::render_project(&project, &library).unwrap();
             assert_eq!(pcm.frames(), 75_600);
             // The first bar is silent; every frame must come from the second bar.

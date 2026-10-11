@@ -8,6 +8,9 @@
 //! placement span, as in MixJam's stretchRatioForDuration scheduling. Descriptive
 //! nativeBPM is not the arrangement playback-rate authority. UI names, palette,
 //! generator metadata and bypassed processor settings are not native controls.
+mod references;
+pub(crate) use references::ReferenceResolver;
+
 use crate::{
     engine::{Clip, Project, Track, normalize_import},
     library::Library,
@@ -260,7 +263,8 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
             "placements":lane.placements})).collect::<Vec<_>>()
     })));
     let solo = document.lanes.iter().any(|lane| lane.solo);
-    let mut imported_paths: HashMap<(PathBuf, u32), u32> = HashMap::new();
+    let mut references = ReferenceResolver::new(library);
+    let mut imported_paths: HashMap<(String, u32), u32> = HashMap::new();
     for (track, mut lane) in document.lanes.into_iter().enumerate() {
         let audible = if solo { lane.solo } else { !lane.muted };
         project.tracks[track] = Track {
@@ -274,21 +278,40 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
         lane.placements
             .sort_by(|a, b| a.start_tick.cmp(&b.start_tick).then(a.id.cmp(&b.id)));
         for (index, placement) in lane.placements.iter().enumerate() {
-            let source = library.resolve_wav_reference(&placement.sample_ref)?;
-            let key = (source.clone(), placement.duration_ticks);
+            let candidates = references.resolve_candidates(&placement.sample_ref);
+            let resolved = candidates
+                .as_ref()
+                .map(|paths| paths[0].clone())
+                .map_err(Clone::clone);
+            let source = resolved
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|_| PathBuf::from(&placement.sample_ref));
+            let key = (
+                placement.sample_ref.to_lowercase(),
+                placement.duration_ticks,
+            );
             let sample_id = if let Some(id) = imported_paths.get(&key) {
                 *id
             } else {
-                let pcm = crate::audio::read_wav(&source)?;
-                if pcm.frames() == 0 {
-                    return Err("A MixJam source WAV contains no audio frames.".into());
-                }
-                let seconds = pcm.frames() as f64 / f64::from(pcm.sample_rate);
-                let tempo = f64::from(placement.duration_ticks) * 240.0 / 32.0 / seconds;
+                let pcm = resolved.and_then(|source| crate::audio::read_wav(&source));
+                let tempo = match &pcm {
+                    Ok(pcm) if pcm.frames() > 0 => {
+                        f64::from(placement.duration_ticks) * 240.0
+                            / 32.0
+                            / (pcm.frames() as f64 / f64::from(pcm.sample_rate))
+                    }
+                    _ => placement
+                        .duration_seconds
+                        .map(|seconds| f64::from(placement.duration_ticks) * 240.0 / 32.0 / seconds)
+                        .unwrap_or_else(|| placement.native_bpm.unwrap_or(document.song.bpm)),
+                };
                 // A second reference may give the same WAV a different span.
                 // Imported project identities must keep those rates independent.
                 let id = crate::products::IMPORTED_ID_START
-                    .checked_add(project.imported_samples.len() as u32)
+                    .checked_add(
+                        (project.imported_samples.len() + project.missing_samples.len()) as u32,
+                    )
                     .ok_or("The MixJam imported sample ID limit was reached.")?;
                 let imported = crate::engine::ImportedSample {
                     id,
@@ -296,13 +319,58 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
                     group_name: "MixJam".into(),
                     path: source.clone(),
                     source_bpm: tempo,
+                    source_sample_rate: pcm.as_ref().ok().map(|pcm| pcm.sample_rate),
                     origin: None,
                 };
                 crate::engine::validate_import_metadata(&imported)?;
-                project.imported_samples.push(imported);
+                match pcm {
+                    Ok(pcm) if pcm.frames() > 0 => project.imported_samples.push(imported),
+                    result => {
+                        let reason = result
+                            .err()
+                            .unwrap_or_else(|| "The source WAV has no audio frames.".into());
+                        let mut missing = crate::engine::MissingSample::external(
+                            &imported,
+                            placement.duration_ticks * 8,
+                            reason,
+                        );
+                        missing.length_inferred = false;
+                        missing
+                            .metadata
+                            .insert("Playback timing policy".into(), "mixjam-span".into());
+                        missing.metadata.insert(
+                            "MixJam source reference".into(),
+                            placement.sample_ref.clone(),
+                        );
+                        missing.metadata.insert(
+                            "MixJam source metadata".into(),
+                            serde_json::to_string(placement).map_err(|error| error.to_string())?,
+                        );
+                        project.missing_samples.push(missing);
+                    }
+                }
                 imported_paths.insert(key, id);
                 id
             };
+            if let Ok(candidates) = candidates
+                && candidates.len() > 1
+            {
+                crate::library::record_wav_conflict(
+                    &mut project,
+                    &placement.sample_ref,
+                    sample_id,
+                    candidates,
+                );
+                if let Some(conflict) = project
+                    .sample_conflicts
+                    .iter_mut()
+                    .find(|conflict| conflict.sample_ids.contains(&sample_id))
+                {
+                    conflict
+                        .source_spans
+                        .insert(sample_id, placement.duration_ticks * 8);
+                }
+            }
             let length = lane
                 .placements
                 .get(index + 1)
@@ -432,5 +500,124 @@ mod tests {
         assert!(projected.source_notices[1].contains("\"type\":\"reverb\""));
         fs::remove_file(wave).unwrap();
         fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_folder_recovery_survives_save_reopen_and_resolves_saved_placeholders() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-legacy-layout-{}", std::process::id()));
+        let selected = root.join("_original");
+        let legacy = root.join("House/Drum/kick.wav");
+        fs::create_dir_all(&selected).unwrap();
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        let write = |path: &Path, frames| {
+            let mut writer = hound::WavWriter::create(
+                path,
+                hound::WavSpec {
+                    channels: 1,
+                    sample_rate: 8000,
+                    bits_per_sample: 16,
+                    sample_format: hound::SampleFormat::Int,
+                },
+            )
+            .unwrap();
+            for _ in 0..frames {
+                writer.write_sample(1000_i16).unwrap();
+            }
+            writer.finalize().unwrap();
+        };
+        write(&legacy, 16000);
+        // A same-basename palette sound must not replace the full saved reference.
+        write(&selected.join("kick.wav"), 8000);
+        let library = Library::open_wav_folder(&selected, 140.0).unwrap();
+        let mut source = fixture();
+        for placement in source["lanes"][0]["placements"].as_array_mut().unwrap() {
+            placement["sampleRef"] = json!("House/Drum/kick.wav");
+        }
+        let input = root.join("old.mixjam");
+        fs::write(&input, serde_json::to_vec(&source).unwrap()).unwrap();
+        let (opened, _) = crate::project_io::open(&input, &library).unwrap();
+        assert!(opened.missing_samples.is_empty());
+        let id = opened.clips[0].sample_id;
+        let audio = opened
+            .imported_samples
+            .iter()
+            .find(|sample| sample.id == id)
+            .unwrap();
+        assert_eq!(audio.path, fs::canonicalize(&legacy).unwrap());
+        assert_eq!(audio.source_bpm, 120.0);
+        assert_eq!(opened.clips[1].sample_id, id);
+
+        let saved = root.join("saved.json");
+        crate::project_io::save(&opened, &saved).unwrap();
+        let (reopened, _) = crate::project_io::open(&saved, &library).unwrap();
+        assert_eq!(reopened.clips, opened.clips);
+        assert_eq!(
+            reopened
+                .imported_samples
+                .iter()
+                .find(|sample| sample.id == id)
+                .unwrap()
+                .path,
+            audio.path
+        );
+
+        let (missing, _) = crate::project_io::open(&input, &Library::empty()).unwrap();
+        assert_eq!(missing.missing_samples.len(), 1);
+        crate::project_io::save(&missing, &saved).unwrap();
+        let (restored, _) = crate::project_io::open(&saved, &library).unwrap();
+        assert!(restored.missing_samples.is_empty());
+        assert_eq!(restored.clips, missing.clips);
+        let restored_audio = restored
+            .imported_samples
+            .iter()
+            .find(|sample| sample.id == restored.clips[0].sample_id)
+            .unwrap();
+        assert_eq!(restored_audio.path, audio.path);
+        assert_eq!(restored_audio.source_bpm, 120.0);
+
+        // A moved reference with two matches opens audibly with a conflict choice.
+        for placement in source["lanes"][0]["placements"].as_array_mut().unwrap() {
+            placement["sampleRef"] = json!("Old/kick.wav");
+        }
+        fs::write(&input, serde_json::to_vec(&source).unwrap()).unwrap();
+        let (conflicted, conflict_library) = crate::project_io::open(&input, &library).unwrap();
+        assert!(conflicted.missing_samples.is_empty());
+        assert_eq!(conflicted.sample_conflicts.len(), 1);
+        let conflict = &conflicted.sample_conflicts[0];
+        assert_eq!(conflict.candidates.len(), 2);
+        assert_eq!(conflict.source_spans[&conflicted.clips[0].sample_id], 256);
+        assert!(!conflict.confirmed);
+        let before_clips = conflicted.clips.clone();
+        let mut session =
+            crate::application::Session::new(std::sync::Arc::new(conflict_library), conflicted)
+                .unwrap();
+        session.resolve_sample_conflict(0, 1).unwrap();
+        assert_eq!(session.project().clips, before_clips);
+        let selected_id = session.project().clips[0].sample_id;
+        let selected_audio = session
+            .project()
+            .imported_samples
+            .iter()
+            .find(|sample| sample.id == selected_id)
+            .unwrap();
+        assert_eq!(selected_audio.source_bpm, 240.0);
+        assert!(session.sample_conflicts()[0].confirmed);
+        crate::project_io::save(session.project(), &saved).unwrap();
+        let (reopened, _) = crate::project_io::open(&saved, &library).unwrap();
+        assert_eq!(
+            reopened.sample_conflicts,
+            session.project().sample_conflicts
+        );
+        assert_eq!(
+            reopened
+                .imported_samples
+                .iter()
+                .find(|sample| sample.id == selected_id)
+                .unwrap()
+                .path,
+            selected_audio.path
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

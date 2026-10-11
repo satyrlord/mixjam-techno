@@ -1,6 +1,9 @@
 //! Import the recovered T1 profile as editable common-project clips.
 use crate::{
-    engine::{Clip, ImportedSample, Project, TICKS_PER_BAR, normalize_import},
+    engine::{
+        Clip, ImportedSample, MissingReference, MissingSample, Project, TICKS_PER_BAR,
+        normalize_import,
+    },
     library::Library,
     products::{IMPORTED_ID_START, Product},
 };
@@ -17,14 +20,13 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-const MIX_BYTE_LIMIT: usize = 16 * 1024 * 1024;
 const PACKED_BYTE_LIMIT: usize = 64 * 1024 * 1024;
 const WAV_BYTE_LIMIT: usize = 128 * 1024 * 1024;
 const SOURCE_BPM: f64 = 180.0;
 const DEFAULT_KIT_REGIONS: [(u16, u16); 3] = [(4400, 4999), (5000, 5624), (5625, 6299)];
 
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
-    let bytes = read_bounded(path, MIX_BYTE_LIMIT, "T1 MIX")?;
+    let bytes = super::song_file::read_song_file(path)?;
     let mix = Mix::parse(&bytes).map_err(|error| format!("Cannot read the T1 MIX: {error}"))?;
     let root = library.source_root(Product::T1);
     let native = root
@@ -34,7 +36,7 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
                 .map(|native| (root, native))
                 .map_err(|error| format!("Cannot read the T1 sample catalogs: {error}"))
         })
-        .transpose()?;
+        .and_then(Result::ok);
     convert(&mix, path, library, |native_id| {
         let global_id = Product::T1.global_sample_id(u32::from(native_id))?;
         let sample = library
@@ -102,80 +104,151 @@ fn convert(
     }
 
     let base = mix_path.parent().unwrap_or_else(|| Path::new("."));
+    let catalog = crate::catalog::wave_metadata(Product::T1)?;
     let mut sources = HashMap::new();
     for record in &footer.imports {
-        let path = resolve_import_path(&record.path, base, library)?;
-        let bytes = read_bounded(&path, WAV_BYTE_LIMIT, "T1 imported WAV")?;
-        FileSample::from_wave(PathBuf::from("import.wav"), &bytes).map_err(|error| {
-            format!(
-                "Cannot use T1 imported sample {} at {}: {error}",
-                record.source_id,
-                path.display()
-            )
-        })?;
-        let duration = legacy_format::playback::wave_duration_bytes(&bytes)
-            .map_err(|error| format!("Cannot read T1 imported WAV timing: {error}"))?;
-        let bars = imports::imported_nominal_bars(duration)
-            .map_err(|error| format!("Cannot schedule T1 imported WAV: {error}"))?;
+        let saved_path = import_reference_path(&record.path, base)?;
+        let resolved =
+            resolve_import_path(&record.path, base, library).and_then(|(path, candidates)| {
+                let bytes = read_bounded(&path, WAV_BYTE_LIMIT, "T1 imported WAV")?;
+                FileSample::from_wave(PathBuf::from("import.wav"), &bytes).map_err(|error| {
+                    format!(
+                        "Cannot use T1 imported sample {} at {}: {error}",
+                        record.source_id,
+                        path.display()
+                    )
+                })?;
+                let duration = legacy_format::playback::wave_duration_bytes(&bytes)
+                    .map_err(|error| format!("Cannot read T1 imported WAV timing: {error}"))?;
+                let bars = imports::imported_nominal_bars(duration)
+                    .map_err(|error| format!("Cannot schedule T1 imported WAV: {error}"))?;
+                Ok((path, bars, candidates))
+            });
         let id = IMPORTED_ID_START
-            .checked_add(project.imported_samples.len() as u32)
+            .checked_add((project.imported_samples.len() + project.missing_samples.len()) as u32)
             .ok_or("The imported sample ID limit was reached.")?;
         let name = record
             .labels
             .iter()
-            .map(ByteText::byte_view)
+            .map(|text| crate::library::decode_1252(&text.0))
             .collect::<Vec<_>>()
             .join(" ")
             .trim()
             .to_owned();
         let name = if name.is_empty() {
-            path.file_stem().map_or_else(
+            saved_path.file_stem().map_or_else(
                 || format!("Sample {}", record.source_id),
                 |stem| stem.to_string_lossy().into_owned(),
             )
         } else {
             name
         };
-        project.imported_samples.push(ImportedSample {
+        let imported = ImportedSample {
             id,
             name,
-            group_name: record.category.byte_view(),
-            path,
+            group_name: crate::library::decode_1252(&record.category.0),
+            path: saved_path,
             source_bpm: SOURCE_BPM,
+            source_sample_rate: Some(44_100),
             origin: Some(Product::T1),
-        });
+        };
+        let bars = match resolved {
+            Ok((path, bars, candidates)) => {
+                crate::library::record_wav_conflict(
+                    &mut project,
+                    &crate::library::decode_1252(&record.path.0),
+                    id,
+                    candidates,
+                );
+                project
+                    .imported_samples
+                    .push(ImportedSample { path, ..imported });
+                bars
+            }
+            Err(reason) => {
+                let bars = inferred_bars(mix, record.source_id);
+                let mut missing = MissingSample::external(&imported, bars * TICKS_PER_BAR, reason);
+                for (key, value) in [
+                    ("source_id", record.source_id.to_string()),
+                    ("label_1", crate::library::decode_1252(&record.labels[0].0)),
+                    ("label_2", crate::library::decode_1252(&record.labels[1].0)),
+                    ("saved_path", crate::library::decode_1252(&record.path.0)),
+                    ("category", crate::library::decode_1252(&record.category.0)),
+                ] {
+                    missing.metadata.insert(key.into(), value);
+                }
+                project.missing_samples.push(missing);
+                bars
+            }
+        };
         sources.insert(record.source_id, (id, bars));
     }
     for event in mix.events() {
         if sources.contains_key(&event.sample_id) {
             continue;
         }
-        if footer.kit_regions.iter().any(|region| {
-            (region.first_id..=region.last_id).contains(&event.sample_id)
-                && !region.name.0.is_empty()
-        }) {
-            return Err(
-                "This T1 MIX names expansion kits. Saved kit names cannot be matched to the active installation."
-                    .into(),
-            );
-        }
-        if !footer.kit_regions.is_empty()
-            && footer
-                .kit_regions
-                .iter()
-                .any(|region| (region.first_id..=region.last_id).contains(&event.sample_id))
-            && footer
-                .kit_regions
-                .iter()
-                .zip(DEFAULT_KIT_REGIONS)
-                .any(|(region, (first, last))| region.first_id != first || region.last_id != last)
-        {
-            return Err(
-                "This T1 MIX remaps expansion-kit sample IDs. That saved kit mapping is not supported."
-                    .into(),
-            );
-        }
-        sources.insert(event.sample_id, resolve_native(event.sample_id)?);
+        let unresolved_kit = footer
+            .kit_regions
+            .iter()
+            .enumerate()
+            .find(|(index, region)| {
+                let (first, last) = DEFAULT_KIT_REGIONS[*index];
+                (region.first_id..=region.last_id).contains(&event.sample_id)
+                    && (!region.name.0.is_empty()
+                        || region.first_id != first
+                        || region.last_id != last)
+            })
+            .map(|(_, region)| region);
+        let resolved = if unresolved_kit.is_some() {
+            Err("The saved T1 expansion kit name or ID range cannot be matched to the active catalog.".into())
+        } else {
+            resolve_native(event.sample_id)
+        };
+        let source = match resolved {
+            Ok(source) => source,
+            Err(reason) => {
+                let (mut missing, bars, _) = super::d1::native_placeholder(
+                    Product::T1,
+                    event.sample_id,
+                    inferred_bars(mix, event.sample_id),
+                    reason,
+                    if unresolved_kit.is_some() {
+                        None
+                    } else {
+                        catalog
+                            .iter()
+                            .find(|sample| sample.native_id == u32::from(event.sample_id))
+                    },
+                )?;
+                if let Some(kit) = unresolved_kit {
+                    missing.id = IMPORTED_ID_START
+                        .checked_add(
+                            (project.imported_samples.len() + project.missing_samples.len()) as u32,
+                        )
+                        .ok_or("The imported sample ID limit was reached.")?;
+                    let name = crate::library::decode_1252(&kit.name.0);
+                    missing.reference = MissingReference::Generated {
+                        product: Product::T1,
+                        kind: "unresolved-kit".into(),
+                        data: serde_json::json!({"native_id": event.sample_id, "first_id": kit.first_id, "last_id": kit.last_id, "name": name}),
+                    };
+                    missing.metadata.insert("kit_name".into(), name);
+                    missing
+                        .metadata
+                        .insert("source_id".into(), event.sample_id.to_string());
+                    missing
+                        .metadata
+                        .insert("kit_first_id".into(), kit.first_id.to_string());
+                    missing
+                        .metadata
+                        .insert("kit_last_id".into(), kit.last_id.to_string());
+                }
+                let id = missing.id;
+                project.missing_samples.push(missing);
+                (id, bars)
+            }
+        };
+        sources.insert(event.sample_id, source);
     }
     let scheduled = timeline::schedule(mix, |native_id| {
         sources.get(&native_id).map(|(_, bars)| *bars)
@@ -203,6 +276,18 @@ fn convert(
     normalize_import(project)
 }
 
+fn inferred_bars(mix: &Mix, source_id: u16) -> u32 {
+    mix.events()
+        .filter(|event| event.sample_id == source_id)
+        .map(|event| {
+            mix.events()
+                .find(|next| next.track == event.track && next.row > event.row)
+                .map_or(1, |next| (next.row - event.row) as u32)
+        })
+        .max()
+        .unwrap_or(1)
+}
+
 fn frame_to_tick(frame: u64) -> Result<u32, String> {
     let scaled = frame
         .checked_mul(u64::from(TICKS_PER_BAR))
@@ -214,7 +299,7 @@ fn frame_to_tick(frame: u64) -> Result<u32, String> {
         .map_err(|_| "The T1 timeline exceeds the supported range.".into())
 }
 
-fn resolve_import_path(raw: &ByteText, base: &Path, library: &Library) -> Result<PathBuf, String> {
+fn import_reference_path(raw: &ByteText, base: &Path) -> Result<PathBuf, String> {
     if raw.0.is_empty() || raw.0.iter().any(|byte| *byte < 32 || *byte == 127) {
         return Err("The T1 imported sample path is empty or contains a control byte.".into());
     }
@@ -241,9 +326,25 @@ fn resolve_import_path(raw: &ByteText, base: &Path, library: &Library) -> Result
         };
         base.join(path)
     };
+    Ok(path)
+}
+
+fn resolve_import_path(
+    raw: &ByteText,
+    base: &Path,
+    library: &Library,
+) -> Result<(PathBuf, Vec<PathBuf>), String> {
+    let path = import_reference_path(raw, base)?;
+    let reference = crate::library::decode_1252(&raw.0).replace('\\', "/");
     match crate::preservation::resolve_asset(&path) {
-        Ok(found) if found.is_file() => Ok(found),
-        _ => library.resolve_wav_reference(&reference),
+        Ok(found) if found.is_file() => Ok((found, Vec::new())),
+        _ => {
+            let candidates = library.find_wav_candidates(&reference)?;
+            let path = candidates.first().cloned().ok_or_else(|| {
+                format!("WAV sample {reference} is missing from the selected folder.")
+            })?;
+            Ok((path, candidates))
+        }
     }
 }
 
@@ -334,15 +435,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unresolved_invalid_offset_and_nonplayable_placements() {
+    fn preserves_unresolved_but_rejects_invalid_offset_and_nonplayable_placements() {
         let mut mix = Mix::default();
         mix.set_cell(0, 0, 733, 0).unwrap();
         footer(&mut mix, [0; 8]);
-        assert!(
-            convert(&mix, Path::new("test.mix"), &Library::empty(), resolve)
-                .unwrap_err()
-                .contains("733")
+        let project = convert(&mix, Path::new("test.mix"), &Library::empty(), resolve).unwrap();
+        assert_eq!(project.clips.len(), 1);
+        assert_eq!(project.missing_samples.len(), 1);
+        assert_eq!(
+            project.missing_samples[0].id,
+            Product::T1.global_sample_id(733).unwrap()
         );
+        assert!(project.missing_samples[0].reason.contains("733"));
         mix.set_cell(0, 0, 731, 16).unwrap();
         footer(&mut mix, [0; 8]);
         assert!(
@@ -368,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_truncated_footer_and_unsupported_kit_remapping() {
+    fn rejects_truncated_footer_and_preserves_unresolved_kit_mapping() {
         let mut mix = Mix::default();
         mix.set_cell(0, 0, 4400, 0).unwrap();
         footer(&mut mix, [0; 8]);
@@ -383,11 +487,13 @@ mod tests {
             })
             .to_vec();
         mix.trailer = saved.to_bytes(&mix).unwrap();
-        assert!(
-            convert(&mix, Path::new("test.mix"), &Library::empty(), resolve)
-                .unwrap_err()
-                .contains("remaps")
-        );
+        let remapped = convert(&mix, Path::new("test.mix"), &Library::empty(), resolve).unwrap();
+        assert_eq!(remapped.clips.len(), 1);
+        assert_eq!(remapped.missing_samples.len(), 1);
+        assert_eq!(remapped.missing_samples[0].metadata["kit_first_id"], "4300");
+        assert!(matches!(&remapped.missing_samples[0].reference,
+            MissingReference::Generated { kind, .. } if kind == "unresolved-kit"));
+        assert!(remapped.missing_samples[0].length_inferred);
         saved.kit_regions[0].first_id = 4400;
         mix.trailer = saved.to_bytes(&mix).unwrap();
         assert_eq!(
@@ -398,11 +504,14 @@ mod tests {
         );
         saved.kit_regions[0].name = text("Another kit");
         mix.trailer = saved.to_bytes(&mix).unwrap();
+        let project = convert(&mix, Path::new("test.mix"), &Library::empty(), resolve).unwrap();
+        let missing = &project.missing_samples[0];
+        assert_eq!(missing.metadata["kit_name"], "Another kit");
         assert!(
-            convert(&mix, Path::new("test.mix"), &Library::empty(), resolve)
-                .unwrap_err()
-                .contains("kit names")
+            matches!(&missing.reference, MissingReference::Generated { kind, .. } if kind == "unresolved-kit")
         );
+        assert!(missing.id >= IMPORTED_ID_START);
+        assert!(missing.length_inferred);
     }
 
     struct Fixture(PathBuf);
@@ -468,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn moved_external_wavs_resolve_from_selected_folder_and_reject_ambiguity() {
+    fn moved_external_wavs_select_first_and_retain_all_conflict_candidates() {
         let fixture = Fixture::new();
         let bytes = legacy_format::wav::PcmWave {
             sample_rate: 22_050,
@@ -483,6 +592,7 @@ mod tests {
         library.import_wav_folder(&fixture.0, 180.0).unwrap();
         let mut mix = Mix::default();
         mix.set_cell(0, 0, 1880, 0).unwrap();
+        mix.set_cell(4, 1, 1880, 0).unwrap();
         let mut saved = MixFooter::new(text("Moved song"), [0; 8]);
         saved.imports.push(NativeImport {
             source_id: 1880,
@@ -499,10 +609,21 @@ mod tests {
         fs::create_dir(&duplicate_folder).unwrap();
         fs::write(duplicate_folder.join("take.wav"), &bytes).unwrap();
         library.import_wav_folder(&duplicate_folder, 180.0).unwrap();
+        let project = load(&song_path, &library).unwrap();
+        assert!(project.missing_samples.is_empty());
+        assert_eq!(project.clips.len(), 2);
+        let conflict = &project.sample_conflicts[0];
+        assert_eq!(conflict.reference, "missing-folder/take.wav");
+        assert_eq!(conflict.candidates.len(), 2);
+        assert_eq!(conflict.selected, 0);
+        assert!(!conflict.confirmed);
+        assert_eq!(project.imported_samples[0].path, conflict.candidates[0]);
+        assert_eq!(conflict.sample_ids, vec![project.imported_samples[0].id]);
         assert!(
-            load(&song_path, &library)
-                .unwrap_err()
-                .contains("ambiguous")
+            project
+                .clips
+                .iter()
+                .all(|clip| clip.sample_id == conflict.sample_ids[0])
         );
     }
 
@@ -554,16 +675,83 @@ mod tests {
         assert_eq!(project.clips[1].length_ticks, 384);
         assert_eq!(fs::read(&wave_path).unwrap(), bytes);
         fs::remove_file(&wave_path).unwrap();
-        assert!(
-            convert(
-                &mix,
-                &fixture.0.join("song.mix"),
-                &Library::empty(),
-                resolve
-            )
-            .unwrap_err()
-            .contains("take.wav")
+        let missing = convert(
+            &mix,
+            &fixture.0.join("song.mix"),
+            &Library::empty(),
+            resolve,
+        )
+        .unwrap();
+        assert!(missing.imported_samples.is_empty());
+        assert_eq!(missing.missing_samples.len(), 2);
+        assert_eq!(missing.clips.len(), 2);
+        assert_eq!(missing.missing_samples[0].id, IMPORTED_ID_START);
+        assert_eq!(missing.missing_samples[1].id, IMPORTED_ID_START + 1);
+        assert_eq!(missing.missing_samples[1].name, "Recorded second");
+        assert_eq!(missing.missing_samples[1].metadata["label_1"], "Recorded");
+        assert_eq!(missing.missing_samples[1].metadata["label_2"], "second");
+        assert_eq!(missing.missing_samples[1].metadata["category"], "voice");
+        assert_eq!(
+            missing.missing_samples[1].metadata["saved_path"],
+            "take.wav"
         );
+        assert!(
+            missing
+                .missing_samples
+                .iter()
+                .all(|sample| sample.length_inferred)
+        );
+        assert_eq!(missing.clips[1].start_tick, 640);
+        assert_eq!(missing.clips[1].length_ticks, 384);
+        let encoded = serde_json::to_string(&missing).unwrap();
+        let reopened: Project = serde_json::from_str(&encoded).unwrap();
+        reopened.validate().unwrap();
+        assert_eq!(
+            serde_json::to_value(reopened).unwrap(),
+            serde_json::to_value(missing).unwrap()
+        );
+        assert!(!wave_path.exists());
+    }
+
+    #[test]
+    fn empty_library_preserves_catalog_lengths_and_all_native_placements() {
+        let fixture = Fixture::new();
+        let sample = crate::catalog::wave_metadata(Product::T1)
+            .unwrap()
+            .into_iter()
+            .find(|sample| sample.native_id < 1880 && sample.bars > 1)
+            .unwrap();
+        let mut mix = Mix::default();
+        mix.set_cell(0, 0, sample.native_id as u16, 0).unwrap();
+        mix.set_cell(12, 2, sample.native_id as u16, 4).unwrap();
+        footer(&mut mix, [0; 8]);
+        let path = fixture.0.join("missing-native.mix");
+        fs::write(&path, mix.to_bytes()).unwrap();
+        let project = load(&path, &Library::empty()).unwrap();
+        assert_eq!(project.clips.len(), 2);
+        assert_eq!(project.missing_samples.len(), 1);
+        let missing = &project.missing_samples[0];
+        assert!(!missing.length_inferred);
+        assert_eq!(missing.nominal_ticks, sample.bars * TICKS_PER_BAR);
+        assert_eq!(missing.name, sample.name);
+        assert_eq!(missing.metadata["code"], sample.code);
+        assert_eq!(project.clips[0].length_ticks, sample.bars * TICKS_PER_BAR);
+        assert_eq!(project.clips[1].start_tick, 12 * TICKS_PER_BAR + 64);
+    }
+
+    #[test]
+    fn unknown_sample_infers_gap_without_dropping_later_placements() {
+        let mut mix = Mix::default();
+        mix.set_cell(0, 0, 6400, 0).unwrap();
+        mix.set_cell(7, 0, 731, 0).unwrap();
+        mix.set_cell(20, 1, 6400, 0).unwrap();
+        footer(&mut mix, [0; 8]);
+        let project = convert(&mix, Path::new("unknown.mix"), &Library::empty(), resolve).unwrap();
+        assert_eq!(project.clips.len(), 3);
+        assert_eq!(project.clips[0].length_ticks, 7 * TICKS_PER_BAR);
+        assert_eq!(project.clips[2].length_ticks, 7 * TICKS_PER_BAR);
+        assert_eq!(project.missing_samples[0].nominal_ticks, 7 * TICKS_PER_BAR);
+        assert!(project.missing_samples[0].length_inferred);
     }
 
     #[test]

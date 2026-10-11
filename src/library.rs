@@ -8,6 +8,39 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+/// Retain a file choice once per saved reference and link every imported source.
+pub(crate) fn record_wav_conflict(
+    project: &mut crate::engine::Project,
+    reference: &str,
+    sample_id: u32,
+    candidates: Vec<PathBuf>,
+) {
+    if candidates.len() < 2 {
+        return;
+    }
+    let normalized = reference.replace('\\', "/").to_lowercase();
+    if let Some(conflict) = project.sample_conflicts.iter_mut().find(|conflict| {
+        conflict.reference.replace('\\', "/").to_lowercase() == normalized
+            && conflict.candidates == candidates
+    }) {
+        if !conflict.sample_ids.contains(&sample_id) {
+            conflict.sample_ids.push(sample_id);
+            conflict.sample_ids.sort_unstable();
+        }
+    } else {
+        project
+            .sample_conflicts
+            .push(crate::engine::SampleConflict {
+                reference: reference.into(),
+                sample_ids: vec![sample_id],
+                candidates,
+                selected: 0,
+                confirmed: false,
+                source_spans: BTreeMap::new(),
+            });
+    }
+}
+
 /// Progress and cancellation shared with a folder scan on another thread.
 #[derive(Debug, Default)]
 pub struct ScanProgress {
@@ -49,6 +82,8 @@ pub struct WavProbe {
 #[serde(deny_unknown_fields)]
 pub struct ScanCache {
     entries: HashMap<String, CachedProbe>,
+    #[serde(skip)]
+    changed: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,6 +102,10 @@ impl ScanCache {
     }
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    pub(crate) fn has_changes(&self) -> bool {
+        self.changed
     }
 
     fn stamp(path: &Path) -> Option<(u64, u128)> {
@@ -92,6 +131,7 @@ impl ScanCache {
         if self.entries.len() >= Self::MAX_ENTRIES && !self.entries.contains_key(key) {
             self.entries.clear();
         }
+        self.changed = true;
         self.entries.insert(
             key.to_owned(),
             CachedProbe {
@@ -137,8 +177,9 @@ pub struct Library {
     /// Native identities that only a WAV with the right name and duration but
     /// different audio could serve. Songs report these instead of guessing.
     unverified: HashMap<u32, PathBuf>,
-    /// Folders whose WAV durations agreed on a tempo: folder, BPM, file count.
+    /// Folders whose original audio or durations establish tempo: folder, BPM, count.
     folder_tempos: Vec<(PathBuf, f64, usize)>,
+    reserved_import_id: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -180,6 +221,7 @@ impl Library {
             verified: HashSet::new(),
             unverified: HashMap::new(),
             folder_tempos: Vec::new(),
+            reserved_import_id: IMPORTED_ID_START - 1,
         }
     }
 
@@ -206,6 +248,7 @@ impl Library {
             verified: HashSet::new(),
             unverified: HashMap::new(),
             folder_tempos: Vec::new(),
+            reserved_import_id: IMPORTED_ID_START - 1,
         }
     }
 
@@ -214,7 +257,7 @@ impl Library {
         self.verified.len()
     }
 
-    /// Folders whose WAV durations agreed on a tempo: folder, BPM, file count.
+    /// Folders whose original audio or durations establish tempo: folder, BPM, count.
     pub fn folder_tempos(&self) -> &[(PathBuf, f64, usize)] {
         &self.folder_tempos
     }
@@ -273,10 +316,28 @@ impl Library {
                     group_name: sample.group_name.clone(),
                     path: path.clone(),
                     source_bpm: sample.source_bpm,
+                    source_sample_rate: Some(sample.sample_rate),
                     origin: *origin,
                 })
             })
             .collect()
+    }
+
+    /// Keep unresolved project identities out of later file and palette imports.
+    pub(crate) fn reserve_missing_samples(&mut self, samples: &[crate::engine::MissingSample]) {
+        self.reserved_import_id = samples
+            .iter()
+            .map(|sample| sample.id)
+            .max()
+            .unwrap_or(0)
+            .max(IMPORTED_ID_START - 1);
+    }
+
+    /// Probe current bytes even when an older palette entry has the same path.
+    pub(crate) fn check_import(imported: &crate::engine::ImportedSample) -> Result<Sample, String> {
+        let path = fs::canonicalize(&imported.path)
+            .map_err(|error| format!("Cannot open imported sample {}: {error}", imported.name))?;
+        imported_sample(imported, &probe_wav(&path, imported.origin)?, path)
     }
 
     /// Restore unused, already validated palette WAVs after a project is opened.
@@ -296,7 +357,8 @@ impl Library {
             .map(|sample| sample.id)
             .filter(|id| *id >= IMPORTED_ID_START)
             .max()
-            .unwrap_or(IMPORTED_ID_START - 1);
+            .unwrap_or(IMPORTED_ID_START - 1)
+            .max(self.reserved_import_id);
         let mut additions = Vec::new();
         for sample in &palette.samples {
             if sample.id < IMPORTED_ID_START {
@@ -320,6 +382,7 @@ impl Library {
                 group_name: restored.group_name.clone(),
                 path: path.clone(),
                 source_bpm: restored.source_bpm,
+                source_sample_rate: Some(restored.sample_rate),
                 origin: *origin,
             };
             additions.push((restored, metadata));
@@ -967,6 +1030,7 @@ impl Library {
             verified: HashSet::new(),
             unverified: HashMap::new(),
             folder_tempos: Vec::new(),
+            reserved_import_id: IMPORTED_ID_START - 1,
         })
     }
 
@@ -1207,6 +1271,21 @@ impl Library {
                 *tempo = octave;
             }
         }
+        // Authenticated original audio resolves duration-octave ambiguity.
+        // Apply this after the heuristic so sibling guesses cannot change it.
+        let evidence = crate::source_tempo::SourceTempos::bundled()?;
+        let mut folder_probes: BTreeMap<&Path, Vec<&WavProbe>> = BTreeMap::new();
+        for (path, probe) in paths.iter().zip(&probes) {
+            folder_probes
+                .entry(path.parent().unwrap_or(&root))
+                .or_default()
+                .push(probe);
+        }
+        for (folder, probes) in folder_probes {
+            if let Some(tempo) = evidence.folder(probes.into_iter()) {
+                tempos.insert(folder.to_path_buf(), tempo);
+            }
+        }
         let folder_tempos = tempos
             .iter()
             .map(|(folder, tempo)| (folder.clone(), *tempo, by_folder[folder].len()))
@@ -1234,6 +1313,7 @@ impl Library {
                 group_name: group,
                 path,
                 source_bpm: tempo,
+                source_sample_rate: None,
                 origin: None,
             };
             imported.push(candidate.adopt_import(record, &probe, existing)?);
@@ -1246,10 +1326,11 @@ impl Library {
     /// Store a probed import under its ID, replacing an entry at `existing`.
     fn adopt_import(
         &mut self,
-        imported: crate::engine::ImportedSample,
+        mut imported: crate::engine::ImportedSample,
         probe: &WavProbe,
         existing: Option<usize>,
     ) -> Result<crate::engine::ImportedSample, String> {
+        imported.source_sample_rate = Some(probe.sample_rate);
         let sample = imported_sample(&imported, probe, imported.path.clone())?;
         self.sources.insert(
             imported.id,
@@ -1267,16 +1348,21 @@ impl Library {
         Ok(imported)
     }
 
-    /// Resolve a moved WAV by its longest matching path suffix. Basename-only
-    /// references must identify exactly one registered file; do not guess.
+    /// Resolve a moved WAV by its longest matching path suffix. Ties use the
+    /// first canonical path; importers retain all candidates for user review.
     pub fn resolve_wav_reference(&self, reference: &str) -> Result<PathBuf, String> {
         self.find_wav_reference(reference)?
             .ok_or_else(|| format!("WAV sample {reference} is missing from the selected folder."))
     }
 
-    /// Return no match separately from invalid or ambiguous references so callers
+    /// Return no match separately from invalid references so callers
     /// can retain an existing external sample only when this folder lacks it.
     pub(crate) fn find_wav_reference(&self, reference: &str) -> Result<Option<PathBuf>, String> {
+        Ok(self.find_wav_candidates(reference)?.into_iter().next())
+    }
+
+    /// Return canonical, unique best-suffix matches in stable path order.
+    pub(crate) fn find_wav_candidates(&self, reference: &str) -> Result<Vec<PathBuf>, String> {
         let normalized = reference.replace('\\', "/");
         let parts: Vec<_> = normalized
             .split('/')
@@ -1301,19 +1387,18 @@ impl Library {
             if score == 0 || score < best_score {
                 continue;
             }
+            let Ok(path) = fs::canonicalize(path) else {
+                continue;
+            };
             if score > best_score {
                 best_score = score;
                 matches.clear();
             }
-            matches.insert(path.clone());
+            matches.insert(path);
         }
-        match matches.len() {
-            0 => Ok(None),
-            1 => Ok(matches.into_iter().next()),
-            _ => Err(format!(
-                "WAV sample {reference} is ambiguous. Keep its relative folder path."
-            )),
-        }
+        let mut matches: Vec<_> = matches.into_iter().collect();
+        matches.sort();
+        Ok(matches)
     }
 
     pub fn import_wav_with_tempo(
@@ -1333,6 +1418,7 @@ impl Library {
             group_name: group.trim().to_string(),
             path,
             source_bpm,
+            source_sample_rate: None,
             origin: None,
         };
         let probe = probe_wav(&imported.path, imported.origin)?;
@@ -1353,6 +1439,9 @@ impl Library {
             && sample.name == imported.name
             && sample.group_name == imported.group_name
             && sample.source_bpm == imported.source_bpm
+            && imported
+                .source_sample_rate
+                .is_none_or(|rate| sample.sample_rate == rate)
             && *origin == imported.origin)
             .then(|| sample.clone())
     }
@@ -1472,28 +1561,30 @@ fn probe_wav(path: &Path, origin: Option<Product>) -> Result<WavProbe, String> {
     if length > 128 * 1024 * 1024 {
         return Err("The WAV sample exceeds the 128 MiB limit.".into());
     }
-    let pcm = if origin == Some(Product::T1) {
-        read_t1_wave(path)?
+    let mut identity = crate::catalog::PcmIdentity::default();
+    let (sample_rate, channels, frame_count) = if origin == Some(Product::T1) {
+        let pcm = read_t1_wave(path)?;
+        for &sample in &pcm.samples {
+            identity.push((sample * 32768.0).round() as i16);
+        }
+        (pcm.sample_rate, pcm.channels, pcm.frames() as u32)
     } else {
-        crate::audio::read_wav(path)?
+        let (spec, frames) = crate::audio::visit_wav_samples(path, |spec, sample| {
+            if spec.channels == 1 && spec.sample_rate == 44_100 {
+                identity.push((sample * 32768.0).round() as i16);
+            }
+        })?;
+        (spec.sample_rate, spec.channels, frames)
     };
-    let frame_count =
-        u32::try_from(pcm.frames()).map_err(|_| "The imported sample is too long.")?;
     if frame_count == 0 {
         return Err("The imported sample contains no audio.".into());
     }
-    let digest = (pcm.channels == 1 && pcm.sample_rate == 44_100 && frame_count > 2).then(|| {
-        let samples: Vec<i16> = pcm
-            .samples
-            .iter()
-            .map(|value| (value * 32768.0).round() as i16)
-            .collect();
-        crate::catalog::pcm_identity(&samples)
-    });
+    let digest =
+        (channels == 1 && sample_rate == 44_100 && frame_count > 2).then(|| identity.finish());
     Ok(WavProbe {
         frame_count,
-        sample_rate: pcm.sample_rate,
-        channels: pcm.channels,
+        sample_rate,
+        channels,
         length,
         digest,
     })
@@ -1536,9 +1627,7 @@ fn probe_all(
     let next = AtomicUsize::new(0);
     // Files after the first failure are not decoded: the scan fails anyway.
     let first_failure = AtomicUsize::new(usize::MAX);
-    // Large files decode one at a time so that peak memory stays near one file.
-    const LARGE_FILE: u64 = 16 * 1024 * 1024;
-    let large = std::sync::Mutex::new(());
+    // Each worker streams validated samples and retains only its reader buffer.
     let results = std::sync::Mutex::new(Vec::with_capacity(pending.len()));
     std::thread::scope(|scope| {
         for _ in 0..workers {
@@ -1554,13 +1643,6 @@ fn probe_all(
                     if index > first_failure.load(Ordering::Relaxed) {
                         return;
                     }
-                    let _serial = stamps[index]
-                        .is_none_or(|(length, _)| length > LARGE_FILE)
-                        .then(|| {
-                            large
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        });
                     let probe = probe_wav(&paths[index], None);
                     if probe.is_err() {
                         first_failure.fetch_min(index, Ordering::Relaxed);
@@ -1610,7 +1692,7 @@ struct ImportAllocator {
 impl ImportAllocator {
     fn new(library: &Library) -> Self {
         let mut existing = HashMap::new();
-        let mut last_id = IMPORTED_ID_START - 1;
+        let mut last_id = library.reserved_import_id;
         for (index, sample) in library.samples.iter().enumerate() {
             if sample.id < IMPORTED_ID_START {
                 continue;
@@ -2178,6 +2260,71 @@ mod tests {
     }
 
     #[test]
+    fn streaming_probes_match_normalized_audio_and_reject_invalid_samples() {
+        let folder = Folder::new();
+        for (bits, format) in [
+            (8, hound::SampleFormat::Int),
+            (16, hound::SampleFormat::Int),
+            (24, hound::SampleFormat::Int),
+            (32, hound::SampleFormat::Int),
+            (32, hound::SampleFormat::Float),
+        ] {
+            let path = folder.0.join(format!("{bits}-{format:?}.wav"));
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: 44_100,
+                bits_per_sample: bits,
+                sample_format: format,
+            };
+            let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+            for value in [-1.0_f32, -0.25, 0.0, 0.5, 0.9] {
+                match format {
+                    hound::SampleFormat::Float => writer.write_sample(value * 2.0).unwrap(),
+                    hound::SampleFormat::Int => writer
+                        .write_sample((value * (1_u64 << (bits - 1)) as f32) as i32)
+                        .unwrap(),
+                }
+            }
+            writer.finalize().unwrap();
+            let pcm = crate::audio::read_wav(&path).unwrap();
+            let samples: Vec<_> = pcm
+                .samples
+                .iter()
+                .map(|v| (v * 32768.0).round() as i16)
+                .collect();
+            let probe = probe_wav(&path, None).unwrap();
+            assert_eq!(probe.frame_count, 5);
+            assert_eq!(probe.digest, Some(crate::catalog::pcm_identity(&samples)));
+            // Truncated input must fail in both callers of the streaming reader.
+            let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+            file.set_len(file.metadata().unwrap().len() - 1).unwrap();
+            assert!(crate::audio::read_wav(&path).is_err());
+            assert!(probe_wav(&path, None).is_err());
+        }
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let path = folder.0.join("nonfinite.wav");
+            let mut writer = hound::WavWriter::create(
+                &path,
+                hound::WavSpec {
+                    channels: 1,
+                    sample_rate: 44_100,
+                    bits_per_sample: 32,
+                    sample_format: hound::SampleFormat::Float,
+                },
+            )
+            .unwrap();
+            writer.write_sample(bad).unwrap();
+            writer.finalize().unwrap();
+            assert!(
+                crate::audio::read_wav(&path)
+                    .unwrap_err()
+                    .contains("finite")
+            );
+            assert!(probe_wav(&path, None).unwrap_err().contains("finite"));
+        }
+    }
+
+    #[test]
     fn folder_scans_report_progress_honour_cancellation_and_reuse_the_cache() {
         let folder = Folder::new();
         let loop_a = folder.mono("Loop/a.wav", &waveform(5, 300));
@@ -2190,6 +2337,10 @@ mod tests {
                 .unwrap();
         assert_eq!(progress.counts(), (3, 3));
         assert_eq!(cache.len(), 3);
+        assert!(cache.has_changes());
+        // Loading persisted entries starts a clean cache.
+        cache = serde_json::from_str(&serde_json::to_string(&cache).unwrap()).unwrap();
+        assert!(!cache.has_changes());
         let probe = |library: &Library, path: &Path| {
             let sample = library
                 .samples
@@ -2206,6 +2357,7 @@ mod tests {
         assert_eq!(again.counts(), (3, 3));
         assert_eq!(probe(&second, &loop_a), probe(&first, &loop_a));
         assert_eq!(second.samples.len(), 3);
+        assert!(!cache.has_changes());
         // A changed file is probed again; its stale entry does not survive.
         std::thread::sleep(std::time::Duration::from_millis(20));
         let replaced = waveform(8, 200);
@@ -2213,6 +2365,7 @@ mod tests {
         let third =
             Library::open_wav_folder_with(&folder.0, 140.0, None, Some(&mut cache)).unwrap();
         assert_eq!(probe(&third, &loop_a).1, 200);
+        assert!(cache.has_changes());
         assert_eq!(
             probe(&third, &loop_a).2,
             Some(crate::catalog::pcm_identity(&replaced))
@@ -2348,10 +2501,10 @@ mod tests {
     }
 
     #[test]
-    fn moved_wave_resolution_preserves_relative_paths_and_rejects_ambiguity() {
+    fn moved_wave_resolution_preserves_relative_paths_and_returns_stable_candidates() {
         let folder = Folder::new();
         let bass = folder.wave("Bass/sound.wav", 44_100, 10);
-        folder.wave("Drum/sound.wav", 44_100, 10);
+        let drum = folder.wave("Drum/sound.wav", 44_100, 10);
         let only = folder.wave("only.wav", 44_100, 10);
         let mut library = Library::empty();
         library.import_wav_folder(&folder.0, 140.0).unwrap();
@@ -2365,12 +2518,11 @@ mod tests {
             library.resolve_wav_reference("old/place/only.wav").unwrap(),
             only
         );
-        assert!(
-            library
-                .resolve_wav_reference("sound.wav")
-                .unwrap_err()
-                .contains("ambiguous")
+        assert_eq!(
+            library.find_wav_candidates("sound.wav").unwrap(),
+            vec![bass.clone(), drum]
         );
+        assert_eq!(library.resolve_wav_reference("sound.wav").unwrap(), bass);
         assert!(library.resolve_wav_reference("../only.wav").is_err());
         assert!(library.resolve_wav_reference("missing.wav").is_err());
     }
