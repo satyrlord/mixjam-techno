@@ -26,7 +26,7 @@
 /tools/runtime/*
 !/tools/runtime/cargo.ps1
 !/tools/runtime/install-rust.ps1
-!/tools/runtime/support-root.ps1
+!/tools/runtime/local-data-root.ps1
 !/tools/runtime/mixjam_song.py
 !/tools/runtime/verify-large-mix.py
 

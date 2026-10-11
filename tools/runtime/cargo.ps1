@@ -4,7 +4,7 @@ param([Parameter(ValueFromRemainingArguments=$true)][string[]]$CargoArguments)
 
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$toolchainRoot = Join-Path (& (Join-Path $PSScriptRoot 'support-root.ps1')) 'toolchain'
+$toolchainRoot = Join-Path (& (Join-Path $PSScriptRoot 'local-data-root.ps1')) 'toolchain'
 
 # Cargo prints the package version, which must be semantic. Keep it equal to the
 # application version of this checkout: `1.005` is package version `1.5.0`.

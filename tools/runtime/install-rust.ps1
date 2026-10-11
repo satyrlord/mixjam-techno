@@ -3,8 +3,8 @@ param([string]$Toolchain = 'stable')
 
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$localRoot = Join-Path (& (Join-Path $PSScriptRoot 'support-root.ps1')) 'toolchain'
-$evidence = Join-Path $workspace 'evidence\runtime\toolchain'
+$localRoot = Join-Path (& (Join-Path $PSScriptRoot 'local-data-root.ps1')) 'toolchain'
+$evidence = Join-Path $workspace 'tmp\evidence\runtime\toolchain'
 $null = New-Item -ItemType Directory -Path $localRoot,$evidence -Force
 $installer = Join-Path $localRoot 'rustup-init.exe'
 $source = 'https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe'

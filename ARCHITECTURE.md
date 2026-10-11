@@ -63,9 +63,10 @@ Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.
 
 Visual artwork uses transparent PNGs only. Embedded SVG artwork and SVG files
-are prohibited in the working tree. `tools/assets/check-raster-assets.py` checks
-this rule, including ignored files. Original archives and the Rust dependency
-cache reside in the external sibling support directory. Runtime PNG textures
+are prohibited in tracked and non-ignored project files.
+`tools/assets/check-raster-assets.py` uses Git's file inventory and respects
+ignore rules. Original archives and the Rust dependency
+cache reside in `local-data/`; temporary files reside in `tmp/`. Runtime PNG textures
 use prepared density variants with one texel per physical screen pixel; views
 snap their bounds to the pixel grid and do not resize them.
 

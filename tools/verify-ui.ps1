@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $Executable) { $Executable = Join-Path $projectRoot 'target\release\mixjam-techno.exe' }
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot 'evidence\ui\redesign' }
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot 'tmp\evidence\ui\redesign' }
 $Executable = [IO.Path]::GetFullPath($Executable)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) {

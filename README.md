@@ -147,10 +147,12 @@ evidence; it does not add HipHop song-format support.
 The build needs Git with a complete checkout history, Rust, the Visual Studio
 C++ build tools, and the Windows SDK. For a shallow clone, run
 `git fetch --unshallow` before building.
-`tools/runtime/install-rust.ps1` installs Rust outside the repository, in the
-sibling `<checkout-name>-support/toolchain/` directory, without changing the user
-PATH. `tools/runtime/cargo.ps1` runs that toolchain. Set
-`MIXJAM_TECHNO_SUPPORT_ROOT` to use another external support directory.
+`tools/runtime/install-rust.ps1` installs Rust in `local-data/toolchain/`, without
+changing the user PATH. `tools/runtime/cargo.ps1` runs that toolchain. Required
+private project data and tools belong in `local-data/`; temporary files belong in
+`tmp/`. Preserved project snapshots and bundles remain in `local-data/legacy/`.
+The repo is the public-facing files. The project includes public and private
+files; Gitignored `local-data/` and `tmp/` remain private project files.
 
 The bottom bar shows the application version with a `v` prefix, such as
 `v1.005`, at its right margin. Select it to
@@ -182,9 +184,10 @@ check the window layout with a synthetic presentation state; they do not record 
 
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
 Prepared density variants support Windows scaling. SVG files and embedded SVG
-artwork are prohibited in this working tree. Run
+artwork are prohibited in tracked and non-ignored project files. Run
 `python tools/assets/check-raster-assets.py` as part of the quality gate. Original
-legacy archives and dependency caches stay in the external support directory.
+legacy archives and required dependency caches stay in ignored `local-data/`;
+temporary files stay in ignored `tmp/`. The asset check respects Git ignore rules.
 
 ## Headless commands
 

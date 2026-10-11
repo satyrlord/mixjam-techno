@@ -13,17 +13,17 @@ records source paths, destination paths, sizes and SHA-256 hashes.
 
 | Preserved location | Original source | Purpose |
 | --- | --- | --- |
-| External `retired-assets/assets/donors/ravefold/logo/` | Original mask artwork | Historical source only |
-| External `retired-assets/assets/donors/ravefold/icons/` | Original control artwork | Historical source only |
-| External `retired-assets/assets/donors/ravefold/design/` | Original mask render with vector metadata | Historical source only |
+| `tmp/retired-assets/assets/donors/ravefold/logo/` | Original mask artwork | Historical source only |
+| `tmp/retired-assets/assets/donors/ravefold/icons/` | Original control artwork | Historical source only |
+| `tmp/retired-assets/assets/donors/ravefold/design/` | Original mask render with vector metadata | Historical source only |
 | `fonts/space-grotesk/` | Installed font package, version `5.3.0` | Font files and source metadata |
 | `licenses/` | Six notice files in `public/` | Original dependency and font notices |
 
-The vector source and the original render containing vector metadata were
-moved unchanged to the sibling `mixjam-techno-support/retired-assets/` directory
-on 2026-10-11. No vector artwork remains here. The application uses canonical
+The vector source and the original render containing vector metadata
+are retained unchanged under `tmp/retired-assets/` following the owner's
+2026-10-11 cleanup. No vector artwork remains in application assets. The application uses canonical
 transparent PNGs from `assets/rail/` and `assets/app/`. The relocation receipt is
-`evidence/review-20261011-resumed/retired-assets.json`; archived manifests retain
+`tmp/evidence/review-20261011-resumed/retired-assets.json`; archived manifests retain
 their original historical paths and hashes.
 
 The font package supplies three variable WOFF2 subsets: Latin, extended Latin

@@ -295,8 +295,9 @@ their alpha and normalizes RGB to white; the view applies text, muted, or accent
 tints. Textures are cached per egui context. Action names are available through
 tooltips and accessibility labels. Recording destination remains a visible
 track number. Canonical PNG artwork and provenance remain in `assets/rail/`.
-SVG files and embedded SVG artwork are not allowed anywhere in the repository.
-Original vector preservation material stays in the external support directory.
+SVG files and embedded SVG artwork are not allowed in tracked or non-ignored
+project files. Ignored `local-data/` and `tmp/` files are outside this check.
+Original preservation material stays in `local-data/` under the owner's layout.
 
 Control icons use prepared 20-pixel PNGs and the title mask uses a 40-pixel PNG
 at 100% Windows scaling. Three display variants cover 100%, 150%, and 200%:

@@ -49,7 +49,7 @@ Use the current commands in `README.md` and `ARCHITECTURE.md`:
    Run `python tools/assets/check-raster-assets.py`,
    `python tools/assets/render-rail-icons.py --check`, and
    `python tools/assets/render-app-icon.py --check` for visual assets.
-   Completion criterion: The tree contains no SVG assets and PNG variants match.
+   Completion criterion: Tracked/non-ignored files contain no SVG assets and PNG variants match.
 7. For UI changes, run `tools/verify-ui.ps1` against the release build.
    Completion criterion: The native capture procedure has a current result.
 8. For UI changes, inspect the captures at the documented sizes.
