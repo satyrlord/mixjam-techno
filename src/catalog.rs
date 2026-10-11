@@ -45,6 +45,47 @@ pub struct WaveMetadata {
     pub bars: u32,
     pub source_bpm: f64,
     pub frame_count: u32,
+    /// Hex [`pcm_identity`] of the original decoded audio. Catalogs generated
+    /// before this field exists leave it absent; those identities match by
+    /// name and duration only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pcm_digest: Option<String>,
+}
+
+impl WaveMetadata {
+    pub fn pcm_identity(&self) -> Option<[u8; 16]> {
+        let text = self.pcm_digest.as_deref()?;
+        if text.len() != 32 {
+            return None;
+        }
+        let mut digest = [0; 16];
+        for (byte, pair) in digest.iter_mut().zip(text.as_bytes().chunks(2)) {
+            *byte = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
+        }
+        Some(digest)
+    }
+}
+
+/// Identify decoded audio independently of file names: the first 16 bytes of
+/// SHA-256 over the first differences of the mono PCM16 frames, omitting the
+/// final frame. Decoders that start from a different predictor leave a constant
+/// offset, and the original pads a missing final frame with silence where other
+/// tools hold the last value; neither changes this digest. Any other change to
+/// the samples does.
+pub fn pcm_identity(samples: &[i16]) -> [u8; 16] {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    for pair in samples[..samples.len().saturating_sub(1)].windows(2) {
+        hasher.update(pair[1].wrapping_sub(pair[0]).to_le_bytes());
+    }
+    hasher.finalize()[..16].try_into().unwrap()
+}
+
+pub fn pcm_identity_hex(samples: &[i16]) -> String {
+    pcm_identity(samples)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub fn wave_metadata(product: Product) -> Result<Vec<WaveMetadata>, String> {
@@ -184,8 +225,44 @@ fn load_d1(root: &Path) -> Result<Vec<NativeSample>, String> {
 fn load_packed(root: &Path, archive: &str, bpm: f64) -> Result<Vec<NativeSample>, String> {
     let folder = relative_file(root, "\x65Jay/\x50XD")?;
     let index = relative_file(&folder, &format!("{archive}.inf"))?;
+    let house = archive.eq_ignore_ascii_case("\x68ouse10");
     let archive = relative_file(&folder, archive)?;
-    load_index(&index, bpm, false, |_| Ok(archive.clone()))
+    let mut samples = load_index(&index, bpm, false, |_| Ok(archive.clone()))?;
+    if house {
+        for sample in &mut samples {
+            if sample.group_name.starts_with("Group ")
+                && let Some(group) = house_group_name(&sample.code)
+            {
+                sample.group_name = group.to_owned();
+            }
+        }
+    }
+    Ok(samples)
+}
+
+/// House index records carry numeric groups without labels. The shipped
+/// program's string table names the sample groups (House10.exe,
+/// SP_LOOP, SP_DRUM, SP_BASS, SP_EFFECTS, SP_KEYS, SP_GUITARS, SP_XTRA,
+/// SP_GROOVE, SP_VOICE). The kind letters that follow the `HS1` prefix and the
+/// bank letter in each code select the group; drum pads keep their header labels.
+fn house_group_name(code: &str) -> Option<&'static str> {
+    let kind: String = code
+        .get(4..)?
+        .chars()
+        .take_while(char::is_ascii_alphabetic)
+        .collect();
+    Some(match kind.as_str() {
+        "LA" => "Loop",
+        "BS" => "Bass",
+        "FX" => "Effect",
+        "GT" => "Guitar",
+        "EX" => "Groove",
+        "SX" => "Xtra",
+        "ON" | "PN" | "SY" => "Keys",
+        kind if kind.starts_with('V') => "Voice",
+        kind if kind.starts_with('D') => "Drum",
+        _ => return None,
+    })
 }
 
 fn load_d2(root: &Path) -> Result<Vec<NativeSample>, String> {
@@ -450,6 +527,59 @@ fn relative_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn pcm_identity_ignores_constant_offset_and_final_frame_but_not_other_changes() {
+        let original: Vec<i16> = (0..64).map(|i| (i * 31 % 97 - 48) as i16).collect();
+        let shifted: Vec<i16> = original.iter().map(|s| s - 178).collect();
+        let mut held = original.clone();
+        held[63] = held[62];
+        let mut changed = original.clone();
+        changed[20] += 1;
+        let expected = pcm_identity(&original);
+        assert_eq!(pcm_identity(&shifted), expected);
+        assert_eq!(pcm_identity(&held), expected);
+        assert_ne!(pcm_identity(&changed), expected);
+        assert_ne!(pcm_identity(&original[..63]), expected);
+        let metadata = WaveMetadata {
+            native_id: 1,
+            code: String::new(),
+            name: String::new(),
+            group_name: String::new(),
+            bars: 1,
+            source_bpm: 140.0,
+            frame_count: 64,
+            pcm_digest: Some(pcm_identity_hex(&original)),
+        };
+        assert_eq!(metadata.pcm_identity(), Some(expected));
+        for (code, group) in [
+            ("HS1AEX001(L)", Some("Groove")),
+            ("HS1DSX010", Some("Xtra")),
+            ("HS1BVA047(L)", Some("Voice")),
+            ("HS1EDF051", Some("Drum")),
+            ("HS1CON033(R)", Some("Keys")),
+            ("HS1FGT001", Some("Guitar")),
+            ("HS1CLA001", Some("Loop")),
+            ("HS1EBS001", Some("Bass")),
+            ("HS1EFX072", Some("Effect")),
+            ("HS1", None),
+            ("HS1Q9", None),
+        ] {
+            assert_eq!(house_group_name(code), group, "{code}");
+        }
+        let text = serde_json::to_string(&metadata).unwrap();
+        assert!(text.contains("pcm_digest"));
+        let legacy: WaveMetadata = serde_json::from_str(&text.replace(
+            &format!(
+                ",\"pcm_digest\":\"{}\"",
+                metadata.pcm_digest.as_deref().unwrap()
+            ),
+            "",
+        ))
+        .unwrap();
+        assert_eq!(legacy.pcm_identity(), None);
+        assert_eq!(pcm_identity(&[]), pcm_identity(&[7]));
+    }
     static NEXT: AtomicU64 = AtomicU64::new(0);
     #[test]
     #[cfg_attr(

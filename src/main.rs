@@ -24,6 +24,21 @@ fn main() -> ExitCode {
         }
     }
 }
+
+fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(), String> {
+    let mut candidate = library.clone();
+    if candidate.source_root(binding.product).is_some() {
+        candidate.remove_product(binding.product)?;
+    }
+    candidate.register(
+        binding.product,
+        &binding.root,
+        &project_io::reference_samples_root(),
+    )?;
+    *library = candidate;
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let mut app: Option<PathBuf> = None;
@@ -75,7 +90,7 @@ fn run() -> Result<(), String> {
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the tempo for unrecognized WAVs (default 140).\nrender and convert require --mix and --output. convert saves native JSON.\nverify-fixtures reads T2 demos."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves native JSON.\nverify-fixtures reads T2 demos."
                 );
                 return Ok(());
             }
@@ -97,7 +112,14 @@ fn run() -> Result<(), String> {
             Err(error) => startup_messages.push(error),
         }
     }
-    if let Some(root) = &samples {
+    // The window opens at once and scans its sample folder in the background.
+    // Interface captures keep the synchronous scan so that they are complete.
+    let background_scan = command == "gui"
+        && samples.is_some()
+        && std::env::var_os("\x54ECHNOREA_CAPTURE_TO").is_none();
+    if let Some(root) = &samples
+        && !background_scan
+    {
         match Library::open_wav_folder(root, source_bpm) {
             Ok(loaded) => library = loaded,
             Err(error) if command == "gui" => startup_messages.push(error),
@@ -110,14 +132,12 @@ fn run() -> Result<(), String> {
         match project_io::load_library_config() {
             Ok(bindings) => {
                 for binding in bindings {
-                    if library.source_root(binding.product).is_some() {
+                    if library.source_root(binding.product).is_some()
+                        && !library.is_sparse_wav_product(binding.product)
+                    {
                         continue;
                     }
-                    if let Err(error) = library.register(
-                        binding.product,
-                        &binding.root,
-                        &project_io::reference_samples_root(),
-                    ) {
+                    if let Err(error) = replace_provider(&mut library, &binding) {
                         startup_messages.push(error);
                     }
                 }
@@ -125,22 +145,26 @@ fn run() -> Result<(), String> {
             Err(error) => startup_messages.push(error),
         }
     }
+    // Providers named on the command line replace the same products in the WAV folder.
+    let mut explicit_providers: Vec<Product> = additional_libraries
+        .iter()
+        .map(|binding| binding.product)
+        .collect();
+    if app.is_some() {
+        explicit_providers.push(Product::T2);
+    }
     if let Some(root) = &app {
         // An explicit provider replaces a T2 binding derived from the WAV folder.
-        if library.source_root(Product::T2).is_some() {
-            library.remove_product(Product::T2)?;
-        }
-        library.register(Product::T2, root, &project_io::reference_samples_root())?;
+        replace_provider(
+            &mut library,
+            &LibraryBinding {
+                product: Product::T2,
+                root: root.clone(),
+            },
+        )?;
     }
     for binding in additional_libraries {
-        if library.source_root(binding.product).is_some() {
-            library.remove_product(binding.product)?;
-        }
-        library.register(
-            binding.product,
-            &binding.root,
-            &project_io::reference_samples_root(),
-        )?;
+        replace_provider(&mut library, &binding)?;
     }
     match command.as_str() {
         "inspect" => {
@@ -152,6 +176,9 @@ fn run() -> Result<(), String> {
             println!(
                 "{}",
                 serde_json::json!({"samples":library.samples.len(),"name_and_frame_matched_wavs":mapped,"unresolved_wav_mappings":library.samples.len()-mapped,"archive":library.archive_path,"samples_root":samples,
+                    "audio_verified_identities":library.verified_count(),
+                    "folder_tempos":library.folder_tempos().iter().map(|(folder,bpm,count)| serde_json::json!({"folder":folder,"bpm":bpm,"wavs":count})).collect::<Vec<_>>(),
+                    "wavs_with_different_audio":library.unverified_waves().map(|(id,path)| serde_json::json!({"id":id,"path":path})).collect::<Vec<_>>(),
                     "tracks":mixjam_techno::engine::TRACK_COUNT,"supported_bpms":mixjam_techno::engine::SUPPORTED_BPMS,
                     "libraries":library.bindings().iter().map(|binding| serde_json::json!({"product":binding.product.slug(),
                         "samples":library.samples.iter().filter(|sample| Product::sample_key(sample.id).is_some_and(|(product,_)|product==binding.product)).count()})).collect::<Vec<_>>()})
@@ -234,8 +261,10 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => {
-            let project = if let Some(path) = mix {
-                let (project, resolved_library) = project_io::open(&path, &library)?;
+            let project = if let Some(path) = &mix
+                && !background_scan
+            {
+                let (project, resolved_library) = project_io::open(path, &library)?;
                 library = resolved_library;
                 project
             } else {
@@ -270,11 +299,22 @@ fn run() -> Result<(), String> {
                     "MixJam Techno",
                     options,
                     Box::new(move |cc| {
-                        let mut app = ui::MixJamApp::new(
-                            cc,
-                            mixjam_techno::application::Session::new(Arc::new(library), project)?,
-                        );
-                        app.set_startup_messages(&startup_messages);
+                        let mut session =
+                            mixjam_techno::application::Session::new(Arc::new(library), project)?;
+                        let mut messages = startup_messages;
+                        session.prefer_providers(&explicit_providers);
+                        if background_scan && let Some(root) = &samples {
+                            if let Err(error) = session.start_wave_scan(root, source_bpm) {
+                                messages.push(error);
+                            }
+                            if let Some(path) = &mix
+                                && let Err(error) = session.open_after_scan(path)
+                            {
+                                messages.push(error);
+                            }
+                        }
+                        let mut app = ui::MixJamApp::new(cc, session);
+                        app.set_startup_messages(&messages);
                         Ok(Box::new(app))
                     }),
                 )
@@ -282,9 +322,66 @@ fn run() -> Result<(), String> {
             }
             #[cfg(not(feature = "gui"))]
             {
-                let _ = (project, library, startup_messages);
+                let _ = (project, library, startup_messages, background_scan, mix);
                 Err("This build has no GUI. Rebuild with the default features.".into())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_provider_replacement_keeps_scanned_samples() {
+        let root = std::env::temp_dir().join(format!(
+            "mixjam-provider-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        audio::Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 32],
+        }
+        .write_wav(&root.join("sample.wav"))
+        .unwrap();
+        let mut library = Library::empty();
+        library.import_wav_folder(&root, 140.0).unwrap();
+        library
+            .register_wav_product(
+                Product::T2,
+                &root,
+                &[mixjam_techno::catalog::WaveMetadata {
+                    native_id: 174,
+                    code: "sample".into(),
+                    name: "Sample".into(),
+                    group_name: "Wave".into(),
+                    bars: 1,
+                    source_bpm: 140.0,
+                    frame_count: 32,
+                    pcm_digest: None,
+                }],
+            )
+            .unwrap();
+        let before = library.bindings().to_vec();
+        assert!(
+            replace_provider(
+                &mut library,
+                &LibraryBinding {
+                    product: Product::T2,
+                    root: root.join("missing")
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(library.bindings(), before);
+        assert!(library.sample_by_id(174).is_some());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

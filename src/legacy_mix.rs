@@ -65,18 +65,36 @@ pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
         .saturating_sub(16 * 5 + TRAILER.len())
         .min(search_start + 4096);
     let mut arrangement = None;
+    // Only a complete track list with the exact trailer can identify a missing
+    // sample. Preamble bytes can also resemble the beginning of a track list.
+    let mut missing: Option<ArrangementError> = None;
     for start in search_start..=search_end {
         if bytes.get(start) != Some(&1) {
             continue;
         }
-        if let Ok(clips) = parse_arrangement(bytes, start, library) {
-            if arrangement.is_some() {
-                return Err("The original mix has ambiguous arrangement data.".into());
+        match parse_arrangement(bytes, start, library) {
+            Ok(clips) => {
+                if arrangement.is_some() || missing.is_some() {
+                    return Err("The original mix has ambiguous arrangement data.".into());
+                }
+                arrangement = Some(clips);
             }
-            arrangement = Some(clips);
+            Err(error) if error.missing_sample => {
+                if arrangement.is_some() || missing.is_some() {
+                    return Err("The original mix has ambiguous arrangement data.".into());
+                }
+                missing = Some(error);
+            }
+            Err(_) => {}
         }
     }
-    let clips = arrangement.ok_or("Cannot decode the original mix arrangement. The file is damaged or uses an unsupported profile.")?;
+    let clips = match (arrangement, missing) {
+        (Some(clips), _) => clips,
+        (None, Some(error)) => return Err(error.message),
+        (None, None) => {
+            return Err("Cannot decode the original mix arrangement. The file is damaged or uses an unsupported profile.".into());
+        }
+    };
     let project = Project {
         title,
         author,
@@ -93,18 +111,47 @@ pub fn load_bytes(bytes: &[u8], library: &Library) -> Result<Project, String> {
     crate::engine::normalize_import(project)
 }
 
-fn parse_arrangement(bytes: &[u8], start: usize, library: &Library) -> Result<Vec<Clip>, String> {
+#[derive(Debug)]
+struct ArrangementError {
+    missing_sample: bool,
+    message: String,
+}
+
+fn parse_arrangement(
+    bytes: &[u8],
+    start: usize,
+    library: &Library,
+) -> Result<Vec<Clip>, ArrangementError> {
     let mut reader = Reader {
         bytes,
         offset: start,
     };
     let mut clips = Vec::new();
+    match parse_tracks(&mut reader, library, &mut clips) {
+        Ok(None) => Ok(clips),
+        Ok(Some(message)) => Err(ArrangementError {
+            missing_sample: true,
+            message,
+        }),
+        Err(message) => Err(ArrangementError {
+            missing_sample: false,
+            message,
+        }),
+    }
+}
+
+fn parse_tracks(
+    reader: &mut Reader,
+    library: &Library,
+    clips: &mut Vec<Clip>,
+) -> Result<Option<String>, String> {
+    let mut missing = None;
     for track in 0..16 {
         if reader.u8()? as usize != track + 1 {
             return Err("Invalid track marker.".into());
         }
         let count = reader.u32()? as usize;
-        if count > 100_000 || count > bytes.len().saturating_sub(reader.offset) / 7 {
+        if count > 100_000 || count > reader.bytes.len().saturating_sub(reader.offset) / 7 {
             return Err("Invalid clip count.".into());
         }
         for _ in 0..count {
@@ -113,9 +160,6 @@ fn parse_arrangement(bytes: &[u8], start: usize, library: &Library) -> Result<Ve
             }
             let stored_position = reader.i32()?;
             let sample_id = reader.u16()? as u32;
-            let sample = library
-                .sample_by_id(sample_id)
-                .ok_or("A MIX sample ID is missing from the selected sample folder.")?;
             let native_position = if stored_position < 0 {
                 !stored_position as u32
             } else {
@@ -137,6 +181,12 @@ fn parse_arrangement(bytes: &[u8], start: usize, library: &Library) -> Result<Ve
             let right_trim = right_trim
                 .checked_mul(2)
                 .ok_or("Invalid native clip trim.")?;
+            let Some(sample) = library.sample_by_id(sample_id) else {
+                missing.get_or_insert_with(|| {
+                    library.describe_missing(crate::products::Product::T2, sample_id)
+                });
+                continue;
+            };
             let full_ticks = sample
                 .bars
                 .checked_mul(TICKS_PER_BAR)
@@ -166,7 +216,7 @@ fn parse_arrangement(bytes: &[u8], start: usize, library: &Library) -> Result<Ve
     if reader.bytes.get(reader.offset..) != Some(TRAILER) {
         return Err("Invalid mix trailer.".into());
     }
-    Ok(clips)
+    Ok(missing)
 }
 
 struct Reader<'a> {
@@ -214,6 +264,65 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn song_with_missing_sample(preamble: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&0x889u32.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&140u16.to_le_bytes());
+        bytes.extend_from_slice(&140u32.to_le_bytes());
+        for text in ["Composer", "Missing sample"] {
+            bytes.extend_from_slice(&((text.len() + 2) as u16).to_le_bytes());
+            bytes.extend_from_slice(text.as_bytes());
+            bytes.extend_from_slice(&[0, 1]);
+        }
+        bytes.extend_from_slice(&[0; 74]);
+        let product = "\x54echno \x65Jay 2";
+        bytes.extend_from_slice(&((product.len() + 2) as u16).to_le_bytes());
+        bytes.extend_from_slice(product.as_bytes());
+        bytes.extend_from_slice(&[0, 1]);
+        bytes.extend_from_slice(preamble);
+        for track in 1..=16 {
+            bytes.push(track);
+            bytes.extend_from_slice(&u32::from(track == 1).to_le_bytes());
+            if track == 1 {
+                bytes.push(0);
+                bytes.extend_from_slice(&(-129i32).to_le_bytes());
+                bytes.extend_from_slice(&174u16.to_le_bytes());
+            }
+        }
+        bytes.extend_from_slice(TRAILER);
+        bytes
+    }
+
+    #[test]
+    fn missing_sample_diagnostic_ignores_partial_tracks_in_the_preamble() {
+        let mut preamble = vec![1];
+        preamble.extend_from_slice(&1u32.to_le_bytes());
+        preamble.push(0);
+        preamble.extend_from_slice(&(-129i32).to_le_bytes());
+        preamble.extend_from_slice(&9999u16.to_le_bytes());
+        let library = Library::empty();
+        let expected = library.describe_missing(crate::products::Product::T2, 174);
+        for prefix in [&[][..], preamble.as_slice()] {
+            assert_eq!(
+                load_bytes(&song_with_missing_sample(prefix), &library).unwrap_err(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn missing_sample_diagnostic_requires_the_exact_trailer() {
+        let mut bytes = song_with_missing_sample(&[]);
+        *bytes.last_mut().unwrap() = 0;
+        let error = load_bytes(&bytes, &Library::empty()).unwrap_err();
+        assert!(
+            error.contains("Cannot decode the original mix arrangement"),
+            "{error}"
+        );
+    }
+
     #[test]
     fn t2_native_ids_import_from_a_wav_only_provider() {
         let root = std::env::temp_dir().join(format!(
@@ -251,6 +360,7 @@ mod tests {
                     bars: 2,
                     source_bpm: 140.0,
                     frame_count: 4,
+                    pcm_digest: None,
                 }],
             )
             .unwrap();
@@ -329,6 +439,7 @@ mod tests {
                             bars: 2,
                             source_bpm: 140.0,
                             frame_count: 151_200,
+                            pcm_digest: None,
                         }],
                     )
                     .unwrap(),

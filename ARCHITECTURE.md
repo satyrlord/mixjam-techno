@@ -18,15 +18,16 @@ src/ui/view.rs + src/ui.rs               src/application.rs
 
 `Session` owns the editor, catalog, project file, dirty state, render revisions,
 audio player, microphone capture, and pending recorded take. Its project and
-catalog accessors are read-only. Construction and mutations validate the project.
-Typed `EditCommand` values change tempo, loop regions, clips, routing, and mixer
-settings. Placement and group movement use explicit operations. Successful edits
-update history and invalidate the render in the application layer.
+catalog accessors are read-only. It validates the project when it starts and
+after each change. Typed `EditCommand` values change tempo, loop regions, clips,
+routing, and mixer settings. Separate operations place and move clips. Successful
+edits update history and mark the render for update.
 
 The frontend owns selection, drag gestures, zoom, layout, open windows, search
 filters, and tool form drafts. It converts pointer positions into requested
-positions and sends them to the application. It does not own an `Editor`, change
-the live project, decode audio, write projects, or control a device directly.
+positions and sends them to the application. It does not own an `Editor` or
+change the live project. It does not decode audio, write projects, or control a
+device directly.
 Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.
 
@@ -35,8 +36,11 @@ The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
 
 `src/main.rs` is the composition root. It resolves command-line options and builds
-the initial library/project before it creates a session. Headless CLI commands
-can use library services directly. The GUI modules are compiled into the native
+the initial library/project before it creates a session. Normal GUI startup then
+scans the WAV folder through `Session`; a queued song opens only if no intervening
+project change or unsaved take requires its cancellation. Successful folder
+adoption tells the frontend to clear selections and active drags. Headless CLI
+commands can use library services directly. The GUI modules are compiled into the native
 binary, not exported by the production Rust library.
 
 ## Safe frontend iteration
@@ -46,13 +50,13 @@ input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.
 
-Run the headless suite to verify the application without the GUI feature. Run the
-full suite for native pointer, keyboard, selection, scrolling, and accessible
-action checks. Source guards reject direct frontend imports of implementation
-modules, selected mutation and I/O patterns, and public GUI exports. Private
-session state and immutable accessors enforce state ownership at compile time.
-The headless build verifies operation without GUI dependencies enabled; the
-source guard is not a general dependency-graph checker.
+Run the headless suite to check the application without the GUI feature. Run the
+full suite to check native pointer and keyboard input, selection, scrolling,
+and accessible actions. Source guards reject direct frontend imports of
+implementation modules. They also reject selected mutation and I/O patterns
+and public GUI exports. Private session state and read-only accessors enforce
+state ownership at compile time. The headless build checks operation without
+GUI dependencies. The source guard does not check the full dependency graph.
 
 ```powershell
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --no-default-features --locked

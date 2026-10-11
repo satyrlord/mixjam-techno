@@ -23,6 +23,7 @@ mod tests {
             channels: 1,
             source_bpm: 140.0,
             wav_path: None,
+            digest: None,
         };
         let library = Arc::new(Library::fixture(vec![sample]));
         let mut editor = Editor::new(Project::default());
@@ -45,8 +46,18 @@ mod tests {
         events: Vec<egui::Event>,
         modifiers: egui::Modifiers,
     ) -> egui::FullOutput {
+        frame_at_size(context, app, events, modifiers, Vec2::new(1440.0, 1000.0))
+    }
+
+    fn frame_at_size(
+        context: &egui::Context,
+        app: &mut MixJamApp,
+        events: Vec<egui::Event>,
+        modifiers: egui::Modifiers,
+        size: Vec2,
+    ) -> egui::FullOutput {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
             events,
             modifiers,
             focused: true,
@@ -81,6 +92,222 @@ mod tests {
     fn click(context: &egui::Context, app: &mut MixJamApp, pos: Pos2, modifiers: egui::Modifiers) {
         pointer(context, app, pos, true, modifiers);
         pointer(context, app, pos, false, modifiers);
+    }
+
+    fn text_rect(output: &egui::FullOutput, label: &str) -> Rect {
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| {
+                if let egui::Shape::Text(text) = &shape.shape
+                    && text.galley.job.text == label
+                {
+                    Some(Rect::from_min_size(text.pos, text.galley.size()))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| panic!("Missing text: {label}"))
+    }
+
+    #[test]
+    fn transport_controls_do_not_move_when_position_digits_change() {
+        let (ctx, mut app) = fixture();
+        let size = Vec2::new(960.0, 720.0);
+        let mut positions = None;
+        for bar in [1, 21, 111, 888, 999, 1000, 4096] {
+            app.session
+                .seek((bar - 1) * TICKS_PER_BAR + 3 * TICKS_PER_BAR / 4);
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let current = ["BPM", "Zoom", "Follow"].map(|label| text_rect(&output, label));
+            if let Some(expected) = positions {
+                assert_eq!(current, expected);
+            }
+            positions = Some(current);
+            assert!(
+                current[2].right() < size.x - 64.0,
+                "Follow must fit beside the rail."
+            );
+            let label = format!("{bar:03} : 4");
+            let time = text_rect(&output, &label);
+            assert!(
+                time.left() >= 18.0 && time.right() <= 130.0,
+                "{label}: {time:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sound_library_divider_resizes_retains_height_and_preserves_arrangement() {
+        let (ctx, mut app) = fixture();
+        for track in 2..TRACK_COUNT {
+            app.session.place(1, track, 0).unwrap();
+        }
+        let base = app.session.library().samples[0].clone();
+        let samples = (1..=128)
+            .map(|id| {
+                let mut sample = base.clone();
+                sample.id = id;
+                sample.name = format!("Resizable sound {id}");
+                sample
+            })
+            .collect();
+        app.session = Session::headless(
+            Arc::new(Library::fixture(samples)),
+            app.session.project().clone(),
+        )
+        .unwrap();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let painted = |output: &egui::FullOutput| {
+            output.shapes.iter().filter(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with("Resizable sound"))
+        }).count()
+        };
+        let before_count = painted(&output);
+        let panel = || {
+            egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
+                .unwrap()
+                .rect
+        };
+        let before = panel();
+        let arrangement_before = app.timeline_drop_rect.unwrap().height();
+        let start = Pos2::new(before.center().x, before.top() + 1.0);
+        let target = start - Vec2::new(0.0, 150.0);
+        pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+        for _ in 0..2 {
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(target)],
+                egui::Modifiers::NONE,
+            );
+        }
+        pointer(&ctx, &mut app, target, false, egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let expanded = panel();
+        assert!(
+            expanded.height() > before.height() + 100.0,
+            "{before:?} -> {expanded:?}"
+        );
+        assert!(painted(&output) > before_count);
+        assert!(app.timeline_drop_rect.unwrap().height() < arrangement_before);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            panel(),
+            expanded,
+            "The divider must keep its height after release."
+        );
+        // Shrinking the window clamps a previous large panel to preserve the lanes.
+        for _ in 0..2 {
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![],
+                egui::Modifiers::NONE,
+                Vec2::new(960.0, 720.0),
+            );
+        }
+        assert!(panel().height() <= 336.0);
+        assert!(app.timeline_drop_rect.unwrap().height() >= 80.0);
+        assert!(!app.session.unsaved());
+    }
+
+    #[test]
+    fn follow_keeps_playhead_visible_and_off_preserves_manual_viewport() {
+        let (ctx, mut app) = fixture();
+        for track in 2..TRACK_COUNT {
+            app.session.place(1, track, 0).unwrap();
+        }
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let visible = app.timeline_drop_rect.unwrap();
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(visible.center()),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, -1000.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            egui::Modifiers::NONE,
+        );
+        // Let egui's wheel smoothing settle before checking the other axis.
+        for _ in 0..60 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let vertical = app.timeline_rect.unwrap().top();
+        let project_before = app.session.project().clone();
+        let mut first_follow_left = None;
+        for (tick, zoom) in [
+            (40 * TICKS_PER_BAR, 1.0),
+            (41 * TICKS_PER_BAR, 1.0),
+            (41 * TICKS_PER_BAR, 2.0),
+            (0, 2.0),
+        ] {
+            app.zoom = zoom;
+            app.session.seek(tick);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let canvas = app.timeline_rect.unwrap();
+            let ruler = app.timeline_ruler_rect.unwrap();
+            let x = canvas.left() + tick as f32 / TICKS_PER_BAR as f32 * app.timeline_bar_width;
+            assert!(
+                x >= ruler.left() - 1.0 && x <= ruler.right(),
+                "tick {tick}: {x}, {ruler:?}"
+            );
+            assert!(
+                (canvas.top() - vertical).abs() < 1.0,
+                "Follow must retain the vertical offset: {} -> {} at tick {tick}.",
+                vertical,
+                canvas.top()
+            );
+            let left = canvas.left();
+            if tick == 40 * TICKS_PER_BAR {
+                first_follow_left = Some(left);
+            } else if tick == 41 * TICKS_PER_BAR && zoom == 1.0 {
+                assert_eq!(
+                    Some(left),
+                    first_follow_left,
+                    "Follow must not scroll on every tick."
+                );
+            }
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.timeline_rect.unwrap().left(), left);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let toggle = text_rect(&output, "Follow").center();
+        click(&ctx, &mut app, toggle, egui::Modifiers::NONE);
+        assert!(!app.follow_playhead);
+        let left = app.timeline_rect.unwrap().left();
+        app.session.seek(50 * TICKS_PER_BAR);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.timeline_rect.unwrap().left(), left);
+        click(&ctx, &mut app, toggle, egui::Modifiers::NONE);
+        assert!(app.follow_playhead);
+        assert!(app.timeline_rect.unwrap().left() < left);
+        // Panning while paused does not fight the Follow setting.
+        let visible = app.timeline_drop_rect.unwrap();
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(visible.center()),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(300.0, 0.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            egui::Modifiers::NONE,
+        );
+        for _ in 0..60 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let panned = app.timeline_rect.unwrap().left();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.timeline_rect.unwrap().left(), panned);
+        assert_eq!(app.session.project(), &project_before);
     }
 
     #[test]
@@ -888,6 +1115,50 @@ mod tests {
             Arc::ptr_eq(&icons, cached),
             "Rail textures must be reused across frames and actions."
         );
+    }
+
+    #[test]
+    fn scan_adoption_clears_selection_and_drag_from_the_previous_palette() {
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-scan-{}", std::process::id()));
+        let old = dir.join("old");
+        let new = dir.join("new");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        for (folder, value) in [(&old, 0.25), (&new, 0.5)] {
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![value; 1000],
+            }
+            .write_wav(&folder.join("sound.wav"))
+            .unwrap();
+        }
+        let library = Library::open_wav_folder(&old, 140.0).unwrap();
+        let source = library.samples[0].id;
+        let session = Session::headless(Arc::new(library), Project::default())
+            .unwrap()
+            .with_settings_root(dir.join("settings"));
+        let mut app = MixJamApp::from_session(session, String::new(), false);
+        let context = egui::Context::default();
+        app.select_wave_folder(&new);
+        app.selected_sample = Some(source);
+        app.drag = Some(DragItem::Sample(source));
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        while app.session.wave_scan().is_some() {
+            assert!(std::time::Instant::now() < deadline);
+            app.poll_application(&context);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(app.session.library().samples[0].id, source);
+        assert!(
+            app.selected_sample.is_none(),
+            "The old ID now identifies another sound."
+        );
+        assert!(
+            app.drag.is_none(),
+            "An in-flight drag must not place the replacement sound."
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

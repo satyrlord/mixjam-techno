@@ -3,8 +3,8 @@ param(
     [string]$OutputDirectory = '',
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    [ValidateSet('arrangement', 'transport-focus', 'mixer', 'libraries', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')]
-    [string[]]$Views = @('arrangement', 'transport-focus', 'mixer', 'libraries', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')
+    [ValidateSet('arrangement', 'transport-focus', 'mixer', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')]
+    [string[]]$Views = @('arrangement', 'transport-focus', 'mixer', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +28,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import shutil
 import struct
 import subprocess
 import sys
@@ -109,10 +110,23 @@ full_project['clips'] = [dict(id=track + 1, sample_id=samples[track % len(sample
     track=track, start_tick=(track % 4) * 256, length_ticks=512,
     offset_frames=0, gain=1) for track in range(64)]
 full = write_project('full64', full_project)
+follow_project = deepcopy(project)
+follow_project['title'] = 'Follow the playhead'
+follow_project['loop_region'] = [32 * 256, 48 * 256]
+for clip in follow_project['clips']:
+    clip['start_tick'] += 32 * 256
+follow = write_project('follow', follow_project)
+large_sounds = root / 'large-library'
+if 'library-expanded' in views:
+    for index in range(128):
+        source = samples[index % len(samples)]
+        destination = large_sounds / source['group_name'] / f'Sound {index + 1:03}.wav'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source['path'], destination)
 
 report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).hexdigest(),
               captured_utc=datetime.now(timezone.utc).isoformat(), platform=platform.platform(),
-              fixture='12 synthetic WAVs at 22050 Hz, schema-2 native projects, 8/2/64 used tracks',
+              fixture='12 synthetic WAVs at 22050 Hz, schema-2 native projects, 8/2/64 used tracks; expanded library adds 128 named copies',
               output_directory=str(root), captures=[],
               checks=['Native process exits successfully', 'BMP exists and dimensions match',
                       'Dedicated per-case user data directory'],
@@ -133,8 +147,9 @@ for size in sizes:
                    MIXJAM_TECHNO_DATA_DIR=str(root / 'user-data' / name))
         command = [str(exe), 'gui']
         if view != 'first-run':
-            fixture = sparse if view == 'sparse' else full if view == 'track64' else arrangement
-            command += ['--samples', str(sounds), '--mix', str(fixture)]
+            fixture = sparse if view == 'sparse' else full if view == 'track64' else follow if view == 'follow' else arrangement
+            folder = large_sounds if view == 'library-expanded' else sounds
+            command += ['--samples', str(folder), '--mix', str(fixture)]
         started = time.monotonic()
         entry = dict(name=name, view=view, requested_size=size, path=str(capture), command=command)
         try:

@@ -113,14 +113,14 @@ components:
 
 ## Overview
 
-**Creative North Star: "A clear live-set score"**
+**Design goal: "A clear live-set score"**
 
-The arrangement carries the work. A quiet graphite shell gives clip names, track
-identity, and playback controls a clear hierarchy. Lime marks primary actions;
-restrained category colors connect sounds to their positions in the arrangement.
+The arrangement is the main work area. Graphite surfaces separate clip names,
+track numbers, and playback controls. Lime marks primary actions. Category
+colors identify the same sounds in the browser and arrangement.
 
-This is the owner's modern reinterpretation of classic loop sequencers. Imported
-Space Grotesk, flat controls, and consistent spacing define its current identity.
+The owner selected this design for the classic loop sequencer. It uses imported
+Space Grotesk, flat controls, and consistent spacing.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -175,7 +175,9 @@ serves fields and explanatory text; Button uses the Medium face. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
-The bar-and-beat readout uses strong proportional text at 23 points. Status text
+The bar-and-beat readout uses strong proportional text at 23 points in a fixed
+112 by 42-point container. Changes to digit widths or bar count must not move
+the adjacent transport controls. Status text
 uses 12 points. These are local roles, not a second font family.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
@@ -187,14 +189,24 @@ retain the full name in a tooltip.
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
 720. The header is 66 points high. Transport occupies 68 points above the
 arrangement. A fixed 64-point tool rail sits at the right. The bottom Sounds/Mixer
-panel uses 28% of the remaining content height, clamped to 220-290 points. Status
-occupies 30 points below it.
+panel starts at 28% of the content height, clamped to 220-290 points. Drag its
+top divider to resize it. A centered grip marks the divider. The panel retains
+its height for the current session, with a minimum of 180 points and a maximum
+that leaves 220 points for the arrangement plus 68 points for transport. Status
+occupies 30 points below it. Sounds and Mixer share this panel size.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. Original track numbers remain stable. Rows are
 34-48 points high and scroll vertically. The label column is 74 points wide;
 the fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
 timeline scrolls horizontally without moving track labels.
+
+Follow is enabled by default in the transport. It moves the horizontal viewport
+when the playhead approaches an edge, including seeks and backward loop jumps.
+It leaves vertical scrolling unchanged. While paused, manual horizontal scroll
+stays where the user leaves it until the position or viewport geometry changes.
+Switch Follow off to keep horizontal scrolling under manual control during
+playback. The toggle is view state for the current session, not a project edit.
 
 Sound search and product/category menus sit above a horizontally scrolling
 category row. The tile grid chooses its column count from available width and
@@ -214,11 +226,10 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 
 ## Elevation & Depth
 
-Flat tonal layers and fine borders separate controls from the work area. The
-application defines no custom gradient, metal bevel, waveform decoration, or
-shadow scale. Floating windows retain the pinned egui dark theme's default
-shadow behavior. Hover and focus changes are immediate native states; there is
-no application motion-token system.
+Flat color layers and thin borders separate controls from the work area. The
+application has no custom gradient, metal bevel, waveform decoration, or shadow
+scale. Floating windows use the default shadow from the pinned egui dark theme.
+Hover and focus states change immediately. The application has no motion tokens.
 
 ## Shapes
 
@@ -268,19 +279,24 @@ results offer Clear filters. The status strip truncates long messages and gives
 the full text on hover. Import details remain available when a project carries
 compatibility notices.
 
-## Do's and Don'ts
+Display full filesystem paths without the Windows extended-length prefix.
+Show network paths as `\\server\share`. Apply this presentation rule to folder
+labels, tooltips, status messages, and import details. Keep stored paths intact;
+display formatting must not change file access, project data, or settings.
 
-### Do:
+## Design rules
 
-- **Do** preserve the graphite, Space Grotesk, and lime hierarchy.
-- **Do** keep category identity and sample names consistent across views.
-- **Do** retain stable track numbers and accessible action names.
-- **Do** verify native layouts at the supported minimum size after changes.
+### Use
 
-### Don't:
+- Preserve the graphite surfaces, Space Grotesk type, and lime primary actions.
+- Use the same category and sample names across views.
+- Keep track numbers stable and give actions accessible names.
+- Check native layouts at the supported minimum size after changes.
 
-- **Don't** restore decorative metal bevels or repeating waveform traces.
-- **Don't** use color alone to identify a sound or action.
-- **Don't** put application rules in the visual layer.
-- **Don't** infer audio parity, device behavior, or assistive-technology support
-  from a screenshot.
+### Avoid
+
+- Do not add decorative metal bevels or repeated waveform traces.
+- Do not use color as the only way to identify a sound or action.
+- Do not put application rules in the visual layer.
+- Do not use a screenshot as evidence for audio parity, device behavior, or
+  assistive technology support.

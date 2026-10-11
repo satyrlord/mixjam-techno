@@ -44,11 +44,11 @@ python -m pip install --target local-data/icon-renderer resvg-py==0.3.1 Pillow==
 python tools/assets/render-rail-icons.py
 ```
 
-The helper uses Pillow for pixel checks and the contact sheet. It reads
-the SVG sources, renders each icon with resvg, retains the rendered alpha
-coverage, sets all RGB pixels to exact navy, and verifies the PNG dimensions,
-transparency, stroke colour and distinct hashes, and writes `manifest.json`.
-It also writes `contact-sheet.png` for visual review. The native UI embeds
-the individual PNG files; the contact sheet and manifest are review material.
+The helper uses Pillow to check pixels and make the contact sheet. It reads the
+SVG sources and renders each icon with resvg. It keeps the rendered alpha
+coverage and sets each RGB pixel to navy. It checks PNG dimensions,
+transparency, stroke color, and distinct hashes. It writes `manifest.json` and
+`contact-sheet.png`. The native UI embeds the individual PNG files. Use the
+contact sheet and manifest for review.
 Use `python tools/assets/render-rail-icons.py --check` to check existing
 assets and their manifest hashes without writing files.

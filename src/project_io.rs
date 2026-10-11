@@ -49,13 +49,68 @@ pub fn load_wave_config() -> Result<Option<WaveFolderConfig>, String> {
     Ok(Some(config))
 }
 
+/// The probe cache of earlier folder scans. A missing, oversized, or
+/// unreadable cache is an empty one: scans then decode every file again.
+pub fn load_scan_cache(data_root: &Path) -> crate::library::ScanCache {
+    let path = data_root.join("wav-scan-cache.json");
+    let Ok(file) = fs::File::open(path) else {
+        return Default::default();
+    };
+    let mut bytes = Vec::new();
+    const LIMIT: u64 = 256 * 1024 * 1024;
+    if file.take(LIMIT + 1).read_to_end(&mut bytes).is_err() || bytes.len() as u64 > LIMIT {
+        return Default::default();
+    }
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
+pub fn save_scan_cache(data_root: &Path, cache: &crate::library::ScanCache) -> Result<(), String> {
+    let bytes = serde_json::to_vec(cache).map_err(|e| e.to_string())?;
+    write_atomically(&data_root.join("wav-scan-cache.json"), &bytes)
+}
+
+fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path.parent().ok_or("The settings path has no folder.")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    // Unique per write: an interrupted or concurrent save never blocks this one.
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let temp = path.with_extension(format!(
+        "{}-{stamp}-{}.tmp",
+        std::process::id(),
+        WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        file.write_all(bytes).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        fs::rename(&temp, path).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temp);
+    }
+    result
+}
+
 pub fn save_wave_config(root: &Path, source_bpm: f64) -> Result<(), String> {
+    save_wave_config_in(&data_root(), root, source_bpm)
+}
+
+pub fn save_wave_config_in(data_root: &Path, root: &Path, source_bpm: f64) -> Result<(), String> {
     if !source_bpm.is_finite() || source_bpm <= 0.0 {
         return Err("The source tempo must be finite and positive.".into());
     }
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    fs::create_dir_all(data_root()).map_err(|e| e.to_string())?;
-    let path = data_root().join("sample-folder.json");
+    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
+    let path = data_root.join("sample-folder.json");
     let temp = path.with_extension(format!("{}.tmp", std::process::id()));
     use std::io::Write;
     let mut file = fs::OpenOptions::new()

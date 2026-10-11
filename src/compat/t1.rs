@@ -39,7 +39,7 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
         let global_id = Product::T1.global_sample_id(u32::from(native_id))?;
         let sample = library
             .sample_by_id(global_id)
-            .ok_or_else(|| format!("T1 sample {native_id} is not in the active sample library."))?;
+            .ok_or_else(|| library.describe_missing(Product::T1, u32::from(native_id)))?;
         if sample.source_bpm != SOURCE_BPM || (native.is_some() && sample.sample_rate != 44_100) {
             return Err(format!(
                 "T1 sample {native_id} has incompatible source timing in the active library."
@@ -447,6 +447,7 @@ mod tests {
             bars: 2,
             source_bpm: 180.0,
             frame_count: 58_800,
+            pcm_digest: None,
         };
         let mut library = Library::empty();
         library.import_wav_folder(&fixture.0, 180.0).unwrap();

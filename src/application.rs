@@ -34,6 +34,9 @@ impl<'a> LibraryView<'a> {
     pub fn wav_root(self) -> Option<&'a Path> {
         self.library.wav_root()
     }
+    pub fn folder_tempos(self) -> &'a [(std::path::PathBuf, f64, usize)] {
+        self.library.folder_tempos()
+    }
     pub fn source_root(self, product: Product) -> Option<&'a Path> {
         self.library.source_root(product)
     }
@@ -151,10 +154,38 @@ impl RenderWorker {
     }
 }
 
+/// A sample folder scan running on its own thread. The result replaces the
+/// library only when it arrives through `poll`; dropping the job abandons it.
+struct WaveScan {
+    root: PathBuf,
+    source_bpm: f64,
+    progress: Arc<crate::library::ScanProgress>,
+    receiver: mpsc::Receiver<Result<Library, String>>,
+}
+
+/// What a frontend may show about a running sample folder scan.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WaveScanStatus {
+    pub root: PathBuf,
+    pub files_done: usize,
+    pub files_total: usize,
+}
+
 /// Owns project history, sources, audio transport, rendering, recording, and persistence.
 /// No mutable project, catalog, device, or renderer is exposed to a frontend.
 pub struct Session {
     library: Arc<Library>,
+    wave_scan: Option<WaveScan>,
+    /// A song to open once the startup folder scan has replaced the library.
+    pending_open: Option<(PathBuf, u64)>,
+    /// The deferred song, once opened, until a frontend reports it.
+    opened_after_scan: Option<PathBuf>,
+    /// A successful folder adoption, until the frontend resets its source selection.
+    wave_folder_adopted: bool,
+    /// Products whose provider replaces the same product found in a WAV folder.
+    preferred_providers: Vec<Product>,
+    /// Where the sample folder setting and scan cache live.
+    settings_root: PathBuf,
     editor: Editor,
     player: Option<Player>,
     render: Option<Arc<Pcm>>,
@@ -183,6 +214,12 @@ impl Session {
         project.validate()?;
         Ok(Self {
             library,
+            wave_scan: None,
+            pending_open: None,
+            opened_after_scan: None,
+            wave_folder_adopted: false,
+            preferred_providers: Vec::new(),
+            settings_root: crate::project_io::data_root(),
             editor: Editor::new(project),
             player: None,
             render: None,
@@ -205,6 +242,12 @@ impl Session {
             record_mix_started: false,
             recorded_take: None,
         })
+    }
+    /// Keep settings and the scan cache in `root` instead of the user's data folder.
+    #[cfg(test)]
+    pub(crate) fn with_settings_root(mut self, root: PathBuf) -> Self {
+        self.settings_root = root;
+        self
     }
     pub fn new(library: Arc<Library>, project: Project) -> Result<Self, String> {
         let mut session = Self::headless(library, project)?;
@@ -481,18 +524,232 @@ impl Session {
         library.remove_product(product)?;
         self.commit_library(library)
     }
+    /// Scan a folder on this thread and adopt it. Headless callers and tests
+    /// use this; the GUI starts a background scan instead.
     pub fn select_wave_folder(&mut self, root: &Path, source_bpm: f64) -> Result<(), String> {
         if self.is_recording() {
             return Err("Stop recording before you change the sample folder.".into());
         }
         let library = Library::open_wav_folder(root, source_bpm)?;
+        let warnings = self.adopt_wave_folder(library, root, source_bpm)?;
+        if !warnings.is_empty() {
+            self.error(warnings.join(" "));
+        }
+        Ok(())
+    }
+
+    /// Let these products' providers replace the same products found in a
+    /// sample folder. Other providers only fill products the folder lacks.
+    pub fn prefer_providers(&mut self, products: &[Product]) {
+        self.preferred_providers = products.to_vec();
+    }
+
+    /// Replace the library with a scanned folder, keeping the product
+    /// providers already in use. Returns the providers that could not be kept.
+    fn adopt_wave_folder(
+        &mut self,
+        mut library: Library,
+        root: &Path,
+        source_bpm: f64,
+    ) -> Result<Vec<String>, String> {
+        let mut warnings = Vec::new();
+        let previous_root = self.library.wav_root();
+        for binding in self.library.bindings() {
+            // Bindings at the previous sample folder came from its WAVs.
+            if previous_root == Some(binding.root.as_path()) {
+                continue;
+            }
+            let mut candidate = library.clone();
+            if candidate.source_root(binding.product).is_some() {
+                // A folder that merely shares some audio with this product
+                // does not displace its provider.
+                if !self.preferred_providers.contains(&binding.product)
+                    && !library.is_sparse_wav_product(binding.product)
+                {
+                    continue;
+                }
+                candidate.remove_product(binding.product)?;
+            }
+            match candidate.register(
+                binding.product,
+                &binding.root,
+                &crate::project_io::reference_samples_root(),
+            ) {
+                Ok(()) => library = candidate,
+                Err(error) => warnings.push(error),
+            }
+        }
         let (project, library) = crate::project_io::resolve(self.project().clone(), &library)?;
-        crate::project_io::save_wave_config(root, source_bpm)?;
+        crate::project_io::save_wave_config_in(&self.settings_root, root, source_bpm)?;
         self.stop();
+        // New sample sources are not an edit: a saved or untouched mix stays so.
+        let unsaved = self.unsaved;
         self.library = Arc::new(library);
         self.editor = Editor::new(project);
         self.changed();
+        self.unsaved = unsaved;
+        self.wave_folder_adopted = true;
+        Ok(warnings)
+    }
+
+    /// Start scanning a sample folder on another thread. A scan already
+    /// running is abandoned. The library changes only when `poll` receives
+    /// the result; `wave_scan` reports progress until then.
+    pub fn start_wave_scan(&mut self, root: &Path, source_bpm: f64) -> Result<(), String> {
+        if self.is_recording() {
+            return Err("Stop recording before you change the sample folder.".into());
+        }
+        if !source_bpm.is_finite() || source_bpm <= 0.0 {
+            return Err("The source tempo must be finite and positive.".into());
+        }
+        if let Some(path) = self.abandon_wave_scan() {
+            self.error(format!(
+                "{} was not opened because another folder was selected.",
+                path.display()
+            ));
+        }
+        let progress = Arc::new(crate::library::ScanProgress::default());
+        let (sender, receiver) = mpsc::channel();
+        let worker_progress = Arc::clone(&progress);
+        let worker_root = root.to_path_buf();
+        let settings_root = self.settings_root.clone();
+        std::thread::Builder::new()
+            .name("mixjam-techno-scan".into())
+            .spawn(move || {
+                let mut cache = crate::project_io::load_scan_cache(&settings_root);
+                let result = Library::open_wav_folder_with(
+                    &worker_root,
+                    source_bpm,
+                    Some(&worker_progress),
+                    Some(&mut cache),
+                );
+                // Keep the probes of a failed or cancelled scan for the next one.
+                // A cache that cannot be written only costs that scan time.
+                let _ = crate::project_io::save_scan_cache(&settings_root, &cache);
+                let _ = sender.send(result);
+            })
+            .map_err(|error| format!("Cannot start the sample folder scan: {error}"))?;
+        self.wave_scan = Some(WaveScan {
+            root: root.to_path_buf(),
+            source_bpm,
+            progress,
+            receiver,
+        });
         Ok(())
+    }
+
+    pub fn wave_scan(&self) -> Option<WaveScanStatus> {
+        self.wave_scan.as_ref().map(|scan| {
+            let (files_done, files_total) = scan.progress.counts();
+            WaveScanStatus {
+                root: scan.root.clone(),
+                files_done,
+                files_total,
+            }
+        })
+    }
+
+    /// Abandon a running scan. Its thread stops at the next file; its result
+    /// is never adopted, and a song waiting for it is not opened.
+    pub fn cancel_wave_scan(&mut self) {
+        if self.wave_scan.is_none() {
+            return;
+        }
+        match self.abandon_wave_scan() {
+            Some(path) => self.message(format!(
+                "Sample folder scan cancelled. {} was not opened.",
+                path.display()
+            )),
+            None => self.message("Sample folder scan cancelled."),
+        }
+    }
+
+    /// Stop the running scan and return the song that was waiting for it.
+    fn abandon_wave_scan(&mut self) -> Option<PathBuf> {
+        if let Some(scan) = self.wave_scan.take() {
+            scan.progress.cancel();
+        }
+        self.pending_open.take().map(|(path, _)| path)
+    }
+
+    /// Report a successful folder adoption once, so views can discard stale IDs.
+    pub fn take_wave_folder_adopted(&mut self) -> bool {
+        std::mem::take(&mut self.wave_folder_adopted)
+    }
+
+    /// The song opened by the last completed scan, reported once.
+    pub fn take_opened_after_scan(&mut self) -> Option<PathBuf> {
+        self.opened_after_scan.take()
+    }
+
+    /// Open this song after the running folder scan completes, or now when
+    /// no scan is running.
+    pub fn open_after_scan(&mut self, path: &Path) -> Result<(), String> {
+        if self.wave_scan.is_some() {
+            self.pending_open = Some((path.to_path_buf(), self.revision));
+            Ok(())
+        } else {
+            self.open(path)
+        }
+    }
+
+    fn poll_wave_scan(&mut self) -> Option<u64> {
+        let scan = self.wave_scan.as_ref()?;
+        if self.is_recording() {
+            // Adopting the folder stops the transport; let the take finish first.
+            return Some(100);
+        }
+        let result = match scan.receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return Some(100),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Err("The sample folder scan stopped unexpectedly.".into())
+            }
+        };
+        let scan = self.wave_scan.take()?;
+        let pending = self.pending_open.take();
+        let project_changed = pending.as_ref().is_some_and(|(_, revision)| {
+            *revision != self.revision || self.needs_save_confirmation()
+        });
+        match result
+            .and_then(|library| self.adopt_wave_folder(library, &scan.root, scan.source_bpm))
+        {
+            Ok(warnings) => {
+                let count = self.library.samples.len();
+                let mut notice = format!("Sample folder loaded: {count} sounds.");
+                let mut error = !warnings.is_empty();
+                if !warnings.is_empty() {
+                    notice.push_str(&format!(" {}", warnings.join(" ")));
+                }
+                if let Some((path, _)) = pending {
+                    if project_changed {
+                        notice.push_str(&format!(
+                            " {} was not opened because the current mix changed or has an unsaved take. Open the song when you are ready.",
+                            path.display()
+                        ));
+                    } else {
+                        match self.open(&path) {
+                            Ok(()) => self.opened_after_scan = Some(path),
+                            Err(cause) => {
+                                error = true;
+                                notice
+                                    .push_str(&format!(" Cannot open {}: {cause}", path.display()));
+                            }
+                        }
+                    }
+                } else if warnings.is_empty() {
+                    notice.push_str(" Choose a sound or open a song.");
+                }
+                self.notice = Some((notice, error));
+            }
+            Err(error) => match pending {
+                Some((path, _)) => {
+                    self.error(format!("{error} {} was not opened.", path.display()))
+                }
+                None => self.error(error),
+            },
+        }
+        None
     }
     pub fn register_file(
         &mut self,
@@ -791,6 +1048,7 @@ impl Session {
     }
     /// Advances devices and the render queue. Returns a suggested polling delay in milliseconds.
     pub fn poll(&mut self) -> Option<u64> {
+        let scan_delay = self.poll_wave_scan();
         self.poll_render();
         if self.wants_playback
             && !self.render_dirty
@@ -807,7 +1065,7 @@ impl Session {
                 (player.position_frames() as f64 / self.playback_frames_per_tick) as u32;
         }
         self.poll_recording();
-        if self.render_worker.in_flight {
+        let delay = if self.render_worker.in_flight {
             Some(20)
         } else if self.playing_mix() {
             Some(30)
@@ -815,6 +1073,10 @@ impl Session {
             Some(40)
         } else {
             None
+        };
+        match (delay, scan_delay) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
         }
     }
     pub fn start_recording(&mut self, track: usize) -> Result<(), String> {
@@ -935,6 +1197,7 @@ mod tests {
             channels: 1,
             source_bpm: 140.0,
             wav_path: None,
+            digest: None,
         };
         let library = Arc::new(Library::fixture(vec![sample]));
         let mut editor = Editor::new(Project::default());
@@ -1193,6 +1456,216 @@ mod boundary_tests {
         assert_eq!(session.project().clips[0].offset_frames, 999);
         session.history_step(false).unwrap();
         assert_eq!(session.project(), &before);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn unavailable_optional_provider_keeps_scanned_product_and_reports_warning() {
+        let dir = fixture_dir();
+        let old = dir.join("provider");
+        let new = dir.join("folder");
+        let metadata = [crate::catalog::WaveMetadata {
+            native_id: 1,
+            code: "TEST".into(),
+            name: "Test".into(),
+            group_name: "Wave".into(),
+            bars: 1,
+            source_bpm: 140.0,
+            frame_count: 1000,
+            pcm_digest: Some(crate::catalog::pcm_identity_hex(&vec![0; 1000])),
+        }];
+        for folder in [&old, &new] {
+            std::fs::create_dir_all(folder).unwrap();
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.0; 1000],
+            }
+            .write_wav(&folder.join("sound.wav"))
+            .unwrap();
+        }
+        let mut provider = Library::empty();
+        provider.import_wav_folder(&old, 140.0).unwrap();
+        provider
+            .register_wav_product(Product::T2, &old, &metadata)
+            .unwrap();
+        let mut scanned = Library::open_wav_folder(&new, 140.0).unwrap();
+        scanned
+            .register_wav_product(Product::T2, &new, &metadata)
+            .unwrap();
+        let native_id = Product::T2.global_sample_id(1).unwrap();
+        assert!(scanned.sample_by_id(native_id).is_some());
+        let mut session = Session::headless(Arc::new(provider), Project::default())
+            .unwrap()
+            .with_settings_root(dir.join("settings"));
+        std::fs::remove_dir_all(&old).unwrap();
+        let song = dir.join("queued.json");
+        Project::default().save(&song).unwrap();
+        let (sender, receiver) = mpsc::channel();
+        session.wave_scan = Some(WaveScan {
+            root: new,
+            source_bpm: 140.0,
+            progress: Arc::new(crate::library::ScanProgress::default()),
+            receiver,
+        });
+        session.open_after_scan(&song).unwrap();
+        sender.send(Ok(scanned)).unwrap();
+        session.poll();
+        assert!(session.library().sample_by_id(native_id).is_some());
+        assert_eq!(session.take_opened_after_scan(), Some(song));
+        let (notice, error) = session.take_notice().unwrap();
+        assert!(error && notice.contains("Cannot open"), "{notice}");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn deferred_scan_open_preserves_intervening_work() {
+        let dir = fixture_dir();
+        let song = dir.join("queued.json");
+        Project {
+            title: "Queued song".into(),
+            ..Project::default()
+        }
+        .save(&song)
+        .unwrap();
+        let other = dir.join("other.json");
+        Project {
+            title: "Other song".into(),
+            ..Project::default()
+        }
+        .save(&other)
+        .unwrap();
+        for action in ["edit", "edit_then_save", "new", "open", "take"] {
+            let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+                .unwrap()
+                .with_settings_root(dir.join(action));
+            let (sender, receiver) = mpsc::channel();
+            session.wave_scan = Some(WaveScan {
+                root: dir.clone(),
+                source_bpm: 140.0,
+                progress: Arc::new(crate::library::ScanProgress::default()),
+                receiver,
+            });
+            session.open_after_scan(&song).unwrap();
+            match action {
+                "edit" => session.edit(EditCommand::SetTempo(160.0)).unwrap(),
+                "edit_then_save" => {
+                    session.edit(EditCommand::SetTempo(160.0)).unwrap();
+                    session.save(&dir.join("saved.json")).unwrap();
+                }
+                "new" => session.new_mix().unwrap(),
+                "open" => session.open(&other).unwrap(),
+                "take" => {
+                    session.recorded_take = Some(Pcm {
+                        sample_rate: 44_100,
+                        channels: 1,
+                        samples: vec![0.25; 32],
+                    })
+                }
+                _ => unreachable!(),
+            }
+            let expected = session.project().clone();
+            let expected_file = session.file.clone();
+            sender.send(Ok(Library::empty())).unwrap();
+            session.poll();
+            assert_eq!(session.project(), &expected, "{action}");
+            assert_eq!(session.file, expected_file, "{action}");
+            assert!(session.take_opened_after_scan().is_none(), "{action}");
+            assert!(
+                session.take_notice().unwrap().0.contains("was not opened"),
+                "{action}"
+            );
+            assert_eq!(session.has_recorded_take(), action == "take");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn background_folder_scans_adopt_on_poll_and_cancel_without_replacing_the_library() {
+        let dir = fixture_dir();
+        std::fs::create_dir_all(dir.join("Loop")).unwrap();
+        for (name, frames) in [
+            ("Loop/a.wav", 75_600),
+            ("Loop/b.wav", 151_200),
+            ("Loop/d.wav", 151_200),
+            ("c.wav", 9_001),
+        ] {
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; frames],
+            }
+            .write_wav(&dir.join(name))
+            .unwrap();
+        }
+        let song = dir.join("song.json");
+        let data = dir.join("data");
+        let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(data.clone());
+        assert!(session.wave_scan().is_none());
+        session.start_wave_scan(&dir, 120.0).unwrap();
+        let status = session.wave_scan().unwrap();
+        assert_eq!(status.root, dir);
+        assert!(status.files_done <= 4);
+        // The song opens once the scanned library can resolve it.
+        session.open_after_scan(&song).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while session.wave_scan().is_some() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the scan did not finish"
+            );
+            let delay = session.poll();
+            if session.wave_scan().is_some() {
+                assert_eq!(delay, Some(100));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(session.library().samples.len(), 4);
+        assert_eq!(session.library().folder_tempos().len(), 1);
+        let (notice, error) = session.take_notice().unwrap();
+        // The pending song did not exist: the folder loaded, the open failed visibly.
+        assert!(error && notice.contains("song.json"), "{notice}");
+        assert_eq!(crate::project_io::load_scan_cache(&data).len(), 4);
+        assert!(data.join("sample-folder.json").is_file());
+        // A cancelled scan never replaces the library, even after its thread ends.
+        let before = session.library().samples.len();
+        session.start_wave_scan(&dir.join("Loop"), 140.0).unwrap();
+        session.open_after_scan(&song).unwrap();
+        session.cancel_wave_scan();
+        assert!(session.wave_scan().is_none());
+        let (notice, error) = session.take_notice().unwrap();
+        assert!(!error && notice.contains("song.json"), "{notice}");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert_eq!(session.poll(), None);
+        assert_eq!(session.library().samples.len(), before);
+        assert!(session.start_wave_scan(&dir, f64::NAN).is_err());
+        // The cancelled scan's song is not opened by a later scan; a queued one is.
+        let finish = |session: &mut Session| {
+            while session.wave_scan().is_some() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the scan did not finish"
+                );
+                session.poll();
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        };
+        session.start_wave_scan(&dir, 120.0).unwrap();
+        finish(&mut session);
+        let (notice, error) = session.take_notice().unwrap();
+        assert!(
+            !error && notice.starts_with("Sample folder loaded"),
+            "{notice}"
+        );
+        assert_eq!(session.take_opened_after_scan(), None);
+        let source = session.library().samples[0].id;
+        session.place(source, 0, 0).unwrap();
+        session.save(&song).unwrap();
+        session.start_wave_scan(&dir, 120.0).unwrap();
+        session.open_after_scan(&song).unwrap();
+        finish(&mut session);
+        assert_eq!(session.take_opened_after_scan(), Some(song.clone()));
+        assert_eq!(session.project().clips.len(), 1);
+        assert!(!session.unsaved());
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]

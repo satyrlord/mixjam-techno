@@ -638,13 +638,9 @@ fn build_project(
         let (sample_id, frames, rate, source_bpm, declared_ticks) = match event.reference {
             Reference::Native(native_id) => {
                 let id = product.global_sample_id(u32::from(native_id))?;
-                let sample = library.sample_by_id(id).ok_or_else(|| {
-                    format!(
-                        "{} native sample {} is missing from its library.",
-                        product.label(),
-                        native_id
-                    )
-                })?;
+                let sample = library
+                    .sample_by_id(id)
+                    .ok_or_else(|| library.describe_missing(product, u32::from(native_id)))?;
                 (
                     id,
                     sample.frame_count,
@@ -1018,6 +1014,7 @@ mod tests {
                         bars: 2,
                         source_bpm: 140.0,
                         frame_count: 4,
+                        pcm_digest: None,
                     }],
                 )
                 .unwrap();

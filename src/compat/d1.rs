@@ -28,7 +28,7 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
         let id = Product::D1.global_sample_id(u32::from(native_id))?;
         let sample = library
             .sample_by_id(id)
-            .ok_or_else(|| format!("D1 sample {native_id} is not in the active library."))?;
+            .ok_or_else(|| library.describe_missing(Product::D1, u32::from(native_id)))?;
         if sample.source_bpm != 140.0
             || (!library.is_wav_product(Product::D1) && sample.sample_rate != 44_100)
         {
@@ -443,6 +443,7 @@ mod tests {
                     bars: 2,
                     source_bpm: 140.0,
                     frame_count: 75_600,
+                    pcm_digest: None,
                 }],
             )
             .unwrap();

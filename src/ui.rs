@@ -50,6 +50,8 @@ pub struct MixJamApp {
     rail_icons: Option<Result<Arc<RailIcons>, String>>,
     erase: bool,
     zoom: f32,
+    follow_playhead: bool,
+    last_follow_position: Option<(u32, f32, f32)>,
     drag: Option<DragItem>,
     timeline_rect: Option<Rect>,
     timeline_drop_rect: Option<Rect>,
@@ -62,6 +64,8 @@ pub struct MixJamApp {
     loop_start: Option<u32>,
     status: String,
     status_error: bool,
+    /// The scan progress line last written to the status, while a scan runs.
+    scan_status: Option<String>,
     pending_action: Option<PendingAction>,
     allow_close: bool,
     selection_origin: Option<Pos2>,
@@ -103,6 +107,16 @@ impl MixJamApp {
         });
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
+            if std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok("library-expanded") {
+                cc.egui_ctx.data_mut(|data| {
+                    data.insert_persisted(
+                        egui::Id::new("sounds"),
+                        egui::containers::panel::PanelState {
+                            rect: Rect::from_min_size(Pos2::ZERO, Vec2::new(1.0, 480.0)),
+                        },
+                    )
+                });
+            }
             cc.egui_ctx.style_mut(|style| {
                 style.animation_time = 0.0;
                 style.scroll_animation = egui::style::ScrollAnimation::none();
@@ -118,7 +132,7 @@ impl MixJamApp {
         }
     }
 
-    fn from_session(session: Session, status: String, status_error: bool) -> Self {
+    fn from_session(mut session: Session, status: String, status_error: bool) -> Self {
         let capture_path = std::env::var_os("\x54ECHNOREA_CAPTURE_TO").map(PathBuf::from);
         let capture_view = if capture_path.is_some() {
             std::env::var("\x54ECHNOREA_CAPTURE_VIEW").unwrap_or_default()
@@ -126,6 +140,9 @@ impl MixJamApp {
             String::new()
         };
         let status = with_import_summary(status, session.project());
+        if capture_view == "follow" {
+            session.seek(40 * TICKS_PER_BAR);
+        }
         let needs_sample_folder = session.library().samples.is_empty();
         let selected_sample = (!capture_view.is_empty())
             .then(|| session.library().samples.first().map(|sample| sample.id))
@@ -146,6 +163,8 @@ impl MixJamApp {
             rail_icons: None,
             erase: false,
             zoom: 1.0,
+            follow_playhead: true,
+            last_follow_position: None,
             drag: None,
             timeline_rect: None,
             timeline_drop_rect: None,
@@ -158,6 +177,7 @@ impl MixJamApp {
             loop_start: None,
             status,
             status_error,
+            scan_status: None,
             pending_action: None,
             allow_close: false,
             selection_origin: None,
@@ -225,18 +245,62 @@ impl MixJamApp {
             self.selected_sample = None;
         }
     }
-    fn sync_notice(&mut self) {
-        if let Some((status, error)) = self.session.take_notice() {
-            self.status = status;
-            self.status_error = error;
-        }
+    fn sync_notice(&mut self) -> bool {
+        let Some((status, error)) = self.session.take_notice() else {
+            return false;
+        };
+        self.status = status;
+        self.status_error = error;
+        true
     }
     fn poll_application(&mut self, ctx: &egui::Context) {
         let recording = self.session.is_recording();
         if let Some(delay) = self.session.poll() {
             ctx.request_repaint_after(Duration::from_millis(delay));
         }
-        self.sync_notice();
+        if self.session.take_wave_folder_adopted() {
+            self.clear_selection();
+            self.drag = None;
+            self.selection_origin = None;
+            self.selection_base.clear();
+            self.edit_start = 0;
+            self.edit_end = 0;
+        }
+        let noticed = self.sync_notice();
+        if let Some(path) = self.session.take_opened_after_scan() {
+            self.clear_selection();
+            if !self.status_error {
+                self.message(with_import_summary(
+                    format!("Opened {}.", path.display()),
+                    self.session.project(),
+                ));
+            }
+        }
+        match self.session.wave_scan() {
+            // Progress owns the status line until another message replaces it.
+            Some(scan)
+                if !self.status_error
+                    && !noticed
+                    && self
+                        .scan_status
+                        .as_ref()
+                        .is_none_or(|shown| *shown == self.status) =>
+            {
+                self.status = if scan.files_total == 0 {
+                    format!("Listing {}…", scan.root.display())
+                } else {
+                    format!(
+                        "Scanning {}: {} of {} WAVs",
+                        scan.root.display(),
+                        scan.files_done,
+                        scan.files_total
+                    )
+                };
+                self.scan_status = Some(self.status.clone());
+            }
+            Some(_) => {}
+            None => self.scan_status = None,
+        }
         if recording && !self.session.is_recording() && self.session.has_recorded_take() {
             self.save_recorded_take();
         }
@@ -402,10 +466,10 @@ impl MixJamApp {
     }
 
     fn select_wave_folder(&mut self, root: &Path) {
-        match self.session.select_wave_folder(root, self.import_bpm) {
+        match self.session.start_wave_scan(root, self.import_bpm) {
             Ok(()) => {
                 self.clear_selection();
-                self.message("Sample folder loaded. Choose a sound or open a song.");
+                self.message(format!("Scanning {}…", root.display()));
             }
             Err(error) => self.error(error),
         }
@@ -875,25 +939,72 @@ impl MixJamApp {
                 .default_width(540.0)
                 .show(ctx, |ui| {
                     ui.label("Choose a folder of WAV files. No original installation is required.");
+                    let scan = self.session.wave_scan();
                     ui.horizontal(|ui| {
-                        ui.label("Source BPM for other WAVs");
-                        ui.add(egui::DragValue::new(&mut self.import_bpm).range(1.0..=999.0));
+                        ui.label("Fallback BPM");
+                        ui.add(egui::DragValue::new(&mut self.import_bpm).range(1.0..=999.0))
+                            .on_hover_text("The tempo of folders whose loop lengths do not agree on one. Loops that fit both a tempo and its half or double are read between 88 and 176 BPM unless this value names the other one.");
                         if ui
                             .add_enabled(
-                                !self.session.is_recording(),
+                                !self.session.is_recording() && scan.is_none(),
                                 egui::Button::new("Choose WAV folder"),
                             )
-                            .on_disabled_hover_text("Stop recording before you change the sample folder.")
+                            .on_disabled_hover_text(if scan.is_some() {
+                                "Wait for the current scan to finish or cancel it."
+                            } else {
+                                "Stop recording before you change the sample folder."
+                            })
                             .clicked()
                             && let Some(path) = rfd::FileDialog::new().pick_folder()
                         {
                             self.select_wave_folder(&path);
                         }
                     });
-                    if let Some(root) = self.session.library().wav_root() {
-                        ui.label(root.display().to_string());
+                    if let Some(scan) = &scan {
+                        ui.horizontal(|ui| {
+                            let (text, fraction) = if scan.files_total == 0 {
+                                ("Listing files…".to_string(), 0.0)
+                            } else {
+                                (
+                                    format!("{} of {} WAVs", scan.files_done, scan.files_total),
+                                    scan.files_done as f32 / scan.files_total as f32,
+                                )
+                            };
+                            ui.add(
+                                egui::ProgressBar::new(fraction)
+                                    .desired_width(300.0)
+                                    .animate(true)
+                                    .text(text),
+                            );
+                            if ui.button("Cancel").clicked() {
+                                self.session.cancel_wave_scan();
+                                self.sync_notice();
+                            }
+                        });
+                        ui.small(format!("Scanning {}", display_paths(&scan.root.to_string_lossy())));
+                    } else if let Some(root) = self.session.library().wav_root() {
+                        ui.label(display_paths(&root.to_string_lossy()));
                     }
-                    ui.label("Known extracted filenames are matched automatically. Other WAVs use the source BPM above.");
+                    ui.label("Extracted product samples are recognized by their audio and keep their original tempo. Each other folder uses the tempo its loop lengths agree on, or the fallback BPM above.");
+                    let library = self.session.library();
+                    if let Some(root) = library.wav_root()
+                        && !library.folder_tempos().is_empty()
+                    {
+                        ui.collapsing(
+                            format!("Folder tempos ({})", library.folder_tempos().len()),
+                            |ui| {
+                                for (folder, bpm, count) in library.folder_tempos() {
+                                    let relative = folder.strip_prefix(root).unwrap_or(folder);
+                                    let name = if relative.as_os_str().is_empty() {
+                                        ".".to_string()
+                                    } else {
+                                        display_paths(&relative.to_string_lossy())
+                                    };
+                                    ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
+                                }
+                            },
+                        );
+                    }
                     ui.collapsing("Optional product providers", |ui| {
                     ui.horizontal(|ui| {
                         egui::ComboBox::from_id_salt("library_product")
@@ -925,8 +1036,9 @@ impl MixJamApp {
                                 self.remove_library(binding.product);
                             }
                         });
-                        ui.add(egui::Label::new(binding.root.display().to_string()).truncate())
-                            .on_hover_text(binding.root.display().to_string());
+                        let path = display_paths(&binding.root.to_string_lossy());
+                        ui.add(egui::Label::new(&path).truncate())
+                            .on_hover_text(&path);
                         ui.add_space(6.0);
                     }
                     });
@@ -949,10 +1061,10 @@ impl MixJamApp {
                     for notice in &self.session.project().source_notices {
                         if notice.starts_with("MixJam v7 source controls:") {
                             ui.collapsing("Saved MixJam source controls", |ui| {
-                                ui.label(notice);
+                                ui.label(display_paths(notice));
                             });
                         } else {
-                            ui.label(notice);
+                            ui.label(display_paths(notice));
                         }
                     }
                     ui.small("These changes are saved with the mix.");

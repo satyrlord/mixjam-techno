@@ -528,6 +528,7 @@ mod tests {
             bars: 1,
             source_bpm: 140.0,
             frame_count: 4,
+            pcm_digest: None,
         };
         let mut library = Library::empty();
         library.import_wav_folder(&root, 140.0).unwrap();

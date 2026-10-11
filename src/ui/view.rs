@@ -1,5 +1,33 @@
 use super::*;
 
+/// Format Windows filesystem paths for labels only. Stored paths and messages
+/// retain their original spelling for file operations and diagnostics.
+pub(super) fn display_paths(text: &str) -> String {
+    let mut display = String::with_capacity(text.len());
+    let mut remaining = text;
+    while let Some(start) = remaining.find(r"\\?\") {
+        display.push_str(&remaining[..start]);
+        let tail = &remaining[start + 4..];
+        if let Some(unc) = tail.strip_prefix(r"UNC\") {
+            display.push_str(r"\\");
+            remaining = unc;
+        } else {
+            let bytes = tail.as_bytes();
+            if !(bytes.len() >= 3
+                && bytes[0].is_ascii_alphabetic()
+                && bytes[1] == b':'
+                && bytes[2] == b'\\')
+            {
+                // Device and volume identifiers have no equivalent drive path.
+                display.push_str(r"\\?\");
+            }
+            remaining = tail;
+        }
+    }
+    display.push_str(remaining);
+    display
+}
+
 // Shared visual tokens. Application state and rules live outside this module.
 pub(super) const CANVAS: Color32 = Color32::from_rgb(20, 23, 27);
 pub(super) const PANEL: Color32 = Color32::from_rgb(28, 32, 37);
@@ -170,28 +198,43 @@ impl MixJamApp {
                         self.show_import_details = true;
                     }
                     let color = if self.status_error { CORAL } else { MUTED };
+                    let status = display_paths(&self.status);
                     ui.add(
-                        egui::Label::new(egui::RichText::new(&self.status).size(12.0).color(color))
+                        egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
                             .truncate(),
                     )
-                    .on_hover_text(&self.status);
+                    .on_hover_text(&status);
                 });
             });
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
-        egui::TopBottomPanel::bottom("sounds")
-            .exact_height(height)
+        // Reserve the transport and a usable arrangement, including its inspector.
+        let max_height = (ctx.available_rect().height() - 68.0 - 220.0).max(180.0);
+        let sounds = egui::TopBottomPanel::bottom("sounds")
+            .default_height(height)
+            .height_range(180.0..=max_height)
+            .resizable(true)
             .frame(
                 egui::Frame::new()
                     .fill(PANEL)
                     .inner_margin(egui::Margin::symmetric(18, 12)),
             )
             .show(ctx, |ui| {
+                ui.set_min_height(ui.available_height());
                 if self.show_mixer {
                     self.mixer(ui);
                 } else {
                     self.palette(ui);
                 }
             });
+        let grip = Rect::from_center_size(
+            Pos2::new(
+                sounds.response.rect.center().x,
+                sounds.response.rect.top() + 2.0,
+            ),
+            Vec2::new(48.0, 3.0),
+        );
+        ctx.layer_painter(egui::LayerId::background())
+            .rect_filled(grip, 2.0, MUTED);
         egui::TopBottomPanel::top("transport")
             .exact_height(68.0)
             .frame(
@@ -203,21 +246,8 @@ impl MixJamApp {
     }
 
     pub(super) fn transport(&mut self, ui: &mut egui::Ui) {
-        let bars = self.session.cursor_tick() / TICKS_PER_BAR + 1;
-        let beat = (self.session.cursor_tick() % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
         ui.horizontal_centered(|ui| {
-            egui::Frame::new()
-                .fill(CANVAS)
-                .corner_radius(6)
-                .inner_margin(egui::Margin::symmetric(14, 9))
-                .show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new(format!("{bars:03} : {beat}"))
-                            .size(23.0)
-                            .strong()
-                            .color(TEXT),
-                    );
-                });
+            transport_position(ui, self.session.cursor_tick());
             ui.add_space(12.0);
             if transport_button(
                 ui,
@@ -303,6 +333,13 @@ impl MixJamApp {
                     .show_value(false)
                     .clamping(egui::SliderClamping::Always),
             );
+            if ui
+                .toggle_value(&mut self.follow_playhead, "Follow")
+                .on_hover_text("Keep the playhead in view during playback and seeking.")
+                .changed()
+            {
+                self.last_follow_position = None;
+            }
         });
     }
 
@@ -651,7 +688,9 @@ impl MixJamApp {
         self.timeline_row_height = row_height;
         self.timeline_bar_width = bar_width;
         let track_height = row_height * row_count as f32;
-        let bars = (self.session.project().end_tick() / TICKS_PER_BAR + 16).max(64);
+        let cursor_tick = self.session.cursor_tick();
+        let bars =
+            (self.session.project().end_tick().max(cursor_tick) / TICKS_PER_BAR + 16).max(64);
         let width = bars as f32 * bar_width;
         let label_width = 74.0;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
@@ -674,6 +713,23 @@ impl MixJamApp {
             })
             .auto_shrink([false, false])
             .max_height(viewport_height);
+        // Only a position or geometry change can move a paused viewport. Manual
+        // scrolling stays put until the playhead moves or Follow is enabled again.
+        let visible_width =
+            (ui.available_width() - lane_inset - ui.spacing().scroll.allocated_width()).max(1.0);
+        let follow_position = (cursor_tick, bar_width, visible_width);
+        if self.follow_playhead && self.last_follow_position != Some(follow_position) {
+            let id = ui.make_persistent_id(egui::Id::new("arrangement_scroll"));
+            let offset = egui::scroll_area::State::load(ui.ctx(), id)
+                .unwrap_or_default()
+                .offset
+                .x;
+            let playhead = cursor_tick as f32 / TICKS_PER_BAR as f32 * bar_width;
+            if let Some(offset) = follow_offset(playhead, offset, visible_width, width) {
+                scroll_area = scroll_area.horizontal_scroll_offset(offset);
+            }
+        }
+        self.last_follow_position = Some(follow_position);
         if self.capture_last_track {
             scroll_area = scroll_area.vertical_scroll_offset(track_height);
             self.capture_last_track = false;
@@ -1104,6 +1160,41 @@ impl MixJamApp {
         self.tool_windows(ctx);
         self.capture(ctx);
     }
+}
+
+/// Keep the viewport still while the playhead is comfortably visible.
+fn follow_offset(
+    playhead: f32,
+    offset: f32,
+    visible_width: f32,
+    content_width: f32,
+) -> Option<f32> {
+    let margin = (visible_width * 0.1).min(48.0);
+    if playhead >= offset + margin && playhead <= offset + visible_width - margin {
+        return None;
+    }
+    let next =
+        (playhead - visible_width * 0.25).clamp(0.0, (content_width - visible_width).max(0.0));
+    ((next - offset).abs() > 0.5).then_some(next)
+}
+
+fn transport_position(ui: &mut egui::Ui, tick: u32) -> Response {
+    let bars = tick / TICKS_PER_BAR + 1;
+    let beat = (tick % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
+    let text = format!("{bars:03} : {beat}");
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 42.0), Sense::hover());
+    ui.painter().rect_filled(rect, 6.0, CANVAS);
+    ui.painter()
+        .with_clip_rect(rect.intersect(ui.clip_rect()))
+        .text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            &text,
+            FontId::new(23.0, egui::FontFamily::Name("Space Grotesk Bold".into())),
+            TEXT,
+        );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
+    response.on_hover_text(format!("Bar {bars}, beat {beat}"))
 }
 
 pub(super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
