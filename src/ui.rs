@@ -99,12 +99,9 @@ impl MixJamApp {
     #[cfg_attr(test, allow(dead_code))]
     pub fn new(cc: &eframe::CreationContext<'_>, mut session: Session) -> Self {
         configure_style(&cc.egui_ctx);
-        let (status, status_error) = session.take_notice().unwrap_or_else(|| {
-            (
-                "Choose a sound, then drag it onto a track. Double-click to listen.".into(),
-                false,
-            )
-        });
+        let (status, status_error) = session
+            .take_notice()
+            .unwrap_or_else(|| (DEFAULT_STATUS.into(), false));
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
             if std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok("library-expanded") {
@@ -155,7 +152,7 @@ impl MixJamApp {
             group: None,
             palette_product: None,
             search: String::new(),
-            show_mixer: capture_view == "mixer",
+            show_mixer: capture_view.starts_with("mixer"),
             show_help: false,
             show_libraries: capture_view == "libraries" || needs_sample_folder,
             show_import_details: false,
@@ -789,6 +786,9 @@ impl MixJamApp {
                 "Click a bar number to seek. Drag across bar numbers to set a loop.",
                 "L and R control each track's left and right output. Turn both off to mute.",
                 "Mixer opens track volume, pan, routing, and master volume controls.",
+                "Gain 0 is silence. Gain +1 is unity (unchanged level). Negative track gain inverts polarity; its magnitude controls level.",
+                "Click a gain value to enter an exact setting, then press Enter. Unity resets gain to +1. Center resets pan.",
+                "Use Tab to focus mixer controls, arrow keys to adjust sliders, and Space to toggle an output. Master stays visible while you scroll tracks.",
                 "Space plays or pauses. Ctrl+Z undoes. Ctrl+Shift+Z redoes.",
                 "Open accepts supported original song files and saved JSON mixes. Save writes JSON; Export writes stereo WAV.",
             ] { ui.label(text); ui.add_space(4.0); }

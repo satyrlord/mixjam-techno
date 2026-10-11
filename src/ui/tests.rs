@@ -110,6 +110,294 @@ mod tests {
             .unwrap_or_else(|| panic!("Missing text: {label}"))
     }
 
+    fn accessible_node<'a>(
+        output: &'a egui::FullOutput,
+        label: &str,
+    ) -> (egui::accesskit::NodeId, &'a egui::accesskit::Node) {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("Accessibility must be enabled for this test.")
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some(label))
+            .map(|(id, node)| (*id, node))
+            .unwrap_or_else(|| panic!("Missing accessible control: {label}"))
+    }
+
+    fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    fn focus_control(
+        context: &egui::Context,
+        app: &mut MixJamApp,
+        output: &egui::FullOutput,
+        label: &str,
+    ) -> egui::FullOutput {
+        let (target, _) = accessible_node(output, label);
+        frame(
+            context,
+            app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Focus,
+                    target,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+        )
+    }
+
+    #[test]
+    fn mixer_master_stays_visible_while_scrolling_all_tracks_at_supported_sizes() {
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.show_mixer = true;
+            for track in 2..TRACK_COUNT {
+                app.session.place(1, track, 0).unwrap();
+            }
+            for _ in 0..12 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let master = text_rect(&output, "Master");
+            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(master));
+            let bank = text_rect(&output, "Track 1");
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(bank.center()),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: Vec2::new(-20_000.0, 0.0),
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+                size,
+            );
+            for _ in 0..60 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            assert_eq!(text_rect(&output, "Master"), master, "Window: {size:?}");
+            let last = text_rect(&output, "Track 64");
+            assert!(last.right() < master.left(), "Window: {size:?}; {last:?}");
+            assert!(output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text)
+                    if text.galley.job.text == "Track 64" && shape.clip_rect.contains_rect(last))
+            }));
+            let bounds = accessible_node(&output, "Master gain").1.bounds().unwrap();
+            let pos = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, bounds.y0 as f32 + 2.0);
+            for pressed in [true, false] {
+                frame_at_size(
+                    &ctx,
+                    &mut app,
+                    vec![
+                        egui::Event::PointerMoved(pos),
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    egui::Modifiers::NONE,
+                    size,
+                );
+            }
+            assert!(app.session.project().master_gain > 1.5, "Window: {size:?}");
+        }
+    }
+
+    #[test]
+    fn mixer_gain_pan_and_routes_support_accessibility_and_keyboard_input() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.tracks[1].gain = 0.3333;
+        project.master_gain = 0.7777;
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+        ctx.enable_accesskit();
+        app.show_mixer = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (_, gain) = accessible_node(&output, "Track 1 gain");
+        assert_eq!(gain.role(), egui::accesskit::Role::Slider);
+        assert_eq!(gain.numeric_value(), Some(1.0));
+        assert_eq!(gain.min_numeric_value(), Some(-2.0));
+        assert_eq!(gain.max_numeric_value(), Some(4.0));
+        accessible_node(&output, "Track 2 gain");
+        accessible_node(&output, "Master gain");
+        let (_, left) = accessible_node(&output, "Track 1 left output");
+        assert_eq!(left.role(), egui::accesskit::Role::CheckBox);
+        assert_eq!(left.toggled(), Some(egui::accesskit::Toggled::True));
+        focus_control(&ctx, &mut app, &output, "Track 2 gain value");
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Master gain value");
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 left output");
+        assert_eq!(app.session.project().tracks[1].gain, 0.3333);
+        assert_eq!(app.session.project().master_gain, 0.7777);
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Space, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(!app.session.project().tracks[0].left_enabled);
+        assert!(app.session.project().tracks[1].left_enabled);
+        assert_eq!(
+            accessible_node(&output, "Track 1 left output").1.toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        focus_control(&ctx, &mut app, &output, "Track 1 right output");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Space, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(!app.session.project().tracks[0].right_enabled);
+        assert!(!app.session.wants_playback(), "A routing key must not start playback.");
+        text_rect(&output, "Muted");
+
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("-0.7533".into()),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        focus_control(&ctx, &mut app, &output, "Reset Track 1 gain to unity");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Space, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 pan");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::ArrowRight, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.session.project().tracks[0].pan > 0.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Center Track 1 pan");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Space, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[0].pan, 0.0);
+        assert_eq!(app.session.project().tracks[1].gain, 0.3333);
+        assert_eq!(app.session.project().master_gain, 0.7777);
+    }
+
+    #[test]
+    fn mixer_summaries_and_control_identity_follow_sparse_project_tracks() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let mut samples = app.session.library().samples.to_vec();
+        let mut second = samples[0].clone();
+        second.id = 2;
+        second.name = "Second sound".into();
+        samples.push(second);
+        let mut project = app.session.project().clone();
+        project.clips[1].track = 63;
+        app.session = Session::headless(Arc::new(Library::fixture(samples)), project).unwrap();
+        app.session.place(2, 0, TICKS_PER_BAR * 2).unwrap();
+        app.show_mixer = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "2 sounds");
+        text_rect(&output, "good grasp 2");
+        let track64 = accessible_node(&output, "Track 64 gain").0;
+        let track1_ids = app
+            .session
+            .project()
+            .clips
+            .iter()
+            .filter(|clip| clip.track == 0)
+            .map(|clip| clip.id)
+            .collect();
+        app.session.edit(EditCommand::DeleteClips(track1_ids)).unwrap();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(accessible_node(&output, "Track 64 gain").0, track64);
+        focus_control(&ctx, &mut app, &output, "Track 64 gain");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.session.project().tracks[63].gain > 1.0);
+        assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        app.session.place(1, 0, 0).unwrap();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(accessible_node(&output, "Track 64 gain").0, track64);
+        text_rect(&output, "Track 1");
+        text_rect(&output, "Track 64");
+    }
+
+    #[test]
+    fn empty_mixer_explains_strips_and_keeps_action_errors_visible() {
+        let (ctx, mut app) = fixture();
+        app.new_mix();
+        app.show_mixer = true;
+        app.message(DEFAULT_STATUS);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Add a sound to start mixing");
+        text_rect(&output, "A mixer strip appears for each track that contains a clip.");
+        text_rect(&output, "Master");
+        assert!(!output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == DEFAULT_STATUS)
+        }));
+        app.error("Cannot open the selected sample.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Cannot open the selected sample.");
+        assert!(app.status_error);
+        assert_eq!(app.status, "Cannot open the selected sample.");
+    }
+
     #[test]
     fn transport_controls_do_not_move_when_position_digits_change() {
         let (ctx, mut app) = fixture();
@@ -867,8 +1155,8 @@ mod tests {
                 }
             })
             .collect();
-        assert!(labels.contains("1") && labels.contains("64"));
-        assert!(!labels.contains("2") && !labels.contains("32"));
+        assert!(labels.contains("Track 1") && labels.contains("Track 64"));
+        assert!(!labels.contains("Track 2") && !labels.contains("Track 32"));
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let canvas = app.timeline_rect.unwrap();

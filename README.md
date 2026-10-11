@@ -55,6 +55,12 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   the timeline independently during playback.
 - Drag the divider above Sounds or Mixer to give that panel more or less room.
 - Use Mixer for track gain, pan, L/R routing, and master volume.
+  Master stays visible while you scroll through tracks. Each strip shows its
+  track number and the sound names on that track.
+  Gain is a signed multiplier: 0 is silence, +1 is unity, and negative values
+  reverse polarity. Edit the gain value for an exact setting, or select Unity
+  to reset it. Pan shows left, center, or right; select Center to reset it.
+  L and R enable each output. Both off shows Muted.
 - Use Import for WAV files and enter the known source tempo.
 - Use the sample tools to trim, change pitch, stretch tempo, or apply effects.
   Save the result as a new WAV sample.
@@ -105,6 +111,7 @@ the user PATH; `tools/runtime/cargo.ps1` runs that toolchain.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
+Mixer cases cover ordinary, 64-track, empty, and signed-gain/routing states.
 
 ## Headless commands
 

@@ -3,8 +3,8 @@ param(
     [string]$OutputDirectory = '',
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    [ValidateSet('arrangement', 'transport-focus', 'mixer', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')]
-    [string[]]$Views = @('arrangement', 'transport-focus', 'mixer', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')
+    [ValidateSet('arrangement', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')]
+    [string[]]$Views = @('arrangement', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-expanded', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'edit', 'stretch', 'first-run', 'sparse', 'track64')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +110,21 @@ full_project['clips'] = [dict(id=track + 1, sample_id=samples[track % len(sample
     track=track, start_tick=(track % 4) * 256, length_ticks=512,
     offset_frames=0, gain=1) for track in range(64)]
 full = write_project('full64', full_project)
+empty_project = deepcopy(project)
+empty_project['title'] = 'Empty mixer'
+empty_project['clips'] = []
+empty = write_project('empty', empty_project)
+mixer_project = deepcopy(project)
+mixer_project['title'] = 'Mixer states'
+for index, gain in enumerate((-0.33333334, 0, 1, 4, -2, 0.25, 0.8, 1.5)):
+    mixer_project['tracks'][index]['gain'] = gain
+    mixer_project['tracks'][index]['pan'] = (-1, -0.5, 0, 0.5, 1, 0, 0, 0)[index]
+mixer_project['tracks'][1].update(left_enabled=False, right_enabled=False)
+mixer_project['tracks'][2]['right_enabled'] = False
+mixer_project['master_gain'] = 0.7777778
+# A track can contain more than one sound; its strip must not invent one identity.
+mixer_project['clips'][0]['sample_id'] = samples[4]['id']
+mixer_states = write_project('mixer-states', mixer_project)
 follow_project = deepcopy(project)
 follow_project['title'] = 'Follow the playhead'
 follow_project['loop_region'] = [32 * 256, 48 * 256]
@@ -147,7 +162,10 @@ for size in sizes:
                    MIXJAM_TECHNO_DATA_DIR=str(root / 'user-data' / name))
         command = [str(exe), 'gui']
         if view != 'first-run':
-            fixture = sparse if view == 'sparse' else full if view == 'track64' else follow if view == 'follow' else arrangement
+            fixture = {
+                'sparse': sparse, 'track64': full, 'mixer-dense': full,
+                'mixer-empty': empty, 'mixer-states': mixer_states, 'follow': follow,
+            }.get(view, arrangement)
             folder = large_sounds if view == 'library-expanded' else sounds
             command += ['--samples', str(folder), '--mix', str(fixture)]
         started = time.monotonic()

@@ -191,8 +191,10 @@ The native client starts at 1440 by 1000 logical points, with a minimum of 960 b
 arrangement. A fixed 64-point tool rail sits at the right. The bottom Sounds/Mixer
 panel starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
-its height for the current session, with a minimum of 180 points and a maximum
-that leaves 220 points for the arrangement plus 68 points for transport. Status
+its height for the current session, with a minimum of 180 points for Sounds and
+310 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
+The maximum height leaves 220 points for the arrangement plus 68 points for
+transport. Status
 occupies 30 points below it. Sounds and Mixer share this panel size.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
@@ -212,9 +214,12 @@ Sound search and product/category menus sit above a horizontally scrolling
 category row. The tile grid chooses its column count from available width and
 scrolls vertically. This keeps category access separate from palette height.
 
-Mixer strips appear only for occupied tracks. Track strips are 76 points wide;
-Master is 66 points. The horizontal scroller preserves access to every used
-track. Gain faders reserve vertical space for routing, track identity, and pan.
+Mixer strips appear only for occupied tracks. Track and Master strips are
+124 points wide. Master stays outside the horizontal track scroller, whose
+scrollbar remains visible. Track numbers, sound summaries, signed gain values,
+pan descriptions, and output state stay grouped within each strip. A track with
+several distinct sounds shows their count and lists their names on hover.
+Faders are at least 74 points high at the minimum window size.
 
 Step synth constrains its floating window to the viewport and scrolls vertically.
 Its note grid uses 33 by 16-point cells with 2-point gaps; this compact density is
@@ -267,8 +272,16 @@ waveform. A selected clip can show a gain line; it is a control indicator.
 
 ### Mixer and tool windows
 
-Mixer shares the graphite shell and type hierarchy. L/R routing, track number,
-gain, and pan stay grouped. Floating libraries, sample editing, effects, tempo
+Mixer shares the graphite shell and type hierarchy. Track identity and gain lead
+the hierarchy; L/R routing uses compact checkboxes with a check mark and named
+enabled state. Both outputs off shows Muted. Gain is a signed multiplier with
+visible values, silence and unity marks, an exact-entry field, and a Unity reset.
+Negative values show Inverted. The header and Help explain polarity inversion.
+Pan has a readable left/center/right value and a Center reset. Every control has
+a track-specific accessible name; Master has its own gain labels.
+The default status hint explains mixer input when Mixer is open, without hiding
+errors or application notices. The empty mixer explains how to add a track.
+Floating libraries, sample editing, effects, tempo
 stretch, and Step synth use the same native widget theme. The frontend submits
 edits to the application layer; visual changes must preserve those commands.
 

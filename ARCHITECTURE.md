@@ -69,6 +69,10 @@ GUI dependencies. The source guard does not check the full dependency graph.
 1024 by 768, and 960 by 720. It creates synthetic WAV/project fixtures and uses
 isolated settings. These captures need visual inspection. They do not test
 physical audio, native file-picker interaction, high DPI, or screen readers.
+Mixer capture cases include a full 64-track bank, an empty arrangement, and
+negative/zero/unity gain, pan, and output-routing states. Native egui tests check
+control input and emitted accessibility semantics. They do not replace a screen
+reader check of the built executable.
 
 Font assets are derived from the imported Space Grotesk WOFF2 files. Run
 `python tools/assets/prepare-fonts.py --check` to verify reproducible native TTFs.
