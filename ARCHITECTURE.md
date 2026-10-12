@@ -9,6 +9,7 @@ Native views and input                  Headless application
 src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/effects.rs
              + src/ui/step_synth.rs
+             + src/ui/dialog.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -71,6 +72,28 @@ filters, and tool form drafts. It converts pointer positions into requested
 positions and sends them to the application. It does not own an `Editor` or
 change the live project. It does not decode audio, write projects, or control a
 device directly.
+
+`src/ui/dialog.rs` owns the shared hardware presentation for non-musical utility
+windows and blocking dialogs. Its `Window` wrapper and `modal` helper retain
+native egui containers, stable IDs, focus layers, accessible modal naming, and
+caller-owned close behavior. `primary` and `danger` style native action buttons;
+the template has no application state or file operations. `src/ui.rs` retains
+each task's content, actions, and dismissal rules. Recorded take remains an
+explicit Save take or Discard take decision, without close or collapse controls.
+
+The shared chassis consists of nine PNG pieces at 100%, 150%, and 200% in
+`assets/dialog/`. Runtime painting aligns the container to physical pixels,
+selects the nearest density, and tiles or crops each piece at one texel per
+physical pixel. This supports content-sized windows without stretching their
+bitmap material. Titles, text, fields, buttons, and title-bar controls remain
+native. The generic initial body height is 220 logical points. Help and the
+three tool-help windows use 420 points, Sample libraries 180, and Import details
+240; their content scrolls within native viewport constraints. Recorded take
+remains content-sized. The template covers Help and the three musical-tool help windows,
+Sample libraries, Import details, Recorded take, Save your changes?, Sample
+conflicts, Choose path, and Import sound. Musical tools, Sample editor, and
+operating-system file pickers retain their existing presentation.
+
 Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.
 
@@ -255,7 +278,9 @@ Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
 Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs` and
 Effect Studio's in `src/ui/effects.rs`, and Step synth's in
 `src/ui/step_synth.rs`. Keep Mixer presentation in `src/ui/mixer.rs`. Keep tool
-input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
+input and file-dialog adapters in `src/ui.rs`. Reuse `src/ui/dialog.rs` for
+non-musical utility windows and modals; keep their behavior in the caller.
+Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.
 

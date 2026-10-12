@@ -1392,6 +1392,26 @@ mod tests {
             let mut output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
             let viewport = Rect::from_min_size(Pos2::ZERO, size);
             let instruction = text_rect(&output, PLACE);
+            const ACTIONS: [&str; 11] = [
+                "Place sound", "Preview", "Move / copy", "Select group", "Fine snap", "Delete",
+                "Seek / loop", "Play / pause", "Undo / redo", "Open / save", "Export",
+            ];
+            let mut seen_actions = BTreeSet::new();
+            let inspect_actions = |output: &egui::FullOutput, seen: &mut BTreeSet<String>| {
+                for shape in &output.shapes {
+                    if let egui::Shape::Text(text) = &shape.shape
+                        && ACTIONS.contains(&text.galley.job.text.as_str())
+                    {
+                        let action = &text.galley.job.text;
+                        assert_eq!(text.galley.rows.len(), 1,
+                            "Help action {action:?} must stay on one line at {size:?}.");
+                        assert!((action.chars().count() as f32 * 3.0..=160.0).contains(&text.galley.size().x),
+                            "Help action {action:?} needs a readable column at {size:?}: {:?}.", text.galley.size());
+                        seen.insert(action.clone());
+                    }
+                }
+            };
+            inspect_actions(&output, &mut seen_actions);
             assert!(
                 instruction.width() > 200.0,
                 "Instruction column is too narrow at {size:?}: {instruction:?}"
@@ -1428,11 +1448,15 @@ mod tests {
                         output =
                             frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
                     }
+                    inspect_actions(&output, &mut seen_actions);
                 }
                 assert!(
                     visible(&output, label, viewport),
                     "Help guidance is unreachable at {size:?}: {label}"
                 );
+            }
+            for action in ACTIONS {
+                assert!(seen_actions.contains(action), "Help action {action:?} must remain reachable at {size:?}.");
             }
         }
     }
@@ -4828,6 +4852,229 @@ mod tests {
         let reply = send(&mut app, &["click", "target=Discard changes"]);
         assert_eq!(reply["closing"], true, "{reply}");
         assert!(app.allow_close);
+    }
+
+    #[test]
+    fn hardware_utility_windows_keep_identity_keyboard_close_and_scoped_style() {
+        for title in [
+            "Help", "Time Stretcher help", "Effect Studio help", "Step synth help",
+            "Sample libraries", "Import details",
+        ] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            let original_style = ctx.style();
+            match title {
+                "Help" => app.show_help = true,
+                "Time Stretcher help" => app.show_stretch_help = true,
+                "Effect Studio help" => app.show_effects_help = true,
+                "Step synth help" => app.show_step_synth_help = true,
+                "Sample libraries" => app.show_libraries = true,
+                "Import details" => app.show_import_details = true,
+                _ => unreachable!(),
+            }
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let uppercase = title_text(title);
+            let identity = accessible_node(&output, &uppercase).0;
+            assert!(ctx.memory(|memory| memory.area_rect(egui::Id::new(title))).is_some(),
+                "{title} must keep the original mixed-case native area ID.");
+            let next = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(accessible_node(&next, &uppercase).0, identity,
+                "{title} must retain its native window identity between frames.");
+            assert_eq!(ctx.style().text_styles, original_style.text_styles);
+            assert_eq!(ctx.style().visuals.widgets.inactive.bg_fill,
+                original_style.visuals.widgets.inactive.bg_fill,
+                "The hardware body theme must not change the application theme.");
+            focus_control(&ctx, &mut app, &next, "Close window");
+            frame(&ctx, &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE);
+            assert!(!match title {
+                "Help" => app.show_help,
+                "Time Stretcher help" => app.show_stretch_help,
+                "Effect Studio help" => app.show_effects_help,
+                "Step synth help" => app.show_step_synth_help,
+                "Sample libraries" => app.show_libraries,
+                "Import details" => app.show_import_details,
+                _ => unreachable!(),
+            }, "{title} must keep the keyboard-accessible native X action.");
+        }
+    }
+
+    #[test]
+    fn hardware_blocking_dialogs_keep_named_identity_and_safe_explicit_cancel() {
+        for identity in ["Save your changes?", "Import sound", "Choose path"] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            let project = app.session.project().clone();
+            let unsaved = app.session.unsaved();
+            match identity {
+                "Save your changes?" => app.pending_action = Some(PendingAction::New),
+                "Import sound" => app.import_path = Some(PathBuf::from(r"C:\Sounds\unread.wav")),
+                "Choose path" => app.path_prompt = Some(PathPrompt {
+                    request: FileRequest::SaveSong,
+                    text: String::new(), error: None, focused: false,
+                }),
+                _ => unreachable!(),
+            }
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(accessible_node(&output, identity).1.role(), egui::accesskit::Role::Dialog,
+                "Visible title formatting must preserve the exact agent modal identity.");
+            if identity == "Choose path" {
+                assert_eq!(output.platform_output.accesskit_update.as_ref().unwrap().focus,
+                    accessible_node(&output, "Path").0,
+                    "The typed-path dialog must initially focus its path field.");
+            } else {
+                // These dialogs have always required an explicit button. The
+                // shared visual template must not add a backdrop/Escape discard.
+                click(&ctx, &mut app, Pos2::new(2.0, 2.0), egui::Modifiers::NONE);
+                output = frame(&ctx, &mut app,
+                    vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+                    egui::Modifiers::NONE);
+                accessible_node(&output, identity);
+                assert!(if identity == "Save your changes?" {
+                    app.pending_action.is_some()
+                } else { app.import_path.is_some() });
+            }
+            focus_control(&ctx, &mut app, &output, "Cancel");
+            frame(&ctx, &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE);
+            assert!(app.pending_action.is_none() && app.import_path.is_none() && app.path_prompt.is_none(),
+                "Cancel must release the {identity} modal.");
+            assert_eq!(app.session.project(), &project);
+            assert_eq!(app.session.unsaved(), unsaved,
+                "Cancel must not mutate the song or its saved state.");
+        }
+    }
+
+    #[test]
+    fn hardware_recorded_take_keeps_explicit_discard_and_no_window_close() {
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        ctx.enable_accesskit();
+        let mut output = egui::FullOutput::default();
+        for _ in 0..4 {
+            output = ctx.run(egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                focused: true, ..Default::default()
+            }, |ctx| {
+                dialog::window("Recorded take").collapsible(false).resizable(false).show(ctx, |ui| {
+                    ui.label("Unsaved take: stored in memory.");
+                    ui.horizontal(|ui| {
+                        for label in ["Listen", "Save take", "Discard take"] { let _ = ui.button(label); }
+                    });
+                });
+            });
+        }
+        let window = accessible_node(&output, "RECORDED TAKE").0;
+        let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        let mut descendants = BTreeSet::from([window]);
+        for _ in 0..64 {
+            let before = descendants.len();
+            for (id, node) in nodes {
+                if descendants.contains(id) { descendants.extend(node.children().iter().copied()); }
+            }
+            if descendants.len() == before { break; }
+        }
+        for label in ["Listen", "Save take", "Discard take"] {
+            assert!(nodes.iter().any(|(id, node)| descendants.contains(id) && node.label() == Some(label)),
+                "Recorded take must keep its explicit {label} action.");
+        }
+        assert!(!nodes.iter().any(|(id, node)| descendants.contains(id)
+            && node.label().is_some_and(|label| label.contains("Close window") || label.contains("Collapse"))),
+            "An unsaved take must not acquire an implicit close or collapse action.");
+    }
+
+    #[test]
+    fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_at_all_densities() {
+        let size = Vec2::new(960.0, 720.0);
+        let viewport = Rect::from_min_size(Pos2::ZERO, size);
+        for density in [1.0, 1.5, 2.0] {
+            for tall in [false, true] {
+                let ctx = egui::Context::default();
+                configure_style(&ctx);
+                ctx.set_pixels_per_point(density);
+                ctx.enable_accesskit();
+                let mut open = true;
+                let mut draw = |events: Vec<egui::Event>| ctx.run(egui::RawInput {
+                    screen_rect: Some(viewport), events, focused: true, ..Default::default()
+                }, |ctx| {
+                    dialog::window("Utility fixture").open(&mut open).default_width(440.0)
+                        .max_height(500.0).constrain_to(viewport.shrink(12.0)).vscroll(true)
+                        .show(ctx, |ui| {
+                            ui.label("First instruction");
+                            if tall {
+                                for row in 0..60 { ui.label(format!("Diagnostic row {row}: source details remain readable.")); }
+                            }
+                            let _ = ui.button("Last action");
+                        });
+                });
+                let mut output = egui::FullOutput::default();
+                for _ in 0..4 { output = draw(vec![]); }
+                let textures: Vec<_> = ctx.tex_manager().read().allocated()
+                    .filter(|(_, meta)| meta.name.starts_with("dialog-"))
+                    .map(|(id, meta)| (*id, meta.size)).collect();
+                assert_eq!(textures.len(), 9, "The dialog must load a complete density-specific frame.");
+                fn check_tiles(shape: &egui::Shape, textures: &[(egui::TextureId, [usize; 2])],
+                    density: f32, viewport: Rect, count: &mut usize) {
+                    match shape {
+                        egui::Shape::Vec(shapes) => {
+                            for shape in shapes { check_tiles(shape, textures, density, viewport, count); }
+                        }
+                        egui::Shape::Mesh(mesh) => {
+                            let Some((_, size)) = textures.iter().find(|(id, _)| *id == mesh.texture_id) else { return; };
+                            assert!(viewport.contains_rect(mesh.calc_bounds()), "The complete hardware rim must fit the viewport.");
+                            for quad in mesh.vertices.as_chunks::<4>().0 {
+                                let mut dest = Rect::NOTHING;
+                                let mut uv = Rect::NOTHING;
+                                for vertex in quad {
+                                    dest.extend_with(vertex.pos);
+                                    uv.extend_with(vertex.uv);
+                                    for edge in [vertex.pos.x, vertex.pos.y] {
+                                        assert!((edge * density - (edge * density).round()).abs() < 0.001,
+                                            "Raster vertices must align with physical pixels at {density}x.");
+                                    }
+                                }
+                                assert!((dest.width() * density - uv.width() * size[0] as f32).abs() < 0.001,
+                                    "The hardware frame must not stretch horizontally at {density}x.");
+                                assert!((dest.height() * density - uv.height() * size[1] as f32).abs() < 0.001,
+                                    "The hardware frame must not stretch vertically at {density}x.");
+                                *count += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let mut tile_count = 0;
+                for shape in &output.shapes { check_tiles(&shape.shape, &textures, density, viewport, &mut tile_count); }
+                assert!(tile_count >= 9, "All hardware frame sections must be painted.");
+                assert!(viewport.contains_rect(text_rect(&output, "UTILITY FIXTURE")),
+                    "The title must fit at {density}x.");
+                let first = text_rect(&output, "First instruction");
+                assert!(viewport.contains_rect(first), "The first instruction must fit at {density}x.");
+                let visible = |output: &egui::FullOutput| output.shapes.iter().any(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Last action" => {
+                        let bounds = Rect::from_min_size(text.pos, text.galley.size());
+                        viewport.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds)
+                    }
+                    _ => false,
+                });
+                for _ in 0..30 {
+                    if visible(&output) { break; }
+                    output = draw(vec![egui::Event::PointerMoved(first.center()),
+                        egui::Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -160.0),
+                            modifiers: egui::Modifiers::NONE,
+                        }]);
+                    for _ in 0..12 { output = draw(vec![]); }
+                }
+                assert!(visible(&output), "The last action must remain reachable in a {tall:?} dialog at {density}x.");
+                assert!(viewport.contains_rect(text_rect(&output, "UTILITY FIXTURE")),
+                    "Scrolling body content must not move the title out of view.");
+            }
+        }
     }
 
     #[test]

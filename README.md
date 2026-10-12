@@ -193,6 +193,12 @@ The capture set also covers every in-app dialog and tool window, expanded effect
 and provider settings, and missing-source processing states. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.
 
+Non-musical utility windows and dialogs share the compact graphite hardware
+template in `src/ui/dialog.rs`. See [DESIGN.md](DESIGN.md) for its text, spacing,
+and action rules, and [the dialog artwork](assets/dialog/README.md) for asset
+preparation and reproduction. Native containers retain each task's existing
+input and dismissal behavior.
+
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
 Prepared density variants support Windows scaling. SVG files and embedded SVG
 artwork are prohibited in tracked and non-ignored project files. Run

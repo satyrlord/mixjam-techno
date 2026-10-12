@@ -3541,6 +3541,7 @@ mod boundary_tests {
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/mixer.rs", include_str!("ui/mixer.rs")),
+            ("ui/dialog.rs", include_str!("ui/dialog.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
         ] {
             for forbidden in [
@@ -3576,6 +3577,7 @@ mod boundary_tests {
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/mixer.rs", include_str!("ui/mixer.rs")),
+            ("ui/dialog.rs", include_str!("ui/dialog.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),

@@ -21,6 +21,7 @@ colors:
   effect: "#d99192"
   voice: "#b99ecb"
   other-sample: "#bbb39f"
+  drag-label: "#f5dc92"
   stretch-cream: "#f5e8cd"
   stretch-ink: "#181917"
   stretch-body: "#2c2e2e"
@@ -52,6 +53,13 @@ colors:
   mixer-edge: "#6c6a61"
   mixer-face: "#1d2122"
   mixer-amber: "#f5c156"
+  dialog-cream: "#f5e8cd"
+  dialog-ink: "#181917"
+  dialog-body: "#2a2e30"
+  dialog-face: "#171b1c"
+  dialog-edge: "#666e6e"
+  dialog-secondary: "#c5c7bf"
+  dialog-hover: "#353b3c"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -123,6 +131,11 @@ typography:
     fontFamily: "Inter"
     fontSize: "12.5px"
     fontWeight: 500
+  dialog-title:
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
+    fontSize: "18px"
+    fontWeight: 700
 rounded:
   clip: "3px"
   control: "5px"
@@ -134,6 +147,8 @@ rounded:
   step-switch-on: "6px"
   mixer-control: "2px"
   mixer-strip: "3px"
+  dialog-window: "12px"
+  dialog-control: "3px"
 spacing:
   item-horizontal: "8px"
   item-vertical: "6px"
@@ -142,6 +157,8 @@ spacing:
   header-horizontal: "22px"
   step-row: "16px"
   step-column: "46px"
+  dialog-item: "10px"
+  dialog-inner: "18px"
 components:
   action-primary:
     backgroundColor: "{colors.accent}"
@@ -155,6 +172,12 @@ components:
     typography: "{typography.button}"
     rounded: "{rounded.control}"
     height: "30px"
+  category:
+    backgroundColor: "{colors.panel}"
+    textColor: "{colors.muted}"
+    typography: "{typography.button}"
+    rounded: "{rounded.control}"
+    height: "26px"
   category-selected:
     backgroundColor: "{colors.hover}"
     textColor: "{colors.text}"
@@ -284,6 +307,39 @@ components:
     rounded: "{rounded.mixer-control}"
     width: "26px"
     height: "24px"
+  mixer-route:
+    backgroundColor: "{colors.mixer-face}"
+    textColor: "{colors.accent}"
+    rounded: "{rounded.mixer-control}"
+    width: "28px"
+    height: "24px"
+  dialog-frame:
+    backgroundColor: "{colors.dialog-body}"
+    textColor: "{colors.dialog-cream}"
+    typography: "{typography.dialog-title}"
+    rounded: "{rounded.dialog-window}"
+    padding: "18px"
+  dialog-action:
+    backgroundColor: "{colors.dialog-face}"
+    textColor: "{colors.dialog-cream}"
+    typography: "{typography.button}"
+    rounded: "{rounded.dialog-control}"
+    padding: "5px 10px"
+    height: "28px"
+  dialog-primary:
+    backgroundColor: "{colors.dialog-cream}"
+    textColor: "{colors.dialog-ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.dialog-control}"
+    padding: "5px 10px"
+    height: "28px"
+  dialog-danger:
+    backgroundColor: "{colors.dialog-face}"
+    textColor: "{colors.coral}"
+    typography: "{typography.button}"
+    rounded: "{rounded.dialog-control}"
+    padding: "5px 10px"
+    height: "28px"
 ---
 
 # Design System: MixJam Techno
@@ -299,16 +355,17 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
-Time Stretcher, Effect Studio, Step synth, and Mixer are the owner's scoped
-exceptions.
+Time Stretcher, Effect Studio, Step synth, Mixer, and utility dialogs use the
+owner's selected hardware treatments.
 Time Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
 controls, and lamped Listen and Save buttons. Effect Studio uses a compact red
 metal landscape panel with small rotary controls, chrome section switches,
 green section lamps, and black and ivory action buttons. Step synth uses olive
 textured metal, a charcoal bezel, cream labels, amber switches, and coral
 selected notes. Mixer uses graphite material, narrow ivory strips, small black
-faders, native dark value wells, and an amber polarity state. These treatments
-do not change the shared studio theme.
+faders, native dark value wells, and an amber polarity state. Utility dialogs
+share a restrained graphite bezel, cream text, dark fields, and ivory primary
+actions. These treatments keep the shared studio theme and compact control scale.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -322,8 +379,8 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 The implementation is native Windows Rust with eframe/egui. Tokens and painting
 live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`,
 Effect Studio in `src/ui/effects.rs`, Step synth in `src/ui/step_synth.rs`, and
-Mixer in `src/ui/mixer.rs`. Native dialogs and input adapters live in
-`src/ui.rs`. Application
+Mixer in `src/ui/mixer.rs`. The reusable utility-dialog presentation lives in
+`src/ui/dialog.rs`; content and input adapters remain in `src/ui.rs`. Application
 state and behavior live in `src/application.rs`. Sizes here use portable `px`
 labels for egui logical points. The sidecar records native component metadata;
 it does not define browser components or application behavior.
@@ -334,7 +391,7 @@ it does not define browser components or application behavior.
 
 Accent lime identifies Play/Pause, primary empty-state actions,
 the playhead, enabled routing controls, and focus or active-state outlines.
-Coral identifies recording, errors, and selected synth notes.
+Coral identifies recording, errors, missing sources, and selected synth notes.
 
 ### Secondary
 
@@ -351,6 +408,8 @@ Canvas is the deepest structural surface. Panel supports transport, browser,
 mixer, and floating tools. Raised and Hover distinguish controls and interaction
 states. Text carries primary labels; Muted carries counts, metadata, and status.
 Line separates surfaces. Selection and Warning retain their native widget roles.
+Drag Label fills the label that follows the pointer while a sound or clip is
+dragged; it has no other use.
 
 Stretch Cream and Stretch Ink apply only to Time Stretcher. Cream carries its
 title, labels, values, and Listen text. Ink carries Save text on the ivory
@@ -384,6 +443,14 @@ value wells, buttons, and strip borders. Mixer Amber marks inverted polarity;
 the named checked state remains available. The graphite surround and fine
 ivory grain come from prepared material tiles. These tokens are local to Mixer.
 
+Dialog Cream carries utility titles, body text, and dark-control lettering.
+Dialog Ink carries primary-action lettering on ivory. Dialog Body is the
+fallback and panel surface; Face fills fields and buttons, Edge outlines them,
+Secondary carries subdued widget text, and Hover distinguishes hovered controls.
+Shared Coral identifies destructive action text; the action's name states what
+will be discarded. The graphite bezel and fine grain come from prepared PNGs.
+These local colors do not replace the arrangement or browser palette.
+
 ## Typography
 
 The native build embeds Syncopate Bold 700 for branding and titles, and
@@ -402,7 +469,8 @@ Egui's bundled proportional fonts follow the primary families for remaining
 missing glyphs. Keep Syncopate's Apache 2.0 license, Inter's OFL license, and
 provenance with the application; see `assets/fonts/README.md`.
 
-Display is the MixJam name. Headline is the standard native heading. Section
+Display is the MixJam name; Techno follows it in 14-point Syncopate and Muted.
+Headline is the standard native heading. Section
 labels identify Arrangement. Bottom Module supplies the shared Sounds/Mixer
 selector's 16-point Syncopate text. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
@@ -430,6 +498,16 @@ use 12-13-point Inter Medium; action, source, and footer text use 12.5 points.
 Grid pitch labels and step numbers use 12 points. Keep labels separate from
 switches and check actual glyph bounds against adjacent controls. The hardware
 reference does not require oversized text or controls.
+
+Mixer uses the shared Inter sizes without a local title. Track names use Body,
+gain values use Clip, sound summaries and pan or Muted text use Small, and
+rail marks and button lettering use Metadata. These sizes follow the selected
+artwork density with the strip.
+
+Utility dialogs use 18-point Syncopate titles with the existing uppercase Latin
+formatting. Body and button text use 13-point Inter; small text uses 11 points.
+Keep content live, selectable where already supported, and independent of the
+chassis bitmap. The template does not enlarge the shared text scale.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -523,6 +601,19 @@ the grid body with a bounded scrolling form; Note grid returns to editing.
 At other scales the nearest prepared density determines the logical size,
 preserving one texel per physical pixel.
 
+Utility dialogs use native Window and Modal containers with bounded content.
+Their template uses 18-point inner margins, 10-point item gaps, and 28-point
+minimum control height with 10 by 5-point button padding. The shared utility
+window default is 420 points wide with a 220-point initial body height. Help
+and the three tool-help windows start with 420-point bodies, Sample libraries
+with 180 points, and Import details with 240 points. Recorded take remains
+content-sized. These are initial body sizes; native content, scrolling, resizing,
+and viewport constraints still apply. Blocking dialogs size to their content.
+The 640 by 384-pixel
+canonical chassis is an offline preparation size, not a fixed dialog size.
+Nine raster pieces tile or crop at physical pixel scale to cover each native
+container. The outer edge stays complete when a collapsible utility is collapsed.
+
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases
 are defined by `tools/verify-ui.ps1`; execution results belong in evidence reports.
@@ -531,12 +622,16 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 
 Flat color layers and thin borders separate controls from the work area. The
 shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
-scale. Shared floating windows use the default shadow from the pinned egui dark theme.
+scale. Musical tools and utility dialogs provide their own scoped material depth.
 Time Stretcher, Effect Studio, Step synth, and Mixer use textured metal and bezel
 depth from their prepared PNG skins. Time Stretcher, Effect Studio, and Mixer
 also use prepared hardware controls. Step synth paints its fields, buttons, grid,
 and simple pill switches natively. Hover, focus, pressed, and
 disabled feedback remains native painting over each skin.
+Utility dialogs use a quiet graphite rim and inset header seam from their
+prepared chassis. Their native shadow uses a vertical offset of 6 points,
+16-point blur, 2-point spread, and black at 130/255 alpha. This shadow separates
+the floating task from the arrangement; controls do not add individual shadows.
 Hover and focus states change immediately. The application has no motion tokens.
 
 ## Shapes
@@ -547,6 +642,8 @@ radius. Resting native widgets use one-point borders. Selected clips use a
 two-point text-colored border; active rail actions use a one-point accent outline.
 Transport keyboard focus uses a two-point inset outline: Canvas on the bright
 Play/Pause button and Accent on secondary controls.
+Utility dialogs use 12-point outer corners and 3-point native control corners.
+The artwork contains no screws, lettering, icons, or control faces.
 
 ## Components
 
@@ -594,12 +691,19 @@ from the canonical PNG for the shell icon.
 Sound tiles show the name above the category label and bar count. A tile too
 narrow for both keeps the bar count. A 20% overlay
 of the category color tints the whole tile; there is no category dot.
-Hover or selection uses Hover; selection adds a category-colored border.
+Hover or selection uses Hover; selection or keyboard focus adds a one-point
+category-colored border. The category and bar-count line uses Text at 80%.
+Unselected category buttons use Panel with Muted text; the selected one uses
+Hover, Text, and a one-point Muted border.
 One tooltip groups the full name, product, category, code, sample IDs, source
 tempo, nominal bars, actual audio duration, frames, rate, channels, and WAV path
 when available. Nominal bars and audio duration remain separate facts.
 Arrangement clips use flat category fills and names. They do not display a
 waveform. A selected clip can show a gain line; it is a control indicator.
+A clip whose source is missing uses Raised with a one-point Coral outline and
+a Text-colored name that begins with Missing. While a sound or clip is dragged,
+a 150 by 30-point Drag Label follows the pointer with the sound name, Move
+sound, or Copy sound in Canvas text.
 
 ### Mixer and tool windows
 
@@ -611,14 +715,16 @@ the signal. Values round to one decimal place at rest; the active entry field
 shows full precision. Focus without an edit must not change saved amplitude
 or audio. Relative increases must leave silence and raise very quiet positive
 gains. A saved gain below -96 dB must not become silent when increased.
-Master uses the same dB presentation and remains outside the scroller.
+Master uses the same dB presentation and remains outside the scroller. In
+place of pan and routing it shows Main output and L + R.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
 0.46, unity at 0.70, and +12 dB at 1. The bottom segment maps linear amplitude
 to exact zero; the remaining segments interpolate in dB. Thus 72% of travel
 serves -24 through +12 dB. The scale marks useful values without spreading
-very quiet settings over most of the rail. These knots record the current
+very quiet settings over most of the rail. Its labels are +12, 0, -12, -24,
+-48, and negative infinity; 0 sits left of the rail beside the Unity button. These knots record the current
 implementation, not a universal DAW taper.
 
 The small Unity button sits at the 0 dB gain mark. The small Center button
@@ -638,6 +744,9 @@ text, values, rails, ticks, reset buttons, polarity, routing, focus, and hover
 remain native. Select the nearest density and paint one texel per physical
 pixel with aligned bounds; tile materials without runtime texture resizing.
 See `assets/mixer/README.md` for exact prompts, source hashes, and reproduction.
+Native mixer buttons use Mixer Face at rest and shared Raised on hover;
+keyboard focus changes their one-point border to Mixer Amber. Each 28 by
+24-point L/R button pairs its letter with a 12 by 2-point indicator bar.
 Arrangement and mixer L/R labels use Accent when enabled and Muted when off.
 Both expose the same checked state and a track-specific on/off tooltip. Lane
 controls show keyboard focus. A lane edit requests a repaint so the already
@@ -845,6 +954,40 @@ an Error label. Help opens the source, grid, bars, tempo, effects, and file
 workflow in a native window. This presentation does not establish high-DPI,
 screen-reader, listening, or original-product DSP acceptance.
 
+### Utility dialog template
+
+`src/ui/dialog.rs` supplies shared `window`, `modal`, `primary`, and `danger`
+helpers. Use them for non-musical tasks so content, fields, and actions share
+the compact graphite hardware presentation. `window` wraps native egui Window;
+`modal` wraps native egui Modal and retains `name_dialog` for modal input blocking.
+The caller still owns task state, content, actions, and dismissal policy.
+
+The template covers Help, Time Stretcher help, Effect Studio help, Step synth
+help, Sample libraries, Import details, and Recorded take. It also covers the
+blocking Save your changes?, Sample conflicts, Choose path, and Import sound
+dialogs. Existing musical panels and Sample editor retain their own presentation.
+Native operating-system file pickers keep their operating-system presentation.
+
+Prepared artwork lives in `assets/dialog/{100,150,200}/`. Nine pieces per density
+supply corners, edges, header, and body. The renderer chooses the nearest density,
+aligns outer bounds to physical pixels, and tiles each piece with cropped UVs
+at its remaining edge. It does not stretch the texture. Titles, close and collapse
+controls, text, fields, buttons, hover, keyboard focus, and disabled state remain
+native. See `assets/dialog/README.md` for dimensions, exact prompt, source hash,
+and reproduction. Offline preparation removes broad lighting from repeated
+pieces while retaining fine grain and the cross-edge bezel profile, so tiling
+does not produce bands behind the content.
+
+Primary actions use ivory with ink lettering. Ordinary actions use dark faces
+with cream text. Destructive actions use coral text and an explicit action name.
+Hover uses Dialog Hover; an active control uses the shared Accent border.
+Keep native focus and accessibility behavior. Preserve original window IDs and
+modal labels independently of uppercase titles. Do not add close or collapse
+controls to a task that requires an explicit decision: Recorded take retains
+Listen and requires Save take or Discard take to resolve it. Blocking dialogs
+retain their existing confirmation and cancellation paths, without new dismissal
+behavior.
+
 ### Empty states and feedback
 
 The empty sound browser offers Choose WAV folder. Filtered empty
@@ -875,8 +1018,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Keep metal hardware treatments scoped to Time Stretcher, Effect Studio,
-  Step synth, and Mixer. Do not add repeated waveform traces.
+- Keep metal hardware treatments scoped to the musical panels and shared
+  utility-dialog template described here. Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or
