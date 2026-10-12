@@ -297,6 +297,7 @@ pub struct ClipView {
 pub struct TrackView {
     pub track: usize,
     pub gain: f32,
+    pub polarity_inverted: bool,
     pub pan: f32,
     pub left: bool,
     pub right: bool,
@@ -533,6 +534,7 @@ pub fn song_view(session: &Session) -> SongView {
                 tracks.push(TrackView {
                     track: clip.track + 1,
                     gain: track.gain,
+                    polarity_inverted: track.polarity_inverted,
                     pan: track.pan,
                     left: track.left_enabled,
                     right: track.right_enabled,

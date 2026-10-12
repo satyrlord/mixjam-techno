@@ -36,7 +36,7 @@ pub(super) const ACCENT: Color32 = Color32::from_rgb(184, 227, 126);
 pub(super) const CORAL: Color32 = Color32::from_rgb(255, 130, 130);
 pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
 const LINE: Color32 = Color32::from_rgb(58, 65, 72);
-const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
+pub(super) const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
 const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
 pub(super) const DEFAULT_STATUS: &str = "Ready";
 const GROUPS: [&str; 10] = [
@@ -56,7 +56,7 @@ pub(super) fn title_text(text: &str) -> String {
     deunicode::deunicode(text).to_ascii_uppercase()
 }
 
-fn heading(text: impl Into<String>, size: f32) -> egui::RichText {
+pub(super) fn heading(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(title_text(&text.into()))
         .font(FontId::new(
             size,
@@ -191,8 +191,15 @@ impl MixJamApp {
                         self.request_action(PendingAction::New, ctx);
                     }
                     ui.add_space(10.0);
-                    if rail_button(ui, &icons, RailIcon::Mixer, self.show_mixer).clicked() {
-                        self.show_mixer = !self.show_mixer;
+                    if rail_button(
+                        ui,
+                        &icons,
+                        RailIcon::Mixer,
+                        self.bottom_module == BottomModule::Mixer,
+                    )
+                    .clicked()
+                    {
+                        self.bottom_module = BottomModule::Mixer;
                     }
                     if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
                         self.erase = !self.erase;
@@ -274,8 +281,13 @@ impl MixJamApp {
             });
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
         // Reserve the transport and a usable arrangement, including its inspector.
-        let min_height = if self.show_mixer { 310.0 } else { 180.0 };
-        let max_height = (ctx.available_rect().height() - 68.0 - 220.0).max(min_height);
+        let min_height = self.bottom_module.minimum_height();
+        // Keep the resized section stable when switching to a shorter module.
+        let shared_minimum = BottomModule::ALL
+            .into_iter()
+            .map(BottomModule::minimum_height)
+            .fold(0.0_f32, f32::max);
+        let max_height = (ctx.available_rect().height() - 68.0 - 220.0).max(shared_minimum);
         let sounds = egui::TopBottomPanel::bottom("sounds")
             .default_height(height)
             .height_range(min_height..=max_height)
@@ -287,10 +299,13 @@ impl MixJamApp {
             )
             .show(ctx, |ui| {
                 ui.set_min_height(ui.available_height());
-                if self.show_mixer {
-                    self.mixer(ui);
-                } else {
-                    self.palette(ui);
+                let row_spacing = ui.spacing().item_spacing.y;
+                ui.spacing_mut().item_spacing.y = 0.0;
+                self.bottom_toolbar(ui);
+                ui.spacing_mut().item_spacing.y = row_spacing;
+                match self.bottom_module {
+                    BottomModule::Mixer => self.mixer(ui),
+                    BottomModule::Sounds => self.palette(ui),
                 }
             });
         let grip = Rect::from_center_size(
@@ -413,78 +428,94 @@ impl MixJamApp {
         });
     }
 
-    pub(super) fn palette(&mut self, ui: &mut egui::Ui) {
-        let (samples, groups) = self.palette_view();
-        ui.horizontal(|ui| {
-            ui.label(heading("Sounds", 18.0));
-            // The tool rail has the Mixer toggle. Each control needs its own name.
-            if name_control(action_button(ui, "Mixer", false), "Show Mixer").clicked() {
-                self.show_mixer = true;
-            }
-            ui.add_space(12.0);
-            name_control(
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.search)
-                        .hint_text("Find a sound")
-                        .desired_width(170.0),
-                ),
-                "Find a sound",
-            );
-            let libraries = egui::ComboBox::from_id_salt("palette_product")
-                .selected_text(self.palette_product.map_or("All libraries", Product::label))
-                .width(145.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.palette_product, None, "All libraries");
-                    for product in Product::ALL {
-                        ui.selectable_value(
-                            &mut self.palette_product,
-                            Some(product),
-                            product.label(),
-                        );
-                    }
-                })
-                .response;
-            name_control(libraries, "Library filter");
-            let group_label = self.group.as_deref().map_or("All sounds", |g| {
-                if g.is_empty() { "Uncategorized" } else { g }
-            });
-            let categories = egui::ComboBox::from_id_salt("palette_category")
-                .selected_text(group_label)
-                .width(105.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.group, None, "All sounds");
-                    for name in groups.iter() {
-                        ui.selectable_value(
-                            &mut self.group,
-                            Some((*name).to_owned()),
-                            if name.is_empty() {
-                                "Uncategorized"
-                            } else {
-                                name
-                            },
-                        );
-                    }
-                })
-                .response;
-            name_control(categories, "Category filter");
-            let sorting = egui::ComboBox::from_id_salt("palette_sort")
-                .selected_text(self.palette_sort.label())
-                .width(105.0)
-                .show_ui(ui, |ui| {
-                    for sort in PaletteSort::ALL {
-                        ui.selectable_value(&mut self.palette_sort, sort, sort.label());
-                    }
-                })
-                .response;
-            name_control(sorting, "Sort order");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new(format!("{} sounds", samples.len()))
-                        .size(12.0)
-                        .color(MUTED),
-                );
+    fn bottom_toolbar(&mut self, ui: &mut egui::Ui) {
+        ui.push_id("bottom-module-toolbar", |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().interact_size.y = 28.0;
+                let button_padding = ui.spacing().button_padding;
+                ui.spacing_mut().button_padding.y = 3.0;
+                let response = egui::ComboBox::from_id_salt("bottom_module")
+                    .selected_text(heading(self.bottom_module.label(), 16.0))
+                    .width(136.0)
+                    .show_ui(ui, |ui| {
+                        for module in BottomModule::ALL {
+                            if ui.selectable_value(&mut self.bottom_module, module, module.label()).clicked() {
+                                ui.close();
+                            }
+                        }
+                    }).response;
+                name_control(response, "Bottom module")
+                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, polarity and outputs.");
+                ui.spacing_mut().button_padding = button_padding;
+                if self.bottom_module == BottomModule::Sounds { self.palette_filters(ui); }
             });
         });
+    }
+
+    fn palette_filters(&mut self, ui: &mut egui::Ui) {
+        let (samples, groups) = self.palette_view();
+        name_control(
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search)
+                    .hint_text("Find a sound")
+                    .desired_width(170.0),
+            ),
+            "Find a sound",
+        );
+        let libraries = egui::ComboBox::from_id_salt("palette_product")
+            .selected_text(self.palette_product.map_or("All libraries", Product::label))
+            .width(145.0)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.palette_product, None, "All libraries");
+                for product in Product::ALL {
+                    ui.selectable_value(&mut self.palette_product, Some(product), product.label());
+                }
+            })
+            .response;
+        name_control(libraries, "Library filter");
+        let group_label = self.group.as_deref().map_or("All sounds", |g| {
+            if g.is_empty() { "Uncategorized" } else { g }
+        });
+        let categories = egui::ComboBox::from_id_salt("palette_category")
+            .selected_text(group_label)
+            .width(105.0)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.group, None, "All sounds");
+                for name in groups.iter() {
+                    ui.selectable_value(
+                        &mut self.group,
+                        Some((*name).to_owned()),
+                        if name.is_empty() {
+                            "Uncategorized"
+                        } else {
+                            name
+                        },
+                    );
+                }
+            })
+            .response;
+        name_control(categories, "Category filter");
+        let sorting = egui::ComboBox::from_id_salt("palette_sort")
+            .selected_text(self.palette_sort.label())
+            .width(105.0)
+            .show_ui(ui, |ui| {
+                for sort in PaletteSort::ALL {
+                    ui.selectable_value(&mut self.palette_sort, sort, sort.label());
+                }
+            })
+            .response;
+        name_control(sorting, "Sort order");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(
+                egui::RichText::new(format!("{} sounds", samples.len()))
+                    .size(12.0)
+                    .color(MUTED),
+            );
+        });
+    }
+
+    pub(super) fn palette(&mut self, ui: &mut egui::Ui) {
+        let (samples, _) = self.palette_view();
         ui.add_space(7.0);
         egui::ScrollArea::horizontal()
             .id_salt("sound_categories")
@@ -582,174 +613,19 @@ impl MixJamApp {
     }
 
     pub(super) fn mixer(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label(heading("Mixer", 18.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if action_button(ui, "Sounds", false).clicked() {
-                    self.show_mixer = false;
-                }
-            });
-        });
-        ui.label(
-            egui::RichText::new("0 = silence · +1 = unity · Negative gain inverts polarity")
-                .size(11.0)
-                .color(MUTED),
-        );
         let mut tracks = self.session.project().tracks.clone();
-        let occupied = occupied_tracks(self.session.project());
-        let mut gain = self.session.project().master_gain;
-        let mut change = false;
-        let strip_height = (ui.available_height() - 16.0).max(198.0);
-        let fader_height = (strip_height - 124.0).max(74.0);
-        let bank_width = (ui.available_width() - 146.0).max(124.0);
-        ui.horizontal_top(|ui| {
-            ui.allocate_ui_with_layout(
-                Vec2::new(bank_width, strip_height + 16.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_max_width(bank_width);
-                    ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
-                    egui::ScrollArea::horizontal()
-                        .id_salt("mixer_scroll")
-                        .scroll_bar_visibility(
-                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                        )
-                        .auto_shrink([false, false])
-                        .max_height(strip_height + 16.0)
-                        .show(ui, |ui| {
-                            if occupied.is_empty() {
-                                ui.add_space(22.0);
-                                ui.label(heading("No tracks", 15.0));
-                                ui.label("Place a sound in the arrangement.");
-                                return;
-                            }
-                            ui.horizontal_top(|ui| {
-                                for &index in &occupied {
-                                    ui.scope_builder(
-                                        egui::UiBuilder::new().id(("mixer_track", index)),
-                                        |ui| {
-                                            ui.allocate_ui_with_layout(
-                                                Vec2::new(124.0, strip_height),
-                                                egui::Layout::top_down(egui::Align::Min),
-                                                |ui| {
-                                                    ui.set_width(124.0);
-                                                    ui.spacing_mut().item_spacing =
-                                                        Vec2::new(5.0, 3.0);
-                                                    ui.spacing_mut().interact_size.y = 22.0;
-                                                    ui.spacing_mut().button_padding =
-                                                        Vec2::new(6.0, 3.0);
-                                                    let track = &mut tracks[index];
-                                                    let track_name = format!("Track {}", index + 1);
-                                                    ui.label(
-                                                        egui::RichText::new(&track_name)
-                                                            .size(13.0)
-                                                            .color(TEXT),
-                                                    );
-                                                    let (summary, detail) = mixer_sample_summary(
-                                                        self.session.project(),
-                                                        self.session.library(),
-                                                        index,
-                                                    );
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            egui::RichText::new(summary)
-                                                                .size(11.0)
-                                                                .color(MUTED),
-                                                        )
-                                                        .truncate(),
-                                                    )
-                                                    .on_hover_text(detail);
-                                                    change |= gain_control(
-                                                        ui,
-                                                        &format!("{track_name} gain"),
-                                                        &mut track.gain,
-                                                        -2.0..=4.0,
-                                                        fader_height,
-                                                    );
-                                                    ui.spacing_mut().slider_width = 124.0;
-                                                    change |=
-                                                        pan_control(ui, index, &mut track.pan)
-                                                            .changed();
-                                                    ui.horizontal(|ui| {
-                                                        ui.label(
-                                                            egui::RichText::new(pan_description(
-                                                                track.pan,
-                                                            ))
-                                                            .size(11.0),
-                                                        );
-                                                        let reset = ui.small_button("Center");
-                                                        reset.widget_info(|| {
-                                                            egui::WidgetInfo::labeled(
-                                                                egui::WidgetType::Button,
-                                                                ui.is_enabled(),
-                                                                format!("Center {track_name} pan"),
-                                                            )
-                                                        });
-                                                        if reset
-                                                            .on_hover_text("Reset pan to center")
-                                                            .clicked()
-                                                        {
-                                                            change |= track.pan != 0.0;
-                                                            track.pan = 0.0;
-                                                        }
-                                                    });
-                                                    ui.horizontal(|ui| {
-                                                        change |= route_button(
-                                                            ui,
-                                                            "L",
-                                                            &format!("{track_name} left output"),
-                                                            &mut track.left_enabled,
-                                                        )
-                                                        .changed();
-                                                        change |= route_button(
-                                                            ui,
-                                                            "R",
-                                                            &format!("{track_name} right output"),
-                                                            &mut track.right_enabled,
-                                                        )
-                                                        .changed();
-                                                        if !track.left_enabled
-                                                            && !track.right_enabled
-                                                        {
-                                                            ui.label(
-                                                                egui::RichText::new("Muted")
-                                                                    .size(11.0)
-                                                                    .color(CORAL),
-                                                            );
-                                                        }
-                                                    });
-                                                },
-                                            );
-                                        },
-                                    );
-                                    ui.separator();
-                                }
-                            });
-                        });
-                },
-            );
-            ui.separator();
-            ui.scope_builder(egui::UiBuilder::new().id("mixer_master"), |ui| {
-                ui.allocate_ui_with_layout(
-                    Vec2::new(124.0, strip_height),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_width(124.0);
-                        ui.spacing_mut().item_spacing = Vec2::new(5.0, 3.0);
-                        ui.spacing_mut().interact_size.y = 22.0;
-                        ui.spacing_mut().button_padding = Vec2::new(6.0, 3.0);
-                        ui.label(egui::RichText::new("Master").size(13.0).color(TEXT));
-                        ui.add_space(14.0);
-                        change |=
-                            gain_control(ui, "Master gain", &mut gain, 0.0..=2.0, fader_height);
-                    },
-                );
-            });
-        });
-        if change {
+        let mut master = self.session.project().master_gain;
+        let changed = mixer::show(
+            ui,
+            self.session.project(),
+            self.session.library(),
+            &mut tracks,
+            &mut master,
+        );
+        if changed {
             let result = self.session.edit(EditCommand::SetMixer {
                 tracks,
-                master_gain: gain,
+                master_gain: master,
             });
             self.apply(result);
             ui.ctx().request_repaint();
@@ -1546,102 +1422,6 @@ pub(super) fn mixer_sample_summary(
     (summary, names.join("\n"))
 }
 
-pub(super) fn gain_control(
-    ui: &mut egui::Ui,
-    label: &str,
-    gain: &mut f32,
-    range: std::ops::RangeInclusive<f32>,
-    height: f32,
-) -> bool {
-    let mut changed = false;
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().slider_width = height;
-        let slider = ui.add(
-            egui::Slider::new(gain, range.clone())
-                .vertical()
-                .handle_shape(egui::style::HandleShape::Circle)
-                .show_value(false),
-        );
-        slider.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), f64::from(*gain), label));
-        // egui's circular handle radius is the slider width / 2.5. Its travel
-        // excludes that radius at each end, so these marks follow the real rail.
-        let travel = slider.rect.y_range().shrink(slider.rect.width() / 2.5);
-        for value in [0.0, 1.0] {
-            let fraction = (value - range.start()) / (range.end() - range.start());
-            let y = egui::lerp(travel.max..=travel.min, fraction);
-            ui.painter().line_segment(
-                [
-                    Pos2::new(slider.rect.left() - 2.0, y),
-                    Pos2::new(slider.rect.left() + 2.0, y),
-                ],
-                Stroke::new(1.0_f32, if value == 1.0 { ACCENT } else { MUTED }),
-            );
-        }
-        changed |= slider
-            .on_hover_text(format!(
-                "{label}: {gain:+.1}. 0 is silence; +1 is unity. Negative gain inverts polarity."
-            ))
-            .changed();
-        ui.vertical(|ui| {
-            ui.label(egui::RichText::new("Gain").size(11.0).color(MUTED));
-            let value_id = ui.next_auto_id();
-            let context = ui.ctx().clone();
-            let value = ui.add(
-                egui::DragValue::new(gain)
-                    .range(range)
-                    .speed(0.01)
-                    .custom_formatter(move |value, _| {
-                        let value = value as f32;
-                        if context.memory(|memory| memory.has_focus(value_id)) {
-                            // DragValue parses the draft on blur, even without
-                            // edits. Keep precision while editing so focus alone
-                            // cannot change saved gain or audio.
-                            if value != 0.0 && value.abs() < 0.001 {
-                                format!("{value:+e}")
-                            } else {
-                                format!("{value:+}")
-                            }
-                        } else {
-                            format!("{value:+.1}")
-                        }
-                    }),
-            );
-            value.widget_info(|| {
-                let mut info = egui::WidgetInfo::drag_value(ui.is_enabled(), f64::from(*gain));
-                info.label = Some(format!("{label} value"));
-                info
-            });
-            changed |= value
-                .on_hover_text("Click to enter an exact gain. Press Enter to apply.")
-                .changed();
-            let reset = ui.small_button("Unity");
-            reset.widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::Button,
-                    ui.is_enabled(),
-                    format!("Reset {label} to unity"),
-                )
-            });
-            if reset.on_hover_text("Reset gain to +1.0 (unity)").clicked() {
-                changed |= *gain != 1.0;
-                *gain = 1.0;
-            }
-            ui.label(
-                egui::RichText::new(if *gain < 0.0 {
-                    "Inverted"
-                } else if *gain == 0.0 {
-                    "Silent"
-                } else {
-                    ""
-                })
-                .size(11.0)
-                .color(if *gain <= 0.0 { CORAL } else { MUTED }),
-            );
-        });
-    });
-    changed
-}
-
 pub(super) fn bpm_picker(ui: &mut egui::Ui, id: &str, bpm: &mut f64) -> Response {
     let before = *bpm;
     let mut response = egui::ComboBox::from_id_salt(id)
@@ -2173,23 +1953,6 @@ pub(super) fn visible_clip_label(name: &str, width: f32, font_size: f32, height:
                 .collect::<String>()
         )
     }
-}
-
-pub(super) fn route_button(
-    ui: &mut egui::Ui,
-    text: &str,
-    label: &str,
-    active: &mut bool,
-) -> Response {
-    let color = route_color(*active);
-    let response = ui.add(egui::Checkbox::new(
-        active,
-        egui::RichText::new(text).color(color),
-    ));
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *active, label)
-    });
-    response.on_hover_text(route_hint(label, *active))
 }
 
 fn route_hint(label: &str, active: bool) -> String {

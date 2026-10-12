@@ -1215,10 +1215,10 @@ mod tests {
             .shapes
             .iter()
             .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == "Mixer" => Some(text),
+                egui::Shape::Text(text) if text.galley.job.text == "Find a sound" => Some(text),
                 _ => None,
             })
-            .expect("The Mixer action must stay visible.");
+            .expect("The sound search must keep its body font.");
         assert!(
             body.galley
                 .job
@@ -2503,7 +2503,7 @@ mod tests {
         ] {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
-            app.show_mixer = true;
+            app.bottom_module = BottomModule::Mixer;
             for track in 2..TRACK_COUNT {
                 app.session.place(1, track, 0).unwrap();
             }
@@ -2586,7 +2586,7 @@ mod tests {
         project.tracks[63].pan = 0.5;
         project.tracks[63].gain = 1.25;
         app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project).unwrap();
-        app.show_mixer = true;
+        app.bottom_module = BottomModule::Mixer;
         ctx.enable_accesskit();
         for (left, right) in [(true, true), (true, false), (false, false), (false, true)] {
             for (side, enabled) in [(true, left), (false, right)] {
@@ -2630,10 +2630,11 @@ mod tests {
     }
 
     #[test]
-    fn mixer_gain_labels_use_one_decimal_without_changing_precision() {
+    fn mixer_db_gain_labels_do_not_change_saved_amplitude_precision() {
         let (ctx, mut app) = fixture();
         let mut project = app.session.project().clone();
-        project.tracks[0].gain = -0.7533;
+        project.tracks[0].gain = 0.7533;
+        project.tracks[0].polarity_inverted = true;
         project.tracks[1].gain = 0.3333;
         project.master_gain = 0.7777;
         app.session = Session::headless(
@@ -2642,28 +2643,38 @@ mod tests {
         )
         .unwrap();
         ctx.enable_accesskit();
-        app.show_mixer = true;
+        app.bottom_module = BottomModule::Mixer;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        for label in ["-0.8", "+0.3", "+0.8"] {
+        for label in ["-2.5 dB", "-9.5 dB", "-2.2 dB"] {
             text_rect(&output, label);
         }
-        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        assert_eq!(app.session.project().tracks[0].gain, 0.7533);
+        assert!(app.session.project().tracks[0].polarity_inverted);
         assert_eq!(app.session.project().tracks[1].gain, 0.3333);
         assert_eq!(app.session.project().master_gain, 0.7777);
         assert!(!app.session.unsaved());
 
-        // Entering the rounded value is a real edit, even though the passive
-        // label stays the same. Merely focusing must retain the full value.
+        // A passive display or focus change must not round-trip amplitude
+        // through its rounded dB label and change the saved sound.
         focus_control(&ctx, &mut app, &output, "Track 2 gain value");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        text_rect(&output, "+0.3333");
+        focus_control(&ctx, &mut app, &output, "Master gain value");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 left output");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[1].gain, 0.3333);
+        assert_eq!(app.session.project().master_gain, 0.7777);
+        assert!(!app.session.unsaved());
+
+        // Explicitly entering a rounded dB value is a real amplitude edit.
+        focus_control(&ctx, &mut app, &output, "Track 2 gain value");
         frame(
             &ctx,
             &mut app,
             vec![
                 key_event(egui::Key::A, egui::Modifiers::COMMAND),
-                egui::Event::Text("+0.3".into()),
+                egui::Event::Text("-9.5".into()),
             ],
             egui::Modifiers::COMMAND,
         );
@@ -2673,11 +2684,134 @@ mod tests {
             vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
             egui::Modifiers::NONE,
         );
-        assert_eq!(app.session.project().tracks[1].gain, 0.3);
+        assert!((app.session.project().tracks[1].gain - 10.0_f32.powf(-9.5 / 20.0)).abs() < 0.000_001);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        text_rect(&output, "+0.3");
-        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        let (_, gain) = accessible_node(&output, "Track 2 gain");
+        assert!((gain.numeric_value().unwrap() + 9.5).abs() < 0.001);
+        assert_eq!(app.session.project().tracks[0].gain, 0.7533);
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert!(!app.session.project().tracks[1].polarity_inverted);
         assert_eq!(app.session.project().master_gain, 0.7777);
+    }
+
+    #[test]
+    fn mixer_increasing_silent_and_very_quiet_gain_does_not_stick_or_silence() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.tracks[0].gain = 0.0;
+        project.tracks[1].gain = 0.000_001;
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,
+        ).unwrap();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.session.project().tracks[0].gain > 0.0,
+            "Increasing the numeric gain from silence must produce a positive gain.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 2 gain");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.session.project().tracks[1].gain > 0.000_001,
+            "Increasing a gain below -96 dB must increase it instead of silencing it.");
+    }
+
+    #[test]
+    fn mixer_numeric_silence_origin_preserves_focus_and_exact_entries() {
+        for initial_gain in [0.0, 10.0_f32.powf(-96.0 / 20.0), 0.000_001] {
+            let (ctx, mut app) = fixture();
+            let mut project = app.session.project().clone();
+            project.tracks[0].gain = initial_gain;
+            app.session = Session::headless(
+                Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,
+            ).unwrap();
+            ctx.enable_accesskit();
+            app.bottom_module = BottomModule::Mixer;
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Track 1 left output");
+            assert_eq!(app.session.project().tracks[0].gain.to_bits(), initial_gain.to_bits());
+            assert!(!app.session.unsaved());
+
+            for entry in ["-inf", "-120", "-inf", "-96", "-inf"] {
+                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+                frame(&ctx, &mut app, vec![
+                    key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                    egui::Event::Text(entry.into()),
+                ], egui::Modifiers::COMMAND);
+                frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+                let expected = if entry == "-inf" { 0.0 } else { mixjam_techno::application::db_to_amplitude(entry.parse::<f32>().unwrap()) };
+                assert_eq!(app.session.project().tracks[0].gain, expected, "Explicit {entry} must retain its meaning.");
+            }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().tracks[0].gain, 0.0,
+                "Decreasing a silent numeric control must keep silence.");
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Track 1 left output");
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().tracks[0].gain, 0.0,
+                "Blurring after a decrease from silence must not commit a finite draft.");
+            let rect = effects_control_rect(&output, "Track 1 gain value");
+            let pos = rect.center();
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos), egui::Event::PointerButton {
+                pos, pressed: true, button: egui::PointerButton::Primary, modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE);
+            let pos = pos + Vec2::new(24.0, 0.0);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![egui::Event::PointerButton {
+                pos, pressed: false, button: egui::PointerButton::Primary, modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE);
+            assert!(app.session.project().tracks[0].gain > 0.0,
+                "Dragging the numeric control up from silence must raise gain.");
+        }
+    }
+
+    #[test]
+    fn mixer_retains_legacy_gain_four_until_an_explicit_db_edit() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.tracks[0].gain = 4.0;
+        project.tracks[0].polarity_inverted = true;
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,
+        ).unwrap();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "+12.0 dB");
+        assert_eq!(app.session.project().tracks[0].gain, 4.0);
+        assert!(!app.session.unsaved());
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 left output");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].gain, 4.0,
+            "Focusing a legacy gain must preserve its exact amplitude above +12 dB.");
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert!(!app.session.unsaved());
+
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        frame(&ctx, &mut app, vec![
+            key_event(egui::Key::A, egui::Modifiers::COMMAND),
+            egui::Event::Text("+12".into()),
+        ], egui::Modifiers::COMMAND);
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!((app.session.project().tracks[0].gain - 10.0_f32.powf(12.0 / 20.0)).abs() < 0.000_001,
+            "An explicit +12 dB edit must use the new fader ceiling rather than legacy amplitude four.");
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert!(app.session.unsaved());
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].gain, 4.0);
+        assert!(app.session.project().tracks[0].polarity_inverted);
     }
 
     #[test]
@@ -2692,14 +2826,14 @@ mod tests {
         )
         .unwrap();
         ctx.enable_accesskit();
-        app.show_mixer = true;
+        app.bottom_module = BottomModule::Mixer;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let (_, gain) = accessible_node(&output, "Track 1 gain");
         assert_eq!(gain.role(), egui::accesskit::Role::Slider);
-        assert_eq!(gain.numeric_value(), Some(1.0));
-        assert_eq!(gain.min_numeric_value(), Some(-2.0));
-        assert_eq!(gain.max_numeric_value(), Some(4.0));
+        assert_eq!(gain.numeric_value(), Some(0.0));
+        assert!(gain.min_numeric_value().is_some_and(|db| db <= -60.0));
+        assert_eq!(gain.max_numeric_value(), Some(12.0));
         accessible_node(&output, "Track 2 gain");
         accessible_node(&output, "Master gain");
         let (_, left) = accessible_node(&output, "Track 1 left output");
@@ -2746,7 +2880,7 @@ mod tests {
             &mut app,
             vec![
                 key_event(egui::Key::A, egui::Modifiers::COMMAND),
-                egui::Event::Text("-0.7533".into()),
+                egui::Event::Text("-6.0".into()),
             ],
             egui::Modifiers::COMMAND,
         );
@@ -2756,9 +2890,18 @@ mod tests {
             vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
             egui::Modifiers::NONE,
         );
-        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        assert!((app.session.project().tracks[0].gain - 10.0_f32.powf(-6.0 / 20.0)).abs() < 0.000_001);
+        assert!(!app.session.project().tracks[0].polarity_inverted,
+            "A negative dB value attenuates without reversing polarity.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert_eq!(app.session.project().tracks[0].gain, -0.7533);
+        focus_control(&ctx, &mut app, &output, "Track 1 polarity invert");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert!((app.session.project().tracks[0].gain - 10.0_f32.powf(-6.0 / 20.0)).abs() < 0.000_001);
+        assert!(!app.session.wants_playback(), "A polarity key must not start playback.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(accessible_node(&output, "Track 1 polarity invert").1.toggled(),
+            Some(egui::accesskit::Toggled::True));
         focus_control(&ctx, &mut app, &output, "Reset Track 1 gain to unity");
         frame(
             &ctx,
@@ -2767,6 +2910,28 @@ mod tests {
             egui::Modifiers::NONE,
         );
         assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        assert!(app.session.project().tracks[0].polarity_inverted,
+            "Unity changes magnitude without changing polarity.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 gain");
+        for (key, modifiers, expected_db) in [
+            (egui::Key::ArrowUp, egui::Modifiers::SHIFT, 0.1_f32),
+            (egui::Key::ArrowDown, egui::Modifiers::SHIFT, 0.0),
+            (egui::Key::ArrowDown, egui::Modifiers::NONE, -0.5),
+            (egui::Key::Home, egui::Modifiers::NONE, f32::NEG_INFINITY),
+            (egui::Key::ArrowDown, egui::Modifiers::NONE, f32::NEG_INFINITY),
+            (egui::Key::ArrowDown, egui::Modifiers::SHIFT, f32::NEG_INFINITY),
+            (egui::Key::End, egui::Modifiers::NONE, 12.0),
+            (egui::Key::ArrowUp, egui::Modifiers::NONE, 12.0),
+        ] {
+            frame(&ctx, &mut app, vec![key_event(key, modifiers)], modifiers);
+            let expected_gain = 10.0_f32.powf(expected_db / 20.0);
+            assert!((app.session.project().tracks[0].gain - expected_gain).abs() < 0.000_001,
+                "{key:?} with {modifiers:?} must set {expected_db} dB; lowering silence must keep exact zero.");
+            assert!(app.session.project().tracks[0].polarity_inverted,
+                "Gain rail keys must leave polarity unchanged.");
+        }
+        assert!(!app.session.wants_playback(), "Gain rail keys must not start playback.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         focus_control(&ctx, &mut app, &output, "Track 1 pan");
         frame(
@@ -2802,7 +2967,7 @@ mod tests {
         project.clips[1].track = 63;
         app.session = Session::headless(Arc::new(Library::fixture(samples)), project).unwrap();
         app.session.place(2, 0, TICKS_PER_BAR * 2).unwrap();
-        app.show_mixer = true;
+        app.bottom_module = BottomModule::Mixer;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         text_rect(&output, "2 sounds");
@@ -2838,10 +3003,257 @@ mod tests {
     }
 
     #[test]
+    fn mixer_polarity_survives_silence_history_and_project_save() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        frame(&ctx, &mut app, vec![
+            key_event(egui::Key::A, egui::Modifiers::COMMAND),
+            egui::Event::Text("-inf".into()),
+        ], egui::Modifiers::COMMAND);
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].gain, 0.0);
+        assert!(!app.session.project().tracks[0].polarity_inverted);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Track 1 polarity invert");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].gain, 0.0);
+        assert!(app.session.project().tracks[0].polarity_inverted,
+            "Polarity must remain a real independent setting at silence.");
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].gain, 0.0);
+        assert!(!app.session.project().tracks[0].polarity_inverted);
+        app.history_step(true);
+        assert_eq!(app.session.project().tracks[0].gain, 0.0);
+        assert!(app.session.project().tracks[0].polarity_inverted);
+
+        let path = std::env::temp_dir().join(format!(
+            "mixjam-ui-mixer-polarity-{}.json", std::process::id()
+        ));
+        app.session.project().save(&path).unwrap();
+        let loaded = Project::load(&path).unwrap();
+        assert_eq!(loaded.tracks[0].gain, 0.0);
+        assert!(loaded.tracks[0].polarity_inverted);
+        std::fs::remove_file(path).unwrap();
+
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Reset Track 1 gain to unity");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert_eq!(app.session.project().tracks[0].effective_gain(), -1.0);
+        assert_eq!(app.session.project().tracks[1].gain, 1.0);
+        assert!(!app.session.project().tracks[1].polarity_inverted);
+    }
+
+    #[test]
+    fn mixer_compact_rails_and_inline_resets_fit_supported_densities() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            let mut project = app.session.project().clone();
+            project.tracks[0].gain = 10.0_f32.powf(12.0 / 20.0);
+            project.tracks[1].gain = 0.0;
+            app.session = Session::headless(
+                Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,
+            ).unwrap();
+            app.bottom_module = BottomModule::Mixer;
+            let size = Vec2::new(960.0, 720.0);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            for _ in 0..12 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let mut caps = Vec::new();
+            for track in ["Track 1", "Track 2", "Master"] {
+                let gain = effects_control_rect(&output, &format!("{track} gain"));
+                let value = effects_control_rect(&output, &format!("{track} gain value"));
+                let unity = effects_control_rect(&output, &format!("Reset {track} gain to unity"));
+                assert!(viewport.contains_rect(gain) && viewport.contains_rect(value)
+                    && viewport.contains_rect(unity), "{track} gain controls must fit at {density}x.");
+                assert!(gain.height() >= 112.0, "The minimum-window rail must remain usable at {density}x.");
+                assert!(value.bottom() <= gain.top(), "The dB readout must have room above its rail.");
+                let cap = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) => {
+                        let bounds = mesh.calc_bounds();
+                        ((bounds.width() - 24.0).abs() <= 1.0 / density
+                            && (bounds.height() - 32.0).abs() <= 1.0 / density
+                            && (bounds.center().x - gain.center().x).abs() <= 1.0 / density
+                            && gain.expand(1.0 / density).contains(bounds.center())).then_some(bounds)
+                    }
+                    _ => None,
+                }).unwrap_or_else(|| panic!("Missing {track} fader cap at {density}x."));
+                assert!(cap.top() - value.bottom() >= 4.0 - 1.0 / density,
+                    "The fader cap must clear the dB readout even at +12 dB.");
+                caps.push((track, cap));
+                assert!(gain.y_range().contains(unity.center().y), "Unity must sit directly beside the gain rail.");
+                assert!(unity.width() <= 48.0 && unity.height() <= 20.0, "Unity must be a small rail button.");
+            }
+            for track in ["Track 1", "Track 2"] {
+                let pan = effects_control_rect(&output, &format!("{track} pan"));
+                let center = effects_control_rect(&output, &format!("Center {track} pan"));
+                let polarity = effects_control_rect(&output, &format!("{track} polarity invert"));
+                let left = effects_control_rect(&output, &format!("{track} left output"));
+                let right = effects_control_rect(&output, &format!("{track} right output"));
+                for rect in [pan, center, polarity, left, right] {
+                    assert!(viewport.contains_rect(rect), "{track} lower controls must fit at {density}x.");
+                }
+                let cap = caps.iter().find(|(name, _)| *name == track).unwrap().1;
+                assert!(pan.top() - cap.bottom() >= 4.0 - 1.0 / density,
+                    "The fader cap must clear pan even at silence.");
+                assert!(center.top() >= pan.bottom() - 1.0 / density
+                    && center.top() <= pan.bottom() + 4.0,
+                    "Center must attach just below its pan rail without covering the slider.");
+                assert!((pan.center().x - center.center().x).abs() <= 1.0 / density,
+                    "Center must mark the center of the pan rail.");
+                assert!(center.width() <= 44.0 && center.height() <= 18.0);
+                assert!(!polarity.intersects(pan) && !polarity.intersects(center));
+                assert!(!polarity.intersects(left) && !polarity.intersects(right));
+                assert_eq!(accessible_node(&output, &format!("{track} polarity invert")).1.role(),
+                    egui::accesskit::Role::CheckBox);
+            }
+        }
+    }
+
+    #[test]
+    fn mixer_gain_taper_reaches_silence_and_favors_musically_useful_levels() {
+        assert_eq!(mixer::fraction_gain(0.0), 0.0);
+        assert_eq!(mixer::gain_fraction(0.0), 0.0);
+        assert!((20.0 * mixer::fraction_gain(1.0).log10() - 12.0).abs() < 0.000_01);
+        let useful_travel = mixer::gain_fraction(10.0_f32.powf(12.0 / 20.0))
+            - mixer::gain_fraction(10.0_f32.powf(-24.0 / 20.0));
+        assert!(useful_travel >= 0.65,
+            "Most travel must serve -24 through +12 dB rather than near-silent levels.");
+        assert!(mixer::gain_fraction(10.0_f32.powf(-60.0 / 20.0)) <= 0.12,
+            "The near-silent range must use only a short part of the rail.");
+        let mut previous = 0.0;
+        for position in 1..=1000 {
+            let fraction = position as f32 / 1000.0;
+            let gain = mixer::fraction_gain(fraction);
+            assert!(gain > previous, "Increasing the fader must always increase amplitude.");
+            assert!((mixer::gain_fraction(gain) - fraction).abs() < 0.000_01);
+            previous = gain;
+        }
+        for gain in [0.000_000_01, 0.001, 0.01, 0.1, 0.5, 1.0, 2.0] {
+            let restored = mixer::fraction_gain(mixer::gain_fraction(gain));
+            assert!((restored - gain).abs() <= gain * 0.000_01,
+                "The rail must round-trip small positive amplitudes without an artificial silence floor.");
+        }
+    }
+
+    #[test]
+    fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_methods() {
+        fn action(action: egui::accesskit::Action, target: egui::accesskit::NodeId) -> egui::Event {
+            egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest { action, target, data: None })
+        }
+        fn pointer_events(pos: Pos2, pressed: bool) -> Vec<egui::Event> {
+            vec![egui::Event::PointerMoved(pos), egui::Event::PointerButton {
+                pos, pressed, button: egui::PointerButton::Primary, modifiers: egui::Modifiers::NONE,
+            }]
+        }
+        for size in [Vec2::new(1440.0, 1000.0), Vec2::new(1024.0, 768.0), Vec2::new(960.0, 720.0)] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.bottom_module = BottomModule::Mixer;
+            app.search = "grasp".into();
+            app.group = Some("Loop".into());
+            app.palette_sort = PaletteSort::Name;
+            app.selected_sample = Some(1);
+            for _ in 0..12 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+            let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let selector_id = accessible_node(&output, "Bottom module").0;
+            let selector = effects_control_rect(&output, "Bottom module");
+            let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds")).unwrap().rect;
+            assert!(panel.height() >= 370.0);
+            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(selector));
+            assert!((selector.width() - 136.0).abs() <= 1.0,
+                "The selector must reserve the same fixed width for either module.");
+            assert_eq!(accessible_node(&output, "Bottom module").1.role(), egui::accesskit::Role::ComboBox);
+            accessible_node(&output, "Master gain");
+
+            // Choose Sounds with the pointer, Mixer with focus and Enter,
+            // then Sounds with the same accessibility actions used by agents.
+            for (method, module) in [(0, BottomModule::Sounds), (1, BottomModule::Mixer), (2, BottomModule::Sounds)] {
+                let known: std::collections::HashSet<_> = output.platform_output.accesskit_update.as_ref().unwrap()
+                    .nodes.iter().map(|(id, _)| *id).collect();
+                match method {
+                    0 => {
+                        frame_at_size(&ctx, &mut app, pointer_events(selector.center(), true), egui::Modifiers::NONE, size);
+                        frame_at_size(&ctx, &mut app, pointer_events(selector.center(), false), egui::Modifiers::NONE, size);
+                    }
+                    1 => {
+                        frame_at_size(&ctx, &mut app, vec![action(egui::accesskit::Action::Focus, selector_id)], egui::Modifiers::NONE, size);
+                        frame_at_size(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE, size);
+                    }
+                    _ => { frame_at_size(&ctx, &mut app, vec![action(egui::accesskit::Action::Click, selector_id)], egui::Modifiers::NONE, size); }
+                }
+                for _ in 0..2 { output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+                assert!(egui::Popup::is_any_open(&ctx), "The selector must open with method {method}.");
+                let (option_id, option) = output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+                    .find(|(id, node)| !known.contains(id) && node.label() == Some(module.label()))
+                    .unwrap_or_else(|| panic!("Missing {} module choice.", module.label()));
+                let option_id = *option_id;
+                let bounds = option.bounds().unwrap();
+                let center = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0);
+                match method {
+                    0 => {
+                        frame_at_size(&ctx, &mut app, pointer_events(center, true), egui::Modifiers::NONE, size);
+                        frame_at_size(&ctx, &mut app, pointer_events(center, false), egui::Modifiers::NONE, size);
+                    }
+                    1 => {
+                        frame_at_size(&ctx, &mut app, vec![action(egui::accesskit::Action::Focus, option_id)], egui::Modifiers::NONE, size);
+                        frame_at_size(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE, size);
+                    }
+                    _ => { frame_at_size(&ctx, &mut app, vec![action(egui::accesskit::Action::Click, option_id)], egui::Modifiers::NONE, size); }
+                }
+                for _ in 0..6 { output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+                assert_eq!(app.bottom_module, module, "Method {method}, viewport {size:?}.");
+                assert!(!egui::Popup::is_any_open(&ctx), "Module choice must close after method {method}, viewport {size:?}.");
+                assert_eq!(accessible_node(&output, "Bottom module").0, selector_id);
+                assert_eq!(effects_control_rect(&output, "Bottom module"), selector,
+                    "Module navigation must not move its selector at {size:?}.");
+                let title = title_text(module.label());
+                let painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == title => Some(text),
+                    _ => None,
+                }).expect("The module selector must paint its selected name.");
+                assert!(painted.galley.job.sections.iter().all(|section|
+                    section.format.font_id.family == egui::FontFamily::Name("Syncopate Bold".into())
+                        && section.format.font_id.size == 16.0));
+                assert_eq!(egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds")).unwrap().rect, panel,
+                    "Choosing a module must preserve the existing panel size.");
+                assert_eq!(app.search, "grasp");
+                assert_eq!(app.group.as_deref(), Some("Loop"));
+                assert_eq!(app.palette_product, None);
+                assert_eq!(app.palette_sort, PaletteSort::Name);
+                assert_eq!(app.selected_sample, Some(1));
+                let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
+                assert!(!nodes.iter().any(|(_, node)| node.label() == Some("Show Mixer")
+                    || (node.label() == Some("Sounds") && node.role() == egui::accesskit::Role::Button)),
+                    "The shared selector replaces the former module swap buttons.");
+                if module == BottomModule::Sounds {
+                    for name in ["Find a sound", "Library filter", "Category filter", "Sort order"] {
+                        accessible_node(&output, name);
+                    }
+                    assert!(!nodes.iter().any(|(_, node)| node.label() == Some("Master gain")));
+                } else {
+                    accessible_node(&output, "Master gain");
+                    assert!(!nodes.iter().any(|(_, node)| node.label() == Some("Find a sound")));
+                }
+            }
+            assert!(!app.session.unsaved(), "Module navigation must not edit the project.");
+        }
+    }
+
+    #[test]
     fn empty_mixer_keeps_guidance_master_and_action_errors_visible() {
         let (ctx, mut app) = fixture();
         app.new_mix();
-        app.show_mixer = true;
+        app.bottom_module = BottomModule::Mixer;
         assert_eq!(DEFAULT_STATUS, "Ready");
         let (status, status_error) = startup_status(&mut app.session);
         assert_eq!((status.as_str(), status_error), (DEFAULT_STATUS, false));
@@ -2957,7 +3369,10 @@ mod tests {
                 Vec2::new(960.0, 720.0),
             );
         }
-        assert!(panel().height() <= 336.0);
+        let shared_minimum = BottomModule::ALL.into_iter()
+            .map(BottomModule::minimum_height).fold(0.0_f32, f32::max);
+        assert!(panel().height() <= shared_minimum,
+            "The minimum viewport must clamp to the shared module height limit.");
         assert!(app.timeline_drop_rect.unwrap().height() >= 80.0);
         assert!(!app.session.unsaved());
     }
@@ -3985,10 +4400,13 @@ mod tests {
             }],
             egui::Modifiers::NONE,
         );
-        assert!(app.show_mixer);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
         assert!(clicked.platform_output.events.iter().any(|event| {
             matches!(event, egui::output::OutputEvent::Clicked(info) if info.label.as_deref() == Some("Mixer"))
         }), "The icon must expose its action name to accessibility output.");
+        click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
+        assert_eq!(app.bottom_module, BottomModule::Mixer,
+            "The Mixer rail shortcut must keep Mixer open on a repeated click.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let erase = image_center(&output, RailIcon::Erase);
         click(&ctx, &mut app, erase, egui::Modifiers::NONE);
@@ -4158,6 +4576,7 @@ mod tests {
         for (label, role) in [
             ("Play / pause (Space)", "button"),
             ("Project BPM", "combo_box"),
+            ("Bottom module", "combo_box"),
             ("Zoom", "slider"),
             ("Find a sound", "text_input"),
             ("Library filter", "combo_box"),
@@ -4199,16 +4618,16 @@ mod tests {
         assert!(!egui::Popup::is_any_open(&context));
         assert_eq!(app.session.project().bpm, 160.0);
 
-        // The Sounds panel has its own names for its Mixer and Step synth buttons.
+        // The module selector and the Sounds panel actions have distinct names.
         let reply = send(&mut app, &["click", "target=Step synth"]);
         assert_eq!(reply["ok"], true, "{reply}");
         assert!(app.show_step_synth && app.group.is_none());
         send(&mut app, &["click", "target=Show Step synth sounds"]);
         assert_eq!(app.group.as_deref(), Some("Step synth"));
         send(&mut app, &["click", "target=Show All sounds"]);
-        let reply = send(&mut app, &["set", "target=Mixer", "value=true"]);
+        let reply = send(&mut app, &["set", "target=Bottom module", "value=Mixer"]);
         assert_eq!(reply["ok"], true, "{reply}");
-        assert!(app.show_mixer);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
         // A name that several controls contain needs a selector.
         let reply = send(&mut app, &["click", "target=gain"]);
         assert!(reply["error"].as_str().unwrap().contains("index="), "{reply}");
@@ -4223,11 +4642,12 @@ mod tests {
         send(&mut app, &["click", "target=Close Time Stretcher"]);
         let reply = send(&mut app, &["set", "target=Track 1 gain", "value=0.5"]);
         assert_eq!(reply["ok"], true, "{reply}");
-        assert_eq!(app.session.project().tracks[0].gain, 0.5);
+        assert!((app.session.project().tracks[0].gain - 10.0_f32.powf(0.5 / 20.0)).abs() < 0.000_001);
+        assert!(!app.session.project().tracks[0].polarity_inverted);
         send(&mut app, &["click", "target=Undo"]);
         assert_eq!(app.session.project().tracks[0].gain, Project::default().tracks[0].gain);
 
-        send(&mut app, &["click", "target=Sounds"]);
+        send(&mut app, &["set", "target=Bottom module", "value=Sounds"]);
         let reply = send(&mut app, &["set", "target=Find a sound", "value=grasp"]);
         assert_eq!(reply["control"]["text"], "grasp", "{reply}");
         assert_eq!(app.search, "grasp");
@@ -4408,5 +4828,24 @@ mod tests {
         let reply = send(&mut app, &["click", "target=Discard changes"]);
         assert_eq!(reply["closing"], true, "{reply}");
         assert!(app.allow_close);
+    }
+
+    #[test]
+    fn mixer_pointer_gain_edit_keeps_transport_and_history_shortcuts() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let rail = effects_control_rect(&output, "Track 1 gain");
+        click(&ctx, &mut app, rail.center_bottom() - Vec2::new(0.0, 20.0), egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(app.session.project().tracks[0].gain < 1.0, "The rail click must lower the gain.");
+        // Space, undo, and save share one guard: they run only while no control has focus.
+        assert!(!ctx.wants_keyboard_input(),
+            "A pointer edit must not leave the rail holding keyboard focus.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND);
+        assert_eq!(app.session.project().tracks[0].gain, 1.0,
+            "Undo must work directly after a pointer gain edit.");
     }
 }

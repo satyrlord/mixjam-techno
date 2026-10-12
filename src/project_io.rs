@@ -175,20 +175,22 @@ pub fn save_song_folder(data_root: &Path, folder: &Path) -> Result<(), String> {
     crate::atomic_file::write(&data_root.join("song-folder.json"), &bytes)
 }
 
+/// An optional folder of extracted WAVs with a `metadata.json`: `samples`
+/// beside the executable, or the folder that `MIXJAM_TECHNO_REFERENCE_SAMPLES`
+/// names. A provider registers without it.
 pub fn reference_samples_root() -> PathBuf {
-    let local = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("samples");
-    let candidates = [
-        std::env::current_exe()
-            .ok()
-            .and_then(|path| path.parent().map(|parent| parent.join("samples"))),
-        Some(local.clone()),
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.join("samples")))
+        .unwrap_or_default();
+    [
+        Some(beside.clone()),
         std::env::var_os("MIXJAM_TECHNO_REFERENCE_SAMPLES").map(PathBuf::from),
-    ];
-    candidates
-        .into_iter()
-        .flatten()
-        .find(|path| path.join("metadata.json").is_file())
-        .unwrap_or(local)
+    ]
+    .into_iter()
+    .flatten()
+    .find(|path| path.join("metadata.json").is_file())
+    .unwrap_or(beside)
 }
 
 pub fn load_library_config() -> Result<Vec<LibraryBinding>, String> {
@@ -230,8 +232,9 @@ pub fn save_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
     crate::atomic_file::write(&data_root().join("libraries.json"), &bytes)
 }
 
-pub fn default_root(product: Product) -> Option<PathBuf> {
-    // Development fixtures are explicit optional providers, never startup requirements.
+/// Original installations for the ignored fixture tests. The application has no default provider.
+#[cfg(test)]
+pub(crate) fn default_root(product: Product) -> Option<PathBuf> {
     let installations = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("local-data/installations");
     let media = std::env::var_os("MIXJAM_TECHNO_MEDIA_ROOT").map(PathBuf::from);
     let (local, setup) = match product {
@@ -258,7 +261,7 @@ pub fn open(path: &Path, library: &Library) -> Result<(Project, Library), String
 }
 
 /// Open a song, a `.mix` or v7 `.mixjam` import, or an earlier JSON project.
-/// The flag says whether Save can replace the file: only a format version 8
+/// The flag says whether Save can replace the file: format version 8 or 9
 /// song. Imports and earlier JSON projects need a new `.mixjam` path.
 pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bool), String> {
     let candidate = library.clone();
@@ -625,10 +628,6 @@ pub fn detect_product(path: &Path) -> Result<Product, String> {
     }
 }
 
-/// Resolve imported files before the old source project folders are removed.
-/// A selected WAV folder relinks imports by path suffix. An import that the
-/// folder lacks keeps its own file when that file exists; a missing file is
-/// restored from the preservation manifest, then looked up in the library.
 fn conflict_selection(project: &Project, sample_id: u32) -> Option<PathBuf> {
     project
         .sample_conflicts
@@ -637,6 +636,9 @@ fn conflict_selection(project: &Project, sample_id: u32) -> Option<PathBuf> {
         .map(|conflict| conflict.candidates[conflict.selected].clone())
 }
 
+/// A selected WAV folder relinks imports by path suffix. An import that the
+/// folder lacks keeps its own file when that file exists; a missing file is
+/// looked up in the library.
 fn rebase_asset(
     imported: &mut ImportedSample,
     library: &Library,
@@ -674,11 +676,6 @@ fn rebase_asset(
             imported.path = path.clone();
             return Ok(paths);
         }
-    }
-    let path = crate::preservation::resolve_asset(&imported.path)?;
-    if path != imported.path {
-        imported.path = path;
-        return Ok(Vec::new());
     }
     if !imported.path.is_file() && !library.samples.is_empty() {
         let paths = library.find_wav_candidates(&reference)?;

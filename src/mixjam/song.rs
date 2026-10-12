@@ -1,12 +1,14 @@
-//! The application's own `.mixjam` song format, format version 8.
+//! The application's own `.mixjam` song format, format version 9.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
 //! timestamps, `song`, and lanes that own their placements in visible order.
-//! Version 8 differs where the editor does:
+//! Versions 8 and 9 differ from version 7 where the editor does:
 //! - Ticks are the editor's 256 per bar, not MixJam's 32.
 //! - `lanes` always has 64 entries with gain, pan, and two channel switches.
 //!   Master processors, return buses, and sends do not exist here.
+//! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
+//!   signed lane gains migrate without changing their effective amplitude.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -23,7 +25,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, io::Read, path::Path, path::PathBuf};
 
-pub(super) const FORMAT_VERSION: u32 = 8;
+pub(super) const FORMAT_VERSION: u32 = 9;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -55,6 +57,12 @@ struct Song {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Lane {
     gain: f32,
+    #[serde(
+        default,
+        deserialize_with = "crate::engine::optional_polarity",
+        skip_serializing_if = "Option::is_none"
+    )]
+    polarity_inverted: Option<bool>,
     pan: f32,
     left_enabled: bool,
     right_enabled: bool,
@@ -139,6 +147,7 @@ impl Document {
             .iter()
             .map(|track| Lane {
                 gain: track.gain,
+                polarity_inverted: Some(track.polarity_inverted),
                 pan: track.pan,
                 left_enabled: track.left_enabled,
                 right_enabled: track.right_enabled,
@@ -238,7 +247,7 @@ impl Document {
     }
 
     fn into_project(self) -> Result<Project, String> {
-        if self.format_version != FORMAT_VERSION {
+        if !matches!(self.format_version, 8 | FORMAT_VERSION) {
             return Err("This MixJam format version is not supported.".into());
         }
         if !text(&self.app_version) || !text(&self.created_at) || !text(&self.modified_at) {
@@ -247,15 +256,33 @@ impl Document {
         if self.lanes.len() != TRACK_COUNT {
             return Err("The MixJam song must have 64 lanes.".into());
         }
+        if self.format_version == 8
+            && (!self.song.master_gain.is_finite() || !(0.0..=2.0).contains(&self.song.master_gain))
+        {
+            return Err("Legacy master amplitude must be from 0 to 2.".into());
+        }
         let mut tracks = Vec::with_capacity(TRACK_COUNT);
         let mut clips = Vec::new();
         for (track, lane) in self.lanes.into_iter().enumerate() {
-            tracks.push(Track {
+            let mut settings = Track {
                 gain: lane.gain,
+                polarity_inverted: lane.polarity_inverted.unwrap_or(false),
                 pan: lane.pan,
                 left_enabled: lane.left_enabled,
                 right_enabled: lane.right_enabled,
-            });
+            };
+            if self.format_version == 8 {
+                if lane.polarity_inverted.is_some() {
+                    return Err("Version 8 lanes cannot contain polarityInverted.".into());
+                }
+                if !lane.gain.is_finite() || !(-2.0..=4.0).contains(&lane.gain) {
+                    return Err("Legacy track gain must be from -2 to 4.".into());
+                }
+                settings.set_legacy_gain(lane.gain);
+            } else if lane.polarity_inverted.is_none() {
+                return Err("Version 9 lanes require polarityInverted.".into());
+            }
+            tracks.push(settings);
             clips.extend(lane.placements.into_iter().map(|placement| Clip {
                 id: placement.id,
                 sample_id: placement.sample_id,
@@ -388,7 +415,7 @@ fn existing_creation_time(path: &Path) -> Option<String> {
     // without allocating its entire contents just to keep its creation time.
     let header: Header =
         serde_json::from_reader(std::io::BufReader::new(file.take(MAX_SONG_BYTES + 1))).ok()?;
-    (header.format_version == FORMAT_VERSION && text(&header.created_at))
+    (matches!(header.format_version, 8 | FORMAT_VERSION) && text(&header.created_at))
         .then_some(header.created_at)
 }
 
@@ -494,6 +521,7 @@ mod tests {
         };
         project.tracks[5] = Track {
             gain: 0.25,
+            polarity_inverted: true,
             pan: -0.5,
             left_enabled: false,
             right_enabled: true,
@@ -509,7 +537,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_8_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_9_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -517,12 +545,13 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 8);
+        assert_eq!(document["formatVersion"], 9);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(document["song"]["masterGain"], 0.5);
         assert_eq!(document["lanes"].as_array().unwrap().len(), 64);
         assert_eq!(document["lanes"][63]["placements"][0]["durationTicks"], 512);
         assert_eq!(document["lanes"][5]["leftEnabled"], false);
+        assert_eq!(document["lanes"][5]["polarityInverted"], true);
         assert_eq!(document["missingSamples"][1]["reference"]["nativeId"], 7);
         assert_eq!(
             document.as_object().unwrap().keys().collect::<Vec<_>>(),
@@ -559,6 +588,81 @@ mod tests {
         assert_eq!(resaved["createdAt"], "2020-01-02T03:04:05Z");
         assert_ne!(resaved["modifiedAt"], "2020-01-02T03:04:05Z");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn version_8_signed_lanes_migrate_and_save_as_9_without_losing_polarity() {
+        let root = std::env::temp_dir().join(format!("mixjam-polarity-v8-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("song.mixjam");
+        let mut expected = project();
+        expected.tracks[0].gain = 4.0;
+        expected.tracks[1].gain = 0.0;
+        expected.tracks[1].polarity_inverted = true;
+        expected.tracks[2].set_legacy_gain(-2.0 / 65536.0);
+        let mut legacy = serde_json::to_value(Document::new(
+            &expected,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        legacy["formatVersion"] = 8.into();
+        for (lane, track) in legacy["lanes"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .zip(&expected.tracks)
+        {
+            lane.as_object_mut().unwrap().remove("polarityInverted");
+            lane["gain"] = track.effective_gain().into();
+        }
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let (migrated, replaceable) = crate::mixjam::load_song(&path, &Library::empty()).unwrap();
+        assert!(replaceable);
+        assert_eq!(migrated, expected);
+        assert!(migrated.tracks[1].polarity_inverted);
+        save(&migrated, &path).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["formatVersion"], 9);
+        assert_eq!(saved["createdAt"], "2020-01-02T03:04:05Z");
+        assert_eq!(saved["lanes"][1]["gain"], 0.0);
+        assert_eq!(saved["lanes"][1]["polarityInverted"], true);
+        assert_eq!(
+            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            expected
+        );
+        legacy["lanes"][0]["gain"] = (-2.01).into();
+        assert!(parse(&serde_json::to_vec(&legacy).unwrap()).is_err());
+        legacy["lanes"][0]["gain"] = 1.0.into();
+        legacy["lanes"][0]["polarityInverted"] = false.into();
+        assert!(parse(&serde_json::to_vec(&legacy).unwrap()).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn version_9_requires_explicit_polarity_and_nonnegative_amplitude() {
+        let document =
+            serde_json::to_value(Document::new(&project(), timestamp(0), timestamp(0))).unwrap();
+        let mut changed = document.clone();
+        changed["lanes"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("polarityInverted");
+        assert!(
+            parse(&serde_json::to_vec(&changed).unwrap())
+                .unwrap_err()
+                .contains("polarityInverted")
+        );
+        for value in [serde_json::Value::Null, 0.into(), "false".into()] {
+            changed = document.clone();
+            changed["lanes"][0]["polarityInverted"] = value;
+            assert!(parse(&serde_json::to_vec(&changed).unwrap()).is_err());
+        }
+        for amplitude in [-0.5, 4.01] {
+            changed = document.clone();
+            changed["lanes"][0]["gain"] = amplitude.into();
+            assert!(parse(&serde_json::to_vec(&changed).unwrap()).is_err());
+        }
     }
 
     #[test]

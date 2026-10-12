@@ -8,6 +8,8 @@ use view::*;
 mod agent;
 #[path = "ui/effects.rs"]
 mod effects;
+#[path = "ui/mixer.rs"]
+mod mixer;
 #[path = "ui/step_synth.rs"]
 mod step_synth;
 #[path = "ui/stretch.rs"]
@@ -41,6 +43,36 @@ struct PaletteKey {
     group: Option<String>,
     product: Option<Product>,
     sort: PaletteSort,
+}
+
+/// Available modules in the shared bottom section. The selector owns navigation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum BottomModule {
+    #[default]
+    Sounds,
+    Mixer,
+}
+
+impl BottomModule {
+    const ALL: [Self; 2] = [Self::Sounds, Self::Mixer];
+    fn minimum_height(self) -> f32 {
+        match self {
+            Self::Sounds => 180.0,
+            Self::Mixer => 370.0,
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::Sounds => "Sounds",
+            Self::Mixer => "Mixer",
+        }
+    }
+    fn key(self) -> &'static str {
+        match self {
+            Self::Sounds => "sounds",
+            Self::Mixer => "mixer",
+        }
+    }
 }
 
 /// Palette order. Ties keep library order.
@@ -222,7 +254,7 @@ pub struct MixJamApp {
     palette_product: Option<Product>,
     palette_sort: PaletteSort,
     search: String,
-    show_mixer: bool,
+    bottom_module: BottomModule,
     show_help: bool,
     show_stretch_help: bool,
     show_effects_help: bool,
@@ -398,7 +430,11 @@ impl MixJamApp {
             palette_product: None,
             palette_sort: PaletteSort::default(),
             search: String::new(),
-            show_mixer: capture_view.starts_with("mixer"),
+            bottom_module: if capture_view.starts_with("mixer") {
+                BottomModule::Mixer
+            } else {
+                BottomModule::Sounds
+            },
             show_help: capture_view == "help",
             show_stretch_help: false,
             show_effects_help: false,
@@ -1221,8 +1257,10 @@ impl MixJamApp {
                 });
                 ui.separator();
                 ui.label("Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.");
-                ui.label("Gain: 0 is silence; +1 is unity (unchanged level). Negative gain inverts polarity; its magnitude controls level.");
-                ui.label("Click a gain value for exact entry, then Enter. Unity resets gain; Center resets pan. Master stays visible while tracks scroll.");
+                ui.label("Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB reduces level; it does not invert polarity.");
+                ui.label("Click a gain value for exact dB entry, then Enter. Enter -inf for silence. Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. Master stays visible while tracks scroll.");
+                ui.label("The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.");
+                ui.label("The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.");
                 ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.");
                 ui.separator();
                 ui.label(egui::RichText::new("Time Stretcher").strong());

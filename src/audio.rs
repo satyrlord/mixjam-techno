@@ -215,7 +215,7 @@ impl Mix {
             if !step.is_finite() || step <= 0.0 {
                 return Err("The source tempo cannot be represented for sample playback.".into());
             }
-            let gain = clip.gain * track.gain * project.master_gain;
+            let gain = clip.gain * track.effective_gain() * project.master_gain;
             // Pan and channel enables depend only on the track: resolve them once per clip.
             voices.push(Voice {
                 source: Arc::clone(source),
@@ -637,6 +637,61 @@ mod tests {
         assert!(rendered.samples.iter().all(|sample| *sample == 0.0));
         project.missing_samples.clear();
         assert!(render_with_samples(&project, &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn mixer_attenuation_and_polarity_are_independent_of_pan_and_routing() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].pan = 0.25;
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44100,
+                channels: 2,
+                samples: vec![0.125, -0.25, 0.25, -0.125],
+            },
+        )]);
+        for amplitude in [
+            0.0,
+            crate::engine::db_to_amplitude(-6.0),
+            1.0,
+            crate::engine::MAX_MIXER_GAIN,
+        ] {
+            project.tracks[0].gain = amplitude;
+            project.tracks[0].polarity_inverted = false;
+            let mut normal = [0.0; 4];
+            Frames::read(
+                &mix_with_samples(&project, &samples).unwrap(),
+                0,
+                &mut normal,
+            );
+            assert!((normal[0] - 0.125 * 0.5 * amplitude * 0.75).abs() < 1e-7);
+            assert!((normal[1] - -0.25 * 0.5 * amplitude).abs() < 1e-7);
+            project.tracks[0].polarity_inverted = true;
+            let mut reversed = [0.0; 4];
+            Frames::read(
+                &mix_with_samples(&project, &samples).unwrap(),
+                0,
+                &mut reversed,
+            );
+            for (normal, reversed) in normal.into_iter().zip(reversed) {
+                assert_eq!(reversed, -normal);
+            }
+            assert!(project.tracks[0].polarity_inverted);
+            assert_eq!(project.tracks[0].pan, 0.25);
+        }
+        project.tracks[0].gain = 1.0;
+        project.tracks[0].right_enabled = false;
+        let mut routed = [0.0; 4];
+        Frames::read(
+            &mix_with_samples(&project, &samples).unwrap(),
+            0,
+            &mut routed,
+        );
+        assert!(routed[0] < 0.0);
+        assert_eq!([routed[1], routed[3]], [0.0, 0.0]);
     }
 
     #[test]

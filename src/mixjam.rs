@@ -1,4 +1,4 @@
-//! `.mixjam` songs: the application's own format version 8 (`song`) and a
+//! `.mixjam` songs: the application's own format version 9 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
@@ -136,13 +136,13 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     load_song(path, library).map(|(project, _)| project)
 }
 
-/// Open a version 8 song or import a version 7 project. The flag is true for
+/// Open a version 8 or 9 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
     match header.format_version {
-        song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
+        8 | song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
         7 => {
             if bytes.len() > MAX_BYTES {
                 return Err("The MixJam project exceeds the 16 MiB limit.".into());
@@ -151,11 +151,11 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7 and 8 are supported.".into()),
+        _ => Err("Only MixJam format versions 7, 8, and 9 are supported.".into()),
     }
 }
 
-/// Write the song as a format version 8 document.
+/// Write the song as a format version 9 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -308,6 +308,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
         let audible = if solo { lane.solo } else { !lane.muted };
         project.tracks[track] = Track {
             gain: lane.gain,
+            polarity_inverted: false,
             pan: lane.pan,
             left_enabled: audible,
             right_enabled: audible,

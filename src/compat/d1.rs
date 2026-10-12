@@ -534,16 +534,15 @@ fn resolve_path(
     library: &Library,
 ) -> Result<(PathBuf, Vec<PathBuf>), String> {
     let path = reference_path(text, base)?;
-    let (path, candidates) = match crate::preservation::resolve_asset(&path) {
-        Ok(found) if found.is_file() => (found, Vec::new()),
-        _ => {
-            let candidates = library.find_wav_candidates(text)?;
-            let path = candidates
-                .first()
-                .cloned()
-                .ok_or_else(|| format!("WAV sample {text} is missing from the selected folder."))?;
-            (path, candidates)
-        }
+    let (path, candidates) = if path.is_file() {
+        (path, Vec::new())
+    } else {
+        let candidates = library.find_wav_candidates(text)?;
+        let path = candidates
+            .first()
+            .cloned()
+            .ok_or_else(|| format!("WAV sample {text} is missing from the selected folder."))?;
+        (path, candidates)
     };
     fs::canonicalize(path)
         .map(|path| (path, candidates))

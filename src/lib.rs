@@ -10,7 +10,6 @@ pub mod legacy_mix;
 pub mod library;
 pub mod mixjam;
 pub mod packed;
-pub mod preservation;
 pub mod products;
 pub mod project_io;
 pub mod recording;

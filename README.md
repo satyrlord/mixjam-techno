@@ -7,7 +7,9 @@ opens MixJam v7 `.mixjam` projects and several classic `.mix` song formats.
 The interface uses a dark graphite workspace, bundled Syncopate in uppercase
 for branding and titles, and Inter Medium for all other application text.
 Transport sits above the arrangement. Sounds and Mixer share the lower panel;
-sample categories, search, and library filters stay together.
+use its left-side module selector to switch between them. Sample categories,
+search, and library filters stay together in Sounds; search and filters sit
+beside the selector.
 The title branding, window, taskbar, and Windows executable use the tribal mask.
 See [the icon assets](assets/app/README.md) for source and regeneration details.
 
@@ -62,12 +64,19 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
 - Drag the divider above Sounds or Mixer to give that panel more or less room.
+- Select Sounds or Mixer from the fixed module menu at the lower panel's left.
+  The panel retains its resized height; opening Mixer raises a shorter panel
+  to fit its controls. The Mixer tool-rail shortcut opens Mixer.
 - Use Mixer for track gain, pan, L/R routing, and master volume.
   Master stays visible while you scroll through tracks. Each strip shows its
   track number and the sound names on that track.
-  Gain is a signed multiplier: 0 is silence, +1 is unity, and negative values
-  reverse polarity. Edit the gain value for an exact setting, or select Unity
-  to reset it. Pan shows left, center, or right; select Center to reset it.
+  Gain runs from -inf dB (silence) to +12 dB; 0 dB is unity. Negative dB
+  attenuates the signal. The rail gives more space to useful mixing levels.
+  Click the gain value for exact dB entry, or select the small Unity button
+  at the rail's 0 dB mark. Pan shows left, center, or right; its small Center
+  button resets pan at the rail midpoint. The slashed-circle button reverses
+  both channels' polarity without changing gain or pan. Amber means inverted;
+  the polarity setting remains independent even at silence.
   L and R enable each output. Both off shows Muted.
   The lane and mixer L/R controls mirror each other. Changing these controls
   does not change pan.
@@ -79,7 +88,9 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   count-in. Stop and save the take as a WAV file.
 - Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-A `.mixjam` song is JSON, format version 8. It links to WAV files; it is not a
+A `.mixjam` song is JSON, format version 9. Earlier format-8 songs open and
+migrate with their effective gain and polarity preserved. Saving them writes
+version 9, which earlier builds cannot open. A song links to WAV files; it is not a
 portable audio bundle. After moving the sample folder, select its new location
 before opening the song.
 
@@ -177,7 +188,7 @@ The major of the package version must equal `APP_MAJOR_VERSION`.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
-Mixer cases cover ordinary, 64-track, empty, and signed-gain/routing states.
+Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states.
 The capture set also covers every in-app dialog and tool window, expanded effects
 and provider settings, and missing-source processing states. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.

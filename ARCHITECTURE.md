@@ -31,6 +31,15 @@ of each other form one history entry, so a slider drag is one undo step. Saving
 ends that group, so undo can return to the saved state after the next edit. A clip
 cannot be lengthened over the next clip on its track.
 
+Track gain is a nonnegative amplitude and polarity is a separate persistent
+boolean. Playback and export use `Track::effective_gain()` to apply the sign.
+The Mixer presents `20 * log10(amplitude)` dB; zero amplitude is negative
+infinity. Track and Master model admission is 0 through 4, while new
+Mixer edits normally stop at +12 dB (about 3.9811 amplitude). Earlier exact
+track values of 4 survive load and focus. Clip gain remains 0 through 2.
+Changing polarity ends a gain or pan gesture and creates a discrete undo
+step. Silence retains polarity; Unity changes only amplitude.
+
 Project copies share one imported-sample list until an edit changes it, so a
 history entry or render request costs the same for any palette size.
 
@@ -94,6 +103,32 @@ and a revision identify whether that tool's audition is still playing; a later
 preview, transport change, or stop cannot inherit its active indicator.
 Save completion updates the local feedback and the selected output's source
 tempo; cancelling a file choice does not report success.
+
+`src/ui/mixer.rs` owns Mixer's compact graphite and ivory hardware presentation.
+Each strip is 108 logical points wide. Master remains outside the horizontally
+scrolling occupied-track bank. Native controls paint live labels, dB values,
+rail marks, pan, routing, polarity, focus, and hover. Gain uses a piecewise dB
+taper with 72% of travel between -24 and +12 dB; the bottom section maps linear
+amplitude to exact silence. Unity sits at 0 dB on the gain rail. Center aligns
+with the pan midpoint just below its rail. Polarity has a separate
+slashed-circle button. Control-specific tooltips and the Help window carry
+detailed guidance.
+Prepared material tiles and fader caps live in `assets/mixer/{100,150,200}/`.
+The fader is first reduced to a 48 by 64-pixel canonical grid, then prepared
+at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
+to one physical pixel, with no texture resizing. The empty bank gives one
+instruction and leaves Master available.
+
+The frontend's `BottomModule` enum selects Sounds or Mixer. `src/ui/view.rs`
+owns their shared 28-point header and fixed left-side `Bottom module` combo.
+Its width is 136 points and the selected module uses 16-point bold Syncopate.
+The combo keeps its control ID and horizontal anchor across module changes.
+Sounds filters render inline to its right. Each module renders only its body
+below that header. The Mixer tool-rail shortcut selects Mixer rather than
+toggling between modules. Selection and shared panel height are frontend
+session state. Switching preserves resized height; opening Mixer raises a
+shorter panel to its 370-point minimum. Sounds retains its 180-point minimum.
+Later modules can extend the enum and the same selector.
 
 `src/ui/effects.rs` owns Effect Studio's compact red hardware presentation and
 native input responses. Prepared expanded, collapsed, switch, and 32-point knob
@@ -209,8 +244,9 @@ chosen one, including the file extension that a save dialog adds.
 A control is usable by an agent, and by a screen reader, only when it has an
 accessible name. Give a new control visible label text, `widget_info`, or
 `name_control`. Keep each name unique among the controls that can be on screen
-together: the Sounds panel names its buttons `Show Mixer` and
-`Show Step synth sounds` because the tool rail has `Mixer` and `Step synth`. Add a control that is painted on a shared surface to the
+together: the shared panel names its combo `Bottom module`, while the tool
+rail has a `Mixer` shortcut. Sound-library filters keep their own names.
+Add a control that is painted on a shared surface to the
 arrangement requests instead.
 
 ## Safe frontend iteration
@@ -218,7 +254,7 @@ arrangement requests instead.
 Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
 Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs` and
 Effect Studio's in `src/ui/effects.rs`, and Step synth's in
-`src/ui/step_synth.rs`. Keep tool
+`src/ui/step_synth.rs`. Keep Mixer presentation in `src/ui/mixer.rs`. Keep tool
 input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.
@@ -249,7 +285,8 @@ Run `python tools/assets/check-raster-assets.py` after asset or source changes.
 isolated settings. These captures need visual inspection. They do not test
 physical audio, native file-picker interaction, high DPI, or screen readers.
 Mixer capture cases include a full 64-track bank, an empty arrangement, and
-negative/zero/unity gain, pan, and output-routing states. Native egui tests check
+attenuation/silence/unity gain, independent polarity, pan, and output-routing
+states. Native egui tests check
 control input and emitted accessibility semantics. They do not replace a screen
 reader check of the built executable.
 

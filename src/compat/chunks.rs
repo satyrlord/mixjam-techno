@@ -143,11 +143,12 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
         if product == Product::T2 && gain > 32767 {
             return Err("The native track volume exceeds its supported range.".into());
         }
-        track.gain = match product {
+        let signed_gain = match product {
             Product::T3 | Product::D3 | Product::D4 | Product::H1 => native_fader_gain(gain, 1.33),
             Product::D2 => native_fader_gain(gain, 1.25),
             _ => f32::from(gain) / 32767.0,
         };
+        track.set_legacy_gain(signed_gain);
         if track_bytes == 4 {
             if control > 3 {
                 return Err("The native track has invalid output routing.".into());
@@ -742,9 +743,10 @@ fn source_wave<'a>(
             sample_rate: first.sample_rate,
         });
     }
-    let file = match crate::preservation::resolve_asset(Path::new(path)) {
-        Ok(file) if file.is_file() => file,
-        _ => library.resolve_wav_reference(path)?,
+    let file = if Path::new(path).is_file() {
+        PathBuf::from(path)
+    } else {
+        library.resolve_wav_reference(path)?
     };
     if !file.is_file() {
         return Err(format!(
@@ -896,10 +898,8 @@ fn d2_source_wave<'a>(
     if !normalized.ends_with(".pxd") {
         return source_wave(path, &[], library);
     }
-    if let Ok(file) = crate::preservation::resolve_asset(Path::new(path))
-        && file.is_file()
-    {
-        return packed_wave(path, &read_external_wave(&file)?);
+    if Path::new(path).is_file() {
+        return packed_wave(path, &read_external_wave(Path::new(path))?);
     }
     // Older standalone PXD references retain the catalog's relative folder/code.
     // Resolve that identity from selected providers; never use an arbitrary basename.
@@ -1206,8 +1206,7 @@ pub(crate) fn build_project(
                             .any(|source| normalize_saved_path(&source.source_path) == key.path);
                     let candidates = if !has_embedded
                         && !source_path.to_lowercase().ends_with(".pxd")
-                        && !crate::preservation::resolve_asset(Path::new(&source_path))
-                            .is_ok_and(|path| path.is_file())
+                        && !Path::new(&source_path).is_file()
                     {
                         library
                             .find_wav_candidates(&source_path)
@@ -1893,10 +1892,10 @@ mod tests {
                 assert_eq!(track.gain, native_fader_gain(25200, 1.33));
             }
             bytes[start + 2..start + 4].copy_from_slice(&u16::MAX.to_le_bytes());
-            assert_eq!(
-                read_header(&bytes, product).unwrap().tracks[0].gain,
-                -2.0 / 65536.0
-            );
+            let track = &read_header(&bytes, product).unwrap().tracks[0];
+            assert!(track.polarity_inverted);
+            assert_eq!(track.gain, 2.0 / 65536.0);
+            assert_eq!(track.effective_gain(), -2.0 / 65536.0);
             bytes[start..start + 2].copy_from_slice(&256u16.to_le_bytes());
             assert!(read_header(&bytes, product).is_err());
         }

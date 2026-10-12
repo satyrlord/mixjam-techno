@@ -226,13 +226,6 @@ impl Library {
         }
     }
 
-    pub fn open(root: &Path) -> Result<Self, String> {
-        Self::open_with_samples(
-            root,
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("samples"),
-        )
-    }
-
     pub fn open_with_samples(root: &Path, samples_root: &Path) -> Result<Self, String> {
         Self::open_archive(Product::T2, root, samples_root, "\x72ave20", 140.0)
     }
@@ -2967,7 +2960,7 @@ mod tests {
     fn standalone_local_wave_corpus_has_native_aliases_without_original_providers() {
         let root = std::env::var_os("MIXJAM_TECHNO_WAV_CORPUS")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("samples"));
+            .expect("Set MIXJAM_TECHNO_WAV_CORPUS");
         let started = std::time::Instant::now();
         let library = Library::open_wav_folder(&root, 140.0).unwrap();
         assert!(library.archive_path.as_os_str().is_empty());

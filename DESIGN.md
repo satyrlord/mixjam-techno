@@ -46,6 +46,12 @@ colors:
   step-edge: "#5b634b"
   step-amber: "#f5c156"
   step-error: "#ffa78f"
+  mixer-ink: "#1c1d1a"
+  mixer-cream: "#f5e8cd"
+  mixer-metal: "#c9c2af"
+  mixer-edge: "#6c6a61"
+  mixer-face: "#1d2122"
+  mixer-amber: "#f5c156"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -87,6 +93,11 @@ typography:
     fontFamily: "Inter"
     fontSize: "10px"
     fontWeight: 500
+  bottom-module:
+    fontFamily: "Syncopate"
+    textTransform: "uppercase"
+    fontSize: "16px"
+    fontWeight: 700
   stretch-title:
     fontFamily: "Syncopate"
     textTransform: "uppercase"
@@ -121,6 +132,8 @@ rounded:
   step-control: "4px"
   step-switch: "8px"
   step-switch-on: "6px"
+  mixer-control: "2px"
+  mixer-strip: "3px"
 spacing:
   item-horizontal: "8px"
   item-vertical: "6px"
@@ -167,6 +180,10 @@ components:
     rounded: "{rounded.control}"
     width: "48px"
     height: "30px"
+  bottom-module:
+    typography: "{typography.bottom-module}"
+    width: "136px"
+    height: "28px"
   stretch-panel:
     width: "640px"
     height: "320px"
@@ -235,6 +252,38 @@ components:
     rounded: "{rounded.step-switch-on}"
     width: "22px"
     height: "12px"
+  mixer-strip:
+    backgroundColor: "{colors.mixer-metal}"
+    textColor: "{colors.mixer-ink}"
+    rounded: "{rounded.mixer-strip}"
+    width: "108px"
+  mixer-fader:
+    width: "24px"
+    height: "32px"
+  mixer-value:
+    backgroundColor: "{colors.mixer-face}"
+    textColor: "{colors.mixer-cream}"
+    rounded: "{rounded.mixer-strip}"
+    width: "92px"
+    height: "22px"
+  mixer-unity:
+    backgroundColor: "{colors.mixer-face}"
+    textColor: "{colors.mixer-cream}"
+    rounded: "{rounded.mixer-control}"
+    width: "44px"
+    height: "16px"
+  mixer-center:
+    backgroundColor: "{colors.mixer-face}"
+    textColor: "{colors.mixer-cream}"
+    rounded: "{rounded.mixer-control}"
+    width: "40px"
+    height: "14px"
+  mixer-polarity:
+    backgroundColor: "{colors.mixer-face}"
+    textColor: "{colors.mixer-cream}"
+    rounded: "{rounded.mixer-control}"
+    width: "26px"
+    height: "24px"
 ---
 
 # Design System: MixJam Techno
@@ -250,13 +299,16 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
-Time Stretcher, Effect Studio, and Step synth are the owner's scoped exceptions.
+Time Stretcher, Effect Studio, Step synth, and Mixer are the owner's scoped
+exceptions.
 Time Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
 controls, and lamped Listen and Save buttons. Effect Studio uses a compact red
 metal landscape panel with small rotary controls, chrome section switches,
 green section lamps, and black and ivory action buttons. Step synth uses olive
 textured metal, a charcoal bezel, cream labels, amber switches, and coral
-selected notes. These treatments do not change the shared studio theme.
+selected notes. Mixer uses graphite material, narrow ivory strips, small black
+faders, native dark value wells, and an amber polarity state. These treatments
+do not change the shared studio theme.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -269,8 +321,9 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 
 The implementation is native Windows Rust with eframe/egui. Tokens and painting
 live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`,
-Effect Studio in `src/ui/effects.rs`, and Step synth in `src/ui/step_synth.rs`;
-native dialogs and input adapters live in `src/ui.rs`. Application
+Effect Studio in `src/ui/effects.rs`, Step synth in `src/ui/step_synth.rs`, and
+Mixer in `src/ui/mixer.rs`. Native dialogs and input adapters live in
+`src/ui.rs`. Application
 state and behavior live in `src/application.rs`. Sizes here use portable `px`
 labels for egui logical points. The sidecar records native component metadata;
 it does not define browser components or application behavior.
@@ -325,6 +378,12 @@ switches and the viewed bar; shared Coral marks selected notes. Step Error
 marks local errors and outlines selected cells. Olive metal comes from the
 prepared background; these tokens are local to Step synth.
 
+Mixer Metal and Mixer Ink support the ivory strips and their dark live text.
+Mixer Cream supplies dark-control lettering. Mixer Face and Edge define native
+value wells, buttons, and strip borders. Mixer Amber marks inverted polarity;
+the named checked state remains available. The graphite surround and fine
+ivory grain come from prepared material tiles. These tokens are local to Mixer.
+
 ## Typography
 
 The native build embeds Syncopate Bold 700 for branding and titles, and
@@ -344,7 +403,8 @@ missing glyphs. Keep Syncopate's Apache 2.0 license, Inter's OFL license, and
 provenance with the application; see `assets/fonts/README.md`.
 
 Display is the MixJam name. Headline is the standard native heading. Section
-labels identify Arrangement, Sounds, and Mixer. Title names the project. Body
+labels identify Arrangement. Bottom Module supplies the shared Sounds/Mixer
+selector's 16-point Syncopate text. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
 use Inter Medium 500. Track labels and numeric controls also use Inter. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
@@ -383,14 +443,24 @@ arrangement. A fixed 64-point tool rail sits at the right. The bottom Sounds/Mix
 panel starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
-310 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
-The maximum height leaves 220 points for the arrangement plus 68 points for
-transport. Status
+370 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
+When space permits, the maximum panel height leaves 220 points for the
+arrangement plus 68 points for transport. At the minimum client height,
+Mixer's minimum can reduce that arrangement reserve. Status
 occupies 30 points below it. Its application version, prefixed with `v`, stays at the right inner
 margin, with space reserved before status text is truncated. Use 12-point Inter
 Medium and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
-Sounds and Mixer share this panel size.
+Sounds and Mixer share this panel size. Switching modules preserves the resized
+height; opening Mixer first raises a panel below its 370-point minimum.
+
+A single Bottom module selector occupies the fixed left slot in the lower
+panel's 28-point header row. Its width is 136 points and its selected module
+uses 16-point bold Syncopate. The selector keeps the same horizontal anchor
+and control identity for Sounds and Mixer. Sound search and filters occupy
+the rest of this row when Sounds is selected. Module names appear in this
+selector; the module bodies start below it. The tool rail's Mixer shortcut
+opens Mixer, including when Mixer is already selected.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. Original track numbers remain stable. Rows are
@@ -414,11 +484,13 @@ menu orders the filtered sounds by library order, name, length, BPM, or
 category; it is view state for the current session.
 
 Mixer strips appear only for occupied tracks. Track and Master strips are
-124 points wide. Master stays outside the horizontal track scroller, whose
-scrollbar remains visible. Track numbers, sound summaries, signed gain values,
-pan descriptions, and output state stay grouped within each strip. A track with
+108 points wide at the supported prepared scales. Master stays outside the
+horizontal track scroller, whose scrollbar remains visible. Track numbers,
+sound summaries, dB gain values, pan descriptions, and output state stay
+grouped within each strip. A track with
 several distinct sounds shows their count and lists their names on hover.
-Faders are at least 74 points high at the minimum window size.
+Gain rails retain at least 112 logical points of travel at the minimum window
+size. Narrow strips preserve visible tracks without enlarging every control.
 
 Sample libraries constrains its floating window to the viewport and scrolls
 vertically. A large expanded Folder tempos list must leave the provider
@@ -460,9 +532,9 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 Flat color layers and thin borders separate controls from the work area. The
 shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
 scale. Shared floating windows use the default shadow from the pinned egui dark theme.
-Time Stretcher, Effect Studio, and Step synth use textured metal and bezel
-depth from their prepared PNG skins. Time Stretcher and Effect Studio also
-use prepared hardware controls. Step synth paints its fields, buttons, grid,
+Time Stretcher, Effect Studio, Step synth, and Mixer use textured metal and bezel
+depth from their prepared PNG skins. Time Stretcher, Effect Studio, and Mixer
+also use prepared hardware controls. Step synth paints its fields, buttons, grid,
 and simple pill switches natively. Hover, focus, pressed, and
 disabled feedback remains native painting over each skin.
 Hover and focus states change immediately. The application has no motion tokens.
@@ -531,16 +603,41 @@ waveform. A selected clip can show a gain line; it is a control indicator.
 
 ### Mixer and tool windows
 
-Mixer shares the graphite shell and type hierarchy. Track identity and gain lead
-the hierarchy; L/R routing uses compact checkboxes with a check mark and named
-enabled state. Both outputs off shows Muted. Gain is a signed multiplier with
-values rounded to one decimal place, silence and unity marks, an exact-entry
-field, and a Unity reset. Both track and Master values use this format, including
-gain tooltips. Only the active entry field shows full precision. Display rounding
-and focus without an edit must not change the saved gain or audio.
-Negative values show Inverted. The header and Help explain polarity inversion.
-Pan has a readable left/center/right value and a Center reset. Every control has
-a track-specific accessible name; Master has its own gain labels.
+Mixer uses compact ivory strips against a graphite material surround. Track
+identity and gain lead the hierarchy. L/R routing uses small named toggle
+buttons with live enabled indicators; both off shows Muted. Gain runs from
+negative infinity (silence) to +12 dB with 0 dB at unity. Negative dB attenuates
+the signal. Values round to one decimal place at rest; the active entry field
+shows full precision. Focus without an edit must not change saved amplitude
+or audio. Relative increases must leave silence and raise very quiet positive
+gains. A saved gain below -96 dB must not become silent when increased.
+Master uses the same dB presentation and remains outside the scroller.
+
+The rail uses a piecewise dB taper. From bottom to top, its normalized knots
+are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
+0.46, unity at 0.70, and +12 dB at 1. The bottom segment maps linear amplitude
+to exact zero; the remaining segments interpolate in dB. Thus 72% of travel
+serves -24 through +12 dB. The scale marks useful values without spreading
+very quiet settings over most of the rail. These knots record the current
+implementation, not a universal DAW taper.
+
+The small Unity button sits at the 0 dB gain mark. The small Center button
+resets pan at its rail midpoint. A separate slashed-circle button reverses
+both channels' polarity. Amber means inverted and its checked state is named.
+Polarity stays independent of gain and pan, even at silence; Unity leaves it
+unchanged. Pan retains a readable left/center/right value. Every control has
+a track-specific accessible name; Master has its own gain labels. The header
+uses the shared Bottom module selector. Control-specific tooltips and the Help
+window explain silence, unity, attenuation, and independent polarity.
+
+`src/ui/mixer.rs` paints prepared ivory and graphite tiles and a separate
+24 by 32-point fader cap. Nine PNGs cover 100%, 150%, and 200% density. The tiny
+cap is first reduced to a 48 by 64-pixel canonical grid before preparing the
+lower densities, preserving broad ridges and its ivory indicator stripe. All
+text, values, rails, ticks, reset buttons, polarity, routing, focus, and hover
+remain native. Select the nearest density and paint one texel per physical
+pixel with aligned bounds; tile materials without runtime texture resizing.
+See `assets/mixer/README.md` for exact prompts, source hashes, and reproduction.
 Arrangement and mixer L/R labels use Accent when enabled and Muted when off.
 Both expose the same checked state and a track-specific on/off tooltip. Lane
 controls show keyboard focus. A lane edit requests a repaint so the already
@@ -778,8 +875,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Keep metal hardware treatments scoped to Time Stretcher, Effect Studio, and
-  Step synth. Do not add repeated waveform traces.
+- Keep metal hardware treatments scoped to Time Stretcher, Effect Studio,
+  Step synth, and Mixer. Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

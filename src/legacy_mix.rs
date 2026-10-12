@@ -53,6 +53,7 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
         }
         tracks.push(Track {
             gain: volume as f32 / 32767.0,
+            polarity_inverted: false,
             pan: 0.0,
             left_enabled: matches!(routing, 0 | 1),
             right_enabled: matches!(routing, 0 | 2),
@@ -673,7 +674,9 @@ mod tests {
     fn all_eleven_installed_demos_decode_without_missing_ids() {
         let root =
             crate::project_io::default_root(crate::products::Product::T2).expect("T2 fixtures");
-        let library = Library::open(&root).unwrap();
+        let library =
+            Library::open_with_samples(&root, &crate::project_io::reference_samples_root())
+                .unwrap();
         let expected = [
             ("clouds", 577),
             ("edge", 302),

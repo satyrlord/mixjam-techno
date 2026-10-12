@@ -336,16 +336,15 @@ fn resolve_import_path(
 ) -> Result<(PathBuf, Vec<PathBuf>), String> {
     let path = import_reference_path(raw, base)?;
     let reference = crate::library::decode_1252(&raw.0).replace('\\', "/");
-    match crate::preservation::resolve_asset(&path) {
-        Ok(found) if found.is_file() => Ok((found, Vec::new())),
-        _ => {
-            let candidates = library.find_wav_candidates(&reference)?;
-            let path = candidates.first().cloned().ok_or_else(|| {
-                format!("WAV sample {reference} is missing from the selected folder.")
-            })?;
-            Ok((path, candidates))
-        }
+    if path.is_file() {
+        return Ok((path, Vec::new()));
     }
+    let candidates = library.find_wav_candidates(&reference)?;
+    let path = candidates
+        .first()
+        .cloned()
+        .ok_or_else(|| format!("WAV sample {reference} is missing from the selected folder."))?;
+    Ok((path, candidates))
 }
 
 fn read_bounded(path: &Path, limit: usize, kind: &str) -> Result<Vec<u8>, String> {

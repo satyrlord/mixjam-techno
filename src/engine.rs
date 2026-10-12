@@ -6,18 +6,31 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const PROJECT_SCHEMA_VERSION: u32 = 3;
+pub const PROJECT_SCHEMA_VERSION: u32 = 4;
 pub const TRACK_COUNT: usize = 64;
 pub const SUPPORTED_BPMS: [f64; 4] = [120.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
 pub const SOURCE_BPM: f64 = 140.0;
 pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
 const MAX_PROJECT_BYTES: usize = 16 * 1024 * 1024;
+pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
+pub const MAX_MIXER_GAIN: f32 = 3.981_071_7;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Convert a nonnegative amplitude multiplier to decibels. Zero is silence.
+pub fn amplitude_to_db(amplitude: f32) -> f32 {
+    (20.0 * f64::from(amplitude).log10()) as f32
+}
+
+/// Convert decibels to a nonnegative amplitude multiplier. Negative infinity is silence.
+pub fn db_to_amplitude(db: f32) -> f32 {
+    10.0_f64.powf(f64::from(db) / 20.0) as f32
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Track {
+    /// Nonnegative amplitude. Polarity is independent, including at silence.
     pub gain: f32,
-    #[serde(default)]
+    pub polarity_inverted: bool,
     pub pan: f32,
     pub left_enabled: bool,
     pub right_enabled: bool,
@@ -26,11 +39,66 @@ impl Default for Track {
     fn default() -> Self {
         Self {
             gain: 1.0,
+            polarity_inverted: false,
             pan: 0.0,
             left_enabled: true,
             right_enabled: true,
         }
     }
+}
+
+impl Track {
+    pub fn effective_gain(&self) -> f32 {
+        if self.polarity_inverted {
+            -self.gain
+        } else {
+            self.gain
+        }
+    }
+
+    /// Preserve the effective amplitude of an older signed gain, including -0.0.
+    pub fn set_legacy_gain(&mut self, signed: f32) {
+        self.gain = signed.abs();
+        self.polarity_inverted = signed.is_sign_negative();
+    }
+}
+
+impl<'de> Deserialize<'de> for Track {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct SavedTrack {
+            gain: f32,
+            #[serde(default, deserialize_with = "optional_polarity")]
+            polarity_inverted: Option<bool>,
+            #[serde(default)]
+            pan: f32,
+            left_enabled: bool,
+            right_enabled: bool,
+        }
+        let saved = SavedTrack::deserialize(deserializer)?;
+        let mut track = Self {
+            gain: saved.gain,
+            polarity_inverted: saved.polarity_inverted.unwrap_or(false),
+            pan: saved.pan,
+            left_enabled: saved.left_enabled,
+            right_enabled: saved.right_enabled,
+        };
+        if saved.polarity_inverted.is_none() {
+            if !saved.gain.is_finite() || !(-2.0..=4.0).contains(&saved.gain) {
+                return Err(serde::de::Error::custom(
+                    "Legacy track gain must be from -2 to 4.",
+                ));
+            }
+            track.set_legacy_gain(saved.gain);
+        }
+        Ok(track)
+    }
+}
+
+pub(crate) fn optional_polarity<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<bool>, D::Error> {
+    bool::deserialize(deserializer).map(Some)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -431,15 +499,15 @@ impl Project {
         }) {
             return Err("Each product needs one library binding with a nonempty root.".into());
         }
-        if !valid_gain(self.master_gain) {
-            return Err("Master volume must be from 0 to 2.".into());
+        if !valid_mixer_gain(self.master_gain) {
+            return Err("Master amplitude must be from 0 to 4.".into());
         }
         if self
             .tracks
             .iter()
-            .any(|track| !track.gain.is_finite() || !(-2.0..=4.0).contains(&track.gain))
+            .any(|track| !valid_mixer_gain(track.gain))
         {
-            return Err("Track gain must be from -2 to 4.".into());
+            return Err("Track amplitude must be from 0 to 4.".into());
         }
         if self
             .tracks
@@ -560,12 +628,15 @@ impl Project {
             return Err("The project file is too large.".into());
         }
         let project: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        if matches!(project.schema_version, 0..=3) && !valid_gain(project.master_gain) {
+            return Err("Legacy master amplitude must be from 0 to 2.".into());
+        }
         match project.schema_version {
             PROJECT_SCHEMA_VERSION => {
                 project.validate()?;
                 Ok(project)
             }
-            2 => {
+            2 | 3 => {
                 let mut migrated = project;
                 migrated.schema_version = PROJECT_SCHEMA_VERSION;
                 migrated.validate()?;
@@ -658,6 +729,12 @@ pub fn normalize_import(mut project: Project) -> Result<Project, String> {
 
 fn valid_gain(g: f32) -> bool {
     g.is_finite() && (0.0..=2.0).contains(&g)
+}
+
+fn valid_mixer_gain(g: f32) -> bool {
+    // Earlier tracks could reach exactly 4.0 (+12.041 dB). Retain that value
+    // when reopening a song; ordinary mixer controls stop at +12 dB.
+    g.is_finite() && (0.0..=4.0).contains(&g)
 }
 
 pub struct Editor {
@@ -953,9 +1030,71 @@ mod tests {
     }
 
     #[test]
+    fn mixer_decibels_use_amplitude_and_keep_legacy_headroom() {
+        assert_eq!(amplitude_to_db(0.0), f32::NEG_INFINITY);
+        assert_eq!(db_to_amplitude(f32::NEG_INFINITY), 0.0);
+        assert_eq!(amplitude_to_db(1.0), 0.0);
+        assert_eq!(db_to_amplitude(0.0), 1.0);
+        assert!((db_to_amplitude(-6.0) - 0.501_187_2).abs() < 1e-6);
+        assert!((amplitude_to_db(0.5) + 6.020_6).abs() < 1e-5);
+        assert_eq!(db_to_amplitude(MAX_MIXER_GAIN_DB), MAX_MIXER_GAIN);
+        for db in [-90.0, -60.0, -24.0, -12.0, -3.0, 0.0, 6.0, 12.0] {
+            assert!((amplitude_to_db(db_to_amplitude(db)) - db).abs() < 1e-5);
+        }
+        let mut project = Project::default();
+        project.tracks[0].gain = 4.0;
+        project.tracks[0].polarity_inverted = true;
+        project.master_gain = MAX_MIXER_GAIN;
+        project.validate().unwrap();
+        assert!(amplitude_to_db(project.tracks[0].gain) > MAX_MIXER_GAIN_DB);
+        project.tracks[0].gain = -0.5;
+        assert!(project.validate().is_err());
+        project.tracks[0].gain = 4.01;
+        assert!(project.validate().is_err());
+        project.tracks[0].gain = 0.0;
+        project.master_gain = 4.01;
+        assert!(project.validate().is_err());
+    }
+
+    #[test]
+    fn signed_legacy_json_migrates_polarity_in_all_earlier_schemas() {
+        for (schema, slots) in [(0, 16), (1, 32), (2, 64), (3, 64)] {
+            let mut value = serde_json::to_value(Project::default()).unwrap();
+            if schema == 0 {
+                value.as_object_mut().unwrap().remove("schema_version");
+            } else {
+                value["schema_version"] = schema.into();
+            }
+            value["tracks"].as_array_mut().unwrap().truncate(slots);
+            for track in value["tracks"].as_array_mut().unwrap() {
+                track.as_object_mut().unwrap().remove("polarity_inverted");
+            }
+            value["tracks"][0]["gain"] = (-0.7533).into();
+            value["tracks"][1]["gain"] = (-0.0_f32).into();
+            value["tracks"][2]["gain"] = 4.0.into();
+            let migrated = Project::parse_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+            assert_eq!(migrated.schema_version, PROJECT_SCHEMA_VERSION);
+            assert_eq!(migrated.tracks[0].gain, 0.7533);
+            assert!(migrated.tracks[0].polarity_inverted);
+            assert_eq!(migrated.tracks[0].effective_gain(), -0.7533);
+            assert_eq!(migrated.tracks[1].gain, 0.0);
+            assert!(migrated.tracks[1].polarity_inverted);
+            assert!(migrated.tracks[1].effective_gain().is_sign_negative());
+            assert_eq!(migrated.tracks[2].gain, 4.0);
+            assert!(!migrated.tracks[2].polarity_inverted);
+            assert_eq!(
+                Project::parse_json(&serde_json::to_vec(&migrated).unwrap()).unwrap(),
+                migrated
+            );
+            value["tracks"][0]["gain"] = (-2.01).into();
+            assert!(Project::parse_json(&serde_json::to_vec(&value).unwrap()).is_err());
+        }
+    }
+
+    #[test]
     fn paired_native_labels_and_signed_track_levels_survive_json() {
         let mut project = Project::default();
-        project.tracks[31].gain = -2.0 / 65536.0;
+        project.tracks[31].set_legacy_gain(-2.0 / 65536.0);
         project.tracks[0].gain = 2.352_630_6;
         project.imported_samples.push(ImportedSample {
             id: 1_000_000,
@@ -1007,6 +1146,7 @@ mod tests {
             project.tracks[0] = Track {
                 pan: 0.0,
                 gain: 0.3,
+                polarity_inverted: false,
                 left_enabled: false,
                 right_enabled: true,
             };

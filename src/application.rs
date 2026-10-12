@@ -4,8 +4,9 @@ pub use crate::{
     audio::Pcm,
     effects::EffectsState,
     engine::{
-        Clip, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
-        TICKS_PER_BAR, TRACK_COUNT, Track,
+        Clip, MAX_MIXER_GAIN, MAX_MIXER_GAIN_DB, MissingReference, MissingSample, Project,
+        SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db,
+        db_to_amplitude,
     },
     library::Sample,
     products::Product,
@@ -319,7 +320,8 @@ impl Gesture {
             } if tracks.len() == project.tracks.len() => {
                 let mut controls = Vec::new();
                 for (index, (old, new)) in project.tracks.iter().zip(tracks).enumerate() {
-                    if old.left_enabled != new.left_enabled
+                    if old.polarity_inverted != new.polarity_inverted
+                        || old.left_enabled != new.left_enabled
                         || old.right_enabled != new.right_enabled
                     {
                         return None;
@@ -2996,6 +2998,41 @@ mod boundary_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
+    fn polarity_at_silence_is_an_independent_undo_step_between_gain_gestures() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let change = |session: &mut Session, gain, polarity_inverted| {
+            let mut tracks = session.project().tracks.clone();
+            tracks[3].gain = gain;
+            tracks[3].polarity_inverted = polarity_inverted;
+            session
+                .edit(EditCommand::SetMixer {
+                    tracks,
+                    master_gain: session.project().master_gain,
+                })
+                .unwrap();
+        };
+        change(&mut session, 0.5, false);
+        change(&mut session, 0.0, false);
+        change(&mut session, 0.0, true);
+        change(&mut session, 1.0, true);
+        for (gain, polarity) in [(0.0, true), (0.0, false), (1.0, false)] {
+            assert!(session.history_step(false).unwrap());
+            assert_eq!(session.project().tracks[3].gain, gain);
+            assert_eq!(session.project().tracks[3].polarity_inverted, polarity);
+            assert_eq!(session.project().tracks[3].pan, 0.0);
+            assert!(session.project().tracks[3].left_enabled);
+            assert!(session.project().tracks[3].right_enabled);
+        }
+        assert!(!session.history_step(false).unwrap());
+        for (gain, polarity) in [(0.0, false), (0.0, true), (1.0, true)] {
+            assert!(session.history_step(true).unwrap());
+            assert_eq!(session.project().tracks[3].gain, gain);
+            assert_eq!(session.project().tracks[3].polarity_inverted, polarity);
+        }
+    }
+
+    #[test]
     fn one_control_drag_is_one_undo_step_and_keeps_earlier_history() {
         let mut session =
             Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -3503,6 +3540,7 @@ mod boundary_tests {
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
+            ("ui/mixer.rs", include_str!("ui/mixer.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
         ] {
             for forbidden in [
@@ -3537,6 +3575,7 @@ mod boundary_tests {
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
+            ("ui/mixer.rs", include_str!("ui/mixer.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
