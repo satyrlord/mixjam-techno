@@ -445,18 +445,16 @@ pub(super) fn show(
             lamp(&painter, point(488.0, 365.0), scale, feedback.saved, true);
             }
             // Window controls come last in the tab order, after the work.
-            if !collapsed {
-                let help = ui.interact(
-                    rect(772.0, 20.0, 44.0, 44.0),
-                    ui.id().with("help"),
-                    Sense::click(),
-                );
-                help_icon(ui.painter(), help.rect.center(), scale);
-                named(&help, egui::WidgetType::Button, "Time Stretcher help");
-                focus(ui, &help, scale);
-                if help.on_hover_text("How stretching changes duration and sound").clicked() {
-                    action = Action::Help;
-                }
+            let help = ui.interact(
+                rect(772.0, 20.0, 44.0, 44.0),
+                ui.id().with("help"),
+                Sense::click(),
+            );
+            help_icon(ui.painter(), help.rect.center(), scale);
+            named(&help, egui::WidgetType::Button, "Time Stretcher help");
+            focus(ui, &help, scale);
+            if help.on_hover_text("How stretching changes duration and sound").clicked() {
+                action = Action::Help;
             }
             let collapse = ui.interact(
                 rect(12.0, 20.0, 44.0, 44.0),

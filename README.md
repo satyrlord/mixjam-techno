@@ -81,8 +81,12 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   The lane and mixer L/R controls mirror each other. Changing these controls
   does not change pan.
 - Use Import for WAV files and enter the known source tempo.
-- Use the sample tools to trim, change pitch, stretch tempo, or apply effects.
-  Save the result as a new WAV sample.
+- Use Sample Editor to trim and change pitch. Start frame is included; End frame
+  is excluded. The adjacent buttons change one frame or 0.1 semitone; hold Shift
+  for 100 frames or one semitone. Click a value for exact entry. Listen edit
+  previews the draft; Save edited sound writes a new WAV in Wave.
+- Use the other sample tools to stretch tempo or apply effects, then save a new
+  WAV sample.
 - Use Step synth to sequence one note per sixteenth step across up to four bars.
 - Select a recording track and press Record. Recording starts after an eight-beat
   count-in. Stop and save the take as a WAV file.

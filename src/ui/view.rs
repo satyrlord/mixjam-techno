@@ -83,11 +83,6 @@ pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
     });
 }
 
-pub(super) fn titled_window(title: &str) -> egui::Window<'_> {
-    // Keep widget identity independent of visible title formatting.
-    egui::Window::new(title_text(title)).id(egui::Id::new(title))
-}
-
 impl MixJamApp {
     /// Load the bundled artwork once. A failure is reported once; the header
     /// then falls back to text actions and the tool rail stays hidden.

@@ -91,8 +91,9 @@ three tool-help windows use 420 points, Sample libraries 180, and Import details
 240; their content scrolls within native viewport constraints. Recorded take
 remains content-sized. The template covers Help and the three musical-tool help windows,
 Sample libraries, Import details, Recorded take, Save your changes?, Sample
-conflicts, Choose path, and Import sound. Musical tools, Sample editor, and
-operating-system file pickers retain their existing presentation.
+conflicts, Choose path, and Import sound. Musical tools, including Sample Editor,
+use separate panel presentations. Operating-system file pickers retain their
+operating-system presentation.
 
 Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.
@@ -108,10 +109,34 @@ snap their bounds to the pixel grid and do not resize them.
 Sample-processing forms hold drafts until the user requests playback or saving.
 The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
+`src/ui/sample_editor.rs` owns Sample Editor's charcoal and gunmetal hardware
+presentation and native input responses. Expanded, collapsed, and silver pitch
+thumb skins live in `assets/sample-editor/{100,150,200}/`. The expanded skin is
+640 by 320 logical points with a 48-point native footer, for a 640 by 368-point
+window; the separate collapsed skin is 640 by 48 points. Runtime painting aligns
+one texel to one physical pixel. The thumb is prepared on a 32 by 56-pixel
+canonical grid before 16 by 28, 24 by 42, and 32 by 56-pixel variants.
+All text, frame and pitch fields, adjacent step buttons, rail, action buttons,
+header controls, and feedback remain native. Enabled action buttons darken
+while pressed. The footer has an inset dark well with an edge outline, or coral
+for missing or invalid source state. Frame drafts retain unsigned
+64-bit values, with an inclusive start and exclusive end. Pitch keeps the
+existing -24 to +24-semitone UI range. Numeric display rounding does not alter
+the draft. The frontend resets the trim range when the source ID or catalog
+revision changes, so a replaced source cannot retain stale bounds.
+`src/ui.rs` adapts Listen edit, Save edited sound, and Import details. Existing
+Session trim and resampling remain synchronous. Preview uses existing PCM
+playback; save uses the existing WAV workflow, registers the result in Wave
+at the source BPM, and selects it. Neither the panel nor the artwork performs
+file or audio operations. Missing sources and invalid ranges disable processing
+with explicit tooltip reasons; the footer shows range and duration or recovery
+guidance. This presentation does not establish original-product DSP parity.
+
 `src/ui/stretch.rs` owns Time Stretcher's hardware-panel presentation and native
 control responses. Its prepared expanded and collapsed skins live in
 `assets/stretch/{100,150,200}/`. Each state paints its own complete bezel.
 Text, values, knob pointers, and interaction feedback remain native painting.
+Its Help icon remains available in both expanded and collapsed states.
 `src/ui.rs` adapts its source selections, Listen, Save, and Import details
 requests to existing application operations; the panel does not render audio or
 write files. Opening it from the tool rail initializes the original BPM draft
@@ -160,7 +185,8 @@ native painting places ticks, numeric wells, text, values, pointers, section
 lamps, focus, and disabled feedback. This separates control geometry from the
 generated material. The current compact expanded skin is 640 by
 352 logical points with a 48-point footer; its separate collapsed skin is 640
-by 48 points. Image bounds stay aligned at one texel per physical pixel.
+by 48 points. Help remains available in both states. Image bounds stay aligned
+at one texel per physical pixel.
 The knob's 32-point artwork has a 42-point input region. Values and captions use
 separate vertical positions. Check their rendered bounds against dial arcs and
 neighboring controls; source coordinates alone do not establish visual acceptance.

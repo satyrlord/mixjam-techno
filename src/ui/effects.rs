@@ -472,17 +472,17 @@ pub(super) fn show(
                         action = Action::Details;
                     }
                 }
-                let help = panel.interact(
-                    rect(571.0, 11.0, 26.0, 26.0),
-                    panel.id().with("help"),
-                    Sense::click(),
-                );
-                help_icon(panel.painter(), point(584.0, 24.0), scale);
-                named(&help, egui::WidgetType::Button, "Effect Studio help");
-                focus(&panel, &help, scale);
-                if help.on_hover_text("How to use Effect Studio").clicked() {
-                    action = Action::Help;
-                }
+            }
+            let help = panel.interact(
+                rect(571.0, 11.0, 26.0, 26.0),
+                panel.id().with("help"),
+                Sense::click(),
+            );
+            help_icon(panel.painter(), point(584.0, 24.0), scale);
+            named(&help, egui::WidgetType::Button, "Effect Studio help");
+            focus(&panel, &help, scale);
+            if help.on_hover_text("How to use Effect Studio").clicked() {
+                action = Action::Help;
             }
             let collapse = panel.interact(
                 rect(7.0, 11.0, 26.0, 26.0),

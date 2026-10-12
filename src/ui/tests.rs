@@ -184,7 +184,7 @@ mod tests {
             assert_ne!(expanded_texture, collapsed_texture, "Collapse must use separate artwork.");
             assert!(textures.contains(&(collapsed_texture, [(640.0 * density) as usize, (48.0 * density) as usize])));
             assert!(clip.expand(1.0 / density).contains_rect(collapsed), "The collapsed bezel must remain complete.");
-            for hidden in ["Source sound", "Cutoff", "Listen", "Effect Studio status", "Effect Studio help"] {
+            for hidden in ["Source sound", "Cutoff", "Listen", "Effect Studio status"] {
                 assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
                     .any(|(_, node)| node.label() == Some(hidden)), "{hidden} must hide when collapsed.");
             }
@@ -576,7 +576,7 @@ mod tests {
             for edge in [collapsed.left(), collapsed.top(), collapsed.right(), collapsed.bottom()] {
                 assert!((edge * density - (edge * density).round()).abs() < 0.001);
             }
-            for hidden in ["Source sound", "Listen to stretched sound", "Time Stretcher status", "Time Stretcher help"] {
+            for hidden in ["Source sound", "Listen to stretched sound", "Time Stretcher status"] {
                 assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
                     .any(|(_, node)| node.label() == Some(hidden)), "{hidden} must hide when collapsed.");
             }
@@ -596,6 +596,71 @@ mod tests {
             focus_control(&ctx, &mut app, &output, "Close Time Stretcher");
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
             assert!(!app.show_stretch, "Close must work in the collapsed state.");
+        }
+    }
+
+    #[test]
+    fn musical_tools_collapsed_help_icons_preserve_processing_drafts() {
+        for (tool, title, collapse, help, expand, collapse_id, height) in [
+            ("stretch", "TIME STRETCHER", "Collapse Time Stretcher", "Time Stretcher help",
+                "Expand Time Stretcher", "stretch-collapsed", 64.0),
+            ("effects", "EFFECT STUDIO", "Collapse Effect Studio", "Effect Studio help",
+                "Expand Effect Studio", "effects-collapsed", 48.0),
+            ("step", "STEP SYNTH", "Collapse Step synth", "Step synth help",
+                "Expand Step synth", "step-synth-collapsed", 48.0),
+        ] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            app.selected_sample = Some(1);
+            app.stretch_source_bpm = 160.0;
+            app.stretch_target_bpm = 120.0;
+            app.effects.echo = Some(Default::default());
+            app.effects.dirty = 0.375;
+            app.step_synth.steps[19] = Some(-7);
+            app.step_synth.active_bars = [true, false, true, false];
+            app.step_synth.bpm = 160.0;
+            match tool {
+                "stretch" => app.show_stretch = true,
+                "effects" => app.show_effects = true,
+                "step" => app.show_step_synth = true,
+                _ => unreachable!(),
+            }
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let before = (app.effects.clone(), app.step_synth.clone(), app.stretch_source_bpm,
+                app.stretch_target_bpm, app.source_id(), app.session.project().clone());
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, collapse);
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let window = effects_control_rect(&output, title);
+            assert!((window.height() - height).abs() < 0.1, "{title} must be collapsed.");
+            assert!(window.contains_rect(effects_control_rect(&output, help)),
+                "The collapsed header must keep {help} available.");
+            assert!(!accessible_node(&output, help).1.is_disabled());
+            focus_control(&ctx, &mut app, &output, help);
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            accessible_node(&output, &title_text(help));
+            assert!(match tool {
+                "stretch" => app.show_stretch && app.show_stretch_help,
+                "effects" => app.show_effects && app.show_effects_help,
+                "step" => app.show_step_synth && app.show_step_synth_help,
+                _ => unreachable!(),
+            });
+            assert_eq!(ctx.data(|data| data.get_temp::<bool>(egui::Id::new(collapse_id))), Some(true));
+            accessible_node(&output, expand);
+            focus_control(&ctx, &mut app, &output, "Close window");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!((effects_control_rect(&output, title).height() - height).abs() < 0.1,
+                "Closing {help} must return to the collapsed tool.");
+            assert_eq!((app.effects.clone(), app.step_synth.clone(), app.stretch_source_bpm,
+                app.stretch_target_bpm, app.source_id(), app.session.project().clone()), before,
+                "Opening and closing {help} must preserve the source, all processing drafts, and song.");
+            assert!(!app.session.is_previewing() && !app.session.wants_playback() && !app.session.is_stretching());
         }
     }
 
@@ -1557,6 +1622,492 @@ mod tests {
     }
 
     #[test]
+    fn sample_editor_readiness_keeps_actions_visible_and_offers_missing_source_recovery() {
+        for (available, missing, frames, start, end) in [
+            (false, false, 0, 0, 0),
+            (false, true, 0, 0, 0),
+            (true, false, 0, 0, 0),
+            (true, false, 32, 0, 32),
+            (true, false, 32, 17, 17),
+            (true, false, 32, 18, 17),
+            (true, false, 32, 31, 32),
+        ] {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| {
+                style.interaction.tooltip_delay = 0.0;
+                style.animation_time = 0.0;
+            });
+            let ready = available && !missing && frames > 0 && start < end && end <= frames;
+            let range = format!("{start}..{end}");
+            let (mut open, mut start, mut end, mut pitch) = (true, start, end, 0.0);
+            let mut render = |events| {
+                let mut action = sample_editor::Action::None;
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                        events,
+                        focused: true,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        action = sample_editor::show(
+                            ctx,
+                            &mut open,
+                            sample_editor::Source {
+                                name: "Source",
+                                frames,
+                                sample_rate: 1000,
+                                available,
+                                missing,
+                            },
+                            &mut start,
+                            &mut end,
+                            &mut pitch,
+                        )
+                        .unwrap();
+                    },
+                );
+                (output, action)
+            };
+            for _ in 0..3 {
+                render(vec![]);
+            }
+            let (mut output, _) = render(vec![]);
+            for label in ["Listen edit", "Save edited sound"] {
+                assert_eq!(
+                    !accessible_node(&output, label).1.is_disabled(),
+                    ready,
+                    "{label}: available={available}, missing={missing}, frames={frames}, {range}"
+                );
+            }
+            accessible_node(&output, "Sample editor status");
+            let actions = if missing {
+                vec![("Import details", sample_editor::Action::Details)]
+            } else if ready {
+                vec![
+                    ("Listen edit", sample_editor::Action::Listen),
+                    ("Save edited sound", sample_editor::Action::Save),
+                ]
+            } else {
+                vec![]
+            };
+            for (label, expected) in actions {
+                let target = accessible_node(&output, label).0;
+                render(vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Focus,
+                        target,
+                        data: None,
+                    },
+                )]);
+                let (_, action) = render(vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
+                assert_eq!(
+                    std::mem::discriminant(&action),
+                    std::mem::discriminant(&expected),
+                    "{label} must return its action without performing audio or file work in the view."
+                );
+                (output, _) = render(vec![]);
+            }
+            if !ready {
+                let reason = if missing {
+                    "This sound is missing and plays silence. Open Import details to inspect or resolve it."
+                } else if !available || frames == 0 {
+                    "Select a nonempty sound or clip before editing."
+                } else {
+                    "End frame must be greater than Start frame and within the source."
+                };
+                let copies = |output: &egui::FullOutput| output.shapes.iter().filter(|shape|
+                    matches!(&shape.shape, egui::Shape::Text(text)
+                        if text.galley.job.text == reason
+                            && shape.clip_rect.contains_rect(text.visual_bounding_rect()))).count();
+                let footer_copies = copies(&output);
+                assert!(footer_copies > 0, "The status footer must explain unavailable processing.");
+                for label in ["Listen edit", "Save edited sound"] {
+                    let center = effects_control_rect(&output, label).center();
+                    render(vec![egui::Event::PointerMoved(center)]);
+                    let mut shown = false;
+                    for _ in 0..4 {
+                        let (hovered, action) = render(vec![]);
+                        assert!(matches!(action, sample_editor::Action::None));
+                        shown |= copies(&hovered) > footer_copies;
+                    }
+                    assert!(shown, "Disabled {label} must explain why it is unavailable on hover.");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sample_editor_native_fields_slider_and_steppers_edit_only_the_draft() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_sample_edit = true;
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let project = app.session.project().clone();
+        let unsaved = app.session.unsaved();
+        let set_value = |app: &mut MixJamApp, label: &str, value: f64| {
+            let output = frame(&ctx, app, vec![], egui::Modifiers::NONE);
+            let target = accessible_node(&output, label).0;
+            frame(
+                &ctx,
+                app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::SetValue,
+                        target,
+                        data: Some(egui::accesskit::ActionData::NumericValue(value)),
+                    },
+                )],
+                egui::Modifiers::NONE,
+            );
+        };
+        let activate = |app: &mut MixJamApp, label: &str, modifiers: egui::Modifiers| {
+            let output = frame(&ctx, app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, app, &output, label);
+            frame(
+                &ctx,
+                app,
+                vec![key_event(egui::Key::Enter, modifiers)],
+                modifiers,
+            );
+        };
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for (label, min, max) in [
+            ("Start frame", 0.0, 75599.0),
+            ("End frame", 1.0, 75600.0),
+            ("Pitch value", -24.0, 24.0),
+            ("Pitch (semitones)", -24.0, 24.0),
+        ] {
+            let node = accessible_node(&output, label).1;
+            assert_eq!(node.min_numeric_value(), Some(min), "{label}");
+            assert_eq!(node.max_numeric_value(), Some(max), "{label}");
+        }
+        set_value(&mut app, "Start frame", 17.0);
+        set_value(&mut app, "End frame", 19.0);
+        assert_eq!((app.edit_start, app.edit_end), (17, 19));
+        activate(&mut app, "Increase End frame", egui::Modifiers::NONE);
+        assert_eq!(app.edit_end, 20);
+        activate(&mut app, "Decrease Start frame", egui::Modifiers::SHIFT);
+        assert_eq!(
+            app.edit_start, 0,
+            "Shift frame stepping clamps at the source boundary."
+        );
+        activate(&mut app, "Increase Start frame", egui::Modifiers::NONE);
+        assert_eq!(app.edit_start, 1);
+        set_value(&mut app, "Start frame", 100000.0);
+        set_value(&mut app, "End frame", 0.0);
+        assert_eq!((app.edit_start, app.edit_end), (75599, 1));
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for label in ["Listen edit", "Save edited sound"] {
+            assert!(
+                accessible_node(&output, label).1.is_disabled(),
+                "A reversed trim must remain editable without allowing audio processing."
+            );
+        }
+        set_value(&mut app, "Start frame", 0.0);
+        set_value(&mut app, "End frame", 75600.0);
+        set_value(&mut app, "Pitch value", 3.5);
+        assert_eq!(app.edit_pitch, 3.5);
+        activate(&mut app, "Increase Pitch", egui::Modifiers::NONE);
+        assert!((app.edit_pitch - 3.6).abs() < 0.0001);
+        activate(&mut app, "Decrease Pitch", egui::Modifiers::SHIFT);
+        assert!((app.edit_pitch - 2.6).abs() < 0.0001);
+        set_value(&mut app, "Pitch (semitones)", -12.0);
+        assert_eq!(app.edit_pitch, -12.0);
+        set_value(&mut app, "Pitch value", 100.0);
+        assert_eq!(app.edit_pitch, 24.0);
+        activate(&mut app, "Increase Pitch", egui::Modifiers::NONE);
+        assert_eq!(app.edit_pitch, 24.0);
+        set_value(&mut app, "Pitch value", -100.0);
+        assert_eq!(app.edit_pitch, -24.0);
+        activate(&mut app, "Decrease Pitch", egui::Modifiers::NONE);
+        assert_eq!(app.edit_pitch, -24.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Pitch value");
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("-4.5678".into()),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.edit_pitch, -4.5678,
+            "The amber readout supports exact keyboard entry."
+        );
+        assert_eq!(app.session.project(), &project);
+        assert_eq!(app.session.unsaved(), unsaved);
+        assert!(
+            !app.session.is_previewing() && !app.session.wants_playback(),
+            "Editing the tool draft must not start preview or transport."
+        );
+    }
+
+    #[test]
+    fn sample_editor_compact_layout_uses_complete_density_assets_and_preserves_collapsed_edits() {
+        let size = Vec2::new(960.0, 720.0);
+        let viewport = Rect::from_min_size(Pos2::ZERO, size);
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            ctx.set_pixels_per_point(density);
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            app.selected_sample = Some(1);
+            app.show_sample_edit = true;
+            let first = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            app.edit_start = 123;
+            app.edit_end = 34567;
+            app.edit_pitch = -3.56789;
+            let before = (app.edit_start, app.edit_end, app.edit_pitch);
+            let mut textures: Vec<_> = first
+                .textures_delta
+                .set
+                .iter()
+                .map(|(id, delta)| (*id, delta.image.size()))
+                .collect();
+            let mut output = egui::FullOutput::default();
+            // The first tool frame loads the artwork; retain all subsequent
+            // updates as well because the font atlas can change independently.
+            for _ in 0..4 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                textures.extend(
+                    output
+                        .textures_delta
+                        .set
+                        .iter()
+                        .map(|(id, delta)| (*id, delta.image.size())),
+                );
+            }
+            let skin = |output: &egui::FullOutput, height: f32| {
+                output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Mesh(mesh)
+                            if (mesh.calc_bounds().width() - 640.0).abs() < 0.1
+                                && (mesh.calc_bounds().height() - height).abs() < 0.1 =>
+                        {
+                            Some((mesh.texture_id, mesh.calc_bounds(), shape.clip_rect))
+                        }
+                        _ => None,
+                    })
+                    .expect("Sample editor must paint the whole prepared skin.")
+            };
+            let (expanded_texture, panel, clip) = skin(&output, 320.0);
+            assert!(
+                textures.contains(&(
+                    expanded_texture,
+                    [(640.0 * density) as usize, (320.0 * density) as usize]
+                )),
+                "The {density}x artwork must paint one texel per physical screen pixel."
+            );
+            assert!(clip.expand(1.0 / density).contains_rect(panel));
+            for edge in [panel.left(), panel.top(), panel.right(), panel.bottom()] {
+                assert!((edge * density - (edge * density).round()).abs() < 0.001);
+            }
+            let window = effects_control_rect(&output, "SAMPLE EDITOR");
+            assert!((window.width() - 640.0).abs() <= 1.0 / density);
+            assert!((window.height() - 368.0).abs() <= 1.0 / density);
+            assert!(
+                viewport.contains_rect(window),
+                "The compact tool must fit at {density}x."
+            );
+            let footer = effects_control_rect(&output, "Sample editor status");
+            assert!(footer.top() >= panel.bottom());
+            assert!(window.contains_rect(footer));
+            let controls = [
+                "Start frame",
+                "End frame",
+                "Pitch (semitones)",
+                "Pitch value",
+                "Listen edit",
+                "Save edited sound",
+                "Collapse Sample editor",
+                "Close Sample editor",
+            ];
+            let bounds = controls.map(|label| effects_control_rect(&output, label));
+            for (label, bounds) in controls.iter().zip(bounds) {
+                assert!(
+                    panel.contains_rect(bounds),
+                    "{label} must fit the skin at {density}x."
+                );
+                assert!(!bounds.intersects(footer), "{label} must not touch status.");
+            }
+            for (index, first) in bounds.iter().enumerate() {
+                for (second, name) in bounds.iter().zip(controls).skip(index + 1) {
+                    assert!(
+                        !first.intersects(*second),
+                        "Controls must not overlap at {density}x: {} and {name}.",
+                        controls[index]
+                    );
+                }
+            }
+            for label in [
+                "SAMPLE EDITOR",
+                "Start frame",
+                "End frame",
+                "Pitch (semitones)",
+                "Listen edit",
+                "Save edited sound",
+            ] {
+                assert!(
+                    panel.contains_rect(text_rect(&output, label)),
+                    "{label} must remain readable inside the panel at {density}x."
+                );
+            }
+            for label in ["Listen edit", "Save edited sound"] {
+                assert!(
+                    effects_control_rect(&output, label)
+                        .shrink(2.0)
+                        .contains_rect(effects_text_mesh_bounds(&output, label)),
+                    "{label} needs clear space inside its button at {density}x."
+                );
+            }
+            focus_control(&ctx, &mut app, &output, "Collapse Sample editor");
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            for _ in 0..3 {
+                let collapsed = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                textures.extend(collapsed.textures_delta.set.iter()
+                    .map(|(id, delta)| (*id, delta.image.size())));
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let (collapsed_texture, collapsed, clip) = skin(&output, 48.0);
+            assert_ne!(
+                expanded_texture, collapsed_texture,
+                "Collapse requires a complete separate bezel."
+            );
+            assert!(textures.contains(&(
+                collapsed_texture,
+                [(640.0 * density) as usize, (48.0 * density) as usize]
+            )));
+            assert!(clip.expand(1.0 / density).contains_rect(collapsed));
+            for label in [
+                "Start frame",
+                "End frame",
+                "Pitch value",
+                "Listen edit",
+                "Sample editor status",
+            ] {
+                assert!(
+                    !output
+                        .platform_output
+                        .accesskit_update
+                        .as_ref()
+                        .unwrap()
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.label() == Some(label)),
+                    "{label} must hide while collapsed."
+                );
+            }
+            assert_eq!((app.edit_start, app.edit_end, app.edit_pitch), before);
+            focus_control(&ctx, &mut app, &output, "Expand Sample editor");
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            for _ in 0..3 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            skin(&output, 320.0);
+            assert_eq!((app.edit_start, app.edit_end, app.edit_pitch), before);
+            focus_control(&ctx, &mut app, &output, "Close Sample editor");
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            assert!(!app.show_sample_edit);
+            assert_eq!((app.edit_start, app.edit_end, app.edit_pitch), before);
+        }
+    }
+
+    #[test]
+    fn sample_editor_trim_uses_stereo_source_frames_and_an_exclusive_end() {
+        let (context, mut app, dir) = sample_conflicts_fixture("sample-editor-trim");
+        app.session.confirm_sample_conflicts().unwrap();
+        app.show_sample_conflicts = false;
+        app.selected_sample = Some(1_000_000);
+        app.show_sample_edit = true;
+        let path = app.session.sample_conflicts()[0].candidates[0].clone();
+        Pcm {
+            sample_rate: 1000,
+            channels: 2,
+            samples: (0..2000)
+                .flat_map(|frame| {
+                    let value = frame as f32 / 4000.0;
+                    [value, -value]
+                })
+                .collect(),
+        }
+        .write_wav(&path)
+        .unwrap();
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!((app.edit_start, app.edit_end), (0, 2000));
+        app.edit_start = 17;
+        app.edit_end = 19;
+        app.edit_pitch = 0.0;
+        let source = app.session.source_pcm(app.source_id()).unwrap();
+        let edited = app.edited_pcm().unwrap();
+        assert_eq!(
+            (edited.channels, edited.sample_rate, edited.frames()),
+            (2, 1000, 2)
+        );
+        assert_eq!(
+            edited.samples,
+            source.samples[34..38],
+            "Start is inclusive, end is exclusive, and each stereo frame includes both channels."
+        );
+        app.edit_start = 1999;
+        app.edit_end = 2000;
+        assert_eq!(
+            app.edited_pcm().unwrap().samples,
+            source.samples[3998..4000]
+        );
+        for (start, end) in [(10, 10), (11, 10), (0, 2001)] {
+            app.edit_start = start;
+            app.edit_end = end;
+            assert!(
+                app.edited_pcm().is_err(),
+                "Invalid trim {start}..{end} must not render."
+            );
+        }
+        app.edit_start = 0;
+        app.edit_end = 2000;
+        app.edit_pitch = 12.0;
+        assert_eq!(
+            app.edited_pcm().unwrap().frames(),
+            1000,
+            "Pitch changes source speed and duration after trimming."
+        );
+        app.edit_pitch = -12.0;
+        assert_eq!(app.edited_pcm().unwrap().frames(), 4000);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn sample_editor_resets_its_range_when_a_conflict_replaces_the_same_source_id() {
         let (context, mut app, dir) = sample_conflicts_fixture("edit-range");
         app.session.confirm_sample_conflicts().unwrap();
@@ -1926,11 +2477,11 @@ mod tests {
         app.show_sample_edit = true;
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-        text_rect(
-            &output,
-            "Missing audio: clips play silence; processing is unavailable.",
-        );
-        assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "Listen edit")));
+        for label in ["Listen edit", "Save edited sound"] {
+            assert!(accessible_node(&output, label).1.is_disabled(),
+                "Missing source actions remain visible and explain why they are unavailable.");
+        }
+        accessible_node(&output, "Import details");
     }
 
     fn frame(

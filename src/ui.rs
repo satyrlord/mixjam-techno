@@ -12,6 +12,8 @@ mod dialog;
 mod effects;
 #[path = "ui/mixer.rs"]
 mod mixer;
+#[path = "ui/sample_editor.rs"]
+mod sample_editor;
 #[path = "ui/step_synth.rs"]
 mod step_synth;
 #[path = "ui/stretch.rs"]
@@ -1524,21 +1526,6 @@ impl MixJamApp {
         self.session.source_bpm(self.source_id())
     }
 
-    fn show_missing_source(&mut self, ui: &mut egui::Ui) -> bool {
-        if self
-            .source_id()
-            .and_then(|id| self.session.missing_sample(id))
-            .is_none()
-        {
-            return false;
-        }
-        ui.label("Missing audio: clips play silence; processing is unavailable.");
-        if ui.button("Import details").clicked() {
-            self.show_import_details = true;
-        }
-        true
-    }
-
     fn play_pcm(&mut self, pcm: Pcm, label: &str) {
         self.session.play_pcm(pcm, label);
         self.sync_notice();
@@ -2340,71 +2327,48 @@ impl MixJamApp {
         }
         if self.show_sample_edit {
             let mut open = true;
-            titled_window("Sample editor")
-                .open(&mut open)
-                .default_width(510.0)
-                .show(ctx, |ui| {
-                    ui.label(egui::RichText::new(self.source_name()).strong());
-                    if self.show_missing_source(ui) {
-                        return;
+            let source_id = self.source_id();
+            let name = self.source_name();
+            let metadata = source_id
+                .and_then(|id| self.session.library().sample_by_id(id))
+                .map(|sample| (u64::from(sample.frame_count), sample.sample_rate));
+            let (frames, sample_rate) = metadata.unwrap_or((0, 0));
+            // A replacement can keep its source ID. Reset only the old trim draft.
+            let source = source_id.map(|id| (id, self.session.catalog_revision()));
+            if self.edit_end == 0 || self.edit_source != source {
+                self.edit_source = source;
+                self.edit_start = 0;
+                self.edit_end = frames;
+            }
+            match sample_editor::show(
+                ctx,
+                &mut open,
+                sample_editor::Source {
+                    name: &name,
+                    frames,
+                    sample_rate,
+                    available: metadata.is_some(),
+                    missing: source_id.is_some_and(|id| self.session.missing_sample(id).is_some()),
+                },
+                &mut self.edit_start,
+                &mut self.edit_end,
+                &mut self.edit_pitch,
+            ) {
+                Ok(sample_editor::Action::Listen) => match self.edited_pcm() {
+                    Ok(pcm) => self.play_pcm(pcm, "Listening to the sample edit."),
+                    Err(error) => self.error(error),
+                },
+                Ok(sample_editor::Action::Save) => match self.edited_pcm() {
+                    Ok(pcm) => {
+                        let name = format!("{} - edit", self.source_name());
+                        self.save_pcm(pcm, &name, "Wave", self.source_bpm());
                     }
-                    let frames = self
-                        .source_id()
-                        .and_then(|id| self.session.library().sample_by_id(id))
-                        .map_or(0, |s| u64::from(s.frame_count));
-                    // A replacement can keep its source ID. Do not apply the
-                    // previous audio's draft range after a catalog change.
-                    let source = self
-                        .source_id()
-                        .map(|id| (id, self.session.catalog_revision()));
-                    if self.edit_end == 0 || self.edit_source != source {
-                        self.edit_source = source;
-                        self.edit_start = 0;
-                        self.edit_end = frames;
-                    }
-                    ui.horizontal(|ui| {
-                        ui.label("Start frame");
-                        name_control(
-                            ui.add(
-                                egui::DragValue::new(&mut self.edit_start)
-                                    .range(0..=frames.saturating_sub(1))
-                                    .speed(100),
-                            ),
-                            "Start frame",
-                        );
-                        ui.label("End frame");
-                        name_control(
-                            ui.add(
-                                egui::DragValue::new(&mut self.edit_end)
-                                    .range(1..=frames.max(1))
-                                    .speed(100),
-                            ),
-                            "End frame",
-                        );
-                    });
-                    ui.add(
-                        egui::Slider::new(&mut self.edit_pitch, -24.0..=24.0)
-                            .text("Pitch (semitones)"),
-                    )
-                    .on_hover_text("Pitch changes playback speed and sample length.");
-                    ui.horizontal(|ui| {
-                        if ui.button("Listen edit").clicked() {
-                            match self.edited_pcm() {
-                                Ok(pcm) => self.play_pcm(pcm, "Listening to the sample edit."),
-                                Err(error) => self.error(error),
-                            }
-                        }
-                        if ui.button("Save edited sound").clicked() {
-                            match self.edited_pcm() {
-                                Ok(pcm) => {
-                                    let name = format!("{} - edit", self.source_name());
-                                    self.save_pcm(pcm, &name, "Wave", self.source_bpm());
-                                }
-                                Err(error) => self.error(error),
-                            }
-                        }
-                    });
-                });
+                    Err(error) => self.error(error),
+                },
+                Ok(sample_editor::Action::Details) => self.show_import_details = true,
+                Ok(sample_editor::Action::None) => {}
+                Err(error) => self.error(error),
+            }
             self.show_sample_edit = open;
         }
         if self.show_stretch {
