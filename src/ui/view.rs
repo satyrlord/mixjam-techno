@@ -467,6 +467,16 @@ impl MixJamApp {
                 })
                 .response;
             name_control(categories, "Category filter");
+            let sorting = egui::ComboBox::from_id_salt("palette_sort")
+                .selected_text(self.palette_sort.label())
+                .width(105.0)
+                .show_ui(ui, |ui| {
+                    for sort in PaletteSort::ALL {
+                        ui.selectable_value(&mut self.palette_sort, sort, sort.label());
+                    }
+                })
+                .response;
+            name_control(sorting, "Sort order");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     egui::RichText::new(format!("{} sounds", samples.len()))
@@ -512,53 +522,63 @@ impl MixJamApp {
                 self.palette_product = None;
             }
         }
-        let count = ((ui.available_width() + 8.0) / 156.0).floor().max(1.0) as usize;
+        // Tile width follows the bar count, so rows hold a varying number of tiles.
+        let row_width = ui.available_width();
+        let starts = {
+            let library = self.session.library().samples;
+            tile_rows(
+                samples
+                    .iter()
+                    .map(|&index| tile_width(library[index].bars, row_width)),
+                row_width,
+            )
+        };
+        let spacing =
+            std::mem::replace(&mut ui.spacing_mut().item_spacing, Vec2::new(TILE_GAP, 6.0));
         egui::ScrollArea::vertical()
             .id_salt("sample_palette")
             .max_height(ui.available_height())
-            .show_rows(ui, 46.0, samples.len().div_ceil(count), |ui, rows| {
-                egui::Grid::new("sound_grid")
-                    .spacing(Vec2::new(8.0, 6.0))
-                    .show(ui, |ui| {
-                        for row in rows {
-                            for &sample_index in
-                                &samples[row * count..((row + 1) * count).min(samples.len())]
-                            {
-                                let (id, response) = {
-                                    let sample = &self.session.library().samples[sample_index];
-                                    let product = self.sample_product(sample.id);
-                                    let response = ui
-                                        .push_id(sample.id, |ui| {
-                                            sample_button(
-                                                ui,
-                                                sample,
-                                                product,
-                                                self.selected_sample == Some(sample.id),
-                                            )
-                                        })
-                                        .inner;
-                                    if self.capture_view_is("sample-details")
-                                        && self.selected_sample == Some(sample.id)
-                                    {
-                                        response.show_tooltip_text(sample_details(sample, product));
-                                    }
-                                    (sample.id, response)
-                                };
-                                if response.clicked() {
-                                    self.selected_sample = Some(id);
+            .show_rows(ui, 46.0, starts.len(), |ui, rows| {
+                for row in rows {
+                    let end = starts.get(row + 1).copied().unwrap_or(samples.len());
+                    ui.horizontal(|ui| {
+                        for &sample_index in &samples[starts[row]..end] {
+                            let (id, response) = {
+                                let sample = &self.session.library().samples[sample_index];
+                                let product = self.sample_product(sample.id);
+                                let response = ui
+                                    .push_id(sample.id, |ui| {
+                                        sample_button(
+                                            ui,
+                                            sample,
+                                            product,
+                                            self.selected_sample == Some(sample.id),
+                                            tile_width(sample.bars, row_width),
+                                        )
+                                    })
+                                    .inner;
+                                if self.capture_view_is("sample-details")
+                                    && self.selected_sample == Some(sample.id)
+                                {
+                                    response.show_tooltip_text(sample_details(sample, product));
                                 }
-                                if response.double_clicked() {
-                                    self.preview(id);
-                                }
-                                if response.drag_started() {
-                                    self.selected_sample = Some(id);
-                                    self.drag = Some(DragItem::Sample(id));
-                                }
+                                (sample.id, response)
+                            };
+                            if response.clicked() {
+                                self.selected_sample = Some(id);
                             }
-                            ui.end_row();
+                            if response.double_clicked() {
+                                self.preview(id);
+                            }
+                            if response.drag_started() {
+                                self.selected_sample = Some(id);
+                                self.drag = Some(DragItem::Sample(id));
+                            }
                         }
                     });
+                }
             });
+        ui.spacing_mut().item_spacing = spacing;
     }
 
     pub(super) fn mixer(&mut self, ui: &mut egui::Ui) {
@@ -1857,13 +1877,38 @@ pub(super) fn group_color(group: &str) -> Color32 {
     }
 }
 
+/// Width of a one-bar sound tile and the gap between tiles.
+pub(super) const TILE_BAR: f32 = 96.0;
+pub(super) const TILE_GAP: f32 = 8.0;
+
+/// A tile spans one bar unit per bar plus the gaps between them, so tiles
+/// of different lengths align. A sound longer than a row fills the row.
+pub(super) fn tile_width(bars: u32, row_width: f32) -> f32 {
+    (bars.max(1) as f32 * (TILE_BAR + TILE_GAP) - TILE_GAP).min(row_width.max(TILE_BAR))
+}
+
+/// The index of the first tile in each row when tiles wrap at `row_width`.
+pub(super) fn tile_rows(widths: impl IntoIterator<Item = f32>, row_width: f32) -> Vec<usize> {
+    let mut starts = Vec::new();
+    let mut x = 0.0;
+    for (index, width) in widths.into_iter().enumerate() {
+        if index == 0 || x + width > row_width {
+            starts.push(index);
+            x = 0.0;
+        }
+        x += width + TILE_GAP;
+    }
+    starts
+}
+
 pub(super) fn sample_button(
     ui: &mut egui::Ui,
     sample: &Sample,
     product: Option<Product>,
     selected: bool,
+    width: f32,
 ) -> Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(148.0, 46.0), Sense::click_and_drag());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click_and_drag());
     let color = group_color(&sample.group_name);
     let painter = ui.painter_at(rect);
     painter.rect_filled(
@@ -1889,19 +1934,28 @@ pub(super) fn sample_button(
         );
     }
     let text = painter.layout_no_wrap(sample.name.clone(), FontId::proportional(12.0), TEXT);
-    let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(10.0, 3.0)));
-    clip.galley(rect.min + Vec2::new(10.0, 5.0), text, TEXT);
-    clip.text(
-        rect.min + Vec2::new(10.0, 32.0),
-        Align2::LEFT_CENTER,
-        format!(
-            "{}  /  {} bar{}",
-            sample.group_name,
-            sample.bars,
-            if sample.bars == 1 { "" } else { "s" }
-        ),
-        FontId::proportional(10.0),
-        TEXT.gamma_multiply(0.8),
+    let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(8.0, 3.0)));
+    clip.galley(rect.min + Vec2::new(8.0, 5.0), text, TEXT);
+    let bars = format!(
+        "{} bar{}",
+        sample.bars,
+        if sample.bars == 1 { "" } else { "s" }
+    );
+    let font = FontId::proportional(10.0);
+    let muted = TEXT.gamma_multiply(0.8);
+    let mut metadata = painter.layout_no_wrap(
+        format!("{}  /  {bars}", sample.group_name),
+        font.clone(),
+        muted,
+    );
+    // A narrow tile keeps the bar count; its tint still names the category.
+    if metadata.size().x > rect.width() - 16.0 {
+        metadata = painter.layout_no_wrap(bars, font, muted);
+    }
+    clip.galley(
+        rect.min + Vec2::new(8.0, 32.0 - metadata.size().y / 2.0),
+        metadata,
+        muted,
     );
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &sample.name)

@@ -1301,7 +1301,7 @@ mod tests {
             let mut tile = Rect::NOTHING;
             let output = context.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    tile = sample_button(ui, sample, Some(Product::T2), selected).rect;
+                    tile = sample_button(ui, sample, Some(Product::T2), selected, 148.0).rect;
                 });
             });
             let tint_index = output.shapes.iter().position(|shape| {
@@ -2921,6 +2921,58 @@ mod tests {
     }
 
     #[test]
+    fn palette_sorts_by_name_length_bpm_and_category_and_keeps_library_order_for_ties() {
+        let (_, mut app) = fixture();
+        let first = app.session.library().samples[0].clone();
+        let samples = [
+            ("delta", 4, 140.0, "Loop"),
+            ("Alpha", 1, 180.0, "voice"),
+            ("charlie", 2, 90.0, "Bass"),
+            ("bravo", 2, 140.0, "Bass"),
+        ]
+        .into_iter()
+        .zip(1..)
+        .map(|((name, bars, source_bpm, group), id)| Sample {
+            id,
+            name: name.into(),
+            bars,
+            source_bpm,
+            group_name: group.into(),
+            ..first.clone()
+        })
+        .collect();
+        app.session = Session::headless(
+            Arc::new(Library::fixture(samples)),
+            app.session.project().clone(),
+        )
+        .unwrap();
+        for (sort, expected) in [
+            (PaletteSort::Library, [0, 1, 2, 3]),
+            (PaletteSort::Name, [1, 3, 2, 0]),
+            (PaletteSort::Length, [1, 2, 3, 0]),
+            (PaletteSort::Bpm, [2, 0, 3, 1]),
+            (PaletteSort::Category, [2, 3, 0, 1]),
+        ] {
+            app.palette_sort = sort;
+            assert_eq!(app.palette_indices(), expected, "{sort:?}");
+            assert_eq!(*app.palette_view().0, expected, "{sort:?}");
+        }
+    }
+
+    #[test]
+    fn sound_tiles_span_their_bar_count_and_wrap_within_the_row() {
+        assert_eq!(tile_width(1, 800.0), TILE_BAR);
+        assert_eq!(tile_width(2, 800.0), 2.0 * TILE_BAR + TILE_GAP);
+        assert_eq!(tile_width(4, 800.0), 4.0 * TILE_BAR + 3.0 * TILE_GAP);
+        // A long take fills the row; a narrow panel still shows a whole one-bar tile.
+        assert_eq!(tile_width(32_766, 800.0), 800.0);
+        assert_eq!(tile_width(4, 40.0), TILE_BAR);
+        let widths = [1, 2, 4, 1, 8, 1].map(|bars| tile_width(bars, 420.0));
+        assert_eq!(tile_rows(widths, 420.0), [0, 2, 3, 4, 5]);
+        assert!(tile_rows([], 420.0).is_empty());
+    }
+
+    #[test]
     fn failed_open_and_in_use_library_removal_preserve_the_active_project() {
         let (_, mut app) = fixture();
         let previous = app.session.project().clone();
@@ -3621,6 +3673,7 @@ mod tests {
             ("Find a sound", "text_input"),
             ("Library filter", "combo_box"),
             ("Category filter", "combo_box"),
+            ("Sort order", "combo_box"),
             ("Recording track", "combo_box"),
             ("Record on track 1", "radio"),
             ("Arrangement lanes", "other"),

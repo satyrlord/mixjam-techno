@@ -38,6 +38,38 @@ struct PaletteKey {
     search: String,
     group: Option<String>,
     product: Option<Product>,
+    sort: PaletteSort,
+}
+
+/// Palette order. Ties keep library order.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum PaletteSort {
+    #[default]
+    Library,
+    Name,
+    Length,
+    Bpm,
+    Category,
+}
+
+impl PaletteSort {
+    const ALL: [Self; 5] = [
+        Self::Library,
+        Self::Name,
+        Self::Length,
+        Self::Bpm,
+        Self::Category,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Library => "Library order",
+            Self::Name => "By name",
+            Self::Length => "By length",
+            Self::Bpm => "By BPM",
+            Self::Category => "By category",
+        }
+    }
 }
 
 /// The filtered sample indices and the category names of one catalog.
@@ -178,6 +210,7 @@ pub struct MixJamApp {
     context_missing_sample: Option<u32>,
     group: Option<String>,
     palette_product: Option<Product>,
+    palette_sort: PaletteSort,
     search: String,
     show_mixer: bool,
     show_help: bool,
@@ -351,6 +384,7 @@ impl MixJamApp {
             context_missing_sample: None,
             group: None,
             palette_product: None,
+            palette_sort: PaletteSort::default(),
             search: String::new(),
             show_mixer: capture_view.starts_with("mixer"),
             show_help: capture_view == "help",
@@ -904,6 +938,7 @@ impl MixJamApp {
             search: self.search.clone(),
             group: self.group.clone(),
             product: self.palette_product,
+            sort: self.palette_sort,
         };
         if let Some(cache) = &self.palette_cache
             && cache.key == key
@@ -943,9 +978,8 @@ impl MixJamApp {
         } else {
             Default::default()
         };
-        self.session
-            .library()
-            .samples
+        let samples = self.session.library().samples;
+        let mut indices: Vec<usize> = samples
             .iter()
             .enumerate()
             .filter_map(|(index, sample)| {
@@ -962,7 +996,32 @@ impl MixJamApp {
                     && (query.is_empty() || sample.name.to_lowercase().contains(&query)))
                 .then_some(index)
             })
-            .collect()
+            .collect();
+        // Stable sorts: equal keys keep library order.
+        let name = |&index: &usize| samples[index].name.to_lowercase();
+        match self.palette_sort {
+            PaletteSort::Library => {}
+            PaletteSort::Name => indices.sort_by_cached_key(name),
+            PaletteSort::Length => {
+                // Bars first, as the tiles show them; audio duration orders equal bar counts.
+                indices.sort_by(|&a, &b| {
+                    let key = |sample: &Sample| {
+                        let seconds =
+                            f64::from(sample.frame_count) / f64::from(sample.sample_rate.max(1));
+                        (sample.bars, seconds)
+                    };
+                    let (a, b) = (key(&samples[a]), key(&samples[b]));
+                    a.0.cmp(&b.0).then(a.1.total_cmp(&b.1))
+                });
+            }
+            PaletteSort::Bpm => {
+                indices.sort_by(|&a, &b| samples[a].source_bpm.total_cmp(&samples[b].source_bpm))
+            }
+            PaletteSort::Category => {
+                indices.sort_by_cached_key(|&index| samples[index].group_name.to_lowercase());
+            }
+        }
+        indices
     }
 
     fn position_tick(&self, x: f32, rect: Rect, fine: bool) -> u32 {

@@ -131,7 +131,7 @@ components:
     textColor: "{colors.text}"
     typography: "{typography.clip}"
     rounded: "{rounded.control}"
-    width: "148px"
+    width: "96px"
     height: "46px"
   transport-primary:
     backgroundColor: "{colors.accent}"
@@ -337,9 +337,13 @@ stays where the user leaves it until the position or viewport geometry changes.
 Switch Follow off to keep horizontal scrolling under manual control during
 playback. The toggle is view state for the current session, not a project edit.
 
-Sound search and product/category menus sit above a horizontally scrolling
-category row. The tile grid chooses its column count from available width and
-scrolls vertically. This keeps category access separate from palette height.
+Sound search and the product, category, and sort menus sit above a horizontally
+scrolling category row. Tiles wrap at the available width and scroll vertically.
+This keeps category access separate from palette height. A tile's width follows
+its bar count: 96 points per bar plus the 8-point gaps it spans, so a two-bar
+tile covers two one-bar tiles. A sound longer than a row fills the row. The sort
+menu orders the filtered sounds by library order, name, length, BPM, or
+category; it is view state for the current session.
 
 Mixer strips appear only for occupied tracks. Track and Master strips are
 124 points wide. Master stays outside the horizontal track scroller, whose
@@ -435,7 +439,8 @@ from the canonical PNG for the shell icon.
 
 ### Sounds and clips
 
-Sound tiles show the name above the category label and bar count. A 20% overlay
+Sound tiles show the name above the category label and bar count. A tile too
+narrow for both keeps the bar count. A 20% overlay
 of the category color tints the whole tile; there is no category dot.
 Hover or selection uses Hover; selection adds a category-colored border.
 One tooltip groups the full name, product, category, code, sample IDs, source
