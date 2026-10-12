@@ -8,6 +8,8 @@ use view::*;
 mod agent;
 #[path = "ui/effects.rs"]
 mod effects;
+#[path = "ui/step_synth.rs"]
+mod step_synth;
 #[path = "ui/stretch.rs"]
 mod stretch;
 
@@ -201,6 +203,14 @@ struct EffectsFeedback {
     error: bool,
 }
 
+#[derive(Default)]
+struct StepSynthFeedback {
+    /// The palette source that the message describes. An explicit file has none.
+    source: Option<u32>,
+    message: Option<String>,
+    error: bool,
+}
+
 /// Native frontend. It owns view state and submits commands to the headless session.
 pub struct MixJamApp {
     session: Session,
@@ -216,6 +226,7 @@ pub struct MixJamApp {
     show_help: bool,
     show_stretch_help: bool,
     show_effects_help: bool,
+    show_step_synth_help: bool,
     show_libraries: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
@@ -262,6 +273,7 @@ pub struct MixJamApp {
     step_synth_bar: usize,
     step_synth_file: Option<PathBuf>,
     step_synth_effects_expanded: bool,
+    step_synth_feedback: StepSynthFeedback,
     edit_start: u64,
     edit_end: u64,
     /// The sound and catalog revision that the edit range was last set for.
@@ -390,6 +402,7 @@ impl MixJamApp {
             show_help: capture_view == "help",
             show_stretch_help: false,
             show_effects_help: false,
+            show_step_synth_help: false,
             show_libraries: matches!(
                 capture_view.as_str(),
                 "libraries" | "library-providers" | "library-tempos"
@@ -467,6 +480,7 @@ impl MixJamApp {
             step_synth_bar: 0,
             step_synth_file: None,
             step_synth_effects_expanded: capture_view == "step-synth-effects",
+            step_synth_feedback: StepSynthFeedback::default(),
             edit_start: 0,
             edit_end: 0,
             edit_source: None,
@@ -1216,6 +1230,9 @@ impl MixJamApp {
                 ui.separator();
                 ui.label(egui::RichText::new("Effect Studio").strong());
                 effects_help(ui);
+                ui.separator();
+                ui.label(egui::RichText::new("Step synth").strong());
+                step_synth_help(ui);
             });
         titled_window("Time Stretcher help")
             .open(&mut self.show_stretch_help)
@@ -1233,6 +1250,14 @@ impl MixJamApp {
             .constrain_to(ctx.viewport_rect().shrink(12.0))
             .vscroll(true)
             .show(ctx, effects_help);
+        titled_window("Step synth help")
+            .open(&mut self.show_step_synth_help)
+            .resizable(false)
+            .default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .vscroll(true)
+            .show(ctx, step_synth_help);
     }
 
     fn sample_conflicts_open(&self) -> bool {
@@ -1625,6 +1650,21 @@ impl MixJamApp {
                 self.effects_feedback.message = Some("Save cancelled.".into());
                 self.effects_feedback.error = false;
             }
+            let step_message = match request {
+                FileRequest::SynthSource => Some("Source selection cancelled."),
+                FileRequest::SavePattern => Some("Pattern save cancelled."),
+                FileRequest::LoadPattern => Some("Pattern load cancelled."),
+                FileRequest::SaveSound {
+                    group: "Step synth",
+                    stretch: None,
+                    ..
+                } => Some("Sequence save cancelled."),
+                _ => None,
+            };
+            if let Some(message) = step_message {
+                self.step_synth_feedback.message = Some(message.into());
+                self.step_synth_feedback.error = false;
+            }
             return;
         };
         match request {
@@ -1675,6 +1715,15 @@ impl MixJamApp {
                             ));
                             self.effects_feedback.error = false;
                         }
+                        if group == "Step synth" {
+                            self.step_synth_feedback.source =
+                                self.step_synth_file.is_none().then_some(id);
+                            self.step_synth_feedback.message = Some(format!(
+                                "Saved {} to Step synth.",
+                                path.file_name().unwrap_or_default().to_string_lossy()
+                            ));
+                            self.step_synth_feedback.error = false;
+                        }
                     }
                 }
                 Err(error) => {
@@ -1688,6 +1737,11 @@ impl MixJamApp {
                         self.effects_feedback.message =
                             Some(format!("Cannot save the sound: {error}"));
                         self.effects_feedback.error = true;
+                    }
+                    if group == "Step synth" && stretch.is_none() {
+                        self.step_synth_feedback.message =
+                            Some(format!("Cannot save the sequence: {error}"));
+                        self.step_synth_feedback.error = true;
                     }
                     self.error(error);
                 }
@@ -1707,18 +1761,31 @@ impl MixJamApp {
             },
             FileRequest::SampleFolder => self.select_wave_folder(&path),
             FileRequest::ProviderFolder(product) => self.add_library(product, &path),
-            FileRequest::SynthSource => self.step_synth_file = Some(path),
-            FileRequest::SavePattern => match self.session.save_pattern(&path, &self.step_synth) {
-                Ok(()) => self.message("Saved Step synth pattern."),
-                Err(error) => self.error(error),
-            },
-            FileRequest::LoadPattern => match self.session.load_pattern(&path) {
-                Ok(state) => {
-                    self.step_synth = state;
-                    self.message("Loaded Step synth pattern.");
+            FileRequest::SynthSource => {
+                self.step_synth_file = Some(path);
+                self.step_synth_feedback = StepSynthFeedback {
+                    source: None,
+                    message: Some("Selected a source file. Listen before saving.".into()),
+                    error: false,
+                };
+            }
+            FileRequest::SavePattern => {
+                match self.session.save_pattern(&path, &self.step_synth) {
+                    Ok(()) => self.message("Saved Step synth pattern."),
+                    Err(error) => self.error(error),
                 }
-                Err(error) => self.error(error),
-            },
+                self.step_synth_notice();
+            }
+            FileRequest::LoadPattern => {
+                match self.session.load_pattern(&path) {
+                    Ok(state) => {
+                        self.step_synth = state;
+                        self.message("Loaded Step synth pattern.");
+                    }
+                    Err(error) => self.error(error),
+                }
+                self.step_synth_notice();
+            }
             FileRequest::ResolveMissing(id) => self.resolve_missing_sample_with(id, Some(path)),
         }
     }
@@ -2089,170 +2156,82 @@ impl MixJamApp {
         }
         if self.show_step_synth {
             let mut open = true;
-            titled_window("Step synth")
-                .open(&mut open)
-                .default_width(820.0)
-                .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-                .constrain_to(ctx.viewport_rect().shrink(12.0))
-                .vscroll(true)
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(self.step_synth_file.as_ref().map_or_else(
-                                || self.source_name(),
-                                |p| {
-                                    p.file_stem()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .into_owned()
-                                },
-                            ))
-                            .strong(),
-                        );
-                        if ui.button("Choose source file").clicked() {
-                            self.ask_path(FileRequest::SynthSource);
-                        }
-                        if ui.button("Use palette sound").clicked() {
-                            self.step_synth_file = None;
-                        }
-                    });
-                    if self.step_synth_file.is_none() && self.show_missing_source(ui) {
-                        return;
+            let explicit_file = self.step_synth_file.is_some();
+            let source_id = self.source_id();
+            let palette_source = source_id.filter(|_| !explicit_file);
+            if self.step_synth_feedback.source != palette_source {
+                self.step_synth_feedback = StepSynthFeedback {
+                    source: palette_source,
+                    ..Default::default()
+                };
+            }
+            let name = self.step_synth_file.as_ref().map_or_else(
+                || self.source_name(),
+                |path| {
+                    path.file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                },
+            );
+            let missing = !explicit_file
+                && source_id.is_some_and(|id| self.session.missing_sample(id).is_some());
+            let available = explicit_file
+                || source_id.is_some_and(|id| self.session.library().sample_by_id(id).is_some());
+            let action = step_synth::show(
+                ctx,
+                &mut open,
+                step_synth::Source {
+                    name: &name,
+                    available,
+                    missing,
+                    explicit_file,
+                },
+                step_synth::Feedback {
+                    message: self.step_synth_feedback.message.as_deref(),
+                    error: self.step_synth_feedback.error,
+                },
+                &mut self.step_synth,
+                &mut self.step_synth_bar,
+                &mut self.step_synth_effects_expanded,
+            );
+            match action {
+                Ok(step_synth::Action::ChooseSource) => self.ask_path(FileRequest::SynthSource),
+                Ok(step_synth::Action::PaletteSource) => {
+                    self.step_synth_file = None;
+                    self.step_synth_feedback = StepSynthFeedback::default();
+                }
+                Ok(step_synth::Action::Listen) => {
+                    match self.step_synth_pcm() {
+                        Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
+                        Err(error) => self.error(error),
                     }
-                    ui.horizontal(|ui| {
-                        ui.label("View bar");
-                        for bar in 0..4 {
-                            if ui
-                                .selectable_label(
-                                    self.step_synth_bar == bar,
-                                    format!("{}", bar + 1),
-                                )
-                                .clicked()
-                            {
-                                self.step_synth_bar = bar;
-                            }
-                        }
-                        ui.add_space(12.0);
-                        for bar in 0..4 {
-                            ui.checkbox(
-                                &mut self.step_synth.active_bars[bar],
-                                format!("Active {}", bar + 1),
-                            );
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut self.step_synth.cut_sixteenth, "1/16 cut");
-                        ui.checkbox(&mut self.step_synth.loop_source, "Loop source");
-                        ui.label("BPM");
-                        name_control(
-                            bpm_picker(ui, "step_synth_bpm", &mut self.step_synth.bpm),
-                            "Step synth BPM",
-                        );
-                        if ui.button("Clear bar").clicked() {
-                            self.step_synth.steps
-                                [self.step_synth_bar * 16..self.step_synth_bar * 16 + 16]
-                                .fill(None);
-                        }
-                    });
-                    ui.scope(|ui| {
-                        ui.spacing_mut().interact_size.y = 16.0;
-                        ui.spacing_mut().button_padding.y = 0.0;
-                        ui.style_mut()
-                            .text_styles
-                            .insert(egui::TextStyle::Body, FontId::proportional(12.0));
-                        egui::Grid::new("step_synth_notes")
-                            .spacing(Vec2::new(2.0, 2.0))
-                            .show(ui, |ui| {
-                                for note in (-12_i8..=12).rev() {
-                                    ui.label(if note == 0 {
-                                        "A  0".to_string()
-                                    } else {
-                                        format!("{note:+}")
-                                    });
-                                    for step in 0..16 {
-                                        let index = self.step_synth_bar * 16 + step;
-                                        let selected = self.step_synth.steps[index] == Some(note);
-                                        let fill = if selected {
-                                            CORAL
-                                        } else if matches!(
-                                            (note + 24) % 12,
-                                            0 | 2 | 3 | 5 | 7 | 8 | 10
-                                        ) {
-                                            Color32::from_rgb(39, 45, 51)
-                                        } else {
-                                            CANVAS
-                                        };
-                                        let label =
-                                            format!("Step {}, {note:+} semitones", step + 1);
-                                        let response = ui.add_sized(
-                                            [33.0, 16.0],
-                                            egui::Button::new("").fill(fill),
-                                        );
-                                        response.widget_info(|| {
-                                            egui::WidgetInfo::selected(
-                                                egui::WidgetType::SelectableLabel,
-                                                ui.is_enabled(),
-                                                selected,
-                                                &label,
-                                            )
-                                        });
-                                        if response.on_hover_text(label).clicked() {
-                                            self.step_synth.steps[index] =
-                                                if selected { None } else { Some(note) };
-                                        }
-                                    }
-                                    ui.end_row();
-                                }
-                                ui.label("Step");
-                                for step in 1..=16 {
-                                    ui.label(format!("{step}"));
-                                }
-                                ui.end_row();
-                            });
-                    });
-                    egui::CollapsingHeader::new("Effects")
-                        .default_open(self.step_synth_effects_expanded)
-                        .show(ui, |ui| effects_controls(ui, &mut self.step_synth.effects));
-                    ui.horizontal(|ui| {
-                        if ui.button("Listen sequence").clicked() {
-                            match self.step_synth_pcm() {
-                                Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
-                                Err(error) => self.error(error),
-                            }
-                        }
-                        if ui
-                            .button("Save sequence")
-                            .on_hover_text("Save a WAV and add it to Step synth.")
-                            .clicked()
-                        {
-                            match self.step_synth_pcm() {
-                                Ok(pcm) => self.save_pcm(
-                                    pcm,
-                                    "Step synth sequence",
-                                    "Step synth",
-                                    self.step_synth.bpm,
-                                ),
-                                Err(error) => self.error(error),
-                            }
-                        }
-                        if ui
-                            .button("Save pattern")
-                            .on_hover_text("Save the editable pattern as JSON.")
-                            .clicked()
-                        {
-                            self.ask_path(FileRequest::SavePattern);
-                        }
-                        if ui.button("Load pattern").clicked() {
-                            self.ask_path(FileRequest::LoadPattern);
-                        }
-                    });
-                    if self.capture_path.is_some() && self.step_synth_effects_expanded {
-                        ui.scroll_to_cursor_animation(
-                            Some(egui::Align::BOTTOM),
-                            egui::style::ScrollAnimation::none(),
+                    self.step_synth_notice();
+                }
+                Ok(step_synth::Action::SaveSequence) => match self.step_synth_pcm() {
+                    Ok(pcm) => {
+                        self.step_synth_feedback.message =
+                            Some("Choose a WAV path to save the sequence.".into());
+                        self.step_synth_feedback.error = false;
+                        self.save_pcm(
+                            pcm,
+                            "Step synth sequence",
+                            "Step synth",
+                            self.step_synth.bpm,
                         );
                     }
-                });
+                    Err(error) => {
+                        self.error(error);
+                        self.step_synth_notice();
+                    }
+                },
+                Ok(step_synth::Action::SavePattern) => self.ask_path(FileRequest::SavePattern),
+                Ok(step_synth::Action::LoadPattern) => self.ask_path(FileRequest::LoadPattern),
+                Ok(step_synth::Action::Details) => self.show_import_details = true,
+                Ok(step_synth::Action::Help) => self.show_step_synth_help = true,
+                Ok(step_synth::Action::None) => {}
+                Err(error) => self.error(error),
+            }
             self.show_step_synth = open;
         }
         if self.show_sample_edit {
@@ -2447,6 +2426,11 @@ impl MixJamApp {
         )
     }
 
+    fn step_synth_notice(&mut self) {
+        self.step_synth_feedback.message = Some(self.status.clone());
+        self.step_synth_feedback.error = self.status_error;
+    }
+
     fn edited_pcm(&self) -> Result<Pcm, String> {
         self.session.edited_pcm(
             self.source_id(),
@@ -2589,6 +2573,20 @@ fn effects_help(ui: &mut egui::Ui) {
         "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
         "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are new algorithms; original-product audio equivalence is not established.",
         "The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.",
+    ] {
+        ui.add(egui::Label::new(text).wrap());
+    }
+}
+
+fn step_synth_help(ui: &mut egui::Ui) {
+    for text in [
+        "Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.",
+        "Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
+        "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
+        "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 140, 160, and 180 BPM.",
+        "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+        "The upper-left triangle collapses the tool without changing its draft. Tab reaches controls and cells; a focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
+        "Resampling, source looping, and effects are reconstruction policies. Original-engine audio equivalence is not established.",
     ] {
         ui.add(egui::Label::new(text).wrap());
     }

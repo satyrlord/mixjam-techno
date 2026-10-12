@@ -3502,6 +3502,7 @@ mod boundary_tests {
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
+            ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
         ] {
             for forbidden in [
@@ -3535,6 +3536,7 @@ mod boundary_tests {
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
+            ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),

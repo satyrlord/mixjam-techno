@@ -67,6 +67,27 @@ mod tests {
     }
 
     #[test]
+    fn effects_disabled_actions_explain_themselves_on_hover() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        app.show_effects = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for label in ["Listen", "Save sound"] {
+            assert!(accessible_node(&output, label).1.is_disabled());
+            let center = effects_control_rect(&output, label).center();
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(center)], egui::Modifiers::NONE);
+            let mut shown = false;
+            for _ in 0..4 {
+                shown |= frame(&ctx, &mut app, vec![], egui::Modifiers::NONE).shapes.iter().any(|shape| matches!(&shape.shape,
+                    egui::Shape::Text(text) if text.galley.job.text == "Select an available sound to process it."));
+            }
+            assert!(shown, "Disabled {label} must show why it is unavailable on hover.");
+        }
+    }
+
+    #[test]
     fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_settings() {
         for density in [1.0, 1.5, 2.0] {
             let (ctx, mut app) = fixture();
@@ -2003,6 +2024,474 @@ mod tests {
             )],
             egui::Modifiers::NONE,
         )
+    }
+
+    fn activate_control(
+        context: &egui::Context,
+        app: &mut MixJamApp,
+        output: &egui::FullOutput,
+        label: &str,
+    ) -> egui::FullOutput {
+        let target = step_synth_accessible_node(output, label).0;
+        frame(
+            context,
+            app,
+            vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Focus, target, data: None,
+            })],
+            egui::Modifiers::NONE,
+        );
+        frame(
+            context,
+            app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(context, app, vec![], egui::Modifiers::NONE)
+    }
+
+    fn step_synth_accessible_node<'a>(
+        output: &'a egui::FullOutput,
+        label: &str,
+    ) -> (egui::accesskit::NodeId, &'a egui::accesskit::Node) {
+        // The main menu also has Effects. Use tree ownership because the window
+        // bounds can still describe the collapsed size on the first expanded frame.
+        let window = accessible_node(output, "STEP SYNTH").0;
+        let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        let mut descendants = BTreeSet::from([window]);
+        for _ in 0..64 {
+            let before = descendants.len();
+            for (id, node) in nodes {
+                if descendants.contains(id) { descendants.extend(node.children().iter().copied()); }
+            }
+            if descendants.len() == before { break; }
+        }
+        nodes.iter()
+            .find(|(id, node)| descendants.contains(id) && node.label() == Some(label))
+            .map(|(id, node)| (*id, node))
+            .unwrap_or_else(|| panic!("Missing Step synth control: {label}"))
+    }
+
+    fn step_synth_control_rect(output: &egui::FullOutput, label: &str) -> Rect {
+        let bounds = step_synth_accessible_node(output, label).1.bounds().unwrap();
+        Rect::from_min_max(
+            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+        )
+    }
+
+    fn step_synth_text_mesh_bounds(output: &egui::FullOutput, label: &str) -> Rect {
+        let window = effects_control_rect(output, "STEP SYNTH");
+        output.shapes.iter().filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(shape) if shape.galley.job.text == label => {
+                let bounds = shape.galley.mesh_bounds.translate(shape.pos.to_vec2());
+                window.contains_rect(bounds).then_some(bounds)
+            }
+            _ => None,
+        }).reduce(|bounds, next| bounds.union(next))
+            .unwrap_or_else(|| panic!("Missing Step synth glyphs: {label}"))
+    }
+
+    fn step_synth_skin(output: &egui::FullOutput, height: f32) -> (egui::TextureId, Rect, Rect) {
+        output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Mesh(mesh) if (mesh.calc_bounds().width() - 820.0).abs() < 0.1
+                && (mesh.calc_bounds().height() - height).abs() < 0.1 =>
+                Some((mesh.texture_id, mesh.calc_bounds(), shape.clip_rect)),
+            _ => None,
+        }).expect("Step synth must paint a complete compact skin.")
+    }
+
+    #[test]
+    fn step_synth_edits_one_note_per_step_and_clears_only_the_viewed_bar() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| {
+            style.animation_time = 0.0;
+            style.scroll_animation = egui::style::ScrollAnimation::none();
+        });
+        app.selected_sample = Some(1);
+        app.show_step_synth = true;
+        app.step_synth.steps[1] = Some(-36);
+        app.step_synth.steps[16] = Some(-48);
+        app.step_synth.steps[48] = Some(48);
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = activate_control(&ctx, &mut app, &output, "Step 1, +12 semitones");
+        assert_eq!(app.step_synth.steps[0], Some(12), "A new pitch must replace the existing note.");
+        let output = activate_control(&ctx, &mut app, &output, "Step 1, +12 semitones");
+        assert_eq!(app.step_synth.steps[0], None, "Activating the selected note must clear it.");
+        let output = activate_control(&ctx, &mut app, &output, "Step 1, +11 semitones");
+        let output = activate_control(&ctx, &mut app, &output, "View bar 2");
+        assert_eq!(app.step_synth_bar, 1);
+        let output = activate_control(&ctx, &mut app, &output, "Step 5, +12 semitones");
+        assert_eq!(app.step_synth.steps[20], Some(12));
+        let before_clear = app.step_synth.clone();
+        let output = activate_control(&ctx, &mut app, &output, "Clear bar");
+        assert!(app.step_synth.steps[16..32].iter().all(Option::is_none));
+        assert_eq!(&app.step_synth.steps[..16], &before_clear.steps[..16]);
+        assert_eq!(&app.step_synth.steps[32..], &before_clear.steps[32..]);
+        let output = activate_control(&ctx, &mut app, &output, "View bar 4");
+        assert_eq!(app.step_synth.steps[48], Some(48), "Viewing a bar must retain loaded pitches outside the visible grid.");
+        activate_control(&ctx, &mut app, &output, "View bar 1");
+        assert_eq!(app.step_synth.steps[0], Some(11));
+        assert_eq!(app.step_synth.steps[1], Some(-36));
+        assert_eq!(app.step_synth.active_bars, before_clear.active_bars, "Viewing a bar must not enable it for playback.");
+    }
+
+    #[test]
+    fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| {
+                style.animation_time = 0.0;
+                style.scroll_animation = egui::style::ScrollAnimation::none();
+            });
+            app.selected_sample = Some(1);
+            app.show_step_synth = true;
+            app.step_synth.steps[63] = Some(-48);
+            app.step_synth.effects.echo = Some(Default::default());
+            let before = app.step_synth.clone();
+            let size = Vec2::new(960.0, 720.0);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            let mut textures = Vec::new();
+            let mut output = egui::FullOutput::default();
+            for _ in 0..4 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                textures.extend(output.textures_delta.set.iter().map(|(id, delta)| (*id, delta.image.size())));
+            }
+            let (expanded_texture, panel, clip) = step_synth_skin(&output, 556.0);
+            assert!(clip.expand(1.0 / density).contains_rect(panel));
+            assert!(textures.contains(&(expanded_texture, [(820.0 * density) as usize, (556.0 * density) as usize])),
+                "The {density}x skin must use one texel per physical pixel.");
+            for edge in [panel.left(), panel.top(), panel.right(), panel.bottom()] {
+                assert!((edge * density - (edge * density).round()).abs() < 0.001);
+            }
+            let window = effects_control_rect(&output, "STEP SYNTH");
+            assert!((window.width() - 820.0).abs() <= 1.0 / density);
+            assert!((window.height() - 600.0).abs() <= 1.0 / density);
+            assert!(viewport.contains_rect(window), "The full tool must fit the minimum window at {density}x.");
+            let footer = step_synth_control_rect(&output, "Step synth status");
+            assert!(footer.top() >= panel.bottom());
+            assert!(window.contains_rect(footer));
+            assert_eq!(accessible_node(&output, "Step synth source sound").1.value(), Some("good grasp 2"));
+            for label in ["Choose source file", "Use palette sound", "View bar 1", "View bar 4",
+                "Active 1", "Active 4", "1/16 cut", "Loop source", "Step synth BPM", "Clear bar",
+                "Listen sequence", "Save sequence", "Effects", "Save pattern", "Load pattern"] {
+                let bounds = step_synth_control_rect(&output, label);
+                assert!(panel.contains_rect(bounds), "{label} must fit the skin at {density}x.");
+                assert!(!bounds.intersects(footer), "{label} must not overlap the status footer.");
+            }
+            for label in ["Choose source file", "Use palette sound", "Clear bar", "Listen sequence",
+                "Save sequence", "Effects", "Save pattern", "Load pattern"] {
+                let glyphs = step_synth_text_mesh_bounds(&output, label);
+                let button = step_synth_control_rect(&output, label);
+                assert!(button.shrink(2.0).contains_rect(glyphs), "{label} must have clear space inside its button at {density}x.");
+            }
+            for bar in 1..=3 {
+                let caption = step_synth_text_mesh_bounds(&output, &format!("Active {bar}"));
+                let next_switch = step_synth_control_rect(&output, &format!("Active {}", bar + 1));
+                assert!(next_switch.left() - caption.right() >= 12.0,
+                    "Active bar captions need clear space before the next switch at {density}x.");
+            }
+            let bottom_note = "Step 16, -12 semitones";
+            focus_control(&ctx, &mut app, &output, bottom_note);
+            for _ in 0..4 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let cell = step_synth_control_rect(&output, bottom_note);
+            let note_view = Rect::from_min_size(panel.min + Vec2::new(20.0, 190.0), Vec2::new(784.0, 306.0));
+            assert!(note_view.contains_rect(cell), "Keyboard focus must scroll the lowest pitch into view at {density}x.");
+            assert!(!cell.intersects(step_synth_control_rect(&output, "Load pattern")));
+            let output = activate_control(&ctx, &mut app, &output, "Effects");
+            assert!(app.step_synth_effects_expanded);
+            accessible_node(&output, "Note grid");
+            text_rect(&output, "Sequence effects");
+            text_rect(&output, "Echo");
+            let output = activate_control(&ctx, &mut app, &output, "Collapse Step synth");
+            let (collapsed_texture, collapsed, clip) = step_synth_skin(&output, 48.0);
+            assert_ne!(expanded_texture, collapsed_texture, "Collapse must use separate complete artwork.");
+            assert!(textures.contains(&(collapsed_texture, [(820.0 * density) as usize, (48.0 * density) as usize])));
+            assert!(clip.expand(1.0 / density).contains_rect(collapsed));
+            for hidden in ["Step synth source sound", "Note grid", "Load pattern", "Step synth status"] {
+                assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+                    .any(|(_, node)| node.label() == Some(hidden)), "{hidden} must hide when collapsed.");
+            }
+            let output = activate_control(&ctx, &mut app, &output, "Expand Step synth");
+            step_synth_skin(&output, 556.0);
+            assert!(app.step_synth_effects_expanded, "Collapse must preserve the chosen pane.");
+            assert_eq!(app.step_synth, before, "Pane changes, scrolling, and collapse must preserve the draft.");
+            let output = activate_control(&ctx, &mut app, &output, "Note grid");
+            assert!(!app.step_synth_effects_expanded);
+            accessible_node(&output, "Step 16, -12 semitones");
+            activate_control(&ctx, &mut app, &output, "Step synth help");
+            assert!(app.show_step_synth_help);
+            app.show_step_synth_help = false;
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            activate_control(&ctx, &mut app, &output, "Close Step synth");
+            assert!(!app.show_step_synth);
+            assert_eq!(app.step_synth, before);
+        }
+    }
+
+    #[test]
+    fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recovery_available() {
+        for (available, missing, explicit_file, active) in [
+            (false, false, false, true),
+            (false, true, false, true),
+            (true, false, false, true),
+            (true, true, true, true),
+            (true, false, false, false),
+        ] {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            ctx.enable_accesskit();
+            let mut state = StepSynthState::default();
+            if !active { state.active_bars.fill(false); }
+            let (mut open, mut view_bar, mut effects) = (true, 0, false);
+            let mut render = |events| {
+                let mut action = step_synth::Action::None;
+                let output = ctx.run(egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                    focused: true, events, ..Default::default()
+                }, |ctx| {
+                    action = step_synth::show(ctx, &mut open,
+                        step_synth::Source { name: "Source", available, missing, explicit_file },
+                        step_synth::Feedback { message: None, error: false },
+                        &mut state, &mut view_bar, &mut effects).unwrap();
+                });
+                (output, action)
+            };
+            for _ in 0..3 { render(vec![]); }
+            let (mut output, _) = render(vec![]);
+            let ready = available && (!missing || explicit_file) && active;
+            for label in ["Listen sequence", "Save sequence"] {
+                assert_eq!(!accessible_node(&output, label).1.is_disabled(), ready,
+                    "{label}: available={available}, missing={missing}, file={explicit_file}, active={active}");
+            }
+            for label in ["Choose source file", "Use palette sound", "Save pattern", "Load pattern",
+                "Active 1", "1/16 cut", "Loop source", "Step synth BPM", "Step 1, +12 semitones"] {
+                assert!(!accessible_node(&output, label).1.is_disabled(), "{label} must remain available for editing or recovery.");
+            }
+            let mut actions = vec![
+                ("Choose source file", step_synth::Action::ChooseSource),
+                ("Use palette sound", step_synth::Action::PaletteSource),
+                ("Save pattern", step_synth::Action::SavePattern),
+                ("Load pattern", step_synth::Action::LoadPattern),
+                ("Step synth help", step_synth::Action::Help),
+            ];
+            if missing && !explicit_file { actions.push(("Import details", step_synth::Action::Details)); }
+            if ready {
+                actions.push(("Listen sequence", step_synth::Action::Listen));
+                actions.push(("Save sequence", step_synth::Action::SaveSequence));
+            }
+            for (label, expected) in actions {
+                let target = accessible_node(&output, label).0;
+                render(vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Focus, target, data: None,
+                })]);
+                let (_, action) = render(vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
+                assert_eq!(std::mem::discriminant(&action), std::mem::discriminant(&expected),
+                    "{label} must return its Session action without performing audio or file work in the view.");
+                (output, _) = render(vec![]);
+            }
+        }
+    }
+
+    #[test]
+    fn step_synth_options_apply_to_the_draft_without_starting_transport() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_step_synth = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = activate_control(&ctx, &mut app, &output, "Active 2");
+        assert_eq!(app.step_synth.active_bars, [true, true, false, false]);
+        let output = activate_control(&ctx, &mut app, &output, "Active 1");
+        assert_eq!(app.step_synth.active_bars, [false, true, false, false]);
+        let output = activate_control(&ctx, &mut app, &output, "1/16 cut");
+        let output = activate_control(&ctx, &mut app, &output, "Loop source");
+        assert!(app.step_synth.cut_sixteenth && app.step_synth.loop_source);
+        let output = activate_control(&ctx, &mut app, &output, "Step synth BPM");
+        focus_control(&ctx, &mut app, &output, "160");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth.bpm, 160.0);
+        let output = activate_control(&ctx, &mut app, &output, "Active 2");
+        for label in ["Listen sequence", "Save sequence"] {
+            assert!(accessible_node(&output, label).1.is_disabled(), "Audio actions need at least one active bar.");
+        }
+        let output = activate_control(&ctx, &mut app, &output, "Active 4");
+        for label in ["Listen sequence", "Save sequence"] {
+            assert!(!accessible_node(&output, label).1.is_disabled());
+        }
+        assert_eq!(app.step_synth_bar, 0, "Active bars and viewed bars must stay independent.");
+        assert!(!app.session.wants_playback(), "Editing generator options must not start transport.");
+        assert!(!app.session.is_previewing());
+        assert!(app.step_synth.validate().is_ok());
+    }
+
+    #[test]
+    fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_errors_locally() {
+        let (ctx, mut app) = missing_fixture();
+        ctx.enable_accesskit();
+        app.select_clip(1, false);
+        app.show_step_synth = true;
+        let draft = app.step_synth.clone();
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(step_synth_accessible_node(&output, "Listen sequence").1.is_disabled());
+        step_synth_accessible_node(&output, "Import details");
+        let absent_source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tmp/step-synth-tests")
+            .join(format!("absent-source-{}.wav", std::process::id()));
+        assert!(!absent_source.exists());
+        app.finish_path(FileRequest::SynthSource, Some(absent_source.clone()));
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth_file.as_ref(), Some(&absent_source));
+        assert!(!step_synth_accessible_node(&output, "Listen sequence").1.is_disabled(),
+            "An explicit file must bypass the missing palette source.");
+        let output = activate_control(&ctx, &mut app, &output, "Listen sequence");
+        assert!(app.status_error && app.step_synth_feedback.error);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some(app.status.as_str()));
+        assert!(!app.session.is_previewing());
+        assert_eq!(app.step_synth, draft);
+        let output = activate_control(&ctx, &mut app, &output, "Use palette sound");
+        assert!(app.step_synth_file.is_none());
+        assert!(app.step_synth_feedback.message.is_none());
+        assert!(!app.step_synth_feedback.error);
+        assert!(step_synth_accessible_node(&output, "Listen sequence").1.is_disabled());
+        activate_control(&ctx, &mut app, &output, "Import details");
+        assert!(app.show_import_details);
+        assert_eq!(app.step_synth, draft);
+    }
+
+    #[test]
+    fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_complete_state() {
+        let (ctx, mut app) = fixture();
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tmp/step-synth-tests")
+            .join(format!("pattern-paths-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        app.show_step_synth = true;
+        app.step_synth.bpm = 160.0;
+        app.step_synth.active_bars = [true, false, true, false];
+        app.step_synth.steps[1] = Some(-48);
+        app.step_synth.steps[63] = Some(48);
+        app.step_synth.cut_sixteenth = true;
+        app.step_synth.loop_source = true;
+        app.step_synth.effects.dirty = 0.25;
+        let saved = app.step_synth.clone();
+        app.finish_path(FileRequest::SavePattern, None);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Pattern save cancelled."));
+        app.finish_path(FileRequest::LoadPattern, None);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Pattern load cancelled."));
+        app.finish_path(FileRequest::SynthSource, None);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Source selection cancelled."));
+        assert!(!app.step_synth_feedback.error);
+        assert_eq!(app.step_synth, saved);
+        assert!(app.step_synth_file.is_none());
+        let pattern = dir.join("sequence.json");
+        app.finish_path(FileRequest::SavePattern, Some(pattern.clone()));
+        assert!(!app.status_error);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Saved Step synth pattern."));
+        assert_eq!(app.session.load_pattern(&pattern).unwrap(), saved);
+        app.step_synth = StepSynthState::default();
+        app.finish_path(FileRequest::LoadPattern, Some(pattern));
+        assert!(!app.status_error);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Loaded Step synth pattern."));
+        assert_eq!(app.step_synth, saved, "Loading must restore notes, active bars, tempo, source options, and effects.");
+        let broken = dir.join("broken.json");
+        std::fs::write(&broken, b"{ not a pattern }").unwrap();
+        app.finish_path(FileRequest::LoadPattern, Some(broken));
+        assert!(app.status_error);
+        assert!(app.step_synth_feedback.error);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some(app.status.as_str()));
+        assert_eq!(app.step_synth, saved, "A failed load must retain the current editable draft.");
+        app.finish_path(FileRequest::SavePattern, Some(dir.join("absent-parent/sequence.json")));
+        assert!(app.status_error);
+        assert!(app.step_synth_feedback.error);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some(app.status.as_str()));
+        assert_eq!(app.step_synth, saved);
+        assert_eq!(app.selected_sample, None);
+        assert_eq!(app.step_synth_bar, 0);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth, saved);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_results() {
+        let (ctx, mut app) = missing_fixture();
+        ctx.enable_accesskit();
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tmp/step-synth-tests")
+            .join(format!("feedback-source-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        app.selected_sample = Some(1);
+        app.show_step_synth = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        app.finish_path(FileRequest::LoadPattern, None);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Pattern load cancelled."),
+            "Feedback must remain while the source is unchanged.");
+        app.select_clip(1, false);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(app.step_synth_feedback.message.is_none(), "A new palette source must drop the previous source's feedback.");
+        assert!(output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter().any(|(_, node)|
+            [node.label(), node.value()].contains(&Some("Missing audio. Choose a source file or open Import details."))),
+            "The footer must return to the missing-audio guidance.");
+        app.finish_path(FileRequest::SynthSource, Some(dir.join("source.wav")));
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Selected a source file. Listen before saving."));
+        app.selected_sample = Some(1);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Selected a source file. Listen before saving."),
+            "Palette selection must not affect feedback while an explicit file is the source.");
+        app.step_synth_file = None;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        app.finish_path(FileRequest::SaveSound {
+            pcm: Pcm { sample_rate: 1000, channels: 1, samples: vec![0.25; 1000] },
+            name: "sequence".into(), group: "Step synth", source_bpm: 140.0, stretch: None,
+        }, Some(dir.join("sequence.wav")));
+        assert_ne!(app.selected_sample, Some(1), "Saving must select the new Step synth sound.");
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth_feedback.message.as_deref(), Some("Saved sequence.wav to Step synth."),
+            "Selecting the saved sound must keep the save confirmation.");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_themselves() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        app.selected_sample = Some(1);
+        app.show_step_synth = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = activate_control(&ctx, &mut app, &output, "Effects");
+        assert!(app.step_synth_effects_expanded);
+        assert_eq!(output.platform_output.accesskit_update.as_ref().unwrap().focus, step_synth_accessible_node(&output, "Note grid").0,
+            "Switching panes from the keyboard must keep focus on the pane button.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(!app.step_synth_effects_expanded, "A second Enter must return to the note grid.");
+        assert_eq!(output.platform_output.accesskit_update.as_ref().unwrap().focus, step_synth_accessible_node(&output, "Effects").0);
+        app.step_synth.active_bars.fill(false);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let listen = step_synth_control_rect(&output, "Listen sequence");
+        // The footer shows the same sentence, so count the tooltip as an added copy.
+        let copies = |output: &egui::FullOutput| output.shapes.iter().filter(|shape| matches!(&shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text == "Select at least one generator bar.")).count();
+        let before = copies(&output);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(listen.center())], egui::Modifiers::NONE);
+        let mut hovered = before;
+        for _ in 0..4 {
+            hovered = hovered.max(copies(&frame(&ctx, &mut app, vec![], egui::Modifiers::NONE)));
+        }
+        assert!(hovered > before, "A disabled audio action must show why it is unavailable on hover.");
     }
 
     #[test]

@@ -38,6 +38,14 @@ colors:
   effects-well: "#1e1715"
   effects-well-line: "#5a413a"
   effects-error: "#ffa78f"
+  step-cream: "#f5e8cd"
+  step-ink: "#181917"
+  step-body: "#2c2e29"
+  step-well: "#191d16"
+  step-face: "#242822"
+  step-edge: "#5b634b"
+  step-amber: "#f5c156"
+  step-error: "#ffa78f"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -96,17 +104,31 @@ typography:
     fontFamily: "Inter"
     fontSize: "12.5px"
     fontWeight: 500
+  step-title:
+    fontFamily: "Syncopate"
+    fontSize: "22px"
+    fontWeight: 700
+  step-status:
+    fontFamily: "Inter"
+    fontSize: "12.5px"
+    fontWeight: 500
 rounded:
   clip: "3px"
   control: "5px"
   transport: "6px"
   window: "10px"
+  step-note: "2px"
+  step-control: "4px"
+  step-switch: "8px"
+  step-switch-on: "6px"
 spacing:
   item-horizontal: "8px"
   item-vertical: "6px"
   button-horizontal: "10px"
   panel-horizontal: "18px"
   header-horizontal: "22px"
+  step-row: "16px"
+  step-column: "46px"
 components:
   action-primary:
     backgroundColor: "{colors.accent}"
@@ -182,6 +204,37 @@ components:
   effects-reset:
     textColor: "{colors.effects-cream}"
     typography: "{typography.button}"
+  step-panel:
+    width: "820px"
+    height: "556px"
+  step-collapsed:
+    width: "820px"
+    height: "48px"
+  step-footer:
+    backgroundColor: "{colors.step-body}"
+    typography: "{typography.step-status}"
+    width: "820px"
+    height: "44px"
+  step-control:
+    backgroundColor: "{colors.step-face}"
+    textColor: "{colors.step-cream}"
+    rounded: "{rounded.step-control}"
+    height: "28px"
+  step-note:
+    backgroundColor: "{colors.step-face}"
+    rounded: "{rounded.step-note}"
+    width: "42px"
+    height: "14px"
+  step-switch:
+    backgroundColor: "{colors.step-ink}"
+    rounded: "{rounded.step-switch}"
+    width: "26px"
+    height: "16px"
+  step-switch-on:
+    backgroundColor: "{colors.step-amber}"
+    rounded: "{rounded.step-switch-on}"
+    width: "22px"
+    height: "12px"
 ---
 
 # Design System: MixJam Techno
@@ -197,12 +250,13 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
-Time Stretcher and Effect Studio are the owner's scoped exceptions. Time
-Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
+Time Stretcher, Effect Studio, and Step synth are the owner's scoped exceptions.
+Time Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
 controls, and lamped Listen and Save buttons. Effect Studio uses a compact red
 metal landscape panel with small rotary controls, chrome section switches,
-green section lamps, and black and ivory action buttons. These treatments do
-not change the shared studio theme.
+green section lamps, and black and ivory action buttons. Step synth uses olive
+textured metal, a charcoal bezel, cream labels, amber switches, and coral
+selected notes. These treatments do not change the shared studio theme.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -214,8 +268,8 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 - Lime primary actions, category-colored clips, and coral recording signals.
 
 The implementation is native Windows Rust with eframe/egui. Tokens and painting
-live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`
-and Effect Studio in `src/ui/effects.rs`;
+live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`,
+Effect Studio in `src/ui/effects.rs`, and Step synth in `src/ui/step_synth.rs`;
 native dialogs and input adapters live in `src/ui.rs`. Application
 state and behavior live in `src/application.rs`. Sizes here use portable `px`
 labels for egui logical points. The sidecar records native component metadata;
@@ -263,6 +317,14 @@ form its status display; Effects Error marks local error text. Red metal,
 chrome, and static knob colors come from the prepared artwork. The section
 lamps show the live enabled state and do not replace named switch states.
 
+Step Cream carries Step synth's live title, labels, source, and feedback. Step
+Ink carries lettering on ivory Save sequence and amber selections. Step Body
+continues its charcoal bezel around the footer. Step Well, Face, and Edge form
+the dark grid, fields, native buttons, and borders. Step Amber marks enabled
+switches and the viewed bar; shared Coral marks selected notes. Step Error
+marks local errors and outlines selected cells. Olive metal comes from the
+prepared background; these tokens are local to Step synth.
+
 ## Typography
 
 The native build embeds Syncopate Bold 700 for branding and titles, and
@@ -302,6 +364,12 @@ Effect Studio uses a live uppercase Syncopate title through Effects Title.
 Inter labels use the shared Clip size; source and action text use Body and
 Button. Effects Value and Effects Status support its numeric wells and footer.
 Keep this standard desktop text scale when preparing hardware artwork.
+
+Step synth uses Step Title for its live uppercase title. Controls and labels
+use 12-13-point Inter Medium; action, source, and footer text use 12.5 points.
+Grid pitch labels and step numbers use 12 points. Keep labels separate from
+switches and check actual glyph bounds against adjacent controls. The hardware
+reference does not require oversized text or controls.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -352,11 +420,9 @@ pan descriptions, and output state stay grouped within each strip. A track with
 several distinct sounds shows their count and lists their names on hover.
 Faders are at least 74 points high at the minimum window size.
 
-Step synth constrains its floating window to the viewport and scrolls vertically.
-Sample libraries uses the same viewport constraint and vertical scrolling. A
-large expanded Folder tempos list must leave the provider controls reachable.
-Its note grid uses 33 by 16-point cells with 2-point gaps; this compact density is
-scoped to the grid. Other tool controls retain the shared control spacing.
+Sample libraries constrains its floating window to the viewport and scrolls
+vertically. A large expanded Folder tempos list must leave the provider
+controls reachable.
 
 Time Stretcher uses a fixed 2:1 panel, 640 by 320 logical points at the supported
 100%, 150%, and 200% display scales. The source selector spans the panel above
@@ -373,6 +439,18 @@ and standard text scale; do not enlarge the panel into a portrait surface.
 These dimensions apply at the prepared display scales. At other scales the
 nearest artwork density determines the logical size, preserving physical pixels.
 
+Step synth's current implementation uses an 820 by 556-point olive skin above
+a 44-point footer, for an 820 by 600-point expanded window. Its separate
+collapsed skin is 820 by 48 points. These dimensions record the implementation;
+the owner selected the treatment, not an exact fixed size. Source, bar, and
+option controls retain normal 28-point rows. The grid body scrolls vertically:
+its sixteen numbered columns stay above twenty-five pitch rows
+from +12 to -12. Cells are 42 by 14 points on 46-point column and 16-point row
+spacing. The five bottom actions and footer remain visible. Effects replaces
+the grid body with a bounded scrolling form; Note grid returns to editing.
+At other scales the nearest prepared density determines the logical size,
+preserving one texel per physical pixel.
+
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases
 are defined by `tools/verify-ui.ps1`; execution results belong in evidence reports.
@@ -382,8 +460,10 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 Flat color layers and thin borders separate controls from the work area. The
 shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
 scale. Shared floating windows use the default shadow from the pinned egui dark theme.
-Time Stretcher and Effect Studio use textured metal, inset displays, knobs,
-and button depth from their prepared PNG skins. Hover, focus, pressed, and
+Time Stretcher, Effect Studio, and Step synth use textured metal and bezel
+depth from their prepared PNG skins. Time Stretcher and Effect Studio also
+use prepared hardware controls. Step synth paints its fields, buttons, grid,
+and simple pill switches natively. Hover, focus, pressed, and
 disabled feedback remains native painting over each skin.
 Hover and focus states change immediately. The application has no motion tokens.
 
@@ -470,8 +550,9 @@ confirmation is an undoable project change; Esc hides it without an edit and
 the status bar reopens it.
 The idle status reads Ready. Errors and application notices remain visible.
 The empty mixer has one instruction for adding a sound to the arrangement.
-Floating libraries, sample editing, and Step synth use the shared native widget
-theme. Time Stretcher and Effect Studio use their scoped hardware panels below.
+Floating libraries and sample editing use the shared native widget theme.
+Time Stretcher, Effect Studio, and Step synth use their scoped hardware panels
+below.
 The frontend submits
 edits to the application layer; visual changes must preserve those commands.
 
@@ -607,6 +688,66 @@ Reserve room for Import details beside missing-audio feedback. Status text has
 a full tooltip and a polite accessible live region; errors include an Error
 label. No original-product DSP equivalence is established by this presentation.
 
+### Step synth
+
+`src/ui/step_synth.rs` paints separate expanded and collapsed backgrounds from
+`assets/step-synth/{100,150,200}/`. Both skins have a complete bezel. The olive
+material is empty: title, source, grid, fields, buttons, switch states, header
+icons, text, hover, focus, and disabled feedback remain live. See
+`assets/step-synth/README.md` for dimensions and generation provenance.
+Select the nearest prepared density and paint aligned bounds at one texel per
+physical pixel. Small switches are simple native pill forms, with a 26 by
+16-point track inside a 30 by 26-point input region. Do not put fine photographic
+detail into these controls.
+
+Collapse is at the upper left, Close at the upper right, and icon Help beside
+Close. The separate collapsed skin retains these controls and the title.
+Esc first leaves active entry, a popup, a modal, or a higher window; otherwise
+it closes the topmost Step synth. Collapse retains the complete draft.
+The source label truncates long names and retains its full tooltip and
+accessible value. Choose source file selects a WAV or PXD path; Use palette
+sound returns to the selected palette sound or clip. An explicit file takes
+precedence over missing palette audio. Selection retains the path without
+reading or validating its audio until Listen sequence or Save sequence.
+
+View bar selects one of four editable bars. Active 1-4 switches choose the
+bars to render, in ascending order. Each bar has sixteen sixteenth steps with
+one optional note per step. Clicking another pitch replaces that step's note;
+clicking the selected note clears it. Clear bar clears only the viewed sixteen
+steps. The grid shows +12 through -12 semitones, with A 0 as the source pitch.
+Loaded notes outside this visible range remain in the draft under the existing
+-48 through +48 validation range. Tab reaches named controls and cells; a
+focused cell scrolls into view. Selected state is also exposed through each
+cell's accessible name and state.
+
+BPM offers 120, 140, 160, and 180. 1/16 cut ends a trigger after one sixteenth;
+otherwise it continues until the next trigger or sequence end. Loop source
+repeats audio within that interval. Both switches and their labels expose
+detailed tooltips for on/off behavior, retriggering, source duration, and their
+combined operation. Cut explains that effects can continue after source gating;
+Loop source explains whole-file repetition rather than pattern repetition.
+Effects swaps the grid for the shared
+native `effects_controls` form, styled for this panel; Note grid restores it.
+Listen sequence, Save sequence, Effects, Save pattern, and Load pattern remain
+in the fixed bottom row. Listen and Save sequence need a source and an active
+bar. Pattern saving retains the existing validation, including one active bar.
+The application processes audio synchronously. Save sequence writes a WAV in
+Step synth at the draft BPM and selects the saved sound. Save pattern and Load
+pattern use JSON without replacing the source file or viewed bar.
+
+The local footer is an inset display inside the continued bezel. It shows
+source guidance, preview feedback, file choice, cancellation, errors, and save
+confirmation. Short messages are centered; long text wraps and scrolls.
+Feedback belongs to its source: a different palette source returns the footer
+to source guidance, while an explicit file keeps its feedback. A disabled
+Listen sequence or Save sequence states its reason on hover. The pane button
+keeps keyboard focus when its label changes.
+Missing palette audio offers Import details beside the message. Full feedback
+is retained in a tooltip and a polite accessible live region; errors include
+an Error label. Help opens the source, grid, bars, tempo, effects, and file
+workflow in a native window. This presentation does not establish high-DPI,
+screen-reader, listening, or original-product DSP acceptance.
+
 ### Empty states and feedback
 
 The empty sound browser offers Choose WAV folder. Filtered empty
@@ -637,8 +778,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Keep metal hardware treatments scoped to Time Stretcher and Effect Studio.
-  Do not add repeated waveform traces.
+- Keep metal hardware treatments scoped to Time Stretcher, Effect Studio, and
+  Step synth. Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

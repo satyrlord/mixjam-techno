@@ -8,6 +8,7 @@ window, file-dialog, or screenshot dependency.
 Native views and input                  Headless application
 src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/effects.rs
+             + src/ui/step_synth.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -116,6 +117,33 @@ section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
 
+`src/ui/step_synth.rs` owns Step synth's olive hardware presentation and native
+input responses. Separate expanded and collapsed backgrounds live in
+`assets/step-synth/{100,150,200}/`. Both have a complete bezel. The current
+skin is 820 by 556 logical points with a 44-point native footer; the expanded
+window is 820 by 600 points and the collapsed skin is 820 by 48 points at the
+prepared scales. Bounds stay aligned at one texel per physical pixel. All text,
+fields, buttons, switches, grid cells, and interaction feedback are native.
+The pitch grid and its replacement effects form have bounded scrolling; step
+numbers, source and bar controls, actions, and footer stay fixed. The grid exposes
+sixteen steps and twenty-five pitch rows. The shared `effects_controls` form
+retains its algorithms and ranges with local panel styling.
+
+`src/ui.rs` owns the source path, viewed bar, effects-view selection, draft,
+and local feedback. It adapts the panel's actions to existing `Session`
+operations. An explicit WAV or PXD path overrides palette or clip selection,
+including missing palette audio. Selecting it does not read audio.
+`Session::step_synth_pcm` reads the source and renders synchronously when Listen
+sequence or Save sequence is requested. The frontend then requests PCM preview
+or the existing WAV save workflow. Save registers the result in Step synth at
+the draft BPM and selects it. Save choice, cancellation, failure, and success
+update local feedback. Missing palette audio offers Import details.
+Pattern save/load uses `Session::save_pattern` and `Session::load_pattern`.
+It replaces only the four-bar draft; the source path and viewed bar remain.
+Clear bar clears only the viewed sixteen steps. The visible +12 through -12
+pitch rows do not narrow the existing -48 through +48 serialized-note range.
+This presentation does not add a worker or establish original-product DSP parity.
+
 Missing audio is explicit project state. The renderer leaves those placements
 silent. The frontend reads the retained source metadata and sends a chosen WAV
 path to `Session::resolve_missing_sample`. That operation resolves every matching
@@ -189,7 +217,8 @@ arrangement requests instead.
 
 Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
 Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs` and
-Effect Studio's in `src/ui/effects.rs`. Keep tool
+Effect Studio's in `src/ui/effects.rs`, and Step synth's in
+`src/ui/step_synth.rs`. Keep tool
 input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.

@@ -958,9 +958,10 @@ fn action_button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool, scale
     );
     named(&response, egui::WidgetType::Button, text);
     focus(ui, &response, scale);
-    response.on_hover_text(if !enabled {
-        "Select an available sound to process it."
-    } else if text == "Save sound" {
+    if !enabled {
+        return response.on_disabled_hover_text("Select an available sound to process it.");
+    }
+    response.on_hover_text(if text == "Save sound" {
         "Save a new WAV and add it to Effect."
     } else {
         text
