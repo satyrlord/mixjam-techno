@@ -40,5 +40,37 @@
     200
   ],
   "source_material": "generated screw-free Folded Metal chassis",
-  "perimeter": "continuous native antialiased bevel; source material fades at all boundaries"
+  "perimeter": "continuous native antialiased bevel; source material fades at all boundaries",
+  "paint_grain": {
+    "distribution": "quantized Gaussian, symmetric shuffled pairs",
+    "seed": "41723 + density",
+    "requested_standard_deviation": 1.5,
+    "channel_policy": "identical additive RGB delta",
+    "measured": {
+      "100": {
+        "width": 256,
+        "height": 256,
+        "mean": 0,
+        "standard_deviation": 1.5263093923998912,
+        "minimum": -7,
+        "maximum": 7
+      },
+      "150": {
+        "width": 384,
+        "height": 384,
+        "mean": 0,
+        "standard_deviation": 1.5256461020321304,
+        "minimum": -8,
+        "maximum": 8
+      },
+      "200": {
+        "width": 512,
+        "height": 512,
+        "mean": 0,
+        "standard_deviation": 1.5260394446798387,
+        "minimum": -6,
+        "maximum": 6
+      }
+    }
+  }
 }

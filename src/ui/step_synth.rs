@@ -317,7 +317,7 @@ pub(super) fn show(
             if missing
                 && button(
                     &mut panel,
-                    rect(700.0, 566.0, 104.0, 26.0),
+                    rect(676.0, 566.0, 128.0, 26.0),
                     "Import details",
                     true,
                     false,
@@ -445,7 +445,6 @@ fn form_style(ui: &mut egui::Ui, scale: f32) {
     style.visuals.override_text_color = Some(CREAM);
     style.visuals.panel_fill = WELL;
     style.visuals.extreme_bg_color = WELL;
-    style.visuals.selection.bg_fill = EDGE;
     style.visuals.selection.stroke = Stroke::new(1.0_f32, CREAM);
     for widgets in [
         &mut style.visuals.widgets.inactive,
@@ -619,7 +618,7 @@ fn status_footer(
     named(&response, egui::WidgetType::Panel, "Step synth status");
     let text_rect = Rect::from_min_max(
         rect.min + Vec2::new(9.0, 5.0) * scale,
-        rect.max - Vec2::new(if missing { 122.0 } else { 9.0 }, 5.0) * scale,
+        rect.max - Vec2::new(if missing { 144.0 } else { 9.0 }, 5.0) * scale,
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()

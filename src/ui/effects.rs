@@ -66,7 +66,7 @@ pub(super) fn show(
                     .font(FontId::proportional(13.0 * scale))
                     .color(CREAM);
                 let label = ui.put(
-                    rect(27.0, 48.0, 586.0, 22.0),
+                    rect(27.0, 49.0, 586.0, 22.0),
                     egui::Label::new(text).truncate(),
                 );
                 named(&label, egui::WidgetType::Label, "Source sound");
@@ -343,7 +343,7 @@ pub(super) fn show(
             if source.missing
                 && controls::button_at(
                     &mut panel,
-                    rect(526.0, 407.0, 94.0, 30.0),
+                    rect(492.0, 407.0, 128.0, 30.0),
                     "Import details",
                     "Import details",
                     controls::ButtonRole::Secondary,
@@ -488,7 +488,7 @@ fn status_footer(
     named(&response, egui::WidgetType::Panel, "Effect Studio status");
     let text_rect = Rect::from_min_max(
         rect.min + Vec2::new(9.0, 6.0) * scale,
-        rect.max - Vec2::new(if missing { 116.0 } else { 9.0 }, 6.0) * scale,
+        rect.max - Vec2::new(if missing { 148.0 } else { 9.0 }, 6.0) * scale,
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()

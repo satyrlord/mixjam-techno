@@ -199,7 +199,7 @@ fn show_shell<R>(
                 header.max - Vec2::new(84.0, 3.0),
             );
             let drag = ui.interact(drag_rect, id.with("title-drag"), Sense::drag());
-            if drag.dragged() {
+            if drag.dragged() && !drag.drag_started() {
                 geometry.position += ctx.input(|i| i.pointer.delta());
             }
             let left = Rect::from_center_size(
@@ -391,7 +391,7 @@ fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry) {
                 Sense::drag(),
             )
             .on_hover_cursor(cursor);
-        if response.dragged() {
+        if response.dragged() && !response.drag_started() {
             let delta = ui.input(|i| i.pointer.delta());
             let before = g.size;
             if h != 0 {

@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import random
 import statistics
 from PIL import Image
 
@@ -108,6 +109,7 @@ def render(check: bool) -> None:
     chassis = original.crop(CHASSIS_BOX)
     patch = chassis.crop((500, 160, 700, 300))
     baseline = statistics.median(.2126*r + .7152*g + .0722*b for r, g, b, _ in patch.get_flattened_data())
+    grain_stats = {}
     for density in (100, 150, 200):
         scale = density / 200
         material = chassis.convert("RGBa").resize(
@@ -126,11 +128,29 @@ def render(check: bool) -> None:
             "edge-left": ((0, ch, round(12*unit), ch+round(96*unit)), True, False, False, False),
             "edge-right": ((width-round(12*unit), ch, width, ch+round(96*unit)), True, False, True, False),
         }
+        grain_size = round(256*unit)
+        rng = random.Random(41723 + density)
+        # Quantized symmetric Gaussian pairs give an exactly zero-mean field.
+        # Shuffle removes pairing patterns; the saved PNG is static at runtime.
+        noise = []
+        for _ in range(grain_size*grain_size//2):
+            value = round(rng.gauss(0.0, 1.5))
+            noise.extend((value, -value))
+        rng.shuffle(noise)
+        deviation = statistics.pstdev(noise)
+        if statistics.mean(noise) != 0 or not 1.2 <= deviation <= 1.8:
+            raise ValueError("Paint grain must be zero-mean with restrained finite variance.")
+        grain_stats[str(density)] = {"width": grain_size, "height": grain_size,
+            "mean": statistics.mean(noise), "standard_deviation": deviation,
+            "minimum": min(noise), "maximum": max(noise)}
         for name, color in PALETTES.items():
             for part, (box, horizontal, vertical, rx, ry) in specs.items():
                 prepared = prepare(material.crop(box), color, baseline, horizontal, vertical, unit, rx, ry)
                 validate_material(prepared, unit, horizontal, vertical, rx, ry)
                 save(prepared, OUTPUT / name / str(density) / f"{part}.png", check)
+            grain = Image.new("RGBA", (grain_size, grain_size))
+            grain.putdata([(*(channel+delta for channel in color), 255) for delta in noise])
+            save(grain, OUTPUT / name / str(density) / "paint-grain.png", check)
         # Prepare each physical-size cap from an 8x supersampled original.
         # The one-time premultiplied-alpha reduction smooths silhouettes, ribs,
         # and metal grain without introducing runtime texture scaling.
@@ -162,7 +182,9 @@ def render(check: bool) -> None:
         save(brushed, OUTPUT / "controls" / str(density) / "primary.png", check)
     manifest = {"source": "local-data/artwork/folded-metal/chassis-screwless.png", "sha256": hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
                 "crop": CHASSIS_BOX, "palettes": PALETTES, "variants": [100,150,200], "source_material": "generated screw-free Folded Metal chassis",
-                "perimeter": "continuous native antialiased bevel; source material fades at all boundaries"}
+                "perimeter": "continuous native antialiased bevel; source material fades at all boundaries",
+                "paint_grain": {"distribution": "quantized Gaussian, symmetric shuffled pairs", "seed": "41723 + density",
+                    "requested_standard_deviation": 1.5, "channel_policy": "identical additive RGB delta", "measured": grain_stats}}
     text = json.dumps(manifest, indent=2) + "\n"
     path = OUTPUT / "provenance.json"
     if check:

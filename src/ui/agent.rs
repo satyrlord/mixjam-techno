@@ -836,39 +836,47 @@ impl MixJamApp {
             } => {
                 let held = modifiers(&held);
                 let pos = visible(Pos2::new(x, y))?;
-                let steps =
-                    match action {
-                        PointerAction::Move => {
-                            vec![Step::Input(vec![egui::Event::PointerMoved(pos)], held)]
-                        }
-                        PointerAction::Down => vec![press(pos, right, held)],
-                        PointerAction::Up => vec![
+                let steps = match action {
+                    PointerAction::Move => {
+                        vec![Step::Input(vec![egui::Event::PointerMoved(pos)], held)]
+                    }
+                    PointerAction::Down => vec![press(pos, right, held)],
+                    PointerAction::Up => vec![
+                        Step::Input(vec![egui::Event::PointerMoved(pos)], held),
+                        release(pos, right, held),
+                    ],
+                    PointerAction::Click => click_steps(pos, right, false, held),
+                    PointerAction::DoubleClick => click_steps(pos, right, true, held),
+                    PointerAction::Drag => {
+                        let (Some(to_x), Some(to_y)) = (to_x, to_y) else {
+                            return Err("A drag needs to_x and to_y.".into());
+                        };
+                        let end = visible(Pos2::new(to_x, to_y))?;
+                        // The first short move starts the drag. The others
+                        // let the target under the pointer follow it.
+                        let moves = [
+                            pos + (end - pos).normalized() * 8.0,
+                            pos + (end - pos) / 2.0,
+                            end,
+                            end,
+                        ];
+                        // Establish the hovered edge/window before pressing.
+                        // Native hit testing needs the same approach frame
+                        // that a physical pointer supplies before a drag.
+                        [
                             Step::Input(vec![egui::Event::PointerMoved(pos)], held),
-                            release(pos, right, held),
-                        ],
-                        PointerAction::Click => click_steps(pos, right, false, held),
-                        PointerAction::DoubleClick => click_steps(pos, right, true, held),
-                        PointerAction::Drag => {
-                            let (Some(to_x), Some(to_y)) = (to_x, to_y) else {
-                                return Err("A drag needs to_x and to_y.".into());
-                            };
-                            let end = visible(Pos2::new(to_x, to_y))?;
-                            // The first short move starts the drag. The others
-                            // let the target under the pointer follow it.
-                            let moves = [
-                                pos + (end - pos).normalized() * 8.0,
-                                pos + (end - pos) / 2.0,
-                                end,
-                                end,
-                            ];
-                            std::iter::once(press(pos, right, held))
-                                .chain(moves.map(|pos| {
-                                    Step::Input(vec![egui::Event::PointerMoved(pos)], held)
-                                }))
-                                .chain([release(end, right, held)])
-                                .collect()
-                        }
-                    };
+                            Step::Idle,
+                            press(pos, right, held),
+                        ]
+                        .into_iter()
+                        .chain(
+                            moves
+                                .map(|pos| Step::Input(vec![egui::Event::PointerMoved(pos)], held)),
+                        )
+                        .chain([release(end, right, held)])
+                        .collect()
+                    }
+                };
                 Start::run(settled(steps))
             }
             Request::Scroll { x, y, dx, dy } => {

@@ -352,6 +352,9 @@ button, value, and status text. The shared shell uses 18-point titles, 13-point
 body and button text, and 11-point small text. Content can use the shared compact
 text roles where needed, without inventing per-tool typography. Keep labels separate
 from controls and check rendered glyph bounds. Resizing never scales text.
+Center value text and button captions inside their own visible faces. Native
+widget minimums must fit the readout rectangle; they must not shift text below
+the well. Check the visible glyph center at all three prepared display densities.
 
 Mixer uses the shared Inter sizes without a local title. Track names use Body,
 gain values use Clip, sound summaries and pan or Muted text use Small, and
@@ -446,6 +449,12 @@ solid chassis color. Resizing grows the solid regions instead of stretching bitm
 edges or repeating a visible texture seam. Prepare only 100%, 150%, and 200% PNG variants;
 select the nearest and paint one texel per physical screen pixel. Keep labels,
 control values, indicators, and interaction states live.
+
+Painted backgrounds use restrained, static monochromatic Gaussian grain. Its
+mean is zero and its standard deviation is about 1.5 RGB levels. Apply the same
+offset to all channels to retain each module's color. Align the prepared grain
+to physical pixels and fade it before the perimeter. Do not animate the noise or
+add grain over labels and control values.
 
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases

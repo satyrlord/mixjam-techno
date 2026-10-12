@@ -318,7 +318,7 @@ pub(super) fn show(
             let text_rect = rect(
                 24.0,
                 286.0,
-                if source.missing { 468.0 } else { 592.0 },
+                if source.missing { 456.0 } else { 592.0 },
                 52.0,
             );
             let previous_id = ui.id().with("previous-status");
@@ -352,7 +352,7 @@ pub(super) fn show(
             if source.missing
                 && controls::button_at(
                     ui,
-                    rect(500.0, 296.0, 116.0, 32.0),
+                    rect(488.0, 296.0, 128.0, 32.0),
                     "Import details",
                     "Import details",
                     controls::ButtonRole::Secondary,

@@ -2039,7 +2039,7 @@ impl MixJamApp {
         if self.show_libraries {
             let mut open = true;
             dialog::window("Sample libraries")
-                .default_height(180.0)
+                .default_height(260.0)
                 .open(&mut open)
                 .default_width(540.0)
                 .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))

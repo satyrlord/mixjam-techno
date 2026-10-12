@@ -45,13 +45,15 @@ mod tests {
         let textures: Vec<_> = ctx.tex_manager().read().allocated()
             .filter(|(_,meta)|meta.name.starts_with(&format!("folded-metal-{palette}-")) && meta.name.ends_with(&format!("-{density_index}")))
             .map(|(id,meta)|(*id,meta.size,meta.name.clone())).collect();
-        let dimensions = [(112,64),(112,64),(112,64),(112,64),(192,12),(192,12),(12,96),(12,96),(36,36),(48,24)];
+        let dimensions = [(112,64),(112,64),(112,64),(112,64),(192,12),(192,12),(12,96),(12,96),(36,36),(48,24),(256,256)];
         for (index,(width,height)) in dimensions.into_iter().enumerate() {
-            let part=if index<8 {format!("part-{index}")} else if index==8 {"knob".into()} else {"primary".into()};
+            let part=if index<8 {format!("part-{index}")} else if index==8 {"knob".into()} else if index==9 {"primary".into()} else {"grain".into()};
             let name=format!("folded-metal-{palette}-{part}-{density_index}");
             let expected=[(width as f32*density) as usize,(height as f32*density) as usize];
             assert!(textures.iter().any(|(_,size,key)|*key==name && *size==expected),"{name} must load its prepared density dimensions {expected:?}.");
         }
+        let grain=textures.iter().find(|(_,_,name)|name==&format!("folded-metal-{palette}-grain-{density_index}")).unwrap().0;
+        assert!(output.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Mesh(mesh) if mesh.texture_id==grain)),"The chassis must paint its prepared grain tile.");
         let body=match palette {
             "Marine"=>Color32::from_rgb(32,83,91),
             "Granite"=>Color32::from_rgb(52,57,60),
@@ -67,14 +69,18 @@ mod tests {
                 egui::Shape::Mesh(mesh)=>{
                     let Some((_,size,name))=textures.iter().find(|(id,_,_)|*id==mesh.texture_id) else {return;};
                     if let Some(part)=name.split("-part-").nth(1).and_then(|part|part.split('-').next()).and_then(|part|part.parse::<usize>().ok()) {parts[part]=true;}
-                    for quad in mesh.vertices.as_chunks::<4>().0 {
-                        let mut dest=Rect::NOTHING;let mut uv=Rect::NOTHING;
-                        for vertex in quad {
-                            dest.extend_with(vertex.pos);uv.extend_with(vertex.uv);
-                            for edge in [vertex.pos.x,vertex.pos.y] {assert!((edge*density-(edge*density).round()).abs()<0.001,"Folded Metal raster vertices align to physical pixels.");}
+                    for vertex in &mesh.vertices {
+                        for edge in [vertex.pos.x,vertex.pos.y] {assert!((edge*density-(edge*density).round()).abs()<0.001,"Folded Metal raster vertices align to physical pixels.");}
+                    }
+                    for triangle in mesh.indices.as_chunks::<3>().0 {
+                        for edge in 0..3 {
+                            let a=mesh.vertices[triangle[edge] as usize];
+                            let b=mesh.vertices[triangle[(edge+1)%3] as usize];
+                            let dest=(b.pos-a.pos).abs()*density;
+                            let source=(b.uv-a.uv).abs()*Vec2::new(size[0] as f32,size[1] as f32);
+                            assert!((dest.x-source.x).abs()<0.001,"Do not stretch material or control raster width.");
+                            assert!((dest.y-source.y).abs()<0.001,"Do not stretch material or control raster height.");
                         }
-                        assert!((dest.width()*density-uv.width()*size[0] as f32).abs()<0.001,"Do not stretch material or control raster width.");
-                        assert!((dest.height()*density-uv.height()*size[1] as f32).abs()<0.001,"Do not stretch material or control raster height.");
                     }
                 }
                 _=>{},
@@ -101,6 +107,17 @@ mod tests {
             _ => None,
         }).reduce(|bounds, next| bounds.union(next))
             .unwrap_or_else(|| panic!("Missing glyph mesh: {text}"))
+    }
+
+    fn assert_full_recovery_caption(output:&egui::FullOutput) {
+        let button=effects_control_rect(output,"Import details");
+        let text=output.shapes.iter().find_map(|shape|match &shape.shape {
+            egui::Shape::Text(text) if text.galley.job.text=="Import details" && button.contains(text.visual_bounding_rect().center())=>Some((shape.clip_rect,text.visual_bounding_rect(),text.galley.elided)),
+            _=>None,
+        }).expect("Recovery button must paint the complete Import details caption.");
+        assert!(!text.2,"Recovery button must not abbreviate its action.");
+        assert!(button.shrink(6.0).contains_rect(text.1),"Recovery caption needs common horizontal and vertical padding.");
+        assert!(text.0.contains_rect(text.1),"Recovery caption must remain visible.");
     }
 
     #[test]
@@ -385,6 +402,7 @@ mod tests {
         let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, Vec2::new(960.0, 720.0),);
         for name in ["Listen", "Save sound"] { assert!(accessible_node(&output, name).1.is_disabled()); }
         assert!(effects_control_rect(&output, "Effect Studio status").contains_rect(effects_control_rect(&output, "Import details")));
+        assert_full_recovery_caption(&output);
         text_rect(&output, "Missing audio. Open Import details to resolve the sound.",);
         focus_control(&ctx, &mut app, &output, "Import details");
         frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
@@ -1024,6 +1042,7 @@ mod tests {
                         "Footer message is not visibly centered at {density}x: {offset:?}");
                 }
                 if missing {
+                    assert_full_recovery_caption(&output);
                     let details = accessible_node(&output, "Import details").1.bounds().unwrap();
                     let details = Rect::from_min_max(Pos2::new(details.x0 as f32, details.y0 as f32), Pos2::new(details.x1 as f32, details.y1 as f32),);
                     assert!(footer.contains_rect(details), "Recovery control leaves its footer");
@@ -1684,6 +1703,7 @@ mod tests {
             }
             accessible_node(&output, "Sample editor status");
             let actions = if missing {
+                assert_full_recovery_caption(&output);
                 vec![("Import details", sample_editor::Action::Details)]
             } else if ready {
                 vec![
@@ -1904,6 +1924,23 @@ mod tests {
                 );
                 assert!(!bounds.intersects(footer), "{label} must not touch status.");
             }
+            let start_value=effects_control_rect(&output,"Start frame");
+            let end_value=effects_control_rect(&output,"End frame");
+            assert!((start_value.width()-end_value.width()).abs()<0.1,"Frame fields must share a width.");
+            assert!((start_value.center().y-end_value.center().y).abs()<0.1,"Frame values must share a baseline.");
+            for name in ["Start frame","End frame","Pitch value"] {
+                let value=accessible_node(&output,name).1.value().unwrap();
+                let container=effects_control_rect(&output,name);
+                let glyph=output.shapes.iter().find_map(|shape|match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text==value && container.contains(text.visual_bounding_rect().center())=>Some(text.visual_bounding_rect()),
+                    _=>None,
+                }).expect("Numeric field must paint its value inside its own container.");
+                let offset=(glyph.center()-container.center()).abs()*density;
+                assert!(offset.x<=1.0 && offset.y<=1.0,"{name} glyph offset {offset:?} at {density}x");
+            }
+            let pitch_value=effects_control_rect(&output,"Pitch value");
+            let pitch_rail=effects_control_rect(&output,"Pitch (semitones)");
+            assert!((pitch_value.center().y-pitch_rail.center().y).abs()<0.6,"Pitch rail and value must align vertically.");
             for (index, first) in bounds.iter().enumerate() {
                 for (second, name) in bounds.iter().zip(controls).skip(index + 1) {
                     assert!(
@@ -2739,6 +2776,8 @@ mod tests {
             accessible_node(&output, "Note grid");
             text_rect(&output, "Sequence effects");
             text_rect(&output, "Echo");
+            let echo=step_synth_control_rect(&output,"Echo");
+            assert!(output.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Circle(circle) if echo.contains(circle.center) && circle.fill==Color32::from_rgb(157,178,94))),"Enabled sequence effects must retain the same olive accent as Active bars.");
             let row_y=step_synth_control_rect(&output,"Cutoff").center().y;
             for name in ["Cutoff","Resonance","Overdrive","Filter volume"] {
                 let dial=step_synth_control_rect(&output,name);
@@ -2820,7 +2859,7 @@ mod tests {
                 ("Load pattern", step_synth::Action::LoadPattern),
                 ("Step synth help", step_synth::Action::Help),
             ];
-            if missing && !explicit_file { actions.push(("Import details", step_synth::Action::Details)); }
+            if missing && !explicit_file { assert_full_recovery_caption(&output); actions.push(("Import details", step_synth::Action::Details)); }
             if ready {
                 actions.push(("Listen sequence", step_synth::Action::Listen));
                 actions.push(("Save sequence", step_synth::Action::SaveSequence));
