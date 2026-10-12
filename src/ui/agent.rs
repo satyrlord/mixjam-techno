@@ -452,7 +452,7 @@ impl MixJamApp {
             }
             let Some(step) = current.steps.pop_front() else {
                 if let Some(job) = job.take() {
-                    let outcome = self.agent_outcome(job.clips, job.control);
+                    let outcome = self.agent_outcome(ctx, job.clips, job.control);
                     job.respond.send(Ok(Body::Done(Box::new(outcome))));
                 }
                 continue;
@@ -474,7 +474,7 @@ impl MixJamApp {
                 }
                 Step::Pick { value, known } => {
                     let options: Vec<UiNode> = self
-                        .agent_nodes()
+                        .agent_nodes(ctx)
                         .into_iter()
                         .filter(|node| {
                             node.clickable && !node.label.is_empty() && !known.contains(&node.id)
@@ -596,9 +596,9 @@ impl MixJamApp {
 
     /// The controls on screen. A modal takes all input, but the toolkit
     /// still reports the controls behind it as enabled.
-    fn agent_nodes(&self) -> Vec<UiNode> {
+    fn agent_nodes(&self, ctx: &egui::Context) -> Vec<UiNode> {
         let mut nodes = self.agent.as_ref().map(Driver::nodes).unwrap_or_default();
-        if let Some(modal) = self.modal_name() {
+        if let Some(modal) = self.blocking_modal(ctx) {
             for node in &mut nodes {
                 node.enabled &= node.window.as_deref() == Some(modal);
             }
@@ -619,7 +619,7 @@ impl MixJamApp {
         };
         Ok(match request {
             Request::Help => Start::Reply(Body::Help { help: wire::HELP }),
-            Request::State => Start::Reply(Body::State(Box::new(self.agent_state()))),
+            Request::State => Start::Reply(Body::State(Box::new(self.agent_state(ctx)))),
             Request::Samples {
                 search,
                 group,
@@ -662,9 +662,9 @@ impl MixJamApp {
             } => {
                 let contains = contains.map(|text| text.to_lowercase());
                 Start::Reply(Body::Ui {
-                    modal: self.modal_name(),
+                    modal: self.blocking_modal(ctx),
                     nodes: self
-                        .agent_nodes()
+                        .agent_nodes(ctx)
                         .into_iter()
                         .filter(|node| {
                             // Without `all`: what a person can operate now.
@@ -714,7 +714,7 @@ impl MixJamApp {
                 pointer,
                 modifiers: held,
             } => {
-                let node = self.agent_target(&target, window, role, index)?;
+                let node = self.agent_target(ctx, &target, window, role, index)?;
                 let steps = if double || right || pointer || !held.is_empty() {
                     let [x, y, width, height] = node.rect;
                     let pos = visible(Pos2::new(x + width / 2.0, y + height / 2.0))?;
@@ -740,7 +740,7 @@ impl MixJamApp {
                 index,
                 value,
             } => {
-                let node = self.agent_target(&target, window, role, index)?;
+                let node = self.agent_target(ctx, &target, window, role, index)?;
                 let steps = match node.role {
                     "slider" | "number" => {
                         let number = match &value {
@@ -788,7 +788,11 @@ impl MixJamApp {
                         Step::Idle,
                         Step::Pick {
                             value: value.text(),
-                            known: self.agent_nodes().into_iter().map(|node| node.id).collect(),
+                            known: self
+                                .agent_nodes(ctx)
+                                .into_iter()
+                                .map(|node| node.id)
+                                .collect(),
                         },
                         Step::Idle,
                         Step::ClosePopups,
@@ -992,13 +996,14 @@ impl MixJamApp {
 
     fn agent_target(
         &self,
+        ctx: &egui::Context,
         target: &str,
         window: Option<String>,
         role: Option<String>,
         index: Option<usize>,
     ) -> Result<UiNode, String> {
         let node = find(
-            &self.agent_nodes(),
+            &self.agent_nodes(ctx),
             target,
             window.as_deref(),
             role.as_deref(),
@@ -1007,7 +1012,7 @@ impl MixJamApp {
         if node.enabled {
             Ok(node)
         } else {
-            Err(match self.modal_name() {
+            Err(match self.blocking_modal(ctx) {
                 Some(modal) if node.window.as_deref() != Some(modal) => format!(
                     "\"{}\" is disabled while the {modal} modal is open.",
                     node.label
@@ -1055,21 +1060,6 @@ impl MixJamApp {
         }
     }
 
-    /// The modal that takes all input, if one is open.
-    fn modal_name(&self) -> Option<&'static str> {
-        if self.path_prompt.is_some() {
-            Some("Choose path")
-        } else if self.pending_action.is_some() {
-            Some("Save your changes?")
-        } else if self.sample_conflicts_open() {
-            Some("Sample conflicts")
-        } else if self.import_path.is_some() {
-            Some("Import sound")
-        } else {
-            None
-        }
-    }
-
     fn open_windows(&self) -> Vec<&'static str> {
         [
             (self.show_help, "Help"),
@@ -1099,19 +1089,24 @@ impl MixJamApp {
         }
     }
 
-    fn agent_outcome(&self, clips: Vec<u64>, control: Option<String>) -> Outcome {
+    fn agent_outcome(
+        &self,
+        ctx: &egui::Context,
+        clips: Vec<u64>,
+        control: Option<String>,
+    ) -> Outcome {
         Outcome {
             status: self.agent_status(),
-            modal: self.modal_name(),
+            modal: self.blocking_modal(ctx),
             windows: self.open_windows(),
             closing: self.allow_close,
             clips,
             control: control
-                .and_then(|id| self.agent_nodes().into_iter().find(|node| node.id == id)),
+                .and_then(|id| self.agent_nodes(ctx).into_iter().find(|node| node.id == id)),
         }
     }
 
-    fn agent_state(&self) -> StateView {
+    fn agent_state(&self, ctx: &egui::Context) -> StateView {
         let mut song = wire::song_view(&self.session);
         if let Some(lanes) = self.timeline_rect {
             for (view, clip) in song.clips.iter_mut().zip(&self.session.project().clips) {
@@ -1124,7 +1119,7 @@ impl MixJamApp {
             song,
             transport: wire::transport(&self.session),
             status: self.agent_status(),
-            modal: self.modal_name(),
+            modal: self.blocking_modal(ctx),
             path_prompt: self.path_prompt.as_ref().map(|prompt| {
                 let spec = self.path_spec(&prompt.request);
                 PathPromptView {

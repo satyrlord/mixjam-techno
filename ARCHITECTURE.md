@@ -10,6 +10,8 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/effects.rs
              + src/ui/step_synth.rs
              + src/ui/dialog.rs
+             + src/ui/controls.rs
+             + src/ui/sample_editor.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -73,27 +75,44 @@ positions and sends them to the application. It does not own an `Editor` or
 change the live project. It does not decode audio, write projects, or control a
 device directly.
 
-`src/ui/dialog.rs` owns the shared hardware presentation for non-musical utility
-windows and blocking dialogs. Its `Window` wrapper and `modal` helper retain
-native egui containers, stable IDs, focus layers, accessible modal naming, and
-caller-owned close behavior. `primary` and `danger` style native action buttons;
-the template has no application state or file operations. `src/ui.rs` retains
-each task's content, actions, and dismissal rules. Recorded take remains an
-explicit Save take or Discard take decision, without close or collapse controls.
+`src/ui/dialog.rs` owns the shared Folded Metal shell and lifecycle for all
+in-app tools, utility windows, and blocking dialogs. It owns header layout,
+position, edge resizing, open/collapsed geometry, focus layers, stable identities,
+and accessible modal naming. The caller owns the task and decides what an action
+or cancellation means. Native operating-system windows and file pickers are outside
+this shell.
 
-The shared chassis consists of nine PNG pieces at 100%, 150%, and 200% in
-`assets/dialog/`. Runtime painting aligns the container to physical pixels,
-selects the nearest density, and tiles or crops each piece at one texel per
-physical pixel. This supports content-sized windows without stretching their
-bitmap material. Titles, text, fields, buttons, and title-bar controls remain
-native. The generic initial body height is 220 logical points. Help and the
-three tool-help windows use 420 points, Sample libraries 180, and Import details
-240; their content scrolls within native viewport constraints. Recorded take
-remains content-sized. The template covers Help and the three musical-tool help windows,
-Sample libraries, Import details, Recorded take, Save your changes?, Sample
-conflicts, Choose path, and Import sound. Musical tools, including Sample Editor,
-use separate panel presentations. Operating-system file pickers retain their
-operating-system presentation.
+`src/ui/controls.rs` owns reusable control presentation and interaction: buttons,
+header icons, rotaries, sliders, numeric values, and switches. Roles and states
+share the same rendering and keyboard/accessibility behavior. Rotary full travel
+is 150 logical points; Shift applies fine adjustment to new movement. Parameter
+specifications retain ranges, reset values, logarithmic mapping, and discrete
+choices. Tool bodies own content and drafts, without independent window skins or
+button implementations.
+
+The shared chassis uses subtly aged folded painted metal, dark inset control
+bays, cream lettering, polished silver knobs, and pale metal primary buttons.
+`controls::Palette` supplies Utility, Marine, Granite, Red, and Olive variants.
+Time Stretcher uses Marine; Sample Editor uses Granite; Effect Studio uses Red;
+Step synth uses Olive. Utilities use neutral metal with orange-yellow accents.
+Prepared material and control PNGs live in `assets/folded-metal/<palette>/{100,150,200}/` and the shared
+`assets/folded-metal/controls/{100,150,200}/`.
+The chassis contains no decorative screws or fasteners. Its continuous
+antialiased perimeter and bevel are native geometry. Raster material fades before
+the outer outline and at strip ends to avoid visible joints. Knob edges use 8x
+supersampling and one premultiplied-alpha Lanczos reduction per density.
+Fixed details fade to transparent over a matching solid chassis color. Resizing
+extends the solid regions; painting aligns one texel to one physical pixel. Text
+and input remain live, and content reflows or scrolls instead of scaling artwork
+or controls. Palette variants share geometry and interaction.
+
+Collapse retains position, expanded size, and task state. Collapsed blocking
+dialogs release workspace and agent input without executing their pending action.
+`src/ui.rs` owns blocker precedence, paused save continuation, and guards against
+replacement of pending file requests. Choose path suspends its parent confirmation
+until the path request resolves. A close action cancels a confirmation, without
+implicitly saving or discarding. Recorded take can collapse while its unsaved
+in-memory take remains available for explicit Save take or Discard take.
 
 Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.
@@ -109,21 +128,16 @@ snap their bounds to the pixel grid and do not resize them.
 Sample-processing forms hold drafts until the user requests playback or saving.
 The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
-`src/ui/sample_editor.rs` owns Sample Editor's charcoal and gunmetal hardware
-presentation and native input responses. Expanded, collapsed, and silver pitch
-thumb skins live in `assets/sample-editor/{100,150,200}/`. The expanded skin is
-640 by 320 logical points with a 48-point native footer, for a 640 by 368-point
-window; the separate collapsed skin is 640 by 48 points. Runtime painting aligns
-one texel to one physical pixel. The thumb is prepared on a 32 by 56-pixel
-canonical grid before 16 by 28, 24 by 42, and 32 by 56-pixel variants.
-All text, frame and pitch fields, adjacent step buttons, rail, action buttons,
-header controls, and feedback remain native. Enabled action buttons darken
-while pressed. The footer has an inset dark well with an edge outline, or coral
-for missing or invalid source state. Frame drafts retain unsigned
-64-bit values, with an inclusive start and exclusive end. Pitch keeps the
+`src/ui/sample_editor.rs` owns the Sample Editor body and native action responses.
+It uses the shared shell and controls for frame fields, pitch slider, buttons,
+header, and feedback. Numeric formatting does not change the draft.
+
+Frame drafts retain unsigned 64-bit values, with an inclusive start and exclusive end. Pitch keeps the
 existing -24 to +24-semitone UI range. Numeric display rounding does not alter
-the draft. The frontend resets the trim range when the source ID or catalog
-revision changes, so a replaced source cannot retain stale bounds.
+the draft. Background selections do not reset trim while the editor is collapsed.
+On expansion, a changed active source ID or catalog revision applies the existing
+trim reset. Expanded source-change behavior remains unchanged, so a replaced
+source cannot retain stale bounds.
 `src/ui.rs` adapts Listen edit, Save edited sound, and Import details. Existing
 Session trim and resampling remain synchronous. Preview uses existing PCM
 playback; save uses the existing WAV workflow, registers the result in Wave
@@ -132,11 +146,10 @@ file or audio operations. Missing sources and invalid ranges disable processing
 with explicit tooltip reasons; the footer shows range and duration or recovery
 guidance. This presentation does not establish original-product DSP parity.
 
-`src/ui/stretch.rs` owns Time Stretcher's hardware-panel presentation and native
-control responses. Its prepared expanded and collapsed skins live in
-`assets/stretch/{100,150,200}/`. Each state paints its own complete bezel.
-Text, values, knob pointers, and interaction feedback remain native painting.
-Its Help icon remains available in both expanded and collapsed states.
+`src/ui/stretch.rs` owns Time Stretcher's content and action responses inside the
+shared shell. Source, tempo, processing, preview, and save feedback use shared
+controls. Its Help action stays available in both open and collapsed states.
+
 `src/ui.rs` adapts its source selections, Listen, Save, and Import details
 requests to existing application operations; the panel does not render audio or
 write files. Opening it from the tool rail initializes the original BPM draft
@@ -178,18 +191,11 @@ session state. Switching preserves resized height; opening Mixer raises a
 shorter panel to its 370-point minimum. Sounds retains its 180-point minimum.
 Later modules can extend the enum and the same selector.
 
-`src/ui/effects.rs` owns Effect Studio's compact red hardware presentation and
-native input responses. Prepared expanded, collapsed, switch, and 32-point knob
-skins live in `assets/effects/{100,150,200}/`. The background banks are empty;
-native painting places ticks, numeric wells, text, values, pointers, section
-lamps, focus, and disabled feedback. This separates control geometry from the
-generated material. The current compact expanded skin is 640 by
-352 logical points with a 48-point footer; its separate collapsed skin is 640
-by 48 points. Help remains available in both states. Image bounds stay aligned
-at one texel per physical pixel.
-The knob's 32-point artwork has a 42-point input region. Values and captions use
-separate vertical positions. Check their rendered bounds against dial arcs and
-neighboring controls; source coordinates alone do not establish visual acceptance.
+`src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses
+shared rotaries, value entry, switches, action buttons, header, and status styling.
+Keep labels, values, and dial marks separate. Verify rendered bounds at all three
+prepared densities; source coordinates alone do not establish visual acceptance.
+
 `src/ui.rs` adapts Listen, Save sound, Reset, Help, and Import details. Listen
 and Save sound call `Session::processed_pcm` synchronously; Listen then uses the
 existing PCM preview. Save uses the existing file request and
@@ -201,17 +207,12 @@ section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
 
-`src/ui/step_synth.rs` owns Step synth's olive hardware presentation and native
-input responses. Separate expanded and collapsed backgrounds live in
-`assets/step-synth/{100,150,200}/`. Both have a complete bezel. The current
-skin is 820 by 556 logical points with a 44-point native footer; the expanded
-window is 820 by 600 points and the collapsed skin is 820 by 48 points at the
-prepared scales. Bounds stay aligned at one texel per physical pixel. All text,
-fields, buttons, switches, grid cells, and interaction feedback are native.
-The pitch grid and its replacement effects form have bounded scrolling; step
-numbers, source and bar controls, actions, and footer stay fixed. The grid exposes
-sixteen steps and twenty-five pitch rows. The shared `effects_controls` form
-retains its algorithms and ranges with local panel styling.
+`src/ui/step_synth.rs` owns Step synth's source, bar, grid, effects, and action
+content inside the shared shell. Text, grid cells, switches, and input stay live.
+The pitch grid and replacement effects form have bounded scrolling; source,
+step labels, actions, and feedback remain reachable. The grid exposes sixteen
+steps and twenty-five pitch rows. The shared `effects_controls` form retains its
+algorithms and ranges and uses the common controls.
 
 `src/ui.rs` owns the source path, viewed bar, effects-view selection, draft,
 and local feedback. It adapts the panel's actions to existing `Session`
@@ -300,12 +301,14 @@ arrangement requests instead.
 
 ## Safe frontend iteration
 
-Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
-Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs` and
-Effect Studio's in `src/ui/effects.rs`, and Step synth's in
-`src/ui/step_synth.rs`. Keep Mixer presentation in `src/ui/mixer.rs`. Keep tool
-input and file-dialog adapters in `src/ui.rs`. Reuse `src/ui/dialog.rs` for
-non-musical utility windows and modals; keep their behavior in the caller.
+Change workspace layout in `src/ui/view.rs` and Mixer presentation in
+`src/ui/mixer.rs`. Change floating shell geometry and lifecycle in
+`src/ui/dialog.rs`, and shared control rendering and interaction in
+`src/ui/controls.rs`. Tool bodies remain in `src/ui/stretch.rs`,
+`src/ui/effects.rs`, `src/ui/step_synth.rs`, and `src/ui/sample_editor.rs`.
+Keep tool action and file-dialog adapters in `src/ui.rs`. Reuse the same shell
+and controls for every in-app window and modal; keep domain behavior in its caller.
+
 Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.

@@ -22,51 +22,28 @@ colors:
   voice: "#b99ecb"
   other-sample: "#bbb39f"
   drag-label: "#f5dc92"
-  stretch-cream: "#f5e8cd"
-  stretch-ink: "#181917"
-  stretch-body: "#2c2e2e"
-  stretch-body-edge: "#0c0c0b"
-  stretch-well: "#182526"
-  stretch-well-line: "#445f60"
-  stretch-well-deep: "#0e0f0f"
-  stretch-well-hover: "#283c3d"
-  stretch-well-selected: "#3a5455"
-  stretch-error: "#ffa78f"
-  stretch-lamp-rim: "#807b6e"
-  effects-cream: "#f5e8cd"
-  effects-ink: "#181917"
-  effects-body: "#2c2e2e"
-  effects-well: "#1e1715"
-  effects-well-line: "#5a413a"
-  effects-error: "#ffa78f"
-  step-cream: "#f5e8cd"
-  step-ink: "#181917"
-  step-body: "#2c2e29"
-  step-well: "#191d16"
-  step-face: "#242822"
-  step-edge: "#5b634b"
-  step-amber: "#f5c156"
-  step-error: "#ffa78f"
   mixer-ink: "#1c1d1a"
   mixer-cream: "#f5e8cd"
   mixer-metal: "#c9c2af"
   mixer-edge: "#6c6a61"
   mixer-face: "#1d2122"
   mixer-amber: "#f5c156"
-  dialog-cream: "#f5e8cd"
-  dialog-ink: "#181917"
-  dialog-body: "#2a2e30"
-  dialog-face: "#171b1c"
-  dialog-edge: "#666e6e"
-  dialog-secondary: "#c5c7bf"
-  dialog-hover: "#353b3c"
-  sample-cream: "#f5e8cd"
-  sample-amber: "#f5c156"
-  sample-gold: "#e5ac3c"
-  sample-ink: "#181917"
-  sample-body: "#2a2e30"
-  sample-face: "#121515"
-  sample-edge: "#666e6e"
+  folded-utility: "#3c4140"
+  folded-marine: "#20535b"
+  folded-granite: "#34393c"
+  folded-red: "#9a2d27"
+  folded-olive: "#3c4428"
+  folded-utility-accent: "#e79331"
+  folded-marine-accent: "#55aeb7"
+  folded-granite-accent: "#adbabd"
+  folded-red-accent: "#eb7468"
+  folded-olive-accent: "#9db25e"
+  folded-ink: "#121412"
+  folded-cream: "#f9f2dc"
+  folded-face: "#232624"
+  folded-primary: "#d4cdb6"
+  folded-disabled-face: "#3d403c"
+  folded-disabled-text: "#c9cbc0"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -113,41 +90,7 @@ typography:
     textTransform: "uppercase"
     fontSize: "16px"
     fontWeight: 700
-  stretch-title:
-    fontFamily: "Syncopate"
-    textTransform: "uppercase"
-    fontSize: "29.09px"
-    fontWeight: 700
-  effects-title:
-    fontFamily: "Syncopate"
-    fontSize: "22px"
-    fontWeight: 700
-  effects-value:
-    fontFamily: "Inter"
-    fontSize: "14px"
-    fontWeight: 500
-  effects-status:
-    fontFamily: "Inter"
-    fontSize: "12.5px"
-    fontWeight: 500
-  step-title:
-    fontFamily: "Syncopate"
-    fontSize: "22px"
-    fontWeight: 700
-  step-status:
-    fontFamily: "Inter"
-    fontSize: "12.5px"
-    fontWeight: 500
-  sample-title:
-    fontFamily: "Syncopate"
-    textTransform: "uppercase"
-    fontSize: "21px"
-    fontWeight: 700
-  sample-value:
-    fontFamily: "Inter"
-    fontSize: "16px"
-    fontWeight: 500
-  dialog-title:
+  folded-title:
     fontFamily: "Syncopate"
     textTransform: "uppercase"
     fontSize: "18px"
@@ -157,26 +100,14 @@ rounded:
   control: "5px"
   transport: "6px"
   window: "10px"
-  step-note: "2px"
-  step-control: "4px"
-  step-switch: "8px"
-  step-switch-on: "6px"
   mixer-control: "2px"
   mixer-strip: "3px"
-  dialog-window: "12px"
-  dialog-control: "3px"
-  sample-action: "5px"
-  sample-well: "4px"
 spacing:
   item-horizontal: "8px"
   item-vertical: "6px"
   button-horizontal: "10px"
   panel-horizontal: "18px"
   header-horizontal: "22px"
-  step-row: "16px"
-  step-column: "46px"
-  dialog-item: "10px"
-  dialog-inner: "18px"
 components:
   action-primary:
     backgroundColor: "{colors.accent}"
@@ -225,74 +156,6 @@ components:
     typography: "{typography.bottom-module}"
     width: "136px"
     height: "28px"
-  stretch-panel:
-    width: "640px"
-    height: "320px"
-  stretch-listen:
-    textColor: "{colors.stretch-cream}"
-  stretch-save:
-    textColor: "{colors.stretch-ink}"
-  effects-panel:
-    width: "640px"
-    height: "352px"
-  effects-collapsed:
-    width: "640px"
-    height: "48px"
-  effects-footer:
-    backgroundColor: "{colors.effects-body}"
-    width: "640px"
-    height: "48px"
-  effects-knob:
-    width: "32px"
-    height: "32px"
-  effects-toggle:
-    width: "24px"
-    height: "24px"
-  effects-value:
-    textColor: "{colors.effects-cream}"
-    typography: "{typography.effects-value}"
-    width: "56px"
-    height: "16px"
-  effects-listen:
-    textColor: "{colors.effects-cream}"
-    typography: "{typography.button}"
-  effects-save:
-    textColor: "{colors.effects-ink}"
-    typography: "{typography.button}"
-  effects-reset:
-    textColor: "{colors.effects-cream}"
-    typography: "{typography.button}"
-  step-panel:
-    width: "820px"
-    height: "556px"
-  step-collapsed:
-    width: "820px"
-    height: "48px"
-  step-footer:
-    backgroundColor: "{colors.step-body}"
-    typography: "{typography.step-status}"
-    width: "820px"
-    height: "44px"
-  step-control:
-    backgroundColor: "{colors.step-face}"
-    textColor: "{colors.step-cream}"
-    rounded: "{rounded.step-control}"
-    height: "28px"
-  step-note:
-    backgroundColor: "{colors.step-face}"
-    rounded: "{rounded.step-note}"
-    width: "42px"
-    height: "14px"
-  step-switch:
-    backgroundColor: "{colors.step-ink}"
-    rounded: "{rounded.step-switch}"
-    width: "26px"
-    height: "16px"
-  step-switch-on:
-    backgroundColor: "{colors.step-amber}"
-    rounded: "{rounded.step-switch-on}"
-    width: "22px"
-    height: "12px"
   mixer-strip:
     backgroundColor: "{colors.mixer-metal}"
     textColor: "{colors.mixer-ink}"
@@ -331,66 +194,23 @@ components:
     rounded: "{rounded.mixer-control}"
     width: "28px"
     height: "24px"
-  sample-panel:
-    width: "640px"
-    height: "320px"
-  sample-collapsed:
-    width: "640px"
-    height: "48px"
-  sample-footer:
-    backgroundColor: "{colors.sample-body}"
-    textColor: "{colors.sample-cream}"
-    typography: "{typography.small}"
-    width: "640px"
-    height: "48px"
-  sample-value:
-    backgroundColor: "{colors.sample-face}"
-    textColor: "{colors.sample-amber}"
-    typography: "{typography.sample-value}"
-    rounded: "{rounded.sample-well}"
-    height: "44px"
-  sample-listen:
-    backgroundColor: "{colors.sample-face}"
-    textColor: "{colors.sample-cream}"
+  folded-frame:
+    backgroundColor: "{colors.folded-utility}"
+    textColor: "{colors.folded-cream}"
+    typography: "{typography.folded-title}"
+  folded-action:
+    backgroundColor: "{colors.folded-face}"
+    textColor: "{colors.folded-cream}"
     typography: "{typography.button}"
-    rounded: "{rounded.sample-action}"
-    height: "36px"
-  sample-save:
-    backgroundColor: "{colors.sample-gold}"
-    textColor: "{colors.sample-ink}"
+  folded-primary:
+    backgroundColor: "{colors.folded-primary}"
+    textColor: "{colors.folded-ink}"
     typography: "{typography.button}"
-    rounded: "{rounded.sample-action}"
-    height: "36px"
-  sample-thumb:
-    width: "16px"
-    height: "28px"
-  dialog-frame:
-    backgroundColor: "{colors.dialog-body}"
-    textColor: "{colors.dialog-cream}"
-    typography: "{typography.dialog-title}"
-    rounded: "{rounded.dialog-window}"
-    padding: "18px"
-  dialog-action:
-    backgroundColor: "{colors.dialog-face}"
-    textColor: "{colors.dialog-cream}"
-    typography: "{typography.button}"
-    rounded: "{rounded.dialog-control}"
-    padding: "5px 10px"
-    height: "28px"
-  dialog-primary:
-    backgroundColor: "{colors.dialog-cream}"
-    textColor: "{colors.dialog-ink}"
-    typography: "{typography.button}"
-    rounded: "{rounded.dialog-control}"
-    padding: "5px 10px"
-    height: "28px"
-  dialog-danger:
-    backgroundColor: "{colors.dialog-face}"
+  folded-danger:
+    backgroundColor: "{colors.folded-face}"
     textColor: "{colors.coral}"
     typography: "{typography.button}"
-    rounded: "{rounded.dialog-control}"
-    padding: "5px 10px"
-    height: "28px"
+
 ---
 
 # Design System: MixJam Techno
@@ -406,19 +226,18 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
-Time Stretcher, Effect Studio, Step synth, Sample Editor, Mixer, and utility dialogs use the
-owner's selected hardware treatments.
-Time Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
-controls, and lamped Listen and Save buttons. Effect Studio uses a compact red
-metal landscape panel with small rotary controls, chrome section switches,
-green section lamps, and black and ivory action buttons. Step synth uses olive
-textured metal, a charcoal bezel, cream labels, amber switches, and coral
-selected notes. Mixer uses graphite material, narrow ivory strips, small black
-faders, native dark value wells, and an amber polarity state. Sample Editor uses
-charcoal metal, a gunmetal bezel, amber numeric wells, a silver pitch fader, and
-a gold Save edited sound button. Utility dialogs
-share a restrained graphite bezel, cream text, dark fields, and ivory primary
-actions. These treatments keep the shared studio theme and compact control scale.
+Every in-app window and modal uses concept 1, Folded Metal: subtly aged folded
+painted metal, dark inset control bays, cream text, polished silver knobs, and
+pale metal primary buttons. Fine grain, minor scratches, and restrained edge wear
+suggest a well-maintained early-2000s synth. Keep the original tool palettes:
+dark marine cyan for Time Stretcher, dark granite gray for Sample Editor, synth
+red for Effect Studio, and dark olive for Step synth. Utility dialogs use neutral
+metal with an optional orange-yellow accent. The common orange-yellow mock color
+does not replace these identities.
+One shell and control family covers musical tools and utility tasks. The main
+graphite workspace and Mixer's graphite and ivory strips keep their current design.
+Native operating-system windows and file pickers retain their OS presentation.
+
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -429,15 +248,15 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 - A wide arrangement with transport above and sound discovery below.
 - Lime primary actions, category-colored clips, and coral recording signals.
 
-The implementation is native Windows Rust with eframe/egui. Tokens and painting
-live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`,
-Effect Studio in `src/ui/effects.rs`, Step synth in `src/ui/step_synth.rs`, and
-Sample Editor in `src/ui/sample_editor.rs`, and Mixer in `src/ui/mixer.rs`.
-The reusable utility-dialog presentation lives in
-`src/ui/dialog.rs`; content and input adapters remain in `src/ui.rs`. Application
-state and behavior live in `src/application.rs`. Sizes here use portable `px`
-labels for egui logical points. The sidecar records native component metadata;
-it does not define browser components or application behavior.
+The implementation is native Windows Rust with eframe/egui. Workspace tokens and
+painting live in `src/ui/view.rs`; Mixer stays in `src/ui/mixer.rs`.
+`src/ui/dialog.rs` owns every floating shell and its lifecycle.
+`src/ui/controls.rs` owns reusable control rendering and interaction. Tool bodies
+remain in `src/ui/stretch.rs`, `src/ui/effects.rs`, `src/ui/step_synth.rs`, and
+`src/ui/sample_editor.rs`; task adapters remain in `src/ui.rs`. Application state
+and behavior live in `src/application.rs`. Sizes here use portable `px` labels for
+egui logical points. The sidecar records native component metadata; it does not
+define browser components or application behavior.
 
 ## Colors
 
@@ -459,37 +278,34 @@ browser and arrangement. Pair color with its name or category label.
 ### Neutral
 
 Canvas is the deepest structural surface. Panel supports transport, browser,
-mixer, and floating tools. Raised and Hover distinguish controls and interaction
+and mixer. Floating tools use their Folded Metal palette. Raised and Hover
+distinguish controls and interaction
 states. Text carries primary labels; Muted carries counts, metadata, and status.
 Line separates surfaces. Selection and Warning retain their native widget roles.
 Drag Label fills the label that follows the pointer while a sound or clip is
 dragged; it has no other use.
 
-Stretch Cream and Stretch Ink apply only to Time Stretcher. Cream carries its
-title, labels, values, and Listen text. Ink carries Save text on the ivory
-button. The panel's teal, black, ivory, amber, and green material colors come
-from the prepared skin; they do not replace shared palette tokens.
-Stretch Body continues the skin's outer bezel under the status footer, with
-Stretch Body Edge as its one-point outline. The Stretch Well colors fill the
-status footer, the source list, and the Target menu: Well and Well Line for
-the surface and border, Well Deep for the search field, Well Hover and Well
-Selected for rows. Stretch Error tints error text and its mark. Stretch Lamp
-Rim outlines both lamps.
+Folded Metal palettes share dark inset bays and controls, cream lettering,
+polished silver knob caps, and pale metal primary buttons. Tool chassis colors
+remain distinct: Marine for Time Stretcher, Granite for Sample Editor, Red for
+Effect Studio, and Olive for Step synth. Utility is neutral and permits an
+orange-yellow accent. Use explicit names and states alongside color; Coral
+continues to identify errors and destructive actions. Palette changes must not
+change control geometry or behavior. Keep these colors local to floating windows;
+the arrangement, browser, and Mixer retain their palettes.
 
-Effects Cream carries Effect Studio's live title, labels, values, pointers, and
-black-button lettering. Effects Ink carries Save sound lettering on ivory.
-Effects Body continues the bezel below the artwork. Effects Well and Well Line
-form its status display; Effects Error marks local error text. Red metal,
-chrome, and static knob colors come from the prepared artwork. The section
-lamps show the live enabled state and do not replace named switch states.
+| Palette | Window | Chassis | Active accent |
+| --- | --- | --- | --- |
+| Utility | Utility windows and dialogs | `#3c4140` | `#e79331` |
+| Marine | Time Stretcher | `#20535b` | `#55aeb7` |
+| Granite | Sample Editor | `#34393c` | `#adbabd` |
+| Red | Effect Studio | `#9a2d27` | `#eb7468` |
+| Olive | Step synth | `#3c4428` | `#9db25e` |
 
-Step Cream carries Step synth's live title, labels, source, and feedback. Step
-Ink carries lettering on ivory Save sequence and amber selections. Step Body
-continues its charcoal bezel around the footer. Step Well, Face, and Edge form
-the dark grid, fields, native buttons, and borders. Step Amber marks enabled
-switches and the viewed bar; shared Coral marks selected notes. Step Error
-marks local errors and outlines selected cells. Olive metal comes from the
-prepared background; these tokens are local to Step synth.
+Common controls use Face `#232624`, Cream `#f9f2dc`, Ink `#121412`, and pale
+metal Primary `#d4cdb6`. Disabled faces use `#3d403c` with `#c9cbc0` lettering.
+Palette accents identify focus, selection, and active indicators. The default
+frame token uses Utility; tool bodies select their named variant.
 
 Mixer Metal and Mixer Ink support the ivory strips and their dark live text.
 Mixer Cream supplies dark-control lettering. Mixer Face and Edge define native
@@ -497,21 +313,7 @@ value wells, buttons, and strip borders. Mixer Amber marks inverted polarity;
 the named checked state remains available. The graphite surround and fine
 ivory grain come from prepared material tiles. These tokens are local to Mixer.
 
-Dialog Cream carries utility titles, body text, and dark-control lettering.
-Dialog Ink carries primary-action lettering on ivory. Dialog Body is the
-fallback and panel surface; Face fills fields and buttons, Edge outlines them,
-Secondary carries subdued widget text, and Hover distinguishes hovered controls.
-Shared Coral identifies destructive action text; the action's name states what
-will be discarded. The graphite bezel and fine grain come from prepared PNGs.
-These local colors do not replace the arrangement or browser palette.
 
-Sample Cream carries Sample Editor's title, labels, source, and dark-button
-lettering. Sample Amber supplies numeric values, focus, and the collapse mark.
-Sample Gold fills Save edited sound, with Sample Ink lettering. Sample Body
-continues the charcoal bezel under the native status footer; Sample Face and
-Edge define live fields, the pitch rail, and buttons. Shared Coral marks invalid
-or missing-source status. Gunmetal and silver grain come from the prepared
-chassis and thumb. These colors are local to Sample Editor.
 
 ## Typography
 
@@ -545,37 +347,20 @@ The bar-and-beat readout uses Inter Medium at 23 points in a fixed
 the adjacent transport controls. Status text
 uses Inter Medium at 12 points. These are local sizes within the same text family.
 
-Time Stretcher uses a live uppercase Syncopate title at 40 × (640/880), about
-29.09 logical points at the supported display scales. Its other text uses Inter
-Medium. Text is rendered over the skin, so source names, BPM values, warnings,
-and control labels stay current.
-
-Effect Studio uses a live uppercase Syncopate title through Effects Title.
-Inter labels use the shared Clip size; source and action text use Body and
-Button. Effects Value and Effects Status support its numeric wells and footer.
-Keep this standard desktop text scale when preparing hardware artwork.
-
-Step synth uses Step Title for its live uppercase title. Controls and labels
-use 12-13-point Inter Medium; action, source, and footer text use 12.5 points.
-Grid pitch labels and step numbers use 12 points. Keep labels separate from
-switches and check actual glyph bounds against adjacent controls. The hardware
-reference does not require oversized text or controls.
+All floating windows use the same live uppercase Syncopate title and Inter body,
+button, value, and status text. The shared shell uses 18-point titles, 13-point
+body and button text, and 11-point small text. Content can use the shared compact
+text roles where needed, without inventing per-tool typography. Keep labels separate
+from controls and check rendered glyph bounds. Resizing never scales text.
 
 Mixer uses the shared Inter sizes without a local title. Track names use Body,
 gain values use Clip, sound summaries and pan or Muted text use Small, and
 rail marks and button lettering use Metadata. These sizes follow the selected
 artwork density with the strip.
 
-Sample Editor uses Sample Title for its live 21-point uppercase title. Source,
-labels, and actions use 13-point Inter; frame and pitch values use 16-point Inter
-through the native Monospace role, which maps to the bundled Inter family.
-Status uses 11-point Inter. Numeric formatting is presentation only; a rounded
-pitch readout must not change the underlying draft.
-
-Utility dialogs use 18-point Syncopate titles with the existing uppercase Latin
-formatting. Body and button text use 13-point Inter; small text uses 11 points.
-Keep content live, selectable where already supported, and independent of the
-chassis bitmap. The template does not enlarge the shared text scale.
+Numeric formatting is presentation only. Rounded display values must not change
+stored drafts. Keep live content selectable where supported and independent of the
+chassis bitmap.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -642,45 +427,25 @@ Sample libraries constrains its floating window to the viewport and scrolls
 vertically. A large expanded Folder tempos list must leave the provider
 controls reachable.
 
-Time Stretcher uses a fixed 2:1 panel, 640 by 320 logical points at the supported
-100%, 150%, and 200% display scales. The source selector spans the panel above
-the paired Original BPM and Target BPM controls. Listen and Save occupy the
-bottom row. Collapse uses separate 640 by 64-point artwork with a complete lower
-bezel. This compact hardware layout is local to the tool.
+All in-app tools, utility windows, and blocking dialogs use one resizable shell.
+Initial dimensions follow the content; they are not fixed raster dimensions.
+Drag any edge or corner to resize. Reflow or scroll the body without scaling its
+controls. Source names, action labels, and long feedback must remain reachable at
+the minimum supported viewport. Keep a common title bar, margins, gaps, and action
+hierarchy. Specialized bodies such as the note grid keep their domain layout.
 
-Effect Studio's current compact implementation uses a 640 by 352-point
-landscape skin above a 48-point footer.
-The complete expanded window is 640 by 400 points. The separate collapsed skin
-is 640 by 48 points. Its source name sits above two rows of inset banks: Filter
-and Echo above Robotize and Distortion / Output. Keep the small knob artwork
-and standard text scale; do not enlarge the panel into a portrait surface.
-These dimensions apply at the prepared display scales. At other scales the
-nearest artwork density determines the logical size, preserving physical pixels.
+The only window states are open and collapsed. Collapse leaves a complete header
+at the same position, with the same title and applicable controls. Expansion
+restores the previous dimensions and draft. Keep Help available while collapsed
+where a Help action exists. A collapsed blocking dialog releases workspace input
+and pauses its pending action; expanding restores its decision workflow. Do not
+replace a paused request when another file action is requested.
 
-Step synth's current implementation uses an 820 by 556-point olive skin above
-a 44-point footer, for an 820 by 600-point expanded window. Its separate
-collapsed skin is 820 by 48 points. These dimensions record the implementation;
-the owner selected the treatment, not an exact fixed size. Source, bar, and
-option controls retain normal 28-point rows. The grid body scrolls vertically:
-its sixteen numbered columns stay above twenty-five pitch rows
-from +12 to -12. Cells are 42 by 14 points on 46-point column and 16-point row
-spacing. The five bottom actions and footer remain visible. Effects replaces
-the grid body with a bounded scrolling form; Note grid returns to editing.
-At other scales the nearest prepared density determines the logical size,
-preserving one texel per physical pixel.
-
-Utility dialogs use native Window and Modal containers with bounded content.
-Their template uses 18-point inner margins, 10-point item gaps, and 28-point
-minimum control height with 10 by 5-point button padding. The shared utility
-window default is 420 points wide with a 220-point initial body height. Help
-and the three tool-help windows start with 420-point bodies, Sample libraries
-with 180 points, and Import details with 240 points. Recorded take remains
-content-sized. These are initial body sizes; native content, scrolling, resizing,
-and viewport constraints still apply. Blocking dialogs size to their content.
-The 640 by 384-pixel
-canonical chassis is an offline preparation size, not a fixed dialog size.
-Nine raster pieces tile or crop at physical pixel scale to cover each native
-container. The outer edge stays complete when a collapsible utility is collapsed.
+Fixed raster detail fades from opaque texture to transparency over the matching
+solid chassis color. Resizing grows the solid regions instead of stretching bitmap
+edges or repeating a visible texture seam. Prepare only 100%, 150%, and 200% PNG variants;
+select the nearest and paint one texel per physical screen pixel. Keep labels,
+control values, indicators, and interaction states live.
 
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases
@@ -688,19 +453,15 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 
 ## Elevation & Depth
 
-Flat color layers and thin borders separate controls from the work area. The
-shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
-scale. Musical tools and utility dialogs provide their own scoped material depth.
-Time Stretcher, Effect Studio, Step synth, and Mixer use textured metal and bezel
-depth from their prepared PNG skins. Time Stretcher, Effect Studio, and Mixer
-also use prepared hardware controls. Step synth paints its fields, buttons, grid,
-and simple pill switches natively. Hover, focus, pressed, and
-disabled feedback remains native painting over each skin.
-Utility dialogs use a quiet graphite rim and inset header seam from their
-prepared chassis. Their native shadow uses a vertical offset of 6 points,
-16-point blur, 2-point spread, and black at 130/255 alpha. This shadow separates
-the floating task from the arrangement; controls do not add individual shadows.
-Hover and focus states change immediately. The application has no motion tokens.
+Flat color layers and thin borders separate the graphite work area. Folded Metal
+windows add folded painted-metal edges, dark inset control bays, recessed values, fine
+grain, and sparse hairline scratches. Use no decorative screws or fasteners.
+The folded lip, texture, and light wear provide the hardware character. Do not
+add heavy damage, oversized bevels, or ornamental hardware. Mixer retains its existing prepared material and faders.
+
+Shared control rendering supplies hover, keyboard focus, pressed, selected, and
+disabled states. Keep state changes immediate and visible; color alone does not
+communicate state. The application has no motion tokens.
 
 ## Shapes
 
@@ -710,14 +471,18 @@ radius. Resting native widgets use one-point borders. Selected clips use a
 two-point text-colored border; active rail actions use a one-point accent outline.
 Transport keyboard focus uses a two-point inset outline: Canvas on the bright
 Play/Pause button and Accent on secondary controls.
-Utility dialogs use 12-point outer corners and 3-point native control corners.
-The artwork contains no screws, lettering, icons, or control faces.
+Folded Metal windows share rounded chassis edges and the same control geometry.
+Paint the perimeter and bevel as continuous antialiased native geometry. Fade
+raster material before the outer outline and at strip ends so joints stay smooth.
+Prepare knob edges at 8x resolution, then reduce once with premultiplied-alpha
+Lanczos filtering for each 100%, 150%, and 200% variant.
+Live text and header symbols stay independent of the material artwork.
 
 ## Components
 
 ### Actions and transport
 
-Primary action buttons use Accent with Canvas text. Secondary buttons use Raised
+Workspace primary action buttons use Accent with Canvas text. Secondary buttons use Raised
 with Text. Undo and Redo use transparent PNG arrow icons from the shared artwork
 cache, with action names in tooltips and accessibility labels.
 Help uses the shared PNG library icon with Help as its tooltip and
@@ -824,300 +589,178 @@ confirmation is an undoable project change; Esc hides it without an edit and
 the status bar reopens it.
 The idle status reads Ready. Errors and application notices remain visible.
 The empty mixer has one instruction for adding a sound to the arrangement.
-Sample libraries uses the shared utility-dialog hardware template.
-Sample Editor, Time Stretcher, Effect Studio, and Step synth use the dedicated
-hardware panels below.
-The frontend submits
-edits to the application layer; visual changes must preserve those commands.
+All tool windows and utility dialogs use the same Folded Metal shell. The
+frontend submits edits to the application layer; visual changes preserve those
+commands.
 
-### Musical panel consistency
+### Shared shell and controls
 
-Keep the compact hardware family consistent through cream Syncopate titles,
-Inter labels, live native controls, corner collapse and Close actions, and a
-complete separate collapsed bezel. Retain each tool's selected material and
-accent colors. Existing Help controls stay available after collapse. All panels
-provide visible hover, focus, pressed, and disabled states; use control tooltips
-for detailed guidance. Processing feedback belongs in an inset dark status well
-inside the continued bezel. Preserve each tool's geometry and behavior rather
-than forcing distinct musical tasks into one form.
+`src/ui/dialog.rs` owns shell layout, position, resizing, and open/collapsed state.
+`src/ui/controls.rs` owns the shared header controls, action buttons, rotary dials,
+sliders, switches, and value entry. Tool bodies own values, validation, and actions.
+A tool must not introduce another button renderer or a complete per-tool skin.
+The same rules apply to Help, task confirmations, and musical editors.
+
+Secondary buttons use dark faces and cream text; primary buttons use pale metal
+and dark ink. Destructive actions have explicit names and coral indication. All roles use
+the same padding, label alignment, focus, hover, pressed, and disabled behavior.
+Disabled controls explain why they are unavailable. Preserve accessible names,
+numeric values, ranges, selected states, and keyboard actions.
+
+Rotaries share 150 logical points of full-range drag travel. Accumulate unrounded
+movement, apply Shift fine adjustment only to new movement, and stop changing a
+value when the pointer stops. Consume wheel events once. Preserve reset, exact
+entry, arrow keys, Home/End, and accessible numeric actions. Parameter definitions
+retain logarithmic mapping and discrete choices; Time Stretcher's Target BPM has
+four distinct values and pointer positions. Display rounding never changes a draft.
+
+Keep status inside the shared shell, with error text and recovery actions where
+needed. Long feedback wraps or scrolls. Preserve the full tooltip and accessible
+status. Existing Help actions remain available after collapse. The main workspace
+and Mixer do not adopt this floating-window redesign.
 
 ### Time Stretcher
 
-`src/ui/stretch.rs` paints `assets/stretch/{100,150,200}/panel.png`, prepared at
-640 by 320, 960 by 480, and 1280 by 640 pixels. Select the nearest density and
-paint one texel per physical pixel with aligned bounds, as for shared artwork.
-The skin supplies the material finish and static hardware forms. The title,
-source selector, values, labels, knob pointers, and input states remain live.
-Upper corner screws are replaced by native controls: collapse at the left and
-Close at the right. Help uses a cream question-mark icon beside Close. The
-collapsed state uses a separate `collapsed.png` skin with a complete lower rim,
-prepared at 640 by 64, 960 by 96, and 1280 by 128 pixels. It retains the title,
-expand, Close, and Help controls. It does not clip the expanded skin.
-Black Listen and ivory Save buttons pair their action labels with amber and
-green lamps; lamp color does not replace an action name.
-Center the visible action lettering and its shadow horizontally and vertically
-on each flat button face. Font line-box bounds and the surrounding bevel are
-not the visible face bounds. A label too long to clear its lamp moves right
-only until 10 by 640/880 points separate it from the lamp's rim.
-The hardware artwork retains its 640 by 320-point size. The expanded window is
-640 by 400 points and reads as one unit. A Stretch Body base continues the
-bezel below the artwork, with bottom corners that match the skin's radius, and
-leaves no transparent area inside the window. The status footer is an inset
-display well in that base, not a separate floating container.
-Short status and error messages are centered within the footer's text area.
-The message and Import details control share the footer's vertical center.
-Long text wraps inside that footer and scrolls when needed; it does
-not enter the control composition. Missing audio's Import details control sits
-inside the same footer beside its message. Collapsing hides the footer.
+`src/ui/stretch.rs` supplies the body inside the common shell. The source selector
+supports search, bounded long names, full-name tooltips, and a virtualized list.
+Each opening starts with an empty focused search. Original BPM supports 30-300;
+Target offers 120, 140, 160, and 180. Both use shared rotary interaction. Double-click
+Original to restore the selected source tempo; double-click Target to reset to 140.
+Target positions span the dial distinctly. Hover alone never changes a value.
 
-Original BPM supports 30-300; Target BPM offers 120, 140, 160, and 180.
-Knobs support pointer and keyboard input. Drags accumulate unrounded movement
-and hold when the pointer stops. Shift changes only new movement for fine
-adjustments. Hover does not change either BPM. Each wheel event adjusts one
-step; later frames do not repeat it. Double-click Original to restore the
-selected source tempo; double-click Target to reset to 140 BPM. Target's four
-positions span its full 270-degree arc and have distinct major marks.
-Original turns one degree per BPM across the same arc. A Target drag holds
-at most 10 BPM of overshoot past either end, so reversing takes effect at once.
-The source selector truncates long names, retains full-name tooltips, and opens
-a searchable list with bounded, virtualized rows. Each opening starts with an
-empty, focused search. The list and the Target menu use the well material and
-20 by 640/880-point text, not the shared widget theme.
-Tab reaches the source, values, knobs, and actions before Help, collapse, and
-close. Keyboard focus is a solid cream ring; pointer hover is a faint one-point
-ring. Help has a cream circular outline at rest so it reads as a control.
-Esc closes the tool only when it is the top window and nothing inside it is
-in use. An open list or menu, a value being typed, a modal, or a window above
-it takes Esc first.
+Listen and Save require available audio. Processing uses the application worker
+and disables duplicate requests. Listen becomes Stop listening while this tool's
+preview is active. Processing and preview indication must not be confused with a
+successful-save indication. Cancelled or failed saves never report success.
+A successful save retains the selected source and both tempo drafts, names the
+saved file and category locally, and preserves the full path in application status.
 
-Listen and Save require an available source. Processing runs in the application
-worker and disables repeated requests. Listen becomes Stop listening while this
-tool's preview is active. The amber lamp lights only during processing or that
-preview; green confirms a successful save and clears after settings change.
-Cancelled or failed saves do not light green. Each lamp sits in a dark bezel
-with a metal rim, so it is located on the black face and a lit lamp reads on
-the ivory one. Unlit lamps stay visibly dimmer than lit ones. An unavailable
-button fades its lettering with its face.
-A successful save is a receipt. The tool keeps its source and both tempos,
-names the saved file and its category in the footer, and leaves the full path
-in the application status bar.
-The bottom status well shows local progress, errors, save confirmation, or the
-sound and tempo values of a running preview. Changed drafts are distinguished
-from that preview. When no preview runs and no message is pending, show the
-duration change and approximate pitch-preservation warning; add Listen before
-saving until the current settings have been heard. Equal tempos state that the
-duration is unchanged. Errors begin with Cannot, carry a drawn mark, and are
-announced as errors; color is not their only signal. The status is a polite
-live region for assistive technology. Feedback
-also retains its full text in a tooltip. The panel's Help opens the audible
-limitations, ranges, input, reset, and lamp meanings directly in a native window.
-Missing audio exposes Import details and a concise warning. Esc and the
-close control close the tool; the title triangle collapses or expands it.
-The form sends selections and action requests through `src/ui.rs` to the
-existing application operations. It does not process audio or write files.
+Feedback shows progress, errors, save confirmation, or the source and tempo values
+of the current audition. Draft changes remain distinct from the running preview.
+Idle guidance explains duration change and approximate pitch preservation; equal
+tempos state that duration is unchanged. Keep Listen before saving guidance until
+the current settings have been heard. Errors begin with Cannot and carry an explicit
+error indication. Full feedback remains available in a tooltip and polite accessible
+live region. Missing audio offers Import details. Help explains ranges, input,
+reset, processing, preview, and audible limitations.
+
+Esc first closes a popup, leaves exact entry, or goes to a higher window. Otherwise
+it closes the topmost tool. Collapse preserves the source, tempos, and feedback.
+The body sends actions through `src/ui.rs`; it does not process audio or write files.
 
 ### Effect Studio
 
-`src/ui/effects.rs` paints five prepared assets at each of the three display
-densities: `panel.png`, `collapsed.png`, `toggle-off.png`, `toggle-on.png`, and
-`knob.png`.
-The separate collapsed skin has a complete bezel. Select the nearest density,
-align image bounds to physical pixels, and paint one texel per physical pixel.
-See `assets/effects/README.md` for dimensions and generation provenance.
+`src/ui/effects.rs` supplies Filter, Echo, Robotize, and Distortion / Output inside
+the common shell. Filter has Cutoff, Resonance, Overdrive, and Filter volume. Echo
+has Delay (beats), Feedback, and Echo volume. Robotize has Color and Robotize
+volume. Distortion / Output has Dirty distortion, Noise distortion, and Output
+volume. Reuse the same control geometry and interaction as the other windows.
+Keep dial marks, values, and labels in separate regions with measured clearance.
 
-The red metal skin supplies static material, empty bank recesses, and button
-faces. Separate knob sprites supply small black bodies. Keep title, source name,
-section labels, ticks, numeric wells, values, dial pointers, lamps, header
-controls, and interaction feedback live. Collapse is at
-the upper left; Close is at the upper right; Help uses a drawn icon beside Close.
-Help remains available in expanded and collapsed states. Esc first leaves exact
-entry or a window or
-modal above the tool. Otherwise it closes the topmost Effect Studio window.
-
-Filter has Cutoff, Resonance, Overdrive, and Filter volume. Echo has Delay
-(beats), Feedback, and Echo volume. Robotize has Color and Robotize volume.
-Distortion / Output has Dirty distortion, Noise distortion, and Output volume.
-Knob artwork is 32 points square at the prepared scales, with 42-point input
-regions. Section switch sprites are 24 points square. The three optional banks
-pair a named on/off switch with a live green lamp. Disabled banks dim their
-labels and controls. Turning a bank off discards its settings; turning it on
-uses that bank's defaults. Reset restores the complete existing effects draft.
-
-Keep knobs, values, and captions in separate vertical bands. Current upper-row
-centers are 117, 144, and 163 points; lower-row centers are 216, 244, and 263.
-Lower-bank section captions sit at 185 points. Check rendered glyph bounds
-against dial arcs, numeric wells, and adjacent controls at each prepared scale.
-Change positions to restore clearance while retaining small desktop controls.
-The owner rejected crowded labels; these coordinates record the current
-implementation and do not establish visual acceptance. Native capture review
-remains pending for this revision.
-
-Knobs accept drag, wheel, arrow keys, Home, End, and AccessKit numeric actions.
-Drags accumulate unrounded movement and hold when the pointer stops. Shift
-applies fine adjustment to new movement. Wheel events are consumed once.
-Double-click resets a knob; clicking its numeric well permits exact entry.
-Cutoff and Color retain logarithmic knob mapping; each wheel, arrow, or
-accessible step moves them 1% of the dial. All parameter ranges,
-defaults, processing algorithms, and Step synth's shared effects form remain
-unchanged. Accessible controls expose names, current values, ranges, and state.
-The source name is a live truncated label with a full-name tooltip and its full
-text as the accessible value.
+Optional sections pair a named switch with visible state. Disabled sections dim
+their controls. Turning a section off discards its settings; turning it on uses its
+defaults. Reset restores the existing effects draft. Cutoff and Color retain
+logarithmic mapping; wheel, arrow, and accessible steps move them 1% of dial range.
+Other parameter ranges, defaults, algorithms, and Step synth's effects form remain
+unchanged. The source label truncates but retains its full tooltip and accessible
+value.
 
 Listen and Save sound require selected, available audio. Missing audio offers
-Import details in the footer. Processing and preview retain the existing
-synchronous application calls; the panel does not add Time Stretcher's worker
-or Stop listening behavior. Save sound writes a WAV to Effect and selects that
-saved sound at the source BPM. The local footer shows preview feedback, reset,
-save choice, cancellation, errors, and save confirmation. It is an inset display
-inside the continued bezel. Center short messages; wrap and scroll long text.
-Reserve room for Import details beside missing-audio feedback. Status text has
-a full tooltip and a polite accessible live region; errors include an Error
-label. No original-product DSP equivalence is established by this presentation.
+Import details. Processing and preview use existing synchronous application calls;
+the panel does not add Time Stretcher's worker or Stop listening behavior. Save
+sound writes a WAV to Effect at the source BPM and selects it. Local feedback
+covers preview, reset, file choice, cancellation, errors, and save confirmation.
+Keep full feedback in a tooltip and polite accessible live region, with explicit
+error text. Help and collapse retain the complete draft. No DSP equivalence follows
+from this presentation change.
 
 ### Step synth
 
-`src/ui/step_synth.rs` paints separate expanded and collapsed backgrounds from
-`assets/step-synth/{100,150,200}/`. Both skins have a complete bezel. The olive
-material is empty: title, source, grid, fields, buttons, switch states, header
-icons, text, hover, focus, and disabled feedback remain live. See
-`assets/step-synth/README.md` for dimensions and generation provenance.
-Select the nearest prepared density and paint aligned bounds at one texel per
-physical pixel. Small switches are simple native pill forms, with a 26 by
-16-point track inside a 30 by 26-point input region. Do not put fine photographic
-detail into these controls.
+`src/ui/step_synth.rs` supplies the note grid, source and bar controls, options,
+effects body, actions, and feedback inside the common shell. Source names truncate
+with full tooltips and accessible values. Choose source file selects a WAV or PXD
+path; Use palette sound returns to the selected sound or clip. An explicit file
+takes precedence over missing palette audio and is read only when Listen sequence
+or Save sequence requests processing.
 
-Collapse is at the upper left, Close at the upper right, and icon Help beside
-Close. The separate collapsed skin retains these controls and the title.
-Esc first leaves active entry, a popup, a modal, or a higher window; otherwise
-it closes the topmost Step synth. Collapse retains the complete draft.
-The source label truncates long names and retains its full tooltip and
-accessible value. Choose source file selects a WAV or PXD path; Use palette
-sound returns to the selected palette sound or clip. An explicit file takes
-precedence over missing palette audio. Selection retains the path without
-reading or validating its audio until Listen sequence or Save sequence.
-
-View bar selects one of four editable bars. Active 1-4 switches choose the
-bars to render, in ascending order. Each bar has sixteen sixteenth steps with
-one optional note per step. Clicking another pitch replaces that step's note;
-clicking the selected note clears it. Clear bar clears only the viewed sixteen
-steps. The grid shows +12 through -12 semitones, with A 0 as the source pitch.
-Loaded notes outside this visible range remain in the draft under the existing
--48 through +48 validation range. Tab reaches named controls and cells; a
-focused cell scrolls into view. Selected state is also exposed through each
-cell's accessible name and state.
+View bar selects one of four editable bars. Active 1-4 chooses rendered bars in
+ascending order. Each bar has sixteen sixteenth steps with one optional note per
+step. Another pitch replaces the note; selecting the current note clears it.
+Clear bar affects only the viewed bar. The grid shows +12 through -12 semitones,
+with A 0 as source pitch. Loaded notes outside that display remain valid under
+the existing -48 through +48 range. Tab reaches named controls and cells; focused
+cells scroll into view. Expose selected state through accessible names and states.
 
 BPM offers 120, 140, 160, and 180. 1/16 cut ends a trigger after one sixteenth;
-otherwise it continues until the next trigger or sequence end. Loop source
-repeats audio within that interval. Both switches and their labels expose
-detailed tooltips for on/off behavior, retriggering, source duration, and their
-combined operation. Cut explains that effects can continue after source gating;
-Loop source explains whole-file repetition rather than pattern repetition.
-Effects swaps the grid for the shared
-native `effects_controls` form, styled for this panel; Note grid restores it.
-Listen sequence, Save sequence, Effects, Save pattern, and Load pattern remain
-in the fixed bottom row. Listen and Save sequence need a source and an active
-bar. Pattern saving retains the existing validation, including one active bar.
-The application processes audio synchronously. Save sequence writes a WAV in
-Step synth at the draft BPM and selects the saved sound. Save pattern and Load
-pattern use JSON without replacing the source file or viewed bar.
+otherwise it continues until the next trigger or sequence end. Loop source repeats
+audio within that interval. Keep tooltips that explain retriggering, duration,
+combined behavior, whole-file repetition, and effects after source gating.
+Effects replaces the grid with the common effects form; Note grid restores it.
+Keep actions reachable while the body scrolls. The pane switch retains keyboard
+focus when its label changes.
 
-The local footer is an inset display inside the continued bezel. It shows
-source guidance, preview feedback, file choice, cancellation, errors, and save
-confirmation. Short messages are centered; long text wraps and scrolls.
-Feedback belongs to its source: a different palette source returns the footer
-to source guidance, while an explicit file keeps its feedback. A disabled
-Listen sequence or Save sequence states its reason on hover. The pane button
-keeps keyboard focus when its label changes.
-Missing palette audio offers Import details beside the message. Full feedback
-is retained in a tooltip and a polite accessible live region; errors include
-an Error label. Help opens the source, grid, bars, tempo, effects, and file
-workflow in a native window. This presentation does not establish high-DPI,
-screen-reader, listening, or original-product DSP acceptance.
+Listen and Save sequence need a source and active bar. Disabled actions explain
+why. Pattern saving retains validation, including one active bar. Processing is
+synchronous. Save sequence writes a WAV in Step synth at draft BPM and selects it.
+Pattern JSON does not replace the source file or viewed bar. Local feedback covers
+source guidance, preview, file choice, cancellation, errors, and save confirmation.
+Changing palette source resets feedback; an explicit file keeps its own feedback.
+Missing palette audio offers Import details. Full feedback remains in a tooltip
+and polite accessible live region; errors include an Error label. Help explains
+the source, grid, bars, tempo, effects, and file workflow. Collapse preserves the
+draft and source selection.
 
 ### Sample Editor
 
-`src/ui/sample_editor.rs` supplies the dedicated charcoal and gunmetal hardware
-presentation from the owner's reference. The expanded skin is 640 by 320 logical
-points, followed by a 48-point native status footer; the current window is 640
-by 368 points. Its separate collapsed skin is 640 by 48 points and has a complete
-lower rim. These are implementation dimensions, not an owner-selected fixed
-size. The title, source name, labels, numeric wells, pitch rail, buttons, and
-all input and feedback remain native. Collapse occupies the upper-left corner;
-Close occupies the upper-right corner. Keep the recessed title plaque within
-the central 80% of the header, nominally x64..576 at the 100% density. Its inset
-seams must not cross behind the corner controls. The left and right mounting
-areas stay flat. Each control retains a 32 by 32-point input region at x10..42
-or x598..630; the title and control centers share y32 while expanded and y24
-while collapsed. Inspect the actual plaque edges with live controls; coordinates
-alone do not establish clearance.
+`src/ui/sample_editor.rs` supplies trim, pitch, source, actions, and feedback inside
+the common shell. Reuse the shared value fields, slider, buttons, and header.
+The source name truncates with a full tooltip and accessible value. Start frame
+is inclusive and zero-based; End frame is exclusive. Setting End to the source
+frame count includes its last frame. Preserve unsigned 64-bit exact entry.
+Adjacent buttons change one frame, or 100 with Shift. Pitch stays within -24 to
++24 semitones; its buttons change 0.1 semitone, or one with Shift. The slider and
+field share the same draft. Explain exact entry, boundaries, and how pitch changes
+speed and duration. Background selections do not reset the trim draft while the
+editor is collapsed. On expansion, a different active source or catalog revision
+resets the range under the existing policy. Expanded source changes still reset
+the range to actual source frames.
 
-The source name truncates with its full value on hover and in the accessible
-value. Start frame is the first included zero-based frame. End frame is the
-first excluded frame; setting it to the source frame count includes the final
-source frame. Both values retain unsigned 64-bit exact entry. Adjacent buttons
-change one frame, or 100 with Shift. The pitch rail and numeric field share a
--24 to +24-semitone draft. Pitch buttons change 0.1 semitone, or one with Shift.
-Tooltips explain exact entry, range boundaries, and the link between pitch,
-playback speed, and output duration. A new source or catalog revision resets
-the trim range to that source's actual frame count.
+Listen edit and Save edited sound use the shared secondary and primary buttons.
+An absent or missing source, invalid frame range, or invalid pitch disables them
+with an explicit reason. Feedback shows selected frames and duration after pitch,
+or the reason editing is unavailable. Keep full status in its tooltip and polite
+accessible live region. Missing audio offers Import details. Esc first leaves
+exact entry, a popup, or a higher window; otherwise it closes the topmost editor.
 
-Listen edit is dark with cream text. Save edited sound is gold with ink text.
-Both retain 36-point height. Hover lightens the face; pressing an enabled action
-adds a black overlay at 55/255 alpha. Disabled actions use 130/255 alpha. Actions
-become unavailable for an absent or missing
-source, an invalid frame range, or an invalid pitch. Their disabled tooltips
-state the reason. The 48-point footer contains an inset 624 by 36-point Sample
-Face well, with an Edge outline or Coral outline for an invalid range or source.
-It shows selected source frames and estimated duration after pitch, or a concise
-reason editing is unavailable. Full status remains
-available on hover and in a polite accessible live region. A missing source
-offers Import details. Exact entry, a popup, a modal, or a higher window receives
-Esc first; otherwise Esc closes the topmost Sample Editor.
+Session trim, resampling, preview, WAV saving, registration in Wave, and source-BPM
+behavior remain application-owned and synchronous. Saving leaves the source
+unchanged. Collapse preserves edits and performs no processing.
 
-Prepared panel, collapsed, and thumb PNGs live in
-`assets/sample-editor/{100,150,200}/`. The silver thumb is prepared on a 32 by
-56-pixel canonical grid before the 16 by 28-point display variants, so small
-material details stay legible. Paint the nearest density with aligned bounds at
-one texel per physical pixel. See `assets/sample-editor/README.md` for exact
-prompts, hashes, dimensions, and reproduction. Existing Session trim,
-resampling, preview, WAV saving, registration, and source-BPM behavior remain
-application-owned. The panel does not establish listening, physical high-DPI,
-screen-reader, or original-product DSP acceptance.
+### Utility windows and blocking dialogs
 
-### Utility dialog template
+Help, Time Stretcher help, Effect Studio help, Step synth help, Sample libraries,
+Import details, Recorded take, Save your changes?, Sample conflicts, Choose path,
+and Import sound use the same shell and controls as musical tools. Preserve their
+stable identities and exact accessible names independently of uppercase titles.
+Native operating-system file pickers remain outside this system.
 
-`src/ui/dialog.rs` supplies shared `window`, `modal`, `primary`, and `danger`
-helpers. Use them for non-musical tasks so content, fields, and actions share
-the compact graphite hardware presentation. `window` wraps native egui Window;
-`modal` wraps native egui Modal and retains `name_dialog` for modal input blocking.
-The caller still owns task state, content, actions, and dismissal policy.
+Every window can resize and collapse. Recorded take keeps its in-memory audio
+while collapsed; Save take and Discard take remain the explicit resolving actions.
+Collapsing a confirmation releases workspace and agent input and pauses its pending
+action. Expanding restores blocking when a decision is still required. Choose path
+suspends its parent confirmation while the path request is pending, including while
+collapsed. Reject conflicting file requests instead of replacing paused data.
+Close cancels a confirmation without saving, importing, or discarding implicitly.
+Sample conflicts confirms only through Keep choices; dismissal does not confirm.
 
-The template covers Help, Time Stretcher help, Effect Studio help, Step synth
-help, Sample libraries, Import details, and Recorded take. It also covers the
-blocking Save your changes?, Sample conflicts, Choose path, and Import sound
-dialogs. Musical panels, including the separately redesigned Sample Editor,
-use their dedicated hardware presentation.
-Native operating-system file pickers keep their operating-system presentation.
-
-Prepared artwork lives in `assets/dialog/{100,150,200}/`. Nine pieces per density
-supply corners, edges, header, and body. The renderer chooses the nearest density,
-aligns outer bounds to physical pixels, and tiles each piece with cropped UVs
-at its remaining edge. It does not stretch the texture. Titles, close and collapse
-controls, text, fields, buttons, hover, keyboard focus, and disabled state remain
-native. See `assets/dialog/README.md` for dimensions, exact prompt, source hash,
-and reproduction. Offline preparation removes broad lighting from repeated
-pieces while retaining fine grain and the cross-edge bezel profile, so tiling
-does not produce bands behind the content.
-
-Primary actions use ivory with ink lettering. Ordinary actions use dark faces
-with cream text. Destructive actions use coral text and an explicit action name.
-Hover uses Dialog Hover; an active control uses the shared Accent border.
-Keep native focus and accessibility behavior. Preserve original window IDs and
-modal labels independently of uppercase titles. Do not add close or collapse
-controls to a task that requires an explicit decision: Recorded take retains
-Listen and requires Save take or Discard take to resolve it. Blocking dialogs
-retain their existing confirmation and cancellation paths, without new dismissal
-behavior.
+Prepared material lives in `assets/folded-metal/<palette>/{100,150,200}/`;
+shared controls live in `assets/folded-metal/controls/{100,150,200}/`.
+`tools/assets/render-folded-metal.py` prepares the shared density variants. The
+shared material geometry supports Utility, Marine, Granite, Red, and Olive palettes. Fixed raster details
+fade to a matching solid base; no window depends on a complete fixed-size skin.
+Check the open and collapsed states, both resize directions, long content, focus,
+and all button states at supported sizes. Implementation and native visual checks
+for this revision are pending; concept approval is not verification.
 
 ### Empty states and feedback
 
@@ -1149,8 +792,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Keep metal hardware treatments scoped to the musical panels and shared
-  utility-dialog template described here. Do not add repeated waveform traces.
+- Keep Folded Metal styling on in-app floating windows and modals. Preserve the
+  main graphite workspace and Mixer. Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

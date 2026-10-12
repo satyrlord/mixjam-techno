@@ -1,0 +1,8 @@
+{
+  "tool": "Built-in image_gen",
+  "reference": "Owner-selected Folded Metal concept 1",
+  "chassis": "Edit the approved Folded Metal reference into a single empty reusable chassis. Preserve the orange-yellow painted folded-metal material, fine grain, sparse hairline scratches, slight edge wear, rounded folded lip, narrow edge depth, top-left lighting, and four small dark corner fasteners. Remove all text, controls, knobs, panels, source strip, buttons, resize grip, collapsed demonstration, caption, and graphite background. Output one complete straight-on wide empty chassis on a transparent background. Keep the center diffuse and uniform for resizable software use. No perspective, props, extra variants, or dramatic external shadow.",
+  "active_source": "local-data/artwork/folded-metal/chassis-screwless.png",
+  "screwless_revision_brief": "Remove every corner screw and fastener from the generated chassis. Preserve the folded painted-metal material, subtle aging, fine grain and transparent surround. The original remains archived; the screw-free revision is the active preparation source.",
+  "preparation": "render-folded-metal.py recolors the material into the approved module palettes and prepares fixed-scale slices. Material has zero alpha on all boundaries and fades at strip endpoints. Native continuous antialiased rounded paths own the perimeter and folded bevel; text and controls remain native."
+}

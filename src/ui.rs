@@ -6,6 +6,8 @@ mod view;
 use view::*;
 #[path = "ui/agent.rs"]
 mod agent;
+#[path = "ui/controls.rs"]
+mod controls;
 #[path = "ui/dialog.rs"]
 mod dialog;
 #[path = "ui/effects.rs"]
@@ -18,6 +20,9 @@ mod sample_editor;
 mod step_synth;
 #[path = "ui/stretch.rs"]
 mod stretch;
+#[cfg(test)]
+#[path = "ui/window_lifecycle_tests.rs"]
+mod window_lifecycle_tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -856,6 +861,22 @@ impl MixJamApp {
     }
 
     fn request_action(&mut self, action: PendingAction, ctx: &egui::Context) {
+        let pending = if self.path_prompt.is_some() {
+            Some("Choose path")
+        } else if self.pending_action.is_some() {
+            Some("Save your changes?")
+        } else if self.import_path.is_some() {
+            Some("Import sound")
+        } else {
+            None
+        };
+        if let Some(identity) = pending {
+            dialog::expand(ctx, identity);
+            self.error(format!(
+                "Finish or cancel {identity} before starting another file action."
+            ));
+            return;
+        }
         if self.session.is_recording() {
             self.error("Stop recording before you open, close, or start a new mix.");
             return;
@@ -1205,14 +1226,35 @@ impl MixJamApp {
         }
     }
 
+    /// Pending file choices suspend their parent confirmation, even while collapsed.
+    fn blocking_modal(&self, ctx: &egui::Context) -> Option<&'static str> {
+        if self.path_prompt.is_some() {
+            return (!dialog::is_collapsed(ctx, "Choose path")).then_some("Choose path");
+        }
+        if self.pending_action.is_some() && !dialog::is_collapsed(ctx, "Save your changes?") {
+            return Some("Save your changes?");
+        }
+        if self.sample_conflicts_open() && !dialog::is_collapsed(ctx, "Sample conflicts") {
+            return Some("Sample conflicts");
+        }
+        if self.import_path.is_some() && !dialog::is_collapsed(ctx, "Import sound") {
+            return Some("Import sound");
+        }
+        None
+    }
+
     fn dialogs(&mut self, ctx: &egui::Context) {
-        if std::mem::take(&mut self.resume_save_changes)
+        if !dialog::is_collapsed(ctx, "Save your changes?")
+            && self.path_prompt.is_none()
+            && std::mem::take(&mut self.resume_save_changes)
             && let Some(action) = self.pending_action
         {
             self.save_changes(action, ctx);
         }
-        if let Some(action) = self.pending_action {
-            dialog::modal(
+        if let Some(action) = self.pending_action
+            && self.path_prompt.is_none()
+        {
+            let response = dialog::modal(
                 ctx,
                 egui::Id::new("unsaved_changes"),
                 "Save your changes?",
@@ -1234,16 +1276,21 @@ impl MixJamApp {
                         if dialog::danger(ui, "Discard changes").clicked() {
                             self.run_action(action, ctx);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked()
+                        {
                             self.pending_action = None;
                         }
                     });
                 },
             );
+            if response.should_close() {
+                self.pending_action = None;
+                self.resume_save_changes = false;
+            }
         }
-        dialog::window("Help").open(&mut self.show_help).resizable(false).default_width(450.0).default_height(420.0)
+        dialog::window("Help").open(&mut self.show_help).default_width(450.0).default_height(420.0)
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0)).vscroll(true).show(ctx, |ui| {
+            .constrain_to(ctx.viewport_rect().shrink(12.0)).show(ctx, |ui| {
                 egui::Grid::new("help_gestures").num_columns(2).spacing(Vec2::new(18.0, 8.0)).show(ui, |ui| {
                     for (action, gesture) in [
                         ("Place sound", "Drag to a track, or select a sound and click a track. Up to 64 tracks."),
@@ -1283,29 +1330,23 @@ impl MixJamApp {
         dialog::window("Time Stretcher help")
             .default_height(420.0)
             .open(&mut self.show_stretch_help)
-            .resizable(false)
             .default_width(450.0)
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .vscroll(true)
             .show(ctx, stretch_help);
         dialog::window("Effect Studio help")
             .default_height(420.0)
             .open(&mut self.show_effects_help)
-            .resizable(false)
             .default_width(450.0)
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .vscroll(true)
             .show(ctx, effects_help);
         dialog::window("Step synth help")
             .default_height(420.0)
             .open(&mut self.show_step_synth_help)
-            .resizable(false)
             .default_width(450.0)
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .vscroll(true)
             .show(ctx, step_synth_help);
     }
 
@@ -1321,7 +1362,10 @@ impl MixJamApp {
     }
 
     fn sample_conflicts_dialog(&mut self, ctx: &egui::Context) {
-        if !self.sample_conflicts_open() || self.pending_action.is_some() {
+        if !self.sample_conflicts_open()
+            || self.path_prompt.is_some()
+            || (self.pending_action.is_some() && !dialog::is_collapsed(ctx, "Save your changes?"))
+        {
             return;
         }
         self.show_sample_conflicts = true;
@@ -1368,7 +1412,7 @@ impl MixJamApp {
                                         "{instances} instances · {} matches",
                                         conflict.candidates.len()
                                     ))
-                                    .color(MUTED),
+                                    .color(controls::CREAM),
                                 );
                                 ui.add_enabled_ui(!recording, |ui| {
                                     for (candidate_index, path) in
@@ -1385,7 +1429,7 @@ impl MixJamApp {
                                             },
                                             candidate_index + 1
                                         );
-                                        if ui.add(egui::RadioButton::new(selected, label)).clicked()
+                                        if controls::radio(ui, selected, &label).clicked()
                                             && !selected
                                         {
                                             choice = Some((index, candidate_index));
@@ -1401,7 +1445,9 @@ impl MixJamApp {
                         CORAL,
                         "Stop recording before changing or confirming sample choices.",
                     );
-                    if ui.button("Stop recording").clicked() {
+                    if controls::button(ui, "Stop recording", controls::ButtonRole::Secondary)
+                        .clicked()
+                    {
                         self.stop();
                     }
                 }
@@ -1418,10 +1464,14 @@ impl MixJamApp {
                     }
                     let playing = self.session.wants_playback();
                     if ui
-                        .add_enabled(
-                            !recording,
-                            egui::Button::new(if playing { "Pause song" } else { "Play song" }),
-                        )
+                        .add_enabled_ui(!recording, |ui| {
+                            controls::button(
+                                ui,
+                                if playing { "Pause song" } else { "Play song" },
+                                controls::ButtonRole::Secondary,
+                            )
+                        })
+                        .inner
                         .clicked()
                     {
                         if playing {
@@ -1689,6 +1739,14 @@ impl MixJamApp {
     /// Ask for the path of `request`, then carry the request out. An agent
     /// cannot operate a native dialog, so its session types the path instead.
     fn ask_path(&mut self, request: FileRequest) {
+        if self.path_prompt.is_some() {
+            self.error("Finish or cancel Choose path before starting another file action.");
+            return;
+        }
+        if matches!(request, FileRequest::ImportSound) && self.import_path.is_some() {
+            self.error("Finish or cancel Import sound before importing another sound.");
+            return;
+        }
         if self.agent.is_some() {
             self.path_prompt = Some(PathPrompt {
                 request,
@@ -1761,6 +1819,10 @@ impl MixJamApp {
                 self.apply(result);
             }
             FileRequest::ImportSound => {
+                if self.import_path.is_some() {
+                    self.error("Finish or cancel Import sound before importing another sound.");
+                    return;
+                }
                 self.import_path = Some(path);
                 self.import_bpm = 140.0;
             }
@@ -1919,11 +1981,14 @@ impl MixJamApp {
                         .collect();
                     ui.label(
                         egui::RichText::new(format!("{name}: {}", extensions.join(", ")))
-                            .color(MUTED),
+                            .color(controls::CREAM),
                     );
                 }
                 if let Some(name) = &spec.file_name {
-                    ui.label(egui::RichText::new(format!("Suggested name: {name}")).color(MUTED));
+                    ui.label(
+                        egui::RichText::new(format!("Suggested name: {name}"))
+                            .color(controls::CREAM),
+                    );
                 }
                 let path = name_control(
                     ui.add(
@@ -1943,7 +2008,8 @@ impl MixJamApp {
                 }
                 ui.horizontal(|ui| {
                     confirm |= dialog::primary(ui, "Confirm path").clicked();
-                    cancel = ui.button("Cancel").clicked();
+                    cancel =
+                        controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked();
                 });
             },
         );
@@ -1978,21 +2044,19 @@ impl MixJamApp {
                 .default_width(540.0)
                 .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
                 .constrain_to(ctx.viewport_rect().shrink(12.0))
-                .vscroll(true)
+
                 .show(ctx, |ui| {
                     let scan = self.session.wave_scan();
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
                         name_control(
-                            ui.add(egui::DragValue::new(&mut self.fallback_bpm).range(1.0..=999.0)),
+                            controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM"),
                             "Fallback BPM",
                         )
                             .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
                         if ui
-                            .add_enabled(
-                                !self.session.is_recording() && scan.is_none(),
-                                egui::Button::new("Choose WAV folder"),
-                            )
+                            .add_enabled_ui(!self.session.is_recording() && scan.is_none(), |ui| controls::button(ui, "Choose WAV folder", controls::ButtonRole::Secondary))
+                            .inner
                             .on_disabled_hover_text(if scan.is_some() {
                                 "Wait for the current scan to finish or cancel it."
                             } else {
@@ -2019,7 +2083,7 @@ impl MixJamApp {
                                     .animate(true)
                                     .text(text),
                             );
-                            if ui.button("Cancel").clicked() {
+                            if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
                                 self.session.cancel_wave_scan();
                                 self.sync_notice();
                             }
@@ -2032,7 +2096,7 @@ impl MixJamApp {
                     if let Some(root) = library.wav_root()
                         && !library.folder_tempos().is_empty()
                     {
-                        egui::CollapsingHeader::new(format!("Folder tempos ({})", library.folder_tempos().len()))
+                        controls::disclosure(format!("Folder tempos ({})", library.folder_tempos().len()))
                             .default_open(self.capture_view_is("library-tempos"))
                             .show(ui, |ui| {
                                 for (folder, bpm, count) in library.folder_tempos() {
@@ -2046,7 +2110,7 @@ impl MixJamApp {
                                 }
                             });
                     }
-                    egui::CollapsingHeader::new("Optional product providers")
+                    controls::disclosure("Optional product providers")
                         .default_open(self.capture_view_is("library-providers")).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let products = egui::ComboBox::from_id_salt("library_product")
@@ -2062,7 +2126,7 @@ impl MixJamApp {
                             })
                             .response;
                         name_control(products, "Provider product");
-                        if ui.button("Choose folder").clicked() {
+                        if controls::button(ui, "Choose folder", controls::ButtonRole::Secondary).clicked() {
                             self.ask_path(FileRequest::ProviderFolder(self.library_product));
                         }
                     });
@@ -2074,7 +2138,7 @@ impl MixJamApp {
                     for binding in bindings {
                         ui.horizontal(|ui| {
                             ui.label(binding.product.label());
-                            if ui.small_button("Remove").clicked() {
+                            if controls::button(ui, "Remove", controls::ButtonRole::Secondary).clicked() {
                                 self.remove_library(binding.product);
                             }
                         });
@@ -2095,14 +2159,13 @@ impl MixJamApp {
                 .default_width(540.0)
                 .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
                 .constrain_to(ctx.viewport_rect().shrink(12.0))
-                .vscroll(true)
                 .show(ctx, |ui| {
                     if !self.session.missing_samples().is_empty() {
                         ui.heading("MISSING SAMPLES");
                         ui.label("Missing samples play silence. Select details to copy.");
                         for missing in self.session.missing_samples() {
                             let selected = self.source_id() == Some(missing.id);
-                            egui::CollapsingHeader::new(format!("Missing: {}", missing.name))
+                            controls::disclosure(format!("Missing: {}", missing.name))
                                 .id_salt(("missing_sample", missing.id))
                                 .default_open(selected || self.session.missing_samples().len() == 1)
                                 .show(ui, |ui| {
@@ -2136,7 +2199,7 @@ impl MixJamApp {
                     }
                     for notice in &self.session.project().source_notices {
                         if notice.starts_with("MixJam v7 source controls:") {
-                            ui.collapsing("Saved MixJam source controls", |ui| {
+                            controls::disclosure("Saved MixJam source controls").show(ui, |ui| {
                                 ui.label(display_paths(notice));
                             });
                         } else {
@@ -2146,8 +2209,11 @@ impl MixJamApp {
                 });
             self.show_import_details = open;
         }
-        if let Some(path) = self.import_path.clone() {
-            dialog::modal(
+        if let Some(path) = self.import_path.clone()
+            && self.path_prompt.is_none()
+            && (self.pending_action.is_none() || dialog::is_collapsed(ctx, "Save your changes?"))
+        {
+            let response = dialog::modal(
                 ctx,
                 egui::Id::new("import_sound"),
                 "Import sound",
@@ -2158,7 +2224,7 @@ impl MixJamApp {
                     ui.horizontal(|ui| {
                         ui.label("Source BPM");
                         name_control(
-                            ui.add(egui::DragValue::new(&mut self.import_bpm).range(7.5..=1200.0)),
+                            controls::number(ui, &mut self.import_bpm, 7.5..=1200.0, "Source BPM"),
                             "Source BPM",
                         )
                         .on_hover_text("The sound's original tempo, separate from project BPM.");
@@ -2173,12 +2239,16 @@ impl MixJamApp {
                                 Err(error) => self.error(error),
                             }
                         }
-                        if ui.button("Cancel").clicked() {
+                        if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked()
+                        {
                             self.import_path = None;
                         }
                     });
                 },
             );
+            if response.should_close() {
+                self.import_path = None;
+            }
         }
         if self.show_effects {
             let mut open = true;
@@ -2335,7 +2405,9 @@ impl MixJamApp {
             let (frames, sample_rate) = metadata.unwrap_or((0, 0));
             // A replacement can keep its source ID. Reset only the old trim draft.
             let source = source_id.map(|id| (id, self.session.catalog_revision()));
-            if self.edit_end == 0 || self.edit_source != source {
+            if !dialog::is_collapsed(ctx, "Sample editor")
+                && (self.edit_end == 0 || self.edit_source != source)
+            {
                 self.edit_source = source;
                 self.edit_start = 0;
                 self.edit_end = frames;
@@ -2466,13 +2538,13 @@ impl MixJamApp {
             || self.capture_view_is("recorded-take")
         {
             dialog::window("Recorded take")
-                .default_width(360.0)
-                .collapsible(false)
-                .resizable(false)
+                .default_width(400.0)
+                .default_height(92.0)
                 .show(ctx, |ui| {
                     ui.label("Unsaved take: stored in memory.");
                     ui.horizontal(|ui| {
-                        if ui.button("Listen").clicked() {
+                        if controls::button(ui, "Listen", controls::ButtonRole::Secondary).clicked()
+                        {
                             self.session.preview_recorded_take();
                             self.sync_notice();
                         }

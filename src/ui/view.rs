@@ -1246,11 +1246,7 @@ impl MixJamApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request_action(PendingAction::Close, ctx);
         }
-        if self.pending_action.is_none()
-            && !self.sample_conflicts_open()
-            && self.import_path.is_none()
-            && self.path_prompt.is_none()
-        {
+        if self.blocking_modal(ctx).is_none() {
             self.keyboard(ctx);
         }
         self.header(ctx);
@@ -1308,48 +1304,223 @@ fn transport_position(ui: &mut egui::Ui, tick: u32) -> Response {
 }
 
 pub(super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
-    ui.horizontal(|ui| {
-        let mut enabled = state.filter.is_some();
-        if ui.checkbox(&mut enabled, "Filter").changed() {
-            state.filter = enabled.then(Default::default);
-        }
-        if let Some(filter) = &mut state.filter {
-            ui.add(
-                egui::Slider::new(&mut filter.cutoff_hz, 20.0..=20000.0)
-                    .logarithmic(true)
-                    .text("Cutoff"),
-            );
-        }
+    egui::Frame::new().fill(controls::FACE).show(ui, |ui| {
+        ui.visuals_mut().override_text_color = Some(controls::CREAM);
+        ui.vertical(|ui| {
+            let mut enabled = state.filter.is_some();
+            if embedded_effect_group(ui, "Filter", &mut enabled) {
+                state.filter = enabled.then(Default::default);
+            }
+            let mut filter = state.filter.clone().unwrap_or_default();
+            ui.add_enabled_ui(state.filter.is_some(), |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    embedded_effect_dial(
+                        ui,
+                        &mut filter.cutoff_hz,
+                        "Cutoff",
+                        [20.0, 20000.0, 2000.0, 1.0],
+                        0,
+                        true,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut filter.resonance,
+                        "Resonance",
+                        [0.0, 1.0, 0.0, 0.001],
+                        3,
+                        false,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut filter.drive,
+                        "Overdrive",
+                        [0.0, 1.0, 0.0, 0.001],
+                        3,
+                        false,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut filter.wet,
+                        "Filter volume",
+                        [0.0, 1.0, 1.0, 0.001],
+                        3,
+                        false,
+                    );
+                });
+            });
+            if state.filter.is_some() {
+                state.filter = Some(filter);
+            }
+            let mut enabled = state.echo.is_some();
+            if embedded_effect_group(ui, "Echo", &mut enabled) {
+                state.echo = enabled.then(Default::default);
+            }
+            let mut echo = state.echo.clone().unwrap_or_default();
+            ui.add_enabled_ui(state.echo.is_some(), |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    embedded_effect_dial(
+                        ui,
+                        &mut echo.delay_beats,
+                        "Delay (beats)",
+                        [0.001, 2.0, 0.5, 0.01],
+                        3,
+                        false,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut echo.feedback,
+                        "Feedback",
+                        [0.0, 0.95, 0.4, 0.01],
+                        2,
+                        false,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut echo.wet,
+                        "Echo volume",
+                        [0.0, 1.0, 0.35, 0.01],
+                        2,
+                        false,
+                    );
+                });
+            });
+            if state.echo.is_some() {
+                state.echo = Some(echo);
+            }
+            let mut enabled = state.robotize.is_some();
+            if embedded_effect_group(ui, "Robotize", &mut enabled) {
+                state.robotize = enabled.then(Default::default);
+            }
+            let mut robot = state.robotize.clone().unwrap_or_default();
+            ui.add_enabled_ui(state.robotize.is_some(), |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    embedded_effect_dial(
+                        ui,
+                        &mut robot.frequency_hz,
+                        "Color",
+                        [1.0, 2000.0, 80.0, 1.0],
+                        0,
+                        true,
+                    );
+                    embedded_effect_dial(
+                        ui,
+                        &mut robot.wet,
+                        "Robotize volume",
+                        [0.0, 1.0, 0.5, 0.01],
+                        2,
+                        false,
+                    );
+                });
+            });
+            if state.robotize.is_some() {
+                state.robotize = Some(robot);
+            }
+            let (band, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
+            controls::section(ui, band, "Distortion / output");
+            ui.horizontal_wrapped(|ui| {
+                embedded_effect_dial(
+                    ui,
+                    &mut state.dirty,
+                    "Dirty distortion",
+                    [0.0, 1.0, 0.0, 0.001],
+                    3,
+                    false,
+                );
+                embedded_effect_dial(
+                    ui,
+                    &mut state.noise,
+                    "Noise distortion",
+                    [0.0, 1.0, 0.0, 0.001],
+                    3,
+                    false,
+                );
+                embedded_effect_dial(
+                    ui,
+                    &mut state.volume,
+                    "Output volume",
+                    [0.0, 2.0, 1.0, 0.01],
+                    2,
+                    false,
+                );
+            });
+        });
     });
-    if let Some(filter) = &mut state.filter {
-        ui.add(egui::Slider::new(&mut filter.resonance, 0.0..=1.0).text("Resonance"));
-        ui.add(egui::Slider::new(&mut filter.drive, 0.0..=1.0).text("Overdrive"));
-        ui.add(egui::Slider::new(&mut filter.wet, 0.0..=1.0).text("Filter volume"));
+}
+
+fn embedded_effect_group(ui: &mut egui::Ui, name: &str, enabled: &mut bool) -> bool {
+    let (band, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
+    controls::section(ui, band, "");
+    controls::toggle_at(ui, band.shrink2(Vec2::new(8.0, 0.0)), name, name, enabled)
+        .on_hover_text(format!("{name}: turning it off discards its settings."))
+        .changed()
+}
+
+fn embedded_effect_dial(
+    ui: &mut egui::Ui,
+    value: &mut f32,
+    name: &str,
+    settings: [f64; 4],
+    decimals: usize,
+    logarithmic: bool,
+) {
+    let [low, high, reset, step] = settings;
+    let (bounds, _) = ui.allocate_exact_size(Vec2::new(126.0, 112.0), Sense::hover());
+    // Absolute value fields must only advance their own column. Adding them
+    // to the horizontal parent shifts the next dial down to the field baseline.
+    let mut column = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt(name)
+            .max_rect(bounds)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    column.set_clip_rect(bounds.intersect(ui.clip_rect()));
+    let ui = &mut column;
+    let mut draft = f64::from(*value);
+    let dial = Rect::from_center_size(
+        bounds.center_top() + Vec2::new(0.0, 29.0),
+        Vec2::splat(48.0),
+    );
+    let response = controls::rotary(
+        ui,
+        dial,
+        &mut draft,
+        controls::RotarySpec {
+            name,
+            low,
+            high,
+            reset,
+            step,
+            decimals,
+            logarithmic,
+            choices: &[],
+        },
+    );
+    if response.changed() {
+        *value = draft as f32;
     }
-    let mut enabled = state.echo.is_some();
-    if ui.checkbox(&mut enabled, "Echo").changed() {
-        state.echo = enabled.then(Default::default);
-    }
-    if let Some(echo) = &mut state.echo {
-        ui.add(egui::Slider::new(&mut echo.delay_beats, 0.001..=2.0).text("Delay (beats)"));
-        ui.add(egui::Slider::new(&mut echo.feedback, 0.0..=0.95).text("Feedback"));
-        ui.add(egui::Slider::new(&mut echo.wet, 0.0..=1.0).text("Echo volume"));
-    }
-    let mut enabled = state.robotize.is_some();
-    if ui.checkbox(&mut enabled, "Robotize").changed() {
-        state.robotize = enabled.then(Default::default);
-    }
-    if let Some(robot) = &mut state.robotize {
-        ui.add(
-            egui::Slider::new(&mut robot.frequency_hz, 1.0..=2000.0)
-                .logarithmic(true)
-                .text("Color"),
+    let well = Rect::from_min_size(bounds.min + Vec2::new(13.0, 61.0), Vec2::new(100.0, 24.0));
+    controls::well(ui, well);
+    ui.scope(|ui| {
+        controls::value_style(ui);
+        name_control(
+            ui.put(
+                well.shrink(2.0),
+                egui::DragValue::new(value)
+                    .range(low..=high)
+                    .speed(step)
+                    .fixed_decimals(decimals),
+            ),
+            &format!("{name} value"),
         );
-        ui.add(egui::Slider::new(&mut robot.wet, 0.0..=1.0).text("Robotize volume"));
-    }
-    ui.add(egui::Slider::new(&mut state.dirty, 0.0..=1.0).text("Dirty distortion"));
-    ui.add(egui::Slider::new(&mut state.noise, 0.0..=1.0).text("Noise distortion"));
-    ui.add(egui::Slider::new(&mut state.volume, 0.0..=2.0).text("Output volume"));
+    });
+    ui.painter().text(
+        bounds.center_top() + Vec2::new(0.0, 99.0),
+        Align2::CENTER_CENTER,
+        name,
+        FontId::proportional(13.0),
+        controls::CREAM,
+    );
 }
 
 pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Response {

@@ -197,11 +197,20 @@ The capture set also covers every in-app dialog and tool window, expanded effect
 and provider settings, and missing-source processing states. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.
 
-Non-musical utility windows and dialogs share the compact graphite hardware
-template in `src/ui/dialog.rs`. See [DESIGN.md](DESIGN.md) for its text, spacing,
-and action rules, and [the dialog artwork](assets/dialog/README.md) for asset
-preparation and reproduction. Native containers retain each task's existing
-input and dismissal behavior.
+Every in-app tool window and modal uses Folded Metal: subtly aged painted metal,
+dark inset control bays, cream text, polished silver knobs, and pale metal primary
+buttons. Time Stretcher stays dark marine cyan, Sample Editor dark granite gray,
+Effect Studio synth red, and Step synth dark olive. Utility dialogs use neutral
+metal with orange-yellow accents. The chassis has no decorative screws; a smooth
+folded lip, texture, and light wear provide its hardware character.
+`src/ui/dialog.rs` owns the shared resizable shell; `src/ui/controls.rs` owns
+reusable buttons, header icons, rotaries, sliders, value fields, and switches.
+Collapse keeps a window in place and preserves its expanded size and edits.
+Collapsing a blocking dialog releases the workspace and pauses its pending action.
+See [DESIGN.md](DESIGN.md) for the contract. The main graphite workspace, Mixer,
+and native operating-system file pickers retain their existing presentation.
+Verification of the shared-shell revision is pending; concept approval alone
+does not establish runtime, high-DPI, or accessibility acceptance.
 
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
 Prepared density variants support Windows scaling. SVG files and embedded SVG
