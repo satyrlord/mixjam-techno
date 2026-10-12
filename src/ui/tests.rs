@@ -40,6 +40,357 @@ mod tests {
         (context, app)
     }
 
+    fn effects_skin(output: &egui::FullOutput, height: f32) -> (egui::TextureId, Rect, Rect) {
+        output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Mesh(mesh) if (mesh.calc_bounds().width() - 640.0).abs() < 0.1
+                && (mesh.calc_bounds().height() - height).abs() < 0.1 =>
+                Some((mesh.texture_id, mesh.calc_bounds(), shape.clip_rect)),
+            _ => None,
+        }).expect("Effect Studio must paint the complete compact skin.")
+    }
+
+    fn effects_control_rect(output: &egui::FullOutput, name: &str) -> Rect {
+        let bounds = accessible_node(output, name).1.bounds().unwrap();
+        Rect::from_min_max(
+            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+        )
+    }
+
+    fn effects_text_mesh_bounds(output: &egui::FullOutput, text: &str) -> Rect {
+        output.shapes.iter().filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(shape) if shape.galley.job.text == text =>
+                Some(shape.galley.mesh_bounds.translate(shape.pos.to_vec2())),
+            _ => None,
+        }).reduce(|bounds, next| bounds.union(next))
+            .unwrap_or_else(|| panic!("Missing glyph mesh: {text}"))
+    }
+
+    #[test]
+    fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_settings() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            app.selected_sample = Some(1);
+            app.show_effects = true;
+            app.effects.filter = Some(crate::effects::Filter { cutoff_hz: 4567.0, ..Default::default() });
+            app.effects.echo = Some(Default::default());
+            app.effects.robotize = Some(Default::default());
+            app.effects.dirty = 0.375;
+            let before = app.effects.clone();
+            let size = Vec2::new(960.0, 720.0);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            let mut textures = Vec::new();
+            let mut output = egui::FullOutput::default();
+            for _ in 0..4 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                textures.extend(output.textures_delta.set.iter().map(|(id, delta)| (*id, delta.image.size())));
+            }
+            let (expanded_texture, panel, clip) = effects_skin(&output, 352.0);
+            assert!(clip.expand(1.0 / density).contains_rect(panel));
+            assert!(textures.contains(&(expanded_texture, [(640.0 * density) as usize, (352.0 * density) as usize])),
+                "The {density}x skin must use one texel per physical pixel.");
+            for edge in [panel.left(), panel.top(), panel.right(), panel.bottom()] {
+                assert!((edge * density - (edge * density).round()).abs() < 0.001);
+            }
+            let window = effects_control_rect(&output, "EFFECT STUDIO");
+            assert!((window.width() - 640.0).abs() <= 1.0 / density);
+            assert!((window.height() - 400.0).abs() <= 1.0 / density);
+            assert!(viewport.contains_rect(window), "The complete modal must fit at {density}x.");
+            let footer = effects_control_rect(&output, "Effect Studio status");
+            assert!(footer.top() >= panel.bottom(), "Status must have space below the skin.");
+            assert!(window.contains_rect(footer));
+            assert_eq!(accessible_node(&output, "Source sound").1.value(), Some("good grasp 2"));
+            for name in ["Source sound", "Cutoff", "Resonance", "Overdrive", "Filter volume",
+                "Delay (beats)", "Feedback", "Echo volume", "Color", "Robotize volume",
+                "Dirty distortion", "Noise distortion", "Output volume", "Listen", "Save sound", "Reset"] {
+                let bounds = effects_control_rect(&output, name);
+                assert!(panel.contains_rect(bounds), "{name} must fit the compact skin at {density}x.");
+                assert!(!bounds.intersects(footer), "{name} must not overlap status.");
+            }
+            for text in ["Cutoff", "Resonance", "Overdrive", "Filter volume", "Delay (beats)",
+                "Feedback", "Echo volume", "Color", "Robotize volume", "Dirty distortion",
+                "Noise distortion", "Output volume", "Listen", "Save sound", "Reset"] {
+                assert!(panel.contains_rect(text_rect(&output, text)), "{text} must remain readable at {density}x.");
+            }
+            for name in ["Cutoff", "Resonance", "Overdrive", "Filter volume", "Delay (beats)",
+                "Feedback", "Echo volume", "Color", "Robotize volume", "Dirty distortion",
+                "Noise distortion", "Output volume"] {
+                let slot = effects_control_rect(&output, &format!("{name} value"));
+                let number = output.shapes.iter().filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.parse::<f64>().is_ok() => {
+                        let bounds = text.galley.mesh_bounds.translate(text.pos.to_vec2());
+                        slot.contains(bounds.center()).then_some(bounds)
+                    }
+                    _ => None,
+                }).reduce(|bounds, next| bounds.union(next))
+                    .unwrap_or_else(|| panic!("Missing numeric glyphs for {name} at {density}x."));
+                let caption = effects_text_mesh_bounds(&output, name);
+                let gap = caption.top() - number.bottom();
+                assert!(gap >= 4.0,
+                    "{name} needs 4 logical pixels between number and caption glyphs at {density}x; measured {gap:.3}, number={number:?}, caption={caption:?}.");
+            }
+            for (section, controls) in [("Robotize", ["Color", "Robotize volume"].as_slice()),
+                ("Distortion / output", ["Dirty distortion", "Noise distortion", "Output volume"].as_slice())] {
+                let heading = effects_text_mesh_bounds(&output, section);
+                for name in controls {
+                    let knob = effects_control_rect(&output, name).expand(1.0);
+                    let mut ticks = 0;
+                    for shape in &output.shapes {
+                        if let egui::Shape::LineSegment { points, stroke } = &shape.shape
+                            && stroke.width <= 1.1
+                            && points[0].distance(points[1]) <= 4.0
+                            && points.iter().all(|point| knob.contains(*point))
+                        {
+                            ticks += 1;
+                            let bounds = Rect::from_two_pos(points[0], points[1]).expand(stroke.width / 2.0);
+                            assert!(!heading.intersects(bounds),
+                                "{section} heading glyphs must not touch {name} tick marks at {density}x: heading={heading:?}, tick={bounds:?}.");
+                        }
+                    }
+                    assert!(ticks > 0, "{name} must have native tick marks to check.");
+                }
+            }
+            assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Text(text) if text.galley.job.text == "Help")));
+            focus_control(&ctx, &mut app, &output, "Collapse Effect Studio");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let (collapsed_texture, collapsed, clip) = effects_skin(&output, 48.0);
+            assert_ne!(expanded_texture, collapsed_texture, "Collapse must use separate artwork.");
+            assert!(textures.contains(&(collapsed_texture, [(640.0 * density) as usize, (48.0 * density) as usize])));
+            assert!(clip.expand(1.0 / density).contains_rect(collapsed), "The collapsed bezel must remain complete.");
+            for hidden in ["Source sound", "Cutoff", "Listen", "Effect Studio status", "Effect Studio help"] {
+                assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+                    .any(|(_, node)| node.label() == Some(hidden)), "{hidden} must hide when collapsed.");
+            }
+            focus_control(&ctx, &mut app, &output, "Expand Effect Studio");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            effects_skin(&output, 352.0);
+            assert_eq!(app.effects, before, "Collapse must preserve processing settings.");
+            focus_control(&ctx, &mut app, &output, "Effect Studio help");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(app.show_effects_help, "The Help icon must support keyboard activation.");
+            app.show_effects_help = false;
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Collapse Effect Studio");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Close Effect Studio");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(!app.show_effects, "The collapsed module must still close.");
+            assert_eq!(app.effects, before);
+        }
+    }
+
+    #[test]
+    fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.show_effects = true;
+        app.effects = EffectsState {
+            filter: Some(crate::effects::Filter { cutoff_hz: 4567.0, ..Default::default() }),
+            echo: Some(crate::effects::Echo { feedback: 0.7, ..Default::default() }),
+            robotize: Some(crate::effects::Robotize { frequency_hz: 333.0, ..Default::default() }),
+            dirty: 0.25, noise: 0.125, volume: 0.75,
+        };
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for name in ["Listen", "Save sound"] {
+            assert!(accessible_node(&output, name).1.is_disabled(), "Processing needs a selected source.");
+        }
+        app.selected_sample = Some(1);
+        for (switch, knob) in [("Filter", "Cutoff"), ("Echo", "Feedback"), ("Robotize", "Color")] {
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(!accessible_node(&output, knob).1.is_disabled());
+            focus_control(&ctx, &mut app, &output, switch);
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let (target, node) = accessible_node(&output, knob);
+            assert!(node.is_disabled());
+            assert!(accessible_node(&output, &format!("{knob} value")).1.is_disabled());
+            let before = app.effects.clone();
+            frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::SetValue, target,
+                data: Some(egui::accesskit::ActionData::NumericValue(0.9)),
+            })], egui::Modifiers::NONE);
+            assert_eq!(app.effects, before, "A disabled control must not change effect state.");
+            for name in ["Dirty distortion", "Noise distortion", "Output volume", "Listen", "Save sound", "Reset"] {
+                assert!(!accessible_node(&output, name).1.is_disabled(), "{name} must remain available.");
+            }
+            focus_control(&ctx, &mut app, &output, switch);
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        }
+        assert_eq!(app.effects.filter, Some(Default::default()));
+        assert_eq!(app.effects.echo, Some(Default::default()));
+        assert_eq!(app.effects.robotize, Some(Default::default()));
+        assert_eq!((app.effects.dirty, app.effects.noise, app.effects.volume), (0.25, 0.125, 0.75));
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Reset");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.effects, EffectsState::default());
+        assert_eq!(app.effects_feedback.message.as_deref(), Some("Effects reset. Filter, Echo, and Robotize are off."));
+    }
+
+    #[test]
+    fn effects_knob_input_is_stable_bounded_and_accessible() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            app.show_effects = true;
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let origin = effects_control_rect(&output, "Output volume").center();
+            for _ in 0..12 {
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(origin)], egui::Modifiers::NONE);
+                assert_eq!(app.effects.volume, 1.0, "Hover must not change a knob.");
+            }
+            frame(&ctx, &mut app, vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, 20.0), modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE);
+            assert!((app.effects.volume - 1.01).abs() < 0.0001);
+            for _ in 0..20 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                assert!((app.effects.volume - 1.01).abs() < 0.0001, "One wheel event must apply once.");
+            }
+            pointer(&ctx, &mut app, origin, true, egui::Modifiers::NONE);
+            for offset in [15.0, 30.0, 15.0, 0.0] {
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(origin + Vec2::new(offset, 0.0))], egui::Modifiers::NONE);
+                let expected = 1.01 + offset / 75.0;
+                assert!((app.effects.volume - expected).abs() < 0.0001, "Drag must track motion and reversal at {density}x.");
+                for _ in 0..3 {
+                    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                    assert!((app.effects.volume - expected).abs() < 0.0001, "A stopped pointer must hold its value.");
+                }
+            }
+            pointer(&ctx, &mut app, origin, false, egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let (target, node) = accessible_node(&output, "Output volume");
+            assert_eq!(node.min_numeric_value(), Some(0.0));
+            assert_eq!(node.max_numeric_value(), Some(2.0));
+            focus_control(&ctx, &mut app, &output, "Output volume");
+            for (key, modifiers, expected) in [
+                (egui::Key::Home, egui::Modifiers::NONE, 0.0),
+                (egui::Key::ArrowUp, egui::Modifiers::NONE, 0.01),
+                (egui::Key::ArrowUp, egui::Modifiers::SHIFT, 0.011),
+                (egui::Key::End, egui::Modifiers::NONE, 2.0),
+                (egui::Key::ArrowRight, egui::Modifiers::NONE, 2.0),
+            ] {
+                frame(&ctx, &mut app, vec![key_event(key, modifiers)], modifiers);
+                assert!((app.effects.volume - expected).abs() < 0.0001, "Keyboard adjustment must respect the range.");
+            }
+            frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::SetValue, target,
+                data: Some(egui::accesskit::ActionData::NumericValue(50.0)),
+            })], egui::Modifiers::NONE);
+            assert_eq!(app.effects.volume, 2.0);
+            frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Decrement, target, data: None,
+            })], egui::Modifiers::NONE);
+            assert!((app.effects.volume - 1.99).abs() < 0.0001);
+            click(&ctx, &mut app, origin, egui::Modifiers::NONE);
+            click(&ctx, &mut app, origin, egui::Modifiers::NONE);
+            assert_eq!(app.effects.volume, 1.0, "Double-click must restore the control default.");
+        }
+    }
+
+    #[test]
+    fn effects_logarithmic_knobs_step_along_the_dial() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.show_effects = true;
+        app.effects.filter = Some(Default::default());
+        app.effects.robotize = Some(crate::effects::Robotize { frequency_hz: 1.0, ..Default::default() });
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (target, _) = accessible_node(&output, "Cutoff");
+        focus_control(&ctx, &mut app, &output, "Cutoff");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.effects.filter.as_ref().unwrap().cutoff_hz, 2143.0, "A key must turn Cutoff 1% of its dial.");
+        frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Decrement, target, data: None,
+        })], egui::Modifiers::NONE);
+        assert_eq!(app.effects.filter.as_ref().unwrap().cutoff_hz, 2000.0);
+        for key in [egui::Key::End, egui::Key::ArrowUp] {
+            frame(&ctx, &mut app, vec![key_event(key, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        }
+        assert_eq!(app.effects.filter.as_ref().unwrap().cutoff_hz, 20000.0);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Color");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.effects.robotize.as_ref().unwrap().frequency_hz, 2.0, "Rounding must not hold the low end in place.");
+    }
+
+    #[test]
+    fn effects_missing_audio_keeps_processing_disabled_and_details_reachable() {
+        let (ctx, mut app) = missing_fixture();
+        ctx.enable_accesskit();
+        app.select_clip(1, false);
+        app.show_effects = true;
+        for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, Vec2::new(960.0, 720.0)); }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, Vec2::new(960.0, 720.0));
+        for name in ["Listen", "Save sound"] { assert!(accessible_node(&output, name).1.is_disabled()); }
+        assert!(effects_control_rect(&output, "Effect Studio status").contains_rect(effects_control_rect(&output, "Import details")));
+        text_rect(&output, "Missing audio. Open Import details to resolve the sound.");
+        focus_control(&ctx, &mut app, &output, "Import details");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.show_import_details);
+    }
+
+    #[test]
+    fn effects_save_feedback_preserves_source_tempo_and_selects_the_saved_effect() {
+        let (ctx, mut app) = fixture();
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-effects-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.source_bpm = 160.0;
+        app.session = Session::headless(Arc::new(Library::fixture(vec![sample])), app.session.project().clone())
+            .unwrap().with_settings_root(dir.join("settings"));
+        app.selected_sample = Some(1);
+        app.show_effects = true;
+        app.effects.dirty = 0.25;
+        let before = app.effects.clone();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let source_bpm = app.source_bpm();
+        let request = || FileRequest::SaveSound {
+            pcm: Pcm { sample_rate: 1000, channels: 1, samples: vec![0.25; 1000] },
+            name: "effect result".into(), group: "Effect", source_bpm, stretch: None,
+        };
+        app.finish_path(request(), None);
+        assert_eq!(app.effects_feedback.message.as_deref(), Some("Save cancelled."));
+        assert!(!app.effects_feedback.error);
+        assert_eq!(app.selected_sample, Some(1));
+        let path = dir.join("result.wav");
+        app.finish_path(request(), Some(path.clone()));
+        let saved = app.selected_sample.expect("Saving must select the new Effect sound.");
+        assert_ne!(saved, 1);
+        assert_eq!(app.group.as_deref(), Some("Effect"));
+        assert_eq!(app.source_bpm(), 160.0);
+        assert_eq!(app.effects, before);
+        assert_eq!(app.effects_feedback.source, Some(saved));
+        assert_eq!(app.effects_feedback.message.as_deref(), Some("Saved result.wav to Effect."));
+        assert!(!app.effects_feedback.error);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Saved result.wav to Effect.");
+        assert_eq!(crate::audio::read_wav(&path).unwrap().frames(), 1000);
+        app.finish_path(request(), Some(dir.join("absent-parent/result.wav")));
+        assert!(app.effects_feedback.error);
+        assert!(app.effects_feedback.message.as_deref().unwrap().starts_with("Cannot save the sound:"));
+        assert_eq!(app.selected_sample, Some(saved));
+        assert_eq!(app.session.library().samples.len(), 2, "A failed save must not add another source.");
+        assert_eq!(app.effects, before);
+        app.selected_sample = Some(1);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.effects_feedback.source, Some(1));
+        assert!(app.effects_feedback.message.is_none(), "Changing source must clear the previous save receipt.");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn stretch_hover_does_not_change_tempo_and_wheel_input_changes_it_once() {
         let (ctx, mut app) = fixture();
@@ -66,6 +417,50 @@ mod tests {
             for _ in 0..20 {
                 output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
                 assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), expected, "A wheel event must not keep changing {label} on later frames.");
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
+        for density in [1.0, 1.5, 2.0] {
+            for target in [false, true] {
+                let (ctx, mut app) = fixture();
+                ctx.set_pixels_per_point(density);
+                ctx.enable_accesskit();
+                app.selected_sample = Some(1);
+                app.show_stretch = true;
+                for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let label = if target { "Target BPM knob" } else { "Original BPM knob" };
+                let bounds = accessible_node(&output, label).1.bounds().unwrap();
+                let origin = Pos2::new(
+                    (bounds.x0 + bounds.x1) as f32 / 2.0,
+                    (bounds.y0 + bounds.y1) as f32 / 2.0,
+                );
+                let scale = 640.0 / 880.0;
+                let value = |app: &MixJamApp| if target { app.stretch_target_bpm } else { app.stretch_source_bpm };
+                // Pause and reverse within the same gesture, then start a new one.
+                for (start, offsets) in [(origin, [12.0, 24.0, 36.0, 24.0, 0.0]), (origin, [-12.0, -24.0, -36.0, -24.0, 0.0])] {
+                    pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+                    for offset in offsets {
+                        let position = start + Vec2::new(offset * scale, 0.0);
+                        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(position)], egui::Modifiers::NONE);
+                        let expected = if !target { 140.0 + f64::from(offset) }
+                            else if offset == 36.0 { 180.0 }
+                            else if offset > 0.0 { 160.0 }
+                            else if offset < 0.0 { 120.0 }
+                            else { 140.0 };
+                        assert_eq!(value(&app), expected, "{label} at {density}x, offset {offset}");
+                        for _ in 0..3 {
+                            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                            assert_eq!(value(&app), expected, "Holding {label} still must retain its value.");
+                        }
+                    }
+                    pointer(&ctx, &mut app, start, false, egui::Modifiers::NONE);
+                    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                    assert_eq!(value(&app), 140.0);
+                }
             }
         }
     }
@@ -122,6 +517,68 @@ mod tests {
     }
 
     #[test]
+    fn stretch_header_controls_use_corner_positions_and_a_complete_collapsed_skin() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            app.show_stretch = true;
+            app.stretch_source_bpm = 160.0;
+            app.stretch_target_bpm = 120.0;
+            for _ in 0..4 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let skin = |output: &egui::FullOutput, height: f32| {
+                output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) if (mesh.calc_bounds().width() - 640.0).abs() < 0.1
+                        && (mesh.calc_bounds().height() - height).abs() < 0.1 =>
+                        Some((mesh.texture_id, mesh.calc_bounds(), shape.clip_rect)),
+                    _ => None,
+                }).expect("The whole skin must use its prepared dimensions.")
+            };
+            let (expanded_texture, expanded, _) = skin(&output, 320.0);
+            for (name, x) in [("Collapse Time Stretcher", 640.0 * 34.0 / 880.0),
+                ("Close Time Stretcher", 640.0 * 846.0 / 880.0)] {
+                let bounds = accessible_node(&output, name).1.bounds().unwrap();
+                let center = ((bounds.x0 + bounds.x1) / 2.0) as f32;
+                assert!((center - expanded.left() - x).abs() <= 1.0 / density,
+                    "{name} must occupy the former screw column at {density}x.");
+            }
+            assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Text(text) if text.galley.job.text == "Help")));
+            focus_control(&ctx, &mut app, &output, "Collapse Time Stretcher");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            for _ in 0..4 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let (collapsed_texture, collapsed, clip) = skin(&output, 64.0);
+            assert_ne!(expanded_texture, collapsed_texture, "Collapse must use separate artwork.");
+            assert!(clip.expand(1.0 / density).contains_rect(collapsed), "The lower bezel must be visible.");
+            for edge in [collapsed.left(), collapsed.top(), collapsed.right(), collapsed.bottom()] {
+                assert!((edge * density - (edge * density).round()).abs() < 0.001);
+            }
+            for hidden in ["Source sound", "Listen to stretched sound", "Time Stretcher status", "Time Stretcher help"] {
+                assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+                    .any(|(_, node)| node.label() == Some(hidden)), "{hidden} must hide when collapsed.");
+            }
+            focus_control(&ctx, &mut app, &output, "Expand Time Stretcher");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            for _ in 0..4 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            skin(&output, 320.0);
+            assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), (160.0, 120.0));
+            focus_control(&ctx, &mut app, &output, "Time Stretcher help");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(app.show_stretch_help, "The help icon must support keyboard activation.");
+            app.show_stretch_help = false;
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("stretch-collapsed"), true));
+            for _ in 0..4 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Close Time Stretcher");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(!app.show_stretch, "Close must work in the collapsed state.");
+        }
+    }
+
+    #[test]
     fn stretch_rotaries_accept_keyboard_input_and_keep_supported_target_tempos() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
@@ -145,6 +602,62 @@ mod tests {
     }
 
     #[test]
+    fn stretch_escape_closes_an_open_list_or_a_window_above_before_the_tool() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        // Test frames share one instant; a closing window must not keep fading.
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Source sound").1.bounds().unwrap();
+        click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0), egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(egui::Popup::is_any_open(&ctx));
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.show_stretch, "Esc must close the source list, not the tool.");
+        for _ in 0..2 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        assert!(!egui::Popup::is_any_open(&ctx));
+        // The tool's own Help opens above it and takes Esc first.
+        app.show_stretch_help = true;
+        for _ in 0..2 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.show_stretch, "Esc must not close the tool under another window.");
+        app.show_stretch_help = false;
+        for _ in 0..2 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(!app.show_stretch);
+    }
+
+    #[test]
+    fn stretch_idle_status_returns_after_a_preview_and_marks_unheard_settings() {
+        for (audition, original, expected) in [
+            (None, 160.0, "Duration +33%. Pitch preservation is approximate. Listen before saving."),
+            (Some((1, 160.0, 120.0)), 160.0, "Duration +33%. Pitch preservation is approximate."),
+            (Some((1, 160.0, 120.0)), 150.0, "Duration +25%. Pitch preservation is approximate. Listen before saving."),
+            (Some((1, 160.0, 120.0)), 120.0, "Same tempo. Duration is unchanged."),
+        ] {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            let (mut original, mut target, mut open) = (original, 120.0, true);
+            let mut output = egui::FullOutput::default();
+            for _ in 0..3 {
+                output = ctx.run(egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                    focused: true, ..Default::default()
+                }, |ctx| {
+                    stretch::show(ctx, &mut open,
+                        stretch::Source { name: "Sound", id: Some(1), samples: &[], missing: false, bpm: 160.0 },
+                        stretch::Feedback { processing: false, listening: false, saved: false, audition, message: None, error: false },
+                        &mut original, &mut target).unwrap();
+                });
+            }
+            text_rect(&output, expected);
+        }
+    }
+
+    #[test]
     fn stretch_actions_fit_supported_windows_and_require_an_available_source() {
         for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0), Vec2::new(1440.0, 1000.0)] {
             let (ctx, mut app) = fixture();
@@ -153,19 +666,433 @@ mod tests {
             app.selected_sample = Some(1);
             for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            for text in ["TIME STRETCHER", "Original BPM", "Target BPM", "Listen stretch", "Save stretched sound", "Pitch preservation is approximate."] {
+            for text in ["TIME STRETCHER", "Original BPM", "Target BPM", "Listen", "Save stretched sound", "Same tempo. Duration is unchanged."] {
                 let text_bounds = text_rect(&output, text);
                 assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(text_bounds), "{text} outside {size:?}: {text_bounds:?}");
             }
-            for label in ["Listen stretch", "Save stretched sound"] {
+            for label in ["Listen to stretched sound", "Save stretched sound"] {
                 assert!(!accessible_node(&output, label).1.is_disabled());
             }
             app.selected_sample = None;
             app.selected_clip = None;
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            for label in ["Listen stretch", "Save stretched sound"] {
+            for label in ["Listen to stretched sound", "Save stretched sound"] {
                 assert!(accessible_node(&output, label).1.is_disabled());
             }
+        }
+    }
+
+    #[test]
+    fn stretch_source_names_stay_bounded_and_search_selects_the_matching_sound() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            let mut sample = app.session.library().samples[0].clone();
+            sample.name = format!("{} distinctive ending.wav", "Long source name ".repeat(40));
+            let mut other = sample.clone();
+            other.id = 2;
+            other.name = "Unique searchable sound".into();
+            other.source_bpm = 160.0;
+            app.session = Session::headless(Arc::new(Library::fixture(vec![sample, other])), app.session.project().clone()).unwrap();
+            app.selected_sample = Some(1);
+            app.show_stretch = true;
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let bounds = accessible_node(&output, "Source sound").1.bounds().unwrap();
+            let window = accessible_node(&output, "TIME STRETCHER").1.bounds().unwrap();
+            assert!(bounds.x0 >= window.x0 && bounds.x1 <= window.x1);
+            assert!(bounds.x1 - bounds.x0 <= 532.0, "Long source label expanded the slot: {bounds:?}");
+            click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0), egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Find source sound");
+            let output = frame(&ctx, &mut app, vec![egui::Event::Text("unique".into())], egui::Modifiers::NONE);
+            let (_, node) = accessible_node(&output, "Unique searchable sound");
+            let bounds = node.bounds().unwrap();
+            assert!(bounds.x1 - bounds.x0 <= 532.0);
+            click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0), egui::Modifiers::NONE);
+            assert_eq!(app.selected_sample, Some(2));
+            assert_eq!(app.stretch_source_bpm, 160.0);
+            assert!(!egui::Popup::is_any_open(&ctx));
+        }
+    }
+
+    #[test]
+    fn stretch_target_pointer_spans_the_full_arc_and_original_reset_uses_source_tempo() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.source_bpm = 160.0;
+        app.session = Session::headless(Arc::new(Library::fixture(vec![sample])), app.session.project().clone()).unwrap();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for (bpm, angle) in [(120.0, -225.0_f32), (140.0, -135.0), (160.0, -45.0), (180.0, 45.0)] {
+            app.stretch_target_bpm = bpm;
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let bounds = accessible_node(&output, "Target BPM knob").1.bounds().unwrap();
+            let center = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0);
+            let expected = center + Vec2::angled(angle.to_radians()) * (41.0 * 640.0 / 880.0);
+            assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::LineSegment { points, stroke } if (stroke.width - 4.0 * 640.0 / 880.0).abs() < 0.01 && points[1].distance(expected) < 0.05)), "No pointer at {bpm} BPM / {angle} degrees");
+        }
+        app.stretch_source_bpm = 100.0;
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Original BPM knob").1.bounds().unwrap();
+        let center = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0);
+        click(&ctx, &mut app, center, egui::Modifiers::NONE);
+        click(&ctx, &mut app, center, egui::Modifiers::NONE);
+        assert_eq!(app.stretch_source_bpm, 160.0);
+    }
+
+    #[test]
+    fn stretch_shift_changes_only_new_drag_motion() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Original BPM knob").1.bounds().unwrap();
+        let origin = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0);
+        pointer(&ctx, &mut app, origin, true, egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(origin + Vec2::new(12.0 * 640.0 / 880.0, 0.0))], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_source_bpm, 152.0);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::SHIFT);
+        assert_eq!(app.stretch_source_bpm, 152.0);
+        let end = origin + Vec2::new(24.0 * 640.0 / 880.0, 0.0);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end)], egui::Modifiers::SHIFT);
+        assert_eq!(app.stretch_source_bpm, 153.0);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.stretch_source_bpm, 153.0);
+        pointer(&ctx, &mut app, end, false, egui::Modifiers::NONE);
+    }
+
+    #[test]
+    fn stretch_panel_exposes_busy_preview_saved_and_error_states() {
+        for (processing, listening, saved, message, error) in [
+            (true, false, false, Some("Processing sound..."), false),
+            (false, true, false, None, false),
+            (false, false, true, Some("Saved result.wav."), false),
+            (false, false, false, Some("Audio output is unavailable."), true),
+        ] {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            ctx.enable_accesskit();
+            let mut original = 160.0;
+            let mut target = 120.0;
+            let mut open = true;
+            let mut output = egui::FullOutput::default();
+            for _ in 0..3 {
+                output = ctx.run(egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                    focused: true, ..Default::default()
+                }, |ctx| {
+                    stretch::show(ctx, &mut open,
+                        stretch::Source { name: "Sound", id: Some(1), samples: &[], missing: false, bpm: 160.0 },
+                        stretch::Feedback { processing, listening, saved, audition: Some((1, 160.0, 120.0)), message, error },
+                        &mut original, &mut target).unwrap();
+                });
+            }
+            let action_name = if listening { "Stop listening" } else { "Listen to stretched sound" };
+            assert_eq!(accessible_node(&output, action_name).1.is_disabled(), processing);
+            assert_eq!(accessible_node(&output, "Save stretched sound").1.is_disabled(), processing);
+            if let Some(message) = message { text_rect(&output, message); }
+            let colors: Vec<_> = output.shapes.iter().filter_map(|shape| match &shape.shape {
+                egui::Shape::Circle(circle) => Some(circle.fill), _ => None
+            }).collect();
+            assert!(colors.contains(&if processing || listening { Color32::from_rgb(255, 184, 47) } else { Color32::from_rgb(112, 76, 26) }));
+            assert!(colors.contains(&if saved { Color32::from_rgb(174, 231, 55) } else { Color32::from_rgb(74, 94, 38) }));
+        }
+    }
+
+    fn stretch_layout_output(density: f32, missing: bool, feedback: stretch::Feedback<'_>) -> egui::FullOutput {
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        ctx.set_pixels_per_point(density);
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        ctx.enable_accesskit();
+        let mut original = 160.0;
+        let mut target = 120.0;
+        let mut open = true;
+        let mut output = egui::FullOutput::default();
+        for _ in 0..4 {
+            output = ctx.run(egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                focused: true, ..Default::default()
+            }, |ctx| {
+                stretch::show(ctx, &mut open,
+                    stretch::Source { name: "Sound", id: Some(1), samples: &[], missing, bpm: 160.0 },
+                    stretch::Feedback {
+                        processing: feedback.processing, listening: feedback.listening,
+                        saved: feedback.saved, audition: feedback.audition,
+                        message: feedback.message, error: feedback.error,
+                    },
+                    &mut original, &mut target).unwrap();
+            });
+        }
+        output
+    }
+
+    #[test]
+    fn stretch_action_labels_remain_centered_in_every_playback_state_and_density() {
+        for density in [1.0, 1.5, 2.0] {
+            for (processing, listening, saved, listen_text) in [
+                (false, false, false, "Listen"),
+                (false, true, false, "Stop listening"),
+                (true, false, false, "Processing..."),
+                (false, false, true, "Listen"),
+            ] {
+                let output = stretch_layout_output(density, false, stretch::Feedback {
+                    processing, listening, saved, audition: Some((1, 160.0, 120.0)),
+                    message: None, error: false,
+                });
+                for (accessible_name, visible_text) in [
+                    (if listening { "Stop listening" } else { "Listen to stretched sound" }, listen_text),
+                    ("Save stretched sound", "Save stretched sound"),
+                ] {
+                    let bounds = accessible_node(&output, accessible_name).1.bounds().unwrap();
+                    let button = Rect::from_min_max(
+                        Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                        Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+                    );
+                    // Measure visible glyph meshes, including the one-pixel shadow.
+                    let painted = output.shapes.iter().filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == visible_text =>
+                            Some(text.visual_bounding_rect()),
+                        _ => None,
+                    }).reduce(|bounds, text| bounds.union(text)).unwrap_or_else(|| panic!("Missing action label: {visible_text}"));
+                    assert!(button.contains_rect(painted), "{visible_text} leaves its button at {density}x: {painted:?} / {button:?}");
+                    let skin = output.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Mesh(mesh) if (mesh.calc_bounds().width() - 640.0).abs() < 0.1 => Some(mesh.calc_bounds()),
+                        _ => None,
+                    }).unwrap();
+                    // Flat-face centers measured from the prepared 100% skin.
+                    let face_center = skin.min + if visible_text == "Save stretched sound" {
+                        Vec2::new(460.5, 264.5)
+                    } else { Vec2::new(181.0, 265.0) };
+                    let offset = (painted.center() - face_center) * density;
+                    // The lamp's rim ends 54.25 design units into the button;
+                    // lettering keeps 10 more clear and otherwise stays centered.
+                    let gap = (painted.left() - button.left()) * density - 54.25 * 640.0 / 880.0 * density;
+                    let clearance = 10.0 * 640.0 / 880.0 * density;
+                    assert!(gap >= clearance - 1.0, "{visible_text} crowds its lamp at {density}x: {gap} physical pixels");
+                    assert!(offset.y.abs() <= 1.0 && (offset.x.abs() <= 1.0 || (offset.x > 0.0 && gap <= clearance + 1.0)),
+                        "{visible_text} is not centered at {density}x: {offset:?} physical pixels");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin() {
+        let long_preview = "Listening: 160 to 120 BPM. Settings changed; listen again. ".repeat(20);
+        let long_save = format!("Saved {}result.wav.", "long folder name/".repeat(60));
+        for density in [1.0, 1.5, 2.0] {
+            for (processing, listening, saved, message, error, missing) in [
+                (false, false, false, None, false, false),
+                (true, false, false, Some("Processing sound..."), false, false),
+                (false, true, false, Some(long_preview.as_str()), false, false),
+                (false, false, true, Some(long_save.as_str()), false, false),
+                (false, false, false, Some("Audio output is unavailable."), true, false),
+                (false, false, false, None, false, true),
+            ] {
+                let output = stretch_layout_output(density, missing, stretch::Feedback {
+                    processing, listening, saved, audition: Some((1, 160.0, 120.0)), message, error,
+                });
+                let bounds = accessible_node(&output, "Time Stretcher status").1.bounds().unwrap();
+                let footer = Rect::from_min_max(
+                    Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                    Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+                );
+                let skin = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) => {
+                        let bounds = mesh.calc_bounds();
+                        ((bounds.width() - 640.0).abs() < 0.1 && (bounds.height() - 320.0).abs() < 0.1).then_some(bounds)
+                    }
+                    _ => None,
+                }).expect("Missing hardware skin");
+                let viewport = Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0));
+                assert!(viewport.contains_rect(skin) && viewport.contains_rect(footer), "Panel leaves the minimum viewport at {density}x");
+                assert!(footer.top() > skin.bottom(), "Status footer overlaps the hardware skin at {density}x");
+                for name in [if listening { "Stop listening" } else { "Listen to stretched sound" }, "Save stretched sound"] {
+                    assert!(accessible_node(&output, name).1.bounds().unwrap().y1 < f64::from(footer.top()), "Footer overlaps {name}");
+                }
+                let status = if missing {
+                    "Missing audio. Open Import details to resolve the sound."
+                } else {
+                    message.unwrap_or("Duration +33%. Pitch preservation is approximate.")
+                };
+                let painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == status => Some((shape, text)),
+                    _ => None,
+                }).unwrap_or_else(|| panic!("Missing footer message: {status}"));
+                let text_bounds = painted.1.visual_bounding_rect();
+                assert!(footer.contains_rect(painted.0.clip_rect), "Message clip leaves its footer: {:?} / {footer:?}", painted.0.clip_rect);
+                assert!(footer.contains_rect(text_bounds.intersect(painted.0.clip_rect)), "Visible status leaves its footer");
+                if status.len() > 200 {
+                    assert!(painted.1.galley.rows.len() > 1, "Long messages must wrap");
+                    assert!(text_bounds.bottom() > painted.0.clip_rect.bottom(), "Long message must be clipped to its scroll region");
+                } else {
+                    let offset = (text_bounds.center() - painted.0.clip_rect.center()) * density;
+                    assert!(offset.x.abs() <= 1.0 && offset.y.abs() <= 1.0,
+                        "Footer message is not visibly centered at {density}x: {offset:?}");
+                }
+                if missing {
+                    let details = accessible_node(&output, "Import details").1.bounds().unwrap();
+                    let details = Rect::from_min_max(Pos2::new(details.x0 as f32, details.y0 as f32), Pos2::new(details.x1 as f32, details.y1 as f32));
+                    assert!(footer.contains_rect(details), "Recovery control leaves its footer");
+                    assert!((details.center().y - footer.center().y).abs() * density <= 1.0);
+                    let text = output.shapes.iter().find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == "Import details" => Some(text.visual_bounding_rect()),
+                        _ => None,
+                    }).unwrap();
+                    assert!((text.center() - details.center()).length() * density <= 1.0);
+                    assert!(painted.0.clip_rect.right() < details.left(), "Missing audio message overlaps recovery control");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_async_errors_are_local_and_changed_or_closed_requests_do_not_open_a_picker() {
+        let (ctx, mut app) = fixture();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        for change in [0, 1, 2] {
+            app.show_stretch = true;
+            app.start_stretch(StretchPurpose::Save);
+            assert!(app.stretch_feedback.pending.is_some());
+            if change == 1 { app.stretch_target_bpm = 180.0; }
+            if change == 2 { app.show_stretch = false; }
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while app.stretch_feedback.pending.is_some() && std::time::Instant::now() < deadline {
+                app.poll_application(&ctx);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            assert!(app.stretch_feedback.pending.is_none());
+            assert!(app.path_prompt.is_none());
+            if change == 0 {
+                assert!(app.stretch_feedback.error);
+                assert!(app.stretch_feedback.message.as_ref().is_some_and(|message| !message.is_empty()));
+            } else {
+                assert!(!app.stretch_feedback.error);
+                assert_eq!(app.stretch_feedback.message.as_deref(), Some("Settings changed. Process the sound again."));
+            }
+        }
+    }
+
+    #[test]
+    fn stretch_save_confirmation_tracks_success_cancel_failure_and_output_tempo() {
+        let (_, mut app) = fixture();
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        app.selected_sample = Some(1);
+        let settings = StretchSettings { source_id: 1, source_bpm: 160.0, target_bpm: 120.0 };
+        let request = || FileRequest::SaveSound {
+            pcm: Pcm { sample_rate: 1000, channels: 1, samples: vec![0.25; 1000] },
+            name: "stretch result".into(), group: "Wave", source_bpm: settings.target_bpm, stretch: Some(settings),
+        };
+        app.finish_path(request(), Some(dir.join("result.wav")));
+        assert!(!app.stretch_feedback.error);
+        // A save is a receipt: the tool keeps its source and both tempos.
+        assert_eq!(app.selected_sample, Some(1));
+        assert_eq!((app.stretch_source_bpm, app.stretch_target_bpm), (140.0, 140.0));
+        assert_eq!(app.stretch_feedback.saved, Some(settings));
+        assert_eq!(app.stretch_feedback.message.as_deref(), Some("Saved result.wav to Wave."));
+        let saved: Vec<_> = app.session.library().samples.iter().filter(|sample| sample.id != 1).map(|sample| sample.id).collect();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(app.session.source_bpm(Some(saved[0])), 120.0);
+        app.finish_path(request(), None);
+        assert_eq!(app.stretch_feedback.message.as_deref(), Some("Save cancelled."));
+        assert!(app.stretch_feedback.saved.is_none());
+        app.finish_path(request(), Some(dir.join("absent-parent/result.wav")));
+        assert!(app.stretch_feedback.error);
+        assert!(app.stretch_feedback.saved.is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn stretch_stop_and_close_reopen_discard_successful_pending_results() {
+        let (ctx, mut app, _port) = agent_fixture();
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-cancel-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("source.wav");
+        Pcm { sample_rate: 1000, channels: 1, samples: vec![0.25; 1000] }.write_wav(&path).unwrap();
+        let source = app.register_file(&path, "Wave", 140.0).unwrap();
+        for action in [0, 1, 2] {
+            app.selected_sample = Some(source);
+            app.show_stretch = true;
+            app.start_stretch(if action == 2 { StretchPurpose::Save } else { StretchPurpose::Listen });
+            if action == 0 {
+                app.stop();
+            } else {
+                app.show_stretch = false;
+                app.close_stretch_request();
+                app.show_stretch = true;
+            }
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while (app.session.is_stretching() || app.stretch_feedback.pending.is_some()) && std::time::Instant::now() < deadline {
+                app.poll_application(&ctx);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            assert!(!app.session.is_stretching());
+            assert!(app.stretch_feedback.pending.is_none());
+            assert!(app.path_prompt.is_none(), "An abandoned Save must not open a picker.");
+            assert!(app.stretch_feedback.audition.is_none());
+            assert!(!app.stretch_feedback.error, "An abandoned Listen must not attempt audio output.");
+            assert_eq!(app.stretch_feedback.message.as_deref(), Some(if action == 0 { "Preview cancelled by another playback action." } else { "Processing request cancelled." }));
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn stretch_preview_failure_is_a_local_error_that_begins_with_cannot() {
+        let (ctx, mut app, _port) = agent_fixture();
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-stretch-listen-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("source.wav");
+        Pcm { sample_rate: 1000, channels: 1, samples: vec![0.25; 1000] }.write_wav(&path).unwrap();
+        app.selected_sample = Some(app.register_file(&path, "Wave", 140.0).unwrap());
+        app.show_stretch = true;
+        app.start_stretch(StretchPurpose::Listen);
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while app.stretch_feedback.pending.is_some() && std::time::Instant::now() < deadline {
+            app.poll_application(&ctx);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        // The headless session has no audio output.
+        assert!(app.stretch_feedback.error);
+        assert!(app.stretch_feedback.audition.is_none());
+        assert_eq!(app.stretch_feedback.message.as_deref(), Some("Cannot play the preview: Audio output is unavailable."));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn stretch_recovery_control_clears_action_border_and_context_help_starts_with_stretching() {
+        for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0), Vec2::new(1440.0, 1000.0)] {
+            let (ctx, mut app) = missing_fixture();
+            ctx.enable_accesskit();
+            app.selected_sample = Some(app.session.project().missing_samples[0].id);
+            app.show_stretch = true;
+            for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let details = accessible_node(&output, "Import details").1.bounds().unwrap();
+            let save = accessible_node(&output, "Save stretched sound").1.bounds().unwrap();
+            let footer = accessible_node(&output, "Time Stretcher status").1.bounds().unwrap();
+            assert!(details.y0 > save.y1, "Recovery control overlaps the Save border at {size:?}: {details:?} / {save:?}");
+            assert!(details.x0 >= footer.x0 && details.x1 <= footer.x1 && details.y0 >= footer.y0 && details.y1 <= footer.y1,
+                "Recovery control leaves the status footer at {size:?}: {details:?} / {footer:?}");
+            let help = accessible_node(&output, "Time Stretcher help").1.bounds().unwrap();
+            let position = Pos2::new((help.x0 + help.x1) as f32 / 2.0, (help.y0 + help.y1) as f32 / 2.0);
+            pointer(&ctx, &mut app, position, true, egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, position, false, egui::Modifiers::NONE);
+            assert!(app.show_stretch_help);
+            for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let label = "Original BPM describes the recording. Target BPM sets the result to 120, 140, 160, or 180 BPM.";
+            let bounds = text_rect(&output, label);
+            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(bounds));
         }
     }
 
@@ -457,7 +1384,11 @@ mod tests {
                 "Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.",
                 "Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.",
             ] {
-                if !visible(&output, label, viewport) {
+                // Later sections follow this guidance, so scroll toward it in
+                // steps and stop when it appears.
+                let mut steps = 0;
+                while !visible(&output, label, viewport) && steps < 60 {
+                    steps += 1;
                     frame_at_size(
                         &context,
                         &mut app,
@@ -465,7 +1396,7 @@ mod tests {
                             egui::Event::PointerMoved(instruction.center()),
                             egui::Event::MouseWheel {
                                 unit: egui::MouseWheelUnit::Point,
-                                delta: Vec2::new(0.0, -10_000.0),
+                                delta: Vec2::new(0.0, -40.0),
                                 modifiers: egui::Modifiers::NONE,
                             },
                         ],

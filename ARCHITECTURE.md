@@ -7,6 +7,7 @@ window, file-dialog, or screenshot dependency.
 ```text
 Native views and input                  Headless application
 src/ui/view.rs + src/ui/stretch.rs       src/application.rs
+             + src/ui/effects.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -75,12 +76,45 @@ Sample-processing forms hold drafts until the user requests playback or saving.
 The application validates and processes those drafts. It also owns synth-pattern
 file parsing, generated audio registration, import resolution, and settings files.
 `src/ui/stretch.rs` owns Time Stretcher's hardware-panel presentation and native
-control responses. Its prepared skin lives in `assets/stretch/{100,150,200}/`.
+control responses. Its prepared expanded and collapsed skins live in
+`assets/stretch/{100,150,200}/`. Each state paints its own complete bezel.
 Text, values, knob pointers, and interaction feedback remain native painting.
 `src/ui.rs` adapts its source selections, Listen, Save, and Import details
 requests to existing application operations; the panel does not render audio or
 write files. Opening it from the tool rail initializes the original BPM draft
 from the selected sample's source tempo.
+The application owns Time Stretcher's background source read and processing job.
+Each request captures its source catalog and tempo values, rejects duplicate
+work, and retains one consumable result. Library or song replacement invalidates
+that result. The frontend retains the requested action and rejects results after
+the tool closes or its source, tempos, or catalog change. It opens the existing
+save workflow or requests PCM preview only for a current result. Preview state
+and a revision identify whether that tool's audition is still playing; a later
+preview, transport change, or stop cannot inherit its active indicator.
+Save completion updates the local feedback and the selected output's source
+tempo; cancelling a file choice does not report success.
+
+`src/ui/effects.rs` owns Effect Studio's compact red hardware presentation and
+native input responses. Prepared expanded, collapsed, switch, and 32-point knob
+skins live in `assets/effects/{100,150,200}/`. The background banks are empty;
+native painting places ticks, numeric wells, text, values, pointers, section
+lamps, focus, and disabled feedback. This separates control geometry from the
+generated material. The current compact expanded skin is 640 by
+352 logical points with a 48-point footer; its separate collapsed skin is 640
+by 48 points. Image bounds stay aligned at one texel per physical pixel.
+The knob's 32-point artwork has a 42-point input region. Values and captions use
+separate vertical positions. Check their rendered bounds against dial arcs and
+neighboring controls; source coordinates alone do not establish visual acceptance.
+`src/ui.rs` adapts Listen, Save sound, Reset, Help, and Import details. Listen
+and Save sound call `Session::processed_pcm` synchronously; Listen then uses the
+existing PCM preview. Save uses the existing file request and
+`Session::save_pcm`, registers the WAV in Effect at the source BPM, and selects
+the saved sound. Source changes clear local feedback; save choice, cancellation,
+failure, and success update it. Reset restores `EffectsState::default`.
+Turning an optional section off discards its settings; enabling it uses that
+section's defaults. This presentation does not change the algorithms or the
+shared `effects_controls` form used by Step synth. It does not add a background
+processing job or establish original-product DSP parity.
 
 Missing audio is explicit project state. The renderer leaves those placements
 silent. The frontend reads the retained source metadata and sends a chosen WAV
@@ -154,7 +188,8 @@ arrangement requests instead.
 ## Safe frontend iteration
 
 Change shared layout, typography, colors, and controls in `src/ui/view.rs`.
-Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs`. Keep tool
+Keep Time Stretcher's scoped hardware presentation in `src/ui/stretch.rs` and
+Effect Studio's in `src/ui/effects.rs`. Keep tool
 input and file-dialog adapters in `src/ui.rs`. Add a typed operation in
 `application.rs` when a design needs new application behavior. Do not expose a
 mutable project or add a callback that can change arbitrary application state.

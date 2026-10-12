@@ -1073,6 +1073,8 @@ impl MixJamApp {
     fn open_windows(&self) -> Vec<&'static str> {
         [
             (self.show_help, "Help"),
+            (self.show_stretch_help, "Time Stretcher help"),
+            (self.show_effects_help, "Effect Studio help"),
             (self.show_libraries, "Sample libraries"),
             (self.show_import_details, "Import details"),
             (self.show_effects, "Effect Studio"),

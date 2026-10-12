@@ -199,6 +199,19 @@ struct Export {
     thread: std::thread::JoinHandle<()>,
 }
 
+/// The source and tempo values captured for one Time Stretcher operation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StretchSettings {
+    pub source_id: u32,
+    pub source_bpm: f64,
+    pub target_bpm: f64,
+}
+
+struct StretchJob {
+    settings: StretchSettings,
+    receiver: mpsc::Receiver<Result<Pcm, String>>,
+}
+
 /// What a frontend may show about a running sample folder scan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveScanStatus {
@@ -220,6 +233,8 @@ pub struct Session {
     /// A successful folder adoption, until the frontend resets its source selection.
     wave_folder_adopted: bool,
     export: Option<Export>,
+    stretch_job: Option<StretchJob>,
+    stretch_result: Option<(StretchSettings, Result<Pcm, String>)>,
     /// Products whose provider replaces the same product found in a WAV folder.
     preferred_providers: Vec<Product>,
     /// Where the sample folder setting and scan cache live.
@@ -236,6 +251,7 @@ pub struct Session {
     playback_frames_per_tick: f64,
     seek_pending: bool,
     previewing: bool,
+    preview_revision: u64,
     cursor_tick: u32,
     file: Option<PathBuf>,
     unsaved: bool,
@@ -348,6 +364,8 @@ impl Session {
             opened_after_scan: None,
             wave_folder_adopted: false,
             export: None,
+            stretch_job: None,
+            stretch_result: None,
             preferred_providers: Vec::new(),
             settings_root: crate::project_io::data_root(),
             editor: Editor::new(project),
@@ -361,6 +379,7 @@ impl Session {
             playback_frames_per_tick: 1.0,
             seek_pending: false,
             previewing: false,
+            preview_revision: 0,
             cursor_tick: 0,
             file: None,
             unsaved: false,
@@ -650,6 +669,7 @@ impl Session {
         Ok(())
     }
     fn set_library(&mut self, library: Library) {
+        self.cancel_stretch();
         self.library = Arc::new(library);
         self.catalog_revision += 1;
     }
@@ -1005,6 +1025,7 @@ impl Session {
     pub fn new_mix(&mut self) -> Result<(), String> {
         self.require_idle_recording()?;
         self.stop();
+        self.cancel_stretch();
         self.editor = Editor::new(Project {
             libraries: self.library.bindings().to_vec(),
             imported_samples: self.library.imported_samples().into(),
@@ -1394,13 +1415,62 @@ impl Session {
             pitch,
         )
     }
-    pub fn stretched_pcm(
-        &self,
-        id: Option<u32>,
-        source_bpm: f64,
-        target_bpm: f64,
-    ) -> Result<Pcm, String> {
-        crate::sample_edit::time_stretch(&self.source_pcm(id)?, source_bpm, target_bpm)
+    /// Read and stretch the selected source on a worker. Later control changes
+    /// do not change the settings or source catalog used by this request.
+    pub fn start_stretch(&mut self, settings: StretchSettings) -> Result<(), String> {
+        if self.stretch_job.is_some() || self.stretch_result.is_some() {
+            return Err("Wait for the current stretch result before you start another.".into());
+        }
+        if self.missing_sample(settings.source_id).is_some() {
+            return Err("This sample is missing. Select a folder with its source audio.".into());
+        }
+        let library = self.library.clone();
+        let (sender, receiver) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("mixjam-techno-stretch".into())
+            .spawn(move || {
+                let result = library.read_pcm(settings.source_id).and_then(|pcm| {
+                    crate::sample_edit::time_stretch(&pcm, settings.source_bpm, settings.target_bpm)
+                });
+                let _ = sender.send(result);
+            })
+            .map_err(|error| format!("Cannot start Time Stretcher: {error}"))?;
+        self.stretch_job = Some(StretchJob { settings, receiver });
+        Ok(())
+    }
+    pub fn is_stretching(&self) -> bool {
+        self.stretch_job.is_some()
+    }
+    /// Receive a completed operation once. Call `poll` to advance the worker.
+    pub fn take_stretch_result(&mut self) -> Option<(StretchSettings, Result<Pcm, String>)> {
+        self.stretch_result.take()
+    }
+    fn poll_stretch(&mut self) {
+        let Some(job) = self.stretch_job.as_ref() else {
+            return;
+        };
+        let result = match job.receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Err("Time Stretcher stopped unexpectedly. Try again.".into())
+            }
+        };
+        self.stretch_result = Some((job.settings, result));
+        self.stretch_job = None;
+    }
+    fn cancel_stretch(&mut self) {
+        let settings = self
+            .stretch_job
+            .take()
+            .map(|job| job.settings)
+            .or_else(|| self.stretch_result.take().map(|(settings, _)| settings));
+        if let Some(settings) = settings {
+            self.stretch_result = Some((
+                settings,
+                Err("The song or sample library changed. Start Time Stretcher again.".into()),
+            ));
+        }
     }
     pub fn save_pattern(&self, path: &Path, state: &StepSynthState) -> Result<(), String> {
         state.validate()?;
@@ -1426,6 +1496,13 @@ impl Session {
     pub fn playing_mix(&self) -> bool {
         !self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
     }
+    pub fn is_previewing(&self) -> bool {
+        self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
+    }
+    /// Changes when a preview starts or the transport replaces or stops it.
+    pub fn preview_revision(&self) -> u64 {
+        self.preview_revision
+    }
 
     fn tick_to_frame(&self, tick: u32, rate: u32) -> u64 {
         (tick as f64 * self.editor.project().frames_per_tick(rate)).round() as u64
@@ -1442,6 +1519,9 @@ impl Session {
             return;
         }
         self.wants_playback = true;
+        // A queued mix playback supersedes a pending tool audition even before
+        // the render worker has produced its first playback buffer.
+        self.preview_revision = self.preview_revision.wrapping_add(1);
         if self.render_dirty || self.render.is_none() {
             if self.requested_revision != Some(self.revision) {
                 match self.request_render() {
@@ -1487,6 +1567,7 @@ impl Session {
         match self.player.as_mut().unwrap().play(mix, start, region) {
             Ok(()) => {
                 self.previewing = false;
+                self.preview_revision = self.preview_revision.wrapping_add(1);
                 self.seek_pending = false;
                 self.message("Playing mix.");
             }
@@ -1531,6 +1612,7 @@ impl Session {
             player.pause();
         }
         self.previewing = false;
+        self.preview_revision = self.preview_revision.wrapping_add(1);
         self.message("Paused.");
     }
 
@@ -1557,6 +1639,7 @@ impl Session {
                 {
                     Ok(()) => {
                         self.previewing = true;
+                        self.preview_revision = self.preview_revision.wrapping_add(1);
                         self.message(format!("Listening: {name}"));
                     }
                     Err(error) => self.error(error),
@@ -1580,6 +1663,7 @@ impl Session {
         match result {
             Ok(()) => {
                 self.previewing = true;
+                self.preview_revision = self.preview_revision.wrapping_add(1);
                 self.message(label);
             }
             Err(error) => self.error(error),
@@ -1591,6 +1675,7 @@ impl Session {
             player.stop();
         }
         self.previewing = false;
+        self.preview_revision = self.preview_revision.wrapping_add(1);
         self.cursor_tick = 0;
         if let Some(recorder) = self.recorder.take() {
             match recorder.finish() {
@@ -1603,6 +1688,7 @@ impl Session {
     }
     /// Advances devices and the render queue. Returns a suggested polling delay in milliseconds.
     pub fn poll(&mut self) -> Option<u64> {
+        self.poll_stretch();
         let scan_delay = match (self.poll_wave_scan(), self.poll_export()) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
@@ -1623,9 +1709,9 @@ impl Session {
                 (player.position_frames() as f64 / self.playback_frames_per_tick) as u32;
         }
         self.poll_recording();
-        let delay = if self.render_worker.in_flight {
+        let delay = if self.render_worker.in_flight || self.is_stretching() {
             Some(20)
-        } else if self.playing_mix() {
+        } else if self.playing_mix() || self.is_previewing() {
             Some(30)
         } else if self.is_recording() {
             Some(40)
@@ -1884,6 +1970,141 @@ mod tests {
             ..Project::default()
         };
         (Session::headless(Arc::new(library), project).unwrap(), root)
+    }
+    fn wait_for_stretch(session: &mut Session) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while session.is_stretching() {
+            let delay = session.poll();
+            if session.is_stretching() {
+                assert!(delay.is_some_and(|delay| delay <= 20));
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "stretch worker stalled"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+    fn finish_stretch(session: &mut Session) -> (StretchSettings, Result<Pcm, String>) {
+        wait_for_stretch(session);
+        session.take_stretch_result().expect("stretch result")
+    }
+    #[test]
+    fn stretch_worker_preserves_source_and_settings_and_requires_result_consumption() {
+        let (mut session, root) = conflict_fixture();
+        let settings = StretchSettings {
+            source_id: 1_000_000,
+            source_bpm: 160.0,
+            target_bpm: 120.0,
+        };
+        session.start_stretch(settings).unwrap();
+        assert!(session.is_stretching());
+        assert!(session.start_stretch(settings).is_err());
+        assert!(session.take_stretch_result().is_none());
+        // Source additions use copy-on-write. A worker keeps its original
+        // source even if the same ID is registered with another path later.
+        let mut replacement = session.project().imported_samples[0].clone();
+        replacement.path = session.sample_conflicts()[0].candidates[1].clone();
+        Arc::make_mut(&mut session.library)
+            .apply_imports(&[replacement])
+            .unwrap();
+        assert!(
+            session
+                .source_pcm(Some(settings.source_id))
+                .unwrap()
+                .samples[0]
+                < 0.0
+        );
+        let (captured, result) = finish_stretch(&mut session);
+        assert_eq!(captured, settings);
+        let pcm = result.unwrap();
+        assert_eq!(pcm.frames(), 29_400);
+        assert!(pcm.samples.iter().any(|sample| *sample > 0.0));
+        assert!(pcm.samples.iter().all(|sample| *sample >= 0.0));
+        assert!(session.take_stretch_result().is_none());
+        assert!(!session.is_previewing());
+        session.start_stretch(settings).unwrap();
+        wait_for_stretch(&mut session);
+        assert!(session.start_stretch(settings).is_err());
+        assert!(session.take_stretch_result().unwrap().1.is_ok());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn stretch_worker_errors_and_disconnects_leave_a_consumable_result() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let settings = StretchSettings {
+            source_id: 99,
+            source_bpm: 140.0,
+            target_bpm: 120.0,
+        };
+        session.start_stretch(settings).unwrap();
+        let (captured, result) = finish_stretch(&mut session);
+        assert_eq!(captured, settings);
+        assert!(result.unwrap_err().contains("not in the library"));
+        let (sender, receiver) = mpsc::channel();
+        session.stretch_job = Some(StretchJob { settings, receiver });
+        drop(sender);
+        let (captured, result) = finish_stretch(&mut session);
+        assert_eq!(captured, settings);
+        assert!(result.unwrap_err().contains("stopped unexpectedly"));
+        assert!(!session.is_stretching());
+        assert!(session.take_stretch_result().is_none());
+    }
+    #[test]
+    fn stretch_results_are_cancelled_when_the_library_or_song_changes() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let settings = StretchSettings {
+            source_id: 99,
+            source_bpm: 140.0,
+            target_bpm: 120.0,
+        };
+        let (sender, receiver) = mpsc::channel();
+        session.stretch_job = Some(StretchJob { settings, receiver });
+        session.set_library(Library::empty());
+        assert!(!session.is_stretching());
+        let (captured, result) = session.take_stretch_result().unwrap();
+        assert_eq!(captured, settings);
+        assert!(result.is_err());
+        assert!(sender.send(Err("late worker result".into())).is_err());
+        session.stretch_result = Some((
+            settings,
+            Ok(Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 16],
+            }),
+        ));
+        session.new_mix().unwrap();
+        assert!(session.take_stretch_result().unwrap().1.is_err());
+        assert!(!session.is_previewing());
+    }
+    #[test]
+    fn stretch_preview_status_uses_the_actual_player_and_transport_revision() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        assert!(!session.is_previewing());
+        let initial_revision = session.preview_revision();
+        session.play_pcm(
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 16],
+            },
+            "Preview",
+        );
+        assert!(!session.is_previewing());
+        assert_eq!(session.preview_revision(), initial_revision);
+        // A stale logical preview flag alone must not keep an indicator on.
+        session.previewing = true;
+        assert!(!session.is_previewing());
+        assert_eq!(session.poll(), None);
+        session.stop();
+        assert_ne!(session.preview_revision(), initial_revision);
+        let stopped_revision = session.preview_revision();
+        session.pause();
+        assert_ne!(session.preview_revision(), stopped_revision);
     }
     #[test]
     fn conflict_switch_updates_all_instances_and_preserves_musical_trims_with_history() {
@@ -3280,6 +3501,7 @@ mod boundary_tests {
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
         ] {
             for forbidden in [
@@ -3312,6 +3534,7 @@ mod boundary_tests {
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),

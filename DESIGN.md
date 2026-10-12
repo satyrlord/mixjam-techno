@@ -23,6 +23,21 @@ colors:
   other-sample: "#bbb39f"
   stretch-cream: "#f5e8cd"
   stretch-ink: "#181917"
+  stretch-body: "#2c2e2e"
+  stretch-body-edge: "#0c0c0b"
+  stretch-well: "#182526"
+  stretch-well-line: "#445f60"
+  stretch-well-deep: "#0e0f0f"
+  stretch-well-hover: "#283c3d"
+  stretch-well-selected: "#3a5455"
+  stretch-error: "#ffa78f"
+  stretch-lamp-rim: "#807b6e"
+  effects-cream: "#f5e8cd"
+  effects-ink: "#181917"
+  effects-body: "#2c2e2e"
+  effects-well: "#1e1715"
+  effects-well-line: "#5a413a"
+  effects-error: "#ffa78f"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -69,6 +84,18 @@ typography:
     textTransform: "uppercase"
     fontSize: "29.09px"
     fontWeight: 700
+  effects-title:
+    fontFamily: "Syncopate"
+    fontSize: "22px"
+    fontWeight: 700
+  effects-value:
+    fontFamily: "Inter"
+    fontSize: "14px"
+    fontWeight: 500
+  effects-status:
+    fontFamily: "Inter"
+    fontSize: "12.5px"
+    fontWeight: 500
 rounded:
   clip: "3px"
   control: "5px"
@@ -125,6 +152,36 @@ components:
     textColor: "{colors.stretch-cream}"
   stretch-save:
     textColor: "{colors.stretch-ink}"
+  effects-panel:
+    width: "640px"
+    height: "352px"
+  effects-collapsed:
+    width: "640px"
+    height: "48px"
+  effects-footer:
+    backgroundColor: "{colors.effects-body}"
+    width: "640px"
+    height: "48px"
+  effects-knob:
+    width: "32px"
+    height: "32px"
+  effects-toggle:
+    width: "24px"
+    height: "24px"
+  effects-value:
+    textColor: "{colors.effects-cream}"
+    typography: "{typography.effects-value}"
+    width: "56px"
+    height: "16px"
+  effects-listen:
+    textColor: "{colors.effects-cream}"
+    typography: "{typography.button}"
+  effects-save:
+    textColor: "{colors.effects-ink}"
+    typography: "{typography.button}"
+  effects-reset:
+    textColor: "{colors.effects-cream}"
+    typography: "{typography.button}"
 ---
 
 # Design System: MixJam Techno
@@ -140,9 +197,12 @@ colors identify the same sounds in the browser and arrangement.
 The owner selected this design for the classic loop sequencer. It uses imported
 Syncopate branding and titles, Inter Medium interface text, flat controls,
 and consistent spacing.
-Time Stretcher is the owner's scoped exception: a compact teal textured metal
-hardware panel with cream labels, dark displays, rotary controls, and lamped
-Listen and Save buttons. This treatment does not change the shared studio theme.
+Time Stretcher and Effect Studio are the owner's scoped exceptions. Time
+Stretcher uses compact teal textured metal, cream labels, dark displays, rotary
+controls, and lamped Listen and Save buttons. Effect Studio uses a compact red
+metal landscape panel with small rotary controls, chrome section switches,
+green section lamps, and black and ivory action buttons. These treatments do
+not change the shared studio theme.
 RaveFold supplies artistic references only. Product behavior remains governed by
 `PRODUCT.md` and `COMPATIBILITY.md`.
 
@@ -154,7 +214,8 @@ RaveFold supplies artistic references only. Product behavior remains governed by
 - Lime primary actions, category-colored clips, and coral recording signals.
 
 The implementation is native Windows Rust with eframe/egui. Tokens and painting
-live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`;
+live in `src/ui/view.rs`, with the Time Stretcher panel in `src/ui/stretch.rs`
+and Effect Studio in `src/ui/effects.rs`;
 native dialogs and input adapters live in `src/ui.rs`. Application
 state and behavior live in `src/application.rs`. Sizes here use portable `px`
 labels for egui logical points. The sidecar records native component metadata;
@@ -188,6 +249,19 @@ Stretch Cream and Stretch Ink apply only to Time Stretcher. Cream carries its
 title, labels, values, and Listen text. Ink carries Save text on the ivory
 button. The panel's teal, black, ivory, amber, and green material colors come
 from the prepared skin; they do not replace shared palette tokens.
+Stretch Body continues the skin's outer bezel under the status footer, with
+Stretch Body Edge as its one-point outline. The Stretch Well colors fill the
+status footer, the source list, and the Target menu: Well and Well Line for
+the surface and border, Well Deep for the search field, Well Hover and Well
+Selected for rows. Stretch Error tints error text and its mark. Stretch Lamp
+Rim outlines both lamps.
+
+Effects Cream carries Effect Studio's live title, labels, values, pointers, and
+black-button lettering. Effects Ink carries Save sound lettering on ivory.
+Effects Body continues the bezel below the artwork. Effects Well and Well Line
+form its status display; Effects Error marks local error text. Red metal,
+chrome, and static knob colors come from the prepared artwork. The section
+lamps show the live enabled state and do not replace named switch states.
 
 ## Typography
 
@@ -223,6 +297,11 @@ Time Stretcher uses a live uppercase Syncopate title at 40 × (640/880), about
 29.09 logical points at the supported display scales. Its other text uses Inter
 Medium. Text is rendered over the skin, so source names, BPM values, warnings,
 and control labels stay current.
+
+Effect Studio uses a live uppercase Syncopate title through Effects Title.
+Inter labels use the shared Clip size; source and action text use Body and
+Button. Effects Value and Effects Status support its numeric wells and footer.
+Keep this standard desktop text scale when preparing hardware artwork.
 
 **The Name Remains Rule.** Keep sample names visible on clips. Use one line below
 38 points of clip height and up to two lines at larger heights. Truncate long names and
@@ -278,8 +357,17 @@ scoped to the grid. Other tool controls retain the shared control spacing.
 Time Stretcher uses a fixed 2:1 panel, 640 by 320 logical points at the supported
 100%, 150%, and 200% display scales. The source selector spans the panel above
 the paired Original BPM and Target BPM controls. Listen and Save occupy the
-bottom row. Collapse clips the panel to its title strip. This compact hardware
-layout is local to the tool.
+bottom row. Collapse uses separate 640 by 64-point artwork with a complete lower
+bezel. This compact hardware layout is local to the tool.
+
+Effect Studio's current compact implementation uses a 640 by 352-point
+landscape skin above a 48-point footer.
+The complete expanded window is 640 by 400 points. The separate collapsed skin
+is 640 by 48 points. Its source name sits above two rows of inset banks: Filter
+and Echo above Robotize and Distortion / Output. Keep the small knob artwork
+and standard text scale; do not enlarge the panel into a portrait surface.
+These dimensions apply at the prepared display scales. At other scales the
+nearest artwork density determines the logical size, preserving physical pixels.
 
 This is a resizable Windows desktop surface. No browser, mobile, touch, or
 high-DPI acceptance is implied by these logical dimensions. Native capture cases
@@ -290,9 +378,9 @@ are defined by `tools/verify-ui.ps1`; execution results belong in evidence repor
 Flat color layers and thin borders separate controls from the work area. The
 shared studio has no custom gradient, metal bevel, waveform decoration, or shadow
 scale. Shared floating windows use the default shadow from the pinned egui dark theme.
-Time Stretcher alone uses textured metal, inset displays, knobs, screws, and
-button depth from its prepared PNG skin. Its hover, focus, pressed, and disabled
-feedback remains native painting over that skin.
+Time Stretcher and Effect Studio use textured metal, inset displays, knobs,
+and button depth from their prepared PNG skins. Hover, focus, pressed, and
+disabled feedback remains native painting over each skin.
 Hover and focus states change immediately. The application has no motion tokens.
 
 ## Shapes
@@ -377,8 +465,8 @@ confirmation is an undoable project change; Esc hides it without an edit and
 the status bar reopens it.
 The idle status reads Ready. Errors and application notices remain visible.
 The empty mixer has one instruction for adding a sound to the arrangement.
-Floating libraries, sample editing, effects, and Step synth use the same native
-widget theme. Time Stretcher uses the scoped hardware panel described below.
+Floating libraries, sample editing, and Step synth use the shared native widget
+theme. Time Stretcher and Effect Studio use their scoped hardware panels below.
 The frontend submits
 edits to the application layer; visual changes must preserve those commands.
 
@@ -389,18 +477,130 @@ edits to the application layer; visual changes must preserve those commands.
 paint one texel per physical pixel with aligned bounds, as for shared artwork.
 The skin supplies the material finish and static hardware forms. The title,
 source selector, values, labels, knob pointers, and input states remain live.
+Upper corner screws are replaced by native controls: collapse at the left and
+Close at the right. Help uses a cream question-mark icon beside Close. The
+collapsed state uses a separate `collapsed.png` skin with a complete lower rim,
+prepared at 640 by 64, 960 by 96, and 1280 by 128 pixels. It retains the title,
+expand, and Close controls. It does not clip the expanded skin.
 Black Listen and ivory Save buttons pair their action labels with amber and
 green lamps; lamp color does not replace an action name.
+Center the visible action lettering and its shadow horizontally and vertically
+on each flat button face. Font line-box bounds and the surrounding bevel are
+not the visible face bounds. A label too long to clear its lamp moves right
+only until 10 by 640/880 points separate it from the lamp's rim.
+The hardware artwork retains its 640 by 320-point size. The expanded window is
+640 by 400 points and reads as one unit. A Stretch Body base continues the
+bezel below the artwork, with bottom corners that match the skin's radius, and
+leaves no transparent area inside the window. The status footer is an inset
+display well in that base, not a separate floating container.
+Short status and error messages are centered within the footer's text area.
+The message and Import details control share the footer's vertical center.
+Long text wraps inside that footer and scrolls when needed; it does
+not enter the control composition. Missing audio's Import details control sits
+inside the same footer beside its message. Collapsing hides the footer.
 
 Original BPM supports 30-300; Target BPM offers 120, 140, 160, and 180.
-  Knobs support pointer and keyboard input. Hover does not change either BPM.
-  Each wheel event adjusts one step; later frames do not repeat the adjustment.
-  Listen and Save require an available
-source. Missing audio exposes Import details and a concise warning. With an
-available source, retain the approximate pitch-preservation warning. Esc and the
+Knobs support pointer and keyboard input. Drags accumulate unrounded movement
+and hold when the pointer stops. Shift changes only new movement for fine
+adjustments. Hover does not change either BPM. Each wheel event adjusts one
+step; later frames do not repeat it. Double-click Original to restore the
+selected source tempo; double-click Target to reset to 140 BPM. Target's four
+positions span its full 270-degree arc and have distinct major marks.
+Original turns one degree per BPM across the same arc. A Target drag holds
+at most 10 BPM of overshoot past either end, so reversing takes effect at once.
+The source selector truncates long names, retains full-name tooltips, and opens
+a searchable list with bounded, virtualized rows. Each opening starts with an
+empty, focused search. The list and the Target menu use the well material and
+20 by 640/880-point text, not the shared widget theme.
+Tab reaches the source, values, knobs, and actions before Help, collapse, and
+close. Keyboard focus is a solid cream ring; pointer hover is a faint one-point
+ring. Help has a cream circular outline at rest so it reads as a control.
+Esc closes the tool only when it is the top window and nothing inside it is
+in use. An open list or menu, a value being typed, a modal, or a window above
+it takes Esc first.
+
+Listen and Save require an available source. Processing runs in the application
+worker and disables repeated requests. Listen becomes Stop listening while this
+tool's preview is active. The amber lamp lights only during processing or that
+preview; green confirms a successful save and clears after settings change.
+Cancelled or failed saves do not light green. Each lamp sits in a dark bezel
+with a metal rim, so it is located on the black face and a lit lamp reads on
+the ivory one. Unlit lamps stay visibly dimmer than lit ones. An unavailable
+button fades its lettering with its face.
+A successful save is a receipt. The tool keeps its source and both tempos,
+names the saved file and its category in the footer, and leaves the full path
+in the application status bar.
+The bottom status well shows local progress, errors, save confirmation, or the
+sound and tempo values of a running preview. Changed drafts are distinguished
+from that preview. When no preview runs and no message is pending, show the
+duration change and approximate pitch-preservation warning; add Listen before
+saving until the current settings have been heard. Equal tempos state that the
+duration is unchanged. Errors begin with Cannot, carry a drawn mark, and are
+announced as errors; color is not their only signal. The status is a polite
+live region for assistive technology. Feedback
+also retains its full text in a tooltip. The panel's Help opens the audible
+limitations, ranges, input, reset, and lamp meanings directly in a native window.
+Missing audio exposes Import details and a concise warning. Esc and the
 close control close the tool; the title triangle collapses or expands it.
 The form sends selections and action requests through `src/ui.rs` to the
 existing application operations. It does not process audio or write files.
+
+### Effect Studio
+
+`src/ui/effects.rs` paints five prepared assets at each of the three display
+densities: `panel.png`, `collapsed.png`, `toggle-off.png`, `toggle-on.png`, and
+`knob.png`.
+The separate collapsed skin has a complete bezel. Select the nearest density,
+align image bounds to physical pixels, and paint one texel per physical pixel.
+See `assets/effects/README.md` for dimensions and generation provenance.
+
+The red metal skin supplies static material, empty bank recesses, and button
+faces. Separate knob sprites supply small black bodies. Keep title, source name,
+section labels, ticks, numeric wells, values, dial pointers, lamps, header
+controls, and interaction feedback live. Collapse is at
+the upper left; Close is at the upper right; Help uses a drawn icon beside Close.
+Help is available while expanded. Esc first leaves exact entry or a window or
+modal above the tool. Otherwise it closes the topmost Effect Studio window.
+
+Filter has Cutoff, Resonance, Overdrive, and Filter volume. Echo has Delay
+(beats), Feedback, and Echo volume. Robotize has Color and Robotize volume.
+Distortion / Output has Dirty distortion, Noise distortion, and Output volume.
+Knob artwork is 32 points square at the prepared scales, with 42-point input
+regions. Section switch sprites are 24 points square. The three optional banks
+pair a named on/off switch with a live green lamp. Disabled banks dim their
+labels and controls. Turning a bank off discards its settings; turning it on
+uses that bank's defaults. Reset restores the complete existing effects draft.
+
+Keep knobs, values, and captions in separate vertical bands. Current upper-row
+centers are 117, 144, and 163 points; lower-row centers are 216, 244, and 263.
+Lower-bank section captions sit at 185 points. Check rendered glyph bounds
+against dial arcs, numeric wells, and adjacent controls at each prepared scale.
+Change positions to restore clearance while retaining small desktop controls.
+The owner rejected crowded labels; these coordinates record the current
+implementation and do not establish visual acceptance. Native capture review
+remains pending for this revision.
+
+Knobs accept drag, wheel, arrow keys, Home, End, and AccessKit numeric actions.
+Drags accumulate unrounded movement and hold when the pointer stops. Shift
+applies fine adjustment to new movement. Wheel events are consumed once.
+Double-click resets a knob; clicking its numeric well permits exact entry.
+Cutoff and Color retain logarithmic knob mapping; each wheel, arrow, or
+accessible step moves them 1% of the dial. All parameter ranges,
+defaults, processing algorithms, and Step synth's shared effects form remain
+unchanged. Accessible controls expose names, current values, ranges, and state.
+The source name is a live truncated label with a full-name tooltip and its full
+text as the accessible value.
+
+Listen and Save sound require selected, available audio. Missing audio offers
+Import details in the footer. Processing and preview retain the existing
+synchronous application calls; the panel does not add Time Stretcher's worker
+or Stop listening behavior. Save sound writes a WAV to Effect and selects that
+saved sound at the source BPM. The local footer shows preview feedback, reset,
+save choice, cancellation, errors, and save confirmation. It is an inset display
+inside the continued bezel. Center short messages; wrap and scroll long text.
+Reserve room for Import details beside missing-audio feedback. Status text has
+a full tooltip and a polite accessible live region; errors include an Error
+label. No original-product DSP equivalence is established by this presentation.
 
 ### Empty states and feedback
 
@@ -432,8 +632,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Avoid
 
-- Do not extend Time Stretcher's metal treatment to the shared studio or other
-  tools. Do not add repeated waveform traces.
+- Keep metal hardware treatments scoped to Time Stretcher and Effect Studio.
+  Do not add repeated waveform traces.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

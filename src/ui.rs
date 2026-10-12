@@ -6,6 +6,8 @@ mod view;
 use view::*;
 #[path = "ui/agent.rs"]
 mod agent;
+#[path = "ui/effects.rs"]
+mod effects;
 #[path = "ui/stretch.rs"]
 mod stretch;
 
@@ -22,7 +24,8 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Response, Sense, S
 use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
     Clip, EditCommand, EffectsState, LibraryView, MissingReference, MissingSample, Pcm, Product,
-    Project, SUPPORTED_BPMS, Sample, Session, StepSynthState, TICKS_PER_BAR, TRACK_COUNT,
+    Project, SUPPORTED_BPMS, Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR,
+    TRACK_COUNT,
 };
 
 /// What the filtered palette depends on.
@@ -68,6 +71,7 @@ enum FileRequest {
         name: String,
         group: &'static str,
         source_bpm: f64,
+        stretch: Option<StretchSettings>,
     },
     SaveTake,
     SampleFolder,
@@ -129,6 +133,42 @@ struct PathPrompt {
     focused: bool,
 }
 
+#[derive(Clone, Copy)]
+enum StretchPurpose {
+    Listen,
+    Save,
+}
+
+struct StretchRequest {
+    settings: StretchSettings,
+    purpose: StretchPurpose,
+    name: String,
+    catalog_revision: u64,
+    preview_revision: u64,
+}
+
+struct StretchAudition {
+    settings: StretchSettings,
+    name: String,
+    preview_revision: u64,
+}
+
+#[derive(Default)]
+struct StretchFeedback {
+    pending: Option<StretchRequest>,
+    audition: Option<StretchAudition>,
+    saved: Option<StretchSettings>,
+    message: Option<String>,
+    error: bool,
+}
+
+#[derive(Default)]
+struct EffectsFeedback {
+    source: Option<u32>,
+    message: Option<String>,
+    error: bool,
+}
+
 /// Native frontend. It owns view state and submits commands to the headless session.
 pub struct MixJamApp {
     session: Session,
@@ -141,6 +181,8 @@ pub struct MixJamApp {
     search: String,
     show_mixer: bool,
     show_help: bool,
+    show_stretch_help: bool,
+    show_effects_help: bool,
     show_libraries: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
@@ -182,6 +224,7 @@ pub struct MixJamApp {
     show_sample_edit: bool,
     show_stretch: bool,
     effects: EffectsState,
+    effects_feedback: EffectsFeedback,
     step_synth: StepSynthState,
     step_synth_bar: usize,
     step_synth_file: Option<PathBuf>,
@@ -193,6 +236,7 @@ pub struct MixJamApp {
     edit_pitch: f64,
     stretch_source_bpm: f64,
     stretch_target_bpm: f64,
+    stretch_feedback: StretchFeedback,
     armed_track: usize,
     import_path: Option<PathBuf>,
     palette_cache: Option<PaletteCache>,
@@ -310,6 +354,8 @@ impl MixJamApp {
             search: String::new(),
             show_mixer: capture_view.starts_with("mixer"),
             show_help: capture_view == "help",
+            show_stretch_help: false,
+            show_effects_help: false,
             show_libraries: matches!(
                 capture_view.as_str(),
                 "libraries" | "library-providers" | "library-tempos"
@@ -354,6 +400,7 @@ impl MixJamApp {
                 capture_view.as_str(),
                 "effects" | "effects-expanded" | "missing-effects"
             ),
+            effects_feedback: EffectsFeedback::default(),
             show_step_synth: matches!(
                 capture_view.as_str(),
                 "step-synth" | "step-synth-effects" | "missing-step-synth"
@@ -392,6 +439,7 @@ impl MixJamApp {
             edit_pitch: 0.0,
             stretch_source_bpm: 140.0,
             stretch_target_bpm: 140.0,
+            stretch_feedback: StretchFeedback::default(),
             armed_track: if capture_view == "track64" {
                 TRACK_COUNT - 1
             } else {
@@ -450,6 +498,7 @@ impl MixJamApp {
         if let Some(delay) = self.session.poll() {
             ctx.request_repaint_after(Duration::from_millis(delay));
         }
+        self.poll_stretch();
         if self.session.take_wave_folder_adopted() {
             self.clear_selection();
             self.drag = None;
@@ -1102,7 +1151,29 @@ impl MixJamApp {
                 ui.label("Gain: 0 is silence; +1 is unity (unchanged level). Negative gain inverts polarity; its magnitude controls level.");
                 ui.label("Click a gain value for exact entry, then Enter. Unity resets gain; Center resets pan. Master stays visible while tracks scroll.");
                 ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.");
+                ui.separator();
+                ui.label(egui::RichText::new("Time Stretcher").strong());
+                stretch_help(ui);
+                ui.separator();
+                ui.label(egui::RichText::new("Effect Studio").strong());
+                effects_help(ui);
             });
+        titled_window("Time Stretcher help")
+            .open(&mut self.show_stretch_help)
+            .resizable(false)
+            .default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .vscroll(true)
+            .show(ctx, stretch_help);
+        titled_window("Effect Studio help")
+            .open(&mut self.show_effects_help)
+            .resizable(false)
+            .default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .vscroll(true)
+            .show(ctx, effects_help);
     }
 
     fn sample_conflicts_open(&self) -> bool {
@@ -1316,6 +1387,7 @@ impl MixJamApp {
             name: name.into(),
             group,
             source_bpm,
+            stretch: None,
         });
     }
 
@@ -1472,6 +1544,28 @@ impl MixJamApp {
             if matches!(request, FileRequest::SaveTake) {
                 self.message("Unsaved take: stored in memory. Save it before closing.");
             }
+            if matches!(
+                request,
+                FileRequest::SaveSound {
+                    stretch: Some(_),
+                    ..
+                }
+            ) {
+                self.stretch_feedback.message = Some("Save cancelled.".into());
+                self.stretch_feedback.saved = None;
+                self.stretch_feedback.error = false;
+            }
+            if matches!(
+                request,
+                FileRequest::SaveSound {
+                    group: "Effect",
+                    stretch: None,
+                    ..
+                }
+            ) {
+                self.effects_feedback.message = Some("Save cancelled.".into());
+                self.effects_feedback.error = false;
+            }
             return;
         };
         match request {
@@ -1495,15 +1589,49 @@ impl MixJamApp {
                 pcm,
                 group,
                 source_bpm,
+                stretch,
                 ..
             } => match self.session.save_pcm(&pcm, &path, group, source_bpm) {
                 Ok(id) => {
                     self.group = Some(group.into());
                     self.palette_product = None;
-                    self.selected_sample = Some(id);
                     self.message(format!("Saved {} and added it to {group}.", path.display()));
+                    if let Some(settings) = stretch {
+                        // The tool keeps its source and both tempos, so the
+                        // next version starts from the same sound.
+                        let file = path.file_name().map_or_else(
+                            || path.display().to_string(),
+                            |name| name.to_string_lossy().into_owned(),
+                        );
+                        self.stretch_feedback.saved = Some(settings);
+                        self.stretch_feedback.message = Some(format!("Saved {file} to {group}."));
+                        self.stretch_feedback.error = false;
+                    } else {
+                        self.selected_sample = Some(id);
+                        if group == "Effect" {
+                            self.effects_feedback.source = Some(id);
+                            self.effects_feedback.message = Some(format!(
+                                "Saved {} to Effect.",
+                                path.file_name().unwrap_or_default().to_string_lossy()
+                            ));
+                            self.effects_feedback.error = false;
+                        }
+                    }
                 }
-                Err(error) => self.error(error),
+                Err(error) => {
+                    if stretch.is_some() {
+                        self.stretch_feedback.message =
+                            Some(format!("Cannot save the sound: {error}"));
+                        self.stretch_feedback.error = true;
+                        self.stretch_feedback.saved = None;
+                    }
+                    if group == "Effect" && stretch.is_none() {
+                        self.effects_feedback.message =
+                            Some(format!("Cannot save the sound: {error}"));
+                        self.effects_feedback.error = true;
+                    }
+                    self.error(error);
+                }
             },
             FileRequest::SaveTake => match self.session.save_recorded_take(&path) {
                 Ok(clip) => {
@@ -1837,42 +1965,67 @@ impl MixJamApp {
         }
         if self.show_effects {
             let mut open = true;
-            titled_window("Effect Studio")
-                .open(&mut open)
-                .default_width(560.0)
-                .show(ctx, |ui| {
-                    ui.label(egui::RichText::new(self.source_name()).strong().color(TEXT));
-                    if self.show_missing_source(ui) {
-                        return;
+            let source_id = self.source_id();
+            if self.effects_feedback.source != source_id {
+                self.effects_feedback = EffectsFeedback {
+                    source: source_id,
+                    ..Default::default()
+                };
+            }
+            let name = self.source_name();
+            let missing = source_id.is_some_and(|id| self.session.missing_sample(id).is_some());
+            let available =
+                source_id.is_some_and(|id| self.session.library().sample_by_id(id).is_some());
+            let action = effects::show(
+                ctx,
+                &mut open,
+                effects::Source {
+                    name: &name,
+                    available,
+                    missing,
+                },
+                effects::Feedback {
+                    message: self.effects_feedback.message.as_deref(),
+                    error: self.effects_feedback.error,
+                },
+                &mut self.effects,
+            );
+            match action {
+                Ok(effects::Action::Listen) => {
+                    match self.session.processed_pcm(source_id, &self.effects) {
+                        Ok(pcm) => self.play_pcm(pcm, "Listening to the processed sound."),
+                        Err(error) => self.error(error),
                     }
-                    effects_controls(ui, &mut self.effects);
-                    ui.horizontal(|ui| {
-                        if ui.button("Listen").clicked() {
-                            match self.session.processed_pcm(self.source_id(), &self.effects) {
-                                Ok(pcm) => self.play_pcm(pcm, "Listening to the processed sound."),
-                                Err(error) => self.error(error),
-                            }
+                    self.effects_feedback.message = Some(self.status.clone());
+                    self.effects_feedback.error = self.status_error;
+                }
+                Ok(effects::Action::Save) => {
+                    match self.session.processed_pcm(source_id, &self.effects) {
+                        Ok(pcm) => {
+                            self.effects_feedback.message =
+                                Some("Choose a WAV path to save the processed sound.".into());
+                            self.effects_feedback.error = false;
+                            let name = format!("{name} - effect");
+                            self.save_pcm(pcm, &name, "Effect", self.source_bpm());
                         }
-                        if ui
-                            .button("Save sound")
-                            .on_hover_text("Save a new WAV and add it to Effect.")
-                            .clicked()
-                        {
-                            let result =
-                                self.session.processed_pcm(self.source_id(), &self.effects);
-                            match result {
-                                Ok(pcm) => {
-                                    let name = format!("{} - effect", self.source_name());
-                                    self.save_pcm(pcm, &name, "Effect", self.source_bpm());
-                                }
-                                Err(error) => self.error(error),
-                            }
+                        Err(error) => {
+                            self.effects_feedback.message = Some(error.clone());
+                            self.effects_feedback.error = true;
+                            self.error(error);
                         }
-                        if ui.button("Reset").clicked() {
-                            self.effects = Default::default();
-                        }
-                    });
-                });
+                    }
+                }
+                Ok(effects::Action::Reset) => {
+                    self.effects = Default::default();
+                    self.effects_feedback.message =
+                        Some("Effects reset. Filter, Echo, and Robotize are off.".into());
+                    self.effects_feedback.error = false;
+                }
+                Ok(effects::Action::Details) => self.show_import_details = true,
+                Ok(effects::Action::Help) => self.show_effects_help = true,
+                Ok(effects::Action::None) => {}
+                Err(error) => self.error(error),
+            }
             self.show_effects = open;
         }
         if self.show_step_synth {
@@ -2115,7 +2268,27 @@ impl MixJamApp {
         if self.show_stretch {
             let source = self.source_id();
             let source_name = self.source_name();
+            let source_bpm = self.source_bpm();
             let missing = source.is_some_and(|id| self.session.missing_sample(id).is_some());
+            let settings = self.stretch_settings();
+            let listening = self.stretch_is_listening();
+            let audition = self.stretch_feedback.audition.as_ref();
+            let audition_changed = audition.is_some_and(|heard| Some(heard.settings) != settings);
+            // Only a running preview has a message. Afterwards the panel
+            // returns to the duration of the current settings.
+            let playback_message = audition.filter(|_| listening).map(|heard| {
+                format!(
+                    "Playing {} at {:.0} to {:.0} BPM.{}",
+                    heard.name,
+                    heard.settings.source_bpm,
+                    heard.settings.target_bpm,
+                    if audition_changed {
+                        " Settings changed since this preview."
+                    } else {
+                        ""
+                    },
+                )
+            });
             match stretch::show(
                 ctx,
                 &mut self.show_stretch,
@@ -2124,6 +2297,25 @@ impl MixJamApp {
                     id: source,
                     samples: self.session.library().samples,
                     missing,
+                    bpm: source_bpm,
+                },
+                stretch::Feedback {
+                    processing: self.session.is_stretching(),
+                    listening,
+                    saved: settings.is_some() && self.stretch_feedback.saved == settings,
+                    audition: audition.map(|heard| {
+                        (
+                            heard.settings.source_id,
+                            heard.settings.source_bpm,
+                            heard.settings.target_bpm,
+                        )
+                    }),
+                    message: self
+                        .stretch_feedback
+                        .message
+                        .as_deref()
+                        .or(playback_message.as_deref()),
+                    error: self.stretch_feedback.error,
                 },
                 &mut self.stretch_source_bpm,
                 &mut self.stretch_target_bpm,
@@ -2132,18 +2324,18 @@ impl MixJamApp {
                     stretch::Action::Select(id) => {
                         self.selected_sample = Some(id);
                         self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                        self.stretch_feedback.saved = None;
+                        self.stretch_feedback.message = None;
+                        self.stretch_feedback.error = false;
                     }
-                    stretch::Action::Listen => match self.stretched_pcm() {
-                        Ok(pcm) => self.play_pcm(pcm, "Listening to the stretched sound."),
-                        Err(error) => self.error(error),
-                    },
-                    stretch::Action::Save => match self.stretched_pcm() {
-                        Ok(pcm) => {
-                            let name = format!("{} - stretch", self.source_name());
-                            self.save_pcm(pcm, &name, "Wave", self.stretch_target_bpm);
-                        }
-                        Err(error) => self.error(error),
-                    },
+                    stretch::Action::Listen => self.start_stretch(StretchPurpose::Listen),
+                    stretch::Action::Save => self.start_stretch(StretchPurpose::Save),
+                    stretch::Action::Stop => {
+                        self.stop();
+                        self.stretch_feedback.message = Some("Preview stopped.".into());
+                        self.stretch_feedback.error = false;
+                    }
+                    stretch::Action::Help => self.show_stretch_help = true,
                     stretch::Action::Details => self.show_import_details = true,
                     stretch::Action::None => {}
                 },
@@ -2151,6 +2343,17 @@ impl MixJamApp {
                     self.show_stretch = false;
                     self.error(error);
                 }
+            }
+            if self.stretch_settings() != settings {
+                self.stretch_feedback.saved = None;
+                self.stretch_feedback.message = None;
+                self.stretch_feedback.error = false;
+            }
+            if !self.show_stretch {
+                self.close_stretch_request();
+            }
+            if self.session.is_stretching() {
+                ctx.request_repaint_after(Duration::from_millis(16));
             }
         }
         if (self.session.has_recorded_take() && !self.session.is_recording())
@@ -2194,12 +2397,141 @@ impl MixJamApp {
         )
     }
 
-    fn stretched_pcm(&self) -> Result<Pcm, String> {
-        self.session.stretched_pcm(
-            self.source_id(),
-            self.stretch_source_bpm,
-            self.stretch_target_bpm,
-        )
+    fn stretch_settings(&self) -> Option<StretchSettings> {
+        Some(StretchSettings {
+            source_id: self.source_id()?,
+            source_bpm: self.stretch_source_bpm,
+            target_bpm: self.stretch_target_bpm,
+        })
+    }
+
+    fn stretch_is_listening(&self) -> bool {
+        self.stretch_feedback
+            .audition
+            .as_ref()
+            .is_some_and(|heard| {
+                self.session.is_previewing()
+                    && heard.preview_revision == self.session.preview_revision()
+            })
+    }
+
+    fn start_stretch(&mut self, purpose: StretchPurpose) {
+        let Some(settings) = self.stretch_settings() else {
+            return;
+        };
+        match self.session.start_stretch(settings) {
+            Ok(()) => {
+                self.stretch_feedback.pending = Some(StretchRequest {
+                    settings,
+                    purpose,
+                    name: self.source_name(),
+                    catalog_revision: self.session.catalog_revision(),
+                    preview_revision: self.session.preview_revision(),
+                });
+                self.stretch_feedback.message = Some("Processing sound...".into());
+                self.stretch_feedback.error = false;
+                self.stretch_feedback.saved = None;
+            }
+            Err(error) => {
+                self.stretch_feedback.message = Some(format!("Cannot process the sound: {error}"));
+                self.stretch_feedback.error = true;
+                self.error(error);
+            }
+        }
+    }
+
+    fn poll_stretch(&mut self) {
+        let Some((settings, result)) = self.session.take_stretch_result() else {
+            return;
+        };
+        let Some(request) = self.stretch_feedback.pending.take() else {
+            return;
+        };
+        if !self.show_stretch
+            || settings != request.settings
+            || Some(settings) != self.stretch_settings()
+            || request.catalog_revision != self.session.catalog_revision()
+        {
+            self.stretch_feedback.message =
+                Some("Settings changed. Process the sound again.".into());
+            self.stretch_feedback.error = false;
+            return;
+        }
+        if matches!(request.purpose, StretchPurpose::Listen)
+            && request.preview_revision != self.session.preview_revision()
+        {
+            self.stretch_feedback.message =
+                Some("Preview cancelled by another playback action.".into());
+            self.stretch_feedback.error = false;
+            return;
+        }
+        match result {
+            Ok(pcm) => match request.purpose {
+                StretchPurpose::Listen => {
+                    self.play_pcm(pcm, "Listening to the stretched sound.");
+                    self.stretch_feedback.error = self.status_error;
+                    self.stretch_feedback.message =
+                        Some(format!("Cannot play the preview: {}", self.status));
+                    if !self.status_error {
+                        self.stretch_feedback.message = None;
+                        self.stretch_feedback.audition = Some(StretchAudition {
+                            settings,
+                            name: request.name,
+                            preview_revision: self.session.preview_revision(),
+                        });
+                    }
+                }
+                StretchPurpose::Save => {
+                    self.stretch_feedback.message =
+                        Some("Choose where to save the stretched sound.".into());
+                    self.ask_path(FileRequest::SaveSound {
+                        pcm,
+                        name: format!("{} - stretch", request.name),
+                        group: "Wave",
+                        source_bpm: settings.target_bpm,
+                        stretch: Some(settings),
+                    });
+                }
+            },
+            Err(error) => {
+                self.stretch_feedback.message = Some(format!("Cannot process the sound: {error}"));
+                self.stretch_feedback.error = true;
+                self.error(error);
+            }
+        }
+    }
+
+    fn close_stretch_request(&mut self) {
+        if self.stretch_feedback.pending.take().is_some() {
+            self.stretch_feedback.message = Some("Processing request cancelled.".into());
+            self.stretch_feedback.error = false;
+        }
+    }
+}
+
+fn stretch_help(ui: &mut egui::Ui) {
+    for text in [
+        "Original BPM describes the recording. Target BPM sets the result to 120, 140, 160, or 180 BPM.",
+        "A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.",
+        "Click Original BPM for exact entry. Drag a knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes.",
+        "Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.",
+        "Listen changes to Stop listening during preview. The amber lamp marks processing or playback; the green lamp confirms a saved sound.",
+        "Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.",
+    ] {
+        ui.add(egui::Label::new(text).wrap());
+    }
+}
+
+fn effects_help(ui: &mut egui::Ui) {
+    for text in [
+        "Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.",
+        "Filter, Echo, and Robotize each have an on/off switch and lamp. Turning a section off discards its settings. Turning it on restores that section's defaults.",
+        "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.",
+        "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
+        "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are new algorithms; original-product audio equivalence is not established.",
+        "The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.",
+    ] {
+        ui.add(egui::Label::new(text).wrap());
     }
 }
 
