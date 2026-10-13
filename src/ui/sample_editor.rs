@@ -26,7 +26,7 @@ pub(super) fn show(
     start: &mut u64,
     end: &mut u64,
     pitch: &mut f64,
-) -> Result<Action, String> {
+) -> Action {
     let mut action = Action::None;
     let response = dialog::tool(
         ctx,
@@ -36,7 +36,6 @@ pub(super) fn show(
         controls::Palette::Granite,
         true,
         |ui| {
-            let scale = 1.0;
             let (bounds, _) = ui.allocate_exact_size(Vec2::new(640.0, 320.0), Sense::hover());
             let at = |x: f32, y: f32| bounds.min + Vec2::new(x, y - 48.0);
             let rect = |x, y, w, h| Rect::from_min_size(at(x, y), Vec2::new(w, h));
@@ -45,23 +44,18 @@ pub(super) fn show(
             controls::inset(&panel, rect(16.0, 96.0, 608.0, 146.0));
             let name = panel.put(
                 rect(32.0, 64.0, 576.0, 26.0),
-                egui::Label::new(
-                    egui::RichText::new(source.name)
-                        .size(13.0 * scale)
-                        .color(CREAM),
-                )
-                .truncate(),
+                egui::Label::new(egui::RichText::new(source.name).size(13.0).color(CREAM))
+                    .truncate(),
             );
             name_control(name.clone(), "Source sound");
             ctx.accesskit_node_builder(name.id, |node| node.set_value(source.name));
             name.on_hover_text(source.name);
-            label(&panel, at(34.0, 126.0), "Start frame", 13.0 * scale);
-            label(&panel, at(342.0, 126.0), "End frame", 13.0 * scale);
+            label(&panel, at(34.0, 126.0), "Start frame", 13.0);
+            label(&panel, at(342.0, 126.0), "End frame", 13.0);
             panel.add_enabled_ui(source.available && source.frames > 0, |ui| {
                 frame_value(
                     ui,
                     rect(128.0, 102.0, 168.0, 48.0),
-                    scale,
                     "Start frame",
                     start,
                     0..=source.frames.saturating_sub(1),
@@ -69,15 +63,14 @@ pub(super) fn show(
                 frame_value(
                     ui,
                     rect(436.0, 102.0, 168.0, 48.0),
-                    scale,
                     "End frame",
                     end,
                     1..=source.frames.max(1),
                 );
-                pitch_rail(ui, rect(34.0, 188.0, 242.0, 36.0), scale, pitch);
-                pitch_value(ui, rect(310.0, 182.0, 112.0, 48.0), scale, pitch);
+                pitch_rail(ui, rect(34.0, 188.0, 242.0, 36.0), pitch);
+                pitch_value(ui, rect(310.0, 182.0, 112.0, 48.0), pitch);
             });
-            label(&panel, at(440.0, 206.0), "Pitch (semitones)", 13.0 * scale);
+            label(&panel, at(440.0, 206.0), "Pitch (semitones)", 13.0);
             let reason = if source.missing {
                 Some(
                     "This sound is missing and plays silence. Open Import details to inspect or resolve it.",
@@ -96,7 +89,6 @@ pub(super) fn show(
                 &mut panel,
                 rect(32.0, 266.0, 224.0, 36.0),
                 "Listen edit",
-                scale,
                 false,
                 ready,
             );
@@ -113,7 +105,6 @@ pub(super) fn show(
                 &mut panel,
                 rect(284.0, 266.0, 324.0, 36.0),
                 "Save edited sound",
-                scale,
                 true,
                 ready,
             );
@@ -143,8 +134,8 @@ pub(super) fn show(
             controls::well(&panel, rect(8.0, 326.0, 624.0, 36.0));
             panel.painter().rect_stroke(
                 rect(8.0, 326.0, 624.0, 36.0),
-                4.0 * scale,
-                Stroke::new(1.0 * scale, if reason.is_some() { CORAL } else { EDGE }),
+                4.0,
+                Stroke::new(1.0_f32, if reason.is_some() { CORAL } else { EDGE }),
                 egui::StrokeKind::Inside,
             );
             let width = if source.missing { 460.0 } else { 592.0 };
@@ -152,7 +143,7 @@ pub(super) fn show(
                 rect(24.0, 326.0, width, 36.0),
                 egui::Label::new(
                     egui::RichText::new(&summary)
-                        .size(12.5 * scale)
+                        .size(12.5)
                         .color(if reason.is_some() { CORAL } else { CREAM }),
                 )
                 .wrap(),
@@ -168,7 +159,6 @@ pub(super) fn show(
                     &mut panel,
                     rect(492.0, 330.0, 128.0, 28.0),
                     "Import details",
-                    scale,
                     false,
                     true,
                 )
@@ -181,7 +171,7 @@ pub(super) fn show(
     if response.help {
         action = Action::Help;
     }
-    Ok(action)
+    action
 }
 fn label(ui: &egui::Ui, at: Pos2, value: &str, size: f32) {
     ui.painter().text(
@@ -196,7 +186,6 @@ fn action_button(
     ui: &mut egui::Ui,
     rect: Rect,
     name: &str,
-    _scale: f32,
     primary: bool,
     enabled: bool,
 ) -> Response {
@@ -213,7 +202,7 @@ fn action_button(
         enabled,
     )
 }
-fn stepper(ui: &mut egui::Ui, rect: Rect, name: &str, up: bool, _scale: f32) -> Response {
+fn stepper(ui: &mut egui::Ui, rect: Rect, name: &str, up: bool) -> Response {
     let response = controls::button_at(
         ui,
         rect,
@@ -227,15 +216,13 @@ fn stepper(ui: &mut egui::Ui, rect: Rect, name: &str, up: bool, _scale: f32) -> 
 fn frame_value(
     ui: &mut egui::Ui,
     rect: Rect,
-    scale: f32,
     name: &str,
     value: &mut u64,
     range: std::ops::RangeInclusive<u64>,
-) -> bool {
+) {
     controls::well(ui, rect);
-    let mut editing = false;
-    ui.scope_builder(egui::UiBuilder::new().id(name).max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0)*scale,rect.max-Vec2::new(28.0,10.0)*scale)).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
-        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let response=ui.add(egui::DragValue::new(value).range(range.clone()).clamp_existing_to_range(false).speed(100).fixed_decimals(0).update_while_editing(false));if response.changed(){*value=(*value).clamp(*range.start(),*range.end());}editing=response.has_focus();
+    ui.scope_builder(egui::UiBuilder::new().id(name).max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0),rect.max-Vec2::new(28.0,10.0))).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
+        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let response=ui.add(egui::DragValue::new(value).range(range.clone()).clamp_existing_to_range(false).speed(100).fixed_decimals(0).update_while_editing(false));if response.changed(){*value=(*value).clamp(*range.start(),*range.end());}
         name_control(response,name).on_hover_text(if name=="Start frame"{"First included source frame (zero-based). Click for exact entry; Enter applies. Use the adjacent buttons for one-frame steps (Shift: 100)."} else {"First excluded source frame. Set this to the source frame count to include the last frame. Click for exact entry; Enter applies. Use the adjacent buttons for one-frame steps (Shift: 100)."});
     });
     for (up, y) in [(true, 0.0), (false, 24.0)] {
@@ -243,12 +230,11 @@ fn frame_value(
         let button = stepper(
             ui,
             Rect::from_min_size(
-                Pos2::new(rect.right() - 25.0 * scale, rect.top() + y * scale),
-                Vec2::new(24.0, 24.0) * scale,
+                Pos2::new(rect.right() - 25.0, rect.top() + y),
+                Vec2::new(24.0, 24.0),
             ),
             &label,
             up,
-            scale,
         );
         if button
             .on_hover_text("Change one frame. Hold Shift to change 100 frames.")
@@ -267,13 +253,11 @@ fn frame_value(
             *value = (*value).clamp(*range.start(), *range.end());
         }
     }
-    editing
 }
-fn pitch_value(ui: &mut egui::Ui, rect: Rect, scale: f32, pitch: &mut f64) -> bool {
+fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
     controls::well(ui, rect);
-    let mut editing = false;
-    ui.scope_builder(egui::UiBuilder::new().id("pitch-value").max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0)*scale,rect.max-Vec2::new(28.0,10.0)*scale)).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
-        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let id=ui.next_auto_id();let context=ui.ctx().clone();let response=ui.add(egui::DragValue::new(pitch).range(-24.0..=24.0).clamp_existing_to_range(false).speed(0.1).custom_formatter(move|value,_|if context.memory(|memory|memory.has_focus(id)){format!("{value}")}else{format!("{value:.1}")}).update_while_editing(false));if response.changed(){*pitch=pitch.clamp(-24.0,24.0);}editing=response.has_focus();name_control(response,"Pitch value").on_hover_text("Enter semitones from -24 to +24. Pitch changes playback speed and output duration together. Zero keeps the source pitch.");
+    ui.scope_builder(egui::UiBuilder::new().id("pitch-value").max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0),rect.max-Vec2::new(28.0,10.0))).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
+        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let id=ui.next_auto_id();let context=ui.ctx().clone();let response=ui.add(egui::DragValue::new(pitch).range(-24.0..=24.0).clamp_existing_to_range(false).speed(0.1).custom_formatter(move|value,_|if context.memory(|memory|memory.has_focus(id)){format!("{value}")}else{format!("{value:.1}")}).update_while_editing(false));if response.changed(){*pitch=pitch.clamp(-24.0,24.0);}name_control(response,"Pitch value").on_hover_text("Enter semitones from -24 to +24. Pitch changes playback speed and output duration together. Zero keeps the source pitch.");
     });
     for (up, y) in [(true, 0.0), (false, 24.0)] {
         let name = if up {
@@ -284,12 +268,11 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, scale: f32, pitch: &mut f64) -> bo
         let button = stepper(
             ui,
             Rect::from_min_size(
-                Pos2::new(rect.right() - 25.0 * scale, rect.top() + y * scale),
-                Vec2::new(24.0, 24.0) * scale,
+                Pos2::new(rect.right() - 25.0, rect.top() + y),
+                Vec2::new(24.0, 24.0),
             ),
             name,
             up,
-            scale,
         );
         if button
             .on_hover_text("Change 0.1 semitone. Hold Shift for one semitone.")
@@ -304,9 +287,8 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, scale: f32, pitch: &mut f64) -> bo
             *pitch = pitch.clamp(-24.0, 24.0);
         }
     }
-    editing
 }
-fn pitch_rail(ui: &mut egui::Ui, rect: Rect, _scale: f32, pitch: &mut f64) {
+fn pitch_rail(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
     ui.scope_builder(egui::UiBuilder::new().id("pitch-rail").max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)),|ui|{
         ui.spacing_mut().slider_width=rect.width();
         controls::slider(ui,pitch,-24.0..=24.0,"Pitch (semitones)")

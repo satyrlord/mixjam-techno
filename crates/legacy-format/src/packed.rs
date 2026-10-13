@@ -5,7 +5,6 @@
 
 use std::fmt;
 
-pub const SAMPLE_RATE: u32 = 44_100;
 pub const MAX_DECODED_SAMPLES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

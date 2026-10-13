@@ -88,6 +88,8 @@ impl EffectsState {
         {
             return Err("Effect volume or distortion is outside its permitted range.".into());
         }
+        // The upper bound is above every usable cutoff: `process` limits the
+        // cutoff to 0.45 of the sample rate, which is at most 172.8 kHz.
         if let Some(f) = &self.filter
             && (!f.cutoff_hz.is_finite()
                 || !(20.0..=180000.0).contains(&f.cutoff_hz)

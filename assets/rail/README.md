@@ -43,7 +43,6 @@ license status. This adaptation does not assign a new license to donor work.
 | `edit` | New pencil path in the donor family |
 | `stretch` | New outward arrows and sample boundaries in the donor family |
 | `record` | New microphone path in the donor family |
-| `mix` | New crossing channel paths in the donor family |
 | `help` | New ringed question mark in the donor family, drawn with Pillow at eight times the size and reduced once |
 
 ## Update and check

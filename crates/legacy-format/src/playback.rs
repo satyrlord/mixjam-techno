@@ -4,10 +4,7 @@ use crate::{
     packed::{self, HeaderKind},
     source::SampleSource,
 };
-use std::{
-    fmt, fs,
-    path::{Path, PathBuf},
-};
+use std::{fmt, path::PathBuf};
 
 #[derive(Debug)]
 pub struct PlaybackError(pub String);
@@ -81,16 +78,9 @@ pub fn wave_duration_bytes(bytes: &[u8]) -> Result<i32, PlaybackError> {
 
 #[derive(Debug)]
 pub struct FileSample {
-    path: PathBuf,
     pcm: Vec<i16>,
 }
 impl FileSample {
-    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, PlaybackError> {
-        let path = path.as_ref();
-        let bytes = fs::read(path)
-            .map_err(|e| PlaybackError(format!("Cannot read sample {}: {e}", path.display())))?;
-        Self::from_bytes(path.to_path_buf(), &bytes)
-    }
     pub fn from_bytes(path: PathBuf, bytes: &[u8]) -> Result<Self, PlaybackError> {
         if bytes.starts_with(b"RIFF") {
             return Self::from_wave(path, bytes);
@@ -119,10 +109,7 @@ impl FileSample {
             ));
         }
         let source = SampleSource::from_packed(bytes)?.with_file_loader_initial_sample();
-        Ok(Self {
-            path,
-            pcm: source.pcm,
-        })
+        Ok(Self { pcm: source.pcm })
     }
     /// Original canonical PCM WAV path: first source lane, half gain, and
     /// nearest sample hold at the admitted 11.025/22.05/44.1 kHz rates.
@@ -159,11 +146,6 @@ impl FileSample {
         }
         let physical = i64::try_from(bytes.len())
             .map_err(|_| PlaybackError("WAV file exceeds the native signed byte range".into()))?;
-        if physical > 128 * 1024 * 1024 {
-            return Err(PlaybackError(
-                "WAV source exceeds the 128 MiB playback bound".into(),
-            ));
-        }
         let riff = i64::from(u32::from_le_bytes(bytes[4..8].try_into().unwrap()));
         let data = i64::from(u32::from_le_bytes(bytes[40..44].try_into().unwrap()));
         let mut effective = physical;
@@ -208,19 +190,11 @@ impl FileSample {
             };
             pcm.extend(std::iter::repeat_n(sample, repeat));
         }
-        Ok(Self { path, pcm })
-    }
-    pub fn path(&self) -> &Path {
-        &self.path
+        Ok(Self { pcm })
     }
     /// Expose the recovered file-loader output for the shared editor adapter.
     pub fn samples(&self) -> &[i16] {
         &self.pcm
-    }
-    /// Cached full-source contribution length, including packed initial/final runs.
-    /// Scheduled ends and the original EOF release rule can stop playback sooner.
-    pub fn frame_count(&self) -> usize {
-        self.pcm.len()
     }
 }
 

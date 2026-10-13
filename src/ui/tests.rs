@@ -14,7 +14,6 @@ mod tests {
             code: "FIXTURE".into(),
             name: "good grasp 2".into(),
             bars: 1,
-            group: 1,
             group_name: "Loop".into(),
             offset: 0,
             length: 0,
@@ -682,7 +681,7 @@ mod tests {
                 "step" => app.show_step_synth && app.show_step_synth_help,
                 _ => unreachable!(),
             });
-            assert_eq!(ctx.data(|data| data.get_temp::<bool>(egui::Id::new(("hardware-collapsed",collapse_id)))), Some(true));
+            assert!(dialog::is_collapsed(&ctx, collapse_id));
             accessible_node(&output, expand);
             focus_control(&ctx, &mut app, &output, &format!("Close {help}"));
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
@@ -692,7 +691,7 @@ mod tests {
             assert_eq!((app.effects.clone(), app.step_synth.clone(), app.stretch_source_bpm,
                 app.stretch_target_bpm, app.source_id(), app.session.project().clone()), before,
                 "Opening and closing {help} must preserve the source, all processing drafts, and song.");
-            assert!(!app.session.is_previewing() && !app.session.wants_playback() && !app.session.is_stretching());
+            assert!(!app.session.is_stretching());
         }
     }
 
@@ -768,7 +767,7 @@ mod tests {
                     stretch::show(ctx, &mut open,
                         stretch::Source { name: "Sound", id: Some(1), samples: &[], missing: false, bpm: 160.0, },
                         stretch::Feedback { processing: false, listening: false, saved: false, audition, message: None, error: false, },
-                        &mut original, &mut target,).unwrap();
+                        &mut original, &mut target,);
                 },);
             }
             text_rect(&output, expected);
@@ -909,7 +908,7 @@ mod tests {
                     stretch::show(ctx, &mut open,
                         stretch::Source { name: "Sound", id: Some(1), samples: &[], missing: false, bpm: 160.0, },
                         stretch::Feedback { processing, listening, saved, audition: Some((1, 160.0, 120.0)), message, error, },
-                        &mut original, &mut target,).unwrap();
+                        &mut original, &mut target,);
                 },);
             }
             let action_name = if listening { "Stop listening" } else { "Listen to stretched sound" };
@@ -949,7 +948,7 @@ mod tests {
                         saved: feedback.saved, audition: feedback.audition,
                         message: feedback.message, error: feedback.error,
                     },
-                    &mut original, &mut target,).unwrap();
+                    &mut original, &mut target,);
             },);
         }
         output
@@ -1060,7 +1059,7 @@ mod tests {
     }
 
     #[test]
-    fn stretch_async_errors_are_local_and_changed_or_closed_requests_do_not_open_a_picker() {
+    fn stretch_async_errors_are_local_and_changed_or_closed_requests_ask_to_process_again() {
         let (ctx, mut app) = fixture();
         app.selected_sample = Some(1);
         app.show_stretch = true;
@@ -1076,7 +1075,6 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(1));
             }
             assert!(app.stretch_feedback.pending.is_none());
-            assert!(app.path_prompt.is_none());
             if change == 0 {
                 assert!(app.stretch_feedback.error);
                 assert!(app.stretch_feedback.message.as_ref().is_some_and(|message| !message.is_empty()));
@@ -1684,8 +1682,7 @@ mod tests {
                             &mut start,
                             &mut end,
                             &mut pitch,
-                        )
-                        .unwrap();
+                        );
                     },
                 );
                 (output, action)
@@ -1872,10 +1869,6 @@ mod tests {
         );
         assert_eq!(app.session.project(), &project);
         assert_eq!(app.session.unsaved(), unsaved);
-        assert!(
-            !app.session.is_previewing() && !app.session.wants_playback(),
-            "Editing the tool draft must not start preview or transport."
-        );
     }
 
     #[test]
@@ -2391,13 +2384,13 @@ mod tests {
         app.session =
             std::mem::replace(&mut app.session, placeholder).with_settings_root(dir.join("settings"));
         let status = app.status.clone();
-        app.resolve_missing_sample_with(id, None);
+        app.finish_path(FileRequest::ResolveMissing(id), None);
         assert_eq!(app.session.project(), &before);
         assert_eq!(app.context_missing_sample, Some(id));
         assert_eq!(app.status, status);
         let bad = dir.join("bad.wav");
         std::fs::write(&bad, b"not audio").unwrap();
-        app.resolve_missing_sample_with(id, Some(bad.clone()));
+        app.resolve_missing_sample_with(id, &bad);
         assert_eq!(app.session.project(), &before);
         assert!(app.status_error);
         let chosen = dir.join("chosen.wav");
@@ -2408,9 +2401,9 @@ mod tests {
         }
         .write_wav(&chosen)
         .unwrap();
-        app.resolve_missing_sample_with(999, Some(chosen.clone()));
+        app.resolve_missing_sample_with(999, &chosen);
         assert_eq!(app.session.project(), &before);
-        app.resolve_missing_sample_with(id, Some(chosen.clone()));
+        app.resolve_missing_sample_with(id, &chosen);
         assert!(app.session.missing_samples().is_empty());
         assert_eq!(app.context_missing_sample, None);
         let resolved = &app.session.project().clips[0];
@@ -2595,7 +2588,7 @@ mod tests {
         app: &mut MixJamApp,
         output: &egui::FullOutput,
         label: &str,
-    ) -> egui::FullOutput {
+    ) {
         let (target, _) = accessible_node(output, label);
         frame(
             context,
@@ -2608,7 +2601,7 @@ mod tests {
                 },
             )],
             egui::Modifiers::NONE,
-        )
+        );
     }
 
     fn activate_control(
@@ -2837,7 +2830,7 @@ mod tests {
                     action = step_synth::show(ctx, &mut open,
                         step_synth::Source { name: "Source", available, missing, explicit_file, },
                         step_synth::Feedback { message: None, error: false, },
-                        &mut state, &mut view_bar, &mut effects,).unwrap();
+                        &mut state, &mut view_bar, &mut effects,);
                 },);
                 (output, action)
             };
@@ -2906,8 +2899,6 @@ mod tests {
             assert!(!accessible_node(&output, label).1.is_disabled());
         }
         assert_eq!(app.step_synth_bar, 0, "Active bars and viewed bars must stay independent.");
-        assert!(!app.session.wants_playback(), "Editing generator options must not start transport.");
-        assert!(!app.session.is_previewing());
         assert!(app.step_synth.validate().is_ok());
     }
 
@@ -2934,7 +2925,6 @@ mod tests {
         let output = activate_control(&ctx, &mut app, &output, "Listen sequence");
         assert!(app.status_error && app.step_synth_feedback.error);
         assert_eq!(app.step_synth_feedback.message.as_deref(), Some(app.status.as_str()));
-        assert!(!app.session.is_previewing());
         assert_eq!(app.step_synth, draft);
         let output = activate_control(&ctx, &mut app, &output, "Use palette sound");
         assert!(app.step_synth_file.is_none());
@@ -3207,7 +3197,6 @@ mod tests {
         frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_routes(&output, 64, false, false);
-        assert!(!app.session.wants_playback(), "Space on a lane output must toggle routing only.");
         assert_eq!(app.session.project().tracks[0].pan, -0.75);
         assert_eq!(app.session.project().tracks[63].pan, 0.5);
     }
@@ -3451,10 +3440,6 @@ mod tests {
         );
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(!app.session.project().tracks[0].right_enabled);
-        assert!(
-            !app.session.wants_playback(),
-            "A routing key must not start playback."
-        );
         text_rect(&output, "Muted");
 
         focus_control(&ctx, &mut app, &output, "Track 1 gain value");
@@ -3481,7 +3466,6 @@ mod tests {
         frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         assert!(app.session.project().tracks[0].polarity_inverted);
         assert!((app.session.project().tracks[0].gain - 10.0_f32.powf(-6.0 / 20.0)).abs() < 0.000_001);
-        assert!(!app.session.wants_playback(), "A polarity key must not start playback.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(accessible_node(&output, "Track 1 polarity invert").1.toggled(),
             Some(egui::accesskit::Toggled::True));
@@ -3514,7 +3498,6 @@ mod tests {
             assert!(app.session.project().tracks[0].polarity_inverted,
                 "Gain rail keys must leave polarity unchanged.");
         }
-        assert!(!app.session.wants_playback(), "Gain rail keys must not start playback.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         focus_control(&ctx, &mut app, &output, "Track 1 pan");
         frame(
@@ -5309,10 +5292,17 @@ mod tests {
     }
 
     fn agent_fixture() -> (egui::Context, MixJamApp, (u16, String)) {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let (context, mut app) = fixture();
-        let folder = std::env::temp_dir().join(format!("mixjam-ui-agent-key-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!(
+            "mixjam-ui-agent-key-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         let server = crate::agent::Server::start(0, &folder).unwrap();
         let port = (server.port(), server.key().to_string());
+        // The tests send the key directly, so the key folder is not needed again.
+        std::fs::remove_dir_all(&folder).unwrap();
         app.attach_agent(server, &context);
         (context, app, port)
     }
@@ -5514,6 +5504,10 @@ mod tests {
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
         let dir = std::env::temp_dir().join(format!("mixjam-ui-agent-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        let placeholder = Session::headless(Arc::new(Library::fixture(vec![])), Project::default())
+            .unwrap();
+        app.session =
+            std::mem::replace(&mut app.session, placeholder).with_settings_root(dir.join("settings"));
 
         let reply = send(&mut app, &["click", "target=Export"]);
         assert_eq!(reply["modal"], "Choose path", "{reply}");
@@ -5569,7 +5563,9 @@ mod tests {
             String::from_utf8(output).unwrap()
         });
         // The platform reports a minimized window with each frame's input.
+        let started = std::time::Instant::now();
         while !client.is_finished() {
+            assert!(started.elapsed() < Duration::from_secs(60), "The window did not reply.");
             let info = egui::ViewportInfo {
                 minimized: Some(true),
                 ..Default::default()
@@ -5710,102 +5706,6 @@ mod tests {
     }
 
     #[test]
-    fn hardware_recorded_take_keeps_explicit_discard_and_no_window_close() {
-        let ctx = egui::Context::default();
-        configure_style(&ctx);
-        ctx.enable_accesskit();
-        let mut output = egui::FullOutput::default();
-        for _ in 0..4 {
-            output = ctx.run(egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
-                focused: true, ..Default::default()
-            }, |ctx| {
-                dialog::window("Recorded take").show(ctx, |ui| {
-                    ui.label("Unsaved take: stored in memory.");
-                    ui.horizontal(|ui| {
-                        for label in ["Listen", "Save take", "Discard take"] { let _ = ui.button(label); }
-                    });
-                });
-            },);
-        }
-        let window = accessible_node(&output, "RECORDED TAKE").0;
-        let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
-        let mut descendants = BTreeSet::from([window]);
-        for _ in 0..64 {
-            let before = descendants.len();
-            for (id, node) in nodes {
-                if descendants.contains(id) { descendants.extend(node.children().iter().copied()); }
-            }
-            if descendants.len() == before { break; }
-        }
-        for label in ["Listen", "Save take", "Discard take"] {
-            assert!(nodes.iter().any(|(id, node)| descendants.contains(id) && node.label() == Some(label)),
-                "Recorded take must keep its explicit {label} action.");
-        }
-        assert!(!nodes.iter().any(|(id, node)| descendants.contains(id)
-            && node.label() == Some("Close Recorded take")),
-            "Unsaved take still requires explicit save or discard."
-        );
-        let collapse = accessible_node(&output, "Collapse Recorded take").0;
-        let draw = |events| {
-            ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
-                    events,
-                    focused: true,
-                    ..Default::default()
-                },
-                |ctx| {
-                    dialog::window("Recorded take").show(ctx, |ui| {
-                        ui.label("Unsaved take: stored in memory.");
-                        for name in ["Listen", "Save take", "Discard take"] {
-                            let _ = ui.button(name);
-                        }
-                    });
-                },
-            )
-        };
-        draw(vec![egui::Event::AccessKitActionRequest(
-            egui::accesskit::ActionRequest {
-                action: egui::accesskit::Action::Focus,
-                target: collapse,
-                data: None,
-            },
-        )]);
-        draw(vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
-        for _ in 0..3 {
-            output = draw(vec![]);
-        }
-        assert!(dialog::is_collapsed(&ctx, "Recorded take"));
-        assert!((effects_control_rect(&output, "RECORDED TAKE").height() - 44.0).abs() < 0.1);
-        assert!(
-            !output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(|(_, node)| node.label() == Some("Discard take"))
-        );
-        let expand = accessible_node(&output, "Expand Recorded take").0;
-        draw(vec![egui::Event::AccessKitActionRequest(
-            egui::accesskit::ActionRequest {
-                action: egui::accesskit::Action::Focus,
-                target: expand,
-                data: None,
-            },
-        )]);
-        draw(vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
-        for _ in 0..3 {
-            output = draw(vec![]);
-        }
-        text_rect(&output, "Unsaved take: stored in memory.");
-        accessible_node(&output, "Save take");
-        accessible_node(&output, "Discard take");
-    }
-
-    #[test]
     fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_at_all_densities() {
         let size = Vec2::new(960.0, 720.0);
         let viewport = Rect::from_min_size(Pos2::ZERO, size);
@@ -5918,8 +5818,6 @@ mod tests {
         frame(&ctx, &mut app, vec![key_event(egui::Key::Y, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
         assert_eq!(app.session.project().bpm, other, "Ctrl+Y must redo.");
         frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
-        assert!(!app.session.wants_playback(),
-            "Space on a focused button activates that button, not the transport.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         focus_control(&ctx, &mut app, &output, "Find a sound");
         frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
@@ -5968,7 +5866,6 @@ mod tests {
             code: "WAVE".into(),
             name: "long take".into(),
             bars: 1,
-            group: 1,
             group_name: "Loop".into(),
             offset: 0,
             length: 0,

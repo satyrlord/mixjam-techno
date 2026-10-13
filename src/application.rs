@@ -4,9 +4,8 @@ pub use crate::{
     audio::Pcm,
     effects::EffectsState,
     engine::{
-        Clip, MAX_MIXER_GAIN, MAX_MIXER_GAIN_DB, MissingReference, MissingSample, Project,
-        SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db,
-        db_to_amplitude,
+        Clip, MAX_MIXER_GAIN_DB, MissingReference, MissingSample, Project, SUPPORTED_BPMS,
+        SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
     },
     library::Sample,
     products::Product,
@@ -39,7 +38,7 @@ impl<'a> LibraryView<'a> {
     pub fn wav_root(self) -> Option<&'a Path> {
         self.library.wav_root()
     }
-    pub fn folder_tempos(self) -> &'a [(std::path::PathBuf, f64, usize)] {
+    pub fn folder_tempos(self) -> &'a [(PathBuf, f64, usize)] {
         self.library.folder_tempos()
     }
     pub fn source_root(self, product: Product) -> Option<&'a Path> {
@@ -460,12 +459,7 @@ impl Session {
                     crate::engine::ImportedSample {
                         id: *id,
                         name: source.name.clone(),
-                        group_name: source
-                            .metadata
-                            .get("group_name")
-                            .filter(|name| !name.trim().is_empty())
-                            .cloned()
-                            .unwrap_or_else(|| "Resolved samples".into()),
+                        group_name: source.group_name().unwrap_or("Resolved samples").into(),
                         path: path.clone(),
                         source_bpm: source.source_bpm,
                         source_sample_rate: Some(source.sample_rate),
@@ -608,12 +602,7 @@ impl Session {
             let mut imported = crate::engine::ImportedSample {
                 id: new_id,
                 name: missing.name.clone(),
-                group_name: missing
-                    .metadata
-                    .get("group_name")
-                    .filter(|name| !name.trim().is_empty())
-                    .cloned()
-                    .unwrap_or_else(|| "Resolved samples".into()),
+                group_name: missing.group_name().unwrap_or("Resolved samples").into(),
                 path: path.clone(),
                 source_bpm: missing.source_bpm,
                 source_sample_rate: None,
@@ -1092,19 +1081,6 @@ impl Session {
         library.remove_product(product)?;
         self.commit_library(library)
     }
-    /// Scan a folder on this thread and adopt it. Headless callers and tests
-    /// use this; the GUI starts a background scan instead.
-    pub fn select_wave_folder(&mut self, root: &Path, source_bpm: f64) -> Result<(), String> {
-        if self.is_recording() {
-            return Err("Stop recording before you change the sample folder.".into());
-        }
-        let library = Library::open_wav_folder(root, source_bpm)?;
-        let warnings = self.adopt_wave_folder(library, root, source_bpm)?;
-        if !warnings.is_empty() {
-            self.error(warnings.join(" "));
-        }
-        Ok(())
-    }
 
     /// Let these products' providers replace the same products found in a
     /// sample folder. Other providers only fill products the folder lacks.
@@ -1391,7 +1367,7 @@ impl Session {
     }
     pub fn source_bpm(&self, id: Option<u32>) -> f64 {
         id.and_then(|id| self.library.sample_by_id(id))
-            .map_or(140.0, |sample| sample.source_bpm)
+            .map_or(crate::engine::SOURCE_BPM, |sample| sample.source_bpm)
     }
     pub fn processed_pcm(&self, id: Option<u32>, effects: &EffectsState) -> Result<Pcm, String> {
         crate::effects::process(&self.source_pcm(id)?, effects, self.source_bpm(id))
@@ -1492,12 +1468,13 @@ impl Session {
     }
     pub fn load_pattern(&self, path: &Path) -> Result<StepSynthState, String> {
         use std::io::Read;
+        const MAX_BYTES: u64 = 1024 * 1024;
         let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
         let mut bytes = Vec::new();
-        file.take(1_048_577)
+        file.take(MAX_BYTES + 1)
             .read_to_end(&mut bytes)
             .map_err(|error| error.to_string())?;
-        if bytes.len() > 1_048_576 {
+        if bytes.len() as u64 > MAX_BYTES {
             return Err("The pattern file is too large.".into());
         }
         let mut state: StepSynthState =
@@ -1898,7 +1875,6 @@ mod tests {
             code: "FIXTURE".into(),
             name: "fixture".into(),
             bars: 1,
-            group: 1,
             group_name: "Loop".into(),
             offset: 0,
             length: 0,
@@ -2412,7 +2388,6 @@ mod tests {
             code: "FIXTURE".into(),
             name: "good grasp 2".into(),
             bars: 1,
-            group: 1,
             group_name: "Loop".into(),
             offset: 0,
             length: 0,
@@ -2725,8 +2700,8 @@ mod tests {
         let revision = app.revision;
         let unsaved = app.unsaved;
 
-        // An empty path cannot be scanned. The recording guard must run first.
-        let error = app.select_wave_folder(Path::new(""), 140.0).unwrap_err();
+        // The recording guard must run before a scan of any path starts.
+        let error = app.start_wave_scan(Path::new(""), 140.0).unwrap_err();
 
         assert_eq!(error, "Stop recording before you change the sample folder.");
         assert_eq!(*app.editor.project(), project);

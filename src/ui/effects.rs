@@ -27,7 +27,7 @@ pub(super) fn show(
     source: Source<'_>,
     feedback: Feedback<'_>,
     state: &mut EffectsState,
-) -> Result<Action, String> {
+) -> Action {
     let mut action = Action::None;
     let response = dialog::tool(
         ctx,
@@ -37,7 +37,6 @@ pub(super) fn show(
         controls::Palette::Red,
         true,
         |ui| {
-            let scale = 1.0;
             let (bounds, _) = ui.allocate_exact_size(Vec2::new(640.0, 400.0), Sense::hover());
             let point = |x: f32, y: f32| bounds.min + Vec2::new(x, y - 48.0);
             let rect = |x, y, w, h| Rect::from_min_size(point(x, y), Vec2::new(w, h));
@@ -62,7 +61,7 @@ pub(super) fn show(
             }
             panel.scope(|ui| {
                 let text = egui::RichText::new(source.name)
-                    .font(FontId::proportional(13.0 * scale))
+                    .font(FontId::proportional(13.0))
                     .color(CREAM);
                 let label = ui.put(
                     rect(27.0, 49.0, 586.0, 22.0),
@@ -80,7 +79,6 @@ pub(super) fn show(
             if toggle(
                 &mut panel,
                 point(338.0, 89.0),
-                scale,
                 "Filter",
                 &mut filter_enabled,
             ) {
@@ -136,7 +134,6 @@ pub(super) fn show(
                 control(
                     &mut panel,
                     [point(x, 131.0), point(x, 166.0), point(x, 189.0)],
-                    scale,
                     value,
                     Control {
                         name,
@@ -155,13 +152,7 @@ pub(super) fn show(
             }
 
             let mut echo_enabled = state.echo.is_some();
-            if toggle(
-                &mut panel,
-                point(600.0, 89.0),
-                scale,
-                "Echo",
-                &mut echo_enabled,
-            ) {
+            if toggle(&mut panel, point(600.0, 89.0), "Echo", &mut echo_enabled) {
                 state.echo = echo_enabled.then(Default::default);
             }
             let mut echo = state.echo.clone().unwrap_or_default();
@@ -191,7 +182,6 @@ pub(super) fn show(
                 control(
                     &mut panel,
                     [point(x, 131.0), point(x, 166.0), point(x, 189.0)],
-                    scale,
                     value,
                     Control {
                         name,
@@ -213,7 +203,6 @@ pub(super) fn show(
             if toggle(
                 &mut panel,
                 point(246.0, 221.0),
-                scale,
                 "Robotize",
                 &mut robot_enabled,
             ) {
@@ -247,7 +236,6 @@ pub(super) fn show(
                 control(
                     &mut panel,
                     [point(x, 263.0), point(x, 298.0), point(x, 321.0)],
-                    scale,
                     value,
                     Control {
                         name,
@@ -289,7 +277,6 @@ pub(super) fn show(
                 control(
                     &mut panel,
                     [point(x, 263.0), point(x, 298.0), point(x, 321.0)],
-                    scale,
                     value,
                     Control {
                         name,
@@ -309,15 +296,7 @@ pub(super) fn show(
                 (232.0, 177.0, "Save sound", Action::Save, available),
                 (430.0, 165.0, "Reset", Action::Reset, true),
             ] {
-                if action_button(
-                    &mut panel,
-                    rect(x, 350.0, width, 36.0),
-                    text,
-                    enabled,
-                    scale,
-                )
-                .clicked()
-                {
+                if action_button(&mut panel, rect(x, 350.0, width, 36.0), text, enabled).clicked() {
                     action = next;
                 }
             }
@@ -337,7 +316,6 @@ pub(super) fn show(
                 status,
                 feedback.error,
                 source.missing,
-                scale,
             );
             if source.missing
                 && controls::button_at(
@@ -357,9 +335,9 @@ pub(super) fn show(
     if response.help {
         action = Action::Help;
     }
-    Ok(action)
+    action
 }
-fn toggle(ui: &mut egui::Ui, center: Pos2, _scale: f32, name: &str, value: &mut bool) -> bool {
+fn toggle(ui: &mut egui::Ui, center: Pos2, name: &str, value: &mut bool) -> bool {
     let response = controls::toggle_at(
         ui,
         Rect::from_center_size(center, Vec2::new(36.0, 24.0)),
@@ -390,7 +368,6 @@ struct Control<'a> {
 fn control(
     ui: &mut egui::Ui,
     positions: [Pos2; 3],
-    _scale: f32,
     value: &mut f32,
     spec: Control<'_>,
     enabled: bool,
@@ -439,13 +416,7 @@ fn control(
         });
     });
 }
-fn action_button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    text: &str,
-    enabled: bool,
-    _scale: f32,
-) -> Response {
+fn action_button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool) -> Response {
     controls::button_at(
         ui,
         rect,
@@ -465,21 +436,11 @@ fn action_button(
         text
     })
 }
-fn named(response: &Response, kind: egui::WidgetType, text: &str) {
-    response.widget_info(|| egui::WidgetInfo::labeled(kind, response.enabled(), text));
-}
-fn status_footer(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    text: &str,
-    error: bool,
-    missing: bool,
-    scale: f32,
-) {
+fn status_footer(ui: &mut egui::Ui, rect: Rect, text: &str, error: bool, missing: bool) {
     controls::well(ui, rect);
     ui.painter().rect_stroke(
         rect,
-        4.0 * scale,
+        4.0,
         Stroke::new(
             1.0_f32,
             if error {
@@ -493,8 +454,8 @@ fn status_footer(
     let response = ui.interact(rect, ui.id().with("status"), Sense::hover());
     named(&response, egui::WidgetType::Panel, "Effect Studio status");
     let text_rect = Rect::from_min_max(
-        rect.min + Vec2::new(9.0, 6.0) * scale,
-        rect.max - Vec2::new(if missing { 148.0 } else { 9.0 }, 6.0) * scale,
+        rect.min + Vec2::new(9.0, 6.0),
+        rect.max - Vec2::new(if missing { 148.0 } else { 9.0 }, 6.0),
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -519,7 +480,7 @@ fn status_footer(
         let color = if error { CORAL } else { CREAM };
         let mut job = egui::text::LayoutJob::simple(
             text.into(),
-            FontId::proportional(12.5 * scale),
+            FontId::proportional(12.5),
             color,
             ui.available_width(),
         );

@@ -39,7 +39,8 @@ Read
   wait [ms=N | idle=true timeout_ms=N]   idle waits for a scan or export.
 
 Use controls (target is a label from `ui`, or an id such as \"#123\")
-  click target= [window= role= index= double=true right=true pointer=true]
+  click target= [window= role= index= double=true right=true pointer=true
+                         modifiers=]
   set target= value= [window= role= index=]   Slider, number, text, checkbox,
                          radio button, toggle, or combo box.
   key key=Enter [modifiers=[\"ctrl\",\"shift\",\"alt\"]]
@@ -60,10 +61,10 @@ Other
   quit                   Close the window. Unsaved work opens the save modal.
 
 An action replies with the status line, the open modal, and the open windows.
-A modal blocks the controls behind it. The application writes a session key to its data folder. Use the same
-MIXJAM_TECHNO_DATA_DIR for this command as for the application.
-File choices open a Choose path modal
-while an agent is attached: set the Path field, then click Confirm path.";
+A modal blocks the controls behind it. The application writes a session key
+to its data folder. Use the same MIXJAM_TECHNO_DATA_DIR for this command as
+for the application. File choices open a Choose path modal while an agent is
+attached: set the Path field, then click Confirm path.";
 
 /// A scalar that a request can carry in more than one type.
 #[derive(Clone, Debug, Deserialize, PartialEq)]

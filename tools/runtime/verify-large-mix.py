@@ -144,9 +144,8 @@ def main():
             parser.error('--clean would delete a report inside the artifact folder.')
         root.mkdir(parents=True)
     env = os.environ.copy()
-    # Host reference media and REA settings must not reach the copied executable.
-    for name in [key for key in env
-                 if key.startswith('MIXJAM_TECHNO_') or key.startswith('TECHNOREA_')]:
+    # Host reference media and capture settings must not reach the copied executable.
+    for name in [key for key in env if key.startswith('MIXJAM_TECHNO_')]:
         env.pop(name)
     env['MIXJAM_TECHNO_DATA_DIR'] = str(root / 'user-data')
     exe = root / 'MixJam-Techno.exe'
@@ -364,6 +363,7 @@ def main():
                           'real_fixture_failures': report['real_fixture_failures']},
                          indent=2), flush=True)
     return 0 if report['passed'] else 1
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

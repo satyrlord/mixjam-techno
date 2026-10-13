@@ -3,7 +3,7 @@
 //! must contain all sixteen numbered, counted track lists and the exact trailer.
 use crate::{
     compat::chunks::{self, Event, Header, Reference, Timeline, WaveReference},
-    engine::{MAX_TICKS, Project, TICKS_PER_BAR, Track},
+    engine::{MAX_CLIPS, MAX_TICKS, Project, TICKS_PER_BAR, Track},
     library::{Library, decode_1252},
     products::Product,
 };
@@ -116,7 +116,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
             return Err("Invalid track marker.".into());
         }
         let count = reader.u32()? as usize;
-        if count > 100_000 - events.len()
+        if count > MAX_CLIPS - events.len()
             || count > reader.bytes.len().saturating_sub(reader.offset) / 7
         {
             return Err("Invalid clip count.".into());
@@ -431,16 +431,10 @@ mod tests {
         bytes.extend_from_slice(&0u32.to_le_bytes());
         bytes.extend_from_slice(&140u16.to_le_bytes());
         bytes.extend_from_slice(&140u32.to_le_bytes());
-        for text in ["Composer", "Missing sample"] {
-            bytes.extend_from_slice(&((text.len() + 2) as u16).to_le_bytes());
-            bytes.extend_from_slice(text.as_bytes());
-            bytes.extend_from_slice(&[0, 1]);
-        }
+        text(&mut bytes, "Composer");
+        text(&mut bytes, "Missing sample");
         bytes.extend_from_slice(&[0; 74]);
-        let product = "\x54echno \x65Jay 2";
-        bytes.extend_from_slice(&((product.len() + 2) as u16).to_le_bytes());
-        bytes.extend_from_slice(product.as_bytes());
-        bytes.extend_from_slice(&[0, 1]);
+        text(&mut bytes, "\x54echno \x65Jay 2");
         bytes.extend_from_slice(preamble);
         for track in 1..=16 {
             bytes.push(track);
@@ -463,7 +457,7 @@ mod tests {
         preamble.extend_from_slice(&(-129i32).to_le_bytes());
         preamble.extend_from_slice(&9999u16.to_le_bytes());
         let library = Library::empty();
-        let expected = library.describe_missing(crate::products::Product::D2, 174);
+        let expected = library.describe_missing(Product::D2, 174);
         for prefix in [&[][..], preamble.as_slice()] {
             let project = load_bytes(&song_with_missing_sample(prefix), &library).unwrap();
             assert_eq!(project.missing_samples.len(), 1);
@@ -513,7 +507,7 @@ mod tests {
         library.import_wav_folder(&root, 140.0).unwrap();
         library
             .register_wav_product(
-                crate::products::Product::T2,
+                Product::T2,
                 &root,
                 &[crate::catalog::WaveMetadata {
                     native_id: 174,
@@ -532,11 +526,6 @@ mod tests {
         bytes.extend_from_slice(&0u32.to_le_bytes());
         bytes.extend_from_slice(&140u16.to_le_bytes());
         bytes.extend_from_slice(&140u32.to_le_bytes());
-        fn text(bytes: &mut Vec<u8>, value: &str) {
-            bytes.extend_from_slice(&((value.len() + 2) as u16).to_le_bytes());
-            bytes.extend_from_slice(value.as_bytes());
-            bytes.extend_from_slice(&[0, 1]);
-        }
         text(&mut bytes, "Composer");
         text(&mut bytes, "Standalone song");
         bytes.extend_from_slice(&[0; 64]);
@@ -592,7 +581,7 @@ mod tests {
             assert_eq!(
                 library
                     .register_wav_product(
-                        crate::products::Product::T2,
+                        Product::T2,
                         &root,
                         &[crate::catalog::WaveMetadata {
                             native_id: 174,
@@ -656,7 +645,7 @@ mod tests {
     }
 
     #[test]
-    fn reader_rejects_truncated_and_foreign_files() {
+    fn reader_rejects_truncated_fields() {
         let mut reader = Reader {
             bytes: &[3, 0, b'A'],
             offset: 0,
@@ -672,11 +661,15 @@ mod tests {
     #[test]
     #[ignore = "Requires the locally installed original project fixtures."]
     fn all_eleven_installed_demos_decode_without_missing_ids() {
-        let root =
-            crate::project_io::default_root(crate::products::Product::T2).expect("T2 fixtures");
-        let library =
-            Library::open_with_samples(&root, &crate::project_io::reference_samples_root())
-                .unwrap();
+        let root = crate::project_io::default_root(Product::T2).expect("T2 fixtures");
+        let mut library = Library::empty();
+        library
+            .register(
+                Product::T2,
+                &root,
+                &crate::project_io::reference_samples_root(),
+            )
+            .unwrap();
         let expected = [
             ("clouds", 577),
             ("edge", 302),

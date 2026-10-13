@@ -12,9 +12,12 @@ pub const SUPPORTED_BPMS: [f64; 4] = [120.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
 pub const SOURCE_BPM: f64 = 140.0;
 pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
+/// A guard against malformed songs. It is above the 262,144 one-bar clips
+/// that the 64-track timeline holds.
+pub const MAX_CLIPS: usize = 1_000_000;
+pub const MAX_IMPORTED_SAMPLES: usize = 100_000;
 const MAX_PROJECT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
-pub const MAX_MIXER_GAIN: f32 = 3.981_071_7;
 
 /// Convert a nonnegative amplitude multiplier to decibels. Zero is silence.
 pub fn amplitude_to_db(amplitude: f32) -> f32 {
@@ -135,13 +138,6 @@ fn default_source_bpm() -> f64 {
 #[derive(Clone, Debug, Default)]
 pub struct ImportedSamples(std::sync::Arc<Vec<ImportedSample>>);
 
-impl ImportedSamples {
-    /// Whether both lists are one allocation, as project copies are until
-    /// an edit changes the imports.
-    pub fn is_shared_with(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
-    }
-}
 impl std::ops::Deref for ImportedSamples {
     type Target = Vec<ImportedSample>;
     fn deref(&self) -> &Self::Target {
@@ -277,6 +273,16 @@ impl MissingSample {
             reason,
             metadata: BTreeMap::from([("group_name".into(), sample.group_name.clone())]),
         }
+    }
+
+    /// The sample group saved with this placeholder. An external placeholder
+    /// saves it as `group_name`. A native one saves it as `Group` or `category`.
+    pub fn group_name(&self) -> Option<&str> {
+        ["group_name", "Group", "category"]
+            .into_iter()
+            .filter_map(|key| self.metadata.get(key))
+            .map(String::as_str)
+            .find(|name| !name.trim().is_empty())
     }
 
     pub fn resolved_source_bpm(&self, frames: u32, sample_rate: u32) -> Result<f64, String> {
@@ -516,12 +522,12 @@ impl Project {
         {
             return Err("Track pan must be from -1 to 1.".into());
         }
-        if self.clips.len() > 100_000 {
+        if self.clips.len() > MAX_CLIPS {
             return Err("The project has too many clips.".into());
         }
         let mut ids = HashSet::new();
         let mut imported_ids = HashSet::new();
-        if self.imported_samples.len() > 100_000 {
+        if self.imported_samples.len() > MAX_IMPORTED_SAMPLES {
             return Err("The project has too many imported samples.".into());
         }
         for sample in &self.imported_samples {
@@ -855,21 +861,6 @@ impl Editor {
         })?;
         Ok(id)
     }
-    #[cfg(test)]
-    pub fn move_clip(&mut self, id: u64, track: usize, start_tick: u32) -> Result<(), String> {
-        let c = self
-            .project
-            .clips
-            .iter()
-            .find(|c| c.id == id)
-            .ok_or("The clip does not exist.")?;
-        ensure_space(&self.project, Some(id), track, start_tick, c.length_ticks)?;
-        self.transact(|p| {
-            let c = p.clips.iter_mut().find(|c| c.id == id).unwrap();
-            c.track = track;
-            c.start_tick = start_tick;
-        })
-    }
     pub fn move_clips(
         &mut self,
         ids: &[u64],
@@ -944,6 +935,31 @@ pub(crate) fn ensure_space(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_sample_group_reads_the_key_of_each_importer() {
+        let mut missing = MissingSample::native(
+            crate::products::Product::D2,
+            7,
+            "Lead".into(),
+            140.0,
+            256,
+            false,
+            "The sample is unavailable.".into(),
+        )
+        .unwrap();
+        assert_eq!(missing.group_name(), None);
+        for (key, group) in [
+            ("category", "Bass"),
+            ("Group", "Drum"),
+            ("group_name", "Loop"),
+        ] {
+            missing.metadata.insert(key.into(), group.into());
+            assert_eq!(missing.group_name(), Some(group));
+        }
+        missing.metadata.insert("group_name".into(), " ".into());
+        assert_eq!(missing.group_name(), Some("Drum"));
+    }
+
     #[test]
     fn sample_conflict_choices_persist_validate_and_prune_after_clip_deletion() {
         let source = ImportedSample {
@@ -1043,14 +1059,14 @@ mod tests {
         assert_eq!(db_to_amplitude(0.0), 1.0);
         assert!((db_to_amplitude(-6.0) - 0.501_187_2).abs() < 1e-6);
         assert!((amplitude_to_db(0.5) + 6.020_6).abs() < 1e-5);
-        assert_eq!(db_to_amplitude(MAX_MIXER_GAIN_DB), MAX_MIXER_GAIN);
+        assert_eq!(db_to_amplitude(MAX_MIXER_GAIN_DB), 3.981_071_7);
         for db in [-90.0, -60.0, -24.0, -12.0, -3.0, 0.0, 6.0, 12.0] {
             assert!((amplitude_to_db(db_to_amplitude(db)) - db).abs() < 1e-5);
         }
         let mut project = Project::default();
         project.tracks[0].gain = 4.0;
         project.tracks[0].polarity_inverted = true;
-        project.master_gain = MAX_MIXER_GAIN;
+        project.master_gain = db_to_amplitude(MAX_MIXER_GAIN_DB);
         project.validate().unwrap();
         assert!(amplitude_to_db(project.tracks[0].gain) > MAX_MIXER_GAIN_DB);
         project.tracks[0].gain = -0.5;
@@ -1129,7 +1145,7 @@ mod tests {
         editor.project.validate().unwrap();
         let id = editor.place(1, 63, 17, 31).unwrap();
         let placed = editor.project.clone();
-        editor.move_clip(id, 62, 48).unwrap();
+        editor.move_clips(&[id], -1, 31, false).unwrap();
         assert!(editor.undo());
         assert_eq!(editor.project, placed);
         assert!(editor.redo());
@@ -1552,13 +1568,15 @@ mod tests {
         let a = e.place(1, 0, 0, 256).unwrap();
         e.place(2, 0, 256, 256).unwrap();
         let before = e.project.clone();
-        assert!(e.move_clip(a, 0, 128).is_err());
+        assert!(e.move_clips(&[a], 0, 128, false).is_err());
         assert_eq!(e.project, before);
-        e.move_clip(a, 1, 128).unwrap();
+        e.move_clips(&[a], 1, 128, false).unwrap();
         assert!(e.undo());
         assert_eq!(e.project, before);
         assert!(e.redo());
-        assert_eq!(e.project.clips[0].track, 1);
+        // A move appends the clip again, so find it by identity.
+        let moved = e.project.clips.iter().find(|c| c.id == a).unwrap();
+        assert_eq!(moved.track, 1);
     }
     #[test]
     fn invalid_edit_rolls_back_and_redo_branch_is_cleared() {
@@ -1611,19 +1629,17 @@ mod tests {
         });
         e.place(1, 0, 0, 256).unwrap();
         e.transact(|p| p.master_gain = 1.0).unwrap();
+        // Project copies hold one allocation until an edit changes the imports.
         assert!(e.undo.iter().all(|snapshot| {
-            snapshot
-                .imported_samples
-                .is_shared_with(&e.project.imported_samples)
+            std::sync::Arc::ptr_eq(&snapshot.imported_samples.0, &e.project.imported_samples.0)
         }));
         e.transact(|p| p.imported_samples.push(sample(1_000_001)))
             .unwrap();
         let before = e.undo.last().unwrap();
-        assert!(
-            !before
-                .imported_samples
-                .is_shared_with(&e.project.imported_samples)
-        );
+        assert!(!std::sync::Arc::ptr_eq(
+            &before.imported_samples.0,
+            &e.project.imported_samples.0
+        ));
         assert_eq!(before.imported_samples.len(), 1);
         assert_eq!(e.project.imported_samples.len(), 2);
     }

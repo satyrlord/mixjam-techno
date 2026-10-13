@@ -23,7 +23,12 @@ use crate::{
     products::{LibraryBinding, Product},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, io::Read, path::Path, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 pub(super) const FORMAT_VERSION: u32 = 9;
 
@@ -575,7 +580,9 @@ mod tests {
 "
         ));
         assert_eq!(
-            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            crate::mixjam::load_song(&path, &Library::empty())
+                .unwrap()
+                .0,
             project
         );
 
@@ -628,7 +635,9 @@ mod tests {
         assert_eq!(saved["lanes"][1]["gain"], 0.0);
         assert_eq!(saved["lanes"][1]["polarityInverted"], true);
         assert_eq!(
-            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            crate::mixjam::load_song(&path, &Library::empty())
+                .unwrap()
+                .0,
             expected
         );
         legacy["lanes"][0]["gain"] = (-2.01).into();
@@ -730,7 +739,9 @@ mod tests {
         assert!(existing_creation_time(&path).is_none());
         save(&Project::default(), &path).unwrap();
         assert_eq!(
-            crate::mixjam::load(&path, &Library::empty()).unwrap(),
+            crate::mixjam::load_song(&path, &Library::empty())
+                .unwrap()
+                .0,
             Project::default()
         );
         fs::remove_file(path).unwrap();

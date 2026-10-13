@@ -91,6 +91,11 @@ pub(super) fn name_region(response: Response, name: &str) -> Response {
     response
 }
 
+/// Name a painted surface with the widget role that the caller selects.
+pub(super) fn named(response: &Response, kind: egui::WidgetType, text: &str) {
+    response.widget_info(|| egui::WidgetInfo::labeled(kind, response.enabled(), text));
+}
+
 /// Group the controls of a modal under its title, for assistive technology
 /// and agents.
 pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
@@ -135,11 +140,7 @@ impl MixJamApp {
                     RailIcon::Redo => can_redo,
                     _ => true,
                 },
-                match icon {
-                    RailIcon::Undo => "Undo (Ctrl+Z)",
-                    RailIcon::Redo => "Redo (Ctrl+Shift+Z or Ctrl+Y)",
-                    _ => icon.hint(),
-                },
+                icon.hint(),
             ),
             None => action_button(ui, label, false).on_hover_text(label),
         };
@@ -1230,7 +1231,7 @@ impl MixJamApp {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for &index in &visible_tracks {
                         let (rect, _) =
-                            ui.allocate_exact_size(Vec2::new(74.0, row_height), Sense::hover());
+                            ui.allocate_exact_size(Vec2::new(label_width, row_height), Sense::hover());
                         if add_track == Some(index) {
                             ui.painter().text(
                                 rect.center(),

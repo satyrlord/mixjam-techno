@@ -195,5 +195,7 @@ def render(check: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
-    render(parser.parse_args().check)
-    print("PASS: Folded Metal assets and source provenance match.")
+    check = parser.parse_args().check
+    render(check)
+    print("PASS: Folded Metal assets and source provenance match." if check
+          else "Prepared Folded Metal assets and source provenance.")

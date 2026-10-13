@@ -22,9 +22,11 @@ DISPLAY_SIZES = (20, 30, 40)
 INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "libraries", "new", "mixer",
-    "erase", "delete", "effects", "step-synth", "edit", "stretch", "record", "mix",
+    "erase", "delete", "effects", "step-synth", "edit", "stretch", "record",
     "undo", "redo", "help",
 )
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

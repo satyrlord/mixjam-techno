@@ -58,6 +58,11 @@ impl Buffer {
         }
     }
 }
+/// A take ends after ten minutes, or sooner at the WAV limit: the take is mono
+/// and is saved as a WAV that the library reads again.
+fn take_limit(sample_rate: u32) -> usize {
+    (sample_rate as usize * 600).min(crate::audio::MAX_WAV_SAMPLES)
+}
 pub struct RecordingStatus {
     pub count_in_frames_remaining: u64,
     pub captured_frames: u64,
@@ -106,7 +111,7 @@ impl Recorder {
             return Err("The audio input settings are not supported.".into());
         }
         let sample_rate = config.sample_rate.0;
-        let limit = sample_rate as usize * 600;
+        let limit = take_limit(sample_rate);
         let buffer = Arc::new(Mutex::new(Buffer {
             channels: config.channels as usize,
             skip: (sample_rate as f64 * 480.0 / bpm).round() as u64,
@@ -219,6 +224,13 @@ mod tests {
         b.push([1.0, 1.0, 0.5, 0.5, 0.2, 0.6, 0.0, 0.2, 1.0, 1.0].into_iter());
         assert_eq!(b.skip, 0);
         assert_eq!(b.samples, vec![0.4, 0.1]);
+    }
+    #[test]
+    fn a_take_never_exceeds_ten_minutes_or_the_wav_limit() {
+        assert_eq!(take_limit(44_100), 26_460_000);
+        assert_eq!(take_limit(96_000), 57_600_000);
+        assert_eq!(take_limit(192_000), 64_000_000);
+        assert_eq!(take_limit(384_000), 64_000_000);
     }
     #[test]
     fn a_failed_input_keeps_the_audio_captured_before_the_failure() {

@@ -5,7 +5,6 @@ use crate::packed::{self, PackedError};
 
 #[derive(Debug, Clone)]
 pub struct SampleSource {
-    pub declared_frames: usize,
     initial_sample: i16,
     file_initial_applied: bool,
     pub(crate) pcm: Vec<i16>,
@@ -83,7 +82,6 @@ impl SampleSource {
         }
         debug_assert_eq!(count, actual);
         Ok(Self {
-            declared_frames: decoded.header.decoded_samples,
             initial_sample: (decoded.header.unknown_field as i16).wrapping_mul(2),
             file_initial_applied: false,
             pcm,
@@ -170,7 +168,6 @@ impl SampleSource {
             })
             .collect();
         let source = Self {
-            declared_frames: header.decoded_samples,
             initial_sample,
             file_initial_applied: false,
             pcm,
@@ -182,19 +179,6 @@ impl SampleSource {
         } else {
             source
         })
-    }
-    /// Return the end of the whole run covering the requested output range.
-    /// `start` must be a previous returned boundary (or zero).
-    pub fn chunk_end(&self, start: usize, frame_budget: usize) -> Option<usize> {
-        if start > self.pcm.len() || (start != 0 && self.run_ends.binary_search(&start).is_err()) {
-            return None;
-        }
-        if frame_budget == 0 || start == self.pcm.len() {
-            return Some(start);
-        }
-        let requested = start.saturating_add(frame_budget).min(self.pcm.len());
-        let index = self.run_ends.partition_point(|&end| end < requested);
-        self.run_ends.get(index).copied()
     }
 }
 
@@ -212,14 +196,9 @@ mod tests {
     fn native_run_boundaries_survive_chunk_limits_and_declared_end() {
         let s = SampleSource::from_packed(&fixture(8, &[0xf8, 1, 0x81, 0x82, 0x80, 0x7f, 0x83, 1]))
             .unwrap();
-        assert_eq!(s.declared_frames, 8);
         assert_eq!(s.pcm.len(), 10);
         assert_eq!(s.run_ends, [5, 10]);
         assert_eq!(s.compressed_ends, [7, 8]);
-        assert_eq!(s.chunk_end(0, 1), Some(5));
-        assert_eq!(s.chunk_end(5, 2), Some(10));
-        assert_eq!(s.chunk_end(1, 2), None);
-        assert_eq!(s.chunk_end(10, 5), Some(10));
         assert_eq!(
             s.pcm[..8],
             packed::original_pcm(
@@ -234,7 +213,6 @@ mod tests {
         let s = SampleSource::from_packed(&b).unwrap();
         assert_eq!(s.pcm.len(), 1);
         assert_eq!(s.pcm[0], 76);
-        assert_eq!(s.chunk_end(0, 4), Some(1));
         assert_eq!(
             packed::original_pcm(&packed::decode_file(&b).unwrap()),
             [76, 0, 0, 0]
@@ -248,18 +226,14 @@ mod tests {
         assert_eq!(s.pcm, [74, 76]);
         assert_eq!(s.run_ends, [1, 2]);
         assert_eq!(s.compressed_ends, [0, 2]);
-        assert_eq!(s.chunk_end(0, 1), Some(1));
-        assert_eq!(s.chunk_end(1, 1), Some(2));
     }
     #[test]
     fn file_audio_stops_at_complete_physical_eof_without_nominal_padding() {
         let b = fixture(packed::MAX_DECODED_SAMPLES as u32, &[255, 129]);
         let s = SampleSource::from_packed_file_audio(&b).unwrap();
-        assert_eq!(s.declared_frames, packed::MAX_DECODED_SAMPLES);
         assert_eq!(s.pcm, [74, 76]);
         assert_eq!(s.run_ends, [1, 2]);
         assert_eq!(s.compressed_ends, [0, 2]);
-        assert_eq!(s.chunk_end(1, 100_000), Some(2));
         assert!(matches!(
             packed::decode_file(&b),
             Err(PackedError::ImpossibleExpansion { .. })

@@ -34,7 +34,7 @@ pub(super) fn show(
     feedback: Feedback<'_>,
     original: &mut f64,
     target: &mut f64,
-) -> Result<Action, String> {
+) -> Action {
     let mut action = Action::None;
     let response = dialog::tool(
         ctx,
@@ -367,7 +367,7 @@ pub(super) fn show(
     if response.help {
         action = Action::Help;
     }
-    Ok(action)
+    action
 }
 fn at(ui: &mut egui::Ui, rect: Rect, add: impl FnOnce(&mut egui::Ui)) {
     ui.scope_builder(

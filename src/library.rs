@@ -9,6 +9,9 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+// Every WAV can become a project import when this palette is adopted.
+const MAX_WAV_FOLDER_ITEMS: usize = crate::engine::MAX_IMPORTED_SAMPLES;
+
 /// Retain a file choice once per saved reference and link every imported source.
 pub(crate) fn record_wav_conflict(
     project: &mut crate::engine::Project,
@@ -157,7 +160,6 @@ pub struct Sample {
     pub code: String,
     pub name: String,
     pub bars: u32,
-    pub group: u8,
     pub group_name: String,
     pub offset: u64,
     pub length: u64,
@@ -224,10 +226,6 @@ impl Library {
             folder_tempos: Vec::new(),
             reserved_import_id: IMPORTED_ID_START - 1,
         }
-    }
-
-    pub fn open_with_samples(root: &Path, samples_root: &Path) -> Result<Self, String> {
-        Self::open_archive(Product::T2, root, samples_root, "\x72ave20", 140.0)
     }
 
     pub fn empty() -> Self {
@@ -895,7 +893,6 @@ impl Library {
                 code: native.code,
                 name: native.name,
                 bars: native.bars,
-                group: 9,
                 group_name: native.group_name.trim().to_owned(),
                 offset,
                 length,
@@ -935,7 +932,6 @@ impl Library {
                 code: metadata.path.clone(),
                 name: metadata.labels.join(" ").trim().into(),
                 bars: metadata.nominal_bars.unwrap_or(1).max(1),
-                group: 9,
                 group_name: canonical_group(&metadata.category),
                 offset: 0,
                 length: file.metadata().map_err(|e| e.to_string())?.len(),
@@ -1042,7 +1038,6 @@ impl Library {
                 code: unquote(row[2]).to_string(),
                 name,
                 bars: u32::try_from(number(7)?).map_err(|_| "The bar count is too large.")?,
-                group: u8::try_from(number(8)?).map_err(|_| "The sample group is too large.")?,
                 group_name: fields[4].to_string(),
                 offset,
                 length,
@@ -1053,7 +1048,8 @@ impl Library {
                 wav_path: None,
                 digest: None,
             };
-            if sample.group == 0 || sample.bars == 0 || by_id.insert(id, samples.len()).is_some() {
+            let group = u8::try_from(number(8)?).map_err(|_| "The sample group is too large.")?;
+            if group == 0 || sample.bars == 0 || by_id.insert(id, samples.len()).is_some() {
                 return Err(format!(
                     "Sample {id} has an invalid group, bar count, or duplicate ID."
                 ));
@@ -1206,15 +1202,6 @@ impl Library {
         Ok(sources)
     }
 
-    pub fn import_wav(
-        &mut self,
-        path: &Path,
-        name: Option<&str>,
-        group: &str,
-    ) -> Result<crate::engine::ImportedSample, String> {
-        self.import_wav_with_tempo(path, name, group, 140.0)
-    }
-
     /// Load a WAV-only folder without an original installation or a sidecar index.
     /// The caller supplies the tempo: a WAV file does not establish musical BPM.
     /// Keep the returned records in the project when these samples are used.
@@ -1265,7 +1252,7 @@ impl Library {
             {
                 let entry = entry.map_err(|e| format!("Cannot read {}: {e}", folder.display()))?;
                 entries_seen += 1;
-                if entries_seen > 100_000 {
+                if entries_seen > MAX_WAV_FOLDER_ITEMS {
                     return Err("The WAV folder exceeds the 100,000-item limit.".into());
                 }
                 let path = fs::canonicalize(entry.path())
@@ -1824,23 +1811,11 @@ fn imported_sample(
         exact.ceil()
     };
     let bars = (bars as u32).max(1);
-    let group = match imported.group_name.to_ascii_lowercase().as_str() {
-        "loop" => 1,
-        "drum" => 2,
-        "bass" => 3,
-        "sphere" | "layer" => 4,
-        "sequence" | "seq" => 5,
-        "voice" | "rap" => 6,
-        "effect" => 7,
-        "xtra" => 8,
-        _ => 9,
-    };
     Ok(Sample {
         id: imported.id,
         code: format!("IMPORT{}", imported.id),
         name: imported.name.clone(),
         bars,
-        group,
         group_name: imported.group_name.clone(),
         offset: 0,
         length: probe.length,
@@ -2102,6 +2077,32 @@ fn compact_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_full_wav_folder_palette_fits_the_project_import_budget() {
+        use crate::engine::{ImportedSample, Project};
+        let imported = |index: usize| ImportedSample {
+            id: super::IMPORTED_ID_START + index as u32,
+            name: "Sample".into(),
+            group_name: "Wave".into(),
+            path: std::path::PathBuf::from(format!("sample-{index}.wav")),
+            source_bpm: 140.0,
+            source_sample_rate: Some(44_100),
+            origin: None,
+        };
+        let mut project = Project {
+            imported_samples: (0..super::MAX_WAV_FOLDER_ITEMS).map(imported).collect(),
+            ..Project::default()
+        };
+        project.validate().unwrap();
+        project
+            .imported_samples
+            .push(imported(super::MAX_WAV_FOLDER_ITEMS));
+        assert_eq!(
+            project.validate().unwrap_err(),
+            "The project has too many imported samples."
+        );
+    }
+
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
@@ -2455,7 +2456,6 @@ mod tests {
         assert_eq!(second.samples.len(), 3);
         assert!(!cache.has_changes());
         // A changed file is probed again; its stale entry does not survive.
-        std::thread::sleep(std::time::Duration::from_millis(20));
         let replaced = waveform(8, 200);
         folder.mono("Loop/a.wav", &replaced);
         let third =
@@ -2475,7 +2475,7 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("cancelled"), "{error}");
         assert!(untouched.samples.is_empty());
-        // A corrupt or oversized cache file is an empty cache.
+        // A cache file with the wrong shape does not parse.
         let text = serde_json::to_string(&cache).unwrap();
         let restored: ScanCache = serde_json::from_str(&text).unwrap();
         assert_eq!(restored.len(), cache.len());
@@ -2632,7 +2632,7 @@ mod tests {
         palette.import_wav_folder(&folder.0, 160.0).unwrap();
         let mut project = Library::empty();
         let used = project
-            .import_wav(&second, Some("Project name"), "Wave")
+            .import_wav_with_tempo(&second, Some("Project name"), "Wave", 140.0)
             .unwrap();
         fs::remove_file(first).unwrap();
         let added = project.restore_wav_palette(&palette).unwrap();
@@ -2649,7 +2649,9 @@ mod tests {
         let folder = Folder::new();
         let path = folder.wave("loop.wav", 44_100, 10);
         let mut library = Library::empty();
-        let imported = library.import_wav(&path, Some("Loop"), "Wave").unwrap();
+        let imported = library
+            .import_wav_with_tempo(&path, Some("Loop"), "Wave", 140.0)
+            .unwrap();
         // Undo and redo re-apply identical metadata: the file is not read again.
         fs::remove_file(&path).unwrap();
         library
@@ -2698,7 +2700,9 @@ mod tests {
         assert_eq!(library.read_pcm(id).unwrap().frames(), 100);
 
         let duplicate = folder.wave("extra/Bass/soft-dust-6.wav", 22_050, 100);
-        library.import_wav(&duplicate, None, "bass").unwrap();
+        library
+            .import_wav_with_tempo(&duplicate, None, "bass", 140.0)
+            .unwrap();
         let count = library.samples.len();
         assert_eq!(
             library
@@ -2793,7 +2797,7 @@ mod tests {
         .unwrap();
         let mut library = Library::empty();
         let imported = library
-            .import_wav(&path, Some("My sample"), "Wave")
+            .import_wav_with_tempo(&path, Some("My sample"), "Wave", 140.0)
             .unwrap();
         assert_eq!(imported.id, 1_000_000);
         let sample = library.sample_by_id(imported.id).unwrap();
@@ -2802,7 +2806,10 @@ mod tests {
         assert_eq!(sample.channels, 2);
         assert_eq!(library.read_pcm(imported.id).unwrap().frames(), 220);
         assert_eq!(
-            library.import_wav(&path, None, "Wave").unwrap().id,
+            library
+                .import_wav_with_tempo(&path, None, "Wave", 140.0)
+                .unwrap()
+                .id,
             imported.id
         );
         let mut project = crate::engine::Project::default();
@@ -2836,7 +2843,6 @@ mod tests {
             code: "source.\x70xd".into(),
             name: "Native source".into(),
             bars: 1,
-            group: 9,
             group_name: "Loop".into(),
             offset: 0,
             length: 16,
@@ -2991,9 +2997,14 @@ mod tests {
     #[ignore = "Requires the installed original and the supplied WAV corpus."]
     fn installed_catalog_has_complete_nonoverlapping_ranges() {
         let root = crate::project_io::default_root(Product::T2).expect("T2 fixtures");
-        let library =
-            Library::open_with_samples(&root, &crate::project_io::reference_samples_root())
-                .unwrap();
+        let mut library = Library::empty();
+        library
+            .register(
+                Product::T2,
+                &root,
+                &crate::project_io::reference_samples_root(),
+            )
+            .unwrap();
         assert_eq!(library.samples.len(), 4015);
         assert_eq!(
             library.samples.last().unwrap().offset + library.samples.last().unwrap().length,

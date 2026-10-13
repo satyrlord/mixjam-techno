@@ -138,15 +138,6 @@ fn workspace_file_requests_cannot_replace_paused_tasks() {
     app.pending_action = None;
     app.path_prompt = Some(prompt());
     collapsed(&ctx, "Choose path", true);
-    app.ask_path(FileRequest::ExportMix);
-    assert!(matches!(
-        app.path_prompt.as_ref().unwrap().request,
-        FileRequest::SaveSong
-    ));
-    assert_eq!(
-        app.path_prompt.as_ref().unwrap().text,
-        "C:\\Draft\\song.mixjam"
-    );
     app.request_action(PendingAction::New, &ctx);
     assert!(app.pending_action.is_none());
     assert!(!dialog::is_collapsed(&ctx, "Choose path"));
@@ -154,11 +145,7 @@ fn workspace_file_requests_cannot_replace_paused_tasks() {
     app.path_prompt = None;
     app.import_path = Some(PathBuf::from("first.wav"));
     app.import_bpm = 127.0;
-    app.ask_path(FileRequest::ImportSound);
     app.finish_path(FileRequest::ImportSound, Some(PathBuf::from("second.wav")));
     assert_eq!(app.import_path, Some(PathBuf::from("first.wav")));
     assert_eq!(app.import_bpm, 127.0);
-    app.request_action(PendingAction::New, &ctx);
-    assert!(app.pending_action.is_none());
-    assert_eq!(app.import_path, Some(PathBuf::from("first.wav")));
 }

@@ -9,7 +9,8 @@ choose a remedy. These examples do not add product requirements.
   group continuous gestures when the current contract requires one history step.
 - Validate projects and imports before adoption. Preserve the active project on
   failure and keep save replacement atomic.
-- Keep schema 1 and unversioned project migrations compatible with schema 2.
+- Keep unversioned and schema 1 to 3 project migrations compatible with the
+  current schema.
 - Check native sample identity with audio digests when available. Reject an
   available digest mismatch. Treat name and duration matching as inference
   only when a digest comparison is unavailable.

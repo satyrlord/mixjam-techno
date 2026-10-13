@@ -1,7 +1,6 @@
 //! Step synth body. Shared hardware shell and controls own presentation.
 use super::controls::{CREAM, FACE};
 use super::*;
-const WELL: Color32 = FACE;
 const EDGE: Color32 = Color32::from_rgb(100, 105, 101);
 /// Beat-group lines, idle cell edges, and the alternate pitch rows of the grid.
 const GRID_LINE: Color32 = Color32::from_rgb(120, 128, 108);
@@ -40,7 +39,7 @@ pub(super) fn show(
     state: &mut StepSynthState,
     view_bar: &mut usize,
     show_effects: &mut bool,
-) -> Result<Action, String> {
+) -> Action {
     let mut action = Action::None;
     let response = dialog::tool(
         ctx,
@@ -50,7 +49,6 @@ pub(super) fn show(
         controls::Palette::Olive,
         true,
         |ui| {
-            let scale = 1.0;
             let (bounds, _) = ui.allocate_exact_size(Vec2::new(820.0, 552.0), Sense::hover());
             let point = |x: f32, y: f32| bounds.min + Vec2::new(x, y - 48.0);
             let rect = |x, y, w, h| Rect::from_min_size(point(x, y), Vec2::new(w, h));
@@ -60,12 +58,12 @@ pub(super) fn show(
             let missing = source.missing && !source.explicit_file;
             let available = source.available && !missing;
             let source_rect = rect(18.0, 48.0, 222.0, 28.0);
-            well(&panel, source_rect, scale);
+            controls::well(&panel, source_rect);
             let label = panel.put(
-                source_rect.shrink2(Vec2::new(8.0, 4.0) * scale),
+                source_rect.shrink2(Vec2::new(8.0, 4.0)),
                 egui::Label::new(
                     egui::RichText::new(source.name)
-                        .font(FontId::proportional(12.5 * scale))
+                        .font(FontId::proportional(12.5))
                         .color(CREAM),
                 )
                 .truncate(),
@@ -80,16 +78,7 @@ pub(super) fn show(
                 (252.0, 164.0, "Choose source file", Action::ChooseSource),
                 (426.0, 154.0, "Use palette sound", Action::PaletteSource),
             ] {
-                if button(
-                    &mut panel,
-                    rect(x, 48.0, width, 28.0),
-                    text,
-                    true,
-                    false,
-                    scale,
-                )
-                .clicked()
-                {
+                if button(&mut panel, rect(x, 48.0, width, 28.0), text, true, false).clicked() {
                     action = next;
                 }
             }
@@ -101,10 +90,10 @@ pub(super) fn show(
                 } else {
                     "Palette sound"
                 },
-                12.0 * scale,
+                12.0,
                 CREAM,
             );
-            left_text(&panel, point(20.0, 100.0), "View bar", 13.0 * scale, CREAM);
+            left_text(&panel, point(20.0, 100.0), "View bar", 13.0, CREAM);
             for bar in 0..4 {
                 let selected = *view_bar == bar;
                 let response = select_button(
@@ -113,7 +102,6 @@ pub(super) fn show(
                     &format!("{}", bar + 1),
                     &format!("View bar {}", bar + 1),
                     selected,
-                    scale,
                 );
                 if response.clicked() {
                     *view_bar = bar;
@@ -122,7 +110,6 @@ pub(super) fn show(
                     &mut panel,
                     point(278.0 + bar as f32 * 130.0, 100.0),
                     point(308.0 + bar as f32 * 130.0, 100.0),
-                    scale,
                     &format!("Active {}", bar + 1),
                     &mut state.active_bars[bar],
                 );
@@ -131,7 +118,6 @@ pub(super) fn show(
                 &mut panel,
                 point(32.0, 134.0),
                 point(56.0, 134.0),
-                scale,
                 "1/16 cut",
                 &mut state.cut_sixteenth,
             );
@@ -139,15 +125,14 @@ pub(super) fn show(
                 &mut panel,
                 point(178.0, 134.0),
                 point(202.0, 134.0),
-                scale,
                 "Loop source",
                 &mut state.loop_source,
             );
-            left_text(&panel, point(330.0, 134.0), "BPM", 13.0 * scale, CREAM);
+            left_text(&panel, point(330.0, 134.0), "BPM", 13.0, CREAM);
             panel.scope_builder(
                 egui::UiBuilder::new().max_rect(rect(370.0, 120.0, 76.0, 28.0)),
                 |ui| {
-                    form_style(ui, scale);
+                    form_style(ui);
                     name_control(
                         bpm_picker(ui, "step_synth_bpm", &mut state.bpm),
                         "Step synth BPM",
@@ -160,7 +145,6 @@ pub(super) fn show(
                 "Clear bar",
                 true,
                 false,
-                scale,
             )
             .on_hover_text("Clear the notes in the viewed bar.")
             .clicked()
@@ -173,13 +157,7 @@ pub(super) fn show(
             let main_rect = rect(16.0, 160.0, 788.0, 344.0);
             controls::inset(&panel, main_rect);
             if *show_effects {
-                left_text(
-                    &panel,
-                    point(30.0, 177.0),
-                    "Sequence effects",
-                    13.0 * scale,
-                    CREAM,
-                );
+                left_text(&panel, point(30.0, 177.0), "Sequence effects", 13.0, CREAM);
                 let effects_rect = rect(28.0, 198.0, 764.0, 294.0);
                 let mut form = panel.new_child(
                     egui::UiBuilder::new()
@@ -187,10 +165,10 @@ pub(super) fn show(
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
                 form.set_clip_rect(effects_rect.intersect(panel.clip_rect()));
-                form_style(&mut form, scale);
+                form_style(&mut form);
                 form.style_mut().spacing.scroll.floating = false;
-                form.style_mut().spacing.scroll.bar_width = 6.0 * scale;
-                form.style_mut().spacing.scroll.bar_inner_margin = 4.0 * scale;
+                form.style_mut().spacing.scroll.bar_width = 6.0;
+                form.style_mut().spacing.scroll.bar_inner_margin = 4.0;
                 form.style_mut().spacing.scroll.bar_outer_margin = 0.0;
                 egui::ScrollArea::vertical()
                     .id_salt("step-synth-effects")
@@ -204,16 +182,14 @@ pub(super) fn show(
                         &panel,
                         point(83.0 + step as f32 * 46.0, 174.0),
                         &format!("{}", step + 1),
-                        12.0 * scale,
+                        12.0,
                         CREAM,
-                        false,
                     );
                 }
-                left_text(&panel, point(25.0, 174.0), "Pitch", 11.0 * scale, CREAM);
+                left_text(&panel, point(25.0, 174.0), "Pitch", 11.0, CREAM);
                 note_grid(
                     &mut panel,
                     rect(20.0, 190.0, 784.0, 306.0),
-                    scale,
                     state,
                     *view_bar,
                 );
@@ -259,7 +235,6 @@ pub(super) fn show(
                     text,
                     enabled,
                     ivory,
-                    scale,
                 );
                 let hint = match text {
                     "Listen sequence" | "Save sequence" if !active => {
@@ -293,7 +268,6 @@ pub(super) fn show(
                 },
                 true,
                 false,
-                scale,
             )
             .clicked()
             {
@@ -316,7 +290,6 @@ pub(super) fn show(
                 status,
                 feedback.error,
                 missing,
-                scale,
             );
             if missing
                 && button(
@@ -325,7 +298,6 @@ pub(super) fn show(
                     "Import details",
                     true,
                     false,
-                    scale,
                 )
                 .clicked()
             {
@@ -336,29 +308,28 @@ pub(super) fn show(
     if response.help {
         action = Action::Help;
     }
-    Ok(action)
+    action
 }
-fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthState, bar: usize) {
+fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usize) {
     let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     child.set_clip_rect(rect.intersect(ui.clip_rect()));
-    form_style(&mut child, scale);
+    form_style(&mut child);
     child.style_mut().spacing.scroll.floating = false;
-    child.style_mut().spacing.scroll.bar_width = 6.0 * scale;
-    child.style_mut().spacing.scroll.bar_inner_margin = 4.0 * scale;
+    child.style_mut().spacing.scroll.bar_width = 6.0;
+    child.style_mut().spacing.scroll.bar_inner_margin = 4.0;
     child.style_mut().spacing.scroll.bar_outer_margin = 0.0;
     egui::ScrollArea::vertical()
         .id_salt("step-synth-notes")
         .auto_shrink([false, false])
         .max_height(rect.height())
         .show(&mut child, |ui| {
-            let (content, _) =
-                ui.allocate_exact_size(Vec2::new(774.0, 400.0) * scale, Sense::hover());
+            let (content, _) = ui.allocate_exact_size(Vec2::new(774.0, 400.0), Sense::hover());
             for group in 1..4 {
-                let x = content.left() + (40.0 + group as f32 * 184.0) * scale;
+                let x = content.left() + (40.0 + group as f32 * 184.0);
                 ui.painter().line_segment(
                     [Pos2::new(x, content.top()), Pos2::new(x, content.bottom())],
                     Stroke::new(1.0_f32, GRID_LINE),
@@ -443,16 +414,16 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                 )
             });
             for (row, note) in (-12_i8..=12).rev().enumerate() {
-                let y = content.top() + row as f32 * 16.0 * scale;
+                let y = content.top() + row as f32 * 16.0;
                 ui.painter().text(
-                    Pos2::new(content.left() + 32.0 * scale, y + 8.0 * scale),
+                    Pos2::new(content.left() + 32.0, y + 8.0),
                     Align2::RIGHT_CENTER,
                     if note == 0 {
                         "A  0".into()
                     } else {
                         format!("{note:+}")
                     },
-                    FontId::proportional(12.0 * scale),
+                    FontId::proportional(12.0),
                     CREAM,
                 );
                 for step in 0..16 {
@@ -462,11 +433,8 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                         .get(index)
                         .is_some_and(|value| *value == Some(note));
                     let cell = Rect::from_min_size(
-                        Pos2::new(
-                            content.left() + (42.0 + step as f32 * 46.0) * scale,
-                            y + scale,
-                        ),
-                        Vec2::new(42.0, 14.0) * scale,
+                        Pos2::new(content.left() + (42.0 + step as f32 * 46.0), y + 1.0),
+                        Vec2::new(42.0, 14.0),
                     );
                     let response = ui.interact(cell, cell_id(note, step), Sense::CLICK);
                     if response.clicked() {
@@ -482,10 +450,10 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                     } else {
                         CELL_ALTERNATE
                     };
-                    ui.painter().rect_filled(cell, 2.0 * scale, fill);
+                    ui.painter().rect_filled(cell, 2.0, fill);
                     ui.painter().rect_stroke(
                         cell,
-                        2.0 * scale,
+                        2.0,
                         Stroke::new(
                             1.0_f32,
                             if selected {
@@ -512,7 +480,6 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                         ui,
                         &response,
                         current,
-                        scale,
                         if selected { controls::INK } else { CREAM },
                     );
                     if current && reveal {
@@ -529,15 +496,15 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                 .data_mut(|data| data.insert_temp(cursor_id, cursor));
         });
 }
-fn form_style(ui: &mut egui::Ui, scale: f32) {
+fn form_style(ui: &mut egui::Ui) {
     let style = ui.style_mut();
-    style.override_font_id = Some(FontId::proportional(13.0 * scale));
-    style.spacing.interact_size.y = 26.0 * scale;
-    style.spacing.item_spacing = Vec2::new(8.0, 6.0) * scale;
-    style.spacing.slider_width = 180.0 * scale;
+    style.override_font_id = Some(FontId::proportional(13.0));
+    style.spacing.interact_size.y = 26.0;
+    style.spacing.item_spacing = Vec2::new(8.0, 6.0);
+    style.spacing.slider_width = 180.0;
     style.visuals.override_text_color = Some(CREAM);
-    style.visuals.panel_fill = WELL;
-    style.visuals.extreme_bg_color = WELL;
+    style.visuals.panel_fill = FACE;
+    style.visuals.extreme_bg_color = FACE;
     style.visuals.selection.stroke = Stroke::new(1.0_f32, CREAM);
     for widgets in [
         &mut style.visuals.widgets.inactive,
@@ -550,14 +517,7 @@ fn form_style(ui: &mut egui::Ui, scale: f32) {
         widgets.fg_stroke = Stroke::new(1.0_f32, CREAM);
     }
 }
-fn toggle(
-    ui: &mut egui::Ui,
-    center: Pos2,
-    label_at: Pos2,
-    _scale: f32,
-    name: &str,
-    value: &mut bool,
-) {
+fn toggle(ui: &mut egui::Ui, center: Pos2, label_at: Pos2, name: &str, value: &mut bool) {
     let hit = Rect::from_min_size(
         center - Vec2::new(14.0, 13.0),
         Vec2::new((label_at.x - center.x + 90.0).max(110.0), 26.0),
@@ -587,15 +547,8 @@ fn toggle(
     };
     response.on_hover_text(tooltip);
 }
-fn button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    text: &str,
-    enabled: bool,
-    primary: bool,
-    scale: f32,
-) -> Response {
-    keyed_button(ui, rect, text, text, enabled, primary, scale)
+fn button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool, primary: bool) -> Response {
+    keyed_button(ui, rect, text, text, enabled, primary)
 }
 fn keyed_button(
     ui: &mut egui::Ui,
@@ -604,7 +557,6 @@ fn keyed_button(
     text: &str,
     enabled: bool,
     primary: bool,
-    _scale: f32,
 ) -> Response {
     controls::button_at(
         ui,
@@ -625,7 +577,6 @@ fn select_button(
     text: &str,
     name: &str,
     selected: bool,
-    _scale: f32,
 ) -> Response {
     let response = controls::button_at(
         ui,
@@ -649,15 +600,8 @@ fn select_button(
     });
     response.on_hover_text(name)
 }
-fn well(ui: &egui::Ui, rect: Rect, _scale: f32) {
-    controls::well(ui, rect);
-}
-fn lettering(ui: &egui::Ui, center: Pos2, text: &str, size: f32, color: Color32, title: bool) {
-    let font = if title {
-        FontId::new(size, egui::FontFamily::Name("Syncopate Bold".into()))
-    } else {
-        FontId::proportional(size)
-    };
+fn lettering(ui: &egui::Ui, center: Pos2, text: &str, size: f32, color: Color32) {
+    let font = FontId::proportional(size);
     let galley = ui.painter().layout_no_wrap(text.into(), font, color);
     ui.painter().galley(
         center - galley.mesh_bounds.center().to_vec2(),
@@ -676,35 +620,24 @@ fn left_text(ui: &egui::Ui, at: Pos2, text: &str, size: f32, color: Color32) {
     );
 }
 
-fn named(response: &Response, kind: egui::WidgetType, text: &str) {
-    response.widget_info(|| egui::WidgetInfo::labeled(kind, response.enabled(), text));
-}
-
-fn focus(ui: &egui::Ui, response: &Response, focused: bool, scale: f32, color: Color32) {
+fn focus(ui: &egui::Ui, response: &Response, focused: bool, color: Color32) {
     if focused || (response.hovered() && response.enabled()) {
         ui.painter().rect_stroke(
-            response.rect.shrink(scale),
-            2.0 * scale,
-            Stroke::new(if focused { 2.0 * scale } else { 1.0 }, color),
+            response.rect.shrink(1.0),
+            2.0,
+            Stroke::new(if focused { 2.0 } else { 1.0_f32 }, color),
             egui::StrokeKind::Inside,
         );
     }
 }
 
-fn status_footer(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    text: &str,
-    error: bool,
-    missing: bool,
-    scale: f32,
-) {
-    well(ui, rect, scale);
+fn status_footer(ui: &mut egui::Ui, rect: Rect, text: &str, error: bool, missing: bool) {
+    controls::well(ui, rect);
     let response = ui.interact(rect, ui.id().with("status"), Sense::hover());
     named(&response, egui::WidgetType::Panel, "Step synth status");
     let text_rect = Rect::from_min_max(
-        rect.min + Vec2::new(9.0, 5.0) * scale,
-        rect.max - Vec2::new(if missing { 144.0 } else { 9.0 }, 5.0) * scale,
+        rect.min + Vec2::new(9.0, 5.0),
+        rect.max - Vec2::new(if missing { 144.0 } else { 9.0 }, 5.0),
     );
     let mut child = ui.new_child(
         egui::UiBuilder::new()
@@ -729,7 +662,7 @@ fn status_footer(
         let color = if error { CORAL } else { CREAM };
         let mut job = egui::text::LayoutJob::simple(
             text.into(),
-            FontId::proportional(12.5 * scale),
+            FontId::proportional(12.5),
             color,
             ui.available_width(),
         );

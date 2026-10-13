@@ -2,7 +2,7 @@
 //! Grid 2 holds sixteenth-bar offsets. Trailer bytes stay opaque and lossless.
 use std::{
     fmt,
-    path::{Component, Path, PathBuf},
+    path::{Component, Path},
 };
 
 pub const TRACKS: usize = 8;
@@ -161,9 +161,6 @@ impl Catalog {
             .get(usize::from(id))
             .filter(|s| !s.is_empty())
             .map(String::as_str)
-    }
-    pub fn resolve(&self, root: &Path, id: u16) -> Option<PathBuf> {
-        self.get(id).map(|p| root.join(p))
     }
 }
 

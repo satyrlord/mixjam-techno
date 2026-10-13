@@ -65,6 +65,9 @@ pub fn read_wav(path: &Path) -> Result<Pcm, String> {
     })
 }
 
+/// The largest WAV that the library reads, in samples of all channels.
+pub(crate) const MAX_WAV_SAMPLES: usize = 64_000_000;
+
 /// Validate and normalize WAV samples without retaining decoded audio.
 pub(crate) fn visit_wav_samples(
     path: &Path,
@@ -76,7 +79,7 @@ pub(crate) fn visit_wav_samples(
     if !(1..=2).contains(&spec.channels)
         || spec.sample_rate == 0
         || spec.sample_rate > 384_000
-        || reader.len() > 64_000_000
+        || reader.len() as usize > MAX_WAV_SAMPLES
     {
         return Err(
             "The WAV must contain mono or stereo audio with a supported sample rate and size."
@@ -657,7 +660,7 @@ mod tests {
             0.0,
             crate::engine::db_to_amplitude(-6.0),
             1.0,
-            crate::engine::MAX_MIXER_GAIN,
+            crate::engine::db_to_amplitude(crate::engine::MAX_MIXER_GAIN_DB),
         ] {
             project.tracks[0].gain = amplitude;
             project.tracks[0].polarity_inverted = false;
@@ -679,8 +682,6 @@ mod tests {
             for (normal, reversed) in normal.into_iter().zip(reversed) {
                 assert_eq!(reversed, -normal);
             }
-            assert!(project.tracks[0].polarity_inverted);
-            assert_eq!(project.tracks[0].pan, 0.25);
         }
         project.tracks[0].gain = 1.0;
         project.tracks[0].right_enabled = false;

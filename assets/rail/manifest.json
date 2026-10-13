@@ -83,11 +83,6 @@
         "donor_symbol": null
       },
       {
-        "name": "mix",
-        "source_sha256": "aac271e1af5513cec281df8a51f260f9a48f7bc32126980a0f17303ca3bb36c5",
-        "donor_symbol": null
-      },
-      {
         "name": "undo",
         "source_sha256": "9113a7e1b2b2ac781415f5b83beb8d05b085044b0e48232d3c32879cd2ca406b",
         "donor_symbol": "undo"
@@ -592,39 +587,6 @@
         {
           "size": 40,
           "png_sha256": "96c469b0f6f9f5041e284f6c356e9601b75e8eb5b77f3889bab7f71aba17df65"
-        }
-      ]
-    },
-    {
-      "name": "mix",
-      "png_sha256": "a06263a6f15fd235df23b6f88b4ba32729f3224dc7ef99a758f104f589b978d5",
-      "size": [
-        96,
-        96
-      ],
-      "mode": "RGBA",
-      "visible_pixels": 2148,
-      "opaque_pixels": 1600,
-      "transparent_pixels": 7068,
-      "antialiased_pixels": 548,
-      "alpha_bounds": [
-        8,
-        4,
-        88,
-        92
-      ],
-      "variants": [
-        {
-          "size": 20,
-          "png_sha256": "a7b741d2beb8cc6f3c0b4cb4f79eab09af07245fb779a9c3bf1ec6e0415ff7bf"
-        },
-        {
-          "size": 30,
-          "png_sha256": "84b11a906438cad3dcf44bc2f7ce8d2ff4b5b568b03fdd44dbc825b0d105982c"
-        },
-        {
-          "size": 40,
-          "png_sha256": "9308c67bbc2e941bc23879e2d530941ace83cdb5a8af1f1e85a6bbba959bc346"
         }
       ]
     },

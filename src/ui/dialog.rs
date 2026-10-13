@@ -41,17 +41,13 @@ fn style(ui: &mut egui::Ui, palette: controls::Palette) {
     s.spacing.button_padding = Vec2::new(12.0, 6.0);
     s.spacing.interact_size.y = 28.0;
     s.wrap_mode = Some(egui::TextWrapMode::Wrap);
-    s.visuals.override_text_color = None;
     // Components communicate disabled state with their face/indicator. Keep
     // labels readable instead of applying a second opacity fade to the text.
     s.visuals.disabled_alpha = 1.0;
-    s.visuals.panel_fill = controls::PANEL;
     s.visuals.extreme_bg_color = controls::FACE;
     s.visuals.faint_bg_color = Color32::from_black_alpha(12);
     s.visuals.widgets.noninteractive.fg_stroke.color = controls::CREAM;
     s.visuals.widgets.noninteractive.bg_stroke.color = Color32::from_black_alpha(70);
-    s.visuals.selection.bg_fill = controls::ACCENT;
-    s.visuals.selection.stroke.color = controls::INK;
     for w in [
         &mut s.visuals.widgets.inactive,
         &mut s.visuals.widgets.hovered,
@@ -82,9 +78,7 @@ struct Shell<'a> {
     /// Follow the height of the content until the user resizes the window.
     fit: bool,
 }
-struct ShellResponse<R> {
-    response: Response,
-    inner: Option<R>,
+struct ShellResponse {
     help: bool,
     close: bool,
 }
@@ -107,7 +101,7 @@ fn show_shell<R>(
     ctx: &egui::Context,
     spec: Shell<'_>,
     contents: impl FnOnce(&mut egui::Ui) -> R,
-) -> ShellResponse<R> {
+) -> ShellResponse {
     let id = egui::Id::new(spec.identity);
     let gid = id.with("hardware-geometry");
     let collapsed = is_collapsed(ctx, spec.identity);
@@ -139,7 +133,7 @@ fn show_shell<R>(
     let guarded = ctx
         .data(|d| d.get_temp::<bool>(id.with("hardware-escape-guard")))
         .unwrap_or(false);
-    let shown = egui::Area::new(id)
+    egui::Area::new(id)
         .kind(egui::UiKind::Window)
         .order(order)
         .fixed_pos(geometry.position)
@@ -235,7 +229,7 @@ fn show_shell<R>(
             let font = FontId::new(18.0, egui::FontFamily::Name("Syncopate Bold".into()));
             let galley = ui
                 .painter()
-                .layout_no_wrap(title_text(spec.title), font, controls::CREAM);
+                .layout_no_wrap(display_title, font, controls::CREAM);
             ui.painter().with_clip_rect(title_rect).galley(
                 Pos2::new(
                     (header.center().x - galley.size().x / 2.0).max(title_rect.left()),
@@ -272,9 +266,7 @@ fn show_shell<R>(
                 )
                 .clicked();
             }
-            if collapsed {
-                None
-            } else {
+            if !collapsed {
                 ui.painter().line_segment(
                     [
                         Pos2::new(bounds.left() + 10.0, header.bottom()),
@@ -314,7 +306,6 @@ fn show_shell<R>(
                 if geometry.size != before {
                     ctx.data_mut(|d| d.insert_temp(resized_id, true));
                 }
-                Some(scrolled.inner)
             }
         });
     let top = ctx.memory(|m| {
@@ -356,12 +347,7 @@ fn show_shell<R>(
         d.insert_temp(gid, constrain(geometry, spec.viewport, collapsed));
         d.insert_temp(id.with("hardware-escape-guard"), wants_keyboard);
     });
-    ShellResponse {
-        response: shown.response,
-        inner: shown.inner,
-        help,
-        close,
-    }
+    ShellResponse { help, close }
 }
 
 fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry) {
@@ -468,13 +454,9 @@ impl<'a> Window<'a> {
         self.viewport = Some(value);
         self
     }
-    pub(super) fn show<R>(
-        self,
-        ctx: &egui::Context,
-        contents: impl FnOnce(&mut egui::Ui) -> R,
-    ) -> Option<egui::InnerResponse<Option<R>>> {
+    pub(super) fn show<R>(self, ctx: &egui::Context, contents: impl FnOnce(&mut egui::Ui) -> R) {
         if self.open.as_deref() == Some(&false) {
-            return None;
+            return;
         }
         let result = show_shell(
             ctx,
@@ -505,10 +487,6 @@ impl<'a> Window<'a> {
         {
             *open = false;
         }
-        Some(egui::InnerResponse {
-            inner: result.inner,
-            response: result.response,
-        })
     }
 }
 pub(super) struct ToolResponse {
@@ -557,7 +535,6 @@ impl ModalResponse {
 }
 pub(super) fn modal<R>(
     ctx: &egui::Context,
-    _id: egui::Id,
     identity: &str,
     title: &str,
     contents: impl FnOnce(&mut egui::Ui) -> R,

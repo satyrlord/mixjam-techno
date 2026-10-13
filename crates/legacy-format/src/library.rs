@@ -105,8 +105,6 @@ pub struct SampleMetadata {
 #[derive(Debug, Clone)]
 pub struct Library {
     samples: BTreeMap<u16, SampleMetadata>,
-    max: Catalog,
-    pub step_synth: BTreeMap<String, (String, String)>,
 }
 impl Library {
     pub fn load(root: &Path) -> Result<Self, LibraryError> {
@@ -155,57 +153,17 @@ impl Library {
                 }
             }
         }
-        let step_synth = parse_step_synth(&fs::read(resources.join("\x48YPSOUND"))?)?;
-        Ok(Self {
-            samples,
-            max,
-            step_synth,
-        })
+        // The Step synth sound index is part of a complete installation.
+        // A missing or malformed index rejects the library.
+        parse_step_synth(&fs::read(resources.join("\x48YPSOUND"))?)?;
+        Ok(Self { samples })
     }
     pub fn sample(&self, id: u16) -> Option<&SampleMetadata> {
         self.samples.get(&id)
     }
-    pub fn len(&self) -> usize {
-        self.samples.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.samples.is_empty()
-    }
     pub fn samples(&self) -> impl Iterator<Item = &SampleMetadata> {
         self.samples.values()
     }
-    pub fn max_slot_path(&self, slot: u16) -> Option<&str> {
-        self.max.get(slot)
-    }
-    pub fn max_slots(&self) -> usize {
-        self.max.len()
-    }
-    /// Original keys concatenate label 1 and label 2, keeping the last 250 characters.
-    /// Equal keys retain catalog order here; native qsort tie order is not established.
-    pub fn sorted_samples(&self, category: &str, sort: SampleSort) -> Vec<&SampleMetadata> {
-        let mut entries: Vec<_> = self.samples().filter(|s| s.category == category).collect();
-        if sort != SampleSort::Catalog {
-            entries.sort_by_key(|s| {
-                let label = format!("{}{}", s.labels[0], s.labels[1]);
-                let chars: Vec<_> = label.chars().collect();
-                let suffix: String = chars[chars.len().saturating_sub(250)..].iter().collect();
-                let prefix = if sort == SampleSort::Length {
-                    format!("{:02}", s.nominal_bars.unwrap_or(0))
-                } else {
-                    String::new()
-                };
-                format!("{prefix}{suffix}").to_ascii_lowercase()
-            });
-        }
-        entries
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SampleSort {
-    Catalog,
-    Name,
-    Length,
 }
 
 fn parse_step_synth(bytes: &[u8]) -> Result<BTreeMap<String, (String, String)>, LibraryError> {
@@ -239,55 +197,6 @@ fn parse_step_synth(bytes: &[u8]) -> Result<BTreeMap<String, (String, String)>, 
     Ok(out)
 }
 
-/// Narrow decoder for the common saved footer observed in this installation.
-/// Unknown prefix bytes and extra records are retained, never reserialized here.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MixTrailer {
-    pub raw: Vec<u8>,
-    pub routes: [u16; 8],
-    /// Extra data can contain imported sample overrides. Do not ignore it in playback.
-    pub unresolved_import: bool,
-    /// Original factory-only loader closes after routes, leaving this suffix unread.
-    pub extra_ignored: bool,
-    pub extra: Vec<u8>,
-}
-impl MixTrailer {
-    pub fn parse(bytes: &[u8]) -> Result<Self, LibraryError> {
-        const PREFIX: &[u8] = b"\x08\x0a\x01\0\x10\0\x52ave \x65Jay 1.01\0\x01\0\0";
-        if !bytes.starts_with(PREFIX) || bytes.get(24..26) != Some(&[8, 0]) || bytes.len() < 42 {
-            return Err(LibraryError(
-                "Unsupported or incomplete MIX footer layout".into(),
-            ));
-        }
-        let routes =
-            std::array::from_fn(|i| u16::from_le_bytes([bytes[26 + i * 2], bytes[27 + i * 2]]));
-        if routes.iter().any(|&r| r > 3) {
-            return Err(LibraryError("Unsupported track speaker mode".into()));
-        }
-        let extra = bytes[42..].to_vec();
-        Ok(Self {
-            raw: bytes.to_vec(),
-            routes,
-            unresolved_import: !extra.is_empty(),
-            extra_ignored: false,
-            extra,
-        })
-    }
-    /// Apply the proven original footer read boundary for factory-only arrangements.
-    /// Imported and kit-remapped MIX layouts need separate decoding.
-    pub fn for_mix(mix: &crate::mix::Mix, library: &Library) -> Result<Self, LibraryError> {
-        let mut trailer = Self::parse(&mix.trailer)?;
-        let factory_only = mix.events().all(|event| {
-            library.sample(event.sample_id).is_some_and(|sample| {
-                sample.source_catalog == "\x50XD" && sample.secondary.is_empty()
-            })
-        });
-        trailer.unresolved_import = !factory_only;
-        trailer.extra_ignored = factory_only && !trailer.extra.is_empty();
-        Ok(trailer)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,67 +225,5 @@ mod tests {
         );
         assert!(parse_step_synth(b"Vibes\n999999999999999999999999999999\n").is_err());
         assert!(parse_step_synth(b"Vibes\n1\n").is_err());
-    }
-    #[test]
-    fn display_sort_uses_both_labels_and_native_integer_length() {
-        let samples = [
-            (731, 2, ["Alpha", "Z"]),
-            (732, 1, ["Alpha", "a"]),
-            (733, 2, ["Alpha", "B"]),
-        ]
-        .into_iter()
-        .map(|(id, length, labels)| {
-            (
-                id,
-                SampleMetadata {
-                    id,
-                    max_slot: None,
-                    path: format!("{id}.\x70xd"),
-                    nominal_bars: Some(length),
-                    category: "bass".into(),
-                    group: String::new(),
-                    labels: labels.map(String::from),
-                    secondary: String::new(),
-                    source_catalog: "\x50XD".into(),
-                    raw_fields: None,
-                },
-            )
-        })
-        .collect();
-        let library = Library {
-            samples,
-            max: Catalog::parse(b"").unwrap(),
-            step_synth: BTreeMap::new(),
-        };
-        let ids = |sort| {
-            library
-                .sorted_samples("bass", sort)
-                .iter()
-                .map(|s| s.id)
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(ids(SampleSort::Catalog), [731, 732, 733]);
-        assert_eq!(ids(SampleSort::Name), [732, 733, 731]);
-        assert_eq!(ids(SampleSort::Length), [732, 733, 731]);
-        assert!(library.sorted_samples("voice", SampleSort::Name).is_empty());
-    }
-    #[test]
-    fn footer_keeps_overrides_and_rejects_partial_or_unsupported_modes() {
-        let mut bytes = b"\x08\x0a\x01\0\x10\0\x52ave \x65Jay 1.01\0\x01\0\0\x08\0".to_vec();
-        for route in [0u16, 0, 0, 0, 1, 2, 1, 2] {
-            bytes.extend(route.to_le_bytes());
-        }
-        let parsed = MixTrailer::parse(&bytes).unwrap();
-        assert_eq!(parsed.routes, [0, 0, 0, 0, 1, 2, 1, 2]);
-        assert!(!parsed.unresolved_import);
-        bytes.extend_from_slice(b"opaque override");
-        let parsed = MixTrailer::parse(&bytes).unwrap();
-        assert!(parsed.unresolved_import);
-        assert_eq!(parsed.raw, bytes);
-        for length in 0..42 {
-            assert!(MixTrailer::parse(&bytes[..length]).is_err());
-        }
-        bytes[26] = 4;
-        assert!(MixTrailer::parse(&bytes).is_err());
     }
 }

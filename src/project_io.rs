@@ -112,10 +112,11 @@ pub fn load_wave_config() -> Result<Option<WaveFolderConfig>, String> {
     }
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
-    file.take(16_385)
+    const LIMIT: u64 = 16 * 1024;
+    file.take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() > 16_384 {
+    if bytes.len() as u64 > LIMIT {
         return Err("The sample folder settings exceed the size limit.".into());
     }
     let config: WaveFolderConfig = serde_json::from_slice(&bytes)
@@ -214,7 +215,7 @@ pub fn load_library_config() -> Result<Vec<LibraryBinding>, String> {
 }
 
 fn validate_library_config(bindings: &[LibraryBinding]) -> Result<(), String> {
-    let mut products = std::collections::HashSet::new();
+    let mut products = HashSet::new();
     if bindings.len() > Product::ALL.len()
         || bindings
             .iter()
@@ -509,7 +510,6 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         .extend(candidate.restore_wav_palette(library)?);
     let used: std::collections::BTreeSet<_> =
         project.clips.iter().map(|clip| clip.sample_id).collect();
-    let mut catalogs = std::collections::HashMap::new();
     for id in used {
         if project.missing_sample(id).is_some() || id >= crate::products::IMPORTED_ID_START {
             continue;
@@ -517,12 +517,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         if let Err(reason) = candidate.read_pcm(id) {
             let (product, native_id) =
                 Product::sample_key(id).ok_or("The native sample ID has no product identity.")?;
-            let catalog = match catalogs.entry(product) {
-                std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-                std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(crate::catalog::wave_metadata(product)?)
-                }
-            };
+            let catalog = crate::catalog::bundled_wave_metadata(product)?;
             let entry = catalog.iter().find(|entry| entry.native_id == native_id);
             let (ticks, rate, inferred) =
                 sample_timing(&project, candidate.sample_by_id(id), id, project.bpm, None);
@@ -772,7 +767,9 @@ mod tests {
         .write_wav(&original)
         .unwrap();
         let mut library = Library::empty();
-        let imported = library.import_wav(&original, None, "Lead").unwrap();
+        let imported = library
+            .import_wav_with_tempo(&original, None, "Lead", 140.0)
+            .unwrap();
         assert_eq!(imported.source_sample_rate, Some(22_050));
         let project = Project {
             imported_samples: vec![imported.clone()].into(),
@@ -790,8 +787,9 @@ mod tests {
         let song = root.join("song.mixjam");
         save(&project, &song).unwrap();
         assert_eq!(
-            crate::mixjam::load(&song, &Library::empty())
+            crate::mixjam::load_song(&song, &Library::empty())
                 .unwrap()
+                .0
                 .imported_samples[0]
                 .source_sample_rate,
             Some(22_050)
@@ -948,8 +946,9 @@ mod tests {
         let song = root.join("song.mixjam");
         save(&opened, &song).unwrap();
         assert_eq!(
-            crate::mixjam::load(&song, &Library::empty())
+            crate::mixjam::load_song(&song, &Library::empty())
                 .unwrap()
+                .0
                 .imported_samples
                 .len(),
             1
@@ -1223,10 +1222,7 @@ mod tests {
         assert_eq!(retained.nominal_ticks, 1024);
         assert!(!retained.length_inferred);
         let silent = crate::audio::render_project(&opened, &empty).unwrap();
-        assert_eq!(
-            silent.frames(),
-            (opened.end_tick() as f64 * opened.frames_per_tick(44_100)).ceil() as u64
-        );
+        assert_eq!(silent.frames(), 80_621);
         assert!(silent.samples.iter().all(|sample| *sample == 0.0));
         save(&opened, &path).unwrap();
         assert_eq!(open(&path, &Library::empty()).unwrap().0, opened);
@@ -1300,7 +1296,9 @@ mod tests {
         );
         let other = root.join("new.wav");
         write_wave(&other);
-        let new_sample = ready.import_wav(&other, None, "Wave").unwrap();
+        let new_sample = ready
+            .import_wav_with_tempo(&other, None, "Wave", 140.0)
+            .unwrap();
         assert_ne!(new_sample.id, missing.id);
         fs::remove_file(other).unwrap();
         fs::remove_dir(root).unwrap();

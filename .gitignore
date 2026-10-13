@@ -1,17 +1,14 @@
 # Tooling
 .impeccable/
-.toolchain/
 
 # Build artifacts
-/out/
 /target/
 
-# Runtime and local data
-.original-runtime/
+# Local data
 /local-data/
+.env.local
 
 # Temporary files
-/temp/
 /tmp/
 
 # Research notes, original-format tooling, and local agent instructions

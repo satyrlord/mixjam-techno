@@ -248,12 +248,7 @@ fn convert(
         if source.1 == 0 || source.1 > 32766 {
             return Err("A D1 sample has an invalid native bar length.".into());
         }
-        if let Some((kit, _)) = footer
-            .regions
-            .iter()
-            .enumerate()
-            .find(|(_, (first, last, _))| (*first..=*last).contains(&event.sample))
-        {
+        if let Some((kit, _)) = saved_kit {
             let prefix = format!("dmkit{}/", kit + 1);
             if !source.2.is_empty()
                 && !source

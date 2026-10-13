@@ -148,8 +148,8 @@ components:
     width: "42px"
     height: "42px"
   rail-action:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.text}"
+    backgroundColor: "{colors.folded-face}"
+    textColor: "{colors.folded-cream}"
     rounded: "{rounded.control}"
     width: "48px"
     height: "30px"
@@ -316,8 +316,6 @@ Mixer Cream supplies dark-control lettering. Mixer Face and Edge define native
 value wells, buttons, and strip borders. Mixer Amber marks inverted polarity;
 the named checked state remains available. The graphite surround and fine
 ivory grain come from prepared material tiles. These tokens are local to Mixer.
-
-
 
 ## Typography
 
@@ -544,8 +542,8 @@ window, taskbar, and Windows executable use the same preserved mask.
 the PNG; `build.rs` links the ICO into the executable.
 
 Transparent PNG artwork supplies alpha masks. `src/ui_icons.rs` retains
-their alpha and normalizes RGB to white; the view applies text, muted, or accent
-tints. Textures are cached per egui context. Action names are available through
+their alpha and normalizes RGB to white; the view applies text, cream, muted, or
+accent tints. Textures are cached per egui context. Action names are available through
 tooltips and accessibility labels. Recording destination remains a visible
 track number. Canonical PNG artwork and provenance remain in `assets/rail/`.
 SVG files and embedded SVG artwork are not allowed in tracked or non-ignored
@@ -821,8 +819,8 @@ shared controls live in `assets/folded-metal/controls/{100,150,200}/`.
 shared material geometry supports Utility, Marine, Granite, Red, and Olive palettes. Fixed raster details
 fade to a matching solid base; no window depends on a complete fixed-size skin.
 Check the open and collapsed states, both resize directions, long content, focus,
-and all button states at supported sizes. Implementation and native visual checks
-for this revision are pending; concept approval is not verification.
+and all button states at supported sizes. Native visual checks for this revision
+are pending; concept approval is not verification.
 
 ### Empty states and feedback
 

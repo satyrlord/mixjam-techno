@@ -1,10 +1,7 @@
 //! RIFF/WAVE PCM container I/O. Audio processing belongs to the mixer.
 //! This module uses the standard container; its validation rules are new Rust
 //! bounds checks, not a reproduction of the original's malformed-file behavior.
-use std::{
-    fmt,
-    io::{self, Seek, SeekFrom, Write},
-};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WaveError(pub String);
@@ -22,12 +19,6 @@ pub struct PcmWave {
     pub samples: Vec<i16>,
 }
 impl PcmWave {
-    pub fn frames(&self) -> usize {
-        self.samples
-            .len()
-            .checked_div(usize::from(self.channels))
-            .unwrap_or(0)
-    }
     pub fn parse(data: &[u8]) -> Result<Self, WaveError> {
         let error = |s: &str| WaveError(s.into());
         if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WAVE" {
@@ -168,69 +159,11 @@ fn header(sample_rate: u32, channels: u16, data_bytes: u32) -> Result<Vec<u8>, W
     Ok(b)
 }
 
-/// Writes bounded blocks without holding a whole rendered song in memory.
-/// Finish patches the RIFF sizes after the last complete frame is written.
-pub struct WaveWriter<W: Write + Seek> {
-    sink: W,
-    rate: u32,
-    channels: u16,
-    data_bytes: u32,
-}
-impl<W: Write + Seek> WaveWriter<W> {
-    pub fn new(mut sink: W, rate: u32, channels: u16) -> Result<Self, Box<dyn std::error::Error>> {
-        if sink.stream_position()? != 0 {
-            return Err(WaveError("WAVE output must start at stream position zero".into()).into());
-        }
-        sink.write_all(&header(rate, channels, 0)?)?;
-        Ok(Self {
-            sink,
-            rate,
-            channels,
-            data_bytes: 0,
-        })
-    }
-    pub fn write_samples(&mut self, samples: &[i16]) -> io::Result<()> {
-        if !samples.len().is_multiple_of(usize::from(self.channels)) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Incomplete PCM sample frame",
-            ));
-        }
-        let added = samples
-            .len()
-            .checked_mul(2)
-            .and_then(|n| u32::try_from(n).ok())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "WAVE is too large"))?;
-        let total = self
-            .data_bytes
-            .checked_add(added)
-            .filter(|&n| n <= u32::MAX - 36)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "WAVE is too large"))?;
-        let mut bytes = Vec::with_capacity(added as usize);
-        for sample in samples {
-            bytes.extend_from_slice(&sample.to_le_bytes());
-        }
-        self.sink.write_all(&bytes)?;
-        self.data_bytes = total;
-        Ok(())
-    }
-    pub fn finish(mut self) -> Result<W, Box<dyn std::error::Error>> {
-        let end = self.sink.stream_position()?;
-        self.sink.seek(SeekFrom::Start(0))?;
-        self.sink
-            .write_all(&header(self.rate, self.channels, self.data_bytes)?)?;
-        self.sink.seek(SeekFrom::Start(end))?;
-        self.sink.flush()?;
-        Ok(self.sink)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     #[test]
-    fn pcm16_stereo_roundtrip_and_streaming_are_identical() {
+    fn pcm16_stereo_roundtrip() {
         let w = PcmWave {
             sample_rate: 44100,
             channels: 2,
@@ -238,10 +171,6 @@ mod tests {
         };
         let bytes = w.encode().unwrap();
         assert_eq!(PcmWave::parse(&bytes).unwrap(), w);
-        let mut stream = WaveWriter::new(Cursor::new(Vec::new()), 44100, 2).unwrap();
-        stream.write_samples(&w.samples[..2]).unwrap();
-        stream.write_samples(&w.samples[2..]).unwrap();
-        assert_eq!(stream.finish().unwrap().into_inner(), bytes);
     }
     #[test]
     fn accepts_unknown_padded_chunk_and_converts_unsigned8() {
@@ -278,7 +207,5 @@ mod tests {
         }
         .encode()
         .is_err());
-        let mut writer = WaveWriter::new(Cursor::new(Vec::new()), 44100, 2).unwrap();
-        assert!(writer.write_samples(&[1]).is_err());
     }
 }

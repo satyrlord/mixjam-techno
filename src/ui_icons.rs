@@ -58,14 +58,13 @@ pub(crate) enum RailIcon {
     Edit,
     Stretch,
     Record,
-    Mix,
     Undo,
     Redo,
     Help,
 }
 
 impl RailIcon {
-    pub(crate) const ALL: [Self; 19] = [
+    pub(crate) const ALL: [Self; 18] = [
         Self::Open,
         Self::Save,
         Self::SaveAs,
@@ -81,7 +80,6 @@ impl RailIcon {
         Self::Edit,
         Self::Stretch,
         Self::Record,
-        Self::Mix,
         Self::Undo,
         Self::Redo,
         Self::Help,
@@ -104,7 +102,6 @@ impl RailIcon {
             Self::Edit => "Edit",
             Self::Stretch => "Stretch",
             Self::Record => "Recording destination",
-            Self::Mix => "Mix tools",
             Self::Undo => "Undo",
             Self::Redo => "Redo",
             Self::Help => "Help",
@@ -129,6 +126,8 @@ impl RailIcon {
             Self::StepSynth => "Step synth: show or close Step synth",
             Self::Edit => "Edit: show or close Sample Editor",
             Self::Stretch => "Stretch: show or close Time Stretcher",
+            Self::Undo => "Undo (Ctrl+Z)",
+            Self::Redo => "Redo (Ctrl+Shift+Z or Ctrl+Y)",
             Self::Help => "Help (F1)",
             other => other.label(),
         }
@@ -164,7 +163,6 @@ impl RailIcon {
             Self::Edit => rail_pngs!("edit")[density],
             Self::Stretch => rail_pngs!("stretch")[density],
             Self::Record => rail_pngs!("record")[density],
-            Self::Mix => rail_pngs!("mix")[density],
             Self::Undo => rail_pngs!("undo")[density],
             Self::Redo => rail_pngs!("redo")[density],
             Self::Help => rail_pngs!("help")[density],

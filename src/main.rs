@@ -110,7 +110,7 @@ fn run() -> Result<(), String> {
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--mix PATH] [--output PATH] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--source-bpm BPM] [--mix PATH] [--output PATH] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
@@ -138,7 +138,7 @@ fn run() -> Result<(), String> {
     // Interface captures keep the synchronous scan so that they are complete.
     let background_scan = command == "gui"
         && samples.is_some()
-        && std::env::var_os("\x54ECHNOREA_CAPTURE_TO").is_none();
+        && std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO").is_none();
     if let Some(root) = &samples
         && !background_scan
     {
@@ -298,7 +298,7 @@ fn run() -> Result<(), String> {
             };
             #[cfg(feature = "gui")]
             {
-                let size = std::env::var("\x54ECHNOREA_WINDOW_SIZE")
+                let size = std::env::var("MIXJAM_TECHNO_WINDOW_SIZE")
                     .ok()
                     .and_then(|value| {
                         let (w, h) = value.split_once('x')?;

@@ -46,19 +46,22 @@ Use the current commands in `README.md` and `ARCHITECTURE.md`:
    Completion criterion: The release build has a current result or is not applicable.
 6. Run `python tools/assets/prepare-fonts.py --check` for native font assets.
    Completion criterion: The font check has a current result.
-   Run `python tools/assets/check-raster-assets.py`,
+7. Run `python tools/assets/check-raster-assets.py`,
    `python tools/assets/render-rail-icons.py --check`, and
-   `python tools/assets/render-app-icon.py --check` for visual assets.
+   `python tools/assets/render-app-icon.py --check` for visual assets. If the
+   private masters are in `local-data/artwork/`, also run
+   `python tools/assets/render-folded-metal.py --check` and
+   `python tools/assets/render-mixer.py --check`.
    Completion criterion: Tracked/non-ignored files contain no SVG assets and PNG variants match.
-7. For UI changes, run `tools/verify-ui.ps1` against the release build.
+8. For UI changes, run `tools/verify-ui.ps1` against the release build.
    Completion criterion: The native capture procedure has a current result.
-8. For UI changes, inspect the captures at the documented sizes.
+9. For UI changes, inspect the captures at the documented sizes.
    Completion criterion: Each capture has a recorded visual result.
-9. For import, project, render, or audio changes, run applicable focused tests.
-   Completion criterion: Each focused test has a current result.
-10. For those changes, run built-artifact scenarios with representative files.
+10. For import, project, render, or audio changes, run applicable focused tests.
+    Completion criterion: Each focused test has a current result.
+11. For those changes, run built-artifact scenarios with representative files.
     Completion criterion: Each scenario has a current result.
-11. Record original-engine parity, device behavior, listening, and clean-machine
+12. Record original-engine parity, device behavior, listening, and clean-machine
     checks separately.
     Completion criterion: None of these checks inherit a result from another check.
 

@@ -185,8 +185,8 @@ owns their shared 28-point header and fixed left-side `Bottom module` combo.
 Its width is 136 points and the selected module uses 16-point bold Syncopate.
 The combo keeps its control ID and horizontal anchor across module changes.
 Sounds filters render inline to its right. Each module renders only its body
-below that header. The Mixer tool-rail shortcut selects Mixer rather than
-toggling between modules. Selection and shared panel height are frontend
+below that header. The Mixer tool-rail shortcut selects Mixer, and selects
+Sounds when Mixer is already selected. Selection and shared panel height are frontend
 session state. Switching preserves resized height; opening Mixer raises a
 shorter panel to its 370-point minimum. Sounds retains its 180-point minimum.
 Later modules can extend the enum and the same selector.

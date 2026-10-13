@@ -121,8 +121,9 @@ Keep that folder available when you reopen them. File size alone does not show
 whether a song contains embedded audio.
 
 Older app releases also saved version-7 `.mixjam` files with genre-based sample
-paths. If the selected folder is `eJay\_original`, the importer can recover those
-references from the containing `eJay` folder, including moved category folders.
+paths. If the selected folder is named `_original`, the importer can also recover
+those references from its containing folder (not a drive root), including moved
+category folders.
 Exact relative paths take priority. If several files match, the first match loads
 and a **Sample conflicts** modal shows the choices. Select another path to update
 all instances in the song immediately. Use **Play song** to compare the result,
@@ -194,8 +195,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states.
-The capture set also covers every in-app dialog and tool window, expanded effects
-and provider settings, and missing-source processing states. Recorded-take captures
+The capture set also covers Help, Sample libraries, Import sound, Import details,
+Save your changes?, Sample conflicts, and the four tool windows, with expanded
+effects and provider settings and missing-source processing states. It has no
+case for the tool Help windows or Choose path. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.
 
 Every in-app tool window and modal uses Folded Metal: subtly aged painted metal,

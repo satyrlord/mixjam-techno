@@ -197,11 +197,11 @@ for size in sizes:
         name = f'{view}-{size}'
         capture = root / f'{name}.bmp'
         env = os.environ.copy()
-        for key in ('TECHNOREA_CAPTURE_TO', 'TECHNOREA_CAPTURE_VIEW', 'TECHNOREA_WINDOW_SIZE',
+        for key in ('MIXJAM_TECHNO_CAPTURE_TO', 'MIXJAM_TECHNO_CAPTURE_VIEW', 'MIXJAM_TECHNO_WINDOW_SIZE',
                     'MIXJAM_TECHNO_REFERENCE_SAMPLES'):
             env.pop(key, None)
-        env.update(TECHNOREA_CAPTURE_TO=str(capture), TECHNOREA_WINDOW_SIZE=size,
-                   TECHNOREA_CAPTURE_VIEW='' if view in ('arrangement', 'sparse', 'first-run') else view,
+        env.update(MIXJAM_TECHNO_CAPTURE_TO=str(capture), MIXJAM_TECHNO_WINDOW_SIZE=size,
+                   MIXJAM_TECHNO_CAPTURE_VIEW='' if view in ('arrangement', 'sparse', 'first-run') else view,
                    MIXJAM_TECHNO_DATA_DIR=str(root / 'user-data' / name))
         command = [str(exe), 'gui']
         if view != 'first-run':

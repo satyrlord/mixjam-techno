@@ -4,7 +4,7 @@ use crate::{
         Clip, ImportedSample, MissingReference, MissingSample, Project, TICKS_PER_BAR,
         normalize_import,
     },
-    library::Library,
+    library::{Library, decode_1252},
     products::{IMPORTED_ID_START, Product},
 };
 use legacy_format::{
@@ -130,7 +130,7 @@ fn convert(
         let name = record
             .labels
             .iter()
-            .map(|text| crate::library::decode_1252(&text.0))
+            .map(|text| decode_1252(&text.0))
             .collect::<Vec<_>>()
             .join(" ")
             .trim()
@@ -146,7 +146,7 @@ fn convert(
         let imported = ImportedSample {
             id,
             name,
-            group_name: crate::library::decode_1252(&record.category.0),
+            group_name: decode_1252(&record.category.0),
             path: saved_path,
             source_bpm: SOURCE_BPM,
             source_sample_rate: Some(44_100),
@@ -156,7 +156,7 @@ fn convert(
             Ok((path, bars, candidates)) => {
                 crate::library::record_wav_conflict(
                     &mut project,
-                    &crate::library::decode_1252(&record.path.0),
+                    &decode_1252(&record.path.0),
                     id,
                     candidates,
                 );
@@ -170,10 +170,10 @@ fn convert(
                 let mut missing = MissingSample::external(&imported, bars * TICKS_PER_BAR, reason);
                 for (key, value) in [
                     ("source_id", record.source_id.to_string()),
-                    ("label_1", crate::library::decode_1252(&record.labels[0].0)),
-                    ("label_2", crate::library::decode_1252(&record.labels[1].0)),
-                    ("saved_path", crate::library::decode_1252(&record.path.0)),
-                    ("category", crate::library::decode_1252(&record.category.0)),
+                    ("label_1", decode_1252(&record.labels[0].0)),
+                    ("label_2", decode_1252(&record.labels[1].0)),
+                    ("saved_path", decode_1252(&record.path.0)),
+                    ("category", decode_1252(&record.category.0)),
                 ] {
                     missing.metadata.insert(key.into(), value);
                 }
@@ -226,7 +226,7 @@ fn convert(
                             (project.imported_samples.len() + project.missing_samples.len()) as u32,
                         )
                         .ok_or("The imported sample ID limit was reached.")?;
-                    let name = crate::library::decode_1252(&kit.name.0);
+                    let name = decode_1252(&kit.name.0);
                     missing.reference = MissingReference::Generated {
                         product: Product::T1,
                         kind: "unresolved-kit".into(),
@@ -303,7 +303,7 @@ fn import_reference_path(raw: &ByteText, base: &Path) -> Result<PathBuf, String>
     if raw.0.is_empty() || raw.0.iter().any(|byte| *byte < 32 || *byte == 127) {
         return Err("The T1 imported sample path is empty or contains a control byte.".into());
     }
-    let reference = crate::library::decode_1252(&raw.0).replace('\\', "/");
+    let reference = decode_1252(&raw.0).replace('\\', "/");
     let path = PathBuf::from(&reference);
     let path = if path.is_absolute() {
         path
@@ -335,7 +335,7 @@ fn resolve_import_path(
     library: &Library,
 ) -> Result<(PathBuf, Vec<PathBuf>), String> {
     let path = import_reference_path(raw, base)?;
-    let reference = crate::library::decode_1252(&raw.0).replace('\\', "/");
+    let reference = decode_1252(&raw.0).replace('\\', "/");
     if path.is_file() {
         return Ok((path, Vec::new()));
     }

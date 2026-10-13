@@ -266,7 +266,7 @@ fn paint_grain(ui: &egui::Ui, texture: &egui::TextureHandle, rect: Rect) {
         (rect.max.to_vec2() * ppp).round().to_pos2() / ppp,
     );
     let size = texture.size_vec2() / ppp;
-    let origin = (rect.min.to_vec2() * ppp).round().to_pos2() / ppp;
+    let origin = rect.min;
     let interior = rect.shrink(4.0);
     let cuts = |minimum: f32, maximum: f32, low: f32, high: f32| {
         let mut points = vec![minimum.max(low + 4.0), maximum.min(high - 4.0)];
@@ -1287,17 +1287,6 @@ mod tests {
 
     #[test]
     fn folded_text_colors_stay_readable_on_their_actual_surfaces() {
-        let luminance = |color: Color32| {
-            let linear = |v: u8| {
-                let v = f64::from(v) / 255.0;
-                if v <= 0.04045 {
-                    v / 12.92
-                } else {
-                    ((v + 0.055) / 1.055).powf(2.4)
-                }
-            };
-            0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
-        };
         for (role, text, background) in [
             ("utility labels", CREAM, Palette::Utility.body()),
             ("marine labels", CREAM, Palette::Marine.body()),
@@ -1313,12 +1302,10 @@ mod tests {
             ("value and button labels", CREAM, FACE),
             ("disabled labels", DISABLED_TEXT, DISABLED_FACE),
         ] {
-            let a = luminance(text);
-            let b = luminance(background);
-            let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+            let ratio = contrast(text, background);
             assert!(
-                contrast >= 4.5,
-                "{role} contrast {contrast:.2}:1 must be at least4.5:1"
+                ratio >= 4.5,
+                "{role} contrast {ratio:.2}:1 must be at least 4.5:1"
             );
         }
     }

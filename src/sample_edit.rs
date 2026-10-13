@@ -16,6 +16,13 @@ pub fn trim(input: &Pcm, start_frame: u64, end_frame: u64) -> Result<Pcm, String
     })
 }
 
+/// An edited sound is saved as a WAV and read again, so it has the WAV limit.
+fn fits_a_wav(frames: usize, channels: usize) -> bool {
+    frames
+        .checked_mul(channels)
+        .is_some_and(|samples| samples <= crate::audio::MAX_WAV_SAMPLES)
+}
+
 /// Change sample pitch and duration together through linear interpolation.
 pub fn pitch_shift(input: &Pcm, semitones: f64) -> Result<Pcm, String> {
     input.validate()?;
@@ -30,10 +37,10 @@ pub fn pitch_shift(input: &Pcm, semitones: f64) -> Result<Pcm, String> {
     }
     let step = 2.0f64.powf(semitones / 12.0);
     let frames = (input.frames() as f64 / step).round().max(1.0) as usize;
-    if frames > 32_000_000 {
+    let channels = input.channels as usize;
+    if !fits_a_wav(frames, channels) {
         return Err("The edited sample is too large.".into());
     }
-    let channels = input.channels as usize;
     let source_frames = input.frames() as usize;
     let mut samples = vec![0.0; frames * channels];
     for frame in 0..frames {
@@ -73,10 +80,10 @@ pub fn time_stretch(input: &Pcm, source_bpm: f64, target_bpm: f64) -> Result<Pcm
     }
     let ratio = source_bpm / target_bpm;
     let frames = (source_frames as f64 * ratio).round().max(1.0) as usize;
-    if frames > 32_000_000 {
+    let channels = input.channels as usize;
+    if !fits_a_wav(frames, channels) {
         return Err("The stretched sample is too large.".into());
     }
-    let channels = input.channels as usize;
     let window = (input.sample_rate as usize / 50).max(32).min(source_frames);
     let hop = (window / 2).max(1);
     let search = (input.sample_rate as usize / 200).max(1);
@@ -165,6 +172,14 @@ pub fn time_stretch(input: &Pcm, source_bpm: f64, target_bpm: f64) -> Result<Pcm
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn an_edited_sound_can_be_as_large_as_an_importable_wav() {
+        assert!(fits_a_wav(64_000_000, 1));
+        assert!(!fits_a_wav(64_000_001, 1));
+        assert!(fits_a_wav(32_000_000, 2));
+        assert!(!fits_a_wav(32_000_001, 2));
+        assert!(!fits_a_wav(usize::MAX, 2));
+    }
     fn sine(frames: usize) -> Pcm {
         Pcm {
             sample_rate: 8000,

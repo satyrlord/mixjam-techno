@@ -34,7 +34,7 @@ const PROCESSORS: [&str; 10] = [
     "clip", "tube", "subeq", "comp", "max", "addeq", "tape", "width", "mbc", "lim",
 ];
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Document {
     format_version: u32,
@@ -48,7 +48,7 @@ struct Document {
     #[serde(default)]
     generator: Option<Value>,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Song {
     bpm: f64,
@@ -62,7 +62,7 @@ struct Fades {
     fade_in_ms: f64,
     fade_out_ms: f64,
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Lane {
     id: String,
@@ -130,10 +130,6 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     let header = serde_json::from_slice(&bytes)
         .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
     Ok((header, bytes))
-}
-
-pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
-    load_song(path, library).map(|(project, _)| project)
 }
 
 /// Open a version 8 or 9 song or import a version 7 project. The flag is true for
@@ -248,8 +244,8 @@ fn validate(document: &Document) -> Result<(), String> {
         }
         for p in &lane.placements {
             count += 1;
-            if count > 100_000 {
-                return Err("The MixJam project exceeds the 100,000-clip limit.".into());
+            if count > crate::engine::MAX_CLIPS {
+                return Err("The MixJam project exceeds the 1,000,000-clip limit.".into());
             }
             if !text(&p.id)
                 || !placement_ids.insert(&p.id)
@@ -503,7 +499,9 @@ mod tests {
         }
         writer.finalize().unwrap();
         let mut library = Library::empty();
-        library.import_wav(&wave, None, "Drum").unwrap();
+        library
+            .import_wav_with_tempo(&wave, None, "Drum", 140.0)
+            .unwrap();
         let project = convert(
             serde_json::from_value(fixture()).unwrap(),
             Path::new("song.mixjam"),

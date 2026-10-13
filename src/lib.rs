@@ -28,4 +28,6 @@ mod ui_icons;
 mod ui_test_harness {
     include!("ui.rs");
     include!("ui/tests.rs");
+    #[path = "../ui/window_lifecycle_tests.rs"]
+    mod window_lifecycle_tests;
 }

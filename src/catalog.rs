@@ -613,6 +613,22 @@ mod tests {
             pcm_digest: Some(pcm_identity_hex(&original)),
         };
         assert_eq!(metadata.pcm_identity(), Some(expected));
+        let text = serde_json::to_string(&metadata).unwrap();
+        assert!(text.contains("pcm_digest"));
+        let legacy: WaveMetadata = serde_json::from_str(&text.replace(
+            &format!(
+                ",\"pcm_digest\":\"{}\"",
+                metadata.pcm_digest.as_deref().unwrap()
+            ),
+            "",
+        ))
+        .unwrap();
+        assert_eq!(legacy.pcm_identity(), None);
+        assert_eq!(pcm_identity(&[]), pcm_identity(&[7]));
+    }
+
+    #[test]
+    fn house_codes_select_their_sample_group() {
         for (code, group) in [
             ("HS1AEX001(L)", Some("Groove")),
             ("HS1DSX010", Some("Xtra")),
@@ -628,18 +644,6 @@ mod tests {
         ] {
             assert_eq!(house_group_name(code), group, "{code}");
         }
-        let text = serde_json::to_string(&metadata).unwrap();
-        assert!(text.contains("pcm_digest"));
-        let legacy: WaveMetadata = serde_json::from_str(&text.replace(
-            &format!(
-                ",\"pcm_digest\":\"{}\"",
-                metadata.pcm_digest.as_deref().unwrap()
-            ),
-            "",
-        ))
-        .unwrap();
-        assert_eq!(legacy.pcm_identity(), None);
-        assert_eq!(pcm_identity(&[]), pcm_identity(&[7]));
     }
     static NEXT: AtomicU64 = AtomicU64::new(0);
     #[test]

@@ -1,10 +1,10 @@
 //! Counted timeline profiles from the installed Gen 2 and Gen 3 products.
 //! Unsupported generated records cause an error before a project is returned.
-use super::{drums, song_file::read_song_file as read_bounded};
+use super::{drums, song_file::read_song_file};
 use crate::{
     engine::{
-        Clip, ImportedSample, MAX_TICKS, MissingReference, MissingSample, Project, TICKS_PER_BAR,
-        TRACK_COUNT, Track, normalize_import,
+        Clip, ImportedSample, MAX_CLIPS, MAX_TICKS, MissingReference, MissingSample, Project,
+        TICKS_PER_BAR, TRACK_COUNT, Track, normalize_import,
     },
     library::{Library, decode_1252},
     products::{IMPORTED_ID_START, Product},
@@ -20,7 +20,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const MAX_EVENTS: usize = 100_000;
+const MAX_EMBEDDED_WAVES: usize = 100_000;
 const MAX_PENDING_ASSET_BYTES: usize = super::song_file::MIX_BYTE_LIMIT;
 const SENTINEL: [u8; 4] = [0xa9, 0x7a, 0x8a, 0x01];
 static NEXT_ASSET_TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -33,7 +33,7 @@ pub fn load(path: &Path, product: Product, library: &Library) -> Result<Project,
     if product == Product::T2 {
         return crate::legacy_mix::load(path, library);
     }
-    let bytes = read_bounded(path)?;
+    let bytes = read_song_file(path)?;
     let header = read_header(&bytes, product)?;
     let raw = read_timeline(&bytes, header.after_mixer, product)?;
     build_project(path, &bytes, product, library, header, raw)
@@ -103,7 +103,6 @@ pub(crate) struct Header {
 
 fn profile(product: Product) -> Result<(u32, usize, usize), String> {
     match product {
-        Product::T2 => Ok((0x889, 16, 4)),
         Product::D2 => Ok((0xa19, 16, 4)),
         Product::T3 => Ok((0x2572, 32, 8)),
         Product::D3 => Ok((0x2571, 32, 8)),
@@ -140,13 +139,9 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
     for track in &mut tracks[..mixer_count] {
         let control = reader.u16()?;
         let gain = reader.u16()?;
-        if product == Product::T2 && gain > 32767 {
-            return Err("The native track volume exceeds its supported range.".into());
-        }
         let signed_gain = match product {
-            Product::T3 | Product::D3 | Product::D4 | Product::H1 => native_fader_gain(gain, 1.33),
             Product::D2 => native_fader_gain(gain, 1.25),
-            _ => f32::from(gain) / 32767.0,
+            _ => native_fader_gain(gain, 1.33),
         };
         track.set_legacy_gain(signed_gain);
         if track_bytes == 4 {
@@ -334,7 +329,7 @@ fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, String> {
         let count = reader.u32()? as usize;
         if lane <= previous_lane
             || lane > maximum_lane
-            || count > MAX_EVENTS
+            || count > MAX_CLIPS
             || count > bytes.len().saturating_sub(reader.offset) / 7
         {
             return Err("The native timeline has an invalid lane or event count.".into());
@@ -344,7 +339,7 @@ fn read_chunk(bytes: &[u8], product: Product) -> Result<Vec<Event>, String> {
             return Err("The native song uses more than 64 tracks.".into());
         }
         for _ in 0..count {
-            if events.len() >= MAX_EVENTS {
+            if events.len() >= MAX_CLIPS {
                 return Err("The native song has too many events.".into());
             }
             let class = reader.u8()?;
@@ -689,7 +684,7 @@ fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'_>>, String
         }
         if let Some(source_path) = source_path {
             let wav = &bytes[riff..riff + size];
-            if sources.len() >= MAX_EVENTS {
+            if sources.len() >= MAX_EMBEDDED_WAVES {
                 return Err("The native song has too many embedded WAV records.".into());
             }
             sources.push(EmbeddedSource {
@@ -797,7 +792,7 @@ fn d2_embedded_sources(
         return Ok(Vec::new());
     }
     let count = reader.u32()? as usize;
-    if count > MAX_EVENTS || count > bytes.len().saturating_sub(reader.offset) / 12 {
+    if count > MAX_EMBEDDED_WAVES || count > bytes.len().saturating_sub(reader.offset) / 12 {
         return Err("The D2 embedded-audio count is invalid.".into());
     }
     let mut sources = Vec::new();
@@ -1708,15 +1703,7 @@ mod tests {
 
     #[test]
     fn counted_profiles_import_from_wav_only_native_providers() {
-        let root = std::env::temp_dir().join(format!(
-            "counted-wav-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
+        let root = asset_test_directory("counted-wav");
         let wave_path = root.join("sample.wav");
         fs::write(&wave_path, wave_fixture()).unwrap();
         let path = root.join("song.mix");
@@ -1776,12 +1763,10 @@ mod tests {
             assert_eq!(header.effective_bpm, 146.0);
             assert_eq!(header.tracks.len(), TRACK_COUNT);
             assert_eq!(header.tracks[0].pan, 0.0);
-            let gain = match product {
-                Product::T3 | Product::D3 | Product::D4 | Product::H1 => {
-                    native_fader_gain(16384, 1.33)
-                }
-                Product::D2 => native_fader_gain(16384, 1.25),
-                _ => 16384.0 / 32767.0,
+            let gain = if product == Product::D2 {
+                40961.0 / 65536.0
+            } else {
+                43582.0 / 65536.0
             };
             assert_eq!(header.tracks[0].gain, gain);
             let project = build_project(
@@ -1963,7 +1948,7 @@ mod tests {
     fn installed_native_mixer_headers_preserve_artist_settings() {
         let root = crate::project_io::default_root(Product::D3).unwrap();
         let header = read_header(
-            &read_bounded(&root.join("MIX/start.mix")).unwrap(),
+            &read_song_file(&root.join("MIX/start.mix")).unwrap(),
             Product::D3,
         )
         .unwrap();
@@ -1991,7 +1976,7 @@ mod tests {
         ] {
             let root = crate::project_io::default_root(product).unwrap();
             let header = read_header(
-                &read_bounded(&root.join("MIX").join(name)).unwrap(),
+                &read_song_file(&root.join("MIX").join(name)).unwrap(),
                 product,
             )
             .unwrap();
@@ -2324,15 +2309,7 @@ mod tests {
 
     #[test]
     fn preserved_audio_never_overwrites_an_existing_file() {
-        let directory = std::env::temp_dir().join(format!(
-            "mixjam-techno-chunk-audio-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&directory).unwrap();
+        let directory = asset_test_directory("chunk-audio");
         let path = directory.join("sample.wav");
         let bytes = wave_fixture();
         preserve_wave(&path, &bytes).unwrap();
@@ -2615,14 +2592,7 @@ mod tests {
 
     #[test]
     fn missing_user_wave_does_not_bind_an_unrelated_installation_basename() {
-        let directory = std::env::temp_dir().join(format!(
-            "mixjam-techno-wave-identity-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let directory = asset_test_directory("wave-identity");
         let installation = directory.join("installation/MIXWAVES");
         fs::create_dir_all(&installation).unwrap();
         let unrelated = installation.join("kick.wav");
@@ -2673,7 +2643,7 @@ mod tests {
                 continue;
             }
             songs += 1;
-            let bytes = read_bounded(&path).unwrap();
+            let bytes = read_song_file(&path).unwrap();
             let header = read_header(&bytes, Product::D2).unwrap();
             let timeline = read_timeline(&bytes, header.after_mixer, Product::D2).unwrap();
             let kit =
@@ -2719,11 +2689,10 @@ mod tests {
                 if !path
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("mix"))
-                    || path.file_name().unwrap() == ".mix"
                 {
                     continue;
                 }
-                let bytes = read_bounded(&path).unwrap();
+                let bytes = read_song_file(&path).unwrap();
                 let header = read_header(&bytes, product).unwrap();
                 let timeline = read_timeline(&bytes, header.after_mixer, product).unwrap();
                 let patterns: Vec<_> = timeline
@@ -2766,11 +2735,11 @@ mod tests {
     #[ignore = "Requires the local installed song fixtures."]
     fn installed_counted_profiles_have_explicit_complete_results() {
         let cases = [
-            (Product::D2, "D2/MIX", (13, 13, 0)),
-            (Product::D3, "MIX", (17, 17, 0)),
-            (Product::D4, "Mix", (12, 12, 0)),
-            (Product::H1, "Mix", (14, 14, 0)),
-            (Product::T3, "Mix", (20, 20, 0)),
+            (Product::D2, "D2/MIX", (13, 13)),
+            (Product::D3, "MIX", (17, 17)),
+            (Product::D4, "Mix", (12, 12)),
+            (Product::H1, "Mix", (14, 14)),
+            (Product::T3, "Mix", (20, 20)),
         ];
         for (product, mix_folder, expected) in cases {
             let installation = crate::project_io::default_root(product)
@@ -2779,14 +2748,13 @@ mod tests {
             if product == Product::D4 {
                 let placeholder = folder.join(".mix");
                 assert_eq!(fs::metadata(&placeholder).unwrap().len(), 2);
-                assert!(read_header(&read_bounded(&placeholder).unwrap(), product).is_err());
+                assert!(read_header(&read_song_file(&placeholder).unwrap(), product).is_err());
             }
             let mut library = Library::empty();
             library
                 .register(product, &installation, Path::new(""))
                 .unwrap();
             let mut parsed = 0;
-            let mut malformed = 0;
             let mut drum_audio_projects = 0;
             let mut failures = Vec::new();
             let paths: Vec<_> = fs::read_dir(&folder)
@@ -2799,7 +2767,7 @@ mod tests {
                 .collect();
             assert_eq!(paths.len(), expected.0);
             for path in paths {
-                let bytes = read_bounded(&path).unwrap();
+                let bytes = read_song_file(&path).unwrap();
                 let result = read_header(&bytes, product).and_then(|header| {
                     let events = read_timeline(&bytes, header.after_mixer, product)?;
                     build_project(&path, &bytes, product, &library, header, events)
@@ -2910,22 +2878,12 @@ mod tests {
                         }
                         parsed += 1;
                     }
-                    Err(_)
-                        if product == Product::D4
-                            && path.file_name().is_some_and(|name| name == ".mix")
-                            && bytes.len() == 2 =>
-                    {
-                        malformed += 1;
-                    }
                     Err(error) => failures.push(format!("{}: {error}", path.display())),
                 }
             }
-            eprintln!(
-                "{}: {parsed} complete projects, {malformed} explicit malformed rejections",
-                product.label()
-            );
+            eprintln!("{}: {parsed} complete projects", product.label());
             assert!(failures.is_empty(), "{}", failures.join("\n"));
-            assert_eq!((parsed, malformed), (expected.1, expected.2));
+            assert_eq!(parsed, expected.1);
             assert_eq!(
                 drum_audio_projects,
                 match product {

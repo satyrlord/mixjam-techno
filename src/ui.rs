@@ -20,9 +20,6 @@ mod sample_editor;
 mod step_synth;
 #[path = "ui/stretch.rs"]
 mod stretch;
-#[cfg(test)]
-#[path = "ui/window_lifecycle_tests.rs"]
-mod window_lifecycle_tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -157,7 +154,6 @@ enum FileRequest {
     ResolveMissing(u32),
 }
 
-#[derive(Clone, Copy, PartialEq)]
 enum PathKind {
     OpenFile,
     SaveFile,
@@ -358,7 +354,7 @@ impl MixJamApp {
         let (status, status_error) = startup_status(&mut session);
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
-            if std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok("library-expanded") {
+            if app.capture_view_is("library-expanded") {
                 cc.egui_ctx.data_mut(|data| {
                     data.insert_persisted(
                         egui::Id::new("sounds"),
@@ -395,9 +391,9 @@ impl MixJamApp {
     }
 
     fn from_session(mut session: Session, status: String, status_error: bool) -> Self {
-        let capture_path = std::env::var_os("\x54ECHNOREA_CAPTURE_TO").map(PathBuf::from);
+        let capture_path = std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO").map(PathBuf::from);
         let capture_view = if capture_path.is_some() {
-            std::env::var("\x54ECHNOREA_CAPTURE_VIEW").unwrap_or_default()
+            std::env::var("MIXJAM_TECHNO_CAPTURE_VIEW").unwrap_or_default()
         } else {
             String::new()
         };
@@ -562,7 +558,7 @@ impl MixJamApp {
 
     fn capture_view_is(&self, view: &str) -> bool {
         self.capture_path.is_some()
-            && std::env::var("\x54ECHNOREA_CAPTURE_VIEW").as_deref() == Ok(view)
+            && std::env::var("MIXJAM_TECHNO_CAPTURE_VIEW").as_deref() == Ok(view)
     }
 
     fn clear_selection(&mut self) {
@@ -706,14 +702,11 @@ impl MixJamApp {
         }
     }
 
-    /// A cancelled picker leaves the project unchanged. The application
-    /// validates the chosen audio and rejects a reference that no longer exists.
-    fn resolve_missing_sample_with(&mut self, sample_id: u32, path: Option<PathBuf>) {
-        let Some(path) = path else {
-            return;
-        };
-        match self.session.resolve_missing_sample(sample_id, &path) {
-            Ok(_) => {
+    /// The application validates the chosen audio and rejects a reference
+    /// that no longer exists.
+    fn resolve_missing_sample_with(&mut self, sample_id: u32, path: &Path) {
+        match self.session.resolve_missing_sample(sample_id, path) {
+            Ok(()) => {
                 self.context_missing_sample = None;
                 self.reconcile_selection();
                 self.sync_notice();
@@ -1278,15 +1271,15 @@ impl MixJamApp {
     }
 
     fn finish_drag(&mut self, ctx: &egui::Context) {
-        if self.drag.is_none() {
+        let Some(drag) = &self.drag else {
             return;
-        }
+        };
         if let Some(pos) = ctx.input(|i| i.pointer.latest_pos()) {
             let painter = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Tooltip,
                 egui::Id::new("drag_sound"),
             ));
-            let label = match self.drag.as_ref().unwrap() {
+            let label = match drag {
                 DragItem::Sample(id) => self
                     .session
                     .library()
@@ -1310,7 +1303,9 @@ impl MixJamApp {
         if !ctx.input(|i| i.pointer.any_released()) {
             return;
         }
-        let item = self.drag.take().unwrap();
+        let Some(item) = self.drag.take() else {
+            return;
+        };
         let pos = ctx.input(|i| i.pointer.latest_pos());
         if let (Some(pos), Some(rect)) = (pos, self.timeline_rect)
             && self
@@ -1389,35 +1384,28 @@ impl MixJamApp {
         if let Some(action) = self.pending_action
             && self.path_prompt.is_none()
         {
-            let response = dialog::modal(
-                ctx,
-                egui::Id::new("unsaved_changes"),
-                "Save your changes?",
-                "Save your changes?",
-                |ui| {
-                    ui.label(
-                        if self.session.has_recorded_take() && self.session.unsaved() {
-                            "The song and the recorded take are unsaved."
-                        } else if self.session.has_recorded_take() {
-                            "The recorded take is unsaved."
-                        } else {
-                            "The song has unsaved changes."
-                        },
-                    );
-                    ui.horizontal(|ui| {
-                        if dialog::primary(ui, "Save changes").clicked() {
-                            self.save_changes(action, ctx);
-                        }
-                        if dialog::danger(ui, "Discard changes").clicked() {
-                            self.run_action(action, ctx);
-                        }
-                        if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked()
-                        {
-                            self.pending_action = None;
-                        }
-                    });
-                },
-            );
+            let response = dialog::modal(ctx, "Save your changes?", "Save your changes?", |ui| {
+                ui.label(
+                    if self.session.has_recorded_take() && self.session.unsaved() {
+                        "The song and the recorded take are unsaved."
+                    } else if self.session.has_recorded_take() {
+                        "The recorded take is unsaved."
+                    } else {
+                        "The song has unsaved changes."
+                    },
+                );
+                ui.horizontal(|ui| {
+                    if dialog::primary(ui, "Save changes").clicked() {
+                        self.save_changes(action, ctx);
+                    }
+                    if dialog::danger(ui, "Discard changes").clicked() {
+                        self.run_action(action, ctx);
+                    }
+                    if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
+                        self.pending_action = None;
+                    }
+                });
+            });
             if response.should_close() {
                 self.pending_action = None;
                 self.resume_save_changes = false;
@@ -1527,117 +1515,109 @@ impl MixJamApp {
         let recording = self.session.is_recording();
         let mut choice = None;
         let mut confirm = false;
-        let response = dialog::modal(
-            ctx,
-            egui::Id::new("sample_conflicts"),
-            "Sample conflicts",
-            "Sample conflicts",
-            |ui| {
-                ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 700.0));
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                ui.label("Several files match a saved sample. The first match is selected until you choose another.");
-                ui.label("Each choice updates every instance of that source in this song.");
-                ui.add_space(10.0);
-                egui::ScrollArea::vertical()
-                    .id_salt("sample_conflict_choices")
-                    .max_height((ctx.viewport_rect().height() - 310.0).max(160.0))
-                    .show(ui, |ui| {
-                        for (index, conflict) in conflicts.iter().enumerate() {
-                            ui.push_id(index, |ui| {
-                                if index > 0 {
-                                    ui.add_space(8.0);
-                                    ui.separator();
-                                    ui.add_space(8.0);
-                                }
-                                ui.add(
-                                    egui::Label::new(display_paths(&conflict.reference))
-                                        .wrap()
-                                        .selectable(true),
-                                );
-                                let instances = self
-                                    .session
-                                    .project()
-                                    .clips
-                                    .iter()
-                                    .filter(|clip| conflict.sample_ids.contains(&clip.sample_id))
-                                    .count();
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{instances} instances · {} matches",
-                                        conflict.candidates.len()
-                                    ))
-                                    .color(controls::CREAM),
-                                );
-                                ui.add_enabled_ui(!recording, |ui| {
-                                    for (candidate_index, path) in
-                                        conflict.candidates.iter().enumerate()
+        let response = dialog::modal(ctx, "Sample conflicts", "Sample conflicts", |ui| {
+            ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 700.0));
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            ui.label("Several files match a saved sample. The first match is selected until you choose another.");
+            ui.label("Each choice updates every instance of that source in this song.");
+            ui.add_space(10.0);
+            egui::ScrollArea::vertical()
+                .id_salt("sample_conflict_choices")
+                .max_height((ctx.viewport_rect().height() - 310.0).max(160.0))
+                .show(ui, |ui| {
+                    for (index, conflict) in conflicts.iter().enumerate() {
+                        ui.push_id(index, |ui| {
+                            if index > 0 {
+                                ui.add_space(8.0);
+                                ui.separator();
+                                ui.add_space(8.0);
+                            }
+                            ui.add(
+                                egui::Label::new(display_paths(&conflict.reference))
+                                    .wrap()
+                                    .selectable(true),
+                            );
+                            let instances = self
+                                .session
+                                .project()
+                                .clips
+                                .iter()
+                                .filter(|clip| conflict.sample_ids.contains(&clip.sample_id))
+                                .count();
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{instances} instances · {} matches",
+                                    conflict.candidates.len()
+                                ))
+                                .color(controls::CREAM),
+                            );
+                            ui.add_enabled_ui(!recording, |ui| {
+                                for (candidate_index, path) in
+                                    conflict.candidates.iter().enumerate()
+                                {
+                                    let path = display_paths(&path.to_string_lossy());
+                                    let selected = candidate_index == conflict.selected;
+                                    let label = format!(
+                                        "{}{}\n{path}",
+                                        if selected {
+                                            "Selected match "
+                                        } else {
+                                            "Use match "
+                                        },
+                                        candidate_index + 1
+                                    );
+                                    if controls::radio(ui, selected, &label).clicked() && !selected
                                     {
-                                        let path = display_paths(&path.to_string_lossy());
-                                        let selected = candidate_index == conflict.selected;
-                                        let label = format!(
-                                            "{}{}\n{path}",
-                                            if selected {
-                                                "Selected match "
-                                            } else {
-                                                "Use match "
-                                            },
-                                            candidate_index + 1
-                                        );
-                                        if controls::radio(ui, selected, &label).clicked()
-                                            && !selected
-                                        {
-                                            choice = Some((index, candidate_index));
-                                        }
+                                        choice = Some((index, candidate_index));
                                     }
-                                });
+                                }
                             });
-                        }
-                    });
-                ui.add_space(10.0);
-                if recording {
-                    ui.colored_label(
-                        CORAL,
-                        "Stop recording before changing or confirming sample choices.",
-                    );
-                    if controls::button(ui, "Stop recording", controls::ButtonRole::Secondary)
-                        .clicked()
-                    {
-                        self.stop();
-                    }
-                }
-                if let Some(error) = &self.sample_conflict_error {
-                    ui.colored_label(CORAL, display_paths(error));
-                }
-                ui.horizontal(|ui| {
-                    if ui
-                        .add_enabled_ui(!recording, |ui| dialog::primary(ui, "Keep choices"))
-                        .inner
-                        .clicked()
-                    {
-                        confirm = true;
-                    }
-                    let playing = self.session.wants_playback();
-                    if ui
-                        .add_enabled_ui(!recording, |ui| {
-                            controls::button(
-                                ui,
-                                if playing { "Pause song" } else { "Play song" },
-                                controls::ButtonRole::Secondary,
-                            )
-                        })
-                        .inner
-                        .clicked()
-                    {
-                        if playing {
-                            self.pause();
-                        } else {
-                            self.start_playback();
-                        }
+                        });
                     }
                 });
-                ui.small("Esc closes this window without confirming. Reopen from Sample conflicts in the status bar.");
-            },
-        );
+            ui.add_space(10.0);
+            if recording {
+                ui.colored_label(
+                    CORAL,
+                    "Stop recording before changing or confirming sample choices.",
+                );
+                if controls::button(ui, "Stop recording", controls::ButtonRole::Secondary).clicked()
+                {
+                    self.stop();
+                }
+            }
+            if let Some(error) = &self.sample_conflict_error {
+                ui.colored_label(CORAL, display_paths(error));
+            }
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled_ui(!recording, |ui| dialog::primary(ui, "Keep choices"))
+                    .inner
+                    .clicked()
+                {
+                    confirm = true;
+                }
+                let playing = self.session.wants_playback();
+                if ui
+                    .add_enabled_ui(!recording, |ui| {
+                        controls::button(
+                            ui,
+                            if playing { "Pause song" } else { "Play song" },
+                            controls::ButtonRole::Secondary,
+                        )
+                    })
+                    .inner
+                    .clicked()
+                {
+                    if playing {
+                        self.pause();
+                    } else {
+                        self.start_playback();
+                    }
+                }
+            });
+            ui.small("Esc closes this window without confirming. Reopen from Sample conflicts in the status bar.");
+        });
         if let Some((conflict, candidate)) = choice {
             match self.session.resolve_sample_conflict(conflict, candidate) {
                 Ok(()) => {
@@ -2082,7 +2062,7 @@ impl MixJamApp {
                 }
                 self.step_synth_notice();
             }
-            FileRequest::ResolveMissing(id) => self.resolve_missing_sample_with(id, Some(path)),
+            FileRequest::ResolveMissing(id) => self.resolve_missing_sample_with(id, &path),
         }
     }
 
@@ -2113,60 +2093,52 @@ impl MixJamApp {
         let spec = self.path_spec(&prompt.request);
         let mut confirm = false;
         let mut cancel = false;
-        let modal = dialog::modal(
-            ctx,
-            egui::Id::new("path_prompt"),
-            "Choose path",
-            &spec.title,
-            |ui| {
-                ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 620.0));
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                ui.label(match spec.kind {
-                    PathKind::OpenFile => "Enter the full path of the file to open.",
-                    PathKind::SaveFile => {
-                        "Enter the full path of the file to save. An existing file is replaced."
-                    }
-                    PathKind::Folder => "Enter the full path of the folder.",
-                });
-                if let Some((name, extensions)) = spec.filter {
-                    let extensions: Vec<_> = extensions
-                        .iter()
-                        .map(|extension| format!(".{extension}"))
-                        .collect();
-                    ui.label(
-                        egui::RichText::new(format!("{name}: {}", extensions.join(", ")))
-                            .color(controls::CREAM),
-                    );
+        let modal = dialog::modal(ctx, "Choose path", &spec.title, |ui| {
+            ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 620.0));
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+            ui.label(match spec.kind {
+                PathKind::OpenFile => "Enter the full path of the file to open.",
+                PathKind::SaveFile => {
+                    "Enter the full path of the file to save. An existing file is replaced."
                 }
-                if let Some(name) = &spec.file_name {
-                    ui.label(
-                        egui::RichText::new(format!("Suggested name: {name}"))
-                            .color(controls::CREAM),
-                    );
-                }
-                let path = name_control(
-                    ui.add(
-                        egui::TextEdit::singleline(&mut prompt.text)
-                            .hint_text("Path")
-                            .desired_width(f32::INFINITY),
-                    ),
-                    "Path",
+                PathKind::Folder => "Enter the full path of the folder.",
+            });
+            if let Some((name, extensions)) = spec.filter {
+                let extensions: Vec<_> = extensions
+                    .iter()
+                    .map(|extension| format!(".{extension}"))
+                    .collect();
+                ui.label(
+                    egui::RichText::new(format!("{name}: {}", extensions.join(", ")))
+                        .color(controls::CREAM),
                 );
-                if !prompt.focused {
-                    path.request_focus();
-                    prompt.focused = true;
-                }
-                confirm = path.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                if let Some(error) = &prompt.error {
-                    ui.colored_label(CORAL, error);
-                }
-                ui.horizontal(|ui| {
-                    confirm |= dialog::primary(ui, "Confirm path").clicked();
-                    cancel =
-                        controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked();
-                });
-            },
-        );
+            }
+            if let Some(name) = &spec.file_name {
+                ui.label(
+                    egui::RichText::new(format!("Suggested name: {name}")).color(controls::CREAM),
+                );
+            }
+            let path = name_control(
+                ui.add(
+                    egui::TextEdit::singleline(&mut prompt.text)
+                        .hint_text("Path")
+                        .desired_width(f32::INFINITY),
+                ),
+                "Path",
+            );
+            if !prompt.focused {
+                path.request_focus();
+                prompt.focused = true;
+            }
+            confirm = path.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if let Some(error) = &prompt.error {
+                ui.colored_label(CORAL, error);
+            }
+            ui.horizontal(|ui| {
+                confirm |= dialog::primary(ui, "Confirm path").clicked();
+                cancel = controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked();
+            });
+        });
         if confirm {
             match spec.checked(&prompt.text) {
                 Ok(path) => {
@@ -2198,7 +2170,6 @@ impl MixJamApp {
                 .default_width(540.0)
                 .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
                 .constrain_to(ctx.viewport_rect().shrink(12.0))
-
                 .show(ctx, |ui| {
                     let scan = self.session.wave_scan();
                     if scan.is_none() && self.session.library().wav_root().is_none() {
@@ -2206,10 +2177,7 @@ impl MixJamApp {
                     }
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
-                        name_control(
-                            controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM"),
-                            "Fallback BPM",
-                        )
+                        controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM")
                             .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
                         if ui
                             .add_enabled_ui(!self.session.is_recording() && scan.is_none(), |ui| controls::button(ui, "Choose WAV folder", controls::ButtonRole::Secondary))
@@ -2264,43 +2232,44 @@ impl MixJamApp {
                             });
                     }
                     controls::disclosure("Optional product providers")
-                        .default_open(self.capture_view_is("library-providers")).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let products = egui::ComboBox::from_id_salt("library_product")
-                            .selected_text(self.library_product.label())
-                            .show_ui(ui, |ui| {
-                                for product in Product::ALL {
-                                    ui.selectable_value(
-                                        &mut self.library_product,
-                                        product,
-                                        product.label(),
-                                    );
+                        .default_open(self.capture_view_is("library-providers"))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let products = egui::ComboBox::from_id_salt("library_product")
+                                    .selected_text(self.library_product.label())
+                                    .show_ui(ui, |ui| {
+                                        for product in Product::ALL {
+                                            ui.selectable_value(
+                                                &mut self.library_product,
+                                                product,
+                                                product.label(),
+                                            );
+                                        }
+                                    })
+                                    .response;
+                                name_control(products, "Provider product");
+                                if controls::button(ui, "Choose folder", controls::ButtonRole::Secondary).clicked() {
+                                    self.ask_path(FileRequest::ProviderFolder(self.library_product));
                                 }
-                            })
-                            .response;
-                        name_control(products, "Provider product");
-                        if controls::button(ui, "Choose folder", controls::ButtonRole::Secondary).clicked() {
-                            self.ask_path(FileRequest::ProviderFolder(self.library_product));
-                        }
-                    });
-                    ui.separator();
-                    let bindings = self.session.library().bindings().to_vec();
-                    if bindings.is_empty() {
-                        ui.label("No providers");
-                    }
-                    for binding in bindings {
-                        ui.horizontal(|ui| {
-                            ui.label(binding.product.label());
-                            if controls::button(ui, "Remove", controls::ButtonRole::Secondary).clicked() {
-                                self.remove_library(binding.product);
+                            });
+                            ui.separator();
+                            let bindings = self.session.library().bindings().to_vec();
+                            if bindings.is_empty() {
+                                ui.label("No providers");
+                            }
+                            for binding in bindings {
+                                ui.horizontal(|ui| {
+                                    ui.label(binding.product.label());
+                                    if controls::button(ui, "Remove", controls::ButtonRole::Secondary).clicked() {
+                                        self.remove_library(binding.product);
+                                    }
+                                });
+                                let path = display_paths(&binding.root.to_string_lossy());
+                                ui.add(egui::Label::new(&path).truncate())
+                                    .on_hover_text(&path);
+                                ui.add_space(6.0);
                             }
                         });
-                        let path = display_paths(&binding.root.to_string_lossy());
-                        ui.add(egui::Label::new(&path).truncate())
-                            .on_hover_text(&path);
-                        ui.add_space(6.0);
-                    }
-                    });
                 });
             self.show_libraries = open;
         }
@@ -2384,39 +2353,29 @@ impl MixJamApp {
             && self.path_prompt.is_none()
             && (self.pending_action.is_none() || dialog::is_collapsed(ctx, "Save your changes?"))
         {
-            let response = dialog::modal(
-                ctx,
-                egui::Id::new("import_sound"),
-                "Import sound",
-                "Import sound",
-                |ui| {
-                    ui.label(path.file_name().unwrap_or_default().to_string_lossy())
-                        .on_hover_text(display_paths(&path.to_string_lossy()));
-                    ui.horizontal(|ui| {
-                        ui.label("Source BPM");
-                        name_control(
-                            controls::number(ui, &mut self.import_bpm, 7.5..=1200.0, "Source BPM"),
-                            "Source BPM",
-                        )
+            let response = dialog::modal(ctx, "Import sound", "Import sound", |ui| {
+                ui.label(path.file_name().unwrap_or_default().to_string_lossy())
+                    .on_hover_text(display_paths(&path.to_string_lossy()));
+                ui.horizontal(|ui| {
+                    ui.label("Source BPM");
+                    controls::number(ui, &mut self.import_bpm, 7.5..=1200.0, "Source BPM")
                         .on_hover_text("The sound's original tempo, separate from project BPM.");
-                    });
-                    ui.horizontal(|ui| {
-                        if dialog::primary(ui, "Import into Wave").clicked() {
-                            match self.register_file(&path, "Wave", self.import_bpm) {
-                                Ok(_) => {
-                                    self.import_path = None;
-                                    self.message(format!("Imported {}.", path.display()));
-                                }
-                                Err(error) => self.error(error),
+                });
+                ui.horizontal(|ui| {
+                    if dialog::primary(ui, "Import into Wave").clicked() {
+                        match self.register_file(&path, "Wave", self.import_bpm) {
+                            Ok(_) => {
+                                self.import_path = None;
+                                self.message(format!("Imported {}.", path.display()));
                             }
+                            Err(error) => self.error(error),
                         }
-                        if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked()
-                        {
-                            self.import_path = None;
-                        }
-                    });
-                },
-            );
+                    }
+                    if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
+                        self.import_path = None;
+                    }
+                });
+            });
             if response.should_close() {
                 self.import_path = None;
             }
@@ -2449,7 +2408,7 @@ impl MixJamApp {
                 &mut self.effects,
             );
             match action {
-                Ok(effects::Action::Listen) => {
+                effects::Action::Listen => {
                     match self.session.processed_pcm(source_id, &self.effects) {
                         Ok(pcm) => self.play_pcm(pcm, "Listening to the processed sound."),
                         Err(error) => self.error(error),
@@ -2457,7 +2416,7 @@ impl MixJamApp {
                     self.effects_feedback.message = Some(self.status.clone());
                     self.effects_feedback.error = self.status_error;
                 }
-                Ok(effects::Action::Save) => {
+                effects::Action::Save => {
                     match self.session.processed_pcm(source_id, &self.effects) {
                         Ok(pcm) => {
                             self.effects_feedback.message =
@@ -2473,16 +2432,15 @@ impl MixJamApp {
                         }
                     }
                 }
-                Ok(effects::Action::Reset) => {
+                effects::Action::Reset => {
                     self.effects = Default::default();
                     self.effects_feedback.message =
                         Some("Effects reset. Filter, Echo, and Robotize are off.".into());
                     self.effects_feedback.error = false;
                 }
-                Ok(effects::Action::Details) => self.show_import_details = true,
-                Ok(effects::Action::Help) => self.show_effects_help = true,
-                Ok(effects::Action::None) => {}
-                Err(error) => self.error(error),
+                effects::Action::Details => self.show_import_details = true,
+                effects::Action::Help => self.show_effects_help = true,
+                effects::Action::None => {}
             }
             self.show_effects = open;
         }
@@ -2528,19 +2486,19 @@ impl MixJamApp {
                 &mut self.step_synth_effects_expanded,
             );
             match action {
-                Ok(step_synth::Action::ChooseSource) => self.ask_path(FileRequest::SynthSource),
-                Ok(step_synth::Action::PaletteSource) => {
+                step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
+                step_synth::Action::PaletteSource => {
                     self.step_synth_file = None;
                     self.step_synth_feedback = StepSynthFeedback::default();
                 }
-                Ok(step_synth::Action::Listen) => {
+                step_synth::Action::Listen => {
                     match self.step_synth_pcm() {
                         Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
                         Err(error) => self.error(error),
                     }
                     self.step_synth_notice();
                 }
-                Ok(step_synth::Action::SaveSequence) => match self.step_synth_pcm() {
+                step_synth::Action::SaveSequence => match self.step_synth_pcm() {
                     Ok(pcm) => {
                         self.step_synth_feedback.message =
                             Some("Choose a WAV path to save the sequence.".into());
@@ -2557,12 +2515,11 @@ impl MixJamApp {
                         self.step_synth_notice();
                     }
                 },
-                Ok(step_synth::Action::SavePattern) => self.ask_path(FileRequest::SavePattern),
-                Ok(step_synth::Action::LoadPattern) => self.ask_path(FileRequest::LoadPattern),
-                Ok(step_synth::Action::Details) => self.show_import_details = true,
-                Ok(step_synth::Action::Help) => self.show_step_synth_help = true,
-                Ok(step_synth::Action::None) => {}
-                Err(error) => self.error(error),
+                step_synth::Action::SavePattern => self.ask_path(FileRequest::SavePattern),
+                step_synth::Action::LoadPattern => self.ask_path(FileRequest::LoadPattern),
+                step_synth::Action::Details => self.show_import_details = true,
+                step_synth::Action::Help => self.show_step_synth_help = true,
+                step_synth::Action::None => {}
             }
             self.show_step_synth = open;
         }
@@ -2597,21 +2554,20 @@ impl MixJamApp {
                 &mut self.edit_end,
                 &mut self.edit_pitch,
             ) {
-                Ok(sample_editor::Action::Listen) => match self.edited_pcm() {
+                sample_editor::Action::Listen => match self.edited_pcm() {
                     Ok(pcm) => self.play_pcm(pcm, "Listening to the sample edit."),
                     Err(error) => self.error(error),
                 },
-                Ok(sample_editor::Action::Save) => match self.edited_pcm() {
+                sample_editor::Action::Save => match self.edited_pcm() {
                     Ok(pcm) => {
                         let name = format!("{} - edit", self.source_name());
                         self.save_pcm(pcm, &name, "Wave", self.source_bpm());
                     }
                     Err(error) => self.error(error),
                 },
-                Ok(sample_editor::Action::Details) => self.show_import_details = true,
-                Ok(sample_editor::Action::Help) => self.show_sample_edit_help = true,
-                Ok(sample_editor::Action::None) => {}
-                Err(error) => self.error(error),
+                sample_editor::Action::Details => self.show_import_details = true,
+                sample_editor::Action::Help => self.show_sample_edit_help = true,
+                sample_editor::Action::None => {}
             }
             self.show_sample_edit = open;
         }
@@ -2670,29 +2626,23 @@ impl MixJamApp {
                 &mut self.stretch_source_bpm,
                 &mut self.stretch_target_bpm,
             ) {
-                Ok(action) => match action {
-                    stretch::Action::Select(id) => {
-                        self.selected_sample = Some(id);
-                        self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
-                        self.stretch_feedback.saved = None;
-                        self.stretch_feedback.message = None;
-                        self.stretch_feedback.error = false;
-                    }
-                    stretch::Action::Listen => self.start_stretch(StretchPurpose::Listen),
-                    stretch::Action::Save => self.start_stretch(StretchPurpose::Save),
-                    stretch::Action::Stop => {
-                        self.stop();
-                        self.stretch_feedback.message = Some("Preview stopped.".into());
-                        self.stretch_feedback.error = false;
-                    }
-                    stretch::Action::Help => self.show_stretch_help = true,
-                    stretch::Action::Details => self.show_import_details = true,
-                    stretch::Action::None => {}
-                },
-                Err(error) => {
-                    self.show_stretch = false;
-                    self.error(error);
+                stretch::Action::Select(id) => {
+                    self.selected_sample = Some(id);
+                    self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                    self.stretch_feedback.saved = None;
+                    self.stretch_feedback.message = None;
+                    self.stretch_feedback.error = false;
                 }
+                stretch::Action::Listen => self.start_stretch(StretchPurpose::Listen),
+                stretch::Action::Save => self.start_stretch(StretchPurpose::Save),
+                stretch::Action::Stop => {
+                    self.stop();
+                    self.stretch_feedback.message = Some("Preview stopped.".into());
+                    self.stretch_feedback.error = false;
+                }
+                stretch::Action::Help => self.show_stretch_help = true,
+                stretch::Action::Details => self.show_import_details = true,
+                stretch::Action::None => {}
             }
             if self.stretch_settings() != settings {
                 self.stretch_feedback.saved = None;
