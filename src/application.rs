@@ -848,12 +848,10 @@ impl Session {
         }
         Ok(())
     }
-    pub fn place(&mut self, sample_id: u32, track: usize, tick: u32) -> Result<u64, String> {
-        let sample = self
-            .library
-            .sample_by_id(sample_id)
-            .ok_or("The sample is unavailable.")?;
-        let length = if Product::sample_key(sample_id).is_some() {
+    /// The length that `place` gives a new clip of this sample.
+    pub fn placement_ticks(&self, sample_id: u32) -> Option<u32> {
+        let sample = self.library.sample_by_id(sample_id)?;
+        Some(if Product::sample_key(sample_id).is_some() {
             sample.bars.saturating_mul(TICKS_PER_BAR)
         } else {
             duration_ticks(
@@ -861,7 +859,12 @@ impl Session {
                 sample.sample_rate,
                 sample.source_bpm,
             )
-        };
+        })
+    }
+    pub fn place(&mut self, sample_id: u32, track: usize, tick: u32) -> Result<u64, String> {
+        let length = self
+            .placement_ticks(sample_id)
+            .ok_or("The sample is unavailable.")?;
         let id = self.editor.place(sample_id, track, tick, length)?;
         self.changed();
         Ok(id)
@@ -882,6 +885,14 @@ impl Session {
             self.changed();
         }
         Ok(ids)
+    }
+    /// Whether an undo (`redo == false`) or a redo step is available.
+    pub fn has_history_step(&self, redo: bool) -> bool {
+        if redo {
+            self.editor.can_redo()
+        } else {
+            self.editor.can_undo()
+        }
     }
     pub fn history_step(&mut self, redo: bool) -> Result<bool, String> {
         if self.is_recording() {
@@ -1879,6 +1890,44 @@ fn duration_ticks(frames: u64, rate: u32, bpm: f64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placement_ticks_reports_the_length_that_place_uses() {
+        let sample = |id, frame_count| Sample {
+            id,
+            code: "FIXTURE".into(),
+            name: "fixture".into(),
+            bars: 1,
+            group: 1,
+            group_name: "Loop".into(),
+            offset: 0,
+            length: 0,
+            frame_count,
+            sample_rate: 44100,
+            channels: 1,
+            source_bpm: 140.0,
+            wav_path: None,
+            digest: None,
+        };
+        // No product owns this ID, so its length comes from the audio.
+        let wave = 900_001;
+        assert!(Product::sample_key(wave).is_none());
+        let library = Library::fixture(vec![sample(1, 75_600), sample(wave, 151_200)]);
+        let mut session = Session::headless(Arc::new(library), Project::default()).unwrap();
+        assert_eq!(session.placement_ticks(1), Some(TICKS_PER_BAR));
+        assert_eq!(session.placement_ticks(wave), Some(2 * TICKS_PER_BAR));
+        assert_eq!(session.placement_ticks(7), None);
+        for (track, id) in [1, wave].into_iter().enumerate() {
+            let clip = session.place(id, track, 0).unwrap();
+            let placed = session
+                .project()
+                .clips
+                .iter()
+                .find(|c| c.id == clip)
+                .unwrap();
+            assert_eq!(Some(placed.length_ticks), session.placement_ticks(id));
+        }
+    }
 
     #[test]
     fn identical_missing_paths_include_windows_verbatim_spellings() {

@@ -3063,7 +3063,7 @@ mod tests {
         let listen = step_synth_control_rect(&output, "Listen sequence");
         // The footer shows the same sentence, so count the tooltip as an added copy.
         let copies = |output: &egui::FullOutput| { output.shapes.iter().filter(|shape| { matches!(&shape.shape,
-            egui::Shape::Text(text) if text.galley.job.text == "Select at least one generator bar.")
+            egui::Shape::Text(text) if text.galley.job.text == "Switch on at least one Active bar.")
                 }).count()
         };
         let before = copies(&output);
@@ -4192,19 +4192,36 @@ mod tests {
         let x = rect.left() + app.timeline_bar_width * 1.59;
         assert_eq!(app.position_tick(x, rect, false), 256);
         assert_eq!(app.position_tick(x, rect, true), 400);
-        assert_eq!(clip_label("good grasp 2", 54.0, 11.0), "good\ngrasp 2");
-        assert_eq!(clip_label("électronique", 10.0, 11.0).lines().count(), 2);
-        let short = visible_clip_label("good grasp 2", 54.0, 9.0, 16.0);
-        assert_eq!(
-            short.lines().count(),
-            1,
-            "Short clip rows must keep the text on one visible line."
-        );
-        assert!(short.ends_with('…'));
-        assert_eq!(
-            visible_clip_label("good grasp 2", 54.0, 11.0, 26.0),
-            "good\ngrasp 2"
-        );
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            let rows = |text: &str, width: f32, size: f32, height: f32| {
+                let job = elided(text, size, TEXT, width, clip_label_rows(height));
+                ctx.fonts_mut(|fonts| fonts.layout_job(job))
+                    .rows
+                    .iter()
+                    .map(|row| row.text())
+                    .collect::<Vec<_>>()
+            };
+            let short = rows("Closed hats", 50.0, 12.0, 34.0);
+            assert_eq!(
+                short.len(),
+                1,
+                "Short clip rows must keep the text on one visible line."
+            );
+            assert!(
+                short[0].ends_with('…') && short[0].starts_with("Closed"),
+                "A shortened name must show its ellipsis on the visible line: {short:?}"
+            );
+            assert_eq!(rows("Low orbit", 120.0, 12.0, 34.0), ["Low orbit"]);
+            let tall = rows("good grasp 2", 54.0, 11.0, 44.0);
+            assert_eq!(tall.len(), 2, "Tall clips use two lines: {tall:?}");
+            assert!(tall[0].starts_with("good") && tall[1].starts_with("grasp"));
+            assert_eq!(rows("électronique", 10.0, 11.0, 44.0).len(), 2);
+            let long = rows("one two three four five six seven", 54.0, 11.0, 44.0);
+            assert_eq!(long.len(), 2);
+            assert!(long[1].ends_with('…'));
+        });
     }
 
     #[test]
@@ -4735,7 +4752,9 @@ mod tests {
             canvas.left() + 3.5 * app.timeline_bar_width,
             canvas.top() + 2.5 * app.timeline_row_height,
         );
+        // Choosing a sound in the palette arms click placement.
         app.selected_sample = Some(1);
+        app.place_on_click = true;
         click(&ctx, &mut app, add, egui::Modifiers::NONE);
         assert!(
             app.session
@@ -4893,6 +4912,168 @@ mod tests {
     }
 
     #[test]
+    fn rail_groups_remain_ordered_separated_and_visible_at_supported_densities() {
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            let size = Vec2::new(960.0, 720.0);
+            let viewport = Rect::from_min_size(Pos2::ZERO, size);
+            let mut output = egui::FullOutput::default();
+            for _ in 0..3 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap();
+            let actions = [
+                RailIcon::New, RailIcon::Open, RailIcon::Save, RailIcon::SaveAs,
+                RailIcon::Import, RailIcon::Export,
+                RailIcon::Libraries, RailIcon::Erase, RailIcon::Delete,
+                RailIcon::Mixer, RailIcon::Effects, RailIcon::StepSynth,
+                RailIcon::Edit, RailIcon::Stretch,
+            ];
+            let bounds: Vec<_> = actions.iter().map(|icon| {
+                let rect = effects_control_rect(&output, icon.label());
+                assert!(viewport.contains_rect(rect), "{} must fit the minimum viewport at {density}x.", icon.label());
+                assert!((rect.width()-48.0).abs()<0.01 && (rect.height()-30.0).abs()<0.01,
+                    "{} must retain the common 48 by 30 action target.", icon.label());
+                assert!((rect.center().x-(size.x-32.0)).abs()<0.6,
+                    "{} must be centered in the 64-point rail.", icon.label());
+                let (clip, image) = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) if mesh.texture_id==icons.texture_id(*icon) =>
+                        Some((shape.clip_rect, mesh.calc_bounds())),
+                    _ => None,
+                }).unwrap_or_else(||panic!("Missing rail artwork: {}", icon.label()));
+                assert!(clip.contains_rect(image) && rect.contains_rect(image),
+                    "{} artwork must remain fully visible inside its action target.", icon.label());
+                assert!((image.width()*density-20.0*density).abs()<0.01
+                    && (image.height()*density-20.0*density).abs()<0.01,
+                    "{} artwork must use the prepared density without stretching.", icon.label());
+                rect
+            }).collect();
+            for pair in bounds.windows(2) {
+                assert!(pair[0].bottom()<pair[1].top(),
+                    "File, utility, and musical actions must keep their category order without overlap at {density}x.");
+            }
+            for (before, after) in [(5,6),(8,9)] {
+                let gap = Rect::from_min_max(
+                    Pos2::new(bounds[before].left(),bounds[before].bottom()),
+                    Pos2::new(bounds[after].right(),bounds[after].top()),
+                );
+                let has_separator = output.shapes.iter().any(|shape| match &shape.shape {
+                    egui::Shape::LineSegment { points, stroke } =>
+                        stroke.width>0.0 && (points[0].y-points[1].y).abs()<0.01
+                            && (points[1].x-points[0].x).abs()>=32.0
+                            && gap.contains(points[0]) && gap.contains(points[1]),
+                    egui::Shape::Rect(rect) => rect.rect.width()>=32.0
+                        && rect.rect.height()<=2.0 && gap.contains_rect(rect.rect),
+                    _=>false,
+                });
+                assert!(has_separator, "Category boundaries need a visible separator at {density}x.");
+            }
+            let microphone = effects_control_rect(&output, RailIcon::Record.label());
+            let destination = effects_control_rect(&output, "Recording track");
+            assert!(bounds.last().unwrap().bottom()<microphone.top()
+                && microphone.bottom()<=destination.top(),
+                "The microphone and its track selector must follow every musical tool.");
+            assert!(viewport.contains_rect(microphone) && viewport.contains_rect(destination),
+                "The final recording selector must remain visible at {density}x.");
+            assert!((destination.center().x-(size.x-32.0)).abs()<0.6,
+                "The recording selector must remain centered beneath the microphone at {density}x: {destination:?}.");
+            let density_index = [1.0,1.5,2.0].iter().position(|value| *value==density).unwrap();
+            for (part, expected) in [("grain", [256,256]), ("part-6", [12,96]), ("part-7", [12,96])] {
+                let name = format!("folded-metal-Utility-{part}-{density_index}");
+                let (texture, pixels) = ctx.tex_manager().read().allocated()
+                    .find(|(_,meta)|meta.name==name)
+                    .map(|(id,meta)|(*id,meta.size)).expect("The rail must load its shared material finish.");
+                assert_eq!(pixels,expected.map(|side|(side as f32*density) as usize),
+                    "The rail must load the prepared material density.");
+                let mut painted = false;
+                for shape in &output.shapes {
+                    let egui::Shape::Mesh(mesh) = &shape.shape else {continue;};
+                    if mesh.texture_id!=texture {continue;}
+                    painted = true;
+                    for vertex in &mesh.vertices {
+                        for coordinate in [vertex.pos.x,vertex.pos.y] {
+                            assert!((coordinate*density-(coordinate*density).round()).abs()<0.001,
+                                "Rail material must align to physical pixels.");
+                        }
+                    }
+                    for triangle in mesh.indices.as_chunks::<3>().0 {
+                        for edge in 0..3 {
+                            let a=mesh.vertices[triangle[edge] as usize];
+                            let b=mesh.vertices[triangle[(edge+1)%3] as usize];
+                            let destination=(b.pos-a.pos).abs()*density;
+                            let source=(b.uv-a.uv).abs()*Vec2::new(pixels[0] as f32,pixels[1] as f32);
+                            assert!((destination-source).abs().max_elem()<0.001,
+                                "The narrow rail must crop its material without stretching texels.");
+                        }
+                    }
+                }
+                assert!(painted,"The rail must paint its {part} material at {density}x.");
+            }
+        }
+    }
+
+    #[test]
+    fn rail_toggles_close_windows_and_keep_highlights_in_sync() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        let project = app.session.project().clone();
+        for (icon, window) in [
+            (RailIcon::Libraries, "Sample libraries"),
+            (RailIcon::Effects, "Effect Studio"),
+            (RailIcon::StepSynth, "Step synth"),
+            (RailIcon::Edit, "Sample editor"),
+            (RailIcon::Stretch, "Time Stretcher"),
+        ] {
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let node = accessible_node(&output, icon.label()).1;
+            assert_eq!(node.toggled(), Some(egui::accesskit::Toggled::False));
+            let bounds = node.bounds().unwrap();
+            let center = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0,
+                                  (bounds.y0 + bounds.y1) as f32 / 2.0);
+            let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap().clone();
+            let assert_active = |output: &egui::FullOutput, active: bool| {
+                let node = accessible_node(output, icon.label()).1;
+                assert_eq!(node.toggled(), Some(if active {
+                    egui::accesskit::Toggled::True
+                } else {
+                    egui::accesskit::Toggled::False
+                }), "{}", icon.label());
+                let tint = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) if mesh.texture_id == icons.texture_id(icon) =>
+                        Some(mesh.vertices[0].color),
+                    _ => None,
+                }).expect("The rail icon must be painted.");
+                assert_eq!(tint, if active { controls::ACCENT } else { controls::CREAM });
+            };
+            click(&ctx, &mut app, center, egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_active(&output, true);
+            accessible_node(&output, &title_text(window));
+            let collapse = effects_control_rect(&output, &format!("Collapse {window}"));
+            click(&ctx, &mut app, collapse.center(), egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(dialog::is_collapsed(&ctx, window));
+            assert_active(&output, true);
+            click(&ctx, &mut app, center, egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_active(&output, false);
+            assert!(!output.platform_output.accesskit_update.as_ref().unwrap().nodes.iter()
+                .any(|(_, node)| node.label() == Some(title_text(window).as_str())));
+            // Closing through the header must also clear the rail state.
+            click(&ctx, &mut app, center, egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let close = effects_control_rect(&output, &format!("Close {window}"));
+            click(&ctx, &mut app, close.center(), egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_active(&output, false);
+        }
+        assert_eq!(app.session.project(), &project, "Window toggles must not edit the song.");
+    }
+
+    #[test]
     fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         let (ctx, mut app) = fixture();
         let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap().clone();
@@ -4944,7 +5125,7 @@ mod tests {
         let hovered = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(
             hovered.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "Mixer")
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with("Mixer"))
             }),
             "The icon must preserve its action name in a hover tooltip."
         );
@@ -4963,7 +5144,7 @@ mod tests {
         let hovered_undo = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(
             hovered_undo.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == "Undo")
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo"))
             }),
             "The header icon must preserve its action name in a hover tooltip."
         );
@@ -4987,10 +5168,21 @@ mod tests {
         assert!(clicked.platform_output.events.iter().any(|event| {
             matches!(event, egui::output::OutputEvent::Clicked(info) if info.label.as_deref() == Some("Mixer"))
         }), "The icon must expose its action name to accessibility output.");
-        click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
-        assert_eq!(app.bottom_module, BottomModule::Mixer,
-            "The Mixer rail shortcut must keep Mixer open on a repeated click.");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(accessible_node(&output, "Mixer").1.toggled(),
+            Some(egui::accesskit::Toggled::True));
+        click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
+        assert_eq!(app.bottom_module, BottomModule::Sounds,
+            "The Mixer rail shortcut must restore Sounds on a repeated click.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(accessible_node(&output, "Mixer").1.toggled(),
+            Some(egui::accesskit::Toggled::False));
+        for icon in [RailIcon::New, RailIcon::Open, RailIcon::Save, RailIcon::SaveAs,
+            RailIcon::Import, RailIcon::Export, RailIcon::Delete] {
+            let node = accessible_node(&output, icon.label()).1;
+            assert_eq!(node.role(), egui::accesskit::Role::Button);
+            assert_eq!(node.toggled(), None, "{} must remain an action.", icon.label());
+        }
         let erase = image_center(&output, RailIcon::Erase);
         click(&ctx, &mut app, erase, egui::Modifiers::NONE);
         assert!(app.erase);
@@ -5417,7 +5609,7 @@ mod tests {
     fn hardware_utility_windows_keep_identity_keyboard_close_and_scoped_style() {
         for title in [
             "Help", "Time Stretcher help", "Effect Studio help", "Step synth help",
-            "Sample libraries", "Import details",
+            "Sample editor help", "Sample libraries", "Import details",
         ] {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
@@ -5427,6 +5619,7 @@ mod tests {
                 "Time Stretcher help" => app.show_stretch_help = true,
                 "Effect Studio help" => app.show_effects_help = true,
                 "Step synth help" => app.show_step_synth_help = true,
+                "Sample editor help" => app.show_sample_edit_help = true,
                 "Sample libraries" => app.show_libraries = true,
                 "Import details" => app.show_import_details = true,
                 _ => unreachable!(),
@@ -5453,6 +5646,7 @@ mod tests {
                 "Time Stretcher help" => app.show_stretch_help,
                 "Effect Studio help" => app.show_effects_help,
                 "Step synth help" => app.show_step_synth_help,
+                "Sample editor help" => app.show_sample_edit_help,
                 "Sample libraries" => app.show_libraries,
                 "Import details" => app.show_import_details,
                 _ => unreachable!(),
@@ -5705,6 +5899,243 @@ mod tests {
             let message=output.shapes.iter().find(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.job.text==status)).expect("Scrolling the shell must reach the status footer.");
             assert!(body.intersects(message.clip_rect));
         }
+    }
+
+    #[test]
+    fn focused_controls_keep_command_shortcuts_and_only_typing_blocks_them() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let before = app.session.project().bpm;
+        let other = if before == 160.0 { 140.0 } else { 160.0 };
+        app.session.edit(EditCommand::SetTempo(other)).unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Stop");
+        assert!(ctx.memory(|memory| memory.focused()).is_some());
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
+        assert_eq!(app.session.project().bpm, before,
+            "Undo must work while a button has keyboard focus.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Y, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
+        assert_eq!(app.session.project().bpm, other, "Ctrl+Y must redo.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
+        assert!(!app.session.wants_playback(),
+            "Space on a focused button activates that button, not the transport.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Find a sound");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
+        assert_eq!(app.session.project().bpm, other,
+            "A text field that is being typed in keeps Ctrl+Z.");
+    }
+
+    #[test]
+    fn choosing_a_clip_ends_click_placement_until_a_sound_is_chosen_again() {
+        let (ctx, mut app) = fixture();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let canvas = app.timeline_rect.unwrap();
+        let clip = app.session.project().clips[0].clone();
+        let on_clip = app.clip_rect(&clip, canvas).center();
+        let count = app.session.project().clips.len();
+        click(&ctx, &mut app, on_clip, egui::Modifiers::NONE);
+        assert_eq!(app.selected_clip, Some(clip.id));
+        assert!(!app.place_on_click);
+        let empty = (0..20)
+            .map(|bar| Pos2::new(canvas.left() + (bar as f32 + 0.5) * app.timeline_bar_width, on_clip.y))
+            .rev()
+            .find(|pos| !app.session.project().clips.iter().any(|clip| app.clip_rect(clip, canvas).contains(*pos)))
+            .unwrap();
+        click(&ctx, &mut app, empty, egui::Modifiers::NONE);
+        assert_eq!(app.session.project().clips.len(), count,
+            "A click on an empty lane after choosing a clip must only clear the selection.");
+        assert!(app.selected_clips.is_empty());
+        app.place_on_click = true;
+        click(&ctx, &mut app, empty, egui::Modifiers::NONE);
+        assert_eq!(app.session.project().clips.len(), count + 1,
+            "A sound chosen in the palette is placed by a click.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
+        assert!(!app.place_on_click, "Esc must end click placement.");
+    }
+
+    #[test]
+    fn placement_outline_matches_the_length_of_the_placed_clip() {
+        let (ctx, mut app) = fixture();
+        // A sound outside the product catalogs takes its length from its audio:
+        // two bars here, although `bars` says one.
+        let id = 900_001;
+        assert!(Product::sample_key(id).is_none());
+        let sample = Sample {
+            id,
+            code: "WAVE".into(),
+            name: "long take".into(),
+            bars: 1,
+            group: 1,
+            group_name: "Loop".into(),
+            offset: 0,
+            length: 0,
+            frame_count: 151_200,
+            sample_rate: 44100,
+            channels: 1,
+            source_bpm: 140.0,
+            wav_path: None,
+            digest: None,
+        };
+        app.session =
+            Session::headless(Arc::new(Library::fixture(vec![sample])), Project::default())
+                .unwrap();
+        app.selected_sample = Some(id);
+        app.place_on_click = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let canvas = app.timeline_rect.unwrap();
+        let pos = Pos2::new(
+            canvas.left() + 1.5 * app.timeline_bar_width,
+            canvas.top() + 0.5 * app.timeline_row_height,
+        );
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos)], egui::Modifiers::NONE);
+        click(&ctx, &mut app, pos, egui::Modifiers::NONE);
+        let clip = app.session.project().clips[0].clone();
+        assert_eq!(clip.length_ticks, 2 * TICKS_PER_BAR);
+        let width = app.clip_rect(&clip, app.timeline_rect.unwrap()).width();
+        assert!(
+            output.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Rect(rect) if rect.stroke.color == TEXT
+                    && (rect.rect.width() - (width - 1.0)).abs() < 0.01)),
+            "The outline must show the length of the clip that a click places."
+        );
+    }
+
+    #[test]
+    fn escape_ends_erase_while_its_rail_button_has_focus() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, RailIcon::Erase.label());
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert!(app.erase, "Space on the focused Erase button starts erasing.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        // egui releases focus on Esc before the workspace reads the key.
+        assert!(!app.erase, "Esc must end erasing, as the Erase tooltip says.");
+    }
+
+    #[test]
+    fn clip_menu_previews_the_clip_it_was_opened_on() {
+        let (ctx, mut app) = missing_fixture();
+        let mut project = app.session.project().clone();
+        let other = MissingSample::native(
+            Product::T2,
+            43,
+            "Other pad".into(),
+            132.0,
+            4 * TICKS_PER_BAR,
+            false,
+            "The original audio file is absent.".into(),
+        )
+        .unwrap();
+        project.clips.push(Clip {
+            id: 2,
+            sample_id: other.id,
+            track: 3,
+            start_tick: TICKS_PER_BAR,
+            length_ticks: 4 * TICKS_PER_BAR,
+            offset_frames: 0,
+            gain: 1.0,
+        });
+        project.missing_samples.push(other);
+        app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        // Both clips are selected; the first one is the primary clip.
+        app.selected_clips = [1, 2].into_iter().collect();
+        app.selected_clip = Some(1);
+        let clip = app.session.project().clips[1].clone();
+        let pos = app.clip_rect(&clip, app.timeline_rect.unwrap()).center();
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+            );
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.selected_clips.len(), 2, "A right-click inside a selection keeps it.");
+        let preview = text_rect(&output, "Preview").center();
+        click(&ctx, &mut app, preview, egui::Modifiers::NONE);
+        assert!(
+            app.status.contains("Other pad"),
+            "Preview must act on the clip under the menu: {}",
+            app.status
+        );
+    }
+
+    #[test]
+    fn focused_lanes_choose_move_duplicate_and_delete_clips_by_key() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Arrangement lanes");
+        // egui holds arrow keys for a control from its second focused frame.
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let key = |app: &mut MixJamApp, key, modifiers| {
+            frame(&ctx, app, vec![key_event(key, modifiers)], modifiers);
+            frame(&ctx, app, vec![], egui::Modifiers::NONE);
+        };
+        key(&mut app, egui::Key::ArrowRight, egui::Modifiers::NONE);
+        let first = app.session.project().clips.iter()
+            .min_by_key(|clip| (clip.track, clip.start_tick)).unwrap().clone();
+        assert_eq!(app.selected_clip, Some(first.id), "An arrow key chooses the first clip.");
+        assert!(!app.place_on_click);
+        let count = app.session.project().clips.len();
+        key(&mut app, egui::Key::D, egui::Modifiers::COMMAND);
+        assert_eq!(app.session.project().clips.len(), count + 1, "Ctrl+D duplicates the selection.");
+        let copy = app.session.project().clips.iter()
+            .find(|clip| Some(clip.id) == app.selected_clip).unwrap().clone();
+        assert_eq!(copy.track, first.track);
+        assert!(copy.start_tick >= first.start_tick + first.length_ticks);
+        assert_eq!(copy.start_tick % TICKS_PER_BAR, first.start_tick % TICKS_PER_BAR);
+        key(&mut app, egui::Key::ArrowRight, egui::Modifiers::ALT);
+        let moved = app.session.project().clips.iter()
+            .find(|clip| Some(clip.id) == app.selected_clip).unwrap().clone();
+        assert_eq!(moved.start_tick, copy.start_tick + TICKS_PER_BAR, "Alt+Right moves the clip one bar.");
+        key(&mut app, egui::Key::Delete, egui::Modifiers::NONE);
+        assert_eq!(app.session.project().clips.len(), count, "Delete removes the selected clip.");
+        key(&mut app, egui::Key::A, egui::Modifiers::COMMAND);
+        assert_eq!(app.selected_clips.len(), count, "Ctrl+A selects every clip.");
+    }
+
+    #[test]
+    fn step_grid_is_one_tab_stop_with_arrow_key_navigation() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_step_synth = true;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let nodes = &output.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        assert_eq!(nodes.iter().filter(|(_, node)| node.label().is_some_and(|label| label.starts_with("Step ") && label.ends_with("semitones"))).count(), 400,
+            "Every cell stays available to assistive technology.");
+        focus_control(&ctx, &mut app, &output, "Step 1, +0 semitones");
+        // egui holds arrow keys for a control from its second focused frame.
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for key in [egui::Key::ArrowRight, egui::Key::ArrowRight, egui::Key::ArrowUp] {
+            frame(&ctx, &mut app, vec![key_event(key, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.step_synth.steps[2], Some(1),
+            "Arrow keys move the cell cursor and Enter sets its note.");
+        assert!(app.show_step_synth, "Arrow keys must stay inside the grid.");
     }
 
     #[test]

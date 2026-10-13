@@ -693,6 +693,39 @@
           "png_sha256": "a5a62b210352befb776148581f92c66d178e3e8d04072d6d484e987f672d8898"
         }
       ]
+    },
+    {
+      "name": "help",
+      "png_sha256": "3be29a2096a3c78207f93f5baedf2ec34e008a04d7c70b2f068b0a30396b2f07",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 3157,
+      "opaque_pixels": 1169,
+      "transparent_pixels": 6059,
+      "antialiased_pixels": 1988,
+      "alpha_bounds": [
+        5,
+        5,
+        91,
+        91
+      ],
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "eded8fc26c2a56426dec34f3f34a7da2851abb90a4d71a34423c1a563130bcc9"
+        },
+        {
+          "size": 30,
+          "png_sha256": "9671e32b51a1ff5c7ab75ce81ff93cb2169827e17e550e5d88711ea40b114167"
+        },
+        {
+          "size": 40,
+          "png_sha256": "8546a7a46717eaf4d7694004277fd70fd87c9dd7f524fee9e8bdfea454bf57b8"
+        }
+      ]
     }
   ]
 }

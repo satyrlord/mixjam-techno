@@ -44,6 +44,7 @@ colors:
   folded-primary: "#d4cdb6"
   folded-disabled-face: "#3d403c"
   folded-disabled-text: "#c9cbc0"
+  folded-danger: "#833627"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -207,8 +208,8 @@ components:
     textColor: "{colors.folded-ink}"
     typography: "{typography.button}"
   folded-danger:
-    backgroundColor: "{colors.folded-face}"
-    textColor: "{colors.coral}"
+    backgroundColor: "{colors.folded-danger}"
+    textColor: "{colors.folded-cream}"
     typography: "{typography.button}"
 
 ---
@@ -304,8 +305,11 @@ the arrangement, browser, and Mixer retain their palettes.
 
 Common controls use Face `#232624`, Cream `#f9f2dc`, Ink `#121412`, and pale
 metal Primary `#d4cdb6`. Disabled faces use `#3d403c` with `#c9cbc0` lettering.
-Palette accents identify focus, selection, and active indicators. The default
-frame token uses Utility; tool bodies select their named variant.
+Palette accents identify focus, selection, and active indicators. A focus ring
+that crosses the chassis needs 3:1 against it; Red's accent reaches only 2.6:1,
+so its ring uses Cream. The default frame token uses Utility; tool bodies select
+their named variant. Destructive buttons use Danger `#833627` with cream text.
+Error text uses Coral in every window.
 
 Mixer Metal and Mixer Ink support the ivory strips and their dark live text.
 Mixer Cream supplies dark-control lettering. Mixer Face and Edge define native
@@ -394,7 +398,7 @@ uses 16-point bold Syncopate. The selector keeps the same horizontal anchor
 and control identity for Sounds and Mixer. Sound search and filters occupy
 the rest of this row when Sounds is selected. Module names appear in this
 selector; the module bodies start below it. The tool rail's Mixer shortcut
-opens Mixer, including when Mixer is already selected.
+opens Mixer and returns to Sounds when Mixer is already selected.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. Original track numbers remain stable. Rows are
@@ -479,8 +483,14 @@ radius; transport has a slightly larger radius. Floating windows use the window
 radius. Resting native widgets use one-point borders. Selected clips use a
 two-point text-colored border; active rail actions use a one-point accent outline.
 Transport keyboard focus uses a two-point inset outline: Canvas on the bright
-Play/Pause button and Accent on secondary controls.
+Play/Pause button and Accent on secondary controls. Header actions, category
+buttons, and empty-state actions use the same outline. Undo and Redo dim and
+disable when no step is available. An engaged Loop keeps a
+one-point Accent outline. Window edges, title bars, the lanes, and the bar ruler
+are pointer surfaces and take no Tab stop.
 Folded Metal windows share rounded chassis edges and the same control geometry.
+The painted chassis uses 8-point corners; the 10-point window radius applies to
+native popups and menus.
 Paint the perimeter and bevel as continuous antialiased native geometry. Fade
 raster material before the outer outline and at strip ends so joints stay smooth.
 Prepare knob edges at 8x resolution, then reduce once with premultiplied-alpha
@@ -494,15 +504,38 @@ Live text and header symbols stay independent of the material artwork.
 Workspace primary action buttons use Accent with Canvas text. Secondary buttons use Raised
 with Text. Undo and Redo use transparent PNG arrow icons from the shared artwork
 cache, with action names in tooltips and accessibility labels.
-Help uses the shared PNG library icon with Help as its tooltip and
-accessibility label.
+Help uses its own ringed question-mark PNG with Help as its accessibility
+label. Tooltips name each action with its window or shortcut; accessible names
+stay short.
 Export WAV is available through the Export icon in the right-hand tool rail.
 Play/Pause stays prominent in the transport; other transport controls
 use raised surfaces and hover fills. Record uses a coral circle with a white ring
 during capture. Symbols are painted native geometry with tooltips and accessible
 action names.
 
+### Library loading
+
+Library loading uses cream status text above a recessed dark progress rail.
+An amber segment moves while listing files; after the total is known, the fill
+shows the completed fraction. Keep Cancel beside it and fit the rail to the
+available window width. Text never overlaps the changing fill.
+
 ### Tool rail
+
+The fixed 64-point rail uses the utility Folded Metal finish: dark neutral
+paint, subtle monochromatic grain, smooth folded edges, and shared dark button
+faces. Orange marks active controls and focus. Icons stay centered in 48 by
+30-point targets. Recessed horizontal separators divide file commands (New,
+Open, Save, Save as, Import, Export), utilities (Libraries, Erase, Delete),
+and musical tools (Mixer, Effect Studio, Step synth, Sample editor, Time
+Stretcher). The microphone icon and visible recording-track selector come last,
+after a final separator. Material and icons retain their prepared physical
+pixel density; the narrow chassis omits the windows' wide corner patches.
+
+Libraries and musical tools toggle their open state. Erase toggles its editing
+mode. Active toggles use a subtle accent outline and icon tint and expose their
+selected state to accessibility. A collapsed window stays active until closed.
+File commands and Delete remain one-shot actions.
 
 The header places a 40-point tribal mask before the MixJam Techno title.
 The artwork retains its original colors and transparent background. The native
@@ -545,7 +578,17 @@ waveform. A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
 a Text-colored name that begins with Missing. While a sound or clip is dragged,
 a 150 by 30-point Drag Label follows the pointer with the sound name, Move
-sound, or Copy sound in Canvas text.
+sound, or Copy sound in Canvas text. A dragged sound, or a palette sound armed
+for click placement, shows a tinted outline at the bar and track where it will
+land. Choosing a clip or pressing Esc ends click placement, so a click on an
+empty lane then only clears the selection. Enter on a focused sound tile places
+it on the recording track at the playhead. Lane L/R letters gain a short bar
+when their output is on. The lanes are one Tab stop with an Accent outline:
+arrow keys choose a clip, Alt+arrows move the selection by a bar or a track,
+Ctrl+Alt+arrows by a sixteenth, Enter previews, and Delete removes. Ctrl+A
+selects every clip and Ctrl+D copies the selection to the bars that follow. A
+right-click on a clip offers Preview, Duplicate, Delete, and, for a missing
+sound, Resolve manually. The clip inspector shows gain in dB like the Mixer.
 
 ### Mixer and tool windows
 
@@ -587,7 +630,9 @@ remain native. Select the nearest density and paint one texel per physical
 pixel with aligned bounds; tile materials without runtime texture resizing.
 See `assets/mixer/README.md` for exact prompts, source hashes, and reproduction.
 Native mixer buttons use Mixer Face at rest and shared Raised on hover;
-keyboard focus changes their one-point border to Mixer Amber. Each 28 by
+keyboard focus changes their one-point border to Mixer Amber and adds a
+two-point Mixer Ink ring, because amber alone is illegible on ivory. The gain
+rail, pan rail, and value field show the same ink ring or a cream edge. Each 28 by
 24-point L/R button pairs its letter with a 12 by 2-point indicator bar.
 Arrangement and mixer L/R labels use Accent when enabled and Muted when off.
 Both expose the same checked state and a track-specific on/off tooltip. Lane
@@ -611,7 +656,7 @@ A tool must not introduce another button renderer or a complete per-tool skin.
 The same rules apply to Help, task confirmations, and musical editors.
 
 Secondary buttons use dark faces and cream text; primary buttons use pale metal
-and dark ink. Destructive actions have explicit names and coral indication. All roles use
+and dark ink. Destructive actions have explicit names and the rust-red Danger face. All roles use
 the same padding, label alignment, focus, hover, pressed, and disabled behavior.
 Disabled controls explain why they are unavailable. Preserve accessible names,
 numeric values, ranges, selected states, and keyboard actions.
@@ -697,8 +742,11 @@ ascending order. Each bar has sixteen sixteenth steps with one optional note per
 step. Another pitch replaces the note; selecting the current note clears it.
 Clear bar affects only the viewed bar. The grid shows +12 through -12 semitones,
 with A 0 as source pitch. Loaded notes outside that display remain valid under
-the existing -48 through +48 range. Tab reaches named controls and cells; focused
-cells scroll into view. Expose selected state through accessible names and states.
+the existing -48 through +48 range. Tab reaches named controls and the grid as
+one stop. Arrow keys move a cell cursor, Home and End jump to the first and last
+step, and Space or Enter sets or clears the note; the cursor cell scrolls into
+view. Every cell stays a named pointer and assistive target. Expose selected
+state through accessible names and states.
 
 BPM offers 120, 140, 160, and 180. 1/16 cut ends a trigger after one sixteenth;
 otherwise it continues until the next trigger or sequence end. Loop source repeats
@@ -747,7 +795,8 @@ unchanged. Collapse preserves edits and performs no processing.
 
 ### Utility windows and blocking dialogs
 
-Help, Time Stretcher help, Effect Studio help, Step synth help, Sample libraries,
+Help, Time Stretcher help, Effect Studio help, Step synth help, Sample editor
+help, Sample libraries,
 Import details, Recorded take, Save your changes?, Sample conflicts, Choose path,
 and Import sound use the same shell and controls as musical tools. Preserve their
 stable identities and exact accessible names independently of uppercase titles.
@@ -755,11 +804,15 @@ Native operating-system file pickers remain outside this system.
 
 Every window can resize and collapse. Recorded take keeps its in-memory audio
 while collapsed; Save take and Discard take remain the explicit resolving actions.
+Discard take asks once more in place: Confirm discard erases the recording and
+Keep take returns. Import details offers Resolve manually for each missing sound.
 Collapsing a confirmation releases workspace and agent input and pauses its pending
 action. Expanding restores blocking when a decision is still required. Choose path
 suspends its parent confirmation while the path request is pending, including while
 collapsed. Reject conflicting file requests instead of replacing paused data.
 Close cancels a confirmation without saving, importing, or discarding implicitly.
+Blocking dialogs and Recorded take follow the height of their content until the
+user resizes them.
 Sample conflicts confirms only through Keep choices; dismissal does not confirm.
 
 Prepared material lives in `assets/folded-metal/<palette>/{100,150,200}/`;
@@ -798,6 +851,22 @@ display formatting must not change file access, project data, or settings.
 - Use the same category and sample names across views.
 - Keep track numbers stable and give actions accessible names.
 - Check native layouts at the supported minimum size after changes.
+
+### Accepted exceptions
+
+The owner confirmed these on 2026-10-12 after an audit. Do not report them as
+defects.
+
+- Mixer Unity, Center, pan rail, and gain value stay below 24 points high. The
+  compact strip is intended.
+- Step synth note cells stay 14 points high so that 19 of 25 pitch rows show at
+  once. Arrow keys reach every cell.
+- The tool rail stays icon-only. Tooltips name each action, its window, and its
+  shortcut.
+- The Sounds panel keeps both the category menu and the category row. The menu
+  lists the library's own categories, including Uncategorized.
+- `PRODUCT.md` leaves Platform unclassified. No value of the design skill
+  describes a Windows desktop application.
 
 ### Avoid
 

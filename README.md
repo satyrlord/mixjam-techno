@@ -66,7 +66,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Drag the divider above Sounds or Mixer to give that panel more or less room.
 - Select Sounds or Mixer from the fixed module menu at the lower panel's left.
   The panel retains its resized height; opening Mixer raises a shorter panel
-  to fit its controls. The Mixer tool-rail shortcut opens Mixer.
+  to fit its controls. The Mixer tool-rail shortcut opens Mixer
+  and returns to Sounds when Mixer is already selected.
 - Use Mixer for track gain, pan, L/R routing, and master volume.
   Master stays visible while you scroll through tracks. Each strip shows its
   track number and the sound names on that track.

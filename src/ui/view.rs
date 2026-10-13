@@ -1,4 +1,5 @@
 use super::*;
+use mixjam_techno::application::{amplitude_to_db, db_to_amplitude};
 
 /// Format Windows filesystem paths for labels only. Stored paths and messages
 /// retain their original spelling for file operations and diagnostics.
@@ -38,6 +39,15 @@ pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
 const LINE: Color32 = Color32::from_rgb(58, 65, 72);
 pub(super) const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
 const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
+const SELECTION: Color32 = Color32::from_rgb(65, 85, 50);
+const WARNING: Color32 = Color32::from_rgb(232, 197, 133);
+/// The label that follows the pointer while a sound or clip is dragged.
+pub(super) const DRAG_LABEL: Color32 = Color32::from_rgb(245, 220, 146);
+/// Alternate arrangement rows and the bar lines between four-bar marks.
+const ROW_ALTERNATE: Color32 = Color32::from_rgb(24, 28, 32);
+const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
+/// The clip inspector shows gain at or below this level as silence.
+const CLIP_SILENCE_DB: f32 = -60.0;
 pub(super) const DEFAULT_STATUS: &str = "Ready";
 const GROUPS: [&str; 10] = [
     "Loop",
@@ -74,6 +84,13 @@ pub(super) fn name_control(response: Response, name: &str) -> Response {
     response
 }
 
+/// Name a pointer surface that is not a Tab stop. egui describes only
+/// focusable widgets by itself; the widget information adds the bounds.
+pub(super) fn name_region(response: Response, name: &str) -> Response {
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, name));
+    response
+}
+
 /// Group the controls of a modal under its title, for assistive technology
 /// and agents.
 pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
@@ -103,8 +120,27 @@ impl MixJamApp {
 
     pub(super) fn header(&mut self, ctx: &egui::Context) {
         let icons = self.icons(ctx);
+        let (can_undo, can_redo) = (
+            self.session.has_history_step(false),
+            self.session.has_history_step(true),
+        );
         let action = |ui: &mut egui::Ui, icon: RailIcon, label: &str| match &icons {
-            Some(icons) => action_icon_button(ui, icons, icon, label),
+            Some(icons) => action_icon_button(
+                ui,
+                icons,
+                icon,
+                label,
+                match icon {
+                    RailIcon::Undo => can_undo,
+                    RailIcon::Redo => can_redo,
+                    _ => true,
+                },
+                match icon {
+                    RailIcon::Undo => "Undo (Ctrl+Z)",
+                    RailIcon::Redo => "Redo (Ctrl+Shift+Z or Ctrl+Y)",
+                    _ => icon.hint(),
+                },
+            ),
             None => action_button(ui, label, false).on_hover_text(label),
         };
         egui::TopBottomPanel::top("header")
@@ -135,7 +171,7 @@ impl MixJamApp {
                         egui::Label::new(heading(title, 15.0)).truncate(),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if action(ui, RailIcon::Libraries, "Help").clicked() {
+                        if action(ui, RailIcon::Help, "Help").clicked() {
                             self.show_help = !self.show_help;
                         }
                         ui.add_space(8.0);
@@ -159,10 +195,14 @@ impl MixJamApp {
             .resizable(false)
             .frame(egui::Frame::new().fill(CANVAS).inner_margin(6))
             .show(ctx, |ui| {
+                controls::apply_palette(ui, controls::Palette::Utility);
+                controls::rail_panel(ui, ui.max_rect().expand(4.0));
+                ui.spacing_mut().item_spacing.y = 4.0;
                 ui.add_space(4.0);
                 ui.vertical_centered(|ui| {
-                    rail_heading(ui, &icons, RailIcon::Mix);
-                    ui.add_space(4.0);
+                    if rail_button(ui, &icons, RailIcon::New, false).clicked() {
+                        self.request_action(PendingAction::New, ctx);
+                    }
                     if rail_button(ui, &icons, RailIcon::Open, false).clicked() {
                         self.request_action(PendingAction::Open, ctx);
                     }
@@ -172,20 +212,23 @@ impl MixJamApp {
                     if rail_button(ui, &icons, RailIcon::SaveAs, false).clicked() {
                         self.save(true);
                     }
-                    if rail_button(ui, &icons, RailIcon::Export, false).clicked() {
-                        self.export();
-                    }
                     if rail_button(ui, &icons, RailIcon::Import, false).clicked() {
                         self.import_wav();
                     }
-                    if rail_button(ui, &icons, RailIcon::Libraries, false).clicked() {
-                        self.show_libraries = true;
+                    if rail_button(ui, &icons, RailIcon::Export, false).clicked() {
+                        self.export();
                     }
-                    ui.add_space(10.0);
-                    if rail_button(ui, &icons, RailIcon::New, false).clicked() {
-                        self.request_action(PendingAction::New, ctx);
+                    controls::rail_separator(ui);
+                    if rail_button(ui, &icons, RailIcon::Libraries, self.show_libraries).clicked() {
+                        self.show_libraries = !self.show_libraries;
                     }
-                    ui.add_space(10.0);
+                    if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
+                        self.erase = !self.erase;
+                    }
+                    if rail_button(ui, &icons, RailIcon::Delete, false).clicked() {
+                        self.delete_selection();
+                    }
+                    controls::rail_separator(ui);
                     if rail_button(
                         ui,
                         &icons,
@@ -194,34 +237,43 @@ impl MixJamApp {
                     )
                     .clicked()
                     {
-                        self.bottom_module = BottomModule::Mixer;
+                        self.bottom_module = match self.bottom_module {
+                            BottomModule::Sounds => BottomModule::Mixer,
+                            BottomModule::Mixer => BottomModule::Sounds,
+                        };
                     }
-                    if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
-                        self.erase = !self.erase;
+                    if rail_button(ui, &icons, RailIcon::Effects, self.show_effects).clicked() {
+                        self.show_effects = !self.show_effects;
                     }
-                    if rail_button(ui, &icons, RailIcon::Delete, false).clicked() {
-                        self.delete_selection();
+                    if rail_button(ui, &icons, RailIcon::StepSynth, self.show_step_synth).clicked()
+                    {
+                        self.show_step_synth = !self.show_step_synth;
                     }
-                    ui.add_space(8.0);
-                    if rail_button(ui, &icons, RailIcon::Effects, false).clicked() {
-                        self.show_effects = true;
+                    if rail_button(ui, &icons, RailIcon::Edit, self.show_sample_edit).clicked() {
+                        self.show_sample_edit = !self.show_sample_edit;
+                        if self.show_sample_edit {
+                            self.edit_start = 0;
+                            self.edit_end = 0;
+                        }
                     }
-                    if rail_button(ui, &icons, RailIcon::StepSynth, false).clicked() {
-                        self.show_step_synth = true;
+                    if rail_button(ui, &icons, RailIcon::Stretch, self.show_stretch).clicked() {
+                        self.show_stretch = !self.show_stretch;
+                        if self.show_stretch {
+                            self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                        } else {
+                            self.close_stretch_request();
+                        }
                     }
-                    if rail_button(ui, &icons, RailIcon::Edit, false).clicked() {
-                        self.show_sample_edit = true;
-                        self.edit_start = 0;
-                        self.edit_end = 0;
-                    }
-                    if rail_button(ui, &icons, RailIcon::Stretch, false).clicked() {
-                        self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
-                        self.show_stretch = true;
-                    }
-                    ui.add_space(8.0);
+                    controls::rail_separator(ui);
                     rail_heading(ui, &icons, RailIcon::Record);
                     let occupied = occupied_tracks(self.session.project());
-                    recording_destination(ui, &mut self.armed_track, &occupied);
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(48.0, 24.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            recording_destination(ui, &mut self.armed_track, &occupied);
+                        },
+                    );
                 });
             });
     }
@@ -232,9 +284,15 @@ impl MixJamApp {
             .frame(
                 egui::Frame::new()
                     .fill(CANVAS)
-                    .inner_margin(egui::Margin::symmetric(18, 6)),
+                    .inner_margin(egui::Margin::symmetric(18, 3)),
             )
             .show(ctx, |ui| {
+                let notice = |ui: &mut egui::Ui, label: &str| {
+                    ui.add(
+                        egui::Button::new(egui::RichText::new(label).size(12.0))
+                            .min_size(Vec2::new(0.0, 24.0)),
+                    )
+                };
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add(
                         egui::Hyperlink::from_label_and_url(
@@ -248,7 +306,7 @@ impl MixJamApp {
                     .on_hover_text("Open MixJam Techno on GitHub");
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         if !self.session.sample_conflicts().is_empty()
-                            && ui.small_button("Sample conflicts").clicked()
+                            && notice(ui, "Sample conflicts").clicked()
                         {
                             self.show_sample_conflicts = true;
                             self.sample_conflict_error = None;
@@ -256,7 +314,7 @@ impl MixJamApp {
                         if (!self.session.project().import_notices.is_empty()
                             || !self.session.project().source_notices.is_empty()
                             || !self.session.missing_samples().is_empty())
-                            && ui.small_button("Import details").clicked()
+                            && notice(ui, "Import details").clicked()
                         {
                             self.show_import_details = true;
                         }
@@ -265,12 +323,23 @@ impl MixJamApp {
                                 .on_hover_text("Missing samples play silence. Open Import details to see their saved references.");
                         }
                         let color = if self.status_error { CORAL } else { MUTED };
-                        let status = display_paths(&self.status);
-                        ui.add(
-                            egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
+                        // The idle text would contradict a missing-sound notice.
+                        let status = if self.status == DEFAULT_STATUS
+                            && !self.session.missing_samples().is_empty()
+                        {
+                            String::new()
+                        } else {
+                            display_paths(&self.status)
+                        };
+                        if !status.is_empty() {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&status).size(12.0).color(color),
+                                )
                                 .truncate(),
-                        )
-                        .on_hover_text(&status);
+                            )
+                            .on_hover_text(&status);
+                        }
                     });
                 });
             });
@@ -330,7 +399,7 @@ impl MixJamApp {
                 ui,
                 TransportIcon::Loop,
                 self.session.project().loop_region.is_some(),
-                "Loop selected bars",
+                "Loop the whole song. Drag the bar ruler to loop a range.",
             )
             .clicked()
             {
@@ -404,7 +473,7 @@ impl MixJamApp {
                 self.apply(result);
             }
             ui.add_space(10.0);
-            ui.label("Zoom");
+            ui.label(egui::RichText::new("Zoom").color(MUTED));
             name_control(
                 ui.add(
                     egui::Slider::new(&mut self.zoom, 0.55..=2.0)
@@ -452,7 +521,8 @@ impl MixJamApp {
         name_control(
             ui.add(
                 egui::TextEdit::singleline(&mut self.search)
-                    .hint_text("Find a sound")
+                    // The workspace overrides text color; a hint needs its own.
+                    .hint_text(egui::RichText::new("Find a sound").color(MUTED))
                     .desired_width(170.0),
             ),
             "Find a sound",
@@ -590,14 +660,22 @@ impl MixJamApp {
                                 }
                                 (sample.id, response)
                             };
+                            // Enter on a focused tile places it without a pointer.
+                            let place = response.has_focus()
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter));
                             if response.clicked() {
                                 self.selected_sample = Some(id);
+                                self.place_on_click = true;
+                            }
+                            if place {
+                                self.place(id, self.armed_track, self.session.cursor_tick());
                             }
                             if response.double_clicked() {
                                 self.preview(id);
                             }
                             if response.drag_started() {
                                 self.selected_sample = Some(id);
+                                self.place_on_click = true;
                                 self.drag = Some(DragItem::Sample(id));
                             }
                         }
@@ -651,12 +729,47 @@ impl MixJamApp {
         ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new(name).color(ACCENT).strong());
             ui.add_space(12.0);
-            ui.label("Gain");
+            // The mixer shows dB, so the clip does too. An untouched value
+            // keeps its exact saved amplitude.
+            ui.label("Gain (dB)");
+            let mut db = if gain > 0.0 {
+                amplitude_to_db(gain).max(CLIP_SILENCE_DB)
+            } else {
+                CLIP_SILENCE_DB
+            };
             let mut change = name_control(
-                ui.add(egui::DragValue::new(&mut gain).range(0.0..=2.0).speed(0.01)),
+                ui.add(
+                    egui::DragValue::new(&mut db)
+                        .range(CLIP_SILENCE_DB..=amplitude_to_db(2.0))
+                        .speed(0.1)
+                        .custom_formatter(|value, _| {
+                            if value <= f64::from(CLIP_SILENCE_DB) {
+                                "-inf".into()
+                            } else {
+                                format!("{value:+.1}")
+                            }
+                        })
+                        .custom_parser(|text| {
+                            let text = text.trim().to_lowercase();
+                            let text = text.trim_end_matches("db").trim();
+                            if matches!(text, "-inf" | "-infinity" | "silence") {
+                                Some(f64::from(CLIP_SILENCE_DB))
+                            } else {
+                                text.parse().ok()
+                            }
+                        }),
+                ),
                 "Clip gain",
             )
+            .on_hover_text("Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.")
             .changed();
+            if change {
+                gain = if db <= CLIP_SILENCE_DB {
+                    0.0
+                } else {
+                    db_to_amplitude(db).min(2.0)
+                };
+            }
             ui.label("Trim start (frames)");
             change |= name_control(
                 ui.add(
@@ -801,6 +914,9 @@ impl MixJamApp {
                         ui.interact(rect, ui.id().with("canvas"), Sense::click_and_drag()),
                         "Arrangement lanes",
                     );
+                    if response.has_focus() {
+                        self.lane_keys(ui, &response, rect);
+                    }
                     self.timeline_rect = Some(rect);
                     if response.hovered()
                         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
@@ -838,29 +954,13 @@ impl MixJamApp {
                             if track % 2 == 0 {
                                 CANVAS
                             } else {
-                                Color32::from_rgb(24, 28, 32)
+                                ROW_ALTERNATE
                             },
                         );
                         painter.line_segment(
                             [row.left_bottom(), row.right_bottom()],
                             Stroke::new(1.0_f32, LINE.gamma_multiply(0.6)),
                         );
-                    }
-                    if add_track.is_some() {
-                        let target = Rect::from_min_size(
-                            Pos2::new(rect.left(), rect.top() + occupied_count as f32 * row_height),
-                            Vec2::new(width, row_height),
-                        )
-                        .intersect(canvas_clip);
-                        if target.height() >= 22.0 {
-                            painter.text(
-                                target.center(),
-                                Align2::CENTER_CENTER,
-                                "Drop a sound here",
-                                FontId::proportional(13.0),
-                                MUTED,
-                            );
-                        }
                     }
                     let visible = ui.clip_rect().intersect(rect);
                     let first_bar = ((visible.left() - rect.left()) / bar_width)
@@ -875,13 +975,27 @@ impl MixJamApp {
                             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
                             Stroke::new(
                                 1.0_f32,
-                                if bar % 4 == 0 {
-                                    LINE
-                                } else {
-                                    Color32::from_rgb(35, 40, 46)
-                                },
+                                if bar % 4 == 0 { LINE } else { BAR_LINE },
                             ),
                         );
+                    }
+                    if add_track.is_some() {
+                        let target = Rect::from_min_size(
+                            Pos2::new(rect.left(), rect.top() + occupied_count as f32 * row_height),
+                            Vec2::new(width, row_height),
+                        )
+                        .intersect(canvas_clip);
+                        if target.height() >= 22.0 {
+                            // Clear the bar lines behind the hint.
+                            let hint = painter.layout_no_wrap(
+                                "Drop a sound here".into(),
+                                FontId::proportional(13.0),
+                                MUTED,
+                            );
+                            let area = Rect::from_center_size(target.center(), hint.size());
+                            painter.rect_filled(area.expand2(Vec2::new(6.0, 1.0)), 0.0, CANVAS);
+                            painter.galley(area.min, hint, MUTED);
+                        }
                     }
                     for clip in &self.session.project().clips {
                         let clip_rect = self.clip_rect(clip, rect);
@@ -896,6 +1010,60 @@ impl MixJamApp {
                                 clip.gain,
                             );
                         }
+                    }
+                    // Show where a dragged or click-placed sound will land.
+                    let incoming = match &self.drag {
+                        Some(DragItem::Sample(id)) => Some(*id),
+                        Some(DragItem::Clip { .. }) => None,
+                        None => self
+                            .selected_sample
+                            .filter(|_| self.place_on_click && !self.erase && response.hovered()),
+                    };
+                    if let Some(sample) =
+                        incoming.and_then(|id| self.session.library().sample_by_id(id))
+                        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+                        && visible.contains(pos)
+                        && let Some(track) = self.timeline_track_at(pos)
+                        && let Some(length_ticks) = self.session.placement_ticks(sample.id)
+                        && !self
+                            .session
+                            .project()
+                            .clips
+                            .iter()
+                            .any(|clip| self.clip_rect(clip, rect).contains(pos))
+                    {
+                        let fine = ui.input(|i| i.modifiers.ctrl);
+                        let ghost = self.clip_rect(
+                            &Clip {
+                                id: 0,
+                                sample_id: sample.id,
+                                track,
+                                start_tick: self.position_tick(pos.x, rect, fine),
+                                length_ticks,
+                                offset_frames: 0,
+                                gain: 1.0,
+                            },
+                            rect,
+                        );
+                        painter.rect_filled(
+                            ghost,
+                            3.0,
+                            group_color(&sample.group_name).gamma_multiply(0.3),
+                        );
+                        painter.rect_stroke(
+                            ghost.shrink(0.5),
+                            3.0,
+                            Stroke::new(1.0_f32, TEXT),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    if response.has_focus() {
+                        painter.rect_stroke(
+                            visible.shrink(1.0),
+                            0.0,
+                            Stroke::new(1.0_f32, ACCENT),
+                            egui::StrokeKind::Inside,
+                        );
                     }
                     let play_x = rect.left()
                         + self.session.cursor_tick() as f32 / TICKS_PER_BAR as f32 * bar_width;
@@ -925,13 +1093,14 @@ impl MixJamApp {
                                 self.apply(result);
                             } else {
                                 self.select_clip(clip.id, ui.input(|i| i.modifiers.shift));
+                                self.place_on_click = false;
                                 if response.double_clicked() {
                                     self.preview(clip.sample_id);
                                 }
                             }
                         } else if let Some(sample) = self
                             .selected_sample
-                            .filter(|_| !ui.input(|i| i.modifiers.shift))
+                            .filter(|_| self.place_on_click && !ui.input(|i| i.modifiers.shift))
                         {
                             let Some(track) = self.timeline_track_at(pos) else {
                                 return;
@@ -947,6 +1116,16 @@ impl MixJamApp {
                         }
                     }
                     if response.secondary_clicked() {
+                        let hit = response.interact_pointer_pos().and_then(|pos| {
+                            self.session.project().clips.iter().rev()
+                                .find(|clip| self.clip_rect(clip, rect).contains(pos))
+                                .map(|clip| clip.id)
+                        });
+                        self.context_clip = hit;
+                        if let Some(id) = hit.filter(|id| !self.selected_clips.contains(id)) {
+                            self.select_clip(id, false);
+                            self.place_on_click = false;
+                        }
                         self.context_missing_sample = response.interact_pointer_pos().and_then(|pos| {
                             self.session.project().clips.iter().rev()
                                 .find(|clip| self.clip_rect(clip, rect).contains(pos))
@@ -954,11 +1133,28 @@ impl MixJamApp {
                                 .map(|missing| missing.id)
                         });
                     }
-                    if let Some(sample_id) = self.context_missing_sample {
+                    if self.context_clip.is_some() || self.context_missing_sample.is_some() {
                         response.context_menu(|ui| {
-                            if ui.button("Resolve manually").clicked() {
+                            if let Some(sample_id) = self.context_missing_sample
+                                && ui.button("Resolve manually").clicked()
+                            {
                                 ui.close();
                                 self.resolve_missing_sample(sample_id);
+                            }
+                            if let Some(id) = self.context_clip {
+                                if ui.button("Preview").clicked() {
+                                    ui.close();
+                                    // The menu's clip need not be the primary one.
+                                    self.preview_clip(id);
+                                }
+                                if ui.button("Duplicate (Ctrl+D)").clicked() {
+                                    ui.close();
+                                    self.duplicate_selection();
+                                }
+                                if ui.button("Delete (Delete)").clicked() {
+                                    ui.close();
+                                    self.delete_selection();
+                                }
                             }
                         });
                     }
@@ -1000,7 +1196,7 @@ impl MixJamApp {
                             painter.rect_filled(
                                 selection,
                                 0.0,
-                                Color32::from_rgba_unmultiplied(123, 170, 246, 35),
+                                TEXT.gamma_multiply(0.12),
                             );
                             outline(&painter, selection, TEXT, 1.0);
                             self.selected_clips = self.selection_base.clone();
@@ -1059,6 +1255,14 @@ impl MixJamApp {
                                 self.armed_track = index;
                                 self.message(format!("Recording will create track {}.", index + 1));
                             }
+                            if response.has_focus() {
+                                ui.painter().rect_stroke(
+                                    rect.shrink(1.0),
+                                    4.0,
+                                    Stroke::new(1.0_f32, ACCENT),
+                                    egui::StrokeKind::Inside,
+                                );
+                            }
                             response.on_hover_text(
                                 "Drop a sound on this row or select it for recording.",
                             );
@@ -1078,10 +1282,10 @@ impl MixJamApp {
                             Align2::CENTER_CENTER,
                             format!("{}", index + 1),
                             FontId::proportional(14.0),
-                            Color32::WHITE,
+                            TEXT,
                         );
                         let arm = ui.interact(
-                            Rect::from_center_size(rect.center(), Vec2::new(28.0, row_height)),
+                            Rect::from_center_size(rect.center(), Vec2::new(26.0, row_height)),
                             ui.id().with(("arm", index)),
                             Sense::click(),
                         );
@@ -1100,6 +1304,14 @@ impl MixJamApp {
                                 CORAL,
                             );
                         }
+                        if arm.has_focus() {
+                            ui.painter().rect_stroke(
+                                arm.rect.shrink2(Vec2::new(0.0, 2.0)),
+                                3.0,
+                                Stroke::new(1.0_f32, ACCENT),
+                                egui::StrokeKind::Inside,
+                            );
+                        }
                         if arm.clicked() {
                             self.armed_track = index;
                             self.message(format!("Track {} is ready for recording.", index + 1));
@@ -1110,13 +1322,13 @@ impl MixJamApp {
                             [(true, track.left_enabled), (false, track.right_enabled)]
                         {
                             let x = if left {
-                                rect.left() + 11.0
+                                rect.left() + 12.0
                             } else {
-                                rect.right() - 11.0
+                                rect.right() - 12.0
                             };
                             let button = Rect::from_center_size(
                                 Pos2::new(x, rect.center().y),
-                                Vec2::new(19.0, row_height - 3.0),
+                                Vec2::new(24.0, row_height - 3.0),
                             );
                             let mut response = ui.interact(
                                 button,
@@ -1152,11 +1364,11 @@ impl MixJamApp {
             ruler_strip.min + Vec2::new(lane_inset - painted_offset_x, 0.0),
             Vec2::new(width, 26.0),
         );
-        let ruler_response = name_control(
+        let ruler_response = name_region(
             ui.interact(
                 ruler_clip,
                 ui.id().with("bar_ruler"),
-                Sense::click_and_drag(),
+                Sense::CLICK | Sense::DRAG,
             ),
             "Bar ruler",
         );
@@ -1173,11 +1385,7 @@ impl MixJamApp {
                     ruler.bottom(),
                 ),
             );
-            ruler_painter.rect_filled(
-                rect,
-                0.0,
-                Color32::from_rgba_unmultiplied(184, 227, 126, 35),
-            );
+            ruler_painter.rect_filled(rect, 0.0, ACCENT.gamma_multiply(0.14));
         }
         let first_bar = ((ruler_clip.left() - ruler.left()) / bar_width)
             .floor()
@@ -1233,6 +1441,78 @@ impl MixJamApp {
         }
         ui.add_space(3.0);
         self.selected_inspector(ui);
+    }
+
+    /// Keys for the focused lanes: arrows choose a clip, Alt+arrows move the
+    /// selection, Enter previews it, and Delete removes it.
+    fn lane_keys(&mut self, ui: &egui::Ui, response: &Response, rect: Rect) {
+        controls::keep_transport_key(ui.ctx(), response.id);
+        ui.memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            )
+        });
+        let (mut step, mut shift) = ((0, 0), (0, 0));
+        let (mut preview, mut delete, mut fine) = (false, false, false);
+        ui.input_mut(|input| {
+            for (key, x, y) in [
+                (egui::Key::ArrowLeft, -1, 0),
+                (egui::Key::ArrowRight, 1, 0),
+                (egui::Key::ArrowUp, 0, -1),
+                (egui::Key::ArrowDown, 0, 1),
+            ] {
+                // egui ignores an extra Alt when it matches a key, so read it here.
+                let modifiers = input.modifiers;
+                if input.consume_key(modifiers, key) {
+                    if modifiers.alt {
+                        shift = (x, y);
+                        fine = modifiers.ctrl;
+                    } else {
+                        step = (x, y);
+                    }
+                }
+            }
+            preview = input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+            delete = input.consume_key(egui::Modifiers::NONE, egui::Key::Delete);
+        });
+        if step != (0, 0) {
+            self.step_clip_selection(step.0, step.1);
+        }
+        if shift != (0, 0) && !self.selected_clips.is_empty() {
+            let ids: Vec<_> = self.selected_clips.iter().copied().collect();
+            let ticks = i64::from(if fine {
+                TICKS_PER_BAR / 16
+            } else {
+                TICKS_PER_BAR
+            });
+            if let Err(error) =
+                self.try_move_clips(&ids, shift.1, i64::from(shift.0) * ticks, false)
+            {
+                self.error(error);
+            }
+        }
+        if preview {
+            self.preview_selection();
+        }
+        if delete {
+            self.delete_selection();
+        }
+        if (step != (0, 0) || shift != (0, 0))
+            && let Some(clip) = self.selected_clip.and_then(|id| {
+                self.session
+                    .project()
+                    .clips
+                    .iter()
+                    .find(|clip| clip.id == id)
+            })
+        {
+            ui.scroll_to_rect(self.clip_rect(clip, rect), None);
+        }
     }
 
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
@@ -1505,7 +1785,7 @@ fn embedded_effect_dial(
         controls::value_style(ui);
         name_control(
             ui.put(
-                well.shrink(2.0),
+                well.shrink2(Vec2::new(2.0, 0.0)),
                 egui::DragValue::new(value)
                     .range(low..=high)
                     .speed(step)
@@ -1640,10 +1920,10 @@ pub(super) fn configure_style(ctx: &egui::Context) {
     style.visuals.window_corner_radius = egui::CornerRadius::same(10);
     style.visuals.faint_bg_color = RAISED;
     style.visuals.extreme_bg_color = CANVAS;
-    style.visuals.selection.bg_fill = Color32::from_rgb(65, 85, 50);
+    style.visuals.selection.bg_fill = SELECTION;
     style.visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
     style.visuals.hyperlink_color = ACCENT;
-    style.visuals.warn_fg_color = Color32::from_rgb(232, 197, 133);
+    style.visuals.warn_fg_color = WARNING;
     style.visuals.error_fg_color = CORAL;
     for widget in [
         &mut style.visuals.widgets.noninteractive,
@@ -1696,13 +1976,27 @@ pub(super) fn outline(painter: &egui::Painter, rect: Rect, color: Color32, width
     painter.line_segment([rect.left_bottom(), rect.left_top()], stroke);
 }
 
+/// These buttons override egui's fill and stroke, so focus needs its own mark.
+fn focus_outline(ui: &egui::Ui, response: &Response, color: Color32) {
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            response.rect.shrink(1.0),
+            5.0,
+            Stroke::new(2.0_f32, color),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
 pub(super) fn action_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
-    ui.add(
+    let response = ui.add(
         egui::Button::new(egui::RichText::new(label).color(if active { CANVAS } else { TEXT }))
             .fill(if active { ACCENT } else { RAISED })
             .stroke(Stroke::NONE)
             .min_size(Vec2::new(48.0, 30.0)),
-    )
+    );
+    focus_outline(ui, &response, if active { CANVAS } else { ACCENT });
+    response
 }
 
 fn action_icon_button(
@@ -1710,8 +2004,11 @@ fn action_icon_button(
     icons: &RailIcons,
     icon: RailIcon,
     label: &str,
+    enabled: bool,
+    hint: &str,
 ) -> Response {
-    let response = ui.add(
+    let response = ui.add_enabled(
+        enabled,
         egui::Button::new("")
             .fill(RAISED)
             .stroke(Stroke::NONE)
@@ -1721,12 +2018,17 @@ fn action_icon_button(
         icons.texture_id(icon),
         icons.icon_rect(ui.ctx(), response.rect.center()),
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-        TEXT,
+        if enabled {
+            TEXT
+        } else {
+            MUTED.gamma_multiply(0.5)
+        },
     );
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label)
-    });
-    response.on_hover_text(label)
+    focus_outline(ui, &response, ACCENT);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
+    response
+        .on_hover_text(hint)
+        .on_disabled_hover_text(format!("{hint}: nothing to {}.", label.to_lowercase()))
 }
 
 pub(super) fn rail_button(
@@ -1737,28 +2039,13 @@ pub(super) fn rail_button(
 ) -> Response {
     let width = 48.0_f32.min(ui.available_width().max(1.0));
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::click());
-    let fill = if active {
-        HOVER
-    } else if response.hovered() {
-        RAISED
-    } else {
-        CANVAS
-    };
-    ui.painter().rect_filled(rect, 5.0, fill);
-    if active || response.has_focus() {
-        ui.painter().rect_stroke(
-            rect.shrink(0.5),
-            5.0,
-            Stroke::new(1.0_f32, ACCENT),
-            egui::StrokeKind::Inside,
-        );
-    }
+    controls::icon_button_surface(ui, &response, active);
     let color = if !ui.is_enabled() {
         MUTED.gamma_multiply(0.5)
     } else if active {
-        ACCENT
+        controls::ACCENT
     } else {
-        TEXT
+        controls::CREAM
     };
     ui.painter().image(
         icons.texture_id(icon),
@@ -1778,7 +2065,7 @@ pub(super) fn rail_button(
             egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), icon.label())
         }
     });
-    response.on_hover_text(icon.label())
+    response.on_hover_text(icon.hint())
 }
 
 pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon) {
@@ -1798,16 +2085,14 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
 pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
     // A category can have the name of a tool, such as Step synth.
     let action = format!("Show {label} sounds");
-    name_control(
-        ui.add(
-            egui::Button::new(egui::RichText::new(label).color(if active { TEXT } else { MUTED }))
-                .fill(if active { HOVER } else { PANEL })
-                .stroke(Stroke::new(1.0_f32, if active { MUTED } else { PANEL }))
-                .min_size(Vec2::new(40.0, 26.0)),
-        ),
-        &action,
-    )
-    .on_hover_text(action)
+    let response = ui.add(
+        egui::Button::new(egui::RichText::new(label).color(if active { TEXT } else { MUTED }))
+            .fill(if active { HOVER } else { PANEL })
+            .stroke(Stroke::new(1.0_f32, if active { MUTED } else { PANEL }))
+            .min_size(Vec2::new(40.0, 26.0)),
+    );
+    focus_outline(ui, &response, ACCENT);
+    name_control(response, &action).on_hover_text(action)
 }
 
 pub(super) fn group_color(group: &str) -> Color32 {
@@ -1879,7 +2164,7 @@ pub(super) fn sample_button(
             egui::StrokeKind::Inside,
         );
     }
-    let text = painter.layout_no_wrap(sample.name.clone(), FontId::proportional(12.0), TEXT);
+    let text = painter.layout_job(elided(&sample.name, 12.0, TEXT, rect.width() - 16.0, 1));
     let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(8.0, 3.0)));
     clip.galley(rect.min + Vec2::new(8.0, 5.0), text, TEXT);
     let bars = format!(
@@ -1978,6 +2263,13 @@ pub(super) fn draw_clip(
             Stroke::new(2.0_f32, TEXT),
             egui::StrokeKind::Inside,
         );
+        // A dark inner line keeps the selection visible on every category fill.
+        painter.rect_stroke(
+            rect.shrink(2.5),
+            2.0,
+            Stroke::new(1.0_f32, CANVAS),
+            egui::StrokeKind::Inside,
+        );
     }
     let label = missing
         .map(|missing| format!("Missing: {}", missing.name))
@@ -1985,21 +2277,13 @@ pub(super) fn draw_clip(
     if let Some(label) = label {
         let text_color = if missing.is_some() { TEXT } else { CANVAS };
         let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
-        let text = clipped.layout(
-            visible_clip_label(
-                &label,
-                rect.width() - 12.0,
-                size,
-                if rect.height() < 38.0 {
-                    20.0
-                } else {
-                    rect.height()
-                },
-            ),
-            FontId::proportional(size),
+        let text = clipped.layout_job(elided(
+            &label,
+            size,
             text_color,
-            (rect.width() - 12.0).max(1.0),
-        );
+            rect.width() - 12.0,
+            clip_label_rows(rect.height()),
+        ));
         clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, text_color);
     }
     if selected {
@@ -2072,53 +2356,29 @@ pub(super) fn missing_sample_details(missing: &MissingSample) -> String {
     display_paths(&rows.join("\n"))
 }
 
-pub(super) fn clip_label(name: &str, width: f32, font_size: f32) -> String {
-    let capacity = (width / (font_size * 0.51)).floor().max(1.0) as usize;
-    if name.chars().count() <= capacity {
-        return name.into();
-    }
-    let split = name
-        .char_indices()
-        .enumerate()
-        .take(capacity + 1)
-        .filter(|(_, (_, c))| c.is_whitespace())
-        .last()
-        .map(|(_, (byte, _))| byte)
-        .unwrap_or_else(|| {
-            name.char_indices()
-                .nth(capacity)
-                .map_or(name.len(), |(byte, _)| byte)
-        });
-    let (first, tail) = name.split_at(split);
-    let tail = tail.trim_start();
-    let second = if tail.chars().count() > capacity {
-        format!(
-            "{}…",
-            tail.chars()
-                .take(capacity.saturating_sub(1))
-                .collect::<String>()
-        )
-    } else {
-        tail.into()
-    };
-    format!("{first}\n{second}")
+/// A clip shows its name on one line below 38 points of height, else on two.
+pub(super) fn clip_label_rows(height: f32) -> usize {
+    if height < 38.0 { 1 } else { 2 }
 }
 
-pub(super) fn visible_clip_label(name: &str, width: f32, font_size: f32, height: f32) -> String {
-    if height >= 24.0 {
-        return clip_label(name, width, font_size);
-    }
-    let capacity = (width / (font_size * 0.51)).floor().max(1.0) as usize;
-    if name.chars().count() <= capacity {
-        name.into()
-    } else {
-        format!(
-            "{}…",
-            name.chars()
-                .take(capacity.saturating_sub(1))
-                .collect::<String>()
-        )
-    }
+/// Text limited to `rows` lines of `width`. The measured glyphs decide where
+/// it ends, and an ellipsis on the last visible line marks a shortened name.
+pub(super) fn elided(
+    text: &str,
+    size: f32,
+    color: Color32,
+    width: f32,
+    rows: usize,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::simple(
+        text.to_owned(),
+        FontId::proportional(size),
+        color,
+        width.max(1.0),
+    );
+    job.wrap.max_rows = rows;
+    job.wrap.break_anywhere = rows == 1;
+    job
 }
 
 fn route_hint(label: &str, active: bool) -> String {
@@ -2133,6 +2393,14 @@ fn route_color(active: bool) -> Color32 {
 }
 
 pub(super) fn speaker(painter: &egui::Painter, rect: Rect, enabled: bool, left: bool) {
+    // The bar marks an enabled output, so the state does not rest on color.
+    if enabled {
+        painter.rect_filled(
+            Rect::from_center_size(rect.center() + Vec2::new(0.0, 9.0), Vec2::new(9.0, 2.0)),
+            1.0,
+            ACCENT,
+        );
+    }
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -2212,7 +2480,7 @@ pub(super) fn transport_button(
         TransportIcon::Record => {
             painter.circle_filled(center, 10.0, CORAL);
             if active {
-                painter.circle_stroke(center, 13.0, Stroke::new(1.0_f32, Color32::WHITE));
+                painter.circle_stroke(center, 13.0, Stroke::new(1.0_f32, TEXT));
             }
         }
         TransportIcon::Back => {
@@ -2262,6 +2530,15 @@ pub(super) fn transport_button(
             ));
         }
     }
+    // An outline marks an engaged loop, so the state does not rest on color.
+    if active && matches!(icon, TransportIcon::Loop) {
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            6.0,
+            Stroke::new(1.0_f32, ACCENT),
+            egui::StrokeKind::Inside,
+        );
+    }
     if response.has_focus() {
         painter.rect_stroke(
             rect.shrink(2.0),
@@ -2271,7 +2548,11 @@ pub(super) fn transport_button(
         );
     }
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tooltip)
+        if matches!(icon, TransportIcon::Loop | TransportIcon::Record) {
+            egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), active, tooltip)
+        } else {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tooltip)
+        }
     });
     response.on_hover_text(tooltip)
 }

@@ -1,7 +1,6 @@
 //! Effect Studio body. Shared hardware controls and shell own presentation.
 use super::controls::CREAM;
 use super::*;
-const ERROR: Color32 = Color32::from_rgb(255, 167, 143);
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub available: bool,
@@ -429,7 +428,7 @@ fn control(
         ui.scope(|ui| {
             controls::value_style(ui);
             let response = ui.put(
-                Rect::from_center_size(well, Vec2::new(58.0, 18.0)),
+                Rect::from_center_size(well, Vec2::new(58.0, 24.0)),
                 egui::DragValue::new(value)
                     .range(spec.low..=spec.high)
                     .speed(spec.step)
@@ -481,7 +480,14 @@ fn status_footer(
     ui.painter().rect_stroke(
         rect,
         4.0 * scale,
-        Stroke::new(1.0_f32, Color32::from_rgb(90, 65, 58)),
+        Stroke::new(
+            1.0_f32,
+            if error {
+                CORAL
+            } else {
+                controls::FACE.lerp_to_gamma(CREAM, 0.3)
+            },
+        ),
         egui::StrokeKind::Inside,
     );
     let response = ui.interact(rect, ui.id().with("status"), Sense::hover());
@@ -510,7 +516,7 @@ fn status_footer(
         scroll = scroll.vertical_scroll_offset(0.0);
     }
     scroll.show(&mut child, |ui| {
-        let color = if error { ERROR } else { CREAM };
+        let color = if error { CORAL } else { CREAM };
         let mut job = egui::text::LayoutJob::simple(
             text.into(),
             FontId::proportional(12.5 * scale),

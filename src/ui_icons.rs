@@ -61,10 +61,11 @@ pub(crate) enum RailIcon {
     Mix,
     Undo,
     Redo,
+    Help,
 }
 
 impl RailIcon {
-    pub(crate) const ALL: [Self; 18] = [
+    pub(crate) const ALL: [Self; 19] = [
         Self::Open,
         Self::Save,
         Self::SaveAs,
@@ -83,6 +84,7 @@ impl RailIcon {
         Self::Mix,
         Self::Undo,
         Self::Redo,
+        Self::Help,
     ];
 
     pub(crate) fn label(self) -> &'static str {
@@ -105,11 +107,44 @@ impl RailIcon {
             Self::Mix => "Mix tools",
             Self::Undo => "Undo",
             Self::Redo => "Redo",
+            Self::Help => "Help",
+        }
+    }
+
+    /// The tooltip: what the action does, with its window name or shortcut.
+    /// `label` stays the short accessible name.
+    pub(crate) fn hint(self) -> &'static str {
+        match self {
+            Self::Open => "Open a song (Ctrl+O)",
+            Self::Save => "Save the song (Ctrl+S)",
+            Self::SaveAs => "Save as a new song file (Ctrl+Shift+S)",
+            Self::Export => "Export the song as a stereo WAV",
+            Self::Import => "Import a WAV sound",
+            Self::Libraries => "Libraries: show or close Sample libraries",
+            Self::New => "New song (Ctrl+N)",
+            Self::Mixer => "Mixer: switch between Mixer and Sounds",
+            Self::Erase => "Erase: click clips to delete them (Esc ends)",
+            Self::Delete => "Delete the selected clips (Delete)",
+            Self::Effects => "Effects: show or close Effect Studio",
+            Self::StepSynth => "Step synth: show or close Step synth",
+            Self::Edit => "Edit: show or close Sample Editor",
+            Self::Stretch => "Stretch: show or close Time Stretcher",
+            Self::Help => "Help (F1)",
+            other => other.label(),
         }
     }
 
     pub(crate) fn is_toggle(self) -> bool {
-        matches!(self, Self::Mixer | Self::Erase)
+        matches!(
+            self,
+            Self::Libraries
+                | Self::Mixer
+                | Self::Erase
+                | Self::Effects
+                | Self::StepSynth
+                | Self::Edit
+                | Self::Stretch
+        )
     }
 
     fn bytes(self, density: usize) -> &'static [u8] {
@@ -132,6 +167,7 @@ impl RailIcon {
             Self::Mix => rail_pngs!("mix")[density],
             Self::Undo => rail_pngs!("undo")[density],
             Self::Redo => rail_pngs!("redo")[density],
+            Self::Help => rail_pngs!("help")[density],
         }
     }
 }

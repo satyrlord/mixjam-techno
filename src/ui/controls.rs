@@ -12,6 +12,36 @@ const PRIMARY: Color32 = Color32::from_rgb(212, 205, 182);
 const DISABLED_FACE: Color32 = Color32::from_rgb(61, 64, 60);
 const DISABLED_TEXT: Color32 = Color32::from_rgb(201, 203, 192);
 const CAP: Color32 = Color32::from_rgb(190, 190, 185);
+const DANGER: Color32 = Color32::from_rgb(131, 54, 39);
+/// Hairlines around dark bays, value wells, and native widgets.
+const BAY_EDGE: Color32 = Color32::from_rgb(70, 72, 64);
+const WELL_EDGE: Color32 = Color32::from_rgb(131, 134, 126);
+
+/// Record the focused dial or fader. These controls use only arrows, Home,
+/// and End, so the workspace keeps its transport key while one has focus.
+pub(super) fn keep_transport_key(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("arrow-key-focus"), id));
+}
+
+pub(super) fn arrow_key_focus(ctx: &egui::Context) -> Option<egui::Id> {
+    ctx.data(|data| data.get_temp(egui::Id::new("arrow-key-focus")))
+}
+
+fn contrast(a: Color32, b: Color32) -> f32 {
+    let luminance = |color: Color32| {
+        let linear = |value: u8| {
+            let value = f32::from(value) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
+    };
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum Palette {
@@ -39,6 +69,15 @@ impl Palette {
             Self::Granite => Color32::from_rgb(173, 186, 189),
             Self::Red => Color32::from_rgb(235, 116, 104),
             Self::Olive => Color32::from_rgb(157, 178, 94),
+        }
+    }
+    /// The keyboard focus ring. A ring crosses the chassis, so an accent
+    /// below 3:1 against it gives way to cream.
+    fn focus(self) -> Color32 {
+        if contrast(self.accent(), self.body()) >= 3.0 {
+            self.accent()
+        } else {
+            CREAM
         }
     }
     fn of(ui: &egui::Ui) -> Self {
@@ -374,6 +413,66 @@ pub(super) fn panel(ui: &egui::Ui, rect: Rect) {
     );
 }
 
+/// A narrow chassis uses the same grain and side folds as tool windows, without
+/// overlapping their wide corner patches across the control column.
+pub(super) fn rail_panel(ui: &egui::Ui, rect: Rect) {
+    let palette = Palette::of(ui);
+    let p = ui.painter();
+    p.rect_filled(rect, 5.0, palette.body());
+    let art = artwork(ui.ctx(), palette);
+    paint_grain(ui, &art.grain, rect);
+    let ppp = ui.ctx().pixels_per_point();
+    for (index, right) in [(6, false), (7, true)] {
+        let size = art.material[index].size_vec2() / ppp;
+        let x = if right {
+            rect.right() - size.x
+        } else {
+            rect.left()
+        };
+        let mut y = rect.top();
+        while y < rect.bottom() {
+            fixed_image(ui, &art.material[index], Pos2::new(x, y), rect.shrink(3.0));
+            y += size.y;
+        }
+    }
+    p.rect_stroke(
+        rect,
+        5.0,
+        Stroke::new(1.0_f32, INK),
+        egui::StrokeKind::Inside,
+    );
+    p.rect_stroke(
+        rect.shrink(1.0),
+        4.0,
+        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(CREAM, 0.20)),
+        egui::StrokeKind::Inside,
+    );
+}
+
+pub(super) fn rail_separator(ui: &mut egui::Ui) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(48.0, 14.0), Sense::hover());
+    let left = rect.left_center() + Vec2::new(3.0, 0.0);
+    let right = rect.right_center() - Vec2::new(3.0, 0.0);
+    ui.painter()
+        .line_segment([left, right], Stroke::new(1.0_f32, INK));
+    ui.painter().line_segment(
+        [left + Vec2::Y, right + Vec2::Y],
+        Stroke::new(1.0_f32, Color32::from_white_alpha(45)),
+    );
+}
+
+pub(super) fn icon_button_surface(ui: &egui::Ui, response: &Response, active: bool) {
+    paint_button(ui, response, "", ButtonRole::Secondary);
+    if active {
+        ui.painter().rect_stroke(
+            response.rect.shrink(0.5),
+            5.0,
+            Stroke::new(1.0_f32, print_color(ui)),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
 /// The palette's accent is reserved for focus, selection and active indicators.
 pub(super) fn print_color(ui: &egui::Ui) -> Color32 {
     ui.visuals().selection.bg_fill
@@ -390,7 +489,7 @@ pub(super) fn inset(ui: &egui::Ui, rect: Rect) {
     ui.painter().rect_stroke(
         rect.shrink(2.0),
         4.0,
-        Stroke::new(1.0_f32, Color32::from_rgb(70, 72, 64)),
+        Stroke::new(1.0_f32, BAY_EDGE),
         egui::StrokeKind::Inside,
     );
 }
@@ -423,10 +522,14 @@ fn focus(ui: &egui::Ui, response: &Response) {
         ui.painter().rect_stroke(
             response.rect.expand(2.0),
             5.0,
-            Stroke::new(2.0_f32, print_color(ui)),
+            Stroke::new(2.0_f32, focus_color(ui)),
             egui::StrokeKind::Outside,
         );
     }
+}
+
+pub(super) fn focus_color(ui: &egui::Ui) -> Color32 {
+    Palette::of(ui).focus()
 }
 
 fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRole) {
@@ -435,7 +538,7 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     let base = match role {
         ButtonRole::Secondary => FACE,
         ButtonRole::Primary => PRIMARY,
-        ButtonRole::Danger => Color32::from_rgb(131, 54, 39),
+        ButtonRole::Danger => DANGER,
     };
     let base = if !response.enabled() {
         DISABLED_FACE
@@ -671,9 +774,54 @@ pub(super) fn well(ui: &egui::Ui, rect: Rect) {
     ui.painter().rect_stroke(
         rect,
         3.0,
-        Stroke::new(1.0_f32, Color32::from_rgb(131, 134, 126)),
+        Stroke::new(1.0_f32, WELL_EDGE),
         egui::StrokeKind::Inside,
     );
+}
+
+/// Keep status text above the fill so contrast does not change with progress.
+/// No numeric value is reported until the total amount of work is known.
+pub(super) fn progress(ui: &mut egui::Ui, label: &str, fraction: Option<f32>, width: f32) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::hover());
+    let text = ui
+        .painter()
+        .layout_no_wrap(label.into(), FontId::proportional(13.0), CREAM);
+    ui.painter()
+        .with_clip_rect(rect.intersect(ui.clip_rect()))
+        .galley(
+            Pos2::new(rect.center().x - text.size().x / 2.0, rect.top()),
+            text,
+            CREAM,
+        );
+    let rail = Rect::from_min_max(
+        rect.left_bottom() - Vec2::new(0.0, 10.0),
+        rect.right_bottom(),
+    );
+    well(ui, rail);
+    let inner = rail.shrink(2.0);
+    let fill = if let Some(fraction) = fraction {
+        Rect::from_min_size(
+            inner.min,
+            Vec2::new(inner.width() * fraction.clamp(0.0, 1.0), inner.height()),
+        )
+    } else {
+        let phase = ui.input(|input| (input.time * 1.8).sin() as f32 * 0.5 + 0.5);
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(33));
+        Rect::from_min_size(
+            inner.min + Vec2::new(inner.width() * 0.75 * phase, 0.0),
+            Vec2::new(inner.width() * 0.25, inner.height()),
+        )
+    };
+    if fill.width() > 0.0 {
+        ui.painter().rect_filled(fill, 1.0, print_color(ui));
+    }
+    response.widget_info(|| {
+        let mut info =
+            egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, ui.is_enabled(), label);
+        info.value = fraction.map(|value| f64::from(value.clamp(0.0, 1.0)) * 100.0);
+        info
+    });
 }
 
 pub(super) fn value_style(ui: &mut egui::Ui) {
@@ -697,6 +845,9 @@ pub(super) fn value_style(ui: &mut egui::Ui) {
         widget.bg_stroke = Stroke::NONE;
         widget.fg_stroke.color = CREAM;
     }
+    // egui paints a focused or dragged value with these visuals. The edge
+    // shows keyboard focus on a field that is not yet being typed in.
+    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, CREAM);
 }
 
 /// Compact editable value for ordinary dialog forms.
@@ -776,7 +927,7 @@ pub(super) fn slider(
             .circle_stroke(center, radius, Stroke::new(1.5_f32, INK));
         if response.has_focus() {
             ui.painter()
-                .circle_stroke(center, radius + 2.0, Stroke::new(2.0_f32, print_color(ui)));
+                .circle_stroke(center, radius + 2.0, Stroke::new(2.0_f32, focus_color(ui)));
         }
         response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), *value, name));
         response
@@ -876,6 +1027,7 @@ pub(super) fn rotary(
     let before = *value;
     if response.enabled() {
         if response.has_focus() {
+            keep_transport_key(ui.ctx(), response.id);
             ui.memory_mut(|memory| {
                 memory.set_focus_lock_filter(
                     response.id,
@@ -1014,6 +1166,7 @@ pub(super) fn rotary(
                 } else {
                     1.0_f32
                 },
+                // The dial sits in a dark bay, where every accent is legible.
                 print_color(ui),
             ),
         );
@@ -1043,6 +1196,53 @@ pub(super) fn rotary(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn loading_status_keeps_text_above_visible_rail() {
+        for fraction in [None, Some(0.0), Some(0.5), Some(1.0)] {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let output = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    apply_palette(ui, Palette::Utility);
+                    progress(ui, "Listing files…", fraction, 180.0);
+                });
+            });
+            let text = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == "Listing files…" => {
+                        Some(text)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            let rail = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect) if rect.fill == INK && rect.rect.height() == 10.0 => {
+                        Some(rect.rect)
+                    }
+                    _ => None,
+                })
+                .expect("An empty loader still needs its full recessed track");
+            assert!(text.pos.y + text.galley.size().y <= rail.top());
+            assert_eq!(text.galley.job.sections[0].format.color, CREAM);
+            assert!(contrast(CREAM, Palette::Utility.body()) >= 4.5);
+            let update = output.platform_output.accesskit_update.unwrap();
+            let node = update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == egui::accesskit::Role::ProgressIndicator)
+                .unwrap();
+            assert_eq!(
+                node.1.numeric_value(),
+                fraction.map(|value| f64::from(value) * 100.0)
+            );
+        }
+    }
 
     #[test]
     fn numeric_text_fits_and_centers_in_its_own_container() {
@@ -1121,6 +1321,25 @@ mod tests {
                 "{role} contrast {contrast:.2}:1 must be at least4.5:1"
             );
         }
+    }
+
+    #[test]
+    fn focus_rings_stay_visible_against_every_chassis() {
+        for palette in [
+            Palette::Utility,
+            Palette::Marine,
+            Palette::Granite,
+            Palette::Red,
+            Palette::Olive,
+        ] {
+            let ratio = contrast(palette.focus(), palette.body());
+            assert!(
+                ratio >= 3.0,
+                "{palette:?} focus ring contrast {ratio:.2}:1 must be at least 3:1"
+            );
+        }
+        assert_eq!(Palette::Red.focus(), CREAM);
+        assert_eq!(Palette::Marine.focus(), Palette::Marine.accent());
     }
 
     fn spec() -> RotarySpec<'static> {

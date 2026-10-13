@@ -801,6 +801,12 @@ impl Editor {
     pub fn set_libraries(&mut self, libraries: Vec<crate::products::LibraryBinding>) {
         self.project.libraries = libraries;
     }
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
     pub fn undo(&mut self) -> bool {
         if let Some(p) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.project, p));

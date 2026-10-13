@@ -258,7 +258,14 @@ pub struct MixJamApp {
     selected_sample: Option<u32>,
     selected_clip: Option<u64>,
     selected_clips: BTreeSet<u64>,
+    /// A click on an empty lane places the selected sound. Choosing a clip
+    /// turns this off, so the next empty click only clears the selection.
+    place_on_click: bool,
+    /// Discard take was pressed once and waits for its confirmation.
+    discard_take_armed: bool,
     context_missing_sample: Option<u32>,
+    /// The clip that the lane context menu was opened on.
+    context_clip: Option<u64>,
     group: Option<String>,
     palette_product: Option<Product>,
     palette_sort: PaletteSort,
@@ -268,6 +275,7 @@ pub struct MixJamApp {
     show_stretch_help: bool,
     show_effects_help: bool,
     show_step_synth_help: bool,
+    show_sample_edit_help: bool,
     show_libraries: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
@@ -434,7 +442,10 @@ impl MixJamApp {
             selected_sample,
             selected_clip: None,
             selected_clips: BTreeSet::new(),
+            place_on_click: true,
+            discard_take_armed: false,
             context_missing_sample: None,
+            context_clip: None,
             group: None,
             palette_product: None,
             palette_sort: PaletteSort::default(),
@@ -448,6 +459,7 @@ impl MixJamApp {
             show_stretch_help: false,
             show_effects_help: false,
             show_step_synth_help: false,
+            show_sample_edit_help: false,
             show_libraries: matches!(
                 capture_view.as_str(),
                 "libraries" | "library-providers" | "library-tempos"
@@ -945,10 +957,117 @@ impl MixJamApp {
         self.apply(result);
     }
 
+    /// Choose the next clip along a track (`dx`) or the nearest clip on the
+    /// next used track (`dy`). Without a selection, choose the first clip.
+    fn step_clip_selection(&mut self, dx: i32, dy: i32) {
+        let clips = &self.session.project().clips;
+        let current = self
+            .selected_clip
+            .and_then(|id| clips.iter().find(|clip| clip.id == id));
+        let next = match current {
+            None => clips
+                .iter()
+                .min_by_key(|clip| (clip.track, clip.start_tick)),
+            Some(current) if dy == 0 => clips
+                .iter()
+                .filter(|clip| clip.track == current.track)
+                .filter(|clip| {
+                    if dx > 0 {
+                        clip.start_tick > current.start_tick
+                    } else {
+                        clip.start_tick < current.start_tick
+                    }
+                })
+                .min_by_key(|clip| clip.start_tick.abs_diff(current.start_tick)),
+            Some(current) => clips
+                .iter()
+                .filter(|clip| {
+                    if dy > 0 {
+                        clip.track > current.track
+                    } else {
+                        clip.track < current.track
+                    }
+                })
+                .min_by_key(|clip| {
+                    (
+                        clip.track.abs_diff(current.track),
+                        clip.start_tick.abs_diff(current.start_tick),
+                    )
+                }),
+        };
+        if let Some(id) = next.map(|clip| clip.id) {
+            self.select_clip(id, false);
+            self.place_on_click = false;
+        }
+    }
+
+    fn preview_selection(&mut self) {
+        if let Some(id) = self.selected_clip {
+            self.preview_clip(id);
+        }
+    }
+
+    fn preview_clip(&mut self, id: u64) {
+        if let Some(sample) = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .find(|clip| clip.id == id)
+            .map(|clip| clip.sample_id)
+        {
+            self.preview(sample);
+        }
+    }
+
+    /// Copy the selected clips to the bars that follow the selection.
+    fn duplicate_selection(&mut self) {
+        let selected: Vec<_> = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .filter(|clip| self.selected_clips.contains(&clip.id))
+            .collect();
+        let (Some(start), Some(end)) = (
+            selected.iter().map(|clip| clip.start_tick).min(),
+            selected
+                .iter()
+                .map(|clip| clip.start_tick.saturating_add(clip.length_ticks))
+                .max(),
+        ) else {
+            return;
+        };
+        // Whole bars keep the copy on the grid.
+        let span = (end - start).div_ceil(TICKS_PER_BAR).max(1) * TICKS_PER_BAR;
+        let ids: Vec<_> = selected.iter().map(|clip| clip.id).collect();
+        if let Err(error) = self.try_move_clips(&ids, 0, i64::from(span), true) {
+            self.error(error);
+        }
+    }
+
+    fn select_all_clips(&mut self) {
+        self.selected_clips = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .map(|clip| clip.id)
+            .collect();
+        self.selected_clip = self.selected_clips.iter().next().copied();
+        self.place_on_click = false;
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context) {
-        if ctx.wants_keyboard_input() {
+        let focused = ctx.memory(|memory| memory.focused());
+        // A value that is being typed keeps every key.
+        if focused.is_some_and(|id| egui::TextEdit::load_state(ctx, id).is_some()) {
             return;
         }
+        // A focused button or switch takes Space itself. A dial or fader uses
+        // only arrows, Home, and End, so the transport keeps Space there.
+        let free = focused.is_none();
+        let transport = free || focused == controls::arrow_key_focus(ctx);
         // Held keys repeat. A toggle or a file action must run once per press.
         let pressed_once = |key: egui::Key| {
             ctx.input(|i| {
@@ -961,29 +1080,45 @@ impl MixJamApp {
                 })
             })
         };
-        if pressed_once(egui::Key::Space) {
+        if transport && pressed_once(egui::Key::Space) {
             if self.session.wants_playback() {
                 self.pause();
             } else {
                 self.start_playback();
             }
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
+        if free && ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
             self.delete_selection();
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z)) {
             let redo = ctx.input(|i| i.modifiers.shift);
             self.history_step(redo);
         }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Y)) {
+            self.history_step(true);
+        }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::S) {
-            self.save(false);
+            self.save(ctx.input(|i| i.modifiers.shift));
+        }
+        if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::N) {
+            self.request_action(PendingAction::New, ctx);
+        }
+        if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::A) {
+            self.select_all_clips();
+        }
+        if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::D) {
+            self.duplicate_selection();
+        }
+        if pressed_once(egui::Key::F1) {
+            self.show_help = true;
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::O) {
             self.request_action(PendingAction::Open, ctx);
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if transport && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.drag = None;
             self.erase = false;
+            self.place_on_click = false;
         }
     }
 
@@ -1163,7 +1298,7 @@ impl MixJamApp {
                 }
             };
             let rect = Rect::from_min_size(pos + Vec2::new(14.0, 14.0), Vec2::new(150.0, 30.0));
-            painter.rect_filled(rect, 4.0, Color32::from_rgb(245, 220, 146));
+            painter.rect_filled(rect, 4.0, DRAG_LABEL);
             painter.text(
                 rect.center(),
                 Align2::CENTER_CENTER,
@@ -1262,11 +1397,11 @@ impl MixJamApp {
                 |ui| {
                     ui.label(
                         if self.session.has_recorded_take() && self.session.unsaved() {
-                            "The mix and recorded take are unsaved."
+                            "The song and the recorded take are unsaved."
                         } else if self.session.has_recorded_take() {
                             "The recorded take is unsaved."
                         } else {
-                            "The mix is unsaved."
+                            "The song has unsaved changes."
                         },
                     );
                     ui.horizontal(|ui| {
@@ -1294,16 +1429,24 @@ impl MixJamApp {
                 egui::Grid::new("help_gestures").num_columns(2).spacing(Vec2::new(18.0, 8.0)).show(ui, |ui| {
                     for (action, gesture) in [
                         ("Place sound", "Drag to a track, or select a sound and click a track. Up to 64 tracks."),
+                        ("Place by key", "Tab to a sound and press Enter. It lands on the recording track at the playhead."),
+                        ("Cancel placing", "An outline shows where a sound lands. Esc or a click on a clip ends click placement."),
                         ("Preview", "Double-click a sound or clip."),
                         ("Move / copy", "Drag a clip. Alt-drag copies."),
                         ("Select group", "Shift-click clips or drag an empty area."),
                         ("Fine snap", "Hold Ctrl for sixteenth-note positions."),
                         ("Delete", "Select clips, then press Delete."),
+                        ("Select all", "Ctrl+A"),
+                        ("Duplicate", "Ctrl+D copies the selected clips to the bars that follow."),
+                        ("Clip menu", "Right-click a clip for Preview, Duplicate, Delete, and Resolve manually."),
+                        ("Clips by key", "Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews."),
                         ("Seek / loop", "Click a bar number to seek. Drag the ruler to loop."),
                         ("Play / pause", "Space"),
-                        ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z"),
-                        ("Open / save", "Ctrl+O / Ctrl+S. Open MIX, MIXJAM, or JSON; save MIXJAM."),
+                        ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y"),
+                        ("Open / save", "Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, MIXJAM, or JSON; save MIXJAM."),
+                        ("New song", "Ctrl+N"),
                         ("Export", "Stereo WAV"),
+                        ("Help", "F1"),
                     ] {
                         ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
                         ui.add(egui::Label::new(gesture).wrap());
@@ -1317,6 +1460,7 @@ impl MixJamApp {
                 ui.label("The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.");
                 ui.label("The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.");
                 ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.");
+                ui.label("Shortcuts with Ctrl work from any control except a value that is being typed. Space plays when no control has focus, or when a dial, a fader, or the lanes have it.");
                 ui.separator();
                 ui.label(egui::RichText::new("Time Stretcher").strong());
                 stretch_help(ui);
@@ -1326,6 +1470,9 @@ impl MixJamApp {
                 ui.separator();
                 ui.label(egui::RichText::new("Step synth").strong());
                 step_synth_help(ui);
+                ui.separator();
+                ui.label(egui::RichText::new("Sample Editor").strong());
+                sample_editor_help(ui);
             });
         dialog::window("Time Stretcher help")
             .default_height(420.0)
@@ -1348,6 +1495,13 @@ impl MixJamApp {
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
             .show(ctx, step_synth_help);
+        dialog::window("Sample editor help")
+            .default_height(420.0)
+            .open(&mut self.show_sample_edit_help)
+            .default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .show(ctx, sample_editor_help);
     }
 
     fn sample_conflicts_open(&self) -> bool {
@@ -2047,6 +2201,9 @@ impl MixJamApp {
 
                 .show(ctx, |ui| {
                     let scan = self.session.wave_scan();
+                    if scan.is_none() && self.session.library().wav_root().is_none() {
+                        ui.label("Choose a folder of WAV files to fill the Sounds panel. Subfolders are included. Fallback BPM applies only to sounds whose tempo cannot be recognized.");
+                    }
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
                         name_control(
@@ -2070,19 +2227,15 @@ impl MixJamApp {
                     if let Some(scan) = &scan {
                         ui.horizontal(|ui| {
                             let (text, fraction) = if scan.files_total == 0 {
-                                ("Listing files…".to_string(), 0.0)
+                                ("Listing files…".to_string(), None)
                             } else {
                                 (
                                     format!("{} of {} WAVs", scan.files_done, scan.files_total),
-                                    scan.files_done as f32 / scan.files_total as f32,
+                                    Some(scan.files_done as f32 / scan.files_total as f32),
                                 )
                             };
-                            ui.add(
-                                egui::ProgressBar::new(fraction)
-                                    .desired_width(300.0)
-                                    .animate(true)
-                                    .text(text),
-                            );
+                            let width = (ui.available_width() - 80.0).clamp(80.0, 300.0);
+                            controls::progress(ui, &text, fraction, width);
                             if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
                                 self.session.cancel_wave_scan();
                                 self.sync_notice();
@@ -2163,12 +2316,27 @@ impl MixJamApp {
                     if !self.session.missing_samples().is_empty() {
                         ui.heading("MISSING SAMPLES");
                         ui.label("Missing samples play silence. Select details to copy.");
+                        let mut resolve = None;
                         for missing in self.session.missing_samples() {
                             let selected = self.source_id() == Some(missing.id);
                             controls::disclosure(format!("Missing: {}", missing.name))
                                 .id_salt(("missing_sample", missing.id))
                                 .default_open(selected || self.session.missing_samples().len() == 1)
                                 .show(ui, |ui| {
+                                    let action = name_control(
+                                        controls::button(
+                                            ui,
+                                            "Resolve manually",
+                                            controls::ButtonRole::Secondary,
+                                        ),
+                                        &format!("Resolve manually: {}", missing.name),
+                                    );
+                                    if action
+                                        .on_hover_text("Choose the WAV file for this sound. Every clip that uses it keeps its position, length, and gain.")
+                                        .clicked()
+                                    {
+                                        resolve = Some(missing.id);
+                                    }
                                     ui.add(
                                         egui::Label::new(missing_sample_details(missing))
                                             .wrap()
@@ -2188,6 +2356,9 @@ impl MixJamApp {
                                         );
                                     }
                                 });
+                        }
+                        if let Some(id) = resolve {
+                            self.resolve_missing_sample(id);
                         }
                         ui.separator();
                     }
@@ -2438,6 +2609,7 @@ impl MixJamApp {
                     Err(error) => self.error(error),
                 },
                 Ok(sample_editor::Action::Details) => self.show_import_details = true,
+                Ok(sample_editor::Action::Help) => self.show_sample_edit_help = true,
                 Ok(sample_editor::Action::None) => {}
                 Err(error) => self.error(error),
             }
@@ -2542,20 +2714,42 @@ impl MixJamApp {
                 .default_height(92.0)
                 .show(ctx, |ui| {
                     ui.label("Unsaved take: stored in memory.");
+                    if self.discard_take_armed {
+                        ui.colored_label(
+                            CORAL,
+                            "Discarding erases this recording. It cannot be undone.",
+                        );
+                    }
                     ui.horizontal(|ui| {
+                        if self.discard_take_armed {
+                            if controls::button(ui, "Keep take", controls::ButtonRole::Secondary)
+                                .clicked()
+                            {
+                                self.discard_take_armed = false;
+                            }
+                            if dialog::danger(ui, "Confirm discard").clicked() {
+                                self.session.discard_recorded_take();
+                                self.discard_take_armed = false;
+                                self.message("Recorded take discarded.");
+                            }
+                            return;
+                        }
+                        if dialog::primary(ui, "Save take").clicked() {
+                            self.save_recorded_take();
+                        }
                         if controls::button(ui, "Listen", controls::ButtonRole::Secondary).clicked()
                         {
                             self.session.preview_recorded_take();
                             self.sync_notice();
                         }
-                        if dialog::primary(ui, "Save take").clicked() {
-                            self.save_recorded_take();
-                        }
+                        ui.add_space(16.0);
                         if dialog::danger(ui, "Discard take").clicked() {
-                            self.session.discard_recorded_take();
+                            self.discard_take_armed = true;
                         }
                     });
                 });
+        } else {
+            self.discard_take_armed = false;
         }
     }
 
@@ -2699,7 +2893,7 @@ fn stretch_help(ui: &mut egui::Ui) {
         "A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.",
         "Click Original BPM for exact entry. Drag a knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes.",
         "Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.",
-        "Listen changes to Stop listening during preview. The amber lamp marks processing or playback; the green lamp confirms a saved sound.",
+        "Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.",
         "Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.",
     ] {
         ui.add(egui::Label::new(text).wrap());
@@ -2709,7 +2903,7 @@ fn stretch_help(ui: &mut egui::Ui) {
 fn effects_help(ui: &mut egui::Ui) {
     for text in [
         "Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.",
-        "Filter, Echo, and Robotize each have an on/off switch and lamp. Turning a section off discards its settings. Turning it on restores that section's defaults.",
+        "Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings. Turning it on restores that section's defaults.",
         "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.",
         "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
         "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are new algorithms; original-product audio equivalence is not established.",
@@ -2726,8 +2920,21 @@ fn step_synth_help(ui: &mut egui::Ui) {
         "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
         "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 140, 160, and 180 BPM.",
         "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
-        "The upper-left triangle collapses the tool without changing its draft. Tab reaches controls and cells; a focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
+        "The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
         "Resampling, source looping, and effects are reconstruction policies. Original-engine audio equivalence is not established.",
+    ] {
+        ui.add(egui::Label::new(text).wrap());
+    }
+}
+
+fn sample_editor_help(ui: &mut egui::Ui) {
+    for text in [
+        "Select a palette sound or a clip, then open Sample Editor. Listen edit previews the result. Save edited sound writes a new WAV, adds it to Wave, and leaves the source unchanged.",
+        "Start frame is the first frame that is kept, counted from zero. End frame is the first frame that is left out; set it to the frame count to keep the last frame. A frame is one sample of audio.",
+        "Click a value for exact entry, then press Enter. The + and - buttons change one frame, or 100 with Shift.",
+        "Pitch runs from -24 to +24 semitones and changes speed and length together: +12 is an octave up and half as long, -12 an octave down and twice as long. Its buttons change 0.1 semitone, or one with Shift.",
+        "The status line shows the selected frames and the length after pitch, or why editing is unavailable. A missing sound plays silence; resolve it in Import details.",
+        "The upper-left triangle collapses the tool and keeps the edit. Esc closes the tool after a value being typed or a window above it has handled the key.",
     ] {
         ui.add(egui::Label::new(text).wrap());
     }

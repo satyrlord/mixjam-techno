@@ -79,6 +79,8 @@ struct Shell<'a> {
     blocking: bool,
     palette: controls::Palette,
     inset_body: bool,
+    /// Follow the height of the content until the user resizes the window.
+    fit: bool,
 }
 struct ShellResponse<R> {
     response: Response,
@@ -151,7 +153,7 @@ fn show_shell<R>(
                 let mut backdrop = ui.new_child(
                     egui::UiBuilder::new()
                         .id_salt("backdrop")
-                        .sense(Sense::click_and_drag())
+                        .sense(Sense::CLICK | Sense::DRAG)
                         .max_rect(rect),
                 );
                 backdrop.set_min_size(rect.size());
@@ -198,7 +200,7 @@ fn show_shell<R>(
                 header.min + Vec2::new(44.0, 2.0),
                 header.max - Vec2::new(84.0, 3.0),
             );
-            let drag = ui.interact(drag_rect, id.with("title-drag"), Sense::drag());
+            let drag = ui.interact(drag_rect, id.with("title-drag"), Sense::DRAG);
             if drag.dragged() && !drag.drag_started() {
                 geometry.position += ctx.input(|i| i.pointer.delta());
             }
@@ -270,7 +272,7 @@ fn show_shell<R>(
                 )
                 .clicked();
             }
-            let inner = if collapsed {
+            if collapsed {
                 None
             } else {
                 ui.painter().line_segment(
@@ -287,24 +289,33 @@ fn show_shell<R>(
                 if spec.inset_body {
                     controls::inset(ui, body.expand(4.0));
                 }
+                // Text in a bay keeps clear of its edge.
+                let body = body.shrink(if spec.inset_body { 6.0 } else { 0.0 });
                 let mut content = ui.new_child(
                     egui::UiBuilder::new()
                         .id_salt("hardware-content")
                         .max_rect(body),
                 );
                 content.set_clip_rect(body.intersect(spec.viewport));
-                Some(
-                    egui::ScrollArea::both()
-                        .id_salt("hardware-scroll")
-                        .auto_shrink([false, false])
-                        .show(&mut content, contents)
-                        .inner,
-                )
-            };
-            if !collapsed {
+                let scrolled = egui::ScrollArea::both()
+                    .id_salt("hardware-scroll")
+                    .auto_shrink([false, false])
+                    .show(&mut content, contents);
+                let resized_id = id.with("hardware-resized");
+                if spec.fit && !ctx.data(|d| d.get_temp::<bool>(resized_id).unwrap_or(false)) {
+                    // A short dialog has no empty bay below its last control.
+                    let chrome = bounds.height() - body.height();
+                    geometry.size.y = (scrolled.content_size.y + chrome)
+                        .max(MIN_SIZE.y.min(spec.size.y))
+                        .min(spec.viewport.height());
+                }
+                let before = geometry.size;
                 resize_handles(ui, bounds, &mut geometry);
+                if geometry.size != before {
+                    ctx.data_mut(|d| d.insert_temp(resized_id, true));
+                }
+                Some(scrolled.inner)
             }
-            inner
         });
     let top = ctx.memory(|m| {
         if blocking {
@@ -388,7 +399,7 @@ fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry) {
             .interact(
                 Rect::from_x_y_ranges(x, y),
                 ui.id().with(("resize", index)),
-                Sense::drag(),
+                Sense::DRAG,
             )
             .on_hover_cursor(cursor);
         if response.dragged() && !response.drag_started() {
@@ -481,9 +492,11 @@ impl<'a> Window<'a> {
                     "Time Stretcher help" => controls::Palette::Marine,
                     "Effect Studio help" => controls::Palette::Red,
                     "Step synth help" => controls::Palette::Olive,
+                    "Sample editor help" => controls::Palette::Granite,
                     _ => controls::Palette::Utility,
                 },
                 inset_body: true,
+                fit: self.title == "Recorded take",
             },
             contents,
         );
@@ -525,6 +538,7 @@ pub(super) fn tool<R>(
             blocking: false,
             palette,
             inset_body: false,
+            fit: false,
         },
         contents,
     );
@@ -566,6 +580,7 @@ pub(super) fn modal<R>(
             blocking: true,
             palette: controls::Palette::Utility,
             inset_body: true,
+            fit: true,
         },
         contents,
     );

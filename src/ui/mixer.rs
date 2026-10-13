@@ -8,6 +8,8 @@ const METAL: Color32 = Color32::from_rgb(201, 194, 175);
 const EDGE: Color32 = Color32::from_rgb(108, 106, 97);
 const FACE: Color32 = Color32::from_rgb(29, 33, 34);
 const AMBER: Color32 = Color32::from_rgb(245, 193, 86);
+/// The fader slot and the resting edge of dark buttons.
+const SLOT: Color32 = Color32::from_rgb(11, 14, 14);
 const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
 const SILENCE_DB: f32 = -96.0;
 // The useful -24..+12 dB interval occupies 72% of the travel. The short
@@ -321,7 +323,7 @@ fn strip(
     ui.painter().text(
         Pos2::new(rail.right() + 9.0 * scale, rail.bottom()),
         Align2::LEFT_CENTER,
-        "−∞",
+        "-inf",
         FontId::proportional(10.0 * scale),
         INK,
     );
@@ -360,6 +362,7 @@ fn strip(
             ui.spacing_mut().interact_size.y = 16.0 * scale;
             let response = pan_control(ui, index, pan);
             changed |= response.changed();
+            focus_ring(ui, &response, pan_rect, scale);
         });
         let center = button(
             ui,
@@ -493,16 +496,10 @@ fn button(
     ui.painter().rect_stroke(
         rect,
         2.0,
-        Stroke::new(
-            1.0 * scale,
-            if response.has_focus() {
-                AMBER
-            } else {
-                Color32::from_rgb(10, 12, 12)
-            },
-        ),
+        Stroke::new(1.0 * scale, if response.has_focus() { AMBER } else { SLOT }),
         egui::StrokeKind::Inside,
     );
+    focus_ring(ui, &response, rect, scale);
     text(
         ui,
         rect.center(),
@@ -514,6 +511,19 @@ fn button(
         egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
     });
     response
+}
+
+/// Amber is illegible on ivory. An ink ring around the control carries
+/// keyboard focus there; amber remains the inner edge on dark faces.
+fn focus_ring(ui: &egui::Ui, response: &Response, rect: Rect, scale: f32) {
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect.expand(1.0 * scale),
+            3.0,
+            Stroke::new(2.0 * scale, INK),
+            egui::StrokeKind::Outside,
+        );
+    }
 }
 
 fn route(
@@ -577,6 +587,8 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
         for widget in [&mut widgets.inactive, &mut widgets.hovered, &mut widgets.active] {
             widget.bg_fill = Color32::TRANSPARENT; widget.weak_bg_fill = Color32::TRANSPARENT; widget.bg_stroke = Stroke::NONE; widget.fg_stroke.color = CREAM;
         }
+        // A focused value shows an edge before it is typed in.
+        widgets.active.bg_stroke = Stroke::new(1.0 * scale, CREAM);
         let id = ui.next_auto_id();
         let context = ui.ctx().clone();
         // DragValue needs a finite origin for relative edits. Keep silence's
@@ -631,8 +643,7 @@ fn gain_rail(
         rect.center(),
         Vec2::new(8.0 * scale, rect.height() + 4.0 * scale),
     );
-    ui.painter()
-        .rect_filled(slot, 4.0, Color32::from_rgb(11, 14, 14));
+    ui.painter().rect_filled(slot, 4.0, SLOT);
     ui.painter().rect_stroke(
         slot.expand(1.0 * scale),
         4.0,
@@ -654,6 +665,7 @@ fn gain_rail(
     }
     let mut step = 0.0_f32;
     if response.has_focus() {
+        controls::keep_transport_key(ui.ctx(), response.id);
         ui.memory_mut(|memory| {
             memory.set_focus_lock_filter(
                 response.id,
@@ -738,14 +750,7 @@ fn gain_rail(
             FACE,
         );
     }
-    if response.has_focus() {
-        ui.painter().rect_stroke(
-            rect.expand(2.0 * scale),
-            3.0,
-            Stroke::new(1.5 * scale, AMBER),
-            egui::StrokeKind::Outside,
-        );
-    }
+    focus_ring(ui, &response, rect, scale);
     let db = amplitude_to_db(*gain);
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(

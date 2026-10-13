@@ -3,7 +3,11 @@ use super::controls::{CREAM, FACE};
 use super::*;
 const WELL: Color32 = FACE;
 const EDGE: Color32 = Color32::from_rgb(100, 105, 101);
-const ERROR: Color32 = Color32::from_rgb(255, 167, 143);
+/// Beat-group lines, idle cell edges, and the alternate pitch rows of the grid.
+const GRID_LINE: Color32 = Color32::from_rgb(120, 128, 108);
+const CELL_EDGE: Color32 = Color32::from_rgb(108, 116, 98);
+const CELL_HOVER: Color32 = Color32::from_rgb(62, 68, 53);
+const CELL_ALTERNATE: Color32 = Color32::from_rgb(29, 33, 28);
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub available: bool,
@@ -259,7 +263,7 @@ pub(super) fn show(
                 );
                 let hint = match text {
                     "Listen sequence" | "Save sequence" if !active => {
-                        "Select at least one generator bar."
+                        "Switch on at least one Active bar."
                     }
                     "Listen sequence" | "Save sequence" if !available => {
                         "Choose an available source file or palette sound."
@@ -300,7 +304,7 @@ pub(super) fn show(
             } else if !source.available {
                 "Choose a source file or select a sound in the palette."
             } else if !active {
-                "Select at least one generator bar."
+                "Switch on at least one Active bar."
             } else if *show_effects {
                 "Adjust sequence effects. Note grid returns to the notes."
             } else {
@@ -357,9 +361,87 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                 let x = content.left() + (40.0 + group as f32 * 184.0) * scale;
                 ui.painter().line_segment(
                     [Pos2::new(x, content.top()), Pos2::new(x, content.bottom())],
-                    Stroke::new(1.0_f32, Color32::from_rgb(63, 70, 53)),
+                    Stroke::new(1.0_f32, GRID_LINE),
                 );
             }
+            // The grid is one Tab stop. It holds keyboard focus and moves a
+            // cursor among its 400 cells, which stay pointer targets.
+            let cell_id = |note: i8, step: usize| ui.id().with(("note", bar, note, step));
+            let cursor_id = ui.id().with("note-cursor");
+            let mut cursor = ui
+                .ctx()
+                .data(|data| data.get_temp::<(i8, usize)>(cursor_id))
+                .filter(|(note, step)| (-12..=12).contains(note) && *step < 16)
+                .unwrap_or((0, 0));
+            let before = cursor;
+            let grid = ui.interact(content, ui.id().with("pitch-grid"), Sense::FOCUSABLE);
+            // Assistive technology can focus any cell directly.
+            let requested = ui.input(|input| {
+                use egui::accesskit::Action;
+                let any = input.events.iter().any(|event| {
+                    matches!(event, egui::Event::AccessKitActionRequest(request)
+                        if request.action == Action::Focus)
+                });
+                any.then(|| {
+                    (-12_i8..=12)
+                        .flat_map(|note| (0..16).map(move |step| (note, step)))
+                        .find(|(note, step)| {
+                            input.has_accesskit_action_request(cell_id(*note, *step), Action::Focus)
+                        })
+                })
+                .flatten()
+            });
+            if let Some(target) = requested {
+                cursor = target;
+                grid.request_focus();
+            }
+            let mut toggle = false;
+            if grid.has_focus() {
+                ui.memory_mut(|memory| {
+                    memory.set_focus_lock_filter(
+                        grid.id,
+                        egui::EventFilter {
+                            horizontal_arrows: true,
+                            vertical_arrows: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+                ui.input_mut(|input| {
+                    let mut pressed = |key| input.consume_key(egui::Modifiers::NONE, key);
+                    if pressed(egui::Key::ArrowUp) {
+                        cursor.0 = (cursor.0 + 1).min(12);
+                    }
+                    if pressed(egui::Key::ArrowDown) {
+                        cursor.0 = (cursor.0 - 1).max(-12);
+                    }
+                    if pressed(egui::Key::ArrowLeft) {
+                        cursor.1 = cursor.1.saturating_sub(1);
+                    }
+                    if pressed(egui::Key::ArrowRight) {
+                        cursor.1 = (cursor.1 + 1).min(15);
+                    }
+                    if pressed(egui::Key::Home) {
+                        cursor.1 = 0;
+                    }
+                    if pressed(egui::Key::End) {
+                        cursor.1 = 15;
+                    }
+                    toggle = pressed(egui::Key::Enter) | pressed(egui::Key::Space);
+                });
+            }
+            let reveal = grid.has_focus() && (cursor != before || grid.gained_focus());
+            grid.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Other,
+                    true,
+                    format!(
+                        "Pitch grid: step {}, {:+} semitones",
+                        cursor.1 + 1,
+                        cursor.0
+                    ),
+                )
+            });
             for (row, note) in (-12_i8..=12).rev().enumerate() {
                 let y = content.top() + row as f32 * 16.0 * scale;
                 ui.painter().text(
@@ -386,19 +468,19 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                         ),
                         Vec2::new(42.0, 14.0) * scale,
                     );
-                    let response = ui.interact(
-                        cell,
-                        ui.id().with(("note", bar, note, step)),
-                        Sense::click(),
-                    );
+                    let response = ui.interact(cell, cell_id(note, step), Sense::CLICK);
+                    if response.clicked() {
+                        cursor = (note, step);
+                    }
+                    let current = grid.has_focus() && cursor == (note, step);
                     let fill = if selected {
                         CORAL
                     } else if response.hovered() {
-                        Color32::from_rgb(62, 68, 53)
+                        CELL_HOVER
                     } else if matches!((note + 24) % 12, 0 | 2 | 3 | 5 | 7 | 8 | 10) {
                         FACE
                     } else {
-                        Color32::from_rgb(29, 33, 28)
+                        CELL_ALTERNATE
                     };
                     ui.painter().rect_filled(cell, 2.0 * scale, fill);
                     ui.painter().rect_stroke(
@@ -407,9 +489,9 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                         Stroke::new(
                             1.0_f32,
                             if selected {
-                                ERROR
+                                CORAL.lerp_to_gamma(CREAM, 0.4)
                             } else {
-                                Color32::from_rgb(70, 76, 64)
+                                CELL_EDGE
                             },
                         ),
                         egui::StrokeKind::Inside,
@@ -423,17 +505,28 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, scale: f32, state: &mut StepSynthSta
                             &label,
                         )
                     });
-                    focus(ui, &response, scale);
-                    if response.gained_focus() {
+                    ui.ctx().accesskit_node_builder(response.id, |node| {
+                        node.add_action(egui::accesskit::Action::Focus)
+                    });
+                    focus(
+                        ui,
+                        &response,
+                        current,
+                        scale,
+                        if selected { controls::INK } else { CREAM },
+                    );
+                    if current && reveal {
                         ui.scroll_to_rect(cell, None);
                     }
-                    if response.on_hover_text(label).clicked()
+                    if (response.on_hover_text(label).clicked() || (current && toggle))
                         && let Some(value) = state.steps.get_mut(index)
                     {
                         *value = if selected { None } else { Some(note) };
                     }
                 }
             }
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(cursor_id, cursor));
         });
 }
 fn form_style(ui: &mut egui::Ui, scale: f32) {
@@ -587,19 +680,12 @@ fn named(response: &Response, kind: egui::WidgetType, text: &str) {
     response.widget_info(|| egui::WidgetInfo::labeled(kind, response.enabled(), text));
 }
 
-fn focus(ui: &egui::Ui, response: &Response, scale: f32) {
-    if response.has_focus() || (response.hovered() && response.enabled()) {
+fn focus(ui: &egui::Ui, response: &Response, focused: bool, scale: f32, color: Color32) {
+    if focused || (response.hovered() && response.enabled()) {
         ui.painter().rect_stroke(
             response.rect.shrink(scale),
             2.0 * scale,
-            Stroke::new(
-                if response.has_focus() {
-                    2.0 * scale
-                } else {
-                    1.0
-                },
-                CREAM,
-            ),
+            Stroke::new(if focused { 2.0 * scale } else { 1.0 }, color),
             egui::StrokeKind::Inside,
         );
     }
@@ -640,7 +726,7 @@ fn status_footer(
         scroll = scroll.vertical_scroll_offset(0.0);
     }
     scroll.show(&mut child, |ui| {
-        let color = if error { ERROR } else { CREAM };
+        let color = if error { CORAL } else { CREAM };
         let mut job = egui::text::LayoutJob::simple(
             text.into(),
             FontId::proportional(12.5 * scale),

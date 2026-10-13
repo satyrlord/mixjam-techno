@@ -1074,6 +1074,7 @@ impl MixJamApp {
             (self.show_stretch_help, "Time Stretcher help"),
             (self.show_effects_help, "Effect Studio help"),
             (self.show_step_synth_help, "Step synth help"),
+            (self.show_sample_edit_help, "Sample editor help"),
             (self.show_libraries, "Sample libraries"),
             (self.show_import_details, "Import details"),
             (self.show_effects, "Effect Studio"),

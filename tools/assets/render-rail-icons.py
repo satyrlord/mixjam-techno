@@ -23,7 +23,7 @@ INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "libraries", "new", "mixer",
     "erase", "delete", "effects", "step-synth", "edit", "stretch", "record", "mix",
-    "undo", "redo",
+    "undo", "redo", "help",
 )
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()

@@ -50,7 +50,7 @@ impl StepSynthState {
             );
         }
         if !self.active_bars.iter().any(|active| *active) {
-            return Err("Select at least one generator bar.".into());
+            return Err("Switch on at least one Active bar.".into());
         }
         self.effects.validate()
     }
