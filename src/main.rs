@@ -201,6 +201,7 @@ fn run() -> Result<(), String> {
                     "audio_verified_identities":library.verified_count(),
                     "folder_tempos":library.folder_tempos().iter().map(|(folder,bpm,count)| serde_json::json!({"folder":folder,"bpm":bpm,"wavs":count})).collect::<Vec<_>>(),
                     "wavs_with_different_audio":library.unverified_waves().map(|(id,path)| serde_json::json!({"id":id,"path":path})).collect::<Vec<_>>(),
+                    "skipped_wavs":library.skipped_waves().iter().map(|(path,error)| serde_json::json!({"path":path,"error":error})).collect::<Vec<_>>(),
                     "tracks":mixjam_techno::engine::TRACK_COUNT,"supported_bpms":mixjam_techno::engine::SUPPORTED_BPMS,
                     "libraries":library.bindings().iter().map(|binding| serde_json::json!({"product":binding.product.slug(),
                         "samples":library.samples.iter().filter(|sample| Product::sample_key(sample.id).is_some_and(|(product,_)|product==binding.product)).count()})).collect::<Vec<_>>()})
@@ -253,8 +254,8 @@ fn run() -> Result<(), String> {
         "convert" => {
             let path = mix.ok_or("convert requires --mix PATH.")?;
             let target = output.ok_or("convert requires --output FILE.mixjam.")?;
-            let (project, _) = project_io::open(&path, &library)?;
-            project_io::save(&project, &target)?;
+            let (project, library) = project_io::open(&path, &library)?;
+            project_io::save_with_library(&project, &library, &target)?;
             println!(
                 "{}",
                 serde_json::json!({"tracks":project.tracks.len(),"bpm":project.bpm,"clips":project.clips.len(),"import_notices":project.import_notices,"source_notices":project.source_notices,"output":target})

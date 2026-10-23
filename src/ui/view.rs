@@ -314,6 +314,7 @@ impl MixJamApp {
                         }
                         if (!self.session.project().import_notices.is_empty()
                             || !self.session.project().source_notices.is_empty()
+                            || !self.session.project().source_settings.is_empty()
                             || !self.session.missing_samples().is_empty())
                             && notice(ui, "Import details").clicked()
                         {

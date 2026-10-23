@@ -1,5 +1,6 @@
 //! Observed D2/D3/4 drum import projection. Original pattern and pad bytes remain available.
 //! The dry renderer follows the documented sixteen-step, one-bar drum matrix.
+//! It applies the Dance 2 Groove Generator volume and no other saved effect.
 use crate::{
     audio::Pcm,
     library::{Library, decode_1252},
@@ -7,7 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-pub(super) const RENDERER_POLICY: &str = "dry-drum-import-v1: bit-zero-first; sixteen steps per bar; equal-temperament pitch; per-pad reverse and L/R routing; native 1.25 fader curve with Q16 truncation; independent hits; one-bar output; final saturation; opaque native effects retained without interpretation";
+pub(super) const RENDERER_POLICY: &str = "dry-drum-import-v3: bit-zero-first; sixteen steps per bar; equal-temperament pitch; per-pad reverse and L/R routing; native 1.25 fader curve with Q16 truncation; independent hits; one-bar output; final saturation; then Groove Generator volume as floor(word / 4) / 8192; saved filter, echo, and distortion named and not applied";
 const GEN3_RENDERER_POLICY: &str = "dry-drum-import-v2: bit-zero-first; sixteen pads and sixteen steps per bar; equal-temperament pitch; per-pad reverse and linear pan attenuation; explicit dry linear stored/32767 pad gain projection; independent hits; one-bar output; final saturation; opaque native effects retained without interpretation";
 
 pub(super) fn renderer_policy(product: Product) -> &'static str {
@@ -51,12 +52,56 @@ pub(super) struct Pad {
     pub opaque_native_settings: Vec<u8>,
 }
 
+/// The nine words that Dance 2 saves after its ten pads, in file order. The
+/// editor sends each to the audio engine unchanged (`DFilterLed`, `DCutOff`,
+/// `DResonance`, `DEchoLed`, `DEchoTime`, `DFeedback`, `DDistortionLed`,
+/// `DDistortion`, `DVolume`). A saved switch is 0 or 65535.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub(super) struct GrooveEffects {
+    pub filter_on: bool,
+    pub filter_cutoff: u16,
+    pub filter_resonance: u16,
+    pub echo_on: bool,
+    pub echo_time: u16,
+    pub echo_feedback: u16,
+    pub distortion_on: bool,
+    pub distortion: u16,
+    pub volume: u16,
+}
+
+impl GrooveEffects {
+    fn read(bytes: &[u8]) -> Option<Self> {
+        let words: [u8; 18] = bytes.try_into().ok()?;
+        let word = |index: usize| u16::from_le_bytes([words[index * 2], words[index * 2 + 1]]);
+        Some(Self {
+            filter_on: word(0) != 0,
+            filter_cutoff: word(1),
+            filter_resonance: word(2),
+            echo_on: word(3) != 0,
+            echo_time: word(4),
+            echo_feedback: word(5),
+            distortion_on: word(6) != 0,
+            distortion: word(7),
+            volume: word(8),
+        })
+    }
+
+    // D2 pxd32d4 mixer, RVA 0x7d9f: each drum sample is multiplied by the
+    // signed volume word shifted right by 2, then shifted right by 13.
+    fn volume_gain(&self) -> f32 {
+        f32::from((self.volume as i16) >> 2) / 8192.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct Kit {
     pub pads: Vec<Pad>,
     pub source_offset: usize,
     pub source_end: usize,
     pub opaque_native_settings: Vec<u8>,
+    /// Dance 2 only: `opaque_native_settings` by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub groove_effects: Option<GrooveEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_end: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -207,6 +252,7 @@ fn parse_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, String> {
         pads,
         source_offset: start,
         source_end,
+        groove_effects: GrooveEffects::read(&opaque_native_settings),
         opaque_native_settings,
         header_end: None,
         raw_header: Vec::new(),
@@ -273,6 +319,7 @@ fn parse_gen3_kit_at(bytes: &[u8], start: usize, end: usize) -> Result<Kit, Stri
         source_offset: start,
         source_end,
         opaque_native_settings: bytes[source_end..end].to_vec(),
+        groove_effects: None,
         header_end: Some(end),
         raw_header: bytes[start..end].to_vec(),
     })
@@ -288,6 +335,27 @@ struct PreparedPad {
 }
 pub(super) struct PreparedKit {
     pads: Vec<Option<PreparedPad>>,
+    volume: f32,
+}
+
+/// A notice for a Dance 2 kit whose saved effects the renderer does not apply.
+pub(super) fn effects_notice(kit: &Kit) -> Option<String> {
+    let effects = kit.groove_effects?;
+    let active: Vec<_> = [
+        (effects.filter_on, "filter"),
+        (effects.echo_on, "echo"),
+        (effects.distortion_on, "distortion"),
+    ]
+    .into_iter()
+    .filter(|(on, _)| *on)
+    .map(|(_, name)| name)
+    .collect();
+    (!active.is_empty()).then(|| {
+        format!(
+            "Saved Groove Generator effects are not applied: {}. Drum patterns play without them.",
+            active.join(", ")
+        )
+    })
 }
 
 pub(super) fn prepare_kit<'a>(
@@ -355,7 +423,15 @@ pub(super) fn prepare_kit<'a>(
             right,
         }));
     }
-    Ok(PreparedKit { pads })
+    // A kit saved before the words had names holds only the bytes.
+    let volume = if product == Product::D2 {
+        GrooveEffects::read(&kit.opaque_native_settings)
+            .ok_or("The native drum kit has no Groove Generator settings.")?
+            .volume_gain()
+    } else {
+        1.0
+    };
+    Ok(PreparedKit { pads, volume })
 }
 
 // D2 packed32d4 RDrum, RVA 0xf9c6, uses the 1.25 curve and signed Q16 output.
@@ -431,7 +507,7 @@ pub(super) fn render(prepared: &PreparedKit, pattern: &Pattern, bpm: f64) -> Res
         }
     }
     for value in &mut output {
-        *value = value.clamp(-1.0, 1.0);
+        *value = value.clamp(-1.0, 1.0) * prepared.volume;
     }
     let pcm = Pcm {
         sample_rate: rate,
@@ -487,7 +563,7 @@ mod tests {
             left: if left { 1.0 } else { 0.0 },
             right: if right { 1.0 } else { 0.0 },
         });
-        PreparedKit { pads }
+        PreparedKit { pads, volume: 1.0 }
     }
     fn pattern(mask: u16) -> Pattern {
         let mut masks = vec![0; 10];
@@ -586,10 +662,68 @@ mod tests {
         assert_eq!(kit.pads[0].native_id, 1518);
         assert_eq!(kit.pads[9].native_id, 1527);
         assert_eq!(kit.opaque_native_settings, [7; 18]);
+        assert_eq!(kit.groove_effects.unwrap().volume, 0x0707);
         assert!(parse_kit(&bytes[..bytes.len() - 1], 0, bytes.len() - 1, Product::D2).is_err());
         let mut malformed = bytes;
         malformed[2..4].copy_from_slice(&u16::MAX.to_le_bytes());
         assert!(parse_kit(&malformed, 0, malformed.len(), Product::D2).is_err());
+    }
+
+    #[test]
+    fn groove_effect_words_have_names_and_the_volume_scales_the_render() {
+        // The block of the factory song SENNER.MIX.
+        let words = [65535u16, 24421, 11611, 65535, 7517, 7313, 0, 32110, 25250];
+        let mut bytes = fixture_kit();
+        let start = bytes.len() - 18;
+        for (index, word) in words.iter().enumerate() {
+            bytes[start + index * 2..start + index * 2 + 2].copy_from_slice(&word.to_le_bytes());
+        }
+        let mut kit = parse_kit(&bytes, 0, bytes.len(), Product::D2).unwrap();
+        let effects = kit.groove_effects.unwrap();
+        assert_eq!(
+            effects,
+            GrooveEffects {
+                filter_on: true,
+                filter_cutoff: 24421,
+                filter_resonance: 11611,
+                echo_on: true,
+                echo_time: 7517,
+                echo_feedback: 7313,
+                distortion_on: false,
+                distortion: 32110,
+                volume: 25250,
+            }
+        );
+        assert_eq!(effects.volume_gain(), 6312.0 / 8192.0);
+        assert_eq!(
+            serde_json::to_value(&kit).unwrap()["groove_effects"]["echo_feedback"],
+            7313
+        );
+        assert_eq!(
+            effects_notice(&kit).unwrap(),
+            "Saved Groove Generator effects are not applied: filter, echo. Drum patterns play without them."
+        );
+
+        let mut prepared = prepared_pad(vec![0.5], 1.0, false, 1.0, true, true);
+        prepared.volume = effects.volume_gain();
+        let pcm = render(&prepared, &pattern(1), 140.0).unwrap();
+        assert_eq!(pcm.samples[0], 0.5 * 6312.0 / 8192.0);
+        // The volume follows the saturation of the summed pads.
+        let mut loud = prepared_pad(vec![3.0], 1.0, false, 1.0, true, true);
+        loud.volume = 0.5;
+        assert_eq!(render(&loud, &pattern(1), 140.0).unwrap().samples[0], 0.5);
+
+        // An earlier saved kit has the bytes and no names. No switch, no notice.
+        kit.groove_effects = None;
+        let saved: Kit = serde_json::from_value(serde_json::to_value(&kit).unwrap()).unwrap();
+        assert_eq!(saved, kit);
+        assert!(effects_notice(&saved).is_none());
+        let mut off = fixture_kit();
+        let start = off.len() - 18;
+        off[start..].fill(0);
+        let off = parse_kit(&off, 0, off.len(), Product::D2).unwrap();
+        assert!(effects_notice(&off).is_none());
+        assert_eq!(off.groove_effects.unwrap().volume_gain(), 0.0);
     }
 
     #[test]
@@ -695,6 +829,7 @@ mod tests {
         assert!(render(&prepared, &pattern(1), f64::NAN).is_err());
         let missing = PreparedKit {
             pads: (0..10).map(|_| None).collect(),
+            volume: 1.0,
         };
         assert!(render(&missing, &pattern(1), 140.0).is_err());
     }

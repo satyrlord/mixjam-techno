@@ -100,6 +100,7 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
         effective_bpm: playback_bpm as f64,
         tracks,
         source_notices: Vec::new(),
+        settings: Default::default(),
         after_mixer: search_start,
     };
     chunks::build_project(path, bytes, Product::T2, library, header, timeline)
@@ -624,6 +625,7 @@ mod tests {
                     effective_bpm: 140.0,
                     tracks: vec![Track::default(); 16],
                     source_notices: Vec::new(),
+                    settings: Default::default(),
                     after_mixer: 0,
                 },
                 Timeline { start: 0, events },

@@ -41,6 +41,9 @@ impl<'a> LibraryView<'a> {
     pub fn folder_tempos(self) -> &'a [(PathBuf, f64, usize)] {
         self.library.folder_tempos()
     }
+    pub fn skipped_waves(self) -> &'a [(PathBuf, String)] {
+        self.library.skipped_waves()
+    }
     pub fn source_root(self, product: Product) -> Option<&'a Path> {
         self.library.source_root(product)
     }
@@ -957,7 +960,7 @@ impl Session {
         Ok(())
     }
     pub fn save(&mut self, path: &Path) -> Result<(), String> {
-        crate::project_io::save(self.project(), path)?;
+        crate::project_io::save_with_library(self.project(), &self.library, path)?;
         // An edit after Save must be undoable back to the saved state.
         self.gesture = None;
         self.file = Some(path.to_path_buf());
@@ -1097,6 +1100,14 @@ impl Session {
         source_bpm: f64,
     ) -> Result<Vec<String>, String> {
         let mut warnings = Vec::new();
+        if let Some((path, error)) = library.skipped_waves().first() {
+            let count = library.skipped_waves().len();
+            let files = if count == 1 { "WAV" } else { "WAVs" };
+            warnings.push(format!(
+                "Skipped {count} unreadable {files}, listed in Libraries. First: {}: {error}",
+                path.display()
+            ));
+        }
         let previous_root = self.library.wav_root();
         for binding in self.library.bindings() {
             // Bindings at the previous sample folder came from its WAVs.
@@ -3391,6 +3402,8 @@ mod boundary_tests {
             .write_wav(&dir.join(name))
             .unwrap();
         }
+        // One unreadable file is reported and does not block the folder.
+        std::fs::write(dir.join("broken.wav"), b"not audio").unwrap();
         let song = dir.join("song.mixjam");
         let data = dir.join("data");
         let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
@@ -3400,7 +3413,7 @@ mod boundary_tests {
         session.start_wave_scan(&dir, 120.0).unwrap();
         let status = session.wave_scan().unwrap();
         assert_eq!(status.root, dir);
-        assert!(status.files_done <= 4);
+        assert!(status.files_done <= 5);
         // The song opens once the scanned library can resolve it.
         session.open_after_scan(&song).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
@@ -3420,6 +3433,9 @@ mod boundary_tests {
         let (notice, error) = session.take_notice().unwrap();
         // The pending song did not exist: the folder loaded, the open failed visibly.
         assert!(error && notice.contains("song.mixjam"), "{notice}");
+        assert!(notice.contains("Skipped 1 unreadable WAV"), "{notice}");
+        assert!(notice.contains("broken.wav"), "{notice}");
+        assert_eq!(session.library().skipped_waves().len(), 1);
         assert_eq!(crate::project_io::load_scan_cache(&data).len(), 4);
         let cache_path = data.join("wav-scan-cache.json");
         let cache_modified = std::fs::metadata(&cache_path).unwrap().modified().unwrap();
@@ -3447,8 +3463,10 @@ mod boundary_tests {
                 std::thread::sleep(std::time::Duration::from_millis(5));
             }
         };
+        std::fs::remove_file(dir.join("broken.wav")).unwrap();
         session.start_wave_scan(&dir, 120.0).unwrap();
         finish(&mut session);
+        assert!(session.library().skipped_waves().is_empty());
         assert_eq!(
             std::fs::metadata(&cache_path).unwrap().modified().unwrap(),
             cache_modified,

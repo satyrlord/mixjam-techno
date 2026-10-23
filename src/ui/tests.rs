@@ -2464,6 +2464,32 @@ mod tests {
     }
 
     #[test]
+    fn saved_source_settings_are_listed_in_import_details() {
+        let (context, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        for (key, value) in [("BoostCompressorLED", "1"), ("BoostStereoWide", "21348")] {
+            project.source_settings.insert(key.into(), value.into());
+        }
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+        // The settings alone make Import details available.
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let button = text_rect(&output, "Import details");
+        click(&context, &mut app, button.center(), egui::Modifiers::NONE);
+        assert!(app.show_import_details);
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let header = text_rect(&output, "Saved settings (2)");
+        click(&context, &mut app, header.center(), egui::Modifiers::NONE);
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "BoostCompressorLED: 1\nBoostStereoWide: 21348");
+    }
+
+    #[test]
     fn missing_sample_details_are_accessible_and_processing_explains_silence() {
         let (context, mut app) = missing_fixture();
         context.enable_accesskit();

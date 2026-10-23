@@ -15,7 +15,7 @@ pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
 /// A guard against malformed songs. It is above the 262,144 one-bar clips
 /// that the 64-track timeline holds.
 pub const MAX_CLIPS: usize = 1_000_000;
-pub const MAX_IMPORTED_SAMPLES: usize = 100_000;
+pub const MAX_IMPORTED_SAMPLES: usize = 200_000;
 const MAX_PROJECT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
 
@@ -413,6 +413,9 @@ pub struct Project {
     pub import_notices: Vec<ImportNotice>,
     #[serde(default)]
     pub source_notices: Vec<String>,
+    /// Settings that the original product saved with an imported song, as text.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub source_settings: BTreeMap<String, String>,
     #[serde(default)]
     pub libraries: Vec<crate::products::LibraryBinding>,
 }
@@ -446,6 +449,7 @@ impl Default for Project {
             sample_conflicts: Vec::new(),
             import_notices: Vec::new(),
             source_notices: Vec::new(),
+            source_settings: BTreeMap::new(),
             libraries: Vec::new(),
         }
     }
@@ -498,6 +502,13 @@ impl Project {
                 || !SUPPORTED_BPMS.contains(&notice.target_bpm)
         }) {
             return Err("The project has invalid import tempo data.".into());
+        }
+        if self
+            .source_settings
+            .iter()
+            .any(|(key, value)| key.is_empty() || key.contains('\0') || value.contains('\0'))
+        {
+            return Err("The project has invalid saved source settings.".into());
         }
         let mut library_products = HashSet::new();
         if self.libraries.iter().any(|binding| {

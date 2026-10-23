@@ -65,5 +65,7 @@ def read_song(path):
         'import_notices': [{'source_bpm': item['sourceBpm'], 'target_bpm': item['targetBpm']}
                            for item in document['importNotices']],
         'source_notices': document['sourceNotices'],
+        **({'source_settings': document['sourceSettings']}
+           if document.get('sourceSettings') else {}),
         'libraries': document['libraries'],
     }

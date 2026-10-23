@@ -12,8 +12,9 @@
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
-//! - Missing sources, conflict choices, and import notices are saved, so an
-//!   imported song reopens without its original file.
+//! - Missing sources, conflict choices, import notices, and the settings that
+//!   the original product saved are kept, so an imported song reopens without
+//!   its original file.
 use super::{Header, MAX_SONG_BYTES, text};
 use crate::{
     engine::{
@@ -46,6 +47,9 @@ struct Document {
     sample_conflicts: Vec<Conflict>,
     import_notices: Vec<Notice>,
     source_notices: Vec<String>,
+    // Songs saved before this field existed, and songs without settings, omit it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    source_settings: BTreeMap<String, String>,
     libraries: Vec<LibraryBinding>,
 }
 #[derive(Deserialize, Serialize)]
@@ -247,6 +251,7 @@ impl Document {
                 })
                 .collect(),
             source_notices: project.source_notices.clone(),
+            source_settings: project.source_settings.clone(),
             libraries: project.libraries.clone(),
         }
     }
@@ -376,6 +381,7 @@ impl Document {
                 })
                 .collect(),
             source_notices: self.source_notices,
+            source_settings: self.source_settings,
             libraries: self.libraries,
         };
         project.validate()?;
@@ -518,6 +524,10 @@ mod tests {
                 target_bpm: 160.0,
             }],
             source_notices: vec!["Imported.".into()],
+            source_settings: BTreeMap::from([
+                ("BoostCompressorLED".into(), "1".into()),
+                ("DrumU1_0".into(), String::new()),
+            ]),
             libraries: vec![LibraryBinding {
                 product: Product::T2,
                 root: "library".into(),
@@ -572,9 +582,11 @@ mod tests {
                 "sampleConflicts",
                 "samples",
                 "song",
-                "sourceNotices"
+                "sourceNotices",
+                "sourceSettings"
             ]
         );
+        assert_eq!(document["sourceSettings"]["BoostCompressorLED"], "1");
         assert!(text.ends_with(
             "}
 "

@@ -447,6 +447,7 @@ fn inherited_ids_keep_the_explicit_d2_namespace_and_loader_boundaries() {
                 effective_bpm: 140.0,
                 tracks: vec![Track::default(); TRACK_COUNT],
                 source_notices: Vec::new(),
+                settings: Default::default(),
                 after_mixer: 0,
             },
             Timeline {
@@ -546,6 +547,7 @@ fn missing_repeated_source_infers_enough_span_for_every_trim() {
             effective_bpm: 140.0,
             tracks: vec![Track::default(); TRACK_COUNT],
             source_notices: Vec::new(),
+            settings: Default::default(),
             after_mixer: 0,
         },
         Timeline {
@@ -635,6 +637,7 @@ fn unavailable_wave_with_conflicting_saved_span_opens_with_explicit_inference() 
             effective_bpm: 140.0,
             tracks: vec![Track::default(); TRACK_COUNT],
             source_notices: Vec::new(),
+            settings: Default::default(),
             after_mixer: 0,
         },
         Timeline {

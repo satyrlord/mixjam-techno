@@ -300,8 +300,11 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         .missing_samples
         .retain(|sample| used.contains(&sample.id));
     for binding in project.libraries.clone() {
-        // A selected WAV provider takes precedence over paths saved on another machine.
-        if candidate.source_root(binding.product).is_some() || candidate.wav_root().is_some() {
+        // A current provider of the whole product takes precedence over the
+        // folder saved in the song. A sample folder without the product, or
+        // with only part of it, does not hide the saved folder.
+        let sparse = candidate.is_sparse_wav_product(binding.product);
+        if candidate.source_root(binding.product).is_some() && !sparse {
             continue;
         }
         if !project.clips.iter().any(|clip| {
@@ -312,7 +315,19 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         }
         if let Ok(root) = fs::canonicalize(&binding.root) {
             // Unavailable providers do not prevent opening the arrangement.
-            let _ = candidate.register(binding.product, &root, &reference_samples_root());
+            if !sparse {
+                let _ = candidate.register(binding.product, &root, &reference_samples_root());
+                continue;
+            }
+            // The partial copy stays when the saved folder cannot replace it.
+            let mut provided = candidate.clone();
+            if provided.remove_product(binding.product).is_ok()
+                && provided
+                    .register(binding.product, &root, &reference_samples_root())
+                    .is_ok()
+            {
+                candidate = provided;
+            }
         }
     }
     let mut mixjam_references = crate::mixjam::ReferenceResolver::new(&candidate);
@@ -685,6 +700,19 @@ fn rebase_asset(
 fn has_song_extension(path: &Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("mixjam"))
+}
+
+/// [`save`] with each product provider recorded as the folder that holds the
+/// song's files in this library. See [`Library::song_binding`].
+pub fn save_with_library(project: &Project, library: &Library, path: &Path) -> Result<(), String> {
+    let used: HashSet<_> = project.clips.iter().map(|clip| clip.sample_id).collect();
+    let mut saved = project.clone();
+    saved.libraries = saved
+        .libraries
+        .iter()
+        .map(|binding| library.song_binding(binding, &used))
+        .collect();
+    save(&saved, path)
 }
 
 /// A saved song references its used audio, not every sound in the browser palette.

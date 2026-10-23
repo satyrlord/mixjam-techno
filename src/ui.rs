@@ -2231,6 +2231,20 @@ impl MixJamApp {
                                 }
                             });
                     }
+                    if let Some(root) = library.wav_root()
+                        && !library.skipped_waves().is_empty()
+                    {
+                        controls::disclosure(format!("Skipped WAVs ({})", library.skipped_waves().len()))
+                            .show(ui, |ui| {
+                                for (path, error) in library.skipped_waves() {
+                                    let relative = path.strip_prefix(root).unwrap_or(path);
+                                    ui.small(format!(
+                                        "{}: {error}",
+                                        display_paths(&relative.to_string_lossy())
+                                    ));
+                                }
+                            });
+                    }
                     controls::disclosure("Optional product providers")
                         .default_open(self.capture_view_is("library-providers"))
                         .show(ui, |ui| {
@@ -2345,6 +2359,23 @@ impl MixJamApp {
                         } else {
                             ui.label(display_paths(notice));
                         }
+                    }
+                    let settings = &self.session.project().source_settings;
+                    if !settings.is_empty() {
+                        controls::disclosure(format!("Saved settings ({})", settings.len()))
+                            .id_salt("source_settings")
+                            .show(ui, |ui| {
+                                ui.label("The original product saved these values with the song. Select them to copy.");
+                                let rows: Vec<_> = settings
+                                    .iter()
+                                    .map(|(key, value)| format!("{key}: {value}"))
+                                    .collect();
+                                ui.add(
+                                    egui::Label::new(rows.join("\n"))
+                                        .wrap()
+                                        .selectable(true),
+                                );
+                            });
                     }
                 });
             self.show_import_details = open;

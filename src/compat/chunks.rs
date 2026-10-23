@@ -1,6 +1,6 @@
 //! Counted timeline profiles from the installed Gen 2 and Gen 3 products.
 //! Unsupported generated records cause an error before a project is returned.
-use super::{drums, song_file::read_song_file};
+use super::{drums, settings, song_file::read_song_file};
 use crate::{
     engine::{
         Clip, ImportedSample, MAX_CLIPS, MAX_TICKS, MissingReference, MissingSample, Project,
@@ -98,6 +98,7 @@ pub(crate) struct Header {
     pub(crate) effective_bpm: f64,
     pub(crate) tracks: Vec<Track>,
     pub(crate) source_notices: Vec<String>,
+    pub(crate) settings: settings::Saved,
     pub(crate) after_mixer: usize,
 }
 
@@ -132,7 +133,9 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
         return Err("The native song declares more than 64 tracks.".into());
     }
     let author = first_text(reader.block()?);
-    let title = first_text(reader.block()?);
+    let title_block = reader.block()?;
+    let title = first_text(title_block);
+    let settings = settings::parse(title_block);
     let mut tracks = vec![Track::default(); TRACK_COUNT];
     let mut native_switches = Vec::new();
     let mut source_notices = Vec::new();
@@ -178,6 +181,7 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
         effective_bpm,
         tracks,
         source_notices,
+        settings,
         after_mixer: reader.offset,
     })
 }
@@ -1047,6 +1051,9 @@ pub(crate) fn build_project(
     } else {
         Vec::new()
     };
+    let mut source_notices = header.source_notices;
+    source_notices.extend(settings::notices(product, &header.settings, kit.is_some()));
+    source_notices.extend(kit.as_ref().and_then(drums::effects_notice));
     let mut project = Project {
         title: if header.title.is_empty() {
             path.file_stem()
@@ -1061,7 +1068,8 @@ pub(crate) fn build_project(
         pitch_ratio: header.effective_bpm / header.bpm,
         master_gain: 1.0,
         tracks: header.tracks,
-        source_notices: header.source_notices,
+        source_notices,
+        source_settings: header.settings.entries,
         libraries: library.bindings().to_vec(),
         ..Project::default()
     };
@@ -1668,6 +1676,10 @@ mod tests {
     }
 
     fn header_fixture(product: Product, bpm: u16, effective: u32) -> Vec<u8> {
+        titled_header_fixture(product, bpm, effective, b"Fixture title\0Mixer text")
+    }
+
+    fn titled_header_fixture(product: Product, bpm: u16, effective: u32, title: &[u8]) -> Vec<u8> {
         let (app_id, count, width) = profile(product).unwrap();
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&app_id.to_le_bytes());
@@ -1675,7 +1687,7 @@ mod tests {
         bytes.extend_from_slice(&bpm.to_le_bytes());
         bytes.extend_from_slice(&effective.to_le_bytes());
         text_block(&mut bytes, b"Composer\0#SKKENNUNG#:0000000\0\x01");
-        text_block(&mut bytes, b"Fixture title\0Mixer text");
+        text_block(&mut bytes, title);
         let mixer_count =
             count + usize::from(matches!(product, Product::D3 | Product::D4 | Product::T3));
         for _ in 0..mixer_count {
@@ -1849,6 +1861,47 @@ mod tests {
     }
 
     #[test]
+    fn saved_settings_after_the_title_survive_import_and_json() {
+        let title = b"Song\0BoostEQ#\xb0_#0%\xb0_%BoostCompressorLED#\xb0_#1%\xb0_%BoostCompressorDrive#\xb0_#12080%\xb0_%FX_12#\xb0_#1%\xb0_%DrumEcho#\xb0_#1%\xb0_%\0\x01";
+        for product in [Product::D3, Product::D4, Product::T3, Product::H1] {
+            let bytes = titled_header_fixture(product, 140, 140, title);
+            let header = read_header(&bytes, product).unwrap();
+            assert_eq!(header.title, "Song");
+            assert_eq!(header.settings.entries.len(), 5);
+            let project = build_project(
+                Path::new("settings.mix"),
+                &bytes,
+                product,
+                &Library::empty(),
+                header,
+                Timeline {
+                    start: bytes.len(),
+                    events: Vec::new(),
+                },
+            )
+            .unwrap();
+            assert_eq!(project.title, "Song");
+            assert_eq!(project.source_settings["BoostCompressorDrive"], "12080");
+            assert_eq!(project.source_settings["BoostEQ"], "0");
+            // No drum pattern uses the kit, so only the Booster changes the sound.
+            let expected = if product == Product::H1 {
+                "House saved 5 settings"
+            } else {
+                "Saved Booster effects are not applied: compressor."
+            };
+            assert_eq!(project.source_notices.len(), 1);
+            assert!(project.source_notices[0].starts_with(expected));
+            let reopened: Project =
+                serde_json::from_slice(&serde_json::to_vec(&project).unwrap()).unwrap();
+            assert_eq!(reopened.source_settings, project.source_settings);
+        }
+        // A song without the list has no settings and no notice.
+        let bytes = header_fixture(Product::D4, 140, 140);
+        let header = read_header(&bytes, Product::D4).unwrap();
+        assert_eq!(header.settings, settings::Saved::default());
+    }
+
+    #[test]
     fn native_headers_use_original_pan_regions_and_signed_fader_curve() {
         for product in [Product::D3, Product::D4, Product::T3, Product::H1] {
             let mut bytes = header_fixture(product, 140, 140);
@@ -1985,6 +2038,59 @@ mod tests {
                 assert!(header.tracks[index].gain > 0.0);
             }
         }
+    }
+
+    #[test]
+    #[ignore = "Requires the local installed D3, D4, T3, and House song fixtures."]
+    fn installed_songs_keep_their_saved_settings_lists() {
+        // Songs, songs with a list, and songs with the EQ, compressor, and
+        // stereo wide switch of the Booster on.
+        for (product, expected) in [
+            (Product::D3, (17, 14, [0, 0, 0])),
+            (Product::D4, (12, 12, [3, 6, 6])),
+            (Product::T3, (20, 20, [0, 1, 1])),
+            (Product::H1, (14, 14, [0, 0, 0])),
+        ] {
+            let folder = crate::project_io::default_root(product)
+                .unwrap()
+                .join("MIX");
+            let (mut songs, mut lists, mut switches) = (0, 0, [0; 3]);
+            for entry in fs::read_dir(folder).unwrap() {
+                let path = entry.unwrap().path();
+                if !path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("mix"))
+                {
+                    continue;
+                }
+                let saved = read_header(&read_song_file(&path).unwrap(), product)
+                    .unwrap()
+                    .settings;
+                assert_eq!(saved.unread, 0, "{}", path.display());
+                songs += 1;
+                lists += usize::from(!saved.entries.is_empty());
+                for (count, key) in
+                    switches
+                        .iter_mut()
+                        .zip(["BoostEQ", "BoostCompressorLED", "BoostStereoLED"])
+                {
+                    *count += usize::from(saved.entries.get(key).is_some_and(|v| v == "1"));
+                }
+            }
+            assert_eq!((songs, lists, switches), expected, "{}", product.label());
+        }
+        let root = crate::project_io::default_root(Product::D4).unwrap();
+        let saved = read_header(
+            &read_song_file(&root.join("MIX/welmix.mix")).unwrap(),
+            Product::D4,
+        )
+        .unwrap()
+        .settings;
+        assert_eq!(saved.entries.len(), 93);
+        assert_eq!(saved.entries["BoostCompressorDrive"], "12080");
+        assert_eq!(saved.entries["BoostStereoWide"], "21348");
+        assert_eq!(saved.entries["DrumK_SFX_ECHOTIME"], "5529");
+        assert_eq!(saved.entries["FX_12"], "1");
     }
 
     #[test]
@@ -2634,6 +2740,7 @@ mod tests {
         let mut total_events = 0;
         let mut songs = 0;
         let mut drum_songs = 0;
+        let (mut filters, mut echoes) = (0, 0);
         for entry in fs::read_dir(folder).unwrap() {
             let path = entry.unwrap().path();
             if !path
@@ -2645,11 +2752,17 @@ mod tests {
             songs += 1;
             let bytes = read_song_file(&path).unwrap();
             let header = read_header(&bytes, Product::D2).unwrap();
+            assert_eq!(header.settings, settings::Saved::default());
             let timeline = read_timeline(&bytes, header.after_mixer, Product::D2).unwrap();
             let kit =
                 drums::parse_kit(&bytes, header.after_mixer, timeline.start, Product::D2).unwrap();
             assert_eq!(kit.pads.len(), 10);
             assert_eq!(kit.source_end + 18, timeline.start);
+            let effects = kit.groove_effects.unwrap();
+            filters += usize::from(effects.filter_on);
+            echoes += usize::from(effects.echo_on);
+            assert!(!effects.distortion_on);
+            assert!((13_527..=25_250).contains(&effects.volume));
             let patterns: Vec<_> = timeline
                 .events
                 .iter()
@@ -2672,6 +2785,7 @@ mod tests {
             total_events += patterns.len();
         }
         assert_eq!((songs, drum_songs, total_events), (13, 8, 449));
+        assert_eq!((filters, echoes), (3, 4));
     }
 
     #[test]
