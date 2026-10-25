@@ -8,7 +8,10 @@ pub use crate::{
         SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
     },
     library::Sample,
-    master::{EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, MasterChain, PedalKind},
+    master::{
+        EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, Knob, KnobRange, MasterChain, MeterReading,
+        OVER_DBTP, PedalKind,
+    },
     products::Product,
     synth::StepSynthState,
 };
@@ -332,48 +335,8 @@ enum Gesture {
     Master,
     Track(usize, TrackControl),
     Clip(u64, ClipControl),
-    Pedal(PedalKnob),
-}
-/// One knob of the master pedalboard.
-#[derive(Clone, Copy, PartialEq)]
-enum PedalKnob {
-    EqBand(usize),
-    Drive,
-    Speed,
-    Gain,
-    Spread,
-}
-impl PedalKnob {
-    /// The knob that differs between two settings, when exactly one does and
-    /// no switch changed.
-    fn changed(old: &MasterChain, new: &MasterChain) -> Option<Self> {
-        if old.order != new.order
-            || old.ejay_eq.on != new.ejay_eq.on
-            || old.ejay_compressor.on != new.ejay_compressor.on
-            || old.ejay_wide.on != new.ejay_wide.on
-        {
-            return None;
-        }
-        let (a, b) = (&old.ejay_compressor, &new.ejay_compressor);
-        let mut knobs: Vec<_> = (0..10)
-            .filter(|band| old.ejay_eq.bands[*band] != new.ejay_eq.bands[*band])
-            .map(Self::EqBand)
-            .collect();
-        knobs.extend(
-            [
-                (a.drive != b.drive, Self::Drive),
-                (a.speed != b.speed, Self::Speed),
-                (a.gain != b.gain, Self::Gain),
-                (old.ejay_wide.spread != new.ejay_wide.spread, Self::Spread),
-            ]
-            .into_iter()
-            .filter_map(|(changed, knob)| changed.then_some(knob)),
-        );
-        match knobs[..] {
-            [knob] => Some(knob),
-            _ => None,
-        }
-    }
+    /// The trim or one knob of the master pedalboard.
+    Pedal(Knob),
 }
 #[derive(Clone, Copy, PartialEq)]
 enum TrackControl {
@@ -442,9 +405,7 @@ impl Gesture {
                     _ => None,
                 }
             }
-            EditCommand::SetMaster(chain) => {
-                PedalKnob::changed(&project.master, chain).map(Self::Pedal)
-            }
+            EditCommand::SetMaster(chain) => project.master.changed_knob(chain).map(Self::Pedal),
             _ => None,
         }
     }
@@ -1012,7 +973,7 @@ impl Session {
         // A step of the master pedalboard alone leaves the mix and playback running.
         let master_only = before.master != self.project().master
             && Project {
-                master: self.project().master.clone(),
+                master: self.project().master,
                 ..before
             } == *self.project();
         if master_only {
@@ -1620,6 +1581,11 @@ impl Session {
     }
     pub fn playing_mix(&self) -> bool {
         !self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
+    }
+    /// The master meters of the latest mix playback, which hold their last
+    /// reading after it stops.
+    pub fn master_meters(&self) -> MeterReading {
+        self.master.meters()
     }
     pub fn is_previewing(&self) -> bool {
         self.previewing && self.player.as_ref().is_some_and(Player::is_playing)
@@ -3170,7 +3136,7 @@ mod boundary_tests {
         let revision = session.revision;
         session.render_dirty = false;
         let set = |session: &mut Session, change: &dyn Fn(&mut MasterChain)| {
-            let mut chain = session.project().master.clone();
+            let mut chain = session.project().master;
             change(&mut chain);
             session.edit(EditCommand::SetMaster(chain))
         };
@@ -3181,11 +3147,22 @@ mod boundary_tests {
         }
         set(&mut session, &|chain| chain.ejay_eq.bands[2] = 70).unwrap();
         set(&mut session, &|chain| chain.ejay_eq.bands[2] = 80).unwrap();
+        // The mastering pedals and the trim form gestures the same way.
+        for attack in [5.0, 2.0] {
+            set(&mut session, &|chain| chain.bus_compressor.attack = attack).unwrap();
+        }
+        set(&mut session, &|chain| chain.trim = -3.5).unwrap();
+        set(&mut session, &|chain| chain.trim = -4.0).unwrap();
         // Moving a pedal is a step of its own, even within a knob gesture.
         set(&mut session, &|chain| chain.move_pedal(0, 2)).unwrap();
         assert_eq!(session.project().master.order[2], PedalKind::EjayEq);
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project().master.order, PedalKind::ALL);
+        assert_eq!(session.project().master.trim, -4.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().master.trim, 0.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().master.bus_compressor.attack, 10.0);
         assert_eq!(session.project().master.ejay_eq.bands[2], 80);
         assert!(session.unsaved());
         assert_eq!(session.master.get(), session.project().master);
@@ -3202,7 +3179,7 @@ mod boundary_tests {
         assert!(!session.project().master.is_active());
         assert!(!session.render_dirty);
 
-        let mut invalid = session.project().master.clone();
+        let mut invalid = session.project().master;
         invalid.ejay_wide.spread = KNOB_MAX + 1;
         assert!(session.edit(EditCommand::SetMaster(invalid)).is_err());
         assert!(session.history_step(true).unwrap());

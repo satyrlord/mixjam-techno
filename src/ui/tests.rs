@@ -367,10 +367,16 @@ mod tests {
 
     #[test]
     fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
-        const KNOBS: [&str; 14] = [
-            "EQ 60 Hz", "EQ 80 Hz", "EQ 160 Hz", "EQ 320 Hz", "EQ 640 Hz", "EQ 1100 Hz",
-            "EQ 2200 Hz", "EQ 4500 Hz", "EQ 9000 Hz", "EQ 12000 Hz",
-            "Compressor drive", "Compressor speed", "Compressor gain", "Stereo width",
+        use mixjam_techno::application::PedalKind::*;
+        const NAMES: [&str; 13] = [
+            "Booster EQ", "Booster compressor", "Booster wide", "Soft clip", "Tube", "Trim EQ",
+            "Bus compressor", "Maximizer", "Lift EQ", "Tape", "Stereo imaging", "Multiband", "Limiter",
+        ];
+        const BOOSTER_KNOBS: [&str; 14] = [
+            "Booster EQ 60 Hz", "Booster EQ 80 Hz", "Booster EQ 160 Hz", "Booster EQ 320 Hz",
+            "Booster EQ 640 Hz", "Booster EQ 1100 Hz", "Booster EQ 2200 Hz", "Booster EQ 4500 Hz",
+            "Booster EQ 9000 Hz", "Booster EQ 12000 Hz", "Booster compressor drive",
+            "Booster compressor speed", "Booster compressor gain", "Booster width",
         ];
         for density in [1.0, 1.5, 2.0] {
             let (ctx, mut app) = fixture();
@@ -390,85 +396,158 @@ mod tests {
             assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(window),
                 "The complete tool must fit at {density}x.");
             assert_folded_assets(&ctx, &output, density, "Indigo");
-            for name in KNOBS.iter().copied().chain(["EQ", "Compressor", "Stereo wide"]) {
-                let bounds = effects_control_rect(&output, name);
-                assert!(window.contains_rect(bounds), "{name} must fit at {density}x.");
+            // The input and output units and the strip stay in view however
+            // far the row scrolls.
+            let strip: Vec<String> = NAMES.iter().map(|name| format!("Show {name}")).collect();
+            for name in ["Trim", "Trim value", "Clear OVER"]
+                .into_iter()
+                .chain(strip.iter().map(String::as_str))
+            {
+                assert!(window.contains_rect(effects_control_rect(&output, name)), "{name} must fit at {density}x.");
+            }
+            for label in [
+                "Input level: no mix playing",
+                "Output loudness: momentary - LUFS, short-term - LUFS, integrated - LUFS, true peak - dBTP",
+            ] {
+                assert!(window.contains_rect(accessible_label(&output, label)), "{label} must fit at {density}x.");
             }
             // Every pedal starts off, and its knobs wait for its switch.
-            for name in KNOBS {
+            for name in BOOSTER_KNOBS.iter().chain(&["Soft clip amount", "Limiter ceiling", "Tape speed"]) {
                 assert!(accessible_node(&output, name).1.is_disabled(), "{name} starts disabled.");
             }
-            assert_eq!(
-                accessible_node(&output, "EQ 1100 Hz value").1.value(),
-                Some("+0.0"),
-                "EQ values read in decibels."
-            );
-            assert!(text_rect(&output, "Signal: mixer → EQ (off) → Compressor (off) → Stereo wide (off) → output. Every pedal is off: the mix is unprocessed.").is_positive());
+            assert!(!accessible_node(&output, "Trim").1.is_disabled());
+            assert_eq!(accessible_node(&output, "Booster EQ 1100 Hz value").1.value(), Some("+0.0"),
+                "EQ values read in decibels.");
+            assert_eq!(accessible_node(&output, "Limiter ceiling value").1.value(), Some("-1.0 dB"));
+            assert_eq!(accessible_node(&output, "Bus compressor ratio value").1.value(), Some("2.0:1"));
+            assert_eq!(accessible_node(&output, "Tape speed value").1.value(), Some("30 ips"));
+            text_rect(&output, "Every pedal is off and the trim is at 0 dB: the mix plays unprocessed.");
 
-            // The board runs left to right in signal order, and every control
-            // keeps clear of its pedal's beveled edge.
+            // The row runs left to right in signal order between the units,
+            // and every control keeps clear of its pedal's beveled edge.
+            // A pedal's header holds its drag grip; the limiter's says that it
+            // always runs last.
             let pedal = |output: &egui::FullOutput, name: &str| {
-                let grip = effects_control_rect(output, &format!("Drag {name}"));
-                Rect::from_min_size(grip.min, Vec2::new(grip.width() + 30.0, 280.0))
+                let header = if name == "Limiter" {
+                    "Limiter always runs last".to_owned()
+                } else {
+                    format!("Drag {name}")
+                };
+                let grip = effects_control_rect(output, &header);
+                Rect::from_min_size(grip.min, Vec2::new(grip.width() + 30.0, 304.0))
             };
-            let input = text_rect(&output, "mixer");
-            let outlet = text_rect(&output, "output");
-            let pedals = ["EQ", "Compressor", "Stereo wide"].map(|name| pedal(&output, name));
-            assert!(input.right() < pedals[0].left() && pedals[0].right() < pedals[1].left()
-                && pedals[1].right() < pedals[2].left() && pedals[2].right() < outlet.left());
-            for (name, controls) in [
-                ("EQ", KNOBS[..10].to_vec()),
-                ("Compressor", KNOBS[10..13].to_vec()),
-                ("Stereo wide", vec!["Stereo width"]),
-            ] {
+            let input = effects_control_rect(&output, "Trim");
+            let outlet = effects_control_rect(&output, "Clear OVER");
+            let pedals = NAMES.map(|name| pedal(&output, name));
+            assert!(input.right() < pedals[0].left() && pedals[12].left() > outlet.left(),
+                "The row scrolls between the units, and its end starts out of view.");
+            assert!(pedals.windows(2).all(|pair| pair[0].right() < pair[1].left()));
+            let dials: [&[&str]; 13] = [
+                &BOOSTER_KNOBS[..10], &BOOSTER_KNOBS[10..13], &BOOSTER_KNOBS[13..],
+                &["Soft clip amount", "Soft clip ceiling"],
+                &["Tube drive", "Tube mix"],
+                &["Trim EQ high-pass", "Trim EQ mud", "Trim EQ harsh"],
+                &["Bus compressor threshold", "Bus compressor ratio", "Bus compressor attack", "Bus compressor release", "Bus compressor gain reduction 0.0 dB"],
+                &["Maximizer boost"],
+                &["Lift EQ low", "Lift EQ air"],
+                &["Tape drive", "Tape speed"],
+                &["Stereo imaging width", "Stereo imaging mono below"],
+                &["Multiband low", "Multiband mid", "Multiband high"],
+                &["Limiter gain", "Limiter ceiling", "Limiter gain reduction 0.0 dB"],
+            ];
+            for (name, dials) in NAMES.into_iter().zip(dials) {
                 let bounds = pedal(&output, name).shrink(4.0);
-                let mut parts: Vec<String> = controls
-                    .iter()
-                    .flat_map(|knob| [knob.to_string(), format!("{knob} value")])
-                    .collect();
-                parts.extend([name.to_string(), format!("Move {name} left"), format!("Move {name} right")]);
+                let mut parts = vec![name.to_string()];
+                if name != "Limiter" {
+                    parts.extend([format!("Move {name} left"), format!("Move {name} right")]);
+                }
+                for dial in dials {
+                    if dial.contains("reduction") {
+                        assert!(bounds.contains_rect(accessible_label(&output, dial)), "{dial} at {density}x.");
+                    } else {
+                        parts.push(dial.to_string());
+                        parts.push(format!("{dial} value"));
+                    }
+                }
                 for part in parts {
                     assert!(bounds.contains_rect(effects_control_rect(&output, &part)),
                         "{part} must keep clear of the {name} pedal's edge at {density}x.");
                 }
             }
-            assert!(accessible_node(&output, "Move EQ left").1.is_disabled());
-            assert!(accessible_node(&output, "Move Stereo wide right").1.is_disabled());
+            assert!(accessible_node(&output, "Move Booster EQ left").1.is_disabled());
+            // Nothing passes the limiter, which has no move buttons or grip.
+            assert!(accessible_node(&output, "Move Multiband right").1.is_disabled());
+            assert!(!accessible_node(&output, "Move Multiband left").1.is_disabled());
+            let labels: Vec<&str> = output.platform_output.accesskit_update.as_ref().unwrap()
+                .nodes.iter().filter_map(|(_, node)| node.label()).collect();
+            for absent in ["Move Limiter left", "Move Limiter right", "Drag Limiter"] {
+                assert!(!labels.contains(&absent), "{absent} must not exist.");
+            }
+
+            // A strip chip brings its pedal into view; so does keyboard focus.
+            focus_control(&ctx, &mut app, &output, "Show Limiter");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(window.contains_rect(pedal(&output, "Limiter")), "The Limiter must come into view at {density}x.");
+            assert!(!window.contains_rect(pedal(&output, "Booster EQ")));
+            // A pedal dropped past the limiter stays before it.
+            let grip = effects_control_rect(&output, "Drag Multiband").center();
+            let past = pedal(&output, "Limiter").right_center() + Vec2::new(6.0, 0.0);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip)], egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
+            for step in 1..=6 {
+                let at = grip + (past - grip) * (step as f32 / 6.0);
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+            }
+            pointer(&ctx, &mut app, past, false, egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.order, PedalKind::ALL);
+            assert!(!app.session.unsaved(), "A drop that moves nothing is no edit.");
+            focus_control(&ctx, &mut app, &output, "Booster wide");
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(window.contains_rect(effects_control_rect(&output, "Booster wide")),
+                "A focused switch must scroll into view at {density}x.");
 
             // Arrow buttons and dragging both move a pedal; each move is one undo step.
-            focus_control(&ctx, &mut app, &output, "Move Stereo wide left");
+            focus_control(&ctx, &mut app, &output, "Move Booster wide left");
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
-            use mixjam_techno::application::PedalKind::*;
-            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor]);
+            assert_eq!(app.session.project().master.order[..3], [EjayEq, EjayWide, EjayCompressor]);
+            focus_control(&ctx, &mut app, &output, "Show Booster EQ");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            let grip = effects_control_rect(&output, "Drag EQ").center();
-            let past_last = pedal(&output, "Compressor").right_center() + Vec2::new(4.0, 0.0);
+            let grip = effects_control_rect(&output, "Drag Booster EQ").center();
+            let past = pedal(&output, "Booster wide").right_center() + Vec2::new(4.0, 0.0);
+            assert!(window.contains(past));
             frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip)], egui::Modifiers::NONE);
             pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
             for step in 1..=8 {
-                let at = grip + (past_last - grip) * (step as f32 / 8.0);
+                let at = grip + (past - grip) * (step as f32 / 8.0);
                 frame(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
             }
-            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor],
+            assert_eq!(app.session.project().master.order[..3], [EjayEq, EjayWide, EjayCompressor],
                 "Dragging previews the place; only the drop moves the pedal.");
-            pointer(&ctx, &mut app, past_last, false, egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, past, false, egui::Modifiers::NONE);
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_eq!(app.session.project().master.order, [EjayWide, EjayCompressor, EjayEq]);
+            assert_eq!(app.session.project().master.order[..3], [EjayWide, EjayEq, EjayCompressor]);
+            assert_eq!(app.session.project().master.order[3..], PedalKind::ALL[3..]);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert!(pedal(&output, "Compressor").right() < pedal(&output, "EQ").left());
+            assert!(pedal(&output, "Booster wide").right() < pedal(&output, "Booster EQ").left());
             assert!(app.session.history_step(false).unwrap());
-            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor]);
+            assert_eq!(app.session.project().master.order[..3], [EjayEq, EjayWide, EjayCompressor]);
             assert!(app.session.history_step(false).unwrap());
             assert_eq!(app.session.project().master.order, PedalKind::ALL);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
 
-            focus_control(&ctx, &mut app, &output, "Compressor");
+            focus_control(&ctx, &mut app, &output, "Booster compressor");
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
             assert!(app.session.project().master.ejay_compressor.on);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert!(!accessible_node(&output, "Compressor drive").1.is_disabled());
-            assert!(accessible_node(&output, "Stereo width").1.is_disabled());
-            focus_control(&ctx, &mut app, &output, "Compressor drive");
+            assert!(!accessible_node(&output, "Booster compressor drive").1.is_disabled());
+            assert!(accessible_node(&output, "Booster width").1.is_disabled());
+            focus_control(&ctx, &mut app, &output, "Booster compressor drive");
             for (key, modifiers, expected) in [
                 (egui::Key::ArrowUp, egui::Modifiers::NONE, 501),
                 (egui::Key::ArrowUp, egui::Modifiers::SHIFT, 502),
@@ -479,7 +558,7 @@ mod tests {
                 assert_eq!(app.session.project().master.ejay_compressor.drive, expected);
             }
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            let center = effects_control_rect(&output, "Compressor drive").center();
+            let center = effects_control_rect(&output, "Booster compressor drive").center();
             click(&ctx, &mut app, center, egui::Modifiers::NONE);
             click(&ctx, &mut app, center, egui::Modifiers::NONE);
             assert_eq!(app.session.project().master.ejay_compressor.drive, 500,
@@ -493,11 +572,163 @@ mod tests {
             assert!(app.session.history_step(false).unwrap());
             assert!(!app.session.project().master.is_active());
 
+            // The mastering pedals: the limiter's knobs step in tenths of a
+            // decibel, the tape speed switches between its two speeds, and
+            // the trim changes the status line.
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Limiter");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(app.session.project().master.limiter.on);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Limiter ceiling");
+            for (key, modifiers, expected) in [
+                (egui::Key::ArrowUp, egui::Modifiers::NONE, -0.9),
+                (egui::Key::ArrowDown, egui::Modifiers::SHIFT, -1.0),
+                (egui::Key::End, egui::Modifiers::NONE, 0.0),
+            ] {
+                frame(&ctx, &mut app, vec![key_event(key, modifiers)], modifiers);
+                assert_eq!(app.session.project().master.limiter.ceiling, expected);
+            }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(accessible_node(&output, "Limiter ceiling value").1.value(), Some("0.0 dB"));
+            assert!(window.contains_rect(accessible_label(&output, "Limiter gain reduction 0.0 dB")));
+            focus_control(&ctx, &mut app, &output, "Tape");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Tape speed");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.tape.speed, 15);
+            focus_control(&ctx, &mut app, &output, "Trim");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.trim, -0.1);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            text_rect(&output, "2 of 13 pedals on, trim -0.1 dB. Latency 4.8 ms, which exports remove.");
+            for _ in 0..5 {
+                assert!(app.session.history_step(false).unwrap());
+            }
+            assert_eq!(app.session.project().master, MasterChain::default());
+
             focus_control(&ctx, &mut app, &output, "Mastering help");
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
             assert!(app.show_master_help, "The Help icon must support keyboard activation.");
         }
+    }
+
+    #[test]
+    fn opening_mastering_preserves_saved_values_between_dial_steps() {
+        use mixjam_techno::application::Knob;
+
+        for on in [false, true] {
+            let (ctx, _) = fixture();
+            let mut chain = MasterChain::default();
+            for kind in PedalKind::ALL {
+                chain.set_on(kind, on);
+            }
+            for knob in Knob::all() {
+                if knob.pedal().is_some_and(PedalKind::is_ejay) {
+                    continue;
+                }
+                let range = knob.range();
+                knob.set(&mut chain, range.low + range.step / 3.0);
+            }
+            chain.validate().unwrap();
+            let metering = master::Metering {
+                reading: MeterReading::default(),
+                playing: false,
+            };
+            for _ in 0..3 {
+                let _ = ctx.run(egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                    ..Default::default()
+                }, |ctx| {
+                    let mut open = true;
+                    assert!(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None),
+                        "Showing a saved board must not change values between dial steps, even when its pedals are {on}.");
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
+        let (ctx, _) = fixture();
+        ctx.enable_accesskit();
+        let chain = MasterChain::default();
+        let mut reading = MeterReading { run: 1, ..MeterReading::default() };
+        let render = |reading, events| {
+            ctx.run(egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                events,
+                ..Default::default()
+            }, |ctx| {
+                let mut open = true;
+                let metering = master::Metering { reading, playing: true };
+                assert!(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None));
+            })
+        };
+        for _ in 0..3 {
+            render(reading, vec![]);
+        }
+        let output = render(reading, vec![]);
+        assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: clear."));
+        reading.overs = 1;
+        let output = render(reading, vec![]);
+        assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: detected."));
+        let target = accessible_node(&output, "Clear OVER").0;
+        render(reading, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Focus, target, data: None,
+        })]);
+        render(reading, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
+        let output = render(reading, vec![]);
+        assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: clear."));
+        reading.overs = 2;
+        let output = render(reading, vec![]);
+        assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: detected."));
+    }
+
+    #[test]
+    fn mastering_meters_show_the_playback_reading() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.show_master = true;
+        let reading = MeterReading {
+            run: 1, input_vu: -1.5, input_peaks: [false, true], compressor_reduction: 1.7,
+            limiter_reduction: 2.6, momentary: -12.6, short_term: -13.4, integrated: -13.9,
+            true_peak: -2.4, true_peak_max: -0.8, overs: 1,
+        };
+        let metering = master::Metering { reading, playing: true };
+        let mut chain = MasterChain::default();
+        chain.bus_compressor.on = true;
+        chain.limiter.on = true;
+        let mut action = None;
+        let mut output = egui::FullOutput::default();
+        // A new window sizes itself before it paints.
+        for _ in 0..3 {
+            output = ctx.run(egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                ..Default::default()
+            }, |ctx| {
+                let mut open = true;
+                action = Some(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None));
+            });
+        }
+        assert_eq!(action, Some(true), "Showing readings must not edit the board.");
+        accessible_label(&output, "Input level -1.5 VU, peaks on the right");
+        accessible_label(&output, "Output loudness: momentary -12.6 LUFS, short-term -13.4 LUFS, integrated -13.9 LUFS, true peak -0.8 dBTP");
+        accessible_label(&output, "Bus compressor gain reduction 1.7 dB");
+        accessible_label(&output, "Limiter gain reduction 2.6 dB");
+        text_rect(&output, "-0.8");
+        // When playback stops, the live meters rest; integrated loudness and
+        // the true peak of the playback remain.
+        let stopped = master::Metering { reading, playing: false };
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            let mut open = true;
+            master::show(ctx, &mut open, &chain, &stopped, None);
+        });
+        accessible_label(&output, "Input level: no mix playing");
+        accessible_label(&output, "Output loudness: momentary - LUFS, short-term - LUFS, integrated -13.9 LUFS, true peak -0.8 dBTP");
+        accessible_label(&output, "Limiter gain reduction 0.0 dB");
     }
 
     #[test]
@@ -2733,6 +2964,24 @@ mod tests {
             .find(|(_, node)| node.label() == Some(label))
             .map(|(id, node)| (*id, node))
             .unwrap_or_else(|| panic!("Missing accessible control: {label}"))
+    }
+
+    /// The bounds of a painted label, whose text egui stores as its value.
+    fn accessible_label(output: &egui::FullOutput, text: &str) -> Rect {
+        let bounds = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("Accessibility must be enabled for this test.")
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == egui::accesskit::Role::Label && node.value() == Some(text))
+            .and_then(|(_, node)| node.bounds())
+            .unwrap_or_else(|| panic!("Missing accessible label: {text}"));
+        Rect::from_min_max(
+            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+        )
     }
 
     fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {

@@ -305,17 +305,52 @@ the arrangement, browser, and Mixer retain their palettes.
 | Indigo | Mastering | `#2e3660` | `#96a6ec` |
 
 Mastering's pedals are painted enclosures on the Indigo board, each with its
-own enamel and ink lettering, as stompboxes are: EQ gold `#deac40`, Compressor
-turquoise `#54b8a6`, Stereo wide orchid `#c896dc`. The enamel always appears
-with the pedal's printed name. The whole pedal is painted: knobs sit directly
+own enamel and ink lettering, as stompboxes are. Light falls on them from the
+upper left, at 135 degrees, as it does on the knob caps. Each enclosure has a
+6-point rounded bevel that catches the light along its upper and left edges
+and falls into shade along its lower and right ones, 4-point side walls in
+shade below and to the right of the face, a faint sheen across the face
+toward the light, and a soft drop shadow cast down and right. Text stays
+inside the bevel. A pedal that is on shows anodised aluminium under its
+enamel: fine brushed grain along the rows at one texel per screen pixel, a
+sheen stretched across the grain (a bright streak toward the light, a darker
+reflection, a fainter streak), and seeded hairline scratches where bare
+aluminium shows. Each pedal keeps its own scratches, which stay below its
+printed name. The finish darkens the enamel by at most 5% for the grain and
+8% for the sheen, and ink keeps 5:1 there. A pedal that is off stays
+matte. Families share hues, and the
+enamel always appears with the pedal's printed name:
+
+| Family | Pedals and enamels |
+| --- | --- |
+| Equaliser (golds) | Booster EQ `#deac40`, Trim EQ `#c4cc5c`, Lift EQ `#ecd06c` |
+| Dynamics (blues and greens) | Booster compressor `#54b8a6`, Bus compressor `#78b2e4`, Maximizer `#82ce96`, Multiband `#64c4cc`, Limiter rose `#ee8ca0` |
+| Saturation (warm oranges) | Soft clip `#f09678`, Tube `#f0a650`, Tape `#ceb48c` |
+| Stereo (violets) | Booster wide `#c896dc`, Stereo imaging `#a6a0e8` |
+
+The Booster pedals print the original's names (EQ, Compressor, Stereo wide)
+over an "eJay Booster" line; the mastering pedals print their names over
+their family. A name too long for its pedal shrinks, down to 11 points, until
+it clears the lamp. The Limiter's rose sets it apart as the board's fixed last stage; it has no
+drag grip or move buttons, and its header line says it always runs last.
+The Input and Output units at the ends of the board are dark inset bays with
+cream lettering, like the other tools' bays. The VU meter has an ivory
+`#f0e4be` face, ink scale, a red zone above 0 VU, and red peak lamps. The
+Output unit shows loudness and true-peak readouts in dark wells, a loudness
+bar with a green `#6ec470` band at -14 LUFS, a true-peak bar with a red line at
+-1 dBTP, and a red OVER lamp in the place of a pedal's lamp. Gain-reduction
+lamps on the Bus compressor and Limiter are amber `#f6b240`. The strip below
+the board repeats each pedal's enamel in signal order, with a cream outline
+around the pedals in view. The whole pedal is painted: knobs sit directly
 on the enamel with ink scale marks, ink labels, and an ink focus ring, and
 values show in small dark windows with cream digits. The shared rotary draws
 ink marks wherever a caller turns egui's `dark_mode` off for a light painted
 surface; every other window keeps cream marks in dark bays. A lit pedal lamp
 uses Accent lime with a soft glow; a pedal that is off keeps a dark lamp,
-darkened knob caps, and a desaturated, darker enamel, and the status line
-names it as off. Ink on every enamel, lit or off, keeps at least 5:1 contrast.
-Patch cables carry metal plugs at both ends.
+darkened knob caps, and a desaturated, darker enamel, and its chip in the
+strip dims the same way. Ink on every enamel, lit or off, keeps at least 5:1
+contrast. Patch cables carry a metal plug wherever they meet a socket or a
+pedal.
 
 Common controls use Face `#232624`, Cream `#f9f2dc`, Ink `#121412`, and pale
 metal Primary `#d4cdb6`. Disabled faces use `#3d403c` with `#c9cbc0` lettering.

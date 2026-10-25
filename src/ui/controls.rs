@@ -27,7 +27,7 @@ pub(super) fn arrow_key_focus(ctx: &egui::Context) -> Option<egui::Id> {
     ctx.data(|data| data.get_temp(egui::Id::new("arrow-key-focus")))
 }
 
-fn contrast(a: Color32, b: Color32) -> f32 {
+pub(super) fn contrast(a: Color32, b: Color32) -> f32 {
     let luminance = |color: Color32| {
         let linear = |value: u8| {
             let value = f32::from(value) / 255.0;

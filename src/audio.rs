@@ -247,13 +247,18 @@ impl Mix {
 
     /// The whole mix in memory, through the master pedalboard. Long songs play
     /// and export through `read` and `write_wav`, which have no length limit.
+    /// Pedals that delay the sound run on past the end, and the delay is
+    /// cut from the start, so the result lines up with the song.
     pub fn to_pcm(&self, master: &MasterChain) -> Result<Pcm, String> {
         if self.frames > Self::MAX_PCM_FRAMES {
             return Err("This song is too long to hold in memory. Play or export it.".into());
         }
-        let mut samples = vec![0.0; self.frames as usize * 2];
+        let mut processor = MasterProcessor::new(master);
+        let latency = processor.latency();
+        let mut samples = vec![0.0; (self.frames as usize + latency) * 2];
         self.read(0, &mut samples);
-        MasterProcessor::new(master).process(&mut samples);
+        processor.process(&mut samples);
+        samples.drain(..latency * 2);
         Ok(Pcm {
             sample_rate: Self::SAMPLE_RATE,
             channels: 2,
@@ -279,12 +284,16 @@ impl Mix {
                 .map_err(|e| e.to_string())?;
             let mut block = vec![0.0; BLOCK_FRAMES as usize * 2];
             let mut master = MasterProcessor::new(master);
+            // The pedals run on past the end by their delay, which is cut
+            // from the start, as in `to_pcm`.
+            let latency = master.latency() as u64;
             let mut frame = 0;
-            while frame < self.frames {
-                let count = (self.frames - frame).min(BLOCK_FRAMES) as usize;
+            while frame < self.frames + latency {
+                let count = (self.frames + latency - frame).min(BLOCK_FRAMES) as usize;
                 self.read(frame, &mut block[..count * 2]);
                 master.process(&mut block[..count * 2]);
-                for &sample in &block[..count * 2] {
+                let skip = latency.saturating_sub(frame).min(count as u64) as usize;
+                for &sample in &block[skip * 2..count * 2] {
                     writer
                         .write_sample(float_to_i16(sample))
                         .map_err(|e| e.to_string())?;
@@ -449,9 +458,14 @@ struct PlaybackSource {
     filled: usize,
     /// The master pedalboard of a stereo mix. Its state runs on through loops.
     master: Option<MasterProcessor>,
+    /// Frames of the pedals' delay still to drop at the start, so the song
+    /// starts on time, and still to play out after the end.
+    lead: usize,
+    tail: usize,
 }
 impl PlaybackSource {
-    const BLOCK_FRAMES: usize = 2048;
+    /// About 23 ms, so the master meters update more than 30 times a second.
+    const BLOCK_FRAMES: usize = 1024;
 
     fn new(
         audio: Arc<dyn Frames>,
@@ -460,6 +474,8 @@ impl PlaybackSource {
         master: Option<Arc<MasterControl>>,
     ) -> Self {
         let channels = audio.channels() as usize;
+        let master = master.filter(|_| channels == 2).map(MasterProcessor::live);
+        let latency = master.as_ref().map_or(0, MasterProcessor::latency);
         Self {
             channels,
             start,
@@ -469,29 +485,64 @@ impl PlaybackSource {
             block: vec![0.0; Self::BLOCK_FRAMES * channels],
             cursor: 0,
             filled: 0,
-            master: master.filter(|_| channels == 2).map(MasterProcessor::live),
+            master,
+            lead: latency,
+            tail: latency,
             audio,
         }
+    }
+    /// Read and process the next block that has sound to play. False when
+    /// nothing is left.
+    fn fill(&mut self) -> bool {
+        loop {
+            if self.frame >= self.end {
+                if let Some(start) = self.loop_start {
+                    self.frame = start;
+                } else if self.tail > 0 {
+                    let count = self.tail.min(Self::BLOCK_FRAMES);
+                    self.tail -= count;
+                    self.filled = count * self.channels;
+                    self.block[..self.filled].fill(0.0);
+                    if self.process() {
+                        return true;
+                    }
+                    continue;
+                } else {
+                    if let Some(mut master) = self.master.take() {
+                        master.finish();
+                    }
+                    return false;
+                }
+            }
+            let count = ((self.end - self.frame) as usize).min(Self::BLOCK_FRAMES);
+            if count == 0 {
+                return false;
+            }
+            self.filled = count * self.channels;
+            self.audio.read(self.frame, &mut self.block[..self.filled]);
+            self.frame += count as u64;
+            if self.process() {
+                return true;
+            }
+        }
+    }
+    /// Run the block through the pedals and drop what remains of their
+    /// delay. True when the block still has samples to play.
+    fn process(&mut self) -> bool {
+        if let Some(master) = &mut self.master {
+            master.process(&mut self.block[..self.filled]);
+        }
+        let skip = self.lead.min(self.filled / self.channels);
+        self.lead -= skip;
+        self.cursor = skip * self.channels;
+        self.cursor < self.filled
     }
 }
 impl Iterator for PlaybackSource {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
-        if self.cursor == self.filled {
-            if self.frame >= self.end {
-                self.frame = self.loop_start?;
-            }
-            let count = ((self.end - self.frame) as usize).min(Self::BLOCK_FRAMES);
-            if count == 0 {
-                return None;
-            }
-            self.filled = count * self.channels;
-            self.audio.read(self.frame, &mut self.block[..self.filled]);
-            if let Some(master) = &mut self.master {
-                master.process(&mut self.block[..self.filled]);
-            }
-            self.frame += count as u64;
-            self.cursor = 0;
+        if self.cursor == self.filled && !self.fill() {
+            return None;
         }
         let value = self.block[self.cursor];
         self.cursor += 1;
@@ -866,6 +917,89 @@ mod tests {
         assert!(before.iter().all(|x| *x == 0.0));
     }
     #[test]
+    fn playback_meters_include_the_final_output_frame() {
+        let mut samples = vec![0.0; 1_024 * 2];
+        samples[1_023 * 2] = 1.0;
+        let audio: Arc<dyn Frames> = Arc::new(Pcm {
+            sample_rate: 44_100,
+            channels: 2,
+            samples: samples.clone(),
+        });
+        let control = MasterControl::new(&MasterChain::default());
+        let played: Vec<_> = PlaybackSource::new(audio, 0, None, Some(control.clone())).collect();
+        assert_eq!(played, samples);
+        let reading = control.meters();
+        assert!(reading.true_peak_max >= 0.0, "{reading:?}");
+        assert!(reading.overs > 0, "{reading:?}");
+        assert_eq!(reading.integrated, f32::NEG_INFINITY);
+    }
+
+    #[test]
+    fn live_pedal_switches_keep_the_timeline_and_final_frame() {
+        for initially_on in [false, true] {
+            let mut samples = vec![0.0; 10_000 * 2];
+            for frame in [0, 7_000, 9_999] {
+                samples[frame * 2] = 0.25;
+                samples[frame * 2 + 1] = -0.25;
+            }
+            let audio: Arc<dyn Frames> = Arc::new(Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: samples.clone(),
+            });
+            let mut chain = MasterChain::default();
+            chain.limiter.on = initially_on;
+            chain.limiter.gain = 0.0;
+            let control = MasterControl::new(&chain);
+            let mut source = PlaybackSource::new(audio, 0, None, Some(control.clone()));
+            let mut played: Vec<_> = source.by_ref().take(2_048 * 2).collect();
+            chain.limiter.on = !initially_on;
+            control.set(&chain);
+            played.extend(source);
+            assert_eq!(played.len(), samples.len());
+            for (index, (played, expected)) in played.iter().zip(&samples).enumerate() {
+                assert_eq!(
+                    played, expected,
+                    "Sample {index}; limiter initially on: {initially_on}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn neutral_live_switches_crossfade_aligned_audio() {
+        let samples: Vec<_> = (0..10_000)
+            .flat_map(|frame| {
+                let sample = (frame as f32 * 0.13).sin() * 0.25;
+                [sample, -sample]
+            })
+            .collect();
+        for initially_on in [false, true] {
+            let audio: Arc<dyn Frames> = Arc::new(Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: samples.clone(),
+            });
+            let mut chain = MasterChain::default();
+            chain.limiter.on = initially_on;
+            chain.limiter.gain = 0.0;
+            let control = MasterControl::new(&chain);
+            let mut source = PlaybackSource::new(audio, 0, None, Some(control.clone()));
+            let mut played: Vec<_> = source.by_ref().take(2_048 * 2).collect();
+            chain.limiter.on = !initially_on;
+            control.set(&chain);
+            played.extend(source);
+            assert_eq!(played.len(), samples.len());
+            for (index, (played, expected)) in played.iter().zip(&samples).enumerate() {
+                assert_eq!(
+                    played, expected,
+                    "Sample {index}; limiter initially on: {initially_on}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn playback_and_export_run_the_same_master_pedalboard() {
         let source = Pcm {
             sample_rate: 44_100,
@@ -898,6 +1032,41 @@ mod tests {
         // Without a control, as for a tool preview, the mix plays dry.
         let preview: Vec<f32> = PlaybackSource::new(mix, 0, None, None).collect();
         assert_eq!(preview, dry.samples);
+
+        // Pedals that delay the sound still line up with the song: a limiter
+        // with nothing to limit gives back the dry mix exactly.
+        let mut delayed = editor.project().clone();
+        delayed.master.limiter.on = true;
+        delayed.master.limiter.gain = 0.0;
+        assert_eq!(
+            render_with_samples(&delayed, &samples).unwrap().samples,
+            dry.samples
+        );
+        delayed.master.tube.on = true;
+        delayed.master.limiter.gain = 6.0;
+        let exported = render_with_samples(&delayed, &samples).unwrap();
+        assert_eq!(exported.samples.len(), dry.samples.len());
+        let mix = mix_with_samples(&delayed, &samples).unwrap();
+        let path = std::env::temp_dir().join(format!("mixjam-master-{}.wav", std::process::id()));
+        mix.write_wav(&path, &delayed.master).unwrap();
+        let written = read_wav(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(written.samples.len(), exported.samples.len());
+        assert!(
+            written
+                .samples
+                .iter()
+                .zip(&exported.samples)
+                .all(|(a, b)| float_to_i16(*a) == float_to_i16(*b))
+        );
+        let played: Vec<f32> = PlaybackSource::new(
+            Arc::new(mix),
+            0,
+            None,
+            Some(MasterControl::new(&delayed.master)),
+        )
+        .collect();
+        assert_eq!(played, exported.samples);
     }
 
     #[test]

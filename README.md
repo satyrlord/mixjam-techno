@@ -82,6 +82,15 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   S solos it: while any track is soloed, only soloed tracks play, and a muted
   track stays silent. The lane and mixer M/S/L/R controls mirror each other.
   Changing these controls does not change pan.
+- Use Mastering for the master pedalboard. The mix enters the Input unit,
+  where Trim sets its level against the VU meter, passes each pedal that is on
+  from left to right, and leaves through the Output unit, which shows
+  loudness in LUFS, the true peak, and an OVER lamp while the song plays. The
+  board holds the three eJay Booster pedals and ten mastering pedals: Soft
+  clip, Tube, Trim EQ, Bus compressor, Maximizer, Lift EQ, Tape, Stereo
+  imaging, Multiband, and Limiter. Drag a pedal by its name or use its arrows
+  to move it; the Limiter always stays last. Click a pedal in the strip below
+  the board to scroll to it. Every pedal starts off.
 - Use Import for WAV files and enter the known source tempo.
 - Use Sample Editor to trim and change pitch. Start frame is included; End frame
   is excluded. The adjacent buttons change one frame or 0.1 semitone; hold Shift
@@ -94,10 +103,11 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   count-in. Stop and save the take as a WAV file.
 - Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-A `.mixjam` song is JSON, format version 11. Earlier format-8 to format-10 songs
+A `.mixjam` song is JSON, format version 12. Earlier format-8 to format-10 songs
 open with their effective gain, polarity, and L/R outputs preserved, Mute and
-Solo off where they had none, and every master pedal off. Saving them writes
-version 11, which earlier builds cannot open.
+Solo off where they had none, and every master pedal off. Format-11 songs open
+with their eJay pedals as saved and the mastering pedals off. Saving them
+writes version 12, which earlier builds cannot open.
 A song links to WAV files; it is not a
 portable audio bundle. After moving the sample folder, select its new location
 before opening the song.
@@ -292,5 +302,6 @@ window can do, which includes saving files to a path that it supplies.
 
 - Original-format writing and portable project bundles are not implemented.
 - Imported songs do not reproduce every effect or level curve of their source
-  programs. MixJam master processing, return effects, and clip fades are not
-  rendered; the importer shows a notice.
+  programs. MixJam return effects and clip fades are not rendered, and its
+  master bus plays through this application's own mastering pedals; the
+  importer shows a notice.

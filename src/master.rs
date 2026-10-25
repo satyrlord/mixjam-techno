@@ -1,20 +1,39 @@
 //! The master pedalboard: processing of the whole mix after the tracks are
 //! summed, for playback and export alike.
 //!
-//! The eJay pedals are the Booster of Dance 3, Dance 4, and Techno 3: an
-//! equaliser, a compressor, and stereo wide from `fxstudio.dll`. They follow
-//! the reference models in `tools/runtime/fx-reference.py` and match the
-//! library's renders sample for sample. They work on 16-bit samples, as the
-//! original does. The pedals run in the chain's order, which the user can
-//! change; the original's fixed order is equaliser, compressor, stereo wide.
-//! A chain with every pedal off leaves the mix untouched.
+//! The mix enters through the input trim, passes the pedals that are on in
+//! the board's order, and leaves for the output. The limiter is always the
+//! last pedal, so nothing after it can raise the peaks it holds; the user can
+//! put the others in any order. Two kinds of pedal share the board:
+//! - The eJay pedals are the Booster of Dance 3, Dance 4, and Techno 3 (see
+//!   `ejay`). They match the original library sample for sample and work on
+//!   16-bit samples, as the original does.
+//! - The mastering pedals are this application's own designs (see
+//!   `pedals`). They work on floats. Those with a curve or a lookahead delay
+//!   the sound; export removes the delay, and playback starts that much
+//!   further into the mix.
+//!
+//! A board with every pedal off and the trim at 0 dB leaves the mix
+//! untouched. During playback, switching or moving a pedal crossfades from
+//! the old board to the new one, and meters read the input after the trim
+//! and the output after the last pedal (see `meters`).
+mod dsp;
+mod ejay;
+mod meters;
+mod pedals;
+
+pub use meters::{MeterReading, OVER_DBTP};
+
+use dsp::{Smoothed, db_to_gain};
+use ejay::clamp16;
 use serde::{Deserialize, Serialize};
 use std::sync::{
-    Arc, LazyLock, Mutex,
+    Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
 
-/// Knob positions run from 0 to this value, as the library's setters take them.
+/// Knob positions of the eJay pedals run from 0 to this value, as the
+/// library's setters take them.
 pub const KNOB_MAX: u16 = 1000;
 /// Equaliser bands run from 0 to this value; half of it is flat.
 pub const EQ_BAND_MAX: u8 = 100;
@@ -22,7 +41,9 @@ pub const EQ_FREQUENCIES: [f64; 10] = [
     60.0, 80.0, 160.0, 320.0, 640.0, 1100.0, 2200.0, 4500.0, 9000.0, 12000.0,
 ];
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+// Settings ------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EjayEq {
     pub on: bool,
@@ -37,7 +58,7 @@ impl Default for EjayEq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EjayCompressor {
     pub on: bool,
@@ -56,7 +77,7 @@ impl Default for EjayCompressor {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EjayWide {
     pub on: bool,
@@ -71,6 +92,210 @@ impl Default for EjayWide {
     }
 }
 
+/// Rounds peaks off below a ceiling.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SoftClip {
+    pub on: bool,
+    /// How far below the ceiling the curve starts to bend, in dB.
+    pub amount: f32,
+    /// The level the output approaches, in dBFS.
+    pub ceiling: f32,
+}
+impl Default for SoftClip {
+    fn default() -> Self {
+        Self {
+            on: false,
+            amount: Knob::SoftClipAmount.range().default,
+            ceiling: Knob::SoftClipCeiling.range().default,
+        }
+    }
+}
+
+/// Asymmetric saturation with mostly even harmonics.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Tube {
+    pub on: bool,
+    /// From 0 to 10.
+    pub drive: f32,
+    /// The saturated share of the output, in percent.
+    pub mix: f32,
+}
+impl Default for Tube {
+    fn default() -> Self {
+        Self {
+            on: false,
+            drive: Knob::TubeDrive.range().default,
+            mix: Knob::TubeMix.range().default,
+        }
+    }
+}
+
+/// Cleanup: a high-pass, and narrow cuts for mud and harshness.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TrimEq {
+    pub on: bool,
+    /// The high-pass corner, in Hz.
+    pub high_pass: f32,
+    /// Cuts at 250 Hz and 3.5 kHz, in dB.
+    pub mud: f32,
+    pub harsh: f32,
+}
+impl Default for TrimEq {
+    fn default() -> Self {
+        Self {
+            on: false,
+            high_pass: Knob::TrimEqHighPass.range().default,
+            mud: Knob::TrimEqMud.range().default,
+            harsh: Knob::TrimEqHarsh.range().default,
+        }
+    }
+}
+
+/// A stereo-linked compressor for the whole mix.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct BusCompressor {
+    pub on: bool,
+    /// In dBFS.
+    pub threshold: f32,
+    /// Input decibels over the threshold per output decibel.
+    pub ratio: f32,
+    /// In milliseconds.
+    pub attack: f32,
+    pub release: f32,
+}
+impl Default for BusCompressor {
+    fn default() -> Self {
+        Self {
+            on: false,
+            threshold: Knob::CompressorThreshold.range().default,
+            ratio: Knob::CompressorRatio.range().default,
+            attack: Knob::CompressorAttack.range().default,
+            release: Knob::CompressorRelease.range().default,
+        }
+    }
+}
+
+/// Loudness from a soft clipper with a fixed ceiling.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Maximizer {
+    pub on: bool,
+    /// In percent; each percent drives the clipper a quarter decibel.
+    pub boost: f32,
+}
+impl Default for Maximizer {
+    fn default() -> Self {
+        Self {
+            on: false,
+            boost: Knob::MaximizerBoost.range().default,
+        }
+    }
+}
+
+/// Wide shelves for low-end weight and treble air.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LiftEq {
+    pub on: bool,
+    /// Shelf gains at 90 Hz and 12 kHz, in dB.
+    pub low: f32,
+    pub air: f32,
+}
+impl Default for LiftEq {
+    fn default() -> Self {
+        Self {
+            on: false,
+            low: Knob::LiftLow.range().default,
+            air: Knob::LiftAir.range().default,
+        }
+    }
+}
+
+/// Tape saturation with its head bump and treble roll-off.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Tape {
+    pub on: bool,
+    /// From 0 to 10.
+    pub drive: f32,
+    /// Inches per second: 15 or 30.
+    pub speed: u8,
+}
+impl Default for Tape {
+    fn default() -> Self {
+        Self {
+            on: false,
+            drive: Knob::TapeDrive.range().default,
+            speed: 30,
+        }
+    }
+}
+
+/// Mid-side width, with the lows kept mono.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Imaging {
+    pub on: bool,
+    /// The side level, in percent.
+    pub width: f32,
+    /// The side is removed below this frequency, in Hz.
+    pub mono_below: f32,
+}
+impl Default for Imaging {
+    fn default() -> Self {
+        Self {
+            on: false,
+            width: Knob::ImagingWidth.range().default,
+            mono_below: Knob::ImagingMonoBelow.range().default,
+        }
+    }
+}
+
+/// A three-band compressor with one amount per band.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Multiband {
+    pub on: bool,
+    /// Amounts below 120 Hz, from 120 Hz to 2 kHz, and above, in percent.
+    pub low: f32,
+    pub mid: f32,
+    pub high: f32,
+}
+impl Default for Multiband {
+    fn default() -> Self {
+        Self {
+            on: false,
+            low: Knob::MultibandLow.range().default,
+            mid: Knob::MultibandMid.range().default,
+            high: Knob::MultibandHigh.range().default,
+        }
+    }
+}
+
+/// A true-peak brickwall limiter.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Limiter {
+    pub on: bool,
+    /// Gain before limiting, in dB.
+    pub gain: f32,
+    /// The highest true peak out, in dBTP.
+    pub ceiling: f32,
+}
+impl Default for Limiter {
+    fn default() -> Self {
+        Self {
+            on: false,
+            gain: Knob::LimiterGain.range().default,
+            ceiling: Knob::LimiterCeiling.range().default,
+        }
+    }
+}
+
 /// One pedal of the board.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,42 +303,333 @@ pub enum PedalKind {
     EjayEq,
     EjayCompressor,
     EjayWide,
+    SoftClip,
+    Tube,
+    TrimEq,
+    BusCompressor,
+    Maximizer,
+    LiftEq,
+    Tape,
+    Imaging,
+    Multiband,
+    Limiter,
 }
 impl PedalKind {
-    /// Every pedal, in the original's order.
-    pub const ALL: [Self; 3] = [Self::EjayEq, Self::EjayCompressor, Self::EjayWide];
+    /// Every pedal in the board's first order: the eJay pedals in the
+    /// original's order, then the mastering pedals, with the limiter last.
+    pub const ALL: [Self; 13] = [
+        Self::EjayEq,
+        Self::EjayCompressor,
+        Self::EjayWide,
+        Self::SoftClip,
+        Self::Tube,
+        Self::TrimEq,
+        Self::BusCompressor,
+        Self::Maximizer,
+        Self::LiftEq,
+        Self::Tape,
+        Self::Imaging,
+        Self::Multiband,
+        Self::Limiter,
+    ];
+    pub fn is_ejay(self) -> bool {
+        matches!(self, Self::EjayEq | Self::EjayCompressor | Self::EjayWide)
+    }
+    /// Whether the pedal can change places. The limiter stays last.
+    pub fn movable(self) -> bool {
+        self != Self::Limiter
+    }
+    /// The pedal's knobs, in panel order.
+    pub fn knobs(self) -> &'static [Knob] {
+        use Knob::*;
+        match self {
+            Self::EjayEq => &[
+                EjayBand(0),
+                EjayBand(1),
+                EjayBand(2),
+                EjayBand(3),
+                EjayBand(4),
+                EjayBand(5),
+                EjayBand(6),
+                EjayBand(7),
+                EjayBand(8),
+                EjayBand(9),
+            ],
+            Self::EjayCompressor => &[EjayDrive, EjaySpeed, EjayGain],
+            Self::EjayWide => &[EjaySpread],
+            Self::SoftClip => &[SoftClipAmount, SoftClipCeiling],
+            Self::Tube => &[TubeDrive, TubeMix],
+            Self::TrimEq => &[TrimEqHighPass, TrimEqMud, TrimEqHarsh],
+            Self::BusCompressor => &[
+                CompressorThreshold,
+                CompressorRatio,
+                CompressorAttack,
+                CompressorRelease,
+            ],
+            Self::Maximizer => &[MaximizerBoost],
+            Self::LiftEq => &[LiftLow, LiftAir],
+            Self::Tape => &[TapeDrive],
+            Self::Imaging => &[ImagingWidth, ImagingMonoBelow],
+            Self::Multiband => &[MultibandLow, MultibandMid, MultibandHigh],
+            Self::Limiter => &[LimiterGain, LimiterCeiling],
+        }
+    }
+    /// The frames by which the pedal delays the sound while it is on.
+    pub fn latency(self) -> usize {
+        match self {
+            Self::SoftClip => pedals::SoftClip::LATENCY,
+            Self::Tube => pedals::Tube::LATENCY,
+            Self::Maximizer => pedals::Maximizer::LATENCY,
+            Self::Tape => pedals::Tape::LATENCY,
+            Self::Limiter => pedals::Limiter::LATENCY,
+            _ => 0,
+        }
+    }
 }
 
-/// Every pedal with its switch, and the order the signal passes through
-/// them. A pedal that is off keeps its settings and passes the signal on.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// A continuous setting of the board: the input trim or a pedal's knob.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Knob {
+    Trim,
+    EjayBand(usize),
+    EjayDrive,
+    EjaySpeed,
+    EjayGain,
+    EjaySpread,
+    SoftClipAmount,
+    SoftClipCeiling,
+    TubeDrive,
+    TubeMix,
+    TrimEqHighPass,
+    TrimEqMud,
+    TrimEqHarsh,
+    CompressorThreshold,
+    CompressorRatio,
+    CompressorAttack,
+    CompressorRelease,
+    MaximizerBoost,
+    LiftLow,
+    LiftAir,
+    TapeDrive,
+    ImagingWidth,
+    ImagingMonoBelow,
+    MultibandLow,
+    MultibandMid,
+    MultibandHigh,
+    LimiterGain,
+    LimiterCeiling,
+}
+
+/// A knob's range in its unit, its default, and the step it moves in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KnobRange {
+    pub low: f32,
+    pub high: f32,
+    pub default: f32,
+    pub step: f32,
+    /// The dial spreads the range by ratio rather than by difference.
+    pub logarithmic: bool,
+}
+const fn range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
+    KnobRange {
+        low,
+        high,
+        default,
+        step,
+        logarithmic: false,
+    }
+}
+const fn ratio_range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
+    KnobRange {
+        logarithmic: true,
+        ..range(low, high, default, step)
+    }
+}
+
+impl Knob {
+    /// Every knob: the trim, then each pedal's knobs in the first order.
+    pub fn all() -> impl Iterator<Item = Self> {
+        std::iter::once(Self::Trim).chain(
+            PedalKind::ALL
+                .into_iter()
+                .flat_map(|kind| kind.knobs().iter().copied()),
+        )
+    }
+    pub const fn range(self) -> KnobRange {
+        match self {
+            Self::Trim => range(-24.0, 24.0, 0.0, 0.1),
+            Self::EjayBand(_) => range(0.0, EQ_BAND_MAX as f32, (EQ_BAND_MAX / 2) as f32, 1.0),
+            Self::EjayDrive | Self::EjaySpeed | Self::EjayGain | Self::EjaySpread => {
+                range(0.0, KNOB_MAX as f32, (KNOB_MAX / 2) as f32, 1.0)
+            }
+            Self::SoftClipAmount => range(0.0, 6.0, 1.5, 0.1),
+            Self::SoftClipCeiling => range(-6.0, 0.0, -0.5, 0.1),
+            Self::TubeDrive => range(0.0, 10.0, 2.5, 0.1),
+            Self::TubeMix => range(0.0, 100.0, 100.0, 1.0),
+            Self::TrimEqHighPass => ratio_range(10.0, 40.0, 20.0, 1.0),
+            Self::TrimEqMud => range(-3.0, 0.0, -1.5, 0.1),
+            Self::TrimEqHarsh => range(-3.0, 0.0, -1.0, 0.1),
+            Self::CompressorThreshold => range(-30.0, 0.0, -16.0, 0.5),
+            Self::CompressorRatio => ratio_range(1.5, 10.0, 2.0, 0.1),
+            Self::CompressorAttack => ratio_range(0.1, 30.0, 10.0, 0.1),
+            Self::CompressorRelease => ratio_range(50.0, 1200.0, 300.0, 10.0),
+            Self::MaximizerBoost => range(0.0, 25.0, 10.0, 1.0),
+            Self::LiftLow | Self::LiftAir => range(0.0, 2.0, 1.0, 0.1),
+            Self::TapeDrive => range(0.0, 10.0, 2.0, 0.1),
+            Self::ImagingWidth => range(60.0, 140.0, 105.0, 1.0),
+            Self::ImagingMonoBelow => ratio_range(60.0, 300.0, 120.0, 5.0),
+            Self::MultibandLow | Self::MultibandHigh => range(0.0, 100.0, 20.0, 1.0),
+            Self::MultibandMid => range(0.0, 100.0, 15.0, 1.0),
+            Self::LimiterGain => range(0.0, 12.0, 4.0, 0.1),
+            Self::LimiterCeiling => range(-3.0, 0.0, -1.0, 0.1),
+        }
+    }
+    /// The pedal the knob belongs to; the trim belongs to the board.
+    pub fn pedal(self) -> Option<PedalKind> {
+        PedalKind::ALL
+            .into_iter()
+            .find(|kind| kind.knobs().contains(&self))
+    }
+    pub fn get(self, chain: &MasterChain) -> f32 {
+        match self {
+            Self::Trim => chain.trim,
+            Self::EjayBand(band) => f32::from(chain.ejay_eq.bands[band]),
+            Self::EjayDrive => f32::from(chain.ejay_compressor.drive),
+            Self::EjaySpeed => f32::from(chain.ejay_compressor.speed),
+            Self::EjayGain => f32::from(chain.ejay_compressor.gain),
+            Self::EjaySpread => f32::from(chain.ejay_wide.spread),
+            Self::SoftClipAmount => chain.soft_clip.amount,
+            Self::SoftClipCeiling => chain.soft_clip.ceiling,
+            Self::TubeDrive => chain.tube.drive,
+            Self::TubeMix => chain.tube.mix,
+            Self::TrimEqHighPass => chain.trim_eq.high_pass,
+            Self::TrimEqMud => chain.trim_eq.mud,
+            Self::TrimEqHarsh => chain.trim_eq.harsh,
+            Self::CompressorThreshold => chain.bus_compressor.threshold,
+            Self::CompressorRatio => chain.bus_compressor.ratio,
+            Self::CompressorAttack => chain.bus_compressor.attack,
+            Self::CompressorRelease => chain.bus_compressor.release,
+            Self::MaximizerBoost => chain.maximizer.boost,
+            Self::LiftLow => chain.lift_eq.low,
+            Self::LiftAir => chain.lift_eq.air,
+            Self::TapeDrive => chain.tape.drive,
+            Self::ImagingWidth => chain.imaging.width,
+            Self::ImagingMonoBelow => chain.imaging.mono_below,
+            Self::MultibandLow => chain.multiband.low,
+            Self::MultibandMid => chain.multiband.mid,
+            Self::MultibandHigh => chain.multiband.high,
+            Self::LimiterGain => chain.limiter.gain,
+            Self::LimiterCeiling => chain.limiter.ceiling,
+        }
+    }
+    /// Set the knob, held to its range. The eJay knobs take whole positions.
+    pub fn set(self, chain: &mut MasterChain, value: f32) {
+        let range = self.range();
+        let value = if value.is_nan() {
+            range.default
+        } else {
+            value.clamp(range.low, range.high)
+        };
+        let whole = value.round() as u16;
+        match self {
+            Self::Trim => chain.trim = value,
+            Self::EjayBand(band) => chain.ejay_eq.bands[band] = whole as u8,
+            Self::EjayDrive => chain.ejay_compressor.drive = whole,
+            Self::EjaySpeed => chain.ejay_compressor.speed = whole,
+            Self::EjayGain => chain.ejay_compressor.gain = whole,
+            Self::EjaySpread => chain.ejay_wide.spread = whole,
+            Self::SoftClipAmount => chain.soft_clip.amount = value,
+            Self::SoftClipCeiling => chain.soft_clip.ceiling = value,
+            Self::TubeDrive => chain.tube.drive = value,
+            Self::TubeMix => chain.tube.mix = value,
+            Self::TrimEqHighPass => chain.trim_eq.high_pass = value,
+            Self::TrimEqMud => chain.trim_eq.mud = value,
+            Self::TrimEqHarsh => chain.trim_eq.harsh = value,
+            Self::CompressorThreshold => chain.bus_compressor.threshold = value,
+            Self::CompressorRatio => chain.bus_compressor.ratio = value,
+            Self::CompressorAttack => chain.bus_compressor.attack = value,
+            Self::CompressorRelease => chain.bus_compressor.release = value,
+            Self::MaximizerBoost => chain.maximizer.boost = value,
+            Self::LiftLow => chain.lift_eq.low = value,
+            Self::LiftAir => chain.lift_eq.air = value,
+            Self::TapeDrive => chain.tape.drive = value,
+            Self::ImagingWidth => chain.imaging.width = value,
+            Self::ImagingMonoBelow => chain.imaging.mono_below = value,
+            Self::MultibandLow => chain.multiband.low = value,
+            Self::MultibandMid => chain.multiband.mid = value,
+            Self::MultibandHigh => chain.multiband.high = value,
+            Self::LimiterGain => chain.limiter.gain = value,
+            Self::LimiterCeiling => chain.limiter.ceiling = value,
+        }
+    }
+}
+
+/// The input trim, every pedal with its switch, and the order the signal
+/// passes through them. A pedal that is off keeps its settings and passes
+/// the signal on.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct MasterChain {
-    /// Each pedal once, from the mixer's output to the master output.
-    pub order: [PedalKind; 3],
+    /// The gain before the first pedal, in dB.
+    pub trim: f32,
+    /// Each pedal once, from the mixer's output to the master output,
+    /// ending with the limiter.
+    pub order: [PedalKind; 13],
     pub ejay_eq: EjayEq,
     pub ejay_compressor: EjayCompressor,
     pub ejay_wide: EjayWide,
+    pub soft_clip: SoftClip,
+    pub tube: Tube,
+    pub trim_eq: TrimEq,
+    pub bus_compressor: BusCompressor,
+    pub maximizer: Maximizer,
+    pub lift_eq: LiftEq,
+    pub tape: Tape,
+    pub imaging: Imaging,
+    pub multiband: Multiband,
+    pub limiter: Limiter,
 }
 impl Default for MasterChain {
     fn default() -> Self {
         Self {
+            trim: 0.0,
             order: PedalKind::ALL,
             ejay_eq: EjayEq::default(),
             ejay_compressor: EjayCompressor::default(),
             ejay_wide: EjayWide::default(),
+            soft_clip: SoftClip::default(),
+            tube: Tube::default(),
+            trim_eq: TrimEq::default(),
+            bus_compressor: BusCompressor::default(),
+            maximizer: Maximizer::default(),
+            lift_eq: LiftEq::default(),
+            tape: Tape::default(),
+            imaging: Imaging::default(),
+            multiband: Multiband::default(),
+            limiter: Limiter::default(),
         }
     }
 }
 impl MasterChain {
+    /// Whether the board changes the mix: a pedal is on or the trim is not 0 dB.
     pub fn is_active(&self) -> bool {
-        PedalKind::ALL.into_iter().any(|kind| self.is_on(kind))
+        self.trim != 0.0 || PedalKind::ALL.into_iter().any(|kind| self.is_on(kind))
     }
     pub fn is_on(&self, kind: PedalKind) -> bool {
         match kind {
             PedalKind::EjayEq => self.ejay_eq.on,
             PedalKind::EjayCompressor => self.ejay_compressor.on,
             PedalKind::EjayWide => self.ejay_wide.on,
+            PedalKind::SoftClip => self.soft_clip.on,
+            PedalKind::Tube => self.tube.on,
+            PedalKind::TrimEq => self.trim_eq.on,
+            PedalKind::BusCompressor => self.bus_compressor.on,
+            PedalKind::Maximizer => self.maximizer.on,
+            PedalKind::LiftEq => self.lift_eq.on,
+            PedalKind::Tape => self.tape.on,
+            PedalKind::Imaging => self.imaging.on,
+            PedalKind::Multiband => self.multiband.on,
+            PedalKind::Limiter => self.limiter.on,
         }
     }
     pub fn set_on(&mut self, kind: PedalKind, on: bool) {
@@ -121,12 +637,32 @@ impl MasterChain {
             PedalKind::EjayEq => self.ejay_eq.on = on,
             PedalKind::EjayCompressor => self.ejay_compressor.on = on,
             PedalKind::EjayWide => self.ejay_wide.on = on,
+            PedalKind::SoftClip => self.soft_clip.on = on,
+            PedalKind::Tube => self.tube.on = on,
+            PedalKind::TrimEq => self.trim_eq.on = on,
+            PedalKind::BusCompressor => self.bus_compressor.on = on,
+            PedalKind::Maximizer => self.maximizer.on = on,
+            PedalKind::LiftEq => self.lift_eq.on = on,
+            PedalKind::Tape => self.tape.on = on,
+            PedalKind::Imaging => self.imaging.on = on,
+            PedalKind::Multiband => self.multiband.on = on,
+            PedalKind::Limiter => self.limiter.on = on,
         }
+    }
+    /// The frames by which the pedals that are on delay the sound.
+    pub fn latency(&self) -> usize {
+        self.order
+            .iter()
+            .filter(|kind| self.is_on(**kind))
+            .map(|kind| kind.latency())
+            .sum()
     }
     /// Move the pedal at `from` to position `to`; the pedals between shift
     /// one place. Positions outside the board change nothing.
+    /// The limiter stays last, so a move from or to its place changes nothing.
     pub fn move_pedal(&mut self, from: usize, to: usize) {
-        if from < self.order.len() && to < self.order.len() {
+        let last = self.order.len() - 1;
+        if from < last && to < last {
             let kind = self.order[from];
             if from < to {
                 self.order.copy_within(from + 1..=to, from);
@@ -136,6 +672,23 @@ impl MasterChain {
             self.order[to] = kind;
         }
     }
+    /// The one knob that differs from `other`, when no switch, speed, or
+    /// position differs too.
+    pub fn changed_knob(&self, other: &Self) -> Option<Knob> {
+        if self.order != other.order
+            || self.tape.speed != other.tape.speed
+            || PedalKind::ALL
+                .into_iter()
+                .any(|kind| self.is_on(kind) != other.is_on(kind))
+        {
+            return None;
+        }
+        let mut changed = Knob::all().filter(|knob| knob.get(self) != knob.get(other));
+        match (changed.next(), changed.next()) {
+            (Some(knob), None) => Some(knob),
+            _ => None,
+        }
+    }
     pub fn validate(&self) -> Result<(), String> {
         if PedalKind::ALL
             .iter()
@@ -143,34 +696,38 @@ impl MasterChain {
         {
             return Err("The master pedal order must name each pedal once.".into());
         }
-        let compressor = &self.ejay_compressor;
-        if self.ejay_eq.bands.iter().any(|band| *band > EQ_BAND_MAX)
-            || [
-                compressor.drive,
-                compressor.speed,
-                compressor.gain,
-                self.ejay_wide.spread,
-            ]
-            .iter()
-            .any(|knob| *knob > KNOB_MAX)
-        {
+        if self.order.last() != Some(&PedalKind::Limiter) {
+            return Err("The limiter must be the last master pedal.".into());
+        }
+        if Knob::all().any(|knob| {
+            let (value, range) = (knob.get(self), knob.range());
+            !(value.is_finite() && (range.low..=range.high).contains(&value))
+        }) {
             return Err("A master pedal setting is out of range.".into());
+        }
+        if ![15, 30].contains(&self.tape.speed) {
+            return Err("The tape speed must be 15 or 30 inches per second.".into());
         }
         Ok(())
     }
 }
 
-/// The settings that playback reads while it runs. An edit stores new
-/// settings; the audio thread takes them at its next block without waiting.
+// Live control ------------------------------------------------------------------------
+
+/// The link between the window and playback: settings that playback reads
+/// while it runs, and the meters it measures. An edit stores new settings;
+/// the audio thread takes them at its next block without waiting.
 pub struct MasterControl {
     generation: AtomicU64,
     chain: Mutex<MasterChain>,
+    meters: meters::Shared,
 }
 impl MasterControl {
     pub fn new(chain: &MasterChain) -> Arc<Self> {
         Arc::new(Self {
             generation: AtomicU64::new(0),
-            chain: Mutex::new(chain.clone()),
+            chain: Mutex::new(*chain),
+            meters: meters::Shared::new(),
         })
     }
     pub fn set(&self, chain: &MasterChain) {
@@ -178,12 +735,16 @@ impl MasterControl {
         if *stored == *chain {
             return;
         }
-        *stored = chain.clone();
+        *stored = *chain;
         drop(stored);
         self.generation.fetch_add(1, Ordering::Release);
     }
     pub fn get(&self) -> MasterChain {
-        self.chain.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        *self.chain.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    /// The latest reading of the playback that runs through this control.
+    pub fn meters(&self) -> MeterReading {
+        self.meters.read()
     }
     /// New settings since `seen`, if the lock is free. A busy lock leaves
     /// `seen` unchanged, so the next block tries again.
@@ -192,94 +753,341 @@ impl MasterControl {
         if generation == *seen {
             return None;
         }
-        let chain = self.chain.try_lock().ok()?.clone();
+        let chain = *self.chain.try_lock().ok()?;
         *seen = generation;
         Some(chain)
     }
 }
 
-/// Runs the pedalboard over stereo audio in order. Its state carries from
-/// one block to the next.
+// Processing ------------------------------------------------------------------------------
+
+/// The crossfade after a pedal is switched or moved during playback: 30 ms.
+const FADE: usize = 1323;
+/// Playback keeps this delay even as pedals switch, so the timeline and
+/// both sides of a crossfade stay aligned. Export uses only active delays.
+const LIVE_LATENCY: usize = 4 * dsp::Oversampler::LATENCY + pedals::Limiter::LATENCY;
+
+/// Runs the board over stereo audio. Its state carries from one block to
+/// the next.
 pub struct MasterProcessor {
-    chain: MasterChain,
     control: Option<(Arc<MasterControl>, u64)>,
-    equalizer: Equalizer,
-    compressor: Compressor,
-    wide: Wide,
+    trim: Smoothed,
+    board: Box<Board>,
+    /// The board before the last switch or move, while it fades out.
+    previous: Box<Board>,
+    /// Frames left of the crossfade from `previous` to `board`.
+    fade: usize,
+    /// Let a rewired board fill its delays before it joins the crossfade.
+    warmup: usize,
+    meters: Option<Box<meters::Meters>>,
 }
 impl MasterProcessor {
-    /// Playback and export start with the compressor's smoothed controls at
-    /// their targets and every other state cleared. The original starts the
-    /// smoothed controls at a fixed value when the library loads and never
-    /// resets them; here each playback starts as a settled original would.
+    /// Playback and export start with the eJay compressor's smoothed
+    /// controls at their targets, every mastering pedal at its settings,
+    /// and every other state cleared. The original starts the smoothed
+    /// controls at a fixed value when the library loads and never resets
+    /// them; here each playback starts as a settled original would.
     pub fn new(chain: &MasterChain) -> Self {
-        let mut processor = Self {
-            chain: MasterChain::default(),
+        let mut board = Box::new(Board::new());
+        board.apply(chain);
+        board.settle();
+        Self {
             control: None,
-            equalizer: Equalizer::new(),
-            compressor: Compressor::at_load(),
-            wide: Wide::new(),
-        };
-        processor.update(chain);
-        processor.compressor.settle();
-        processor
+            trim: Smoothed::new(db_to_gain(f64::from(chain.trim))),
+            previous: board.clone(),
+            board,
+            fade: 0,
+            warmup: 0,
+            meters: None,
+        }
     }
-    /// A processor that takes its settings from `control` as they change.
+    /// A processor that takes its settings from `control` as they change
+    /// and measures for its meters.
     pub fn live(control: Arc<MasterControl>) -> Self {
         let mut seen = 0;
         let chain = control.poll(&mut seen).unwrap_or_else(|| control.get());
         let mut processor = Self::new(&chain);
+        processor.board.live = true;
+        processor.previous.live = true;
+        processor.meters = Some(Box::new(meters::Meters::new(&control.meters)));
         processor.control = Some((control, seen));
         processor
     }
-    /// Apply new settings. Switching a pedal on clears its state, as the
-    /// original's enable calls do; other changes keep it.
-    pub fn update(&mut self, chain: &MasterChain) {
-        if chain.ejay_eq.on && !self.chain.ejay_eq.on {
+    /// The frames by which the output follows the input.
+    pub fn latency(&self) -> usize {
+        if self.board.live {
+            LIVE_LATENCY
+        } else {
+            self.board.chain.latency()
+        }
+    }
+    fn update(&mut self, chain: &MasterChain) {
+        self.trim.set(db_to_gain(f64::from(chain.trim)));
+        if self.board.rewired(chain) {
+            *self.previous = *self.board;
+            self.board.padding = [dsp::Delay::ZERO; 2];
+            self.fade = FADE;
+            self.warmup = LIVE_LATENCY;
+        }
+        self.board.apply(chain);
+    }
+    /// Process interleaved stereo samples in place.
+    pub fn process(&mut self, block: &mut [f32]) {
+        if self.fade == 0
+            && let Some((control, seen)) = &mut self.control
+            && let Some(chain) = control.poll(seen)
+        {
+            self.update(&chain);
+        }
+        let trimmed = !(self.trim.settled() && self.trim.value() == 1.0);
+        if !trimmed && !self.board.active && self.fade == 0 && self.meters.is_none() {
+            return;
+        }
+        for [left, right] in block.as_chunks_mut::<2>().0 {
+            let (mut l, mut r) = (*left, *right);
+            if trimmed {
+                let gain = self.trim.next() as f32;
+                (l, r) = (l * gain, r * gain);
+            }
+            if let Some(meters) = &mut self.meters {
+                meters.input(l, r);
+            }
+            (l, r) = if self.fade > 0 {
+                self.crossfade(l, r)
+            } else if self.board.active || self.board.live {
+                self.board.process(l, r)
+            } else {
+                (l, r)
+            };
+            if let Some(meters) = &mut self.meters {
+                meters.output(l, r);
+            }
+            (*left, *right) = (l, r);
+        }
+        if let (Some(meters), Some((control, _))) = (&mut self.meters, &self.control) {
+            let board = &mut self.board;
+            let compressor = if board.chain.bus_compressor.on {
+                board.bus_compressor.take_reduction()
+            } else {
+                0.0
+            };
+            let limiter = if board.chain.limiter.on {
+                board.limiter.take_reduction()
+            } else {
+                0.0
+            };
+            meters.publish(&control.meters, compressor, limiter);
+        }
+    }
+    /// Complete delayed peak measurement after the last audible frame.
+    /// This does not run the board or add samples to the loudness windows.
+    pub(crate) fn finish(&mut self) {
+        if let (Some(meters), Some((control, _))) = (&mut self.meters, &self.control) {
+            meters.finish(&control.meters);
+        }
+    }
+    /// Both boards on the same input, the old one fading out along a
+    /// raised cosine. The two outputs are nearly the same sound, so their
+    /// gains sum to one.
+    fn crossfade(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let (new_l, new_r) = self.board.process(left, right);
+        let (old_l, old_r) = self.previous.process(left, right);
+        if self.warmup > 0 {
+            self.warmup -= 1;
+            return (old_l, old_r);
+        }
+        let progress = 1.0 - self.fade as f64 / FADE as f64;
+        let weight = (0.5 - 0.5 * (std::f64::consts::PI * progress).cos()) as f32;
+        self.fade -= 1;
+        (
+            old_l + (new_l - old_l) * weight,
+            old_r + (new_r - old_r) * weight,
+        )
+    }
+}
+
+/// A stereo frame between two pedals.
+#[derive(Clone, Copy)]
+enum Frame {
+    /// Normalized floats, as the mix and the mastering pedals use.
+    Audio(f32, f32),
+    /// 16-bit samples, as the eJay pedals take them.
+    Integers(i32, i32),
+    /// 16-bit samples as floats, as the eJay equaliser gives them.
+    Floats(f32, f32),
+}
+impl Frame {
+    /// Leaving the eJay pedals, samples are clamped to 16 bits, as at the
+    /// end of the original's stereo path.
+    fn audio(self) -> (f32, f32) {
+        match self {
+            Self::Audio(left, right) => (left, right),
+            _ => {
+                let (left, right) = self.integers();
+                (
+                    f32::from(clamp16(left)) / 32768.0,
+                    f32::from(clamp16(right)) / 32768.0,
+                )
+            }
+        }
+    }
+    /// An integer becomes a float exactly; a float becomes an integer by
+    /// truncation, and a normalized float by rounding to 16 bits.
+    fn integers(self) -> (i32, i32) {
+        match self {
+            Self::Audio(left, right) => (
+                i32::from(crate::audio::float_to_i16(left)),
+                i32::from(crate::audio::float_to_i16(right)),
+            ),
+            Self::Integers(left, right) => (left, right),
+            Self::Floats(left, right) => (left as i32, right as i32),
+        }
+    }
+    fn floats(self) -> (f32, f32) {
+        match self {
+            Self::Floats(left, right) => (left, right),
+            _ => {
+                let (left, right) = self.integers();
+                (left as f32, right as f32)
+            }
+        }
+    }
+}
+
+/// The state of every pedal and the settings it runs with.
+#[derive(Clone, Copy)]
+struct Board {
+    chain: MasterChain,
+    live: bool,
+    padding: [dsp::Delay<LIVE_LATENCY>; 2],
+    /// Whether any pedal is on.
+    active: bool,
+    equalizer: ejay::Equalizer,
+    compressor: ejay::Compressor,
+    wide: ejay::Wide,
+    soft_clip: pedals::SoftClip,
+    tube: pedals::Tube,
+    trim_eq: pedals::TrimEq,
+    bus_compressor: pedals::BusCompressor,
+    maximizer: pedals::Maximizer,
+    lift_eq: pedals::LiftEq,
+    tape: pedals::Tape,
+    imaging: pedals::Imaging,
+    multiband: pedals::Multiband,
+    limiter: pedals::Limiter,
+}
+impl Board {
+    fn new() -> Self {
+        Self {
+            chain: MasterChain::default(),
+            live: false,
+            padding: [dsp::Delay::ZERO; 2],
+            active: false,
+            equalizer: ejay::Equalizer::new(),
+            compressor: ejay::Compressor::at_load(),
+            wide: ejay::Wide::new(),
+            soft_clip: pedals::SoftClip::new(),
+            tube: pedals::Tube::new(),
+            trim_eq: pedals::TrimEq::new(),
+            bus_compressor: pedals::BusCompressor::new(),
+            maximizer: pedals::Maximizer::new(),
+            lift_eq: pedals::LiftEq::new(),
+            tape: pedals::Tape::new(),
+            imaging: pedals::Imaging::new(),
+            multiband: pedals::Multiband::new(),
+            limiter: pedals::Limiter::new(),
+        }
+    }
+    /// Take new settings. A pedal that switches on starts from a clear
+    /// state, as the original's enable calls do; other changes keep the
+    /// state, and the mastering pedals glide to their new settings.
+    fn apply(&mut self, chain: &MasterChain) {
+        let old = self.chain;
+        let switched_on = |kind| chain.is_on(kind) && !old.is_on(kind);
+        if switched_on(PedalKind::EjayEq) {
             self.equalizer.clear();
         }
-        if chain.ejay_eq.bands != self.chain.ejay_eq.bands {
+        if chain.ejay_eq.bands != old.ejay_eq.bands {
             self.equalizer.set(&chain.ejay_eq.bands);
         }
-        if chain.ejay_compressor.on && !self.chain.ejay_compressor.on {
+        if switched_on(PedalKind::EjayCompressor) {
             self.compressor.clear();
         }
         let compressor = &chain.ejay_compressor;
         self.compressor
             .set(compressor.drive, compressor.speed, compressor.gain);
-        if chain.ejay_wide.on && !self.chain.ejay_wide.on {
+        if switched_on(PedalKind::EjayWide) {
             self.wide.clear();
         }
         self.wide.set(chain.ejay_wide.spread);
-        self.chain = chain.clone();
+
+        self.soft_clip.set(&chain.soft_clip);
+        self.tube.set(&chain.tube);
+        self.trim_eq.set(&chain.trim_eq);
+        self.bus_compressor.set(&chain.bus_compressor);
+        self.maximizer.set(&chain.maximizer);
+        self.lift_eq.set(&chain.lift_eq);
+        self.tape.set(&chain.tape);
+        self.imaging.set(&chain.imaging);
+        self.multiband.set(&chain.multiband);
+        self.limiter.set(&chain.limiter);
+        for kind in PedalKind::ALL {
+            if switched_on(kind) {
+                self.clear(kind);
+            }
+        }
+        self.chain = *chain;
+        self.active = PedalKind::ALL.into_iter().any(|kind| chain.is_on(kind));
     }
-    /// Process interleaved stereo samples in place.
-    pub fn process(&mut self, block: &mut [f32]) {
-        if let Some((control, seen)) = &mut self.control
-            && let Some(chain) = control.poll(seen)
-        {
-            self.update(&chain);
-        }
-        if !self.chain.is_active() {
-            return;
-        }
-        for [left, right] in block.as_chunks_mut::<2>().0 {
-            let (l, r) = self.process_frame(
-                i32::from(crate::audio::float_to_i16(*left)),
-                i32::from(crate::audio::float_to_i16(*right)),
-            );
-            *left = f32::from(l) / 32768.0;
-            *right = f32::from(r) / 32768.0;
+    /// Clear a mastering pedal's state and move it straight to its settings.
+    fn clear(&mut self, kind: PedalKind) {
+        match kind {
+            PedalKind::SoftClip => self.soft_clip.clear(),
+            PedalKind::Tube => self.tube.clear(),
+            PedalKind::TrimEq => self.trim_eq.clear(),
+            PedalKind::BusCompressor => self.bus_compressor.clear(),
+            PedalKind::Maximizer => self.maximizer.clear(),
+            PedalKind::LiftEq => self.lift_eq.clear(),
+            PedalKind::Tape => self.tape.clear(),
+            PedalKind::Imaging => self.imaging.clear(),
+            PedalKind::Multiband => self.multiband.clear(),
+            PedalKind::Limiter => self.limiter.clear(),
+            PedalKind::EjayEq | PedalKind::EjayCompressor | PedalKind::EjayWide => {}
         }
     }
-    /// One frame of 16-bit samples through the pedals that are on, in order,
-    /// then the clamp. As in `FX_RenderStereo`, the equaliser works on floats
-    /// and the other pedals on integers. The samples change kind only where
-    /// two neighbouring pedals differ: an integer becomes a float exactly, a
-    /// float becomes an integer by truncation. In the original's order this
-    /// is the library's stereo path.
-    fn process_frame(&mut self, left: i32, right: i32) -> (i16, i16) {
-        let mut frame = Frame::Integers(left, right);
+    /// Begin as a board that has run with its settings for a while.
+    fn settle(&mut self) {
+        self.compressor.settle();
+        for kind in PedalKind::ALL {
+            self.clear(kind);
+        }
+    }
+    /// Whether new settings switch or move a pedal.
+    fn rewired(&self, chain: &MasterChain) -> bool {
+        chain.order != self.chain.order
+            || PedalKind::ALL
+                .into_iter()
+                .any(|kind| chain.is_on(kind) != self.chain.is_on(kind))
+    }
+    #[inline]
+    fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let (left, right) = self.run(Frame::Audio(left, right)).audio();
+        if self.live {
+            let padding = LIVE_LATENCY - self.chain.latency();
+            (
+                self.padding[0].push_delayed(left, padding),
+                self.padding[1].push_delayed(right, padding),
+            )
+        } else {
+            (left, right)
+        }
+    }
+    /// One frame through the pedals that are on, in order. As in
+    /// `FX_RenderStereo`, the eJay equaliser works on floats and the other
+    /// eJay pedals on integers; the samples change kind only where two
+    /// neighbouring pedals differ. In the original's order the eJay pedals
+    /// are the library's stereo path.
+    fn run(&mut self, mut frame: Frame) -> Frame {
         for kind in self.chain.order {
             if !self.chain.is_on(kind) {
                 continue;
@@ -302,612 +1110,57 @@ impl MasterProcessor {
                     let (left, right) = self.wide.process(left, right);
                     Frame::Integers(left, right)
                 }
+                _ => {
+                    let (left, right) = frame.audio();
+                    let (left, right) = match kind {
+                        PedalKind::SoftClip => self.soft_clip.process(left, right),
+                        PedalKind::Tube => self.tube.process(left, right),
+                        PedalKind::TrimEq => self.trim_eq.process(left, right),
+                        PedalKind::BusCompressor => self.bus_compressor.process(left, right),
+                        PedalKind::Maximizer => self.maximizer.process(left, right),
+                        PedalKind::LiftEq => self.lift_eq.process(left, right),
+                        PedalKind::Tape => self.tape.process(left, right),
+                        PedalKind::Imaging => self.imaging.process(left, right),
+                        PedalKind::Multiband => self.multiband.process(left, right),
+                        _ => self.limiter.process(left, right),
+                    };
+                    Frame::Audio(left, right)
+                }
             };
         }
-        let (left, right) = frame.integers();
+        frame
+    }
+}
+
+#[cfg(test)]
+impl Board {
+    fn settled(chain: &MasterChain) -> Self {
+        let mut board = Self::new();
+        board.apply(chain);
+        board.settle();
+        board
+    }
+    /// One frame of 16-bit samples through the pedals, then the clamp.
+    fn process_integers(&mut self, left: i32, right: i32) -> (i16, i16) {
+        let (left, right) = self.run(Frame::Integers(left, right)).integers();
         (clamp16(left), clamp16(right))
-    }
-}
-
-/// A stereo frame between two pedals.
-#[derive(Clone, Copy)]
-enum Frame {
-    Integers(i32, i32),
-    Floats(f32, f32),
-}
-impl Frame {
-    fn floats(self) -> (f32, f32) {
-        match self {
-            Self::Integers(left, right) => (left as f32, right as f32),
-            Self::Floats(left, right) => (left, right),
-        }
-    }
-    fn integers(self) -> (i32, i32) {
-        match self {
-            Self::Integers(left, right) => (left, right),
-            Self::Floats(left, right) => (left as i32, right as i32),
-        }
-    }
-}
-
-fn clamp16(value: i32) -> i16 {
-    value.clamp(-32768, 32767) as i16
-}
-
-/// The low 32 bits as a signed value, as a 32-bit register holds them.
-fn s32(value: i64) -> i32 {
-    value as i32
-}
-
-fn s16(value: i64) -> i16 {
-    value as i16
-}
-
-// Equaliser ---------------------------------------------------------------
-
-/// Ten biquads in direct form 1, computed in double precision and stored
-/// in single precision, as the library does on the x87 unit at 53-bit
-/// precision. A band at gain 0.5 is skipped.
-struct Equalizer {
-    gains: [f32; 10],
-    coefficients: [[f32; 5]; 10],
-    /// Per band and channel: x1, x2, y1, y2.
-    state: [[[f32; 4]; 2]; 10],
-}
-impl Equalizer {
-    fn new() -> Self {
-        Self {
-            gains: [0.5; 10],
-            coefficients: [[0.0; 5]; 10],
-            state: [[[0.0; 4]; 2]; 10],
-        }
-    }
-    fn clear(&mut self) {
-        self.state = [[[0.0; 4]; 2]; 10];
-    }
-    fn set(&mut self, bands: &[u8; 10]) {
-        for (band, value) in bands.iter().enumerate() {
-            // The editor passes the saved value divided by 100.
-            let gain = ((f64::from(*value) / 100.0) as f32).clamp(0.0, 1.0);
-            self.gains[band] = gain;
-            self.coefficients[band] = eq_coefficients(band, gain).map(|v| v as f32);
-        }
-    }
-    fn process(&mut self, channel: usize, input: f32) -> f32 {
-        let mut x0 = input;
-        for band in 0..10 {
-            if self.gains[band] == 0.5 {
-                continue;
-            }
-            let [b0, b1, b2, a1, a2] = self.coefficients[band].map(f64::from);
-            let [x1, x2, y1, y2] = &mut self.state[band][channel];
-            let y = (((f64::from(x0) * b0 + b1 * f64::from(*x1)) + b2 * f64::from(*x2)
-                - a1 * f64::from(*y1))
-                - a2 * f64::from(*y2)) as f32;
-            (*x2, *x1, *y2, *y1) = (*x1, x0, *y1, y);
-            x0 = y;
-        }
-        x0
-    }
-}
-
-/// `b0, b1, b2, a1, a2` of the library's band routines. Bands 0 and 9 are
-/// shelves with a 12 dB range, the others peaking with an 18 dB range and
-/// Q 4. Where the library keeps a value in single precision, so does this.
-fn eq_coefficients(band: usize, gain: f32) -> [f64; 5] {
-    const Q: f64 = 4.0;
-    let f32r = |value: f64| f64::from(value as f32);
-    let gain = f64::from(gain);
-    let shelf = band == 0 || band == 9;
-    let level = if shelf {
-        gain * 24.0 - 12.0
-    } else {
-        gain * 36.0 - 18.0
-    };
-    let tangent = if band == 0 {
-        // Single-precision pi/44100.
-        (EQ_FREQUENCIES[band] * f64::from(7.123_792_6e-5_f32)).tan()
-    } else {
-        // The single-precision value one step below pi, over 44,100.
-        (EQ_FREQUENCIES[band] * f64::from(3.141_592_5_f32) * 2.267_573_696_145_124_8e-5).tan()
-    };
-    let k = f32r(tangent);
-    let k2 = f32r(tangent * k);
-    let mut v = (level.abs() * f64::from(0.05_f32) * 10f64.ln()).exp();
-    let root2k = 2f64.sqrt() * k;
-    let plain = k2 + root2k + 1.0;
-    let normal = |b: [f64; 3], a: [f64; 2]| [b[0], b[1], b[2], a[0], a[1]];
-    if band == 0 {
-        v = f32r(v);
-        let rvk = (v + v).sqrt() * k;
-        let vk2 = f32r(v * k2);
-        if level < 0.0 {
-            let d = vk2 + rvk + 1.0;
-            return normal(
-                [
-                    plain / d,
-                    ((k2 - 1.0) + (k2 - 1.0)) / d,
-                    ((1.0 - root2k) + k2) / d,
-                ],
-                [((vk2 - 1.0) + (vk2 - 1.0)) / d, (vk2 + (1.0 - rvk)) / d],
-            );
-        }
-        return normal(
-            [
-                (vk2 + rvk + 1.0) / plain,
-                ((vk2 - 1.0) + (vk2 - 1.0)) / plain,
-                ((1.0 - rvk) + vk2) / plain,
-            ],
-            [
-                ((k2 - 1.0) + (k2 - 1.0)) / plain,
-                ((1.0 - root2k) + k2) / plain,
-            ],
-        );
-    }
-    if band == 9 {
-        let rvk = (v + v).sqrt() * k;
-        if level < 0.0 {
-            let d = v + rvk + k2;
-            let kv = f32r(k2 / v);
-            let e = (2.0 / v).sqrt() * k;
-            let d2 = kv + e + 1.0;
-            return normal(
-                [
-                    plain / d,
-                    ((k2 - 1.0) + (k2 - 1.0)) / d,
-                    ((1.0 - root2k) + k2) / d,
-                ],
-                [((kv - 1.0) + (kv - 1.0)) / d2, (kv + (1.0 - e)) / d2],
-            );
-        }
-        return normal(
-            [
-                (v + k2 + rvk) / plain,
-                ((k2 - v) + (k2 - v)) / plain,
-                ((v - rvk) + k2) / plain,
-            ],
-            [
-                ((k2 - 1.0) + (k2 - 1.0)) / plain,
-                ((1.0 - root2k) + k2) / plain,
-            ],
-        );
-    }
-    let kq = k / Q;
-    if level < 0.0 {
-        let vkq = (v * k) / Q;
-        let d = f32r(vkq + k2 + 1.0);
-        let middle = ((k2 - 1.0) + (k2 - 1.0)) / d;
-        return normal(
-            [(kq + k2 + 1.0) / d, middle, ((1.0 - kq) + k2) / d],
-            [middle, ((1.0 - f32r(vkq)) + k2) / d],
-        );
-    }
-    let vkq = f32r((v * k) / Q);
-    let d = f32r(kq + k2 + 1.0);
-    let middle = ((k2 - 1.0) + (k2 - 1.0)) / d;
-    normal(
-        [(vkq + k2 + 1.0) / d, middle, ((1.0 - vkq) + k2) / d],
-        [middle, ((1.0 - kq) + k2) / d],
-    )
-}
-
-// Compressor ----------------------------------------------------------------
-
-/// `trunc(sin(i / 4096 * pi / 2) * 65535)`, as the library builds it.
-static COMPRESSOR_GAIN: LazyLock<[u16; 4096]> = LazyLock::new(|| {
-    std::array::from_fn(|i| {
-        ((i as f64 / 4096.0 * std::f64::consts::PI / 2.0).sin() * 65535.0) as u16
-    })
-});
-/// `trunc(tanh(sinh(6 i / 4096)) * 32767)`. The library's table reaches
-/// 32767 from entry 2473, where this double-precision form still gives 32766.
-static COMPRESSOR_SHAPE: LazyLock<[u16; 4096]> = LazyLock::new(|| {
-    std::array::from_fn(|i| {
-        if i >= 2473 {
-            32767
-        } else {
-            ((6.0 * i as f64 / 4096.0).sinh().tanh() * 32767.0) as u16
-        }
-    })
-});
-
-/// The compressor of `fxstudio.dll`. The level follows the absolute value
-/// of `mono - previous / 2` through a fixed integer low-pass; the gain table
-/// and a division set the gain, and the shape table limits each channel.
-struct Compressor {
-    gain_table: &'static [u16; 4096],
-    shape_table: &'static [u16; 4096],
-    /// Smoothed drive and makeup gain, in 1/65536 steps.
-    drive: i64,
-    gain: i64,
-    envelope: i64,
-    previous: i32,
-    attack: i64,
-    drive_target: i64,
-    release: i64,
-    gain_target: i64,
-    x1: i64,
-    y1: i64,
-    y2: i64,
-}
-impl Compressor {
-    /// Level filter coefficients `b0, b1, a0, a1, a2` as the library holds them.
-    const FILTER: [i128; 5] = [209, 209, 16_777_216, -33_386_659, 16_609_863];
-
-    /// The state that the library holds after it loads.
-    fn at_load() -> Self {
-        Self {
-            gain_table: &COMPRESSOR_GAIN,
-            shape_table: &COMPRESSOR_SHAPE,
-            drive: 0x40 << 16,
-            gain: 0x40 << 16,
-            envelope: 0,
-            previous: 0,
-            attack: 1,
-            drive_target: 0,
-            release: 0,
-            gain_target: 0,
-            x1: 0,
-            y1: 0,
-            y2: 0,
-        }
-    }
-    /// Move the smoothed controls to their targets.
-    fn settle(&mut self) {
-        self.drive = self.drive_target << 16;
-        self.gain = self.gain_target << 16;
-    }
-    /// The enable call clears the level filter only.
-    fn clear(&mut self) {
-        (self.x1, self.y1, self.y2) = (0, 0, 0);
-    }
-    fn set(&mut self, drive: u16, speed: u16, gain: u16) {
-        let (drive, speed, gain) = (i64::from(drive), i64::from(speed), i64::from(gain));
-        self.drive_target = drive + 0x40;
-        self.release = i64::from(s16(0x3FFF - speed * 0x1F / 1000));
-        self.gain_target = i64::from(s16((gain << 9) / 1000));
-    }
-    fn shape(&self, value: i32) -> i32 {
-        let scaled = (s32((i64::from(value).abs()) << 12) / 0x200) as u32;
-        let (mut index, mut fraction) = ((scaled >> 7) as usize, scaled & 0x7F);
-        if index >= 0xFFE {
-            (index, fraction) = (0xFFE, 0);
-        }
-        let result = (u32::from(self.shape_table[index]) * (0x80 - fraction)
-            + u32::from(self.shape_table[index + 1]) * fraction)
-            / 128;
-        if value < 0 {
-            -(result as i32)
-        } else {
-            result as i32
-        }
-    }
-    fn process(&mut self, left: i32, right: i32) -> (i32, i32) {
-        let mono = (left + right) >> 1;
-        let drive = i64::from(s16(self.drive >> 16));
-        let level = i64::from(s32(
-            ((f64::from(mono) - f64::from(self.previous) * 0.5).trunc() as i64).abs() << 8,
-        ));
-        self.previous = mono;
-        self.envelope = if level > self.envelope {
-            ((0x80 - self.attack) * self.envelope + self.attack * level) / 0x80
-        } else {
-            (self.release * self.envelope) >> 14
-        };
-        let x0 = (self.envelope >> 8) * 0x100000;
-        let [b0, b1, a0, a1, a2] = Self::FILTER;
-        let y = ((b0 * i128::from(x0) - a1 * i128::from(self.y1) - a2 * i128::from(self.y2)
-            + b1 * i128::from(self.x1))
-            / a0) as i64;
-        (self.y2, self.y1, self.x1) = (self.y1, y, x0);
-        let smooth = i64::from(s32(y / 0x100000));
-        let product = i64::from(s32(drive * smooth));
-        let lookup = (product / 8).max(0);
-        let factor = if (lookup & 0xFFFF_FF80) >= 0x7FF00 {
-            0xFFFF
-        } else {
-            let index = (lookup >> 7) as usize;
-            let fraction = lookup & 0x7F;
-            (i64::from(self.gain_table[index]) * (0x80 - fraction)
-                + i64::from(self.gain_table[index + 1]) * fraction)
-                >> 7
-        };
-        let factor = (factor & 0xFFFF) >> 1;
-        let divisor = if drive < 0x80 { product / 128 } else { smooth }.max(1);
-        let makeup = i64::from(s32(self.gain >> 16));
-        let channel =
-            |sample: i32| self.shape(s32((i64::from(sample) * factor / divisor) * makeup / 0x800));
-        let out = (channel(left), channel(right));
-        self.drive = (self.drive * 0xFFF + (self.drive_target << 16)) / 0x1000;
-        self.gain = (self.gain * 0xFFF + (self.gain_target << 16)) / 0x1000;
-        out
-    }
-}
-
-// Stereo wide -----------------------------------------------------------------
-
-/// The side signal, delayed 44 samples and scaled, added to and subtracted
-/// from the mid.
-struct Wide {
-    spread: i64,
-    buffer: [i32; 0x800],
-    position: usize,
-}
-impl Wide {
-    const DELAY: usize = 44;
-
-    fn new() -> Self {
-        Self {
-            spread: 0,
-            buffer: [0; 0x800],
-            position: 0,
-        }
-    }
-    fn clear(&mut self) {
-        self.buffer = [0; 0x800];
-        self.position = 0;
-    }
-    fn set(&mut self, spread: u16) {
-        self.spread = i64::from(s16((i64::from(spread) << 6) / 1000));
-    }
-    fn process(&mut self, left: i32, right: i32) -> (i32, i32) {
-        let mid = left.wrapping_add(right);
-        self.buffer[self.position] = left.wrapping_sub(right);
-        let delayed = self.buffer[self.position.wrapping_sub(Self::DELAY) & 0x7FF];
-        let side = s32(i64::from(delayed) * self.spread) / 16;
-        self.position = (self.position + 1) & 0x7FF;
-        (side.wrapping_add(mid) / 2, mid.wrapping_sub(side) / 2)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha2::{Digest, Sha256};
 
-    /// The oracle's test signal: an impulse, a 440 Hz burst, then noise.
-    fn oracle_signal() -> Vec<i32> {
-        let mut samples = vec![0; 98_304];
-        samples[100] = 16_000;
-        for (index, sample) in samples.iter_mut().enumerate().take(44_100).skip(22_050) {
-            *sample = (12_000.0
-                * (2.0 * std::f64::consts::PI * 440.0 * index as f64 / 44_100.0).sin())
-            .round() as i32;
-        }
-        let mut state: u32 = 12_345;
-        for sample in &mut samples[52_000..70_000] {
-            state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345) & 0x7FFF_FFFF;
-            *sample = ((((state >> 8) & 0xFFFF) as i32) - 32_768) >> 1;
-        }
-        samples
+    fn interleaved(frames: &[(f32, f32)]) -> Vec<f32> {
+        frames.iter().flat_map(|(l, r)| [*l, *r]).collect()
     }
 
-    fn sha256_hex(bytes: impl IntoIterator<Item = u8>) -> String {
-        let mut hash = Sha256::new();
-        hash.update(bytes.into_iter().collect::<Vec<_>>());
-        hash.finalize().iter().map(|b| format!("{b:02x}")).collect()
-    }
-
-    fn table_hash(table: &[u16; 4096]) -> String {
-        sha256_hex(table.iter().flat_map(|v| v.to_le_bytes()))
-    }
-
-    #[test]
-    fn signal_and_tables_match_the_oracle() {
-        let signal = oracle_signal();
-        assert_eq!(
-            sha256_hex(signal.iter().flat_map(|v| (*v as i16).to_le_bytes())),
-            "eef7f1e4036422534e8b07d1cd35946307a915e7e243c80718315322531d5387"
-        );
-        assert_eq!(
-            table_hash(&COMPRESSOR_GAIN),
-            "8802f09bf33ae29b09131de9c2e400fed4d91f113d1169f67b87fabf4e972462"
-        );
-        assert_eq!(
-            table_hash(&COMPRESSOR_SHAPE),
-            "a344a6147c9d30b2c1d95a3ef0dcbd7506ea1b398decbdbc811d6af382a43ed4"
-        );
-    }
-
-    /// The stereo renders of `fx-oracle.py`, in the order the oracle made
-    /// them. The compressor's smoothed controls and level never reset, so
-    /// its state carries from one render to the next, as it did in the DLL.
-    #[test]
-    fn booster_matches_every_stereo_render_of_the_library() {
-        struct Render {
-            name: &'static str,
-            block: usize,
-            eq: Option<[f32; 10]>,
-            compressor: Option<[u16; 3]>,
-            wide: Option<u16>,
-            /// The hash of the output; `None` for a render whose pitch stage
-            /// this port does not model, run only to advance the compressor.
-            sha256: Option<&'static str>,
+    fn mastered() -> MasterChain {
+        let mut chain = MasterChain::default();
+        for kind in PedalKind::ALL.into_iter().filter(|kind| !kind.is_ejay()) {
+            chain.set_on(kind, true);
         }
-        const FLAT: [f32; 10] = [0.5; 10];
-        let flat_with = |changes: &[(usize, f32)]| {
-            let mut gains = FLAT;
-            for (band, gain) in changes {
-                gains[*band] = *gain;
-            }
-            Some(gains)
-        };
-        let all = |block, sha256| Render {
-            name: "all",
-            block,
-            eq: flat_with(&[(4, 0.7)]),
-            compressor: Some([600, 300, 600]),
-            wide: Some(500),
-            sha256: Some(sha256),
-        };
-        let renders = [
-            Render {
-                name: "dry",
-                block: 4096,
-                eq: None,
-                compressor: None,
-                wide: None,
-                sha256: Some("d67b7391da1bda3e7f99679c325d02e86855198675f59b7edad81cc3b8af6b74"),
-            },
-            Render {
-                name: "compressor 0",
-                block: 4096,
-                eq: None,
-                compressor: Some([0, 500, 500]),
-                wide: None,
-                sha256: Some("730001bb532ff4f361bf9f773bde95e2e7082f04ced7a907527a3585cecd98c7"),
-            },
-            Render {
-                name: "compressor 300",
-                block: 4096,
-                eq: None,
-                compressor: Some([300, 500, 500]),
-                wide: None,
-                sha256: Some("d80cab845fc04e16a281e84e0b7015fe36dc77f4a432c61bc189351563f9dad6"),
-            },
-            Render {
-                name: "compressor 800",
-                block: 4096,
-                eq: None,
-                compressor: Some([800, 100, 700]),
-                wide: None,
-                sha256: Some("6d9438738b85b0dd4af337cb3d3e20ac7d673d9fd66da8fc104917ba87c2ab65"),
-            },
-            Render {
-                name: "compressor 1000",
-                block: 4096,
-                eq: None,
-                compressor: Some([1000, 1000, 1000]),
-                wide: None,
-                sha256: Some("e91b3c025075926a391830ed9427062d4cbe715173bffc80573d769626e45f9b"),
-            },
-            Render {
-                name: "wide 0",
-                block: 4096,
-                eq: None,
-                compressor: None,
-                wide: Some(0),
-                sha256: Some("3594d65c17f7c521b83c28e5a93e198c59c106ed34cb7a09725171de9dad583b"),
-            },
-            Render {
-                name: "wide 500",
-                block: 4096,
-                eq: None,
-                compressor: None,
-                wide: Some(500),
-                sha256: Some("cb7b8f034d83830d449b6e4d354e5793773e3ba6950407e560d67346d153cf50"),
-            },
-            Render {
-                name: "wide 1000",
-                block: 4096,
-                eq: None,
-                compressor: None,
-                wide: Some(1000),
-                sha256: Some("1f51ca1cb2aafcf3985d858b93e55fbc3f97307f2ea5a42eafccd112d8b861f8"),
-            },
-            Render {
-                name: "eq",
-                block: 4096,
-                eq: flat_with(&[(1, 1.0), (8, 0.1)]),
-                compressor: None,
-                wide: None,
-                sha256: Some("357be7e1cec9c29c85427398178c400197519760ad81a83da2885058aeeb5e78"),
-            },
-            Render {
-                name: "eq loud",
-                block: 4096,
-                eq: flat_with(&[(0, 1.0), (3, 1.0), (4, 1.0), (5, 1.0), (9, 1.0)]),
-                compressor: None,
-                wide: None,
-                sha256: Some("6149d51bf4498ed0e8b0af0dc6bcc5737a19c34b537f5377253a21d9e91a71b1"),
-            },
-            Render {
-                name: "eq wide",
-                block: 4096,
-                eq: flat_with(&[(2, 0.8), (6, 0.3)]),
-                compressor: None,
-                wide: Some(700),
-                sha256: Some("62ce4eebe7d4bac0f7495c413f7375d7b9071cd75b1b30c3a781e7257018d136"),
-            },
-            Render {
-                name: "eq compressor wide",
-                block: 4096,
-                eq: flat_with(&[(0, 0.9), (9, 0.9)]),
-                compressor: Some([600, 300, 600]),
-                wide: Some(400),
-                sha256: Some("6c50aa05d72377d0eab68d1cc92dad2dc0d04201ac8d745d06d886de5863d864"),
-            },
-            Render {
-                name: "compressor wide pitch",
-                block: 4096,
-                eq: None,
-                compressor: Some([600, 300, 600]),
-                wide: Some(800),
-                sha256: None,
-            },
-            all(
-                1024,
-                "537b248657a97023faac456c81e9bdeb86a324cd0dff2025731c5956dba1ca8d",
-            ),
-            all(
-                3000,
-                "4a99eb4bed0d7880f13ba0b9c1d7e37bef8b18dd06a9a998ef88d75b36fe1942",
-            ),
-            all(
-                8192,
-                "537b248657a97023faac456c81e9bdeb86a324cd0dff2025731c5956dba1ca8d",
-            ),
-        ];
-        let left = oracle_signal();
-        let right: Vec<i32> = (0..left.len())
-            .map(|i| left[(i + 37) % left.len()].div_euclid(2))
-            .collect();
-        let mut compressor = Compressor::at_load();
-        for render in renders {
-            // The oracle sets the gains directly; express them as saved bands.
-            let mut processor = MasterProcessor {
-                chain: MasterChain::default(),
-                control: None,
-                equalizer: Equalizer::new(),
-                compressor,
-                wide: Wide::new(),
-            };
-            processor.chain.ejay_eq.on = render.eq.is_some();
-            if let Some(gains) = render.eq {
-                for (band, gain) in gains.iter().enumerate() {
-                    processor.equalizer.gains[band] = *gain;
-                    processor.equalizer.coefficients[band] =
-                        eq_coefficients(band, *gain).map(|v| v as f32);
-                }
-            }
-            if let Some([drive, speed, gain]) = render.compressor {
-                processor.chain.ejay_compressor.on = true;
-                processor.compressor.clear();
-                processor.compressor.set(drive, speed, gain);
-            }
-            if let Some(spread) = render.wide {
-                processor.chain.ejay_wide.on = true;
-                processor.wide.set(spread);
-            }
-            // The oracle renders whole blocks only.
-            let frames = left.len() / render.block * render.block;
-            let output: Vec<u8> = (0..frames)
-                .flat_map(|i| {
-                    let (l, r) = processor.process_frame(left[i], right[i]);
-                    [l.to_le_bytes(), r.to_le_bytes()].concat()
-                })
-                .collect();
-            if let Some(expected) = render.sha256 {
-                assert_eq!(
-                    sha256_hex(output),
-                    expected,
-                    "{} at block {}",
-                    render.name,
-                    render.block
-                );
-            }
-            compressor = processor.compressor;
-        }
+        chain
     }
 
     #[test]
@@ -916,91 +1169,182 @@ mod tests {
         let original = block.clone();
         let mut chain = MasterChain::default();
         chain.ejay_eq.bands = [100; 10];
+        chain.limiter.gain = 12.0;
         MasterProcessor::new(&chain).process(&mut block);
         assert_eq!(block, original);
+        assert!(!chain.is_active());
 
-        // Any pedal on gives 16-bit samples, as the original's Booster does.
-        chain.ejay_wide.on = true;
-        chain.ejay_wide.spread = 0;
-        MasterProcessor::new(&chain).process(&mut block);
+        // Any eJay pedal on gives 16-bit samples, as the original's Booster
+        // does; the mastering pedals keep full precision.
+        let mut wide = chain;
+        wide.ejay_wide.on = true;
+        wide.ejay_wide.spread = 0;
+        MasterProcessor::new(&wide).process(&mut block);
         assert!(block.iter().all(|v| (v * 32768.0).fract() == 0.0));
+        let mut lift = chain;
+        lift.lift_eq.on = true;
+        let mut quiet = vec![0.123_456_7, -0.087_654_3];
+        MasterProcessor::new(&lift).process(&mut quiet);
+        assert!(quiet.iter().any(|v| (v * 32768.0).fract() != 0.0));
+
+        // The trim alone changes the level.
+        let mut trimmed = chain;
+        trimmed.trim = -6.0;
+        assert!(trimmed.is_active());
+        let mut half = vec![0.5, -0.5];
+        MasterProcessor::new(&trimmed).process(&mut half);
+        assert!((half[0] - 0.5 * db_to_gain(-6.0) as f32).abs() < 1e-6);
     }
 
     #[test]
-    fn switching_a_pedal_on_clears_its_state_and_settings_reach_live_playback() {
+    fn delaying_pedals_add_up_and_others_add_nothing() {
         let mut chain = MasterChain::default();
+        assert_eq!(chain.latency(), 0);
         chain.ejay_wide.on = true;
-        chain.ejay_wide.spread = 1000;
+        chain.lift_eq.on = true;
+        assert_eq!(chain.latency(), 0);
+        chain.soft_clip.on = true;
+        chain.limiter.on = true;
+        assert_eq!(
+            MasterProcessor::new(&chain).latency(),
+            pedals::SoftClip::LATENCY + pedals::Limiter::LATENCY
+        );
+        assert_eq!(
+            mastered().latency(),
+            4 * dsp::Oversampler::LATENCY + pedals::Limiter::LATENCY
+        );
+    }
+
+    #[test]
+    fn switching_and_moving_pedals_while_playing_does_not_click() {
+        // A low tone moves at most 0.007 per frame. Switching the limiter
+        // on with 12 dB of gain changes its level and delays it, and moving
+        // the tube changes the sound again; without a crossfade either
+        // would jump.
+        let tone: Vec<f32> = (0..44_100)
+            .flat_map(|i| {
+                let v = (0.5 * (2.0 * std::f64::consts::PI * 100.0 * i as f64 / dsp::RATE).sin())
+                    as f32;
+                [v, v]
+            })
+            .collect();
+        let mut chain = MasterChain::default();
+        chain.tube.on = true;
+        chain.tube.drive = 10.0;
         let control = MasterControl::new(&chain);
         let mut processor = MasterProcessor::live(control.clone());
-        let mut block = [0.5, -0.5].repeat(64);
-        processor.process(&mut block);
-        assert!(processor.wide.buffer.iter().any(|v| *v != 0));
-
-        chain.ejay_wide.on = false;
-        control.set(&chain);
-        let mut quiet = vec![0.25, 0.0];
-        processor.process(&mut quiet);
-        assert_eq!(quiet, [0.25, 0.0]);
-
-        chain.ejay_wide.on = true;
-        control.set(&chain);
-        processor.process(&mut [0.0, 0.0]);
-        assert_eq!(processor.wide.buffer.iter().filter(|v| **v != 0).count(), 0);
+        let mut output = Vec::new();
+        for (index, block) in tone.chunks(1024).enumerate() {
+            if index == 10 {
+                chain.limiter.on = true;
+                chain.limiter.gain = 12.0;
+                control.set(&chain);
+            }
+            if index == 20 {
+                let from = chain
+                    .order
+                    .iter()
+                    .position(|kind| *kind == PedalKind::Tube)
+                    .unwrap();
+                chain.move_pedal(from, 11);
+                control.set(&chain);
+            }
+            let mut block = block.to_vec();
+            processor.process(&mut block);
+            output.extend(block);
+        }
+        let steps = output
+            .chunks(2)
+            .zip(output.chunks(2).skip(1))
+            .map(|(a, b)| (b[0] - a[0]).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(steps < 0.03, "A step of {steps}");
+        assert_eq!(processor.latency(), LIVE_LATENCY);
     }
 
     #[test]
-    fn pedals_run_in_the_chosen_order() {
-        use PedalKind::*;
-        let mut chain = MasterChain::default();
-        chain.move_pedal(2, 0);
-        assert_eq!(chain.order, [EjayWide, EjayEq, EjayCompressor]);
-        chain.move_pedal(0, 2);
-        assert_eq!(chain.order, PedalKind::ALL);
-        chain.move_pedal(1, 1);
-        chain.move_pedal(0, 3);
-        assert_eq!(chain.order, PedalKind::ALL);
+    fn playback_measures_the_input_and_output() {
+        let program = dsp::program(3 * 44_100);
+        let mut chain = mastered();
+        chain.trim = -2.0;
+        let control = MasterControl::new(&chain);
+        assert_eq!(control.meters().run, 0);
+        let mut processor = MasterProcessor::live(control.clone());
+        let mut audio = interleaved(&program);
+        for block in audio.chunks_mut(2048) {
+            processor.process(block);
+        }
+        let reading = control.meters();
+        assert_eq!(reading.run, 1);
+        // The program sits near -18 dBFS RMS, 0 VU, before the trim.
+        assert!((-6.0..1.0).contains(&reading.input_vu), "{reading:?}");
+        assert!(reading.momentary.is_finite() && reading.integrated.is_finite());
+        assert!(
+            reading.true_peak_max <= chain.limiter.ceiling + 1e-3,
+            "{reading:?}"
+        );
+        assert!(reading.compressor_reduction > 0.0 || reading.limiter_reduction > 0.0);
+        // Export measures nothing.
+        let mut exported = interleaved(&program);
+        MasterProcessor::new(&chain).process(&mut exported);
+        assert_eq!(control.meters().run, 1);
+    }
 
-        chain.order = [EjayWide, EjayEq, EjayCompressor];
-        for kind in PedalKind::ALL {
-            chain.set_on(kind, true);
+    #[test]
+    fn mastering_pedals_at_their_defaults_raise_loudness_within_the_ceiling() {
+        let program = dsp::program(3 * 44_100);
+        let measure = |chain: &MasterChain| {
+            let control = MasterControl::new(chain);
+            let mut processor = MasterProcessor::live(control.clone());
+            let mut audio = interleaved(&program);
+            for block in audio.chunks_mut(1024) {
+                processor.process(block);
+            }
+            control.meters()
+        };
+        let dry = measure(&MasterChain::default());
+        let wet = measure(&mastered());
+        let input_power = program
+            .iter()
+            .map(|(l, r)| (f64::from(*l).powi(2) + f64::from(*r).powi(2)) / 2.0)
+            .sum::<f64>()
+            / program.len() as f64;
+        let input_db = 10.0 * input_power.log10();
+        println!(
+            "Input RMS {input_db:.4} dBFS; dry {:.4} LUFS; wet {:.4} LUFS; true peak {:.4} dBTP",
+            dry.integrated, wet.integrated, wet.true_peak_max
+        );
+        assert!((input_db + 18.0).abs() < 0.01);
+        assert!((wet.integrated + 13.0).abs() <= 1.0, "{wet:?}");
+        assert!(wet.integrated > dry.integrated + 3.0, "{dry:?} {wet:?}");
+        assert!(wet.true_peak_max <= -1.0 + 1e-3, "{wet:?}");
+    }
+
+    #[test]
+    fn knob_gestures_name_the_one_knob_that_moved() {
+        let chain = MasterChain::default();
+        let mut moved = chain;
+        Knob::CompressorAttack.set(&mut moved, 0.3);
+        assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorAttack));
+        Knob::EjayBand(4).set(&mut moved, 70.4);
+        assert_eq!(moved.ejay_eq.bands[4], 70);
+        assert_eq!(chain.changed_knob(&moved), None);
+        let mut switched = chain;
+        switched.tape.speed = 15;
+        assert_eq!(chain.changed_knob(&switched), None);
+        Knob::Trim.set(&mut switched, 99.0);
+        assert_eq!(switched.trim, 24.0);
+        assert_eq!(Knob::LiftAir.pedal(), Some(PedalKind::LiftEq));
+        assert_eq!(Knob::Trim.pedal(), None);
+        assert_eq!(Knob::all().count(), 37);
+        // Every default sits inside its range, on its step.
+        for knob in Knob::all() {
+            let range = knob.range();
+            let value = knob.get(&chain);
+            assert_eq!(value, range.default, "{knob:?}");
+            let steps = (value - range.low) / range.step;
+            assert!((steps - steps.round()).abs() < 1e-3, "{knob:?}");
         }
-        chain.ejay_eq.bands = [90, 50, 50, 70, 50, 50, 50, 50, 20, 100];
-        chain.ejay_compressor.drive = 800;
-        chain.ejay_wide.spread = 1000;
-        let mut processor = MasterProcessor::new(&chain);
-        // The same pedals by hand: wide on integers, the equaliser on floats,
-        // a truncation, then the compressor.
-        let mut wide = Wide::new();
-        wide.set(1000);
-        let mut equalizer = Equalizer::new();
-        equalizer.set(&chain.ejay_eq.bands);
-        let mut compressor = Compressor::at_load();
-        compressor.set(800, 500, 500);
-        compressor.settle();
-        let signal = oracle_signal();
-        let mut differs_from_default = false;
-        let mut original = MasterProcessor::new(&MasterChain {
-            order: PedalKind::ALL,
-            ..chain.clone()
-        });
-        for (index, sample) in signal.iter().enumerate().take(70_000) {
-            let right = signal[(index + 37) % signal.len()] / 2;
-            let (l, r) = wide.process(*sample, right);
-            let (l, r) = (
-                equalizer.process(0, l as f32),
-                equalizer.process(1, r as f32),
-            );
-            let (l, r) = compressor.process(l as i32, r as i32);
-            let expected = (clamp16(l), clamp16(r));
-            assert_eq!(
-                processor.process_frame(*sample, right),
-                expected,
-                "frame {index}"
-            );
-            differs_from_default |= original.process_frame(*sample, right) != expected;
-        }
-        assert!(differs_from_default, "The order must change the sound.");
     }
 
     #[test]
@@ -1015,5 +1359,49 @@ mod tests {
         chain.ejay_eq.bands[3] = 100;
         chain.ejay_compressor.speed = 1001;
         assert!(chain.validate().is_err());
+        chain.ejay_compressor.speed = 1000;
+        assert!(chain.validate().is_ok());
+        for (knob, value) in [
+            (Knob::Trim, 24.5),
+            (Knob::CompressorRatio, 1.0),
+            (Knob::LimiterCeiling, 0.1),
+            (Knob::TubeMix, f32::NAN),
+            (Knob::ImagingWidth, f32::INFINITY),
+        ] {
+            let mut changed = chain;
+            match knob {
+                Knob::Trim => changed.trim = value,
+                Knob::CompressorRatio => changed.bus_compressor.ratio = value,
+                Knob::LimiterCeiling => changed.limiter.ceiling = value,
+                Knob::TubeMix => changed.tube.mix = value,
+                _ => changed.imaging.width = value,
+            }
+            assert!(changed.validate().is_err(), "{knob:?}");
+        }
+        chain.tape.speed = 7;
+        assert!(chain.validate().is_err());
+        chain.tape.speed = 30;
+        chain.order.swap(11, 12);
+        assert!(
+            chain
+                .validate()
+                .unwrap_err()
+                .contains("limiter must be the last")
+        );
+    }
+
+    #[test]
+    fn the_limiter_stays_last() {
+        let mut chain = MasterChain::default();
+        assert!(!PedalKind::Limiter.movable() && PedalKind::Tape.movable());
+        chain.move_pedal(12, 0);
+        chain.move_pedal(0, 12);
+        assert_eq!(
+            chain.order,
+            PedalKind::ALL,
+            "No move reaches the limiter's place."
+        );
+        chain.move_pedal(0, 11);
+        assert_eq!(chain.order[11..], [PedalKind::EjayEq, PedalKind::Limiter]);
     }
 }

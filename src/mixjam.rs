@@ -1,9 +1,11 @@
-//! `.mixjam` songs: the application's own format version 11 (`song`) and a
+//! `.mixjam` songs: the application's own format version 12 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
-//! emulation. Master processors, return effects and edge fades remain serialized
-//! in source notices and are not rendered; the importer states this sound change.
+//! emulation. The master bus maps onto this application's mastering pedals,
+//! which are new designs with the same controls: its order, power switches,
+//! trim, and settings carry over. Return effects and edge fades remain serialized
+//! in source notices and are not rendered; the importer states both sound changes.
 //! Lane mute and solo become track Mute and Solo; MixJam plays a soloed lane
 //! even when it is muted, so such a lane imports unmuted. Later same-lane triggers truncate
 //! earlier clips. Playback tempo comes from the measured WAV duration and saved
@@ -17,6 +19,7 @@ pub(crate) use references::ReferenceResolver;
 use crate::{
     engine::{Clip, Project, Track, normalize_import},
     library::Library,
+    master::{Knob, MasterChain, PedalKind},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -33,6 +36,46 @@ const MAX_SONG_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_SOURCE_TICKS: u32 = 999 * 32;
 const PROCESSORS: [&str; 10] = [
     "clip", "tube", "subeq", "comp", "max", "addeq", "tape", "width", "mbc", "lim",
+];
+/// The pedal of each MixJam master processor, in `PROCESSORS` order.
+const PEDALS: [PedalKind; 10] = [
+    PedalKind::SoftClip,
+    PedalKind::Tube,
+    PedalKind::TrimEq,
+    PedalKind::BusCompressor,
+    PedalKind::Maximizer,
+    PedalKind::LiftEq,
+    PedalKind::Tape,
+    PedalKind::Imaging,
+    PedalKind::Multiband,
+    PedalKind::Limiter,
+];
+/// The knob of each MixJam master parameter. `tape.ips`, the tape speed
+/// switch, is read on its own.
+const PARAMETERS: [(&str, Knob); 23] = [
+    ("gain.trim", Knob::Trim),
+    ("clip.amount", Knob::SoftClipAmount),
+    ("clip.ceil", Knob::SoftClipCeiling),
+    ("tube.drive", Knob::TubeDrive),
+    ("tube.mix", Knob::TubeMix),
+    ("subeq.hp", Knob::TrimEqHighPass),
+    ("subeq.mud", Knob::TrimEqMud),
+    ("subeq.harsh", Knob::TrimEqHarsh),
+    ("comp.thr", Knob::CompressorThreshold),
+    ("comp.ratio", Knob::CompressorRatio),
+    ("comp.att", Knob::CompressorAttack),
+    ("comp.rel", Knob::CompressorRelease),
+    ("max.boost", Knob::MaximizerBoost),
+    ("addeq.low", Knob::LiftLow),
+    ("addeq.air", Knob::LiftAir),
+    ("tape.drive", Knob::TapeDrive),
+    ("width.width", Knob::ImagingWidth),
+    ("width.mono", Knob::ImagingMonoBelow),
+    ("mbc.lo", Knob::MultibandLow),
+    ("mbc.mid", Knob::MultibandMid),
+    ("mbc.hi", Knob::MultibandHigh),
+    ("lim.gain", Knob::LimiterGain),
+    ("lim.ceil", Knob::LimiterCeiling),
 ];
 
 #[derive(Deserialize)]
@@ -133,7 +176,7 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8 to 11 song or import a version 7 project. The flag is true for
+/// Open a version 8 to 12 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
@@ -148,11 +191,11 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7 to 11 are supported.".into()),
+        _ => Err("Only MixJam format versions 7 to 12 are supported.".into()),
     }
 }
 
-/// Write the song as a format version 11 document.
+/// Write the song as a format version 12 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -213,6 +256,21 @@ fn validate(document: &Document) -> Result<(), String> {
         .is_none_or(|v| !range(*v, -24.0, 24.0))
     {
         return Err("The MixJam master gain trim is invalid.".into());
+    }
+    if master.params.iter().any(|(id, value)| match id.as_str() {
+        "tape.ips" => *value != 0.0 && *value != 1.0,
+        // This decimal endpoint is not exact in f32. Validate the source's
+        // f64 value against its own range before conversion to a pedal setting.
+        "comp.att" => !range(*value, 0.1, 30.0),
+        id => PARAMETERS
+            .iter()
+            .find(|(name, _)| *name == id)
+            .is_none_or(|(_, knob)| {
+                let limits = knob.range();
+                !range(*value, f64::from(limits.low), f64::from(limits.high))
+            }),
+    }) {
+        return Err("The MixJam master bus settings are invalid.".into());
     }
     if document.fx_buses.len() != 4 {
         return Err("The MixJam project must contain four return buses.".into());
@@ -277,6 +335,37 @@ fn validate(document: &Document) -> Result<(), String> {
     Ok(())
 }
 
+/// The master pedalboard for a validated MixJam master bus: the eJay pedals
+/// off at the front, then the mastering pedals in the bus's order with its
+/// switches and settings, except that the limiter always comes last. A
+/// parameter the file leaves out keeps its default.
+fn master_from_bus(bus: &MasterBus) -> MasterChain {
+    let mut chain = MasterChain::default();
+    let pedal = |id: &str| PROCESSORS.iter().position(|p| *p == id).map(|i| PEDALS[i]);
+    let movable = bus
+        .order
+        .iter()
+        .filter_map(|id| pedal(id))
+        .filter(|kind| kind.movable());
+    for (slot, kind) in chain.order[3..12].iter_mut().zip(movable) {
+        *slot = kind;
+    }
+    for (id, on) in &bus.power {
+        if let Some(kind) = pedal(id) {
+            chain.set_on(kind, *on);
+        }
+    }
+    for (id, knob) in PARAMETERS {
+        if let Some(value) = bus.params.get(id) {
+            knob.set(&mut chain, *value as f32);
+        }
+    }
+    if let Some(ips) = bus.params.get("tape.ips") {
+        chain.tape.speed = if *ips == 0.0 { 15 } else { 30 };
+    }
+    chain
+}
+
 fn convert(document: Document, path: &Path, library: &Library) -> Result<Project, String> {
     validate(&document)?;
     let mut project = Project {
@@ -287,9 +376,10 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
             .into_owned(),
         bpm: document.song.bpm,
         master_gain: document.song.master_gain,
+        master: master_from_bus(&document.master_bus),
         ..Project::default()
     };
-    project.source_notices.push("Imported MixJam v7 arrangement. MixJam master processing, gain trim, return effects, and clip edge fades are not rendered. The sound can differ. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
+    project.source_notices.push("Imported MixJam v7 arrangement. The master bus plays through this application's mastering pedals with its saved order, switches, and settings; they are new designs, so the sound can differ. Return effects and clip edge fades are not rendered. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
     project.source_notices.push(format!("MixJam v7 source controls: {}", serde_json::json!({
         "appVersion":document.app_version, "createdAt":document.created_at, "modifiedAt":document.modified_at,
         "masterBus":document.master_bus, "fxBuses":document.fx_buses,
@@ -445,11 +535,89 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(12);
+        document["formatVersion"] = json!(13);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(error, "Only MixJam format versions 7 to 11 are supported.");
+        assert_eq!(error, "Only MixJam format versions 7 to 12 are supported.");
+    }
+
+    #[test]
+    fn the_master_bus_plays_through_the_mastering_pedals() {
+        let document = |bus: Value| {
+            let mut value = fixture();
+            value["masterBus"] = bus;
+            serde_json::from_value::<Document>(value).unwrap()
+        };
+        let plain = convert(
+            document(fixture()["masterBus"].clone()),
+            Path::new("song.mixjam"),
+            &Library::empty(),
+        )
+        .unwrap();
+        assert_eq!(
+            plain.master,
+            MasterChain::default(),
+            "A bypassed bus imports with every pedal off."
+        );
+
+        let mut order: Vec<&str> = PROCESSORS.to_vec();
+        order.reverse();
+        // The limiter leads this bus, and imports last all the same.
+        let power: HashMap<String, bool> = PROCESSORS
+            .iter()
+            .map(|id| (id.to_string(), ["lim", "tape", "width"].contains(id)))
+            .collect();
+        let bus = json!({"order": order, "power": power, "preset": null, "params": {
+            "gain.trim": -6.5, "lim.ceil": -0.3, "lim.gain": 7, "tape.ips": 0, "width.mono": 95,
+            "comp.att": 0.25, "subeq.mud": -2.5,
+        }});
+        let project = convert(
+            document(bus.clone()),
+            Path::new("song.mixjam"),
+            &Library::empty(),
+        )
+        .unwrap();
+        let master = project.master;
+        assert_eq!(master.order[..3], PedalKind::ALL[..3]);
+        assert_eq!(master.order[3], PedalKind::Multiband);
+        assert_eq!(master.order[11], PedalKind::SoftClip);
+        assert_eq!(master.order[12], PedalKind::Limiter);
+        assert!(master.validate().is_ok());
+        assert!(master.limiter.on && master.tape.on && master.imaging.on && !master.tube.on);
+        assert!(!master.ejay_eq.on && !master.ejay_compressor.on && !master.ejay_wide.on);
+        assert_eq!(
+            (master.trim, master.limiter.ceiling, master.limiter.gain),
+            (-6.5, -0.3, 7.0)
+        );
+        assert_eq!((master.tape.speed, master.imaging.mono_below), (15, 95.0));
+        assert_eq!(
+            (master.bus_compressor.attack, master.trim_eq.mud),
+            (0.25, -2.5)
+        );
+        // Parameters the file leaves out keep their defaults.
+        assert_eq!(master.soft_clip, crate::master::SoftClip::default());
+        assert!(project.source_notices[0].contains("mastering pedals"));
+
+        for (key, value) in [
+            ("lim.ceil", json!(0.5)),
+            ("tape.ips", json!(0.5)),
+            ("reverb.size", json!(1)),
+            ("mbc.lo", json!(-1)),
+        ] {
+            let mut changed = bus.clone();
+            changed["params"][key] = value;
+            assert!(
+                convert(
+                    document(changed),
+                    Path::new("song.mixjam"),
+                    &Library::empty()
+                )
+                .unwrap_err()
+                .contains("master bus settings"),
+                "{key}"
+            );
+        }
     }
 
     fn fixture() -> Value {
@@ -460,6 +628,31 @@ mod tests {
                 {"id":"b","sampleRef":"kick.wav","sampleName":"Kick","nativeBPM":140,"startTick":20,"durationTicks":32,"durationSeconds":2,"slot":null}]}],
             "fxBuses":(0..4).map(|i| json!({"id":format!("fx-{}",i+1),"index":i,"name":format!("FX{}",i+1),"module":{"type":"empty"},"powered":true,"returnLevel":1,"limiterEnabled":true})).collect::<Vec<_>>(),
             "masterBus":{"order":PROCESSORS,"power":PROCESSORS.iter().map(|id| (id.to_string(),false)).collect::<HashMap<_,_>>(),"params":{"gain.trim":0},"preset":"Bypass All"}})
+    }
+    #[test]
+    fn v7_compressor_attack_accepts_exact_decimal_endpoints() {
+        for attack in [0.1_f64, 30.0] {
+            let mut value = fixture();
+            value["masterBus"]["params"]["comp.att"] = json!(attack);
+            let project = convert(
+                serde_json::from_value(value).unwrap(),
+                Path::new("song.mixjam"),
+                &Library::empty(),
+            )
+            .unwrap();
+            assert_eq!(project.master.bus_compressor.attack, attack as f32);
+        }
+        // Reject outside values before f32 conversion rounds them to an endpoint.
+        for attack in [0.1_f64.next_down(), 30.0_f64.next_up()] {
+            let mut value = fixture();
+            value["masterBus"]["params"]["comp.att"] = json!(attack);
+            let document = serde_json::from_value(value).unwrap();
+            assert!(
+                validate(&document)
+                    .unwrap_err()
+                    .contains("master bus settings")
+            );
+        }
     }
     #[test]
     fn rejects_invalid_settings_and_unsafe_paths_before_audio_resolution() {
@@ -553,6 +746,7 @@ mod tests {
         assert_ne!(projected.clips[0].sample_id, projected.clips[1].sample_id);
         assert_eq!(projected.imported_samples[1].source_bpm, 240.0);
         assert!(projected.source_notices[0].contains("not rendered"));
+        assert!(projected.master.limiter.on);
         assert!(projected.source_notices[1].contains("\"lim\":true"));
         assert!(projected.source_notices[1].contains("\"type\":\"reverb\""));
         fs::remove_file(wave).unwrap();

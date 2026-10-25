@@ -55,17 +55,36 @@ The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
 song and song length is bounded only by the timeline. The mix itself is dry.
 `src/master.rs` owns the master pedalboard: `MasterChain` is the saved
-settings, and `MasterProcessor` runs them over the summed stereo mix in blocks,
-with state that carries from block to block. `MasterChain::order` is a fixed
-array that names each pedal once, so a settings copy never allocates on the
-audio thread. Pedals that are off pass the signal on unchanged. Each pedal
-keeps its own state when the order changes. Export and `Mix::to_pcm` take the
-project's chain explicitly. Mix playback reads a `MasterControl` that the
+settings, `Knob` names each continuous setting with its range, and
+`MasterProcessor` runs the board over the summed stereo mix in blocks, with
+state that carries from block to block. Its submodules hold the eJay Booster
+DSP (`ejay`), this application's mastering pedals (`pedals`), their shared
+filters, oversampling, and true-peak interpolation (`dsp`), and the playback
+meters (`meters`). `MasterChain` is `Copy` and its `order` a fixed array that
+names each pedal once, so a settings copy never allocates on the audio thread,
+and the whole board state is fixed-size. Pedals that are off pass the signal on
+unchanged. Each pedal keeps its own state when the order changes; the mastering
+pedals glide to new settings over about 20 ms. During playback, switching or
+moving a pedal copies the board and crossfades from the old copy to the new one
+over 30 ms. Live playback pads both paths to a fixed 417-frame delay and fills
+the new path before the fade starts, so switching pedals preserves their
+timeline alignment and the song's ending.
+`MasterChain::latency` is the delay of the pedals that are on:
+`Mix::to_pcm` and `Mix::write_wav` run the pedals past the end by that much and
+cut it from the start. Playback drops its fixed delay before the first sample
+and drains the same number of frames at the end, so both stay on the timeline.
+Export and `Mix::to_pcm` take the project's chain
+explicitly. Mix playback reads a `MasterControl` that the
 `Session` keeps equal to the project; the audio thread takes new settings at
 its next block with `try_lock`, so it never waits. An edit or history step that
 changes only the pedalboard is not a render change: the prepared mix stays
 valid and playback continues. Tool previews play without the pedalboard. Each
-playback and export starts the pedalboard in the same settled state. The render worker prepares
+playback and export starts the pedalboard in the same settled state. A live
+processor also measures: after each block it publishes a `MeterReading` through
+atomics in the `MasterControl`, which `Session::master_meters` reads without
+waiting. The playback block is 1024 frames, so readings change more than 30
+times a second. At the end, playback finishes the peak detector without adding
+audio frames or loudness time. Export measures nothing. The render worker prepares
 the mix, keeps the decoded sources of the last one, and discards them when the
 library is replaced. `Session::start_export` renders and writes on its own
 thread and reports through `poll`; `Session::export` stays synchronous for
@@ -224,16 +243,22 @@ shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
 
 `src/ui/master.rs` owns the Mastering window: a horizontal pedalboard in
-signal order, from the mixer jack at the left through each pedal to the output
-jack at the right, joined by painted cables. Each pedal shows its name, lamp,
-knobs, arrow buttons, and switch; a pedal that is off is dimmed. Dragging a
-pedal's header moves it, with an insertion marker while it is dragged; the
+signal order. The Input unit (trim and VU meter) stays at the left and the
+Output unit (loudness, true peak, OVER) at the right; between them the pedal
+row scrolls, joined by painted cables. A strip below names every pedal in
+order, outlines those in view, and scrolls the row to the one chosen; keyboard
+focus scrolls a control into view too. Each pedal shows its name, lamp, dials,
+arrow buttons, and switch, and the dynamics pedals their gain-reduction lamps;
+a pedal that is off is dimmed. Dragging a pedal's header moves it, with an
+insertion marker while it is dragged, and the row scrolls near its ends; the
 arrow buttons give the same move to the keyboard, screen readers, and agents.
-The board takes its natural width, and the shell scrolls it when the window is
-narrower. It edits a copy of the project's `MasterChain`; `src/ui.rs`
-sends a changed copy as `EditCommand::SetMaster`. EQ values read in decibels,
-the other knobs in the original's 0 to 1000 steps. Knobs move in whole steps,
-and a fine step still moves one.
+It edits a copy of the project's `MasterChain`; `src/ui.rs` sends a changed
+copy as `EditCommand::SetMaster` and passes the session's meter reading. Dial
+values read in their units, the eJay EQ in decibels and the other eJay knobs in
+the original's 0 to 1000 steps. Dials move on their knob's grid, and a fine
+step still moves one; a typed value takes the nearest step. Displaying or
+focusing a dial preserves saved values between steps. The OVER control exposes
+its latched state as text to assistive technology.
 
 `src/ui/step_synth.rs` owns Step synth's source, bar, grid, effects, and action
 content inside the shared shell. Text, grid cells, switches, and input stay live.
