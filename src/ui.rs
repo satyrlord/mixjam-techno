@@ -12,6 +12,8 @@ mod controls;
 mod dialog;
 #[path = "ui/effects.rs"]
 mod effects;
+#[path = "ui/master.rs"]
+mod master;
 #[path = "ui/mixer.rs"]
 mod mixer;
 #[path = "ui/sample_editor.rs"]
@@ -33,9 +35,9 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Response, Sense, S
 
 use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
-    Clip, EditCommand, EffectsState, LibraryView, MissingReference, MissingSample, Pcm, Product,
-    Project, SUPPORTED_BPMS, Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR,
-    TRACK_COUNT, TrackSwitch,
+    Clip, EQ_BAND_MAX, EQ_FREQUENCIES, EditCommand, EffectsState, KNOB_MAX, LibraryView,
+    MasterChain, MissingReference, MissingSample, Pcm, PedalKind, Product, Project, SUPPORTED_BPMS,
+    Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR, TRACK_COUNT, TrackSwitch,
 };
 
 /// What the filtered palette depends on.
@@ -277,6 +279,7 @@ pub struct MixJamApp {
     show_effects_help: bool,
     show_step_synth_help: bool,
     show_sample_edit_help: bool,
+    show_master_help: bool,
     show_libraries: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
@@ -314,6 +317,7 @@ pub struct MixJamApp {
     capture_transport_focus: bool,
     capture_focus_ready: bool,
     show_effects: bool,
+    show_master: bool,
     show_step_synth: bool,
     show_sample_edit: bool,
     show_stretch: bool,
@@ -406,6 +410,22 @@ impl MixJamApp {
         if capture_view == "follow" {
             session.seek(40 * TICKS_PER_BAR);
         }
+        if matches!(capture_view.as_str(), "master-active" | "master-reordered") {
+            // The Booster of Dance 4's "Summer night at the beach".
+            let mut chain = session.project().master.clone();
+            for kind in PedalKind::ALL {
+                chain.set_on(kind, true);
+            }
+            chain.ejay_eq.bands = [62, 58, 50, 44, 50, 54, 60, 64, 66, 70];
+            (chain.ejay_compressor.drive, chain.ejay_compressor.speed) = (1000, 1000);
+            chain.ejay_compressor.gain = 278;
+            chain.ejay_wide.spread = 444;
+            if capture_view == "master-reordered" {
+                chain.move_pedal(2, 0);
+                chain.ejay_compressor.on = false;
+            }
+            let _ = session.edit(EditCommand::SetMaster(chain));
+        }
         if capture_view == "unsaved" {
             let bpm = if session.project().bpm == 160.0 {
                 140.0
@@ -461,6 +481,7 @@ impl MixJamApp {
             show_effects_help: false,
             show_step_synth_help: false,
             show_sample_edit_help: false,
+            show_master_help: false,
             show_libraries: matches!(
                 capture_view.as_str(),
                 "libraries" | "library-providers" | "library-tempos"
@@ -506,6 +527,7 @@ impl MixJamApp {
                 "effects" | "effects-expanded" | "missing-effects"
             ),
             effects_feedback: EffectsFeedback::default(),
+            show_master: capture_view.starts_with("master"),
             show_step_synth: matches!(
                 capture_view.as_str(),
                 "step-synth" | "step-synth-effects" | "missing-step-synth"
@@ -1482,6 +1504,13 @@ impl MixJamApp {
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
             .show(ctx, effects_help);
+        dialog::window("Mastering help")
+            .default_height(420.0)
+            .open(&mut self.show_master_help)
+            .default_width(450.0)
+            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .show(ctx, master_help);
         dialog::window("Step synth help")
             .default_height(420.0)
             .open(&mut self.show_step_synth_help)
@@ -2481,6 +2510,19 @@ impl MixJamApp {
             }
             self.show_effects = open;
         }
+        if self.show_master {
+            let mut open = true;
+            match master::show(ctx, &mut open, &self.session.project().master) {
+                master::Action::Change(chain) => {
+                    if let Err(error) = self.session.edit(EditCommand::SetMaster(chain)) {
+                        self.error(error);
+                    }
+                }
+                master::Action::Help => self.show_master_help = true,
+                master::Action::None => {}
+            }
+            self.show_master = open;
+        }
         if self.show_step_synth {
             let mut open = true;
             let explicit_file = self.step_synth_file.is_some();
@@ -2882,6 +2924,20 @@ fn stretch_help(ui: &mut egui::Ui) {
         "Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.",
         "Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.",
         "Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.",
+    ] {
+        ui.add(egui::Label::new(text).wrap());
+    }
+}
+
+fn master_help(ui: &mut egui::Ui) {
+    for text in [
+        "Mastering processes the whole mix after the tracks are summed. The signal flows from left to right: the mixer's output enters the first pedal, each pedal feeds the next, and the last one feeds the output. Playback and export both use it, so what you hear is what you export.",
+        "The eJay pedals are the Booster of Dance 3, Dance 4, and Techno 3: a ten-band EQ, a compressor, and stereo wide. In the original's order (EQ, Compressor, Stereo wide) they match the original sample for sample.",
+        "Drag a pedal by its name to move it along the board, or use its arrow buttons. The status line below the board spells out the signal path. Each move is one Undo step.",
+        "Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off, the mix plays exactly as the tracks sum.",
+        "Songs open with every pedal off unless their file switched one on. Importing a Dance 3, Dance 4, or Techno 3 song applies its saved Booster settings.",
+        "EQ bands show decibels; the middle position is flat. The outer bands are shelves with a 12 dB range, the others peak with an 18 dB range. Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
+        "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.",
     ] {
         ui.add(egui::Label::new(text).wrap());
     }

@@ -243,6 +243,9 @@ impl MixJamApp {
                             BottomModule::Mixer => BottomModule::Sounds,
                         };
                     }
+                    if rail_button(ui, &icons, RailIcon::Master, self.show_master).clicked() {
+                        self.show_master = !self.show_master;
+                    }
                     if rail_button(ui, &icons, RailIcon::Effects, self.show_effects).clicked() {
                         self.show_effects = !self.show_effects;
                     }

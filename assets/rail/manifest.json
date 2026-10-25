@@ -360,6 +360,39 @@
       ]
     },
     {
+      "name": "master",
+      "png_sha256": "ea9dc2755ff0ba2e7078e666fb8fb3e975afe63da5a640e9152c5e4e52ef05db",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 2071,
+      "opaque_pixels": 831,
+      "transparent_pixels": 7145,
+      "antialiased_pixels": 1240,
+      "alpha_bounds": [
+        6,
+        14,
+        90,
+        80
+      ],
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "5f6de894aef6894400c24a42397f004a2ab7239a319adc21f3156ed4e29be804"
+        },
+        {
+          "size": 30,
+          "png_sha256": "e7494b190749bbed2f494f2500933e30daff38759589bf47aaea96cbdd275545"
+        },
+        {
+          "size": 40,
+          "png_sha256": "211f96c6e89a1818433544734444cac0e590d5b94992abae7d13cd1e82114384"
+        }
+      ]
+    },
+    {
       "name": "erase",
       "png_sha256": "a677f2c5a7db8f1e0fa01db7581f561b115c028f6358af01216784ea5778a899",
       "size": [

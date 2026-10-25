@@ -1,4 +1,4 @@
-//! `.mixjam` songs: the application's own format version 10 (`song`) and a
+//! `.mixjam` songs: the application's own format version 11 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
@@ -133,13 +133,13 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8, 9, or 10 song or import a version 7 project. The flag is true for
+/// Open a version 8 to 11 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
     match header.format_version {
-        8 | 9 | song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
+        8..=song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
         7 => {
             if bytes.len() > MAX_BYTES {
                 return Err("The MixJam project exceeds the 16 MiB limit.".into());
@@ -148,11 +148,11 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7, 8, 9, and 10 are supported.".into()),
+        _ => Err("Only MixJam format versions 7 to 11 are supported.".into()),
     }
 }
 
-/// Write the song as a format version 10 document.
+/// Write the song as a format version 11 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -445,14 +445,11 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(11);
+        document["formatVersion"] = json!(12);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(
-            error,
-            "Only MixJam format versions 7, 8, 9, and 10 are supported."
-        );
+        assert_eq!(error, "Only MixJam format versions 7 to 11 are supported.");
     }
 
     fn fixture() -> Value {

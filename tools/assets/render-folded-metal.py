@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "local-data/artwork/folded-metal/chassis-screwless.png"
 OUTPUT = ROOT / "assets/folded-metal"
 PALETTES = {"utility": (60, 65, 64), "marine": (32, 83, 91),
-            "granite": (52, 57, 60), "red": (154, 45, 39), "olive": (60, 68, 40)}
+            "granite": (52, 57, 60), "red": (154, 45, 39), "olive": (60, 68, 40),
+            "indigo": (46, 54, 96)}
 # The generated file includes a transparent surround and isolated faint pixels.
 # This box follows the actual metal chassis, including its outer bevel.
 CHASSIS_BOX = (30, 130, 1743, 755)

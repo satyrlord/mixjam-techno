@@ -8,6 +8,7 @@ pub mod effects;
 pub mod engine;
 pub mod legacy_mix;
 pub mod library;
+pub mod master;
 pub mod mixjam;
 pub mod packed;
 pub mod products;

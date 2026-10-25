@@ -50,6 +50,7 @@ pub(super) enum Palette {
     Granite,
     Red,
     Olive,
+    Indigo,
 }
 
 impl Palette {
@@ -60,6 +61,7 @@ impl Palette {
             Self::Granite => Color32::from_rgb(52, 57, 60),
             Self::Red => Color32::from_rgb(154, 45, 39),
             Self::Olive => Color32::from_rgb(60, 68, 40),
+            Self::Indigo => Color32::from_rgb(46, 54, 96),
         }
     }
     fn accent(self) -> Color32 {
@@ -69,6 +71,7 @@ impl Palette {
             Self::Granite => Color32::from_rgb(173, 186, 189),
             Self::Red => Color32::from_rgb(235, 116, 104),
             Self::Olive => Color32::from_rgb(157, 178, 94),
+            Self::Indigo => Color32::from_rgb(150, 166, 236),
         }
     }
     /// The keyboard focus ring. A ring crosses the chassis, so an accent
@@ -81,10 +84,16 @@ impl Palette {
         }
     }
     fn of(ui: &egui::Ui) -> Self {
-        [Self::Marine, Self::Granite, Self::Red, Self::Olive]
-            .into_iter()
-            .find(|palette| palette.body() == ui.visuals().panel_fill)
-            .unwrap_or(Self::Utility)
+        [
+            Self::Marine,
+            Self::Granite,
+            Self::Red,
+            Self::Olive,
+            Self::Indigo,
+        ]
+        .into_iter()
+        .find(|palette| palette.body() == ui.visuals().panel_fill)
+        .unwrap_or(Self::Utility)
     }
 }
 
@@ -222,6 +231,7 @@ fn artwork(ctx: &egui::Context, palette: Palette) -> Arc<Artwork> {
         Palette::Granite => parts!("granite"),
         Palette::Red => parts!("red"),
         Palette::Olive => parts!("olive"),
+        Palette::Indigo => parts!("indigo"),
     };
     let grain = match palette {
         Palette::Utility => material!("utility", "paint-grain"),
@@ -229,6 +239,7 @@ fn artwork(ctx: &egui::Context, palette: Palette) -> Arc<Artwork> {
         Palette::Granite => material!("granite", "paint-grain"),
         Palette::Red => material!("red", "paint-grain"),
         Palette::Olive => material!("olive", "paint-grain"),
+        Palette::Indigo => material!("indigo", "paint-grain"),
     };
     let art = Arc::new(Artwork {
         material: parts
@@ -1129,6 +1140,9 @@ pub(super) fn rotary(
     let size = art.knob.size_vec2() / ppp;
     let min = ((center - size / 2.0).to_vec2() * ppp).round().to_pos2() / ppp;
     let radius = size.x / 2.0;
+    // Dials sit in dark bays. On a light painted surface, which a caller marks
+    // by turning `dark_mode` off, the scale and focus ring use ink instead.
+    let on_light = !ui.visuals().dark_mode;
     for index in 0..=18 {
         let vector = Vec2::angled((-225.0 + index as f32 * 15.0).to_radians());
         ui.painter().line_segment(
@@ -1136,7 +1150,7 @@ pub(super) fn rotary(
                 center + vector * (radius + 2.0),
                 center + vector * (radius + if index % 3 == 0 { 6.0 } else { 4.0 }),
             ],
-            Stroke::new(1.0_f32, CREAM),
+            Stroke::new(1.0_f32, if on_light { INK } else { CREAM }),
         );
     }
     ui.painter().image(
@@ -1166,8 +1180,8 @@ pub(super) fn rotary(
                 } else {
                     1.0_f32
                 },
-                // The dial sits in a dark bay, where every accent is legible.
-                print_color(ui),
+                // In a dark bay every accent is legible; on paint, ink is.
+                if on_light { INK } else { print_color(ui) },
             ),
         );
     }
@@ -1293,12 +1307,14 @@ mod tests {
             ("granite labels", CREAM, Palette::Granite.body()),
             ("red labels", CREAM, Palette::Red.body()),
             ("olive labels", CREAM, Palette::Olive.body()),
+            ("indigo labels", CREAM, Palette::Indigo.body()),
             ("primary labels", INK, PRIMARY),
             ("utility selection", INK, Palette::Utility.accent()),
             ("marine selection", INK, Palette::Marine.accent()),
             ("granite selection", INK, Palette::Granite.accent()),
             ("red selection", INK, Palette::Red.accent()),
             ("olive selection", INK, Palette::Olive.accent()),
+            ("indigo selection", INK, Palette::Indigo.accent()),
             ("value and button labels", CREAM, FACE),
             ("disabled labels", DISABLED_TEXT, DISABLED_FACE),
         ] {
@@ -1318,6 +1334,7 @@ mod tests {
             Palette::Granite,
             Palette::Red,
             Palette::Olive,
+            Palette::Indigo,
         ] {
             let ratio = contrast(palette.focus(), palette.body());
             assert!(
@@ -1484,6 +1501,7 @@ mod tests {
             (Palette::Granite, material!("granite", "paint-grain")),
             (Palette::Red, material!("red", "paint-grain")),
             (Palette::Olive, material!("olive", "paint-grain")),
+            (Palette::Indigo, material!("indigo", "paint-grain")),
         ] {
             let base = palette.body();
             for (index, bytes) in variants.into_iter().enumerate() {

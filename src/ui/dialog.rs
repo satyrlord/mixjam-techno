@@ -475,6 +475,7 @@ impl<'a> Window<'a> {
                     "Effect Studio help" => controls::Palette::Red,
                     "Step synth help" => controls::Palette::Olive,
                     "Sample editor help" => controls::Palette::Granite,
+                    "Mastering help" => controls::Palette::Indigo,
                     _ => controls::Palette::Utility,
                 },
                 inset_body: true,

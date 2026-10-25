@@ -59,6 +59,7 @@ mod tests {
             "Red"=>Color32::from_rgb(154,45,39),
             "Olive"=>Color32::from_rgb(60,68,40),
             "Utility"=>Color32::from_rgb(60,65,64),
+            "Indigo"=>Color32::from_rgb(46,54,96),
             _=>panic!("Unknown chassis palette"),
         };
         assert!(output.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Rect(rect) if rect.fill==body && rect.rect.width()>300.0 && rect.rect.height()>100.0)),"The {palette} chassis must retain its assigned body color.");
@@ -361,6 +362,141 @@ mod tests {
             click(&ctx, &mut app, origin, egui::Modifiers::NONE);
             click(&ctx, &mut app, origin, egui::Modifiers::NONE);
             assert_eq!(app.effects.volume, 1.0, "Double-click must restore the control default.");
+        }
+    }
+
+    #[test]
+    fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
+        const KNOBS: [&str; 14] = [
+            "EQ 60 Hz", "EQ 80 Hz", "EQ 160 Hz", "EQ 320 Hz", "EQ 640 Hz", "EQ 1100 Hz",
+            "EQ 2200 Hz", "EQ 4500 Hz", "EQ 9000 Hz", "EQ 12000 Hz",
+            "Compressor drive", "Compressor speed", "Compressor gain", "Stereo width",
+        ];
+        for density in [1.0, 1.5, 2.0] {
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            let size = Vec2::new(960.0, 720.0);
+            // The first frame after a density change still reports the old
+            // screen; open the tool once the minimum window is in place.
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            app.show_master = true;
+            let mut output = egui::FullOutput::default();
+            for _ in 0..4 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let window = effects_control_rect(&output, "MASTERING");
+            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(window),
+                "The complete tool must fit at {density}x.");
+            assert_folded_assets(&ctx, &output, density, "Indigo");
+            for name in KNOBS.iter().copied().chain(["EQ", "Compressor", "Stereo wide"]) {
+                let bounds = effects_control_rect(&output, name);
+                assert!(window.contains_rect(bounds), "{name} must fit at {density}x.");
+            }
+            // Every pedal starts off, and its knobs wait for its switch.
+            for name in KNOBS {
+                assert!(accessible_node(&output, name).1.is_disabled(), "{name} starts disabled.");
+            }
+            assert_eq!(
+                accessible_node(&output, "EQ 1100 Hz value").1.value(),
+                Some("+0.0"),
+                "EQ values read in decibels."
+            );
+            assert!(text_rect(&output, "Signal: mixer → EQ (off) → Compressor (off) → Stereo wide (off) → output. Every pedal is off: the mix is unprocessed.").is_positive());
+
+            // The board runs left to right in signal order, and every control
+            // keeps clear of its pedal's beveled edge.
+            let pedal = |output: &egui::FullOutput, name: &str| {
+                let grip = effects_control_rect(output, &format!("Drag {name}"));
+                Rect::from_min_size(grip.min, Vec2::new(grip.width() + 30.0, 280.0))
+            };
+            let input = text_rect(&output, "mixer");
+            let outlet = text_rect(&output, "output");
+            let pedals = ["EQ", "Compressor", "Stereo wide"].map(|name| pedal(&output, name));
+            assert!(input.right() < pedals[0].left() && pedals[0].right() < pedals[1].left()
+                && pedals[1].right() < pedals[2].left() && pedals[2].right() < outlet.left());
+            for (name, controls) in [
+                ("EQ", KNOBS[..10].to_vec()),
+                ("Compressor", KNOBS[10..13].to_vec()),
+                ("Stereo wide", vec!["Stereo width"]),
+            ] {
+                let bounds = pedal(&output, name).shrink(4.0);
+                let mut parts: Vec<String> = controls
+                    .iter()
+                    .flat_map(|knob| [knob.to_string(), format!("{knob} value")])
+                    .collect();
+                parts.extend([name.to_string(), format!("Move {name} left"), format!("Move {name} right")]);
+                for part in parts {
+                    assert!(bounds.contains_rect(effects_control_rect(&output, &part)),
+                        "{part} must keep clear of the {name} pedal's edge at {density}x.");
+                }
+            }
+            assert!(accessible_node(&output, "Move EQ left").1.is_disabled());
+            assert!(accessible_node(&output, "Move Stereo wide right").1.is_disabled());
+
+            // Arrow buttons and dragging both move a pedal; each move is one undo step.
+            focus_control(&ctx, &mut app, &output, "Move Stereo wide left");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            use mixjam_techno::application::PedalKind::*;
+            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor]);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let grip = effects_control_rect(&output, "Drag EQ").center();
+            let past_last = pedal(&output, "Compressor").right_center() + Vec2::new(4.0, 0.0);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip)], egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
+            for step in 1..=8 {
+                let at = grip + (past_last - grip) * (step as f32 / 8.0);
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+            }
+            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor],
+                "Dragging previews the place; only the drop moves the pedal.");
+            pointer(&ctx, &mut app, past_last, false, egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.order, [EjayWide, EjayCompressor, EjayEq]);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(pedal(&output, "Compressor").right() < pedal(&output, "EQ").left());
+            assert!(app.session.history_step(false).unwrap());
+            assert_eq!(app.session.project().master.order, [EjayEq, EjayWide, EjayCompressor]);
+            assert!(app.session.history_step(false).unwrap());
+            assert_eq!(app.session.project().master.order, PedalKind::ALL);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+
+            focus_control(&ctx, &mut app, &output, "Compressor");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(app.session.project().master.ejay_compressor.on);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert!(!accessible_node(&output, "Compressor drive").1.is_disabled());
+            assert!(accessible_node(&output, "Stereo width").1.is_disabled());
+            focus_control(&ctx, &mut app, &output, "Compressor drive");
+            for (key, modifiers, expected) in [
+                (egui::Key::ArrowUp, egui::Modifiers::NONE, 501),
+                (egui::Key::ArrowUp, egui::Modifiers::SHIFT, 502),
+                (egui::Key::End, egui::Modifiers::NONE, 1000),
+                (egui::Key::Home, egui::Modifiers::NONE, 0),
+            ] {
+                frame(&ctx, &mut app, vec![key_event(key, modifiers)], modifiers);
+                assert_eq!(app.session.project().master.ejay_compressor.drive, expected);
+            }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let center = effects_control_rect(&output, "Compressor drive").center();
+            click(&ctx, &mut app, center, egui::Modifiers::NONE);
+            click(&ctx, &mut app, center, egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.ejay_compressor.drive, 500,
+                "Double-click must restore the default.");
+            assert!(app.session.unsaved());
+
+            // The knob gesture undoes as one step, then the switch.
+            assert!(app.session.history_step(false).unwrap());
+            assert_eq!(app.session.project().master.ejay_compressor.drive, 500);
+            assert!(app.session.project().master.ejay_compressor.on);
+            assert!(app.session.history_step(false).unwrap());
+            assert!(!app.session.project().master.is_active());
+
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            focus_control(&ctx, &mut app, &output, "Mastering help");
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            assert!(app.show_master_help, "The Help icon must support keyboard activation.");
         }
     }
 

@@ -302,6 +302,20 @@ the arrangement, browser, and Mixer retain their palettes.
 | Granite | Sample Editor | `#34393c` | `#adbabd` |
 | Red | Effect Studio | `#9a2d27` | `#eb7468` |
 | Olive | Step synth | `#3c4428` | `#9db25e` |
+| Indigo | Mastering | `#2e3660` | `#96a6ec` |
+
+Mastering's pedals are painted enclosures on the Indigo board, each with its
+own enamel and ink lettering, as stompboxes are: EQ gold `#deac40`, Compressor
+turquoise `#54b8a6`, Stereo wide orchid `#c896dc`. The enamel always appears
+with the pedal's printed name. The whole pedal is painted: knobs sit directly
+on the enamel with ink scale marks, ink labels, and an ink focus ring, and
+values show in small dark windows with cream digits. The shared rotary draws
+ink marks wherever a caller turns egui's `dark_mode` off for a light painted
+surface; every other window keeps cream marks in dark bays. A lit pedal lamp
+uses Accent lime with a soft glow; a pedal that is off keeps a dark lamp,
+darkened knob caps, and a desaturated, darker enamel, and the status line
+names it as off. Ink on every enamel, lit or off, keeps at least 5:1 contrast.
+Patch cables carry metal plugs at both ends.
 
 Common controls use Face `#232624`, Cream `#f9f2dc`, Ink `#121412`, and pale
 metal Primary `#d4cdb6`. Disabled faces use `#3d403c` with `#c9cbc0` lettering.
@@ -531,8 +545,8 @@ paint, subtle monochromatic grain, smooth folded edges, and shared dark button
 faces. Orange marks active controls and focus. Icons stay centered in 48 by
 30-point targets. Recessed horizontal separators divide file commands (New,
 Open, Save, Save as, Import, Export), utilities (Libraries, Erase, Delete),
-and musical tools (Mixer, Effect Studio, Step synth, Sample editor, Time
-Stretcher). The microphone icon and visible recording-track selector come last,
+and musical tools (Mixer, Mastering, Effect Studio, Step synth, Sample editor,
+Time Stretcher). The microphone icon and visible recording-track selector come last,
 after a final separator. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 

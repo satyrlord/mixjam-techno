@@ -1,7 +1,12 @@
 //! Settings list that Dance 3, Dance 4, Techno 3, and House save after the song
 //! title. Each entry is `KEY#°_#VALUE%°_%`, where `°` is byte 0xB0. The reader
-//! keeps every entry as text; it does not apply any of them.
-use crate::{library::decode_1252, products::Product};
+//! keeps every entry as text. Import applies the Booster entries to the master
+//! pedalboard; the others are kept only.
+use crate::{
+    library::decode_1252,
+    master::{EQ_BAND_MAX, MasterChain},
+    products::Product,
+};
 use std::collections::BTreeMap;
 
 const VALUE_MARK: &[u8] = b"#\xb0_#";
@@ -49,6 +54,76 @@ pub(super) fn parse(title_block: &[u8]) -> Saved {
     saved
 }
 
+/// The Booster's saved settings as the eJay master pedals. A switch saved as
+/// `1` turns its pedal on; a pedal keeps its default for a missing value.
+/// The editor scales a saved knob from 0 to 32767 to the library's 0 to 1000
+/// and divides an equaliser band by 100. A switched-on pedal with a value
+/// that cannot be read stays off, and the second value names it.
+pub(super) fn booster(product: Product, saved: &Saved) -> (MasterChain, Vec<&'static str>) {
+    let mut chain = MasterChain::default();
+    let mut unusable = Vec::new();
+    if !matches!(product, Product::D3 | Product::D4 | Product::T3) {
+        return (chain, unusable);
+    }
+    let on = |key: &str| saved.entries.get(key).is_some_and(|value| value == "1");
+    // `None` for a value that is present but cannot be used.
+    let number = |key: &str, max: u32, default: u32| match saved.entries.get(key) {
+        None => Some(default),
+        Some(text) => text
+            .trim()
+            .parse::<u32>()
+            .ok()
+            .filter(|value| *value <= max),
+    };
+    // The editor's `r(K * 1000 / 32767)`. No saved value falls halfway, and
+    // a missing value keeps the pedal's default.
+    let knob = |key: &str, default: u16| match saved.entries.get(key) {
+        None => Some(default),
+        Some(_) => number(key, 32_767, 0)
+            .map(|value| (f64::from(value) * 1000.0 / 32_767.0).round() as u16),
+    };
+    let bands: Option<Vec<u8>> = (0..10)
+        .map(|band| {
+            number(
+                &format!("BoostEQ_{band}"),
+                u32::from(EQ_BAND_MAX),
+                u32::from(EQ_BAND_MAX / 2),
+            )
+            .map(|value| value as u8)
+        })
+        .collect();
+    match bands {
+        Some(bands) => {
+            chain.ejay_eq.bands.copy_from_slice(&bands);
+            chain.ejay_eq.on = on("BoostEQ");
+        }
+        None if on("BoostEQ") => unusable.push("EQ"),
+        None => {}
+    }
+    let compressor = &mut chain.ejay_compressor;
+    match (
+        knob("BoostCompressorDrive", compressor.drive),
+        knob("BoostCompressorSpeed", compressor.speed),
+        knob("BoostCompressorGain", compressor.gain),
+    ) {
+        (Some(drive), Some(speed), Some(gain)) => {
+            (compressor.drive, compressor.speed, compressor.gain) = (drive, speed, gain);
+            compressor.on = on("BoostCompressorLED");
+        }
+        _ if on("BoostCompressorLED") => unusable.push("compressor"),
+        _ => {}
+    }
+    match knob("BoostStereoWide", chain.ejay_wide.spread) {
+        Some(spread) => {
+            chain.ejay_wide.spread = spread;
+            chain.ejay_wide.on = on("BoostStereoLED");
+        }
+        None if on("BoostStereoLED") => unusable.push("stereo wide"),
+        None => {}
+    }
+    (chain, unusable)
+}
+
 /// Notices for saved settings that change the original's sound and that the
 /// renderer does not apply.
 pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) -> Vec<String> {
@@ -69,15 +144,11 @@ pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) 
     }
     match product {
         Product::D3 | Product::D4 | Product::T3 => {
-            let booster = named(&[
-                ("BoostEQ", "EQ"),
-                ("BoostCompressorLED", "compressor"),
-                ("BoostStereoLED", "stereo wide"),
-            ]);
-            if !booster.is_empty() {
+            let (_, unusable) = booster(product, saved);
+            if !unusable.is_empty() {
                 notices.push(format!(
-                    "Saved Booster effects are not applied: {}. The mix can sound different from the original. The values remain in Saved settings.",
-                    booster.join(", ")
+                    "Saved Booster effects are not applied because their values cannot be read: {}. The mix can sound different from the original. The values remain in Saved settings.",
+                    unusable.join(", ")
                 ));
             }
             let drum = named(&[
@@ -162,6 +233,65 @@ mod tests {
     }
 
     #[test]
+    fn booster_settings_become_master_pedals() {
+        // "Summer night at the beach" of Dance 4 saves these values.
+        let mut entries = vec![
+            ("BoostCompressorLED", "1"),
+            ("BoostCompressorSpeed", "32767"),
+            ("BoostCompressorDrive", "32767"),
+            ("BoostCompressorGain", "9101"),
+            ("BoostStereoLED", "1"),
+            ("BoostEQ", "1"),
+            ("BoostStereoWide", "14563"),
+            ("BOOU1_0", "78"),
+        ];
+        let bands: Vec<_> = (0..10)
+            .map(|band| (format!("BoostEQ_{band}"), (50 + band * 5).to_string()))
+            .collect();
+        entries.extend(
+            bands
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
+        );
+        let saved = parse(&block("Title", &entries));
+        let (chain, unusable) = booster(Product::D4, &saved);
+        assert!(unusable.is_empty());
+        assert!(chain.ejay_eq.on && chain.ejay_compressor.on && chain.ejay_wide.on);
+        assert_eq!(
+            chain.ejay_eq.bands,
+            [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+        );
+        let compressor = &chain.ejay_compressor;
+        assert_eq!(
+            (compressor.drive, compressor.speed, compressor.gain),
+            (1000, 1000, 278)
+        );
+        assert_eq!(chain.ejay_wide.spread, 444);
+        assert!(notices(Product::D4, &saved, false).is_empty());
+        assert_eq!(booster(Product::D2, &saved).0, MasterChain::default());
+        assert_eq!(booster(Product::H1, &saved).0, MasterChain::default());
+
+        // Switches that are off, or absent, keep the values with the pedal off.
+        // The factory value 16384 is the middle of the knob.
+        let quiet = parse(&block(
+            "Title",
+            &[
+                ("BoostCompressorLED", "0"),
+                ("BoostCompressorDrive", "16384"),
+                ("BoostStereoWide", "21348"),
+            ],
+        ));
+        let (chain, _) = booster(Product::T3, &quiet);
+        assert!(!chain.is_active());
+        assert_eq!(chain.ejay_compressor.drive, 500);
+        assert_eq!(chain.ejay_wide.spread, 652);
+        assert_eq!(
+            booster(Product::T3, &Saved::default()).0,
+            MasterChain::default()
+        );
+    }
+
+    #[test]
     fn notices_name_switched_on_effects_that_are_not_applied() {
         let quiet = parse(&block(
             "Title",
@@ -173,23 +303,30 @@ mod tests {
             "Title",
             &[
                 ("BoostCompressorLED", "1"),
+                ("BoostCompressorGain", "32768"),
                 ("BoostStereoLED", "1"),
+                ("BoostStereoWide", "wide"),
+                ("BoostEQ", "0"),
+                ("BoostEQ_4", "101"),
                 ("DrumEcho", "1"),
                 ("DrumHall", "1"),
                 ("FX_0", "1"),
                 ("FX_12", "1"),
             ],
         ));
+        let (chain, unusable) = booster(Product::D4, &saved);
+        assert!(!chain.is_active());
+        assert_eq!(unusable, ["compressor", "stereo wide"]);
         let without_drums = notices(Product::D4, &saved, false);
         assert_eq!(without_drums.len(), 1);
-        assert!(without_drums[0].contains("not applied: compressor, stereo wide."));
+        assert!(without_drums[0].contains("cannot be read: compressor, stereo wide."));
         let with_drums = notices(Product::D3, &saved, true);
         assert_eq!(with_drums.len(), 2);
         assert!(with_drums[1].contains("not applied: echo, reverb on pad 1, 13."));
 
         let house = notices(Product::H1, &saved, true);
         assert_eq!(house.len(), 1);
-        assert!(house[0].starts_with("House saved 6 settings"));
+        assert!(house[0].starts_with("House saved 10 settings"));
         assert!(notices(Product::H1, &Saved::default(), true).is_empty());
         assert!(notices(Product::D2, &saved, true).is_empty());
     }

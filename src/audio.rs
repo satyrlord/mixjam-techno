@@ -1,6 +1,7 @@
 use crate::{
     engine::{Project, SOURCE_BPM},
     library::Library,
+    master::{MasterChain, MasterControl, MasterProcessor},
 };
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
@@ -49,7 +50,7 @@ impl Pcm {
         })
     }
 }
-fn float_to_i16(x: f32) -> i16 {
+pub(crate) fn float_to_i16(x: f32) -> i16 {
     (x.clamp(-1.0, 1.0) * 32768.0)
         .round()
         .clamp(-32768.0, 32767.0) as i16
@@ -244,14 +245,15 @@ impl Mix {
         self.frames
     }
 
-    /// The whole mix in memory. Long songs play and export through `read`
-    /// and `write_wav`, which have no length limit.
-    pub fn to_pcm(&self) -> Result<Pcm, String> {
+    /// The whole mix in memory, through the master pedalboard. Long songs play
+    /// and export through `read` and `write_wav`, which have no length limit.
+    pub fn to_pcm(&self, master: &MasterChain) -> Result<Pcm, String> {
         if self.frames > Self::MAX_PCM_FRAMES {
             return Err("This song is too long to hold in memory. Play or export it.".into());
         }
         let mut samples = vec![0.0; self.frames as usize * 2];
         self.read(0, &mut samples);
+        MasterProcessor::new(master).process(&mut samples);
         Ok(Pcm {
             sample_rate: Self::SAMPLE_RATE,
             channels: 2,
@@ -259,8 +261,8 @@ impl Mix {
         })
     }
 
-    /// Write stereo PCM16, mixing one block at a time.
-    pub fn write_wav(&self, path: &Path) -> Result<(), String> {
+    /// Write stereo PCM16 through the master pedalboard, mixing one block at a time.
+    pub fn write_wav(&self, path: &Path, master: &MasterChain) -> Result<(), String> {
         const BLOCK_FRAMES: u64 = 65_536;
         // A WAV header counts its data bytes in 32 bits.
         if self.frames > u64::from(u32::MAX) / 4 {
@@ -276,10 +278,12 @@ impl Mix {
             let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)
                 .map_err(|e| e.to_string())?;
             let mut block = vec![0.0; BLOCK_FRAMES as usize * 2];
+            let mut master = MasterProcessor::new(master);
             let mut frame = 0;
             while frame < self.frames {
                 let count = (self.frames - frame).min(BLOCK_FRAMES) as usize;
                 self.read(frame, &mut block[..count * 2]);
+                master.process(&mut block[..count * 2]);
                 for &sample in &block[..count * 2] {
                     writer
                         .write_sample(float_to_i16(sample))
@@ -344,7 +348,7 @@ impl Frames for Mix {
 
 /// Render a whole project in memory. Use `prepare_project` for a song of any length.
 pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, String> {
-    prepare_project(project, library)?.to_pcm()
+    prepare_project(project, library)?.to_pcm(&project.master)
 }
 
 /// Decode a project's sources and prepare its mix.
@@ -415,7 +419,7 @@ pub(crate) fn render_with_samples(
     project: &Project,
     samples: &HashMap<u32, Pcm>,
 ) -> Result<Pcm, String> {
-    mix_with_samples(project, samples)?.to_pcm()
+    mix_with_samples(project, samples)?.to_pcm(&project.master)
 }
 
 pub struct Player {
@@ -443,11 +447,18 @@ struct PlaybackSource {
     /// The next sample in `block`, and the count of valid samples in it.
     cursor: usize,
     filled: usize,
+    /// The master pedalboard of a stereo mix. Its state runs on through loops.
+    master: Option<MasterProcessor>,
 }
 impl PlaybackSource {
     const BLOCK_FRAMES: usize = 2048;
 
-    fn new(audio: Arc<dyn Frames>, start: u64, loop_region: Option<[u64; 2]>) -> Self {
+    fn new(
+        audio: Arc<dyn Frames>,
+        start: u64,
+        loop_region: Option<[u64; 2]>,
+        master: Option<Arc<MasterControl>>,
+    ) -> Self {
         let channels = audio.channels() as usize;
         Self {
             channels,
@@ -458,6 +469,7 @@ impl PlaybackSource {
             block: vec![0.0; Self::BLOCK_FRAMES * channels],
             cursor: 0,
             filled: 0,
+            master: master.filter(|_| channels == 2).map(MasterProcessor::live),
             audio,
         }
     }
@@ -475,6 +487,9 @@ impl Iterator for PlaybackSource {
             }
             self.filled = count * self.channels;
             self.audio.read(self.frame, &mut self.block[..self.filled]);
+            if let Some(master) = &mut self.master {
+                master.process(&mut self.block[..self.filled]);
+            }
             self.frame += count as u64;
             self.cursor = 0;
         }
@@ -519,11 +534,13 @@ impl Player {
         })
     }
     /// Play validated audio. Callers check decoded PCM before they pass it.
+    /// A mix plays through `master`, whose settings can change as it plays.
     pub fn play(
         &mut self,
         audio: Arc<dyn Frames>,
         start_frame: u64,
         loop_region: Option<[u64; 2]>,
+        master: Option<Arc<MasterControl>>,
     ) -> Result<(), String> {
         let total = audio.frames();
         if !(1..=2).contains(&audio.channels())
@@ -549,7 +566,7 @@ impl Player {
         };
         let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
         let sample_rate = audio.sample_rate();
-        sink.append(PlaybackSource::new(audio, start, loop_region));
+        sink.append(PlaybackSource::new(audio, start, loop_region, master));
         if let Some(old) = self.sink.take() {
             old.stop();
         }
@@ -812,7 +829,7 @@ mod tests {
         editor.place(1, 63, 700, 256).unwrap();
         let samples = HashMap::from([(1, source.clone())]);
         let mix = mix_with_samples(editor.project(), &samples).unwrap();
-        let whole = mix.to_pcm().unwrap();
+        let whole = mix.to_pcm(&editor.project().master).unwrap();
         // Blocks of any size and position give the same samples, and silence past the end.
         for block_frames in [1, 7, 2048, 65_536] {
             let mut pieces = Vec::new();
@@ -832,7 +849,7 @@ mod tests {
         long.place(1, 0, last_bar, 256).unwrap();
         let mix = mix_with_samples(long.project(), &samples).unwrap();
         assert!(mix.frames() > 300_000_000);
-        assert!(mix.to_pcm().is_err());
+        assert!(mix.to_pcm(&long.project().master).is_err());
         let first = (f64::from(last_bar) * long.project().frames_per_tick(44_100)).round() as u64;
         let mut block = vec![0.0; 2048 * 2];
         Frames::read(&mix, first, &mut block);
@@ -849,13 +866,48 @@ mod tests {
         assert!(before.iter().all(|x| *x == 0.0));
     }
     #[test]
+    fn playback_and_export_run_the_same_master_pedalboard() {
+        let source = Pcm {
+            sample_rate: 44_100,
+            channels: 2,
+            samples: (0..20_000)
+                .map(|i| ((i as f32) * 0.037).sin() * if i % 2 == 0 { 0.6 } else { 0.3 })
+                .collect(),
+        };
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, source)]);
+        let dry = render_with_samples(&project, &samples).unwrap();
+        project.master.ejay_compressor.on = true;
+        project.master.ejay_wide.on = true;
+        project.master.ejay_eq.on = true;
+        project.master.ejay_eq.bands[0] = 90;
+        let exported = render_with_samples(&project, &samples).unwrap();
+        assert_ne!(exported.samples, dry.samples);
+
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let played: Vec<f32> = PlaybackSource::new(
+            mix.clone(),
+            0,
+            None,
+            Some(MasterControl::new(&project.master)),
+        )
+        .collect();
+        assert_eq!(played, exported.samples);
+        // Without a control, as for a tool preview, the mix plays dry.
+        let preview: Vec<f32> = PlaybackSource::new(mix, 0, None, None).collect();
+        assert_eq!(preview, dry.samples);
+    }
+
+    #[test]
     fn loop_source_keeps_channels_aligned_and_preserves_intro() {
         let pcm = Arc::new(Pcm {
             sample_rate: 44100,
             channels: 2,
             samples: vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
         });
-        let source = PlaybackSource::new(pcm, 0, Some([1, 3]));
+        let source = PlaybackSource::new(pcm, 0, Some([1, 3]), None);
         assert_eq!(
             source.take(14).collect::<Vec<_>>(),
             vec![

@@ -436,6 +436,9 @@ pub struct Project {
     pub source_settings: BTreeMap<String, String>,
     #[serde(default)]
     pub libraries: Vec<crate::products::LibraryBinding>,
+    /// The master pedalboard. Every pedal is off unless the song switched it on.
+    #[serde(default)]
+    pub master: crate::master::MasterChain,
 }
 /// An absent version marks a legacy project. Zero is reserved for that case,
 /// so an explicit zero is not a supported version.
@@ -469,6 +472,7 @@ impl Default for Project {
             source_notices: Vec::new(),
             source_settings: BTreeMap::new(),
             libraries: Vec::new(),
+            master: crate::master::MasterChain::default(),
         }
     }
 }
@@ -541,6 +545,7 @@ impl Project {
         if !valid_mixer_gain(self.master_gain) {
             return Err("Master amplitude must be from 0 to 4.".into());
         }
+        self.master.validate()?;
         if self
             .tracks
             .iter()

@@ -51,6 +51,7 @@ pub(crate) enum RailIcon {
     Libraries,
     New,
     Mixer,
+    Master,
     Erase,
     Delete,
     Effects,
@@ -64,7 +65,7 @@ pub(crate) enum RailIcon {
 }
 
 impl RailIcon {
-    pub(crate) const ALL: [Self; 18] = [
+    pub(crate) const ALL: [Self; 19] = [
         Self::Open,
         Self::Save,
         Self::SaveAs,
@@ -73,6 +74,7 @@ impl RailIcon {
         Self::Libraries,
         Self::New,
         Self::Mixer,
+        Self::Master,
         Self::Erase,
         Self::Delete,
         Self::Effects,
@@ -95,6 +97,7 @@ impl RailIcon {
             Self::Libraries => "Libraries",
             Self::New => "New",
             Self::Mixer => "Mixer",
+            Self::Master => "Mastering",
             Self::Erase => "Erase",
             Self::Delete => "Delete",
             Self::Effects => "Effects",
@@ -120,6 +123,7 @@ impl RailIcon {
             Self::Libraries => "Libraries: show or close Sample libraries",
             Self::New => "New song (Ctrl+N)",
             Self::Mixer => "Mixer: switch between Mixer and Sounds",
+            Self::Master => "Mastering: show or close the master pedalboard",
             Self::Erase => "Erase: click clips to delete them (Esc ends)",
             Self::Delete => "Delete the selected clips (Delete)",
             Self::Effects => "Effects: show or close Effect Studio",
@@ -138,6 +142,7 @@ impl RailIcon {
             self,
             Self::Libraries
                 | Self::Mixer
+                | Self::Master
                 | Self::Erase
                 | Self::Effects
                 | Self::StepSynth
@@ -156,6 +161,7 @@ impl RailIcon {
             Self::Libraries => rail_pngs!("libraries")[density],
             Self::New => rail_pngs!("new")[density],
             Self::Mixer => rail_pngs!("mixer")[density],
+            Self::Master => rail_pngs!("master")[density],
             Self::Erase => rail_pngs!("erase")[density],
             Self::Delete => rail_pngs!("delete")[density],
             Self::Effects => rail_pngs!("effects")[density],

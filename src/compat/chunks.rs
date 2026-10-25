@@ -1070,6 +1070,7 @@ pub(crate) fn build_project(
     let mut source_notices = header.source_notices;
     source_notices.extend(settings::notices(product, &header.settings, kit.is_some()));
     source_notices.extend(kit.as_ref().and_then(drums::effects_notice));
+    let (master, _) = settings::booster(product, &header.settings);
     let mut project = Project {
         title: if header.title.is_empty() {
             path.file_stem()
@@ -1087,6 +1088,7 @@ pub(crate) fn build_project(
         source_notices,
         source_settings: header.settings.entries,
         libraries: library.bindings().to_vec(),
+        master,
         ..Project::default()
     };
     let mut pending_waves = Vec::new();
@@ -1941,17 +1943,22 @@ mod tests {
             assert_eq!(project.title, "Song");
             assert_eq!(project.source_settings["BoostCompressorDrive"], "12080");
             assert_eq!(project.source_settings["BoostEQ"], "0");
-            // No drum pattern uses the kit, so only the Booster changes the sound.
-            let expected = if product == Product::H1 {
-                "House saved 5 settings"
+            // The Booster compressor plays as a master pedal. No drum pattern
+            // uses the kit, so no other saved effect changes the sound.
+            if product == Product::H1 {
+                assert!(!project.master.is_active());
+                assert_eq!(project.source_notices.len(), 1);
+                assert!(project.source_notices[0].starts_with("House saved 5 settings"));
             } else {
-                "Saved Booster effects are not applied: compressor."
-            };
-            assert_eq!(project.source_notices.len(), 1);
-            assert!(project.source_notices[0].starts_with(expected));
+                assert!(project.master.ejay_compressor.on);
+                assert!(!project.master.ejay_eq.on && !project.master.ejay_wide.on);
+                assert_eq!(project.master.ejay_compressor.drive, 369);
+                assert!(project.source_notices.is_empty());
+            }
             let reopened: Project =
                 serde_json::from_slice(&serde_json::to_vec(&project).unwrap()).unwrap();
             assert_eq!(reopened.source_settings, project.source_settings);
+            assert_eq!(reopened.master, project.master);
         }
         // A song without the list has no settings and no notice.
         let bytes = header_fixture(Product::D4, 140, 140);
@@ -2152,7 +2159,7 @@ mod tests {
             let folder = crate::project_io::default_root(product)
                 .unwrap()
                 .join("MIX");
-            let (mut songs, mut lists, mut switches) = (0, 0, [0; 3]);
+            let (mut songs, mut lists, mut switches, mut pedals) = (0, 0, [0; 3], [0; 3]);
             for entry in fs::read_dir(folder).unwrap() {
                 let path = entry.unwrap().path();
                 if !path
@@ -2174,8 +2181,16 @@ mod tests {
                 {
                     *count += usize::from(saved.entries.get(key).is_some_and(|v| v == "1"));
                 }
+                // Every saved Booster value is usable, so each switch that is
+                // on becomes a pedal that is on.
+                let (master, unusable) = settings::booster(product, &saved);
+                assert!(unusable.is_empty(), "{}", path.display());
+                pedals[0] += usize::from(master.ejay_eq.on);
+                pedals[1] += usize::from(master.ejay_compressor.on);
+                pedals[2] += usize::from(master.ejay_wide.on);
             }
             assert_eq!((songs, lists, switches), expected, "{}", product.label());
+            assert_eq!(pedals, expected.2, "{}", product.label());
         }
         let root = crate::project_io::default_root(Product::D4).unwrap();
         let saved = read_header(

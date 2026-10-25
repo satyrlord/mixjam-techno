@@ -274,7 +274,7 @@ fn run() -> Result<(), String> {
                 );
             }
             let mix = audio::prepare_project(&p, &library)?;
-            mix.write_wav(&target)?;
+            mix.write_wav(&target, &p.master)?;
             println!(
                 "Wrote {} stereo frames at {} Hz to {}",
                 mix.frames(),

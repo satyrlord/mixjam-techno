@@ -12,6 +12,10 @@ primary buttons. Each tool retains its own color identity.
 | Granite | `#34393c` | `#adbabd` |
 | Red | `#9a2d27` | `#eb7468` |
 | Olive | `#3c4428` | `#9db25e` |
+| Indigo | `#2e3660` | `#96a6ec` |
+
+Indigo was added on 2026-10-25 for Mastering, which has no original window
+to take a color from.
 
 The current generated chassis is retained at
 `local-data/artwork/folded-metal/chassis-screwless.png`. The earlier original

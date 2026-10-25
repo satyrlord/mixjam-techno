@@ -94,9 +94,10 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   count-in. Stop and save the take as a WAV file.
 - Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-A `.mixjam` song is JSON, format version 10. Earlier format-8 and format-9 songs
-open with their effective gain, polarity, and L/R outputs preserved, and Mute
-and Solo off. Saving them writes version 10, which earlier builds cannot open.
+A `.mixjam` song is JSON, format version 11. Earlier format-8 to format-10 songs
+open with their effective gain, polarity, and L/R outputs preserved, Mute and
+Solo off where they had none, and every master pedal off. Saving them writes
+version 11, which earlier builds cannot open.
 A song links to WAV files; it is not a
 portable audio bundle. After moving the sample folder, select its new location
 before opening the song.

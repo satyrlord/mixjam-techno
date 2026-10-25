@@ -53,7 +53,19 @@ history entry or render request costs the same for any palette size.
 frames, with their decoded sources. It mixes any range of the song on demand.
 The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
-song and song length is bounded only by the timeline. The render worker prepares
+song and song length is bounded only by the timeline. The mix itself is dry.
+`src/master.rs` owns the master pedalboard: `MasterChain` is the saved
+settings, and `MasterProcessor` runs them over the summed stereo mix in blocks,
+with state that carries from block to block. `MasterChain::order` is a fixed
+array that names each pedal once, so a settings copy never allocates on the
+audio thread. Pedals that are off pass the signal on unchanged. Each pedal
+keeps its own state when the order changes. Export and `Mix::to_pcm` take the
+project's chain explicitly. Mix playback reads a `MasterControl` that the
+`Session` keeps equal to the project; the audio thread takes new settings at
+its next block with `try_lock`, so it never waits. An edit or history step that
+changes only the pedalboard is not a render change: the prepared mix stays
+valid and playback continues. Tool previews play without the pedalboard. Each
+playback and export starts the pedalboard in the same settled state. The render worker prepares
 the mix, keeps the decoded sources of the last one, and discards them when the
 library is replaced. `Session::start_export` renders and writes on its own
 thread and reports through `poll`; `Session::export` stays synchronous for
@@ -95,9 +107,9 @@ button implementations.
 
 The shared chassis uses subtly aged folded painted metal, dark inset control
 bays, cream lettering, polished silver knobs, and pale metal primary buttons.
-`controls::Palette` supplies Utility, Marine, Granite, Red, and Olive variants.
+`controls::Palette` supplies Utility, Marine, Granite, Red, Olive, and Indigo variants.
 Time Stretcher uses Marine; Sample Editor uses Granite; Effect Studio uses Red;
-Step synth uses Olive. Utilities use neutral metal with orange-yellow accents.
+Step synth uses Olive; Mastering uses Indigo. Utilities use neutral metal with orange-yellow accents.
 Prepared material and control PNGs live in `assets/folded-metal/<palette>/{100,150,200}/` and the shared
 `assets/folded-metal/controls/{100,150,200}/`.
 The chassis contains no decorative screws or fasteners. Its continuous
@@ -210,6 +222,18 @@ Turning an optional section off discards its settings; enabling it uses that
 section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
+
+`src/ui/master.rs` owns the Mastering window: a horizontal pedalboard in
+signal order, from the mixer jack at the left through each pedal to the output
+jack at the right, joined by painted cables. Each pedal shows its name, lamp,
+knobs, arrow buttons, and switch; a pedal that is off is dimmed. Dragging a
+pedal's header moves it, with an insertion marker while it is dragged; the
+arrow buttons give the same move to the keyboard, screen readers, and agents.
+The board takes its natural width, and the shell scrolls it when the window is
+narrower. It edits a copy of the project's `MasterChain`; `src/ui.rs`
+sends a changed copy as `EditCommand::SetMaster`. EQ values read in decibels,
+the other knobs in the original's 0 to 1000 steps. Knobs move in whole steps,
+and a fine step still moves one.
 
 `src/ui/step_synth.rs` owns Step synth's source, bar, grid, effects, and action
 content inside the shared shell. Text, grid cells, switches, and input stay live.

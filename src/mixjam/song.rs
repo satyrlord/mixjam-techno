@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 10.
+//! The application's own `.mixjam` song format, format version 11.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -10,6 +10,8 @@
 //! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
 //!   signed lane gains migrate without changing their effective amplitude.
 //! - Version 10 adds lane Mute and Solo. Earlier songs open with both off.
+//! - Version 11 adds `master`, the master pedalboard. Earlier songs open with
+//!   every pedal off, so they sound as they did.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -22,6 +24,7 @@ use crate::{
         Clip, ImportNotice, ImportedSample, MissingReference, MissingSample,
         PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, Track,
     },
+    master::MasterChain,
     products::{LibraryBinding, Product},
 };
 use serde::{Deserialize, Serialize};
@@ -32,7 +35,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 10;
+pub(super) const FORMAT_VERSION: u32 = 11;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -42,6 +45,9 @@ struct Document {
     created_at: String,
     modified_at: String,
     song: Song,
+    // Required from version 11; earlier versions have no master pedalboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    master: Option<MasterChain>,
     lanes: Vec<Lane>,
     samples: Vec<Sample>,
     missing_samples: Vec<Missing>,
@@ -200,6 +206,7 @@ impl Document {
                 master_gain: project.master_gain,
                 loop_region: project.loop_region,
             },
+            master: Some(project.master.clone()),
             lanes,
             samples: project
                 .imported_samples
@@ -272,7 +279,7 @@ impl Document {
     }
 
     fn into_project(self) -> Result<Project, String> {
-        if !matches!(self.format_version, 8 | 9 | FORMAT_VERSION) {
+        if !(8..=FORMAT_VERSION).contains(&self.format_version) {
             return Err("This MixJam format version is not supported.".into());
         }
         if !text(&self.app_version) || !text(&self.created_at) || !text(&self.modified_at) {
@@ -286,6 +293,16 @@ impl Document {
         {
             return Err("Legacy master amplitude must be from 0 to 2.".into());
         }
+        let master = match (self.format_version, self.master) {
+            (FORMAT_VERSION, Some(master)) => master,
+            (FORMAT_VERSION, None) => {
+                return Err("Version 11 songs require master.".into());
+            }
+            (_, None) => MasterChain::default(),
+            (version, Some(_)) => {
+                return Err(format!("Version {version} songs cannot contain master."));
+            }
+        };
         let mut tracks = Vec::with_capacity(TRACK_COUNT);
         let mut clips = Vec::new();
         for (track, lane) in self.lanes.into_iter().enumerate() {
@@ -312,7 +329,7 @@ impl Document {
                     self.format_version
                 ));
             }
-            if self.format_version < FORMAT_VERSION {
+            if self.format_version < 10 {
                 if lane.muted.is_some() || lane.solo.is_some() {
                     return Err(format!(
                         "Version {} lanes cannot contain muted or solo.",
@@ -320,7 +337,10 @@ impl Document {
                     ));
                 }
             } else if lane.muted.is_none() || lane.solo.is_none() {
-                return Err("Version 10 lanes require muted and solo.".into());
+                return Err(format!(
+                    "Version {} lanes require muted and solo.",
+                    self.format_version
+                ));
             }
             tracks.push(settings);
             clips.extend(lane.placements.into_iter().map(|placement| Clip {
@@ -413,6 +433,7 @@ impl Document {
             source_notices: self.source_notices,
             source_settings: self.source_settings,
             libraries: self.libraries,
+            master,
         };
         project.validate()?;
         Ok(project)
@@ -456,7 +477,7 @@ fn existing_creation_time(path: &Path) -> Option<String> {
     // without allocating its entire contents just to keep its creation time.
     let header: Header =
         serde_json::from_reader(std::io::BufReader::new(file.take(MAX_SONG_BYTES + 1))).ok()?;
-    (matches!(header.format_version, 8 | 9 | FORMAT_VERSION) && text(&header.created_at))
+    ((8..=FORMAT_VERSION).contains(&header.format_version) && text(&header.created_at))
         .then_some(header.created_at)
 }
 
@@ -574,7 +595,25 @@ mod tests {
             solo: false,
         };
         project.tracks[6].solo = true;
+        project.master.ejay_compressor.on = true;
+        project.master.ejay_compressor.drive = 368;
+        project.master.ejay_eq.bands[9] = 0;
+        project.master.move_pedal(2, 0);
         project
+    }
+
+    /// The same song as an earlier format version saves it: no master pedalboard.
+    fn earlier_document(expected: &mut Project, version: u32) -> serde_json::Value {
+        expected.master = MasterChain::default();
+        let mut document = serde_json::to_value(Document::new(
+            expected,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        document["formatVersion"] = version.into();
+        document.as_object_mut().unwrap().remove("master");
+        document
     }
 
     #[test]
@@ -585,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_10_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_11_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -593,8 +632,16 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 10);
+        assert_eq!(document["formatVersion"], 11);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
+        assert_eq!(document["master"]["ejayCompressor"]["on"], true);
+        assert_eq!(document["master"]["ejayCompressor"]["drive"], 368);
+        assert_eq!(document["master"]["ejayEq"]["bands"][9], 0);
+        assert_eq!(document["master"]["ejayWide"]["on"], false);
+        assert_eq!(
+            document["master"]["order"],
+            serde_json::json!(["ejayWide", "ejayEq", "ejayCompressor"])
+        );
         assert_eq!(document["song"]["masterGain"], 0.5);
         assert_eq!(document["lanes"].as_array().unwrap().len(), 64);
         assert_eq!(document["lanes"][63]["placements"][0]["durationTicks"], 512);
@@ -613,6 +660,7 @@ mod tests {
                 "importNotices",
                 "lanes",
                 "libraries",
+                "master",
                 "missingSamples",
                 "modifiedAt",
                 "sampleConflicts",
@@ -646,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn version_8_signed_lanes_migrate_and_save_as_10_without_losing_polarity() {
+    fn version_8_signed_lanes_migrate_and_save_as_11_without_losing_polarity() {
         let root = std::env::temp_dir().join(format!("mixjam-polarity-v8-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -658,13 +706,7 @@ mod tests {
         expected.tracks[1].gain = 0.0;
         expected.tracks[1].polarity_inverted = true;
         expected.tracks[2].set_legacy_gain(-2.0 / 65536.0);
-        let mut legacy = serde_json::to_value(Document::new(
-            &expected,
-            "2020-01-02T03:04:05Z".into(),
-            timestamp(0),
-        ))
-        .unwrap();
-        legacy["formatVersion"] = 8.into();
+        let mut legacy = earlier_document(&mut expected, 8);
         for (lane, track) in legacy["lanes"]
             .as_array_mut()
             .unwrap()
@@ -684,7 +726,7 @@ mod tests {
         assert!(migrated.tracks[1].polarity_inverted);
         save(&migrated, &path).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(saved["formatVersion"], 10);
+        assert_eq!(saved["formatVersion"], 11);
         assert_eq!(saved["createdAt"], "2020-01-02T03:04:05Z");
         assert_eq!(saved["lanes"][1]["gain"], 0.0);
         assert_eq!(saved["lanes"][1]["polarityInverted"], true);
@@ -703,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_10() {
+    fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_11() {
         let root = std::env::temp_dir().join(format!("mixjam-switches-v9-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -711,13 +753,7 @@ mod tests {
         for track in &mut expected.tracks {
             (track.muted, track.solo) = (false, false);
         }
-        let mut earlier = serde_json::to_value(Document::new(
-            &expected,
-            "2020-01-02T03:04:05Z".into(),
-            timestamp(0),
-        ))
-        .unwrap();
-        earlier["formatVersion"] = 9.into();
+        let mut earlier = earlier_document(&mut expected, 9);
         for lane in earlier["lanes"].as_array_mut().unwrap() {
             let lane = lane.as_object_mut().unwrap();
             lane.remove("muted");
@@ -731,7 +767,7 @@ mod tests {
         assert!(!opened.tracks[5].left_enabled);
         save(&opened, &path).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(saved["formatVersion"], 10);
+        assert_eq!(saved["formatVersion"], 11);
         assert_eq!(saved["createdAt"], "2020-01-02T03:04:05Z");
         assert_eq!(saved["lanes"][5]["muted"], false);
         for key in ["muted", "solo"] {
@@ -747,9 +783,53 @@ mod tests {
     }
 
     #[test]
-    fn version_10_requires_explicit_mute_and_solo() {
-        let document =
+    fn version_10_songs_open_with_every_pedal_off_and_version_11_requires_master() {
+        let mut expected = project();
+        let earlier = earlier_document(&mut expected, 10);
+        let opened = parse(&serde_json::to_vec(&earlier).unwrap()).unwrap();
+        assert_eq!(opened, expected);
+        assert!(!opened.master.is_active());
+
+        let mut with_master = earlier.clone();
+        with_master["master"] = serde_json::to_value(MasterChain::default()).unwrap();
+        assert!(
+            parse(&serde_json::to_vec(&with_master).unwrap())
+                .unwrap_err()
+                .contains("Version 10 songs cannot contain master")
+        );
+        let current =
             serde_json::to_value(Document::new(&project(), timestamp(0), timestamp(0))).unwrap();
+        let mut without = current.clone();
+        without.as_object_mut().unwrap().remove("master");
+        assert!(
+            parse(&serde_json::to_vec(&without).unwrap())
+                .unwrap_err()
+                .contains("require master")
+        );
+        for (pointer, value) in [
+            ("/master/ejayEq/bands/0", serde_json::Value::from(101)),
+            ("/master/ejayCompressor/speed", 1001.into()),
+            ("/master/ejayWide/spread", (-1).into()),
+            ("/master/ejayWide/on", serde_json::Value::Null),
+            ("/master/order/0", "ejayEq".into()),
+            ("/master/order", serde_json::json!(["ejayEq", "ejayWide"])),
+            ("/master/order/2", "limiter".into()),
+        ] {
+            let mut changed = current.clone();
+            *changed.pointer_mut(pointer).unwrap() = value;
+            assert!(
+                parse(&serde_json::to_vec(&changed).unwrap()).is_err(),
+                "{pointer}"
+            );
+        }
+        let mut unknown = current;
+        unknown["master"]["ejayWide"]["width"] = 3.into();
+        assert!(parse(&serde_json::to_vec(&unknown).unwrap()).is_err());
+    }
+
+    #[test]
+    fn version_10_requires_explicit_mute_and_solo() {
+        let document = earlier_document(&mut project(), 10);
         for key in ["muted", "solo"] {
             let mut changed = document.clone();
             changed["lanes"][0].as_object_mut().unwrap().remove(key);

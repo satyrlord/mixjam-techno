@@ -8,6 +8,7 @@ pub use crate::{
         SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
     },
     library::Sample,
+    master::{EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, MasterChain, PedalKind},
     products::Product,
     synth::StepSynthState,
 };
@@ -15,6 +16,7 @@ use crate::{
     audio::{self, Player},
     engine::Editor,
     library::Library,
+    master::MasterControl,
 };
 use std::{
     collections::BTreeSet,
@@ -69,6 +71,8 @@ pub enum EditCommand {
         on: bool,
     },
     DeleteClips(Vec<u64>),
+    /// Replace the master pedalboard settings. Playback takes them as it plays.
+    SetMaster(MasterChain),
 }
 
 /// The on/off controls that the arrangement lane and the mixer strip share.
@@ -317,6 +321,8 @@ pub struct Session {
     recorded_take: Option<Arc<Pcm>>,
     /// The control changed by the last edit, while later edits may continue it.
     gesture: Option<(Gesture, std::time::Instant)>,
+    /// The master pedalboard settings that mix playback reads as it plays.
+    master: Arc<MasterControl>,
 }
 
 /// One continuously adjustable control. Edits of the same control in quick
@@ -326,6 +332,48 @@ enum Gesture {
     Master,
     Track(usize, TrackControl),
     Clip(u64, ClipControl),
+    Pedal(PedalKnob),
+}
+/// One knob of the master pedalboard.
+#[derive(Clone, Copy, PartialEq)]
+enum PedalKnob {
+    EqBand(usize),
+    Drive,
+    Speed,
+    Gain,
+    Spread,
+}
+impl PedalKnob {
+    /// The knob that differs between two settings, when exactly one does and
+    /// no switch changed.
+    fn changed(old: &MasterChain, new: &MasterChain) -> Option<Self> {
+        if old.order != new.order
+            || old.ejay_eq.on != new.ejay_eq.on
+            || old.ejay_compressor.on != new.ejay_compressor.on
+            || old.ejay_wide.on != new.ejay_wide.on
+        {
+            return None;
+        }
+        let (a, b) = (&old.ejay_compressor, &new.ejay_compressor);
+        let mut knobs: Vec<_> = (0..10)
+            .filter(|band| old.ejay_eq.bands[*band] != new.ejay_eq.bands[*band])
+            .map(Self::EqBand)
+            .collect();
+        knobs.extend(
+            [
+                (a.drive != b.drive, Self::Drive),
+                (a.speed != b.speed, Self::Speed),
+                (a.gain != b.gain, Self::Gain),
+                (old.ejay_wide.spread != new.ejay_wide.spread, Self::Spread),
+            ]
+            .into_iter()
+            .filter_map(|(changed, knob)| changed.then_some(knob)),
+        );
+        match knobs[..] {
+            [knob] => Some(knob),
+            _ => None,
+        }
+    }
 }
 #[derive(Clone, Copy, PartialEq)]
 enum TrackControl {
@@ -394,6 +442,9 @@ impl Gesture {
                     _ => None,
                 }
             }
+            EditCommand::SetMaster(chain) => {
+                PedalKnob::changed(&project.master, chain).map(Self::Pedal)
+            }
             _ => None,
         }
     }
@@ -411,6 +462,7 @@ impl Drop for Session {
 impl Session {
     pub fn headless(library: Arc<Library>, project: Project) -> Result<Self, String> {
         project.validate()?;
+        let master = MasterControl::new(&project.master);
         Ok(Self {
             library,
             catalog_revision: 0,
@@ -446,6 +498,7 @@ impl Session {
             record_mix_started: false,
             recorded_take: None,
             gesture: None,
+            master,
         })
     }
     /// Keep settings and the scan cache in `root` instead of the user's data folder.
@@ -777,9 +830,17 @@ impl Session {
         self.unsaved = true;
         self.render_dirty = true;
         self.revision = self.revision.wrapping_add(1);
+        self.master.set(&self.editor.project().master);
         if self.wants_playback {
             self.start_playback();
         }
+    }
+    /// A change of the master pedalboard only. The prepared mix stays valid,
+    /// and playback continues with the new settings.
+    fn master_changed(&mut self) {
+        self.gesture = None;
+        self.unsaved = true;
+        self.master.set(&self.editor.project().master);
     }
     pub fn edit(&mut self, command: EditCommand) -> Result<(), String> {
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
@@ -841,6 +902,7 @@ impl Session {
                 Some(previous) == gesture && now.duration_since(at) < GESTURE_GAP
             });
         let generation = self.editor.generation();
+        let master_only = matches!(command, EditCommand::SetMaster(_));
         let apply = |project: &mut Project| match command {
             EditCommand::SetTempo(bpm) => project.bpm = bpm,
             EditCommand::SetLoop(region) => project.loop_region = region,
@@ -870,6 +932,7 @@ impl Session {
                 let ids: BTreeSet<_> = ids.into_iter().collect();
                 project.clips.retain(|clip| !ids.contains(&clip.id));
             }
+            EditCommand::SetMaster(chain) => project.master = chain,
         };
         if continuing {
             self.editor.transact_continuing(apply)?;
@@ -878,7 +941,11 @@ impl Session {
         }
         // An accepted command that changes nothing is not an edit.
         if self.editor.generation() != generation {
-            self.changed();
+            if master_only {
+                self.master_changed();
+            } else {
+                self.changed();
+            }
             self.gesture = gesture.map(|gesture| (gesture, now));
         }
         Ok(())
@@ -933,6 +1000,7 @@ impl Session {
         if self.is_recording() {
             return Err("Stop recording before you undo or redo.".into());
         }
+        let before = self.project().clone();
         let changed = if redo {
             self.editor.redo()
         } else {
@@ -940,6 +1008,16 @@ impl Session {
         };
         if !changed {
             return Ok(false);
+        }
+        // A step of the master pedalboard alone leaves the mix and playback running.
+        let master_only = before.master != self.project().master
+            && Project {
+                master: self.project().master.clone(),
+                ..before
+            } == *self.project();
+        if master_only {
+            self.master_changed();
+            return Ok(true);
         }
         // Most steps leave the imported sources as they are. Rebuild the
         // catalog only for a step that adds, removes, or relinks one.
@@ -994,6 +1072,7 @@ impl Session {
         self.stop();
         self.set_library(library);
         self.editor = Editor::new(project);
+        self.master.set(&self.editor.project().master);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.render_dirty = true;
@@ -1013,10 +1092,11 @@ impl Session {
     /// Render and write the mix on this thread. Headless callers use this;
     /// the GUI calls `start_export` so that the window stays responsive.
     pub fn export(&self, path: &Path) -> Result<(), String> {
+        let master = &self.project().master;
         // Playback already rendered an unchanged mix; write that audio.
         match &self.render {
-            Some(mix) if !self.render_dirty => mix.write_wav(path),
-            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path),
+            Some(mix) if !self.render_dirty => mix.write_wav(path, master),
+            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path, master),
         }
     }
 
@@ -1035,9 +1115,9 @@ impl Session {
             .name("mixjam-techno-export".into())
             .spawn(move || {
                 let result = match rendered {
-                    Some(mix) => mix.write_wav(&target),
+                    Some(mix) => mix.write_wav(&target, &project.master),
                     None => audio::prepare_project(&project, &library)
-                        .and_then(|mix| mix.write_wav(&target)),
+                        .and_then(|mix| mix.write_wav(&target, &project.master)),
                 };
                 let _ = sender.send(result);
             })
@@ -1079,6 +1159,7 @@ impl Session {
             imported_samples: self.library.imported_samples().into(),
             ..Project::default()
         });
+        self.master.set(&self.editor.project().master);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.file = None;
@@ -1608,7 +1689,14 @@ impl Session {
             .project()
             .loop_region
             .map(|[a, b]| [self.tick_to_frame(a, rate), self.tick_to_frame(b, rate)]);
-        match self.player.as_mut().unwrap().play(mix, start, region) {
+        self.master.set(&self.editor.project().master);
+        let master = Some(self.master.clone());
+        match self
+            .player
+            .as_mut()
+            .unwrap()
+            .play(mix, start, region, master)
+        {
             Ok(()) => {
                 self.previewing = false;
                 self.preview_revision = self.preview_revision.wrapping_add(1);
@@ -1679,7 +1767,7 @@ impl Session {
             Ok(pcm) => match self.player.as_mut() {
                 Some(player) => match pcm
                     .validate()
-                    .and_then(|()| player.play(Arc::new(pcm), 0, None))
+                    .and_then(|()| player.play(Arc::new(pcm), 0, None, None))
                 {
                     Ok(()) => {
                         self.previewing = true;
@@ -1703,7 +1791,7 @@ impl Session {
             .player
             .as_mut()
             .ok_or("Audio output is unavailable.".to_string())
-            .and_then(|p| pcm.validate().and_then(|()| p.play(pcm, 0, None)));
+            .and_then(|p| pcm.validate().and_then(|()| p.play(pcm, 0, None, None)));
         match result {
             Ok(()) => {
                 self.previewing = true;
@@ -3076,6 +3164,52 @@ mod boundary_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
+    fn master_pedal_edits_keep_the_mix_and_form_undo_steps() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let revision = session.revision;
+        session.render_dirty = false;
+        let set = |session: &mut Session, change: &dyn Fn(&mut MasterChain)| {
+            let mut chain = session.project().master.clone();
+            change(&mut chain);
+            session.edit(EditCommand::SetMaster(chain))
+        };
+        set(&mut session, &|chain| chain.ejay_compressor.on = true).unwrap();
+        // A drag of one knob is one step; another knob or a switch starts a new one.
+        for drive in [510, 520, 530] {
+            set(&mut session, &|chain| chain.ejay_compressor.drive = drive).unwrap();
+        }
+        set(&mut session, &|chain| chain.ejay_eq.bands[2] = 70).unwrap();
+        set(&mut session, &|chain| chain.ejay_eq.bands[2] = 80).unwrap();
+        // Moving a pedal is a step of its own, even within a knob gesture.
+        set(&mut session, &|chain| chain.move_pedal(0, 2)).unwrap();
+        assert_eq!(session.project().master.order[2], PedalKind::EjayEq);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().master.order, PedalKind::ALL);
+        assert_eq!(session.project().master.ejay_eq.bands[2], 80);
+        assert!(session.unsaved());
+        assert_eq!(session.master.get(), session.project().master);
+        // The prepared mix does not include the pedalboard, so it stays valid.
+        assert_eq!(session.revision, revision);
+        assert!(!session.render_dirty);
+
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().master.ejay_eq.bands[2], 50);
+        assert_eq!(session.master.get().ejay_eq.bands[2], 50);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().master.ejay_compressor.drive, 500);
+        assert!(session.history_step(false).unwrap());
+        assert!(!session.project().master.is_active());
+        assert!(!session.render_dirty);
+
+        let mut invalid = session.project().master.clone();
+        invalid.ejay_wide.spread = KNOB_MAX + 1;
+        assert!(session.edit(EditCommand::SetMaster(invalid)).is_err());
+        assert!(session.history_step(true).unwrap());
+        assert!(session.project().master.ejay_compressor.on);
+    }
+
+    #[test]
     fn mute_and_solo_are_undo_steps_that_end_a_gain_gesture() {
         let mut session =
             Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -3623,9 +3757,10 @@ mod boundary_tests {
         let again =
             audio::prepare_project_reusing(session.project(), &session.library, &mut decoded)
                 .unwrap();
+        let master = &session.project().master;
         assert_eq!(
-            again.to_pcm().unwrap().samples,
-            first.to_pcm().unwrap().samples
+            again.to_pcm(master).unwrap().samples,
+            first.to_pcm(master).unwrap().samples
         );
         let empty = Project::default();
         audio::prepare_project_reusing(&empty, &session.library, &mut decoded).unwrap();
