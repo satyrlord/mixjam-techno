@@ -262,7 +262,7 @@ pub fn open(path: &Path, library: &Library) -> Result<(Project, Library), String
 }
 
 /// Open a song, a `.mix` or v7 `.mixjam` import, or an earlier JSON project.
-/// The flag says whether Save can replace the file: format version 8 or 9
+/// The flag says whether Save can replace the file: format version 8, 9, or 10
 /// song. Imports and earlier JSON projects need a new `.mixjam` path.
 pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bool), String> {
     let candidate = library.clone();

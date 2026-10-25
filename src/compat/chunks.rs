@@ -161,17 +161,33 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
         }
     }
     // The native dispatcher first excludes non-solo lanes when any saved solo
-    // switch is 1, then excludes mute=1 lanes. A muted solo lane stays silent.
+    // switch is 1, then excludes mute=1 lanes. A muted solo lane stays silent,
+    // which is the track Mute and Solo rule. Another value has no equivalent: a
+    // solo of 2 keeps a lane audible without starting solo playback. Such a
+    // song keeps the earlier conversion of the switches to L/R outputs.
+    let exact = native_switches
+        .iter()
+        .all(|&(mute, solo)| mute <= 1 && solo <= 1);
     let any_solo = native_switches.iter().any(|(_, solo)| *solo == 1);
     for (index, (mute, solo)) in native_switches.into_iter().enumerate() {
-        let audible = mute != 1 && (!any_solo || solo != 0);
-        tracks[index].left_enabled &= audible;
-        tracks[index].right_enabled &= audible;
+        let track = &mut tracks[index];
+        if exact {
+            track.muted = mute == 1;
+            track.solo = solo == 1;
+        } else {
+            let audible = mute != 1 && (!any_solo || solo != 0);
+            track.left_enabled &= audible;
+            track.right_enabled &= audible;
+        }
         if mute != 0 || solo != 0 {
-            source_notices.push(format!(
-                "Native track {}: mute={mute}, solo={solo}. Saved mute and solo settings were applied to the L/R outputs.",
-                index + 1
-            ));
+            source_notices.push(if exact {
+                format!("Native track {}: mute={mute}, solo={solo}.", index + 1)
+            } else {
+                format!(
+                    "Native track {}: mute={mute}, solo={solo}. A saved value other than 0 or 1 has no Mute or Solo equivalent, so this song's mute and solo settings were applied to the L/R outputs.",
+                    index + 1
+                )
+            });
         }
     }
     Ok(Header {
@@ -1813,25 +1829,67 @@ mod tests {
             let start = bytes.len() - count * 8;
             // A normal mute, a muted solo, and an unmuted solo on the last saved
             // lane exercise precedence and an empty utility lane's solo switch.
+            let outputs_on = |tracks: &[Track]| {
+                tracks
+                    .iter()
+                    .all(|track| track.left_enabled && track.right_enabled)
+            };
+            let audible = |tracks: &[Track]| {
+                let any_solo = tracks.iter().any(|track| track.solo);
+                tracks
+                    .iter()
+                    .map(|track| track.audible(any_solo))
+                    .collect::<Vec<_>>()
+            };
             bytes[start + 4..start + 6].copy_from_slice(&1u16.to_le_bytes());
             let muted = read_header(&bytes, product).unwrap();
-            assert!(!muted.tracks[0].left_enabled && !muted.tracks[0].right_enabled);
-            assert!(muted.tracks[1].left_enabled && muted.tracks[1].right_enabled);
+            assert!(outputs_on(&muted.tracks));
+            assert!(muted.tracks[0].muted && !muted.tracks[0].solo);
+            assert_eq!(audible(&muted.tracks)[..2], [false, true]);
             bytes[start + 6..start + 8].copy_from_slice(&1u16.to_le_bytes());
             let last = start + (count - 1) * 8;
             bytes[last + 2..last + 4].copy_from_slice(&20000u16.to_le_bytes());
             bytes[last + 6..last + 8].copy_from_slice(&1u16.to_le_bytes());
             let header = read_header(&bytes, product).unwrap();
             assert_eq!(header.after_mixer, bytes.len());
-            assert!(!header.tracks[0].left_enabled && !header.tracks[0].right_enabled);
-            assert!(!header.tracks[1].left_enabled && !header.tracks[1].right_enabled);
-            assert!(
-                header.tracks[count - 1].left_enabled && header.tracks[count - 1].right_enabled
-            );
+            assert!(outputs_on(&header.tracks));
+            assert!(header.tracks[0].muted && header.tracks[0].solo);
+            assert!(!header.tracks[count - 1].muted && header.tracks[count - 1].solo);
+            let heard = audible(&header.tracks);
+            assert_eq!(heard.iter().filter(|audible| **audible).count(), 1);
+            assert!(heard[count - 1]);
             assert!(
                 header.tracks[count..]
                     .iter()
                     .all(|track| track == &Track::default())
+            );
+
+            // A solo of 2 keeps its lane audible without starting solo
+            // playback. No Mute or Solo state says that, so the song keeps
+            // the earlier conversion to outputs.
+            let mut odd = bytes.clone();
+            odd[start + 14..start + 16].copy_from_slice(&2u16.to_le_bytes());
+            let fallback = read_header(&odd, product).unwrap();
+            assert!(
+                fallback
+                    .tracks
+                    .iter()
+                    .all(|track| !track.muted && !track.solo)
+            );
+            let enabled: Vec<_> = fallback.tracks[..count]
+                .iter()
+                .map(|track| track.left_enabled && track.right_enabled)
+                .collect();
+            let mut expected = vec![false; count];
+            expected[1] = true;
+            expected[count - 1] = true;
+            assert_eq!(enabled, expected);
+            assert!(
+                fallback
+                    .source_notices
+                    .iter()
+                    .any(|notice| notice.contains("solo=2")
+                        && notice.contains("applied to the L/R outputs"))
             );
             let expected_gain = native_fader_gain(20000, 1.33);
             assert_eq!(header.tracks[count - 1].gain, expected_gain);
@@ -2034,9 +2092,49 @@ mod tests {
             )
             .unwrap();
             for index in muted {
-                assert!(!header.tracks[index].left_enabled && !header.tracks[index].right_enabled);
+                assert!(header.tracks[index].muted);
+                assert!(header.tracks[index].left_enabled || header.tracks[index].right_enabled);
                 assert!(header.tracks[index].gain > 0.0);
             }
+        }
+    }
+
+    #[test]
+    #[ignore = "Requires the local installed D3, D4, T3, and House song fixtures."]
+    fn installed_songs_save_mute_and_solo_as_zero_or_one() {
+        // Every installed song maps exactly to Mute and Solo; none needs the
+        // conversion to outputs that another saved value would require.
+        for product in [Product::D3, Product::D4, Product::T3, Product::H1] {
+            let folder = crate::project_io::default_root(product)
+                .unwrap()
+                .join("MIX");
+            let (mut songs, mut muted, mut soloed) = (0, 0, 0);
+            for entry in fs::read_dir(folder).unwrap() {
+                let path = entry.unwrap().path();
+                if !path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("mix"))
+                {
+                    continue;
+                }
+                let header = read_header(&read_song_file(&path).unwrap(), product).unwrap();
+                assert!(
+                    !header
+                        .source_notices
+                        .iter()
+                        .any(|notice| notice.contains("no Mute or Solo equivalent")),
+                    "{}",
+                    path.display()
+                );
+                songs += 1;
+                muted += header.tracks.iter().filter(|track| track.muted).count();
+                soloed += header.tracks.iter().filter(|track| track.solo).count();
+            }
+            assert!(songs > 0, "{}", product.label());
+            println!(
+                "{}: {songs} songs, {muted} muted and {soloed} soloed tracks",
+                product.label()
+            );
         }
     }
 
@@ -2958,6 +3056,7 @@ mod tests {
                                     let track = &project.tracks[clip.track];
                                     clip.gain > 0.0
                                         && track.gain > 0.0
+                                        && track.audible(project.any_solo())
                                         && (track.left_enabled || track.right_enabled)
                                 })
                                 .unwrap()

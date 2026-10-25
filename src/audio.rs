@@ -189,6 +189,7 @@ impl Mix {
         // Many clips share one source: check each source's audio once.
         let mut validated = std::collections::HashSet::new();
         let mut voices = Vec::new();
+        let any_solo = project.any_solo();
         for clip in &project.clips {
             if missing.contains(&clip.sample_id) {
                 continue;
@@ -200,7 +201,7 @@ impl Mix {
                 source.validate()?;
             }
             let track = &project.tracks[clip.track];
-            if !track.left_enabled && !track.right_enabled {
+            if !track.audible(any_solo) || !track.left_enabled && !track.right_enabled {
                 continue;
             }
             let start = (clip.start_tick as f64 * frames_per_tick).round() as u64;
@@ -693,6 +694,47 @@ mod tests {
         );
         assert!(routed[0] < 0.0);
         assert_eq!([routed[1], routed[3]], [0.0, 0.0]);
+    }
+
+    #[test]
+    fn solo_plays_only_soloed_tracks_and_mute_wins_over_solo() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        // Tracks 1 to 3 each play the same sound.
+        for track in 1..3 {
+            let mut clip = project.clips[0].clone();
+            clip.id = 10 + track as u64;
+            clip.track = track;
+            project.clips.push(clip);
+        }
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44100,
+                channels: 1,
+                samples: vec![0.25; 4],
+            },
+        )]);
+        let one = render_with_samples(&project, &samples).unwrap().samples[0] / 3.0;
+        for (muted, solo, playing) in [
+            ([false; 3], [false; 3], 3.0),
+            ([true, false, false], [false; 3], 2.0),
+            ([false; 3], [false, true, false], 1.0),
+            ([false; 3], [true, true, false], 2.0),
+            ([true, false, false], [true, true, false], 1.0),
+            ([true, false, false], [true, false, false], 0.0),
+        ] {
+            for track in 0..3 {
+                project.tracks[track].muted = muted[track];
+                project.tracks[track].solo = solo[track];
+            }
+            let rendered = render_with_samples(&project, &samples).unwrap();
+            assert!(
+                (rendered.samples[0] - one * playing).abs() < 1e-7,
+                "{muted:?} {solo:?}"
+            );
+        }
     }
 
     #[test]

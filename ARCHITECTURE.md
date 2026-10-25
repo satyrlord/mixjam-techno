@@ -41,7 +41,10 @@ infinity. Track and Master model admission is 0 through 4, while new
 Mixer edits normally stop at +12 dB (about 3.9811 amplitude). Earlier exact
 track values of 4 survive load and focus. Clip gain remains 0 through 2.
 Changing polarity ends a gain or pan gesture and creates a discrete undo
-step. Silence retains polarity; Unity changes only amplitude.
+step. Silence retains polarity; Unity changes only amplitude. L/R, Mute, and
+Solo are discrete undo steps too. `Track::audible()` applies Mute and Solo
+for playback and export: when any track is soloed, only soloed tracks play,
+and Mute wins over Solo.
 
 Project copies share one imported-sample list until an edit changes it, so a
 history entry or render request costs the same for any palette size.
@@ -188,7 +191,8 @@ Sounds filters render inline to its right. Each module renders only its body
 below that header. The Mixer tool-rail shortcut selects Mixer, and selects
 Sounds when Mixer is already selected. Selection and shared panel height are frontend
 session state. Switching preserves resized height; opening Mixer raises a
-shorter panel to its 370-point minimum. Sounds retains its 180-point minimum.
+shorter panel to its minimum: 400 points, or down to 370 in a window too
+short to keep an 80-point lane viewport. Sounds retains its 180-point minimum.
 Later modules can extend the enum and the same selector.
 
 `src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses

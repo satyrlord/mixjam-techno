@@ -63,12 +63,62 @@ pub enum EditCommand {
         offset_frames: u32,
         length_ticks: u32,
     },
-    SetRouting {
+    SetSwitch {
         track: usize,
-        left: bool,
-        enabled: bool,
+        switch: TrackSwitch,
+        on: bool,
     },
     DeleteClips(Vec<u64>),
+}
+
+/// The on/off controls that the arrangement lane and the mixer strip share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TrackSwitch {
+    Left,
+    Right,
+    Mute,
+    Solo,
+}
+
+impl TrackSwitch {
+    pub const ALL: [Self; 4] = [Self::Mute, Self::Solo, Self::Left, Self::Right];
+
+    pub fn letter(self) -> &'static str {
+        match self {
+            Self::Left => "L",
+            Self::Right => "R",
+            Self::Mute => "M",
+            Self::Solo => "S",
+        }
+    }
+
+    /// The control's accessible name after its track name, such as "left output".
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "left output",
+            Self::Right => "right output",
+            Self::Mute => "mute",
+            Self::Solo => "solo",
+        }
+    }
+
+    pub fn get(self, track: &Track) -> bool {
+        match self {
+            Self::Left => track.left_enabled,
+            Self::Right => track.right_enabled,
+            Self::Mute => track.muted,
+            Self::Solo => track.solo,
+        }
+    }
+
+    pub fn get_mut(self, track: &mut Track) -> &mut bool {
+        match self {
+            Self::Left => &mut track.left_enabled,
+            Self::Right => &mut track.right_enabled,
+            Self::Mute => &mut track.muted,
+            Self::Solo => &mut track.solo,
+        }
+    }
 }
 
 struct RenderRequest {
@@ -323,8 +373,9 @@ impl Gesture {
                 let mut controls = Vec::new();
                 for (index, (old, new)) in project.tracks.iter().zip(tracks).enumerate() {
                     if old.polarity_inverted != new.polarity_inverted
-                        || old.left_enabled != new.left_enabled
-                        || old.right_enabled != new.right_enabled
+                        || TrackSwitch::ALL
+                            .iter()
+                            .any(|switch| switch.get(old) != switch.get(new))
                     {
                         return None;
                     }
@@ -771,7 +822,7 @@ impl Session {
                     )?;
                 }
             }
-            EditCommand::SetRouting { track, .. } if *track >= TRACK_COUNT => {
+            EditCommand::SetSwitch { track, .. } if *track >= TRACK_COUNT => {
                 return Err("The track is outside the project.".into());
             }
             EditCommand::DeleteClips(ids) => {
@@ -812,16 +863,8 @@ impl Session {
                     clip.length_ticks = length_ticks;
                 }
             }
-            EditCommand::SetRouting {
-                track,
-                left,
-                enabled,
-            } => {
-                if left {
-                    project.tracks[track].left_enabled = enabled;
-                } else {
-                    project.tracks[track].right_enabled = enabled;
-                }
+            EditCommand::SetSwitch { track, switch, on } => {
+                *switch.get_mut(&mut project.tracks[track]) = on;
             }
             EditCommand::DeleteClips(ids) => {
                 let ids: BTreeSet<_> = ids.into_iter().collect();
@@ -2923,10 +2966,10 @@ mod boundary_tests {
         for command in [
             EditCommand::SetTempo(146.0),
             EditCommand::SetLoop(Some([256, 256])),
-            EditCommand::SetRouting {
+            EditCommand::SetSwitch {
                 track: TRACK_COUNT,
-                left: true,
-                enabled: false,
+                switch: TrackSwitch::Left,
+                on: false,
             },
             EditCommand::SetMixer {
                 tracks: vec![],
@@ -3032,6 +3075,42 @@ mod boundary_tests {
         assert_eq!(session.project(), &Project::default());
         std::fs::remove_dir_all(dir).unwrap();
     }
+    #[test]
+    fn mute_and_solo_are_undo_steps_that_end_a_gain_gesture() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let mut tracks = session.project().tracks.clone();
+        tracks[2].gain = 0.5;
+        session
+            .edit(EditCommand::SetMixer {
+                tracks: tracks.clone(),
+                master_gain: 1.0,
+            })
+            .unwrap();
+        // A mixer edit that only flips Mute must not join the gain drag.
+        tracks[2].muted = true;
+        session
+            .edit(EditCommand::SetMixer {
+                tracks,
+                master_gain: 1.0,
+            })
+            .unwrap();
+        session
+            .edit(EditCommand::SetSwitch {
+                track: 2,
+                switch: TrackSwitch::Solo,
+                on: true,
+            })
+            .unwrap();
+        assert!(session.unsaved());
+        for (muted, solo, gain) in [(true, false, 0.5), (false, false, 0.5), (false, false, 1.0)] {
+            assert!(session.history_step(false).unwrap());
+            let track = &session.project().tracks[2];
+            assert_eq!((track.muted, track.solo, track.gain), (muted, solo, gain));
+        }
+        assert!(!session.history_step(false).unwrap());
+    }
+
     #[test]
     fn polarity_at_silence_is_an_independent_undo_step_between_gain_gestures() {
         let mut session =

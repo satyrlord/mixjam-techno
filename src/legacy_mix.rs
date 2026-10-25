@@ -57,6 +57,7 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
             pan: 0.0,
             left_enabled: matches!(routing, 0 | 1),
             right_enabled: matches!(routing, 0 | 2),
+            ..Track::default()
         });
     }
     // The installed profile has ten further bytes, followed by a product name,

@@ -37,6 +37,8 @@ pub struct Track {
     pub pan: f32,
     pub left_enabled: bool,
     pub right_enabled: bool,
+    pub muted: bool,
+    pub solo: bool,
 }
 impl Default for Track {
     fn default() -> Self {
@@ -46,6 +48,8 @@ impl Default for Track {
             pan: 0.0,
             left_enabled: true,
             right_enabled: true,
+            muted: false,
+            solo: false,
         }
     }
 }
@@ -57,6 +61,12 @@ impl Track {
         } else {
             self.gain
         }
+    }
+
+    /// Whether Mute and Solo let this track play. While any track is soloed,
+    /// only soloed tracks play; Mute wins over Solo, as in the original.
+    pub fn audible(&self, any_solo: bool) -> bool {
+        !self.muted && (!any_solo || self.solo)
     }
 
     /// Preserve the effective amplitude of an older signed gain, including -0.0.
@@ -71,12 +81,17 @@ impl<'de> Deserialize<'de> for Track {
         #[derive(Deserialize)]
         struct SavedTrack {
             gain: f32,
-            #[serde(default, deserialize_with = "optional_polarity")]
+            #[serde(default, deserialize_with = "optional_bool")]
             polarity_inverted: Option<bool>,
             #[serde(default)]
             pan: f32,
             left_enabled: bool,
             right_enabled: bool,
+            // Projects saved before Mute and Solo existed have neither.
+            #[serde(default)]
+            muted: bool,
+            #[serde(default)]
+            solo: bool,
         }
         let saved = SavedTrack::deserialize(deserializer)?;
         let mut track = Self {
@@ -85,6 +100,8 @@ impl<'de> Deserialize<'de> for Track {
             pan: saved.pan,
             left_enabled: saved.left_enabled,
             right_enabled: saved.right_enabled,
+            muted: saved.muted,
+            solo: saved.solo,
         };
         if saved.polarity_inverted.is_none() {
             if !saved.gain.is_finite() || !(-2.0..=4.0).contains(&saved.gain) {
@@ -98,7 +115,8 @@ impl<'de> Deserialize<'de> for Track {
     }
 }
 
-pub(crate) fn optional_polarity<'de, D: serde::Deserializer<'de>>(
+/// A field that may be absent but, when present, must be a boolean, not null.
+pub(crate) fn optional_bool<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<bool>, D::Error> {
     bool::deserialize(deserializer).map(Some)
@@ -455,6 +473,10 @@ impl Default for Project {
     }
 }
 impl Project {
+    pub fn any_solo(&self) -> bool {
+        self.tracks.iter().any(|track| track.solo)
+    }
+
     /// Remove choices that no longer affect the arrangement before saving or relinking.
     pub fn prune_sample_conflicts(&mut self) {
         if self.sample_conflicts.is_empty() {
@@ -1182,6 +1204,8 @@ mod tests {
                 polarity_inverted: false,
                 left_enabled: false,
                 right_enabled: true,
+                muted: true,
+                solo: true,
             };
             project.clips.push(Clip {
                 id: 37,

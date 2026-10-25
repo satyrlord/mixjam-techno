@@ -347,13 +347,14 @@ impl MixJamApp {
             });
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
         // Reserve the transport and a usable arrangement, including its inspector.
-        let min_height = self.bottom_module.minimum_height();
+        let available = ctx.available_rect().height();
+        let min_height = self.bottom_module.minimum_height(available);
         // Keep the resized section stable when switching to a shorter module.
         let shared_minimum = BottomModule::ALL
             .into_iter()
-            .map(BottomModule::minimum_height)
+            .map(|module| module.minimum_height(available))
             .fold(0.0_f32, f32::max);
-        let max_height = (ctx.available_rect().height() - 68.0 - 220.0).max(shared_minimum);
+        let max_height = (available - 68.0 - 220.0).max(shared_minimum);
         let sounds = egui::TopBottomPanel::bottom("sounds")
             .default_height(height)
             .height_range(min_height..=max_height)
@@ -854,7 +855,7 @@ impl MixJamApp {
         let bars =
             (self.session.project().end_tick().max(cursor_tick) / TICKS_PER_BAR + 16).max(64);
         let width = bars as f32 * bar_width;
-        let label_width = 74.0;
+        let label_width = 122.0;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
         let inspector_height = if self.selected_clip.is_some() {
             34.0
@@ -1010,6 +1011,21 @@ impl MixJamApp {
                                 self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
                                 clip.gain,
+                            );
+                        }
+                    }
+                    // Dim the lanes that Mute or another track's solo silences.
+                    let project = self.session.project();
+                    let any_solo = project.any_solo();
+                    for (row, &track) in visible_tracks.iter().enumerate().take(occupied_count) {
+                        if !project.tracks[track].audible(any_solo) {
+                            painter.rect_filled(
+                                Rect::from_min_size(
+                                    Pos2::new(rect.left(), rect.top() + row as f32 * row_height),
+                                    Vec2::new(width, row_height),
+                                ),
+                                0.0,
+                                CANVAS.gamma_multiply(0.6),
                             );
                         }
                     }
@@ -1271,23 +1287,24 @@ impl MixJamApp {
                             continue;
                         }
                         ui.painter().rect_filled(rect.shrink(1.0), 4.0, PANEL);
+                        let project = self.session.project();
+                        let silenced = !project.tracks[index].audible(project.any_solo());
+                        // From the left: M, S, L, the track number, and R.
+                        let number = Pos2::new(rect.left() + 85.0, rect.center().y);
                         ui.painter().rect_filled(
-                            Rect::from_center_size(
-                                rect.center(),
-                                Vec2::new(25.0, row_height - 3.0),
-                            ),
+                            Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
                             0.0,
                             PANEL,
                         );
                         ui.painter().text(
-                            rect.center() + Vec2::new(0.0, -1.0),
+                            number + Vec2::new(0.0, -1.0),
                             Align2::CENTER_CENTER,
                             format!("{}", index + 1),
                             FontId::proportional(14.0),
-                            TEXT,
+                            if silenced { MUTED } else { TEXT },
                         );
                         let arm = ui.interact(
-                            Rect::from_center_size(rect.center(), Vec2::new(26.0, row_height)),
+                            Rect::from_center_size(number, Vec2::new(26.0, row_height)),
                             ui.id().with(("arm", index)),
                             Sense::click(),
                         );
@@ -1300,11 +1317,7 @@ impl MixJamApp {
                             )
                         });
                         if self.armed_track == index {
-                            ui.painter().circle_filled(
-                                rect.center() + Vec2::new(0.0, 9.0),
-                                2.0,
-                                CORAL,
-                            );
+                            ui.painter().circle_filled(number + Vec2::new(0.0, 9.0), 2.0, CORAL);
                         }
                         if arm.has_focus() {
                             ui.painter().rect_stroke(
@@ -1320,38 +1333,31 @@ impl MixJamApp {
                         }
                         arm.on_hover_text("Select this track for recording");
                         let track = &self.session.project().tracks[index];
-                        for (left, enabled) in
-                            [(true, track.left_enabled), (false, track.right_enabled)]
-                        {
-                            let x = if left {
-                                rect.left() + 12.0
-                            } else {
-                                rect.right() - 12.0
-                            };
+                        for (switch, x) in TrackSwitch::ALL.into_iter().zip([12.0, 36.0, 60.0, 110.0]) {
                             let button = Rect::from_center_size(
-                                Pos2::new(x, rect.center().y),
+                                Pos2::new(rect.left() + x, rect.center().y),
                                 Vec2::new(24.0, row_height - 3.0),
                             );
                             let mut response = ui.interact(
                                 button,
-                                ui.id().with(("route", index, left)),
+                                ui.id().with(("switch", index, switch)),
                                 Sense::click(),
                             );
-                            let mut enabled = enabled;
+                            let mut on = switch.get(track);
                             if response.clicked() {
-                                enabled = !enabled;
-                                route_change = Some((index, left, enabled));
+                                on = !on;
+                                route_change = Some((index, switch, on));
                                 response.mark_changed();
                             }
-                            let label = format!("Arrangement track {} {} output", index + 1, if left { "left" } else { "right" });
+                            let label = format!("Arrangement track {} {}", index + 1, switch.name());
                             response.widget_info(|| {
-                                egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), enabled, &label)
+                                egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), on, &label)
                             });
-                            speaker(ui.painter(), button, enabled, left);
+                            switch_letter(ui.painter(), button, on, switch);
                             if response.has_focus() {
                                 ui.painter().rect_stroke(button.shrink(1.0), 2.0, Stroke::new(1.0_f32, ACCENT), egui::StrokeKind::Inside);
                             }
-                            response.on_hover_text(route_hint(&label, enabled));
+                            response.on_hover_text(switch_hint(&label, switch, on));
                         }
                     }
                 },
@@ -1430,15 +1436,15 @@ impl MixJamApp {
             let result = self.session.edit(EditCommand::SetLoop(Some(region)));
             self.apply(result);
         }
-        if let Some((index, left, enabled)) = route_change {
-            let result = self.session.edit(EditCommand::SetRouting {
+        if let Some((index, switch, on)) = route_change {
+            let result = self.session.edit(EditCommand::SetSwitch {
                 track: index,
-                left,
-                enabled,
+                switch,
+                on,
             });
             self.apply(result);
             // The mixer is laid out before the arrangement. Redraw it with the
-            // new routing state even when the pointer stops after this click.
+            // new switch state even when the pointer stops after this click.
             ui.ctx().request_repaint();
         }
         ui.add_space(3.0);
@@ -2383,20 +2389,29 @@ pub(super) fn elided(
     job
 }
 
-fn route_hint(label: &str, active: bool) -> String {
-    format!(
-        "{label}: {}. Turn both outputs off to mute this track.",
-        if active { "on" } else { "off" }
-    )
+/// The tooltip of a track switch; the arrangement and the mixer share it.
+pub(super) fn switch_hint(label: &str, switch: TrackSwitch, on: bool) -> String {
+    let state = if on { "on" } else { "off" };
+    match switch {
+        TrackSwitch::Left | TrackSwitch::Right => format!(
+            "{label}: {state}. With both outputs off this track has no output. Pan stays unchanged."
+        ),
+        TrackSwitch::Mute => {
+            format!("{label}: {state}. A muted track is silent, even when soloed.")
+        }
+        TrackSwitch::Solo => {
+            format!("{label}: {state}. While any track is soloed, only soloed tracks play.")
+        }
+    }
 }
 
 fn route_color(active: bool) -> Color32 {
     if active { ACCENT } else { MUTED }
 }
 
-pub(super) fn speaker(painter: &egui::Painter, rect: Rect, enabled: bool, left: bool) {
-    // The bar marks an enabled output, so the state does not rest on color.
-    if enabled {
+fn switch_letter(painter: &egui::Painter, rect: Rect, on: bool, switch: TrackSwitch) {
+    // The bar marks a switch that is on, so the state does not rest on color.
+    if on {
         painter.rect_filled(
             Rect::from_center_size(rect.center() + Vec2::new(0.0, 9.0), Vec2::new(9.0, 2.0)),
             1.0,
@@ -2406,9 +2421,9 @@ pub(super) fn speaker(painter: &egui::Painter, rect: Rect, enabled: bool, left: 
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
-        if left { "L" } else { "R" },
+        switch.letter(),
         FontId::proportional(10.0),
-        route_color(enabled),
+        route_color(on),
     );
 }
 

@@ -302,6 +302,8 @@ pub struct TrackView {
     pub pan: f32,
     pub left: bool,
     pub right: bool,
+    pub muted: bool,
+    pub solo: bool,
     pub clips: usize,
 }
 
@@ -345,7 +347,7 @@ pub struct SongView {
     /// The first and last looped bar.
     pub loop_bars: Option<[u32; 2]>,
     pub end_tick: u32,
-    /// Tracks that hold clips. The other tracks keep their default settings.
+    /// Tracks that hold clips or have Solo on, including empty soloed tracks.
     pub tracks: Vec<TrackView>,
     pub clips: Vec<ClipView>,
     pub missing_samples: Vec<MissingView>,
@@ -521,30 +523,31 @@ pub fn sample_view(session: &Session, sample: &Sample) -> SampleView {
 pub fn song_view(session: &Session) -> SongView {
     let project = session.project();
     let library = session.library();
-    let mut tracks: Vec<TrackView> = Vec::new();
+    let mut clip_counts = vec![0; project.tracks.len()];
     for clip in &project.clips {
-        match tracks
-            .iter_mut()
-            .find(|track| track.track == clip.track + 1)
-        {
-            Some(track) => track.clips += 1,
-            None => {
-                let Some(track) = project.tracks.get(clip.track) else {
-                    continue;
-                };
-                tracks.push(TrackView {
-                    track: clip.track + 1,
-                    gain: track.gain,
-                    polarity_inverted: track.polarity_inverted,
-                    pan: track.pan,
-                    left: track.left_enabled,
-                    right: track.right_enabled,
-                    clips: 1,
-                });
-            }
+        if let Some(count) = clip_counts.get_mut(clip.track) {
+            *count += 1;
         }
     }
-    tracks.sort_by_key(|track| track.track);
+    // A soloed track silences the others, so it is listed even without clips.
+    let tracks: Vec<TrackView> = project
+        .tracks
+        .iter()
+        .zip(clip_counts)
+        .enumerate()
+        .filter(|(_, (track, clips))| *clips > 0 || track.solo)
+        .map(|(index, (track, clips))| TrackView {
+            track: index + 1,
+            gain: track.gain,
+            polarity_inverted: track.polarity_inverted,
+            pan: track.pan,
+            left: track.left_enabled,
+            right: track.right_enabled,
+            muted: track.muted,
+            solo: track.solo,
+            clips,
+        })
+        .collect();
     let mut groups: Vec<String> = library
         .samples
         .iter()

@@ -68,7 +68,7 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   The panel retains its resized height; opening Mixer raises a shorter panel
   to fit its controls. The Mixer tool-rail shortcut opens Mixer
   and returns to Sounds when Mixer is already selected.
-- Use Mixer for track gain, pan, L/R routing, and master volume.
+- Use Mixer for track gain, pan, L/R routing, Mute, Solo, and master volume.
   Master stays visible while you scroll through tracks. Each strip shows its
   track number and the sound names on that track.
   Gain runs from -inf dB (silence) to +12 dB; 0 dB is unity. Negative dB
@@ -78,9 +78,10 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   button resets pan at the rail midpoint. The slashed-circle button reverses
   both channels' polarity without changing gain or pan. Amber means inverted;
   the polarity setting remains independent even at silence.
-  L and R enable each output. Both off shows Muted.
-  The lane and mixer L/R controls mirror each other. Changing these controls
-  does not change pan.
+  L and R enable each output; both off shows No output. M mutes the track.
+  S solos it: while any track is soloed, only soloed tracks play, and a muted
+  track stays silent. The lane and mixer M/S/L/R controls mirror each other.
+  Changing these controls does not change pan.
 - Use Import for WAV files and enter the known source tempo.
 - Use Sample Editor to trim and change pitch. Start frame is included; End frame
   is excluded. The adjacent buttons change one frame or 0.1 semitone; hold Shift
@@ -93,9 +94,10 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   count-in. Stop and save the take as a WAV file.
 - Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-A `.mixjam` song is JSON, format version 9. Earlier format-8 songs open and
-migrate with their effective gain and polarity preserved. Saving them writes
-version 9, which earlier builds cannot open. A song links to WAV files; it is not a
+A `.mixjam` song is JSON, format version 10. Earlier format-8 and format-9 songs
+open with their effective gain, polarity, and L/R outputs preserved, and Mute
+and Solo off. Saving them writes version 10, which earlier builds cannot open.
+A song links to WAV files; it is not a
 portable audio bundle. After moving the sample folder, select its new location
 before opening the song.
 

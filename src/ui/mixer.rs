@@ -1,4 +1,5 @@
 //! Compact mixer presentation. Gain magnitude and polarity remain separate project edits.
+use super::view::switch_hint;
 use super::*;
 use mixjam_techno::application::{MAX_MIXER_GAIN_DB, Track, amplitude_to_db, db_to_amplitude};
 
@@ -180,9 +181,12 @@ pub(super) fn show(
     if let Some(art) = art {
         art.tile(ui, 1, whole);
     }
+    // A 400-point panel gives the gain rail 112 points. A short window can
+    // reduce the panel to 370 points, and the rail to 84.
     let height = (ui.available_height() - 14.0).max(304.0 * scale);
     let bank_width = (ui.available_width() - width - 12.0 * scale).max(width);
     let occupied = occupied_tracks(project);
+    let any_solo = project.any_solo();
     let mut changed = false;
     ui.horizontal_top(|ui| {
         ui.allocate_ui_with_layout(
@@ -222,13 +226,16 @@ pub(super) fn show(
                                                     &detail,
                                                 ),
                                                 &mut track.gain,
-                                                Some((
+                                                Some(TrackControls {
                                                     index,
-                                                    &mut track.polarity_inverted,
-                                                    &mut track.pan,
-                                                    &mut track.left_enabled,
-                                                    &mut track.right_enabled,
-                                                )),
+                                                    inverted: &mut track.polarity_inverted,
+                                                    pan: &mut track.pan,
+                                                    left: &mut track.left_enabled,
+                                                    right: &mut track.right_enabled,
+                                                    muted: &mut track.muted,
+                                                    solo: &mut track.solo,
+                                                    any_solo,
+                                                }),
                                             );
                                         },
                                     );
@@ -257,7 +264,17 @@ pub(super) fn show(
     changed
 }
 
-type TrackControls<'a> = (usize, &'a mut bool, &'a mut f32, &'a mut bool, &'a mut bool);
+struct TrackControls<'a> {
+    index: usize,
+    inverted: &'a mut bool,
+    pan: &'a mut f32,
+    left: &'a mut bool,
+    right: &'a mut bool,
+    muted: &'a mut bool,
+    solo: &'a mut bool,
+    /// Whether any track was soloed when the mixer was laid out.
+    any_solo: bool,
+}
 
 fn strip(
     ui: &mut egui::Ui,
@@ -291,7 +308,7 @@ fn strip(
     .on_hover_text(detail);
     let value_rect = Rect::from_min_size(at(8.0, 42.0), Vec2::new(92.0, 22.0) * scale);
     let mut changed = gain_value(ui, value_rect, scale, name, gain);
-    let bottom = height / scale - 108.0;
+    let bottom = height / scale - 136.0;
     let rail = Rect::from_min_max(at(18.0, 84.0), at(50.0, bottom));
     changed |= gain_rail(ui, art, scale, rail, name, gain);
     let zero_y = egui::lerp(rail.bottom()..=rail.top(), gain_fraction(1.0));
@@ -312,13 +329,16 @@ fn strip(
             ],
             Stroke::new(1.0 * scale, INK),
         );
-        ui.painter().text(
-            Pos2::new(rail.right() + 9.0 * scale, y),
-            Align2::LEFT_CENTER,
-            label,
-            FontId::proportional(10.0 * scale),
-            INK,
-        );
+        // A short rail keeps the tick but drops a label that would touch -inf.
+        if rail.bottom() - y >= 12.0 * scale {
+            ui.painter().text(
+                Pos2::new(rail.right() + 9.0 * scale, y),
+                Align2::LEFT_CENTER,
+                label,
+                FontId::proportional(10.0 * scale),
+                INK,
+            );
+        }
     }
     ui.painter().text(
         Pos2::new(rail.right() + 9.0 * scale, rail.bottom()),
@@ -352,9 +372,19 @@ fn strip(
         changed |= *gain != 1.0;
         *gain = 1.0;
     }
-    if let Some((index, inverted, pan, left, right)) = controls {
+    if let Some(TrackControls {
+        index,
+        inverted,
+        pan,
+        left,
+        right,
+        muted,
+        solo,
+        any_solo,
+    }) = controls
+    {
         let pan_rect = Rect::from_min_size(
-            at(8.0, height / scale - 88.0),
+            at(8.0, height / scale - 116.0),
             Vec2::new(92.0, 16.0) * scale,
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(pan_rect), |ui| {
@@ -367,7 +397,7 @@ fn strip(
         let center = button(
             ui,
             Rect::from_center_size(
-                at(54.0, height / scale - 62.0),
+                at(54.0, height / scale - 90.0),
                 Vec2::new(40.0, 14.0) * scale,
             ),
             "Center",
@@ -382,17 +412,35 @@ fn strip(
             changed |= *pan != 0.0;
             *pan = 0.0;
         }
+        // Name why the track is silent; causes on this track come first.
         text(
             ui,
-            at(54.0, height / scale - 44.0),
-            &if !*left && !*right {
+            at(54.0, height / scale - 72.0),
+            &if *muted {
                 "Muted".into()
+            } else if !*left && !*right {
+                "No output".into()
+            } else if any_solo && !*solo {
+                "Solo elsewhere".into()
             } else {
                 pan_description(*pan)
             },
             11.0 * scale,
             INK,
         );
+        for (switch, x, on) in [
+            (TrackSwitch::Mute, 40.0, muted),
+            (TrackSwitch::Solo, 72.0, solo),
+        ] {
+            changed |= switch_button(
+                ui,
+                Rect::from_min_size(at(x, height / scale - 56.0), Vec2::new(28.0, 24.0) * scale),
+                scale,
+                name,
+                switch,
+                on,
+            );
+        }
         let invert_rect = Rect::from_min_size(
             at(8.0, height / scale - 28.0),
             Vec2::new(26.0, 24.0) * scale,
@@ -425,39 +473,30 @@ fn strip(
             )
         });
         if response.on_hover_text(format!("{name} polarity: {}. Invert the sign of both output channels without changing gain or pan. Negative dB values only reduce level.", if *inverted { "inverted" } else { "normal" })).clicked() { *inverted = !*inverted; changed = true; }
-        changed |= route(
-            ui,
-            Rect::from_min_size(
-                at(40.0, height / scale - 28.0),
-                Vec2::new(28.0, 24.0) * scale,
-            ),
-            scale,
-            name,
-            "L",
-            left,
-        );
-        changed |= route(
-            ui,
-            Rect::from_min_size(
-                at(72.0, height / scale - 28.0),
-                Vec2::new(28.0, 24.0) * scale,
-            ),
-            scale,
-            name,
-            "R",
-            right,
-        );
+        for (switch, x, on) in [
+            (TrackSwitch::Left, 40.0, left),
+            (TrackSwitch::Right, 72.0, right),
+        ] {
+            changed |= switch_button(
+                ui,
+                Rect::from_min_size(at(x, height / scale - 28.0), Vec2::new(28.0, 24.0) * scale),
+                scale,
+                name,
+                switch,
+                on,
+            );
+        }
     } else {
         text(
             ui,
-            at(54.0, height / scale - 65.0),
+            at(54.0, height / scale - 93.0),
             "Main output",
             11.0 * scale,
             INK,
         );
         text(
             ui,
-            at(54.0, height / scale - 47.0),
+            at(54.0, height / scale - 75.0),
             "L + R",
             11.0 * scale,
             INK,
@@ -526,18 +565,15 @@ fn focus_ring(ui: &egui::Ui, response: &Response, rect: Rect, scale: f32) {
     }
 }
 
-fn route(
+fn switch_button(
     ui: &mut egui::Ui,
     rect: Rect,
     scale: f32,
     name: &str,
-    side: &str,
+    switch: TrackSwitch,
     enabled: &mut bool,
 ) -> bool {
-    let label = format!(
-        "{name} {} output",
-        if side == "L" { "left" } else { "right" }
-    );
+    let label = format!("{name} {}", switch.name());
     let response = button(ui, rect, "", &label, scale, false);
     ui.painter().rect_filled(
         Rect::from_center_size(
@@ -550,7 +586,7 @@ fn route(
     text(
         ui,
         rect.center() + Vec2::new(0.0, 3.0) * scale,
-        side,
+        switch.letter(),
         11.0 * scale,
         if *enabled { ACCENT } else { MUTED },
     );
@@ -563,10 +599,7 @@ fn route(
         )
     });
     let clicked = response
-        .on_hover_text(format!(
-            "{label}: {}. Disabling both outputs mutes this track. Pan stays unchanged.",
-            if *enabled { "on" } else { "off" }
-        ))
+        .on_hover_text(switch_hint(&label, switch, *enabled))
         .clicked();
     if clicked {
         *enabled = !*enabled;

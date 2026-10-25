@@ -1,10 +1,11 @@
-//! `.mixjam` songs: the application's own format version 9 (`song`) and a
+//! `.mixjam` songs: the application's own format version 10 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
 //! emulation. Master processors, return effects and edge fades remain serialized
 //! in source notices and are not rendered; the importer states this sound change.
-//! Muting/solo becomes channel routing, and later same-lane triggers truncate
+//! Lane mute and solo become track Mute and Solo; MixJam plays a soloed lane
+//! even when it is muted, so such a lane imports unmuted. Later same-lane triggers truncate
 //! earlier clips. Playback tempo comes from the measured WAV duration and saved
 //! placement span, as in MixJam's stretchRatioForDuration scheduling. Descriptive
 //! nativeBPM is not the arrangement playback-rate authority. UI names, palette,
@@ -109,7 +110,7 @@ struct MasterBus {
     preset: Option<String>,
 }
 
-/// The fields that both format versions share, read before the strict parse.
+/// The fields that all supported format versions share, read before the strict parse.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Header {
@@ -132,13 +133,13 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8 or 9 song or import a version 7 project. The flag is true for
+/// Open a version 8, 9, or 10 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
     match header.format_version {
-        8 | song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
+        8 | 9 | song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
         7 => {
             if bytes.len() > MAX_BYTES {
                 return Err("The MixJam project exceeds the 16 MiB limit.".into());
@@ -147,11 +148,11 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7, 8, and 9 are supported.".into()),
+        _ => Err("Only MixJam format versions 7, 8, 9, and 10 are supported.".into()),
     }
 }
 
-/// Write the song as a format version 9 document.
+/// Write the song as a format version 10 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -288,7 +289,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
         master_gain: document.song.master_gain,
         ..Project::default()
     };
-    project.source_notices.push("Imported MixJam v7 arrangement. MixJam master processing, gain trim, return effects, and clip edge fades are not rendered. The sound can differ. Saved source controls remain in the next notice. Mute and solo become channel routing; later lane triggers cut earlier clips.".into());
+    project.source_notices.push("Imported MixJam v7 arrangement. MixJam master processing, gain trim, return effects, and clip edge fades are not rendered. The sound can differ. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
     project.source_notices.push(format!("MixJam v7 source controls: {}", serde_json::json!({
         "appVersion":document.app_version, "createdAt":document.created_at, "modifiedAt":document.modified_at,
         "masterBus":document.master_bus, "fxBuses":document.fx_buses,
@@ -297,17 +298,16 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
             "muted":lane.muted,"solo":lane.solo,"stereoPairId":lane.stereo_pair_id,"sends":lane.sends,
             "placements":lane.placements})).collect::<Vec<_>>()
     })));
-    let solo = document.lanes.iter().any(|lane| lane.solo);
     let mut references = ReferenceResolver::new(library);
     let mut imported_paths: HashMap<(String, u32), u32> = HashMap::new();
     for (track, mut lane) in document.lanes.into_iter().enumerate() {
-        let audible = if solo { lane.solo } else { !lane.muted };
         project.tracks[track] = Track {
             gain: lane.gain,
             polarity_inverted: false,
             pan: lane.pan,
-            left_enabled: audible,
-            right_enabled: audible,
+            muted: lane.muted && !lane.solo,
+            solo: lane.solo,
+            ..Track::default()
         };
         // The format reader sorts equal-time placements by ID. MixJam gives the
         // last trigger at each start tick precedence and cuts the previous voice.
@@ -438,6 +438,23 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn unsupported_song_version_lists_all_supported_versions() {
+        let path = std::env::temp_dir().join(format!(
+            "mixjam-unsupported-version-{}.mixjam",
+            std::process::id()
+        ));
+        let mut document = fixture();
+        document["formatVersion"] = json!(11);
+        fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        let error = load_song(&path, &Library::empty()).unwrap_err();
+        fs::remove_file(path).unwrap();
+        assert_eq!(
+            error,
+            "Only MixJam format versions 7, 8, 9, and 10 are supported."
+        );
+    }
+
     fn fixture() -> Value {
         json!({"formatVersion":7,"appVersion":"1.0","createdAt":"2026-01-01T00:00:00Z","modifiedAt":"2026-01-01T00:00:00Z",
             "song":{"bpm":127,"masterGain":0.8,"clipEdgeMicroFades":{"enabled":false,"fadeInMs":2,"fadeOutMs":4}},
@@ -516,7 +533,10 @@ mod tests {
         assert_eq!(project.clips[1].length_ticks, 256);
         assert_eq!(project.imported_samples.len(), 1);
         assert_eq!(project.imported_samples[0].source_bpm, 120.0);
-        assert!(project.tracks[0].left_enabled);
+        assert!(project.tracks[0].left_enabled && project.tracks[0].right_enabled);
+        // MixJam plays a muted solo lane, so it imports soloed and unmuted.
+        assert!(project.tracks[0].solo && !project.tracks[0].muted);
+        assert!(!project.tracks[1].audible(project.any_solo()));
         assert_eq!(project.tracks[0].pan, -0.25);
         assert_eq!(project.tracks[0].gain, 0.6);
         assert!(project.libraries.is_empty());

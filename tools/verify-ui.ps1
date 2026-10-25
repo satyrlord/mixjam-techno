@@ -156,6 +156,9 @@ for index, gain in enumerate((-0.33333334, 0, 1, 4, -2, 0.25, 0.8, 1.5)):
 mixer_project['tracks'][1].update(left_enabled=False, right_enabled=False)
 mixer_project['tracks'][2]['right_enabled'] = False
 mixer_project['tracks'][3]['left_enabled'] = False
+# Track 2 shows No output, track 5 Muted, track 6 its pan, and the rest Solo elsewhere.
+mixer_project['tracks'][4]['muted'] = True
+mixer_project['tracks'][5]['solo'] = True
 mixer_project['master_gain'] = 0.7777778
 # A track can contain more than one sound; its strip must not invent one identity.
 mixer_project['clips'][0]['sample_id'] = samples[4]['id']

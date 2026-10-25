@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use crate::{
-        engine::{Editor, ImportNotice},
+        engine::{Editor, ImportNotice, Track},
         library::Library,
     };
 
@@ -1504,8 +1504,8 @@ mod tests {
             );
             assert!(visible(&output, PLACE, viewport));
             for label in [
-                "Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.",
-                "Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.",
+                "Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.",
+                "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.",
             ] {
                 // Later sections follow this guidance, so scroll toward it in
                 // steps and stop when it appears.
@@ -3160,16 +3160,17 @@ mod tests {
     }
 
     #[test]
-    fn arrangement_and_mixer_routes_mirror_states_edits_and_history() {
-        fn assert_routes(output: &egui::FullOutput, track: usize, left: bool, right: bool) {
-            for (side, text, enabled) in [("left", "L", left), ("right", "R", right)] {
-                for label in [format!("Arrangement track {track} {side} output"), format!("Track {track} {side} output"),] {
+    fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
+        fn assert_switches(output: &egui::FullOutput, track: usize, state: &Track) {
+            for switch in TrackSwitch::ALL {
+                let enabled = switch.get(state);
+                for label in [format!("Arrangement track {track} {}", switch.name()), format!("Track {track} {}", switch.name()),] {
                     let (_, node) = accessible_node(output, &label);
                     assert_eq!(node.toggled(), Some(if enabled { egui::accesskit::Toggled::True } else { egui::accesskit::Toggled::False }), "{label}");
                     let bounds = node.bounds().unwrap();
                     let rect = Rect::from_min_max(Pos2::new(bounds.x0 as f32, bounds.y0 as f32), Pos2::new(bounds.x1 as f32, bounds.y1 as f32),);
                     let painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(painted) if painted.galley.job.text == text && rect.contains(painted.pos) =>
+                        egui::Shape::Text(painted) if painted.galley.job.text == switch.letter() && rect.contains(painted.pos) =>
                             { Some(painted)
                             }
                         _ => None,
@@ -3187,44 +3188,132 @@ mod tests {
         app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,).unwrap();
         app.bottom_module = BottomModule::Mixer;
         ctx.enable_accesskit();
-        for (left, right) in [(true, true), (true, false), (false, false), (false, true)] {
-            for (side, enabled) in [(true, left), (false, right)] {
-                app.session.edit(EditCommand::SetRouting { track: 0, left: side, enabled, }).unwrap();
+        for (left, right, muted, solo) in [
+            (true, true, false, false),
+            (true, false, true, false),
+            (false, false, false, true),
+            (false, true, true, true),
+        ] {
+            for (switch, on) in TrackSwitch::ALL.into_iter().zip([muted, solo, left, right]) {
+                app.session.edit(EditCommand::SetSwitch { track: 0, switch, on }).unwrap();
             }
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_routes(&output, 1, left, right);
-            assert_routes(&output, 64, true, true);
+            let expected = Track { left_enabled: left, right_enabled: right, muted, solo, ..app.session.project().tracks[0].clone() };
+            assert_switches(&output, 1, &expected);
+            assert_switches(&output, 64, &app.session.project().tracks[63].clone());
         }
-        for (label, track, left) in [
-            ("Arrangement track 1 left output", 0, true),
-            ("Track 64 right output", 63, false),
+        for (label, track, switch) in [
+            ("Arrangement track 1 left output", 0, TrackSwitch::Left),
+            ("Track 64 right output", 63, TrackSwitch::Right),
+            ("Arrangement track 1 mute", 0, TrackSwitch::Mute),
+            ("Track 64 solo", 63, TrackSwitch::Solo),
         ] {
             let before = app.session.project().tracks[track].clone();
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let bounds = accessible_node(&output, label).1.bounds().unwrap();
             click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 * 0.5, (bounds.y0 + bounds.y1) as f32 * 0.5,), egui::Modifiers::NONE,);
             let changed = app.session.project().tracks[track].clone();
-            assert_eq!(changed.left_enabled, if left { !before.left_enabled } else { before.left_enabled });
-            assert_eq!(changed.right_enabled, if left { before.right_enabled } else { !before.right_enabled });
-            assert_eq!(changed.pan, before.pan);
-            assert_eq!(changed.gain, before.gain);
+            let mut expected = before.clone();
+            *switch.get_mut(&mut expected) = !switch.get(&before);
+            assert_eq!(changed, expected, "{label}");
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_routes(&output, track + 1, changed.left_enabled, changed.right_enabled,);
+            assert_switches(&output, track + 1, &changed);
             app.history_step(false);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_routes(&output, track + 1, before.left_enabled, before.right_enabled,);
+            assert_switches(&output, track + 1, &before);
             app.history_step(true);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_routes(&output, track + 1, changed.left_enabled, changed.right_enabled,);
+            assert_switches(&output, track + 1, &changed);
         }
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         focus_control(&ctx, &mut app, &output, "Arrangement track 64 left output");
         frame(&ctx, &mut app, vec![key_event(egui::Key::Space, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert_routes(&output, 64, false, false);
+        assert!(!app.session.project().tracks[63].left_enabled);
+        assert_switches(&output, 64, &app.session.project().tracks[63].clone());
         assert_eq!(app.session.project().tracks[0].pan, -0.75);
         assert_eq!(app.session.project().tracks[63].pan, 0.5);
+    }
+
+    #[test]
+    fn mixer_status_names_why_a_track_is_silent() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.clips[1].track = 1;
+        app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,).unwrap();
+        app.bottom_module = BottomModule::Mixer;
+        // Track 1 shows each cause in turn; the order is Muted, No output, Solo elsewhere.
+        for (switches, expected) in [
+            (vec![(1, TrackSwitch::Solo, true)], "Solo elsewhere"),
+            (vec![(0, TrackSwitch::Left, false), (0, TrackSwitch::Right, false)], "No output"),
+            (vec![(0, TrackSwitch::Mute, true)], "Muted"),
+        ] {
+            for (track, switch, on) in switches {
+                app.session.edit(EditCommand::SetSwitch { track, switch, on }).unwrap();
+            }
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            text_rect(&output, expected);
+        }
+    }
+
+    #[test]
+    fn muted_and_solo_silenced_lanes_dim_their_track_numbers() {
+        fn number_color(output: &egui::FullOutput, track: usize) -> egui::Color32 {
+            let bounds = accessible_node(output, &format!("Record on track {track}")).1.bounds().unwrap();
+            let rect = Rect::from_min_max(Pos2::new(bounds.x0 as f32, bounds.y0 as f32), Pos2::new(bounds.x1 as f32, bounds.y1 as f32));
+            output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == track.to_string() && rect.contains(text.pos) =>
+                    Some(text.galley.job.sections[0].format.color),
+                _ => None,
+            }).unwrap_or_else(|| panic!("Missing track number {track}"))
+        }
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.clips[1].track = 1;
+        app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project,).unwrap();
+        ctx.enable_accesskit();
+        for (track, switch, expected) in [
+            (0, TrackSwitch::Mute, [MUTED, TEXT]),
+            (1, TrackSwitch::Solo, [MUTED, TEXT]),
+            (0, TrackSwitch::Mute, [MUTED, TEXT]),
+            (1, TrackSwitch::Solo, [TEXT, TEXT]),
+        ] {
+            let on = !switch.get(&app.session.project().tracks[track]);
+            app.session.edit(EditCommand::SetSwitch { track, switch, on }).unwrap();
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!([number_color(&output, 1), number_color(&output, 2)], expected);
+        }
+    }
+
+    #[test]
+    fn mixer_yields_its_extra_height_only_in_a_short_window() {
+        for (size, minimum) in [(Vec2::new(1440.0, 1000.0), 400.0), (Vec2::new(960.0, 720.0), 372.0)] {
+            let (ctx, mut app) = fixture();
+            app.bottom_module = BottomModule::Mixer;
+            for _ in 0..3 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds")).unwrap().rect;
+            assert!(panel.height() >= minimum - 0.5, "{size:?}: {panel:?}");
+            assert!(app.timeline_drop_rect.unwrap().height() >= 80.0, "{size:?}");
+        }
+    }
+
+    #[test]
+    fn a_soloed_empty_track_stays_visible_so_its_solo_can_be_cleared() {
+        let (ctx, mut app) = fixture();
+        app.session.edit(EditCommand::SetSwitch { track: 40, switch: TrackSwitch::Solo, on: true }).unwrap();
+        assert!(occupied_tracks(app.session.project()).contains(&40));
+        ctx.enable_accesskit();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Arrangement track 41 solo").1.bounds().unwrap();
+        click(&ctx, &mut app, Pos2::new((bounds.x0 + bounds.x1) as f32 * 0.5, (bounds.y0 + bounds.y1) as f32 * 0.5,), egui::Modifiers::NONE,);
+        assert!(!app.session.project().any_solo());
+        assert!(!occupied_tracks(app.session.project()).contains(&40));
     }
 
     #[test]
@@ -3466,7 +3555,7 @@ mod tests {
         );
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(!app.session.project().tracks[0].right_enabled);
-        text_rect(&output, "Muted");
+        text_rect(&output, "No output");
 
         focus_control(&ctx, &mut app, &output, "Track 1 gain value");
         frame(
@@ -3667,7 +3756,7 @@ mod tests {
                 let unity = effects_control_rect(&output, &format!("Reset {track} gain to unity"));
                 assert!(viewport.contains_rect(gain) && viewport.contains_rect(value)
                     && viewport.contains_rect(unity), "{track} gain controls must fit at {density}x.");
-                assert!(gain.height() >= 112.0, "The minimum-window rail must remain usable at {density}x.");
+                assert!(gain.height() >= 86.0, "The minimum-window rail must remain usable at {density}x.");
                 assert!(value.bottom() <= gain.top(), "The dB readout must have room above its rail.");
                 let cap = output.shapes.iter().find_map(|shape| match &shape.shape {
                     egui::Shape::Mesh(mesh) => {
@@ -3691,8 +3780,14 @@ mod tests {
                 let polarity = effects_control_rect(&output, &format!("{track} polarity invert"));
                 let left = effects_control_rect(&output, &format!("{track} left output"));
                 let right = effects_control_rect(&output, &format!("{track} right output"));
-                for rect in [pan, center, polarity, left, right] {
+                let mute = effects_control_rect(&output, &format!("{track} mute"));
+                let solo = effects_control_rect(&output, &format!("{track} solo"));
+                for rect in [pan, center, polarity, left, right, mute, solo] {
                     assert!(viewport.contains_rect(rect), "{track} lower controls must fit at {density}x.");
+                }
+                for rect in [mute, solo] {
+                    assert!(rect.top() >= center.bottom() && rect.bottom() <= left.top(),
+                        "Mute and Solo sit in their own row between Center and L/R.");
                 }
                 let cap = caps.iter().find(|(name, _)| *name == track).unwrap().1;
                 assert!(pan.top() - cap.bottom() >= 4.0 - 1.0 / density,
@@ -3961,8 +4056,9 @@ mod tests {
                 Vec2::new(960.0, 720.0),
             );
         }
+        // The largest minimum any window size gives a module.
         let shared_minimum = BottomModule::ALL.into_iter()
-            .map(BottomModule::minimum_height).fold(0.0_f32, f32::max);
+            .map(|module| module.minimum_height(f32::INFINITY)).fold(0.0_f32, f32::max);
         assert!(panel().height() <= shared_minimum,
             "The minimum viewport must clamp to the shared module height limit.");
         assert!(app.timeline_drop_rect.unwrap().height() >= 80.0);

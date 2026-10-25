@@ -35,7 +35,7 @@ use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
     Clip, EditCommand, EffectsState, LibraryView, MissingReference, MissingSample, Pcm, Product,
     Project, SUPPORTED_BPMS, Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR,
-    TRACK_COUNT,
+    TRACK_COUNT, TrackSwitch,
 };
 
 /// What the filtered palette depends on.
@@ -61,10 +61,15 @@ enum BottomModule {
 
 impl BottomModule {
     const ALL: [Self; 2] = [Self::Sounds, Self::Mixer];
-    fn minimum_height(self) -> f32 {
+    /// The panel minimum for a window whose content area is `available` points
+    /// high. Mixer prefers 400 points. A short window reduces it, down to 370,
+    /// and its gain rail shortens, so the arrangement keeps the transport, its
+    /// heading and ruler, and an 80-point lane viewport.
+    fn minimum_height(self, available: f32) -> f32 {
+        const ARRANGEMENT_RESERVE: f32 = 68.0 + 103.0 + 80.0;
         match self {
             Self::Sounds => 180.0,
-            Self::Mixer => 370.0,
+            Self::Mixer => (available - ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
         }
     }
     fn label(self) -> &'static str {
@@ -1442,12 +1447,13 @@ impl MixJamApp {
                     }
                 });
                 ui.separator();
-                ui.label("Mixer: gain, pan, L/R outputs, and master gain. Both outputs off mutes a track.");
+                ui.label("Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.");
+                ui.label("M mutes a track. S solos it: while any track is soloed, only soloed tracks play, and a muted track stays silent. The strip says why a silent track is silent: Muted, No output, or Solo elsewhere.");
                 ui.label("Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB reduces level; it does not invert polarity.");
                 ui.label("Click a gain value for exact dB entry, then Enter. Enter -inf for silence. Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. Master stays visible while tracks scroll.");
                 ui.label("The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.");
                 ui.label("The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.");
-                ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles outputs.");
+                ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.");
                 ui.label("Shortcuts with Ctrl work from any control except a value that is being typed. Space plays when no control has focus, or when a dial, a fader, or the lanes have it.");
                 ui.separator();
                 ui.label(egui::RichText::new("Time Stretcher").strong());
@@ -2921,11 +2927,21 @@ fn sample_editor_help(ui: &mut egui::Ui) {
     }
 }
 
+/// Tracks with clips, and soloed tracks: a solo silences the other tracks, so
+/// its switch must stay visible even on an empty track.
 fn occupied_tracks(project: &Project) -> Vec<usize> {
     project
         .clips
         .iter()
         .map(|clip| clip.track)
+        .chain(
+            project
+                .tracks
+                .iter()
+                .enumerate()
+                .filter(|(_, track)| track.solo)
+                .map(|(index, _)| index),
+        )
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()

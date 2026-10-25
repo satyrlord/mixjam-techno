@@ -379,7 +379,9 @@ arrangement. A fixed 64-point tool rail sits at the right. The bottom Sounds/Mix
 panel starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
-370 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
+400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
+In a short window Mixer yields down to 370 points so the lane viewport keeps
+80 points; its gain rail then shortens from 112 points to as little as 84.
 When space permits, the maximum panel height leaves 220 points for the
 arrangement plus 68 points for transport. At the minimum client height,
 Mixer's minimum can reduce that arrangement reserve. Status
@@ -388,7 +390,7 @@ margin, with space reserved before status text is truncated. Use 12-point Inter
 Medium and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
 Sounds and Mixer share this panel size. Switching modules preserves the resized
-height; opening Mixer first raises a panel below its 370-point minimum.
+height; opening Mixer first raises a panel below its minimum.
 
 A single Bottom module selector occupies the fixed left slot in the lower
 panel's 28-point header row. Its width is 136 points and its selected module
@@ -399,9 +401,13 @@ selector; the module bodies start below it. The tool rail's Mixer shortcut
 opens Mixer and returns to Sounds when Mixer is already selected.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
-the model retains 64 slots. Original track numbers remain stable. Rows are
-34-48 points high and scroll vertically. The label column is 74 points wide;
-the fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
+the model retains 64 slots. A soloed track counts as occupied even without
+clips, in the arrangement and the Mixer, so its Solo can be turned off.
+Original track numbers remain stable. Rows are
+34-48 points high and scroll vertically. The label column is 122 points wide
+and holds, from left, M, S, L, the track number, and R. A lane that Mute or
+another track's Solo silences is dimmed, and its track number uses Muted. The
+fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
 timeline scrolls horizontally without moving track labels.
 
 Follow is enabled by default in the transport. It moves the horizontal viewport
@@ -580,8 +586,8 @@ sound, or Copy sound in Canvas text. A dragged sound, or a palette sound armed
 for click placement, shows a tinted outline at the bar and track where it will
 land. Choosing a clip or pressing Esc ends click placement, so a click on an
 empty lane then only clears the selection. Enter on a focused sound tile places
-it on the recording track at the playhead. Lane L/R letters gain a short bar
-when their output is on. The lanes are one Tab stop with an Accent outline:
+it on the recording track at the playhead. Lane M/S/L/R letters gain a short
+bar when their switch is on. The lanes are one Tab stop with an Accent outline:
 arrow keys choose a clip, Alt+arrows move the selection by a bar or a track,
 Ctrl+Alt+arrows by a sixteenth, Enter previews, and Delete removes. Ctrl+A
 selects every clip and Ctrl+D copies the selection to the bars that follow. A
@@ -592,7 +598,10 @@ sound, Resolve manually. The clip inspector shows gain in dB like the Mixer.
 
 Mixer uses compact ivory strips against a graphite material surround. Track
 identity and gain lead the hierarchy. L/R routing uses small named toggle
-buttons with live enabled indicators; both off shows Muted. Gain runs from
+buttons with live enabled indicators. Mute and Solo sit in their own row
+above polarity and L/R. The status line under pan names why a track is
+silent: Muted, then No output (both L and R off), then Solo elsewhere.
+Gain runs from
 negative infinity (silence) to +12 dB with 0 dB at unity. Negative dB attenuates
 the signal. Values round to one decimal place at rest; the active entry field
 shows full precision. Focus without an edit must not change saved amplitude
@@ -631,8 +640,8 @@ Native mixer buttons use Mixer Face at rest and shared Raised on hover;
 keyboard focus changes their one-point border to Mixer Amber and adds a
 two-point Mixer Ink ring, because amber alone is illegible on ivory. The gain
 rail, pan rail, and value field show the same ink ring or a cream edge. Each 28 by
-24-point L/R button pairs its letter with a 12 by 2-point indicator bar.
-Arrangement and mixer L/R labels use Accent when enabled and Muted when off.
+24-point M/S/L/R button pairs its letter with a 12 by 2-point indicator bar.
+Arrangement and mixer M/S/L/R labels use Accent when on and Muted when off.
 Both expose the same checked state and a track-specific on/off tooltip. Lane
 controls show keyboard focus. A lane edit requests a repaint so the already
 drawn mixer refreshes even if the pointer stops. Pan remains independent of L/R.
