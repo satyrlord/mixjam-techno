@@ -21,6 +21,7 @@ mod dsp;
 mod ejay;
 mod meters;
 mod pedals;
+pub mod presets;
 
 pub use meters::{MeterReading, OVER_DBTP};
 
@@ -780,6 +781,8 @@ pub struct MasterProcessor {
     /// Let a rewired board fill its delays before it joins the crossfade.
     warmup: usize,
     meters: Option<Box<meters::Meters>>,
+    /// Do not measure the padding that playback removes before its first frame.
+    meter_lead: usize,
 }
 impl MasterProcessor {
     /// Playback and export start with the eJay compressor's smoothed
@@ -799,6 +802,7 @@ impl MasterProcessor {
             fade: 0,
             warmup: 0,
             meters: None,
+            meter_lead: 0,
         }
     }
     /// A processor that takes its settings from `control` as they change
@@ -810,6 +814,7 @@ impl MasterProcessor {
         processor.board.live = true;
         processor.previous.live = true;
         processor.meters = Some(Box::new(meters::Meters::new(&control.meters)));
+        processor.meter_lead = LIVE_LATENCY;
         processor.control = Some((control, seen));
         processor
     }
@@ -859,7 +864,9 @@ impl MasterProcessor {
             } else {
                 (l, r)
             };
-            if let Some(meters) = &mut self.meters {
+            if self.meter_lead > 0 {
+                self.meter_lead -= 1;
+            } else if let Some(meters) = &mut self.meters {
                 meters.output(l, r);
             }
             (*left, *right) = (l, r);
@@ -1150,6 +1157,33 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn playback_meter_ignores_the_delay_removed_from_the_audible_output() {
+        let control = MasterControl::new(&MasterChain::default());
+        let mut processor = MasterProcessor::live(control.clone());
+        let frames = 17_640; // One complete 400 ms loudness block.
+        let latency = processor.latency();
+        let mut block = vec![0.0; (frames + latency) * 2];
+        for frame in 0..frames {
+            let value = (frame as f32 * std::f32::consts::TAU * 1000.0 / 44_100.0).sin() * 0.1;
+            block[frame * 2..frame * 2 + 2].fill(value);
+        }
+        for chunk in block.chunks_mut(514) {
+            processor.process(chunk);
+        }
+        let mut reference = meters::Loudness::new();
+        for &[left, right] in block[latency * 2..].as_chunks::<2>().0 {
+            reference.push(left, right);
+        }
+        assert!(reference.integrated.is_finite());
+        assert!(
+            (f64::from(control.meters().integrated) - reference.integrated).abs() < 1e-5,
+            "playback {}, audible {}",
+            control.meters().integrated,
+            reference.integrated
+        );
+    }
 
     fn interleaved(frames: &[(f32, f32)]) -> Vec<f32> {
         frames.iter().flat_map(|(l, r)| [*l, *r]).collect()

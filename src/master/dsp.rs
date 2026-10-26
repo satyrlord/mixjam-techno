@@ -367,6 +367,14 @@ impl<const N: usize> Delay<N> {
         position: 0,
     };
 
+    /// A delay that has held `value` for as long as it reaches.
+    pub(super) const fn filled(value: f32) -> Self {
+        Self {
+            buffer: [value; N],
+            position: 0,
+        }
+    }
+
     #[inline]
     pub(super) fn push(&mut self, sample: f32) -> f32 {
         self.push_delayed(sample, N)

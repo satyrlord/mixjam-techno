@@ -1,5 +1,5 @@
-//! Mastering window body: the master pedalboard, laid out as the signal
-//! flows. The mixer's output enters the input unit at the left, with its
+//! Mastering module of the bottom section: the master pedalboard, laid out
+//! as the signal flows. The mixer's output enters the input unit at the left, with its
 //! trim and VU meter. It passes each pedal in order along a row that
 //! scrolls, and reaches the output unit at the right, with the loudness
 //! meter. A strip below the board names every pedal in signal order and
@@ -7,12 +7,11 @@
 //! presentation; the caller turns a changed chain into an edit.
 use super::controls::{CREAM, INK};
 use super::*;
-use mixjam_techno::application::{Knob, KnobRange, MeterReading, OVER_DBTP};
+use mixjam_techno::application::{Knob, KnobRange, MeterReading, OVER_DBTP, presets};
 
 pub(super) enum Action {
     None,
     Change(MasterChain),
-    Help,
 }
 
 /// What the meters show: the latest reading, and whether a mix plays.
@@ -37,8 +36,9 @@ const ROW: f32 = 96.0;
 const PEDAL_PADDING: f32 = 14.0;
 /// Room under the pedals for their shadows and the row's scroll bar.
 const ROW_HEIGHT: f32 = PEDAL_TOP + PEDAL_HEIGHT + 20.0;
-const STRIP_HEIGHT: f32 = 62.0;
-const BOARD_HEIGHT: f32 = ROW_HEIGHT + 8.0 + STRIP_HEIGHT;
+/// One row of chips under the pedals and their shadows.
+const STRIP_HEIGHT: f32 = 30.0;
+const BOARD_HEIGHT: f32 = ROW_HEIGHT + STRIP_HEIGHT;
 /// The gain-reduction lamps above a dynamics pedal's knobs.
 const LAMP_ROW: f32 = 28.0;
 const WELL: Vec2 = Vec2::new(56.0, 20.0);
@@ -433,12 +433,6 @@ fn face(knob: Knob) -> (String, String, &'static str, Format) {
     (label.into(), name.into(), hint, format)
 }
 
-/// The pedal being dragged to a new place, by its position on the board.
-#[derive(Clone, Copy)]
-struct Drag {
-    from: usize,
-}
-
 /// Lamp states that outlast a single reading: when each input peak lamp
 /// last lit, and whether the OVER lamp has latched since it was cleared.
 #[derive(Clone, Copy)]
@@ -466,79 +460,148 @@ struct RowView {
     centres: Vec<f32>,
 }
 
-/// Show the window. `reveal` brings a pedal into view, as its chip does.
+/// The gap between the board's painted edge and its content.
+const BOARD_INSET: f32 = 2.0;
+/// The lower panel's height that shows the whole board: the board, and the
+/// panel's margins, module toolbar, and the spacing under the toolbar.
+pub(super) const MODULE_HEIGHT: f32 = BOARD_HEIGHT + 2.0 * BOARD_INSET + 64.0;
+
+/// The preset selector of the module toolbar. It names the preset whose
+/// pedals the board's equal, or Custom once a pedal has changed, and returns
+/// the board of a chosen preset. The trim is the mix's, so neither changes it.
+pub(super) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<MasterChain> {
+    let untouched = MasterChain {
+        trim: chain.trim,
+        ..MasterChain::default()
+    };
+    let current = presets::matching(chain).unwrap_or(if *chain == untouched {
+        "Choose a preset"
+    } else {
+        "Custom"
+    });
+    let mut chosen = None;
+    let response = egui::ComboBox::from_id_salt("master_preset")
+        .selected_text(current)
+        .width(150.0)
+        .height(560.0)
+        .show_ui(ui, |ui| {
+            for (index, preset) in presets::PRESETS.iter().enumerate() {
+                // A rule parts the three general presets from the genres.
+                if index == 3 {
+                    ui.separator();
+                }
+                if ui
+                    .selectable_label(preset.name == current, preset.name)
+                    .clicked()
+                {
+                    chosen = Some(preset.applied_to(chain));
+                    ui.close();
+                }
+            }
+        })
+        .response;
+    name_control(response, "Mastering preset").on_hover_text(
+        "Load a factory board. A preset sets every pedal and the pedal order, and turns \
+         the eJay Booster pedals off. Trim stays as you set it for the mix. Undo restores \
+         the board before it.",
+    );
+    chosen
+}
+
+/// Show the board in the space left in `ui`. `reveal` brings a pedal into
+/// view, as its chip does.
 pub(super) fn show(
-    ctx: &egui::Context,
-    open: &mut bool,
+    ui: &mut egui::Ui,
     chain: &MasterChain,
     metering: &Metering,
     reveal: Option<PedalKind>,
 ) -> Action {
     let mut draft = *chain;
-    let (_, row_end) = row_layout(&chain.order);
-    let natural = Vec2::new(
-        2.0 * MARGIN + INPUT_WIDTH + OUTPUT_WIDTH + row_end,
-        BOARD_HEIGHT,
-    );
-    if metering.playing && *open {
-        ctx.request_repaint_after(Duration::from_millis(33));
+    if metering.playing {
+        ui.ctx().request_repaint_after(Duration::from_millis(33));
     }
-    let response = dialog::tool(
-        ctx,
-        "Mastering",
-        open,
-        natural,
-        controls::Palette::Indigo,
-        true,
-        |ui| {
-            let minimum = 2.0 * MARGIN + INPUT_WIDTH + OUTPUT_WIDTH + 160.0;
-            let size = Vec2::new(ui.available_width().max(minimum), BOARD_HEIGHT);
-            let (bounds, _) = ui.allocate_exact_size(size, Sense::hover());
-            let mut panel = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
-            let top = bounds.top();
-            let input = Rect::from_min_size(
-                Pos2::new(bounds.left() + MARGIN, top + PEDAL_TOP),
-                Vec2::new(INPUT_WIDTH, PEDAL_HEIGHT),
-            );
-            let output = Rect::from_min_size(
-                Pos2::new(bounds.right() - MARGIN - OUTPUT_WIDTH, top + PEDAL_TOP),
-                Vec2::new(OUTPUT_WIDTH, PEDAL_HEIGHT),
-            );
-            let lamps_id = panel.id().with("master-lamps");
-            let mut lamps = panel
-                .ctx()
-                .data(|data| data.get_temp::<Lamps>(lamps_id))
-                .unwrap_or_default();
-            input_unit(&mut panel, input, &mut draft, metering, &mut lamps);
-            output_unit(&mut panel, output, metering, &mut lamps);
-            panel
-                .ctx()
-                .data_mut(|data| data.insert_temp(lamps_id, lamps));
-
-            let viewport = Rect::from_min_max(
-                Pos2::new(input.right(), top),
-                Pos2::new(output.left(), top + ROW_HEIGHT),
-            );
-            let jump_id = panel.id().with("pedal-jump");
-            let row = pedal_row(&mut panel, viewport, jump_id, chain, &mut draft, metering);
-            let strip_rect = Rect::from_min_size(
-                Pos2::new(bounds.left() + MARGIN, top + ROW_HEIGHT + 8.0),
-                Vec2::new(bounds.width() - 2.0 * MARGIN, STRIP_HEIGHT),
-            );
-            let revealed = reveal.and_then(|kind| chain.order.iter().position(|k| *k == kind));
-            if let Some(index) = strip(&mut panel, strip_rect, &draft, row.visible).or(revealed)
-                && let Some(offset) = row.centres.get(index)
-            {
-                panel
-                    .ctx()
-                    .data_mut(|data| data.insert_temp(jump_id, *offset));
-                panel.ctx().request_repaint();
-            }
-        },
+    let area = ui.available_rect_before_wrap();
+    ui.advance_cursor_after_rect(area);
+    let mut board = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("mastering-board")
+            .max_rect(area),
     );
-    if response.help {
-        Action::Help
-    } else if draft != *chain {
+    dialog::hardware_style(&mut board, controls::Palette::Indigo);
+    board.set_clip_rect(area.intersect(ui.clip_rect()));
+    controls::panel(&board, area);
+    named(
+        &board.interact(area, board.id().with("surface"), Sense::hover()),
+        egui::WidgetType::Other,
+        "Mastering board",
+    );
+    let mut content = board.new_child(
+        egui::UiBuilder::new()
+            .id_salt("mastering-content")
+            .max_rect(area.shrink(BOARD_INSET)),
+    );
+    // A short section scrolls the board. Every control but the strip's
+    // chips lives in the units and the row at its top, so bringing one of
+    // them into view returns the board to the top, where all of it shows.
+    let raise = board
+        .ctx()
+        .data_mut(|data| data.remove_temp::<bool>(raise_id()))
+        .unwrap_or(false);
+    let mut scroll = egui::ScrollArea::both()
+        .id_salt("mastering-scroll")
+        .auto_shrink([false, false]);
+    if raise {
+        scroll = scroll.vertical_scroll_offset(0.0);
+    }
+    scroll.show(&mut content, |ui| {
+        let minimum = 2.0 * MARGIN + INPUT_WIDTH + OUTPUT_WIDTH + 160.0;
+        let size = Vec2::new(ui.available_width().max(minimum), BOARD_HEIGHT);
+        let (bounds, _) = ui.allocate_exact_size(size, Sense::hover());
+        let mut panel = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
+        let top = bounds.top();
+        let input = Rect::from_min_size(
+            Pos2::new(bounds.left() + MARGIN, top + PEDAL_TOP),
+            Vec2::new(INPUT_WIDTH, PEDAL_HEIGHT),
+        );
+        let output = Rect::from_min_size(
+            Pos2::new(bounds.right() - MARGIN - OUTPUT_WIDTH, top + PEDAL_TOP),
+            Vec2::new(OUTPUT_WIDTH, PEDAL_HEIGHT),
+        );
+        // Meter latches outlast project-control identities and reset only
+        // through their meter-run and clear-button rules.
+        let lamps_id = egui::Id::new("master-lamps");
+        let mut lamps = panel
+            .ctx()
+            .data(|data| data.get_temp::<Lamps>(lamps_id))
+            .unwrap_or_default();
+        input_unit(&mut panel, input, &mut draft, metering, &mut lamps);
+        output_unit(&mut panel, output, metering, &mut lamps);
+        panel
+            .ctx()
+            .data_mut(|data| data.insert_temp(lamps_id, lamps));
+
+        let viewport = Rect::from_min_max(
+            Pos2::new(input.right(), top),
+            Pos2::new(output.left(), top + ROW_HEIGHT),
+        );
+        let jump_id = panel.id().with("pedal-jump");
+        let row = pedal_row(&mut panel, viewport, jump_id, chain, &mut draft, metering);
+        let strip_rect = Rect::from_min_size(
+            Pos2::new(bounds.left() + MARGIN, top + ROW_HEIGHT),
+            Vec2::new(bounds.width() - 2.0 * MARGIN, STRIP_HEIGHT),
+        );
+        let revealed = reveal.and_then(|kind| chain.order.iter().position(|k| *k == kind));
+        if let Some(index) = strip(&mut panel, strip_rect, &draft, row.visible).or(revealed)
+            && let Some(offset) = row.centres.get(index)
+        {
+            panel.ctx().data_mut(|data| {
+                data.insert_temp(jump_id, *offset);
+                data.insert_temp(raise_id(), true);
+            });
+            panel.ctx().request_repaint();
+        }
+    });
+    if draft != *chain {
         Action::Change(draft)
     } else {
         Action::None
@@ -572,10 +635,11 @@ fn pedal_row(
     }
     let shown = area.show(&mut row, |ui| {
         let (content, _) = ui.allocate_exact_size(Vec2::new(row_width, ROW_HEIGHT), Sense::hover());
-        let drag_id = ui.id().with("pedal-drag");
-        let mut drag = ui
-            .ctx()
-            .data(|data| data.get_temp::<Drag>(drag_id).map(|d| d.from));
+        // The pedal whose grip egui drags this frame, and whether the primary
+        // button let go of it. egui owns the drag state; project replacement
+        // changes the enclosing control identities so an old drag cannot drop.
+        let mut drag = None;
+        let mut released = false;
         let pedals: Vec<(PedalKind, Rect)> = chain
             .order
             .iter()
@@ -620,17 +684,21 @@ fn pedal_row(
                 );
                 continue;
             }
-            let grip = ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::drag());
-            let grip = name_control(grip, &format!("Drag {}", name(*kind)))
+            // The arrow buttons move the pedal from the keyboard, so the grip
+            // takes no Tab stop.
+            let grip = ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::DRAG);
+            let grip = name_region(grip, &format!("Drag {}", name(*kind)))
                 .on_hover_cursor(egui::CursorIcon::Grab)
                 .on_hover_text(
                     "Drag along the board to change where this pedal sits in the signal path.",
                 );
-            if grip.drag_started() {
+            if grip.dragged_by(egui::PointerButton::Primary) {
                 drag = Some(index);
-            }
-            if grip.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            } else if grip.drag_stopped_by(egui::PointerButton::Primary) {
+                // Escape also stops a drag; only a release drops the pedal.
+                drag = Some(index);
+                released = ui.input(|input| input.pointer.primary_released());
             }
         }
 
@@ -639,7 +707,6 @@ fn pedal_row(
         if let Some(from) = drag {
             let accent = ui.visuals().selection.bg_fill;
             let pointer = ui.ctx().pointer_latest_pos();
-            let released = ui.input(|input| input.pointer.any_released());
             if let Some(pointer) = pointer
                 && !released
             {
@@ -701,14 +768,7 @@ fn pedal_row(
                     draft.move_pedal(from, to);
                 }
             }
-            if released || pointer.is_none() {
-                drag = None;
-            }
         }
-        ui.ctx().data_mut(|data| match drag {
-            Some(from) => data.insert_temp(drag_id, Drag { from }),
-            None => data.remove::<Drag>(drag_id),
-        });
     });
     let width = shown.inner_rect.width();
     let offset = shown.state.offset.x;
@@ -1435,6 +1495,12 @@ fn pedal(
     } else {
         Vec::new()
     };
+    // A move button follows its pedal into view on the next frame. Where the
+    // move turns it off, at the row's ends, focus passes to the other arrow.
+    let follow_id = egui::Id::new("master-move-follow");
+    let follow = ui
+        .ctx()
+        .data(|data| data.get_temp::<(String, bool)>(follow_id));
     for (offset, direction, step, enabled) in buttons {
         let button = Rect::from_min_size(at(offset, FOOTER_TOP + 6.0), Vec2::new(30.0, 28.0));
         let label = format!("Move {} {step}", name(kind));
@@ -1451,8 +1517,35 @@ fn pedal(
             "Move {} one place {step} in the signal path.",
             name(kind)
         ));
+        if let Some((target, focus)) = &follow
+            && *target == label
+        {
+            ui.ctx()
+                .data_mut(|data| data.remove::<(String, bool)>(follow_id));
+            if *focus {
+                response.request_focus();
+            }
+            response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
+        }
         if response.clicked() {
-            moved = Some(if step == "left" { index - 1 } else { index + 1 });
+            let to = if step == "left" { index - 1 } else { index + 1 };
+            moved = Some(to);
+            // After a step right, the pedal that follows it is the one that
+            // followed its new place before the move.
+            let at_end = if step == "left" {
+                to == 0
+            } else {
+                !chain.order.get(to + 1).is_some_and(|next| next.movable())
+            };
+            let other = if step == "left" { "right" } else { "left" };
+            let target = if at_end {
+                format!("Move {} {other}", name(kind))
+            } else {
+                label.clone()
+            };
+            let focus = response.has_focus();
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(follow_id, (target, focus)));
         }
     }
     let mut switch = on;
@@ -1484,12 +1577,21 @@ fn pedal(
 }
 
 /// Bring a control into view at once when it gains keyboard focus, so Tab
-/// can walk the whole row.
+/// can walk the whole row. The row takes the scroll for itself, so the
+/// board returns to the top on the next frame, which shows the whole row.
 fn reveal(response: Response) -> Response {
     if response.gained_focus() {
         response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
+        response
+            .ctx
+            .data_mut(|data| data.insert_temp(raise_id(), true));
     }
     response
+}
+
+/// The request to show the top of a scrolled board on its next frame.
+fn raise_id() -> egui::Id {
+    egui::Id::new("mastering-raise")
 }
 
 /// A row of lamps for the gain reduction of a dynamics pedal; each lights
@@ -1550,7 +1652,7 @@ fn led(ui: &egui::Ui, center: Pos2, radius: f32, lit: bool, color: Color32) {
 /// Clicking a pedal brings it into view. Returns the pedal clicked.
 fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) -> Option<usize> {
     controls::well(ui, rect);
-    let chips_top = rect.top() + 8.0;
+    let chips_top = rect.top() + 4.0;
     let ends = 52.0;
     let gap = 5.0;
     let room = rect.width() - 2.0 * ends - 16.0;
@@ -1607,6 +1709,9 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
             );
         }
         named(&response, egui::WidgetType::Button, &label);
+        if response.gained_focus() {
+            response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
+        }
         let response = response.on_hover_text(format!(
             "{}: {}. Click to bring it into view.",
             name(*kind),
@@ -1630,6 +1735,11 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
         );
     }
 
+    chosen
+}
+
+/// The board's state in a line, and the signal path for its hover text.
+pub(super) fn status(chain: &MasterChain) -> (String, String) {
     let on = chain
         .order
         .iter()
@@ -1656,12 +1766,6 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
     } else {
         "Every pedal is off and the trim is at 0 dB: the mix plays unprocessed.".to_owned()
     };
-    let status_rect = Rect::from_min_max(
-        Pos2::new(rect.left() + 8.0, chips_top + 28.0),
-        Pos2::new(rect.right() - 8.0, rect.bottom() - 4.0),
-    );
-    let response = ui.interact(status_rect, ui.id().with("master-status"), Sense::hover());
-    named(&response, egui::WidgetType::Label, &status);
     let path: Vec<String> = chain
         .order
         .iter()
@@ -1673,15 +1777,10 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
             }
         })
         .collect();
-    response.on_hover_text(format!("Signal: mixer → {} → output.", path.join(" → ")));
-    ui.painter().text(
-        status_rect.center(),
-        Align2::CENTER_CENTER,
-        &status,
-        FontId::proportional(12.0),
-        CREAM,
-    );
-    chosen
+    (
+        status,
+        format!("Signal: mixer → {} → output.", path.join(" → ")),
+    )
 }
 
 /// The painted enclosure of each pedal. Like stompboxes, each kind has its
@@ -2204,19 +2303,39 @@ fn dial(ui: &mut egui::Ui, positions: [Pos2; 3], value: &mut f64, spec: Dial<'_>
                 choices: spec.choices,
             },
         );
+        // A drag, a reset, or a value set by assistive technology names a
+        // place on the dial, which takes the nearest step. Only a key, wheel,
+        // or increment step rounds on in its direction. A drag names its
+        // place again every frame, so rounding it by direction would flip
+        // between the two steps around it.
+        let absolute = response.dragged()
+            || response.double_clicked()
+            || ui.input(|input| {
+                input.num_accesskit_action_requests(response.id, egui::accesskit::Action::SetValue)
+                    > 0
+            });
         reveal(response).on_hover_text(&hint);
         if spec.choices.is_empty() && *value != before {
-            *value = on_grid(*value, Some(before), &range);
+            *value = on_grid(*value, (!absolute).then_some(before), &range);
         }
         ui.scope(|ui| {
             controls::value_style(ui);
             let typed = *value;
             let format = spec.format;
+            // Leaving the window parses the text it shows. Unchanged text is
+            // no edit, so a saved value between the shown digits stays.
             let entry = egui::DragValue::new(value)
                 .range(low..=high)
                 .speed(decimal(range.step))
+                .update_while_editing(false)
                 .custom_formatter(move |value, _| format.show(value))
-                .custom_parser(move |text| format.read(text, high));
+                .custom_parser(move |text| {
+                    if text.trim() == format.show(typed).trim() {
+                        Some(typed)
+                    } else {
+                        format.read(text, high)
+                    }
+                });
             let response = ui.put(
                 Rect::from_center_size(well, WELL + Vec2::new(-2.0, 4.0)),
                 entry,

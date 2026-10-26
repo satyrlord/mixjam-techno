@@ -6,10 +6,10 @@
 //!
 //! The audio thread publishes a reading after each block through atomics;
 //! the window reads the latest one without waiting.
-use super::dsp::{Biquad, Coefficients, RATE, TruePeak, db_to_gain, pole};
+use super::dsp::{Biquad, Coefficients, RATE, TruePeak, db_to_gain, flush, pole};
 use std::{
     f64::consts::PI,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
 /// What the master meters read. Levels are in decibels; a level with
@@ -72,7 +72,9 @@ pub(super) struct Shared {
     integrated: AtomicU32,
     true_peak: AtomicU32,
     true_peak_max: AtomicU32,
-    overs: AtomicU32,
+    /// Keep the playback number and its cumulative count in one store. A
+    /// stale count must not become the next playback's OVER baseline.
+    overs: AtomicU64,
 }
 impl Shared {
     pub(super) fn new() -> Self {
@@ -88,17 +90,31 @@ impl Shared {
             integrated: level(),
             true_peak: level(),
             true_peak_max: level(),
-            overs: AtomicU32::new(0),
+            overs: AtomicU64::new(0),
         }
     }
-    /// Begin a new playback's readings.
-    pub(super) fn start(&self) {
-        self.store(&MeterReading {
-            run: self.run.load(Ordering::Relaxed).wrapping_add(1).max(1),
+    /// Begin a new playback's readings, and return its run.
+    pub(super) fn start(&self) -> u32 {
+        let run = self.run.load(Ordering::Relaxed).wrapping_add(1).max(1);
+        self.store_levels(&MeterReading {
+            run,
             ..MeterReading::default()
         });
+        self.run.store(run, Ordering::Release);
+        run
     }
-    fn store(&self, reading: &MeterReading) {
+    /// Store a reading of playback `reading.run` while that playback is the
+    /// latest. A stopped playback runs on for up to a block after the next
+    /// one starts, and must not overwrite the new readings.
+    fn store_current(&self, reading: &MeterReading) {
+        if self.run.load(Ordering::Acquire) == reading.run {
+            self.store_levels(reading);
+        }
+    }
+    /// Store everything but the run, which only `start` changes. A stopped
+    /// playback can pass the check above just before the next one starts;
+    /// its levels then show for a block, but the run stays the new one's.
+    fn store_levels(&self, reading: &MeterReading) {
         let float =
             |atomic: &AtomicU32, value: f32| atomic.store(value.to_bits(), Ordering::Relaxed);
         float(&self.input_vu, reading.input_vu);
@@ -113,13 +129,16 @@ impl Shared {
         float(&self.integrated, reading.integrated);
         float(&self.true_peak, reading.true_peak);
         float(&self.true_peak_max, reading.true_peak_max);
-        self.overs.store(reading.overs, Ordering::Relaxed);
-        self.run.store(reading.run, Ordering::Release);
+        self.overs.store(
+            (u64::from(reading.run) << 32) | u64::from(reading.overs),
+            Ordering::Relaxed,
+        );
     }
     pub(super) fn read(&self) -> MeterReading {
         let run = self.run.load(Ordering::Acquire);
         let float = |atomic: &AtomicU32| f32::from_bits(atomic.load(Ordering::Relaxed));
         let peaks = self.input_peaks.load(Ordering::Relaxed);
+        let overs = self.overs.load(Ordering::Relaxed);
         MeterReading {
             run,
             input_vu: float(&self.input_vu),
@@ -131,7 +150,11 @@ impl Shared {
             integrated: float(&self.integrated),
             true_peak: float(&self.true_peak),
             true_peak_max: float(&self.true_peak_max),
-            overs: self.overs.load(Ordering::Relaxed),
+            overs: if (overs >> 32) as u32 == run {
+                overs as u32
+            } else {
+                0
+            },
         }
     }
 }
@@ -307,7 +330,7 @@ pub(super) struct Meters {
 }
 impl Meters {
     pub(super) fn new(shared: &Shared) -> Self {
-        shared.start();
+        let run = shared.start();
         Self {
             needle: [[0.0; 2]; 2],
             needle_step: 1.0 - pole(0.045_2),
@@ -317,7 +340,7 @@ impl Meters {
             block_peak: 0.0,
             peak: 0.0,
             overs: 0,
-            run: shared.read().run,
+            run,
         }
     }
     #[inline]
@@ -325,8 +348,8 @@ impl Meters {
         let hot = db_to_gain(-1.0) as f32;
         for (channel, sample) in [left, right].into_iter().enumerate() {
             let [first, second] = &mut self.needle[channel];
-            *first += (f64::from(sample.abs()) - *first) * self.needle_step;
-            *second += (*first - *second) * self.needle_step;
+            *first = flush(*first + (f64::from(sample.abs()) - *first) * self.needle_step);
+            *second = flush(*second + (*first - *second) * self.needle_step);
             self.input_peaks[channel] |= sample.abs() >= hot;
         }
     }
@@ -353,10 +376,13 @@ impl Meters {
             self.overs += 1;
         }
         let mut reading = shared.read();
+        if reading.run != self.run {
+            return;
+        }
         reading.true_peak = reading.true_peak.max(tail_db);
         reading.true_peak_max = 20.0 * self.peak.log10();
         reading.overs = self.overs;
-        shared.store(&reading);
+        shared.store_current(&reading);
     }
     /// Publish the block's reading and start the next block.
     pub(super) fn publish(&mut self, shared: &Shared, compressor: f32, limiter: f32) {
@@ -367,7 +393,7 @@ impl Meters {
         if block_peak > OVER_DBTP {
             self.overs += 1;
         }
-        shared.store(&MeterReading {
+        shared.store_current(&MeterReading {
             run: self.run,
             input_vu: (decibels(needle) + SINE_FORM_DB - REFERENCE_DBFS) as f32,
             input_peaks: std::mem::take(&mut self.input_peaks),
@@ -506,5 +532,69 @@ mod tests {
                 ..MeterReading::default()
             }
         );
+        // The stopped playback can still finish a block, and its end, after
+        // the next one starts; neither reaches the new readings.
+        meters.publish(&shared, 0.0, 0.0);
+        meters.finish(&shared);
+        assert_eq!(
+            shared.read(),
+            MeterReading {
+                run: 2,
+                ..MeterReading::default()
+            }
+        );
+    }
+
+    #[test]
+    fn a_stopped_playback_storing_across_a_start_cannot_silence_the_next() {
+        let shared = Shared::new();
+        let mut stopped = Meters::new(&shared);
+        for sample in tone(1000.0, -6.0, 0.1, RATE) {
+            stopped.output(sample, sample);
+        }
+        // The stopped playback checked its run just before the window
+        // started the next one, and its store lands after that start.
+        let late = MeterReading {
+            run: stopped.run,
+            overs: 7,
+            ..MeterReading::default()
+        };
+        let mut next = Meters::new(&shared);
+        shared.store_levels(&late);
+        assert_eq!(shared.read().run, next.run);
+        // An old count attributed to the new run would suppress its first
+        // genuine OVER events after the user clears the lamp.
+        assert_eq!(shared.read().overs, 0);
+        for sample in tone(1000.0, -18.0, 0.5, RATE) {
+            next.input(sample, sample);
+            next.output(sample, sample);
+        }
+        next.publish(&shared, 0.0, 0.0);
+        let reading = shared.read();
+        assert_eq!(reading.run, next.run);
+        assert_eq!(reading.overs, 0);
+        assert!(reading.momentary.is_finite(), "{reading:?}");
+        for sample in tone(1000.0, 0.0, 0.1, RATE) {
+            next.output(sample, sample);
+        }
+        next.publish(&shared, 0.0, 0.0);
+        assert_eq!(shared.read().overs, 1);
+    }
+
+    #[test]
+    fn the_vu_needle_rests_at_zero_in_long_silence() {
+        let shared = Shared::new();
+        let mut meters = Meters::new(&shared);
+        for sample in tone(1000.0, -18.0, 0.5, RATE) {
+            meters.input(sample, sample);
+        }
+        // A needle that crept toward zero would turn denormal after about
+        // 32 s and slow the audio thread down.
+        for _ in 0..(40.0 * RATE) as usize {
+            meters.input(0.0, 0.0);
+        }
+        for value in meters.needle.iter().flatten() {
+            assert!(*value == 0.0 || value.is_normal(), "{value:e}");
+        }
     }
 }

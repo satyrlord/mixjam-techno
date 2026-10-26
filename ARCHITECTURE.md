@@ -82,9 +82,17 @@ valid and playback continues. Tool previews play without the pedalboard. Each
 playback and export starts the pedalboard in the same settled state. A live
 processor also measures: after each block it publishes a `MeterReading` through
 atomics in the `MasterControl`, which `Session::master_meters` reads without
-waiting. The playback block is 1024 frames, so readings change more than 30
+waiting. Each playback numbers its readings, and only the start of a playback
+changes that number. A stopped playback that is still finishing its last block
+can show its levels for one block, but it cannot keep the next playback's readings
+from reaching the window. The cumulative OVER count carries its playback number
+in the same atomic value. A stale count cannot become the new playback's lamp
+baseline. The playback block is 1024 frames, so readings change more than 30
 times a second. At the end, playback finishes the peak detector without adding
-audio frames or loudness time. Export measures nothing. The render worker prepares
+audio frames or loudness time. Output metering excludes the initial 417 frames
+that playback removes, so loudness windows follow the audible program.
+Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
+size field for its header before it opens a destination file. The render worker prepares
 the mix, keeps the decoded sources of the last one, and discards them when the
 library is replaced. `Session::start_export` renders and writes on its own
 thread and reports through `poll`; `Session::export` stays synchronous for
@@ -92,6 +100,13 @@ headless callers. `Session::catalog_revision` advances when the library is
 replaced; the frontend keeps its filtered palette until then. Folder adoption
 takes providers that are already loaded from the current library and reads a
 provider from disk only when its folder is gone.
+
+A song queued behind a folder scan records both the render revision and the
+editor generation. Any intervening project edit cancels that deferred open,
+including a master-only edit followed by Save. Master-only edits still retain
+the prepared dry mix. Opening a project adopts freshly measured WAV metadata,
+including changes to length and channel count at the same path. History changes
+can still reuse existing metadata without reading each source again.
 
 `src/atomic_file.rs` owns file replacement. Projects, settings, the scan cache,
 synth patterns, and WAV exports are staged beside the destination and renamed
@@ -214,16 +229,20 @@ at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
 to one physical pixel, with no texture resizing. The empty bank gives one
 instruction and leaves Master available.
 
-The frontend's `BottomModule` enum selects Sounds or Mixer. `src/ui/view.rs`
+The frontend's `BottomModule` enum selects Sounds, Mixer, or Mastering. `src/ui/view.rs`
 owns their shared 28-point header and fixed left-side `Bottom module` combo.
 Its width is 136 points and the selected module uses 16-point bold Syncopate.
+The combo has bounded layout space and truncates long selected text; its
+accessible value and popup retain the full name.
 The combo keeps its control ID and horizontal anchor across module changes.
 Sounds filters render inline to its right. Each module renders only its body
-below that header. The Mixer tool-rail shortcut selects Mixer, and selects
-Sounds when Mixer is already selected. Selection and shared panel height are frontend
-session state. Switching preserves resized height; opening Mixer raises a
-shorter panel to its minimum: 400 points, or down to 370 in a window too
-short to keep an 80-point lane viewport. Sounds retains its 180-point minimum.
+below that header. The Mixer and Mastering tool-rail shortcuts select their
+module, and select Sounds when that module is already selected. Selection and
+shared panel height are frontend session state. Switching preserves resized
+height; opening Mixer or Mastering raises a shorter panel to its minimum:
+400 points for Mixer, or the whole board for Mastering. Both yield down to
+370 points in a window too short to keep an 80-point lane viewport. Sounds
+retains its 180-point minimum.
 Later modules can extend the enum and the same selector.
 
 `src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses
@@ -242,7 +261,8 @@ section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
 
-`src/ui/master.rs` owns the Mastering window: a horizontal pedalboard in
+`src/ui/master.rs` owns the Mastering module of the lower panel and its
+preset selector: a horizontal pedalboard in
 signal order. The Input unit (trim and VU meter) stays at the left and the
 Output unit (loudness, true peak, OVER) at the right; between them the pedal
 row scrolls, joined by painted cables. A strip below names every pedal in
@@ -252,8 +272,16 @@ arrow buttons, and switch, and the dynamics pedals their gain-reduction lamps;
 a pedal that is off is dimmed. Dragging a pedal's header moves it, with an
 insertion marker while it is dragged, and the row scrolls near its ends; the
 arrow buttons give the same move to the keyboard, screen readers, and agents.
-It edits a copy of the project's `MasterChain`; `src/ui.rs` sends a changed
-copy as `EditCommand::SetMaster` and passes the session's meter reading. Dial
+Project or library replacement advances a frontend generation for the board's
+control identities. A held pedal or knob cannot edit the replacement project.
+This resets the board view; meter latches keep a separate stable identity so
+an acknowledged OVER count does not light again without another event.
+It edits a copy of the project's `MasterChain`; `src/ui/view.rs` sends a changed
+copy as `EditCommand::SetMaster` and passes the session's meter reading. The
+preset selector offers the factory boards of `src/master/presets.rs`, which
+the frontend reaches through `application::presets`; a chosen preset is one
+`SetMaster` edit that keeps the board's trim (`Preset::applied_to`), and the
+selector names the preset whose pedals the board's equal, whatever the trim. Dial
 values read in their units, the eJay EQ in decibels and the other eJay knobs in
 the original's 0 to 1000 steps. Dials move on their knob's grid, and a fine
 step still moves one; a typed value takes the nearest step. Displaying or
@@ -324,6 +352,10 @@ read. A connection that does not start with the key, or that sends a malformed
 line, is closed. A request from another user, or one that another program was
 tricked into sending, such as an HTTP form post, never reaches the queue. A request that the
 window does not take within 30 seconds fails and can no longer run.
+Dropping the server removes the session key, closes active connections, and
+clears its window wake callback. It also wakes the listener and waits for it to
+release the port. If the server cannot connect to wake the listener, it does not
+wait, so the window can still close.
 
 `src/ui/agent.rs` is the frontend driver. `eframe` calls it before each frame.
 It reads the controls from the accessibility tree that egui produced for the
@@ -337,6 +369,9 @@ reaches the backend only through `application.rs`; the source guard covers it.
 egui does not mark the controls behind a modal as disabled, and an
 accessibility action reaches them. Each modal therefore names itself with
 `name_dialog`, and the driver refuses a control outside the open modal.
+Typed arrangement commands obey the same boundary. Collapsing the dialog
+releases those commands. Setting a radio button to true selects it; clearing
+the selected button requires choosing another option.
 
 Every file choice is a `FileRequest`. Without an agent, `ask_path` shows the
 native dialog and carries the request out at once. With an agent, the request

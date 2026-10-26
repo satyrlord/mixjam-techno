@@ -5,7 +5,7 @@ use crate::{
     products::{LibraryBinding, Product},
 };
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -331,6 +331,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         }
     }
     let mut mixjam_references = crate::mixjam::ReferenceResolver::new(&candidate);
+    let mut checked_imports = HashMap::new();
     let imports = std::mem::take(&mut project.imported_samples);
     for imported in imports {
         let mut resolved = imported.clone();
@@ -372,6 +373,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                     }
                 }
                 resolved.source_sample_rate = Some(ready.sample_rate);
+                checked_imports.insert(resolved.id, ready);
                 project.imported_samples.push(resolved);
             }
             Err(reason) => {
@@ -459,7 +461,9 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                     imported.source_bpm =
                         sample.resolved_source_bpm(ready.frame_count, ready.sample_rate)?;
                     imported.source_sample_rate = Some(ready.sample_rate);
-                    Ok((Some(imported), ready.sample_rate))
+                    let rate = ready.sample_rate;
+                    checked_imports.insert(imported.id, ready);
+                    Ok((Some(imported), rate))
                 })
             }
             MissingReference::Generated { .. } => {
@@ -469,7 +473,9 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                     imported.source_bpm =
                         sample.resolved_source_bpm(ready.frame_count, ready.sample_rate)?;
                     imported.source_sample_rate = Some(ready.sample_rate);
-                    Ok((Some(imported), ready.sample_rate))
+                    let rate = ready.sample_rate;
+                    checked_imports.insert(imported.id, ready);
+                    Ok((Some(imported), rate))
                 })
             }
         };
@@ -518,7 +524,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
     }
     // Keep the selected folder's palette. Saved imports retain their IDs; unused
     // palette entries receive fresh IDs if the saved project uses those numbers.
-    candidate.apply_imports(&project.imported_samples)?;
+    candidate.apply_checked_imports(&project.imported_samples, &checked_imports)?;
     candidate.reserve_missing_samples(&project.missing_samples);
     project
         .imported_samples
@@ -748,6 +754,47 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reopening_refreshes_changed_wave_metadata_at_the_same_path() {
+        let root = std::env::temp_dir().join(format!("mixjam-refresh-wave-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("take.wav");
+        let mut pcm = crate::audio::Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 441],
+        };
+        pcm.write_wav(&path).unwrap();
+        let mut library = Library::empty();
+        let imported = library
+            .import_wav_with_tempo(&path, None, "Wave", 140.0)
+            .unwrap();
+        let project = Project {
+            imported_samples: vec![imported.clone()].into(),
+            clips: vec![crate::engine::Clip {
+                id: 1,
+                sample_id: imported.id,
+                track: 0,
+                start_tick: 0,
+                length_ticks: 256,
+                offset_frames: 0,
+                gain: 1.0,
+            }],
+            ..Project::default()
+        };
+        pcm.channels = 2;
+        pcm.samples = vec![0.5; 1_764];
+        pcm.write_wav(&path).unwrap();
+        let (_, refreshed) = resolve(project, &library).unwrap();
+        let sample = refreshed.sample_by_id(imported.id).unwrap();
+        assert_eq!(sample.frame_count, 882);
+        assert_eq!(sample.channels, 2);
+        assert_eq!(sample.digest, None);
+        assert_eq!(sample.length, fs::metadata(&path).unwrap().len());
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
 
     #[test]
     fn song_folder_is_remembered_until_the_folder_disappears() {

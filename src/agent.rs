@@ -724,12 +724,33 @@ pub struct Server {
     key_file: PathBuf,
     incoming: mpsc::Receiver<Incoming>,
     waker: Waker,
+    stopping: Arc<AtomicBool>,
+    listener: Option<std::thread::JoinHandle<()>>,
+    connections: Arc<Mutex<Vec<std::sync::Weak<TcpStream>>>>,
 }
 
 impl Drop for Server {
     fn drop(&mut self) {
-        // The key of a session that has ended opens nothing.
+        // Remove the key before releasing the port, so a replacement session's
+        // key cannot be removed by this session's cleanup.
         let _ = std::fs::remove_file(&self.key_file);
+        self.stopping.store(true, Ordering::SeqCst);
+        // Wake accept so the listener releases the port before Drop returns.
+        // Without that connection accept may never return, and waiting for
+        // it would keep the window from closing.
+        if TcpStream::connect((Ipv4Addr::LOCALHOST, self.port)).is_ok()
+            && let Some(listener) = self.listener.take()
+        {
+            let _ = listener.join();
+        }
+        if let Ok(connections) = self.connections.lock() {
+            for connection in connections.iter().filter_map(std::sync::Weak::upgrade) {
+                let _ = connection.shutdown(std::net::Shutdown::Both);
+            }
+        }
+        if let Ok(mut wake) = self.waker.lock() {
+            *wake = None;
+        }
     }
 }
 
@@ -758,10 +779,22 @@ impl Server {
         let waker = Waker::default();
         let wake = waker.clone();
         let expected = key.clone();
-        std::thread::Builder::new()
+        let stopping = Arc::new(AtomicBool::new(false));
+        let stop = stopping.clone();
+        let connections = Arc::new(Mutex::new(Vec::<std::sync::Weak<TcpStream>>::new()));
+        let clients = connections.clone();
+        let listener = std::thread::Builder::new()
             .name("mixjam-techno-agent".into())
             .spawn(move || {
                 for stream in listener.incoming().flatten() {
+                    if stop.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    let stream = Arc::new(stream);
+                    if let Ok(mut clients) = clients.lock() {
+                        clients.retain(|client| client.strong_count() > 0);
+                        clients.push(Arc::downgrade(&stream));
+                    }
                     let sender = sender.clone();
                     let wake = wake.clone();
                     let expected = expected.clone();
@@ -770,13 +803,19 @@ impl Server {
                         .spawn(move || serve(stream, &expected, &sender, &wake, start_timeout));
                 }
             })
-            .map_err(|error| format!("Cannot start the agent listener: {error}"))?;
+            .map_err(|error| {
+                let _ = std::fs::remove_file(&key_file);
+                format!("Cannot start the agent listener: {error}")
+            })?;
         Ok(Self {
             port,
             key,
             key_file,
             incoming,
             waker,
+            stopping,
+            listener: Some(listener),
+            connections,
         })
     }
 
@@ -807,7 +846,7 @@ impl Server {
 }
 
 fn serve(
-    stream: TcpStream,
+    stream: Arc<TcpStream>,
     key: &str,
     requests: &mpsc::Sender<Incoming>,
     waker: &Waker,
@@ -816,7 +855,7 @@ fn serve(
     let Ok(mut writer) = stream.try_clone() else {
         return;
     };
-    let mut reader = BufReader::new(stream);
+    let mut reader = BufReader::new(stream.as_ref());
     // The first line is the session key. Anything else ends the connection,
     // which also stops a request that another program was tricked into
     // sending, such as an HTTP form post.
@@ -1149,6 +1188,43 @@ mod tests {
             reply,
             serde_json::json!({"ok": false, "error": "No such control."})
         );
+    }
+
+    #[test]
+    fn dropping_server_releases_the_listener_and_idle_connections() {
+        let folder = key_folder("shutdown");
+        let server = Server::start(0, &folder).unwrap();
+        let port = server.port();
+        let mut client = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let accepted = loop {
+            if let Some(connection) = server
+                .connections
+                .lock()
+                .unwrap()
+                .iter()
+                .find_map(std::sync::Weak::upgrade)
+            {
+                break connection;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "The listener did not accept the idle test client."
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        // This client never sends its key. Shutdown must still close it.
+        // Keep the accepted socket alive to require explicit shutdown.
+        drop(server);
+        assert!(TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_ok());
+        let mut byte = [0];
+        assert!(matches!(client.read(&mut byte), Ok(0)));
+        drop(accepted);
+        assert!(!key_path(&folder, port).exists());
+        std::fs::remove_dir(folder).unwrap();
     }
 
     #[test]

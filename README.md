@@ -82,7 +82,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   S solos it: while any track is soloed, only soloed tracks play, and a muted
   track stays silent. The lane and mixer M/S/L/R controls mirror each other.
   Changing these controls does not change pan.
-- Use Mastering for the master pedalboard. The mix enters the Input unit,
+- Use Mastering, the third module of the lower panel, for the master
+  pedalboard. The mix enters the Input unit,
   where Trim sets its level against the VU meter, passes each pedal that is on
   from left to right, and leaves through the Output unit, which shows
   loudness in LUFS, the true peak, and an OVER lamp while the song plays. The
@@ -90,7 +91,11 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   clip, Tube, Trim EQ, Bus compressor, Maximizer, Lift EQ, Tape, Stereo
   imaging, Multiband, and Limiter. Drag a pedal by its name or use its arrows
   to move it; the Limiter always stays last. Click a pedal in the strip below
-  the board to scroll to it. Every pedal starts off.
+  the board to scroll to it. Every pedal starts off. The Preset selector
+  loads a factory board: Subtle, Revive, or Loud, or one of seventeen genre
+  boards. A preset sets every pedal and the order and turns the Booster pedals
+  off; it keeps your Trim, so a mix you trimmed down stays down. Undo
+  restores the board before it.
 - Use Import for WAV files and enter the known source tempo.
 - Use Sample Editor to trim and change pitch. Start frame is included; End frame
   is excluded. The adjacent buttons change one frame or 0.1 semitone; hold Shift
@@ -202,7 +207,12 @@ The major of the package version must equal `APP_MAJOR_VERSION`.
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --no-default-features --locked
 .\tools\runtime\cargo.ps1 -CargoArguments @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
 .\tools\runtime\cargo.ps1 -CargoArguments @('fmt','--all','--','--check')
+python -m unittest discover -s tools/tests -v
 ~~~
+
+The Python tests check the `.mixjam` projection used by artifact verification.
+It reads formats 8 through 12 and preserves the master pedalboard when a
+verification script writes a schema-4 JSON project for rendering.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three

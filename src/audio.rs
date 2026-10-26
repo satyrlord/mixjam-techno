@@ -269,8 +269,9 @@ impl Mix {
     /// Write stereo PCM16 through the master pedalboard, mixing one block at a time.
     pub fn write_wav(&self, path: &Path, master: &MasterChain) -> Result<(), String> {
         const BLOCK_FRAMES: u64 = 65_536;
-        // A WAV header counts its data bytes in 32 bits.
-        if self.frames > u64::from(u32::MAX) / 4 {
+        // Both the data chunk and the RIFF size are 32-bit. Stereo PCM16
+        // uses four bytes per frame plus 36 bytes in the RIFF payload.
+        if self.frames > (u64::from(u32::MAX) - 36) / 4 {
             return Err("This song is too long for a WAV file.".into());
         }
         let spec = hound::WavSpec {
@@ -666,6 +667,21 @@ impl Player {
 mod tests {
     use super::*;
     use crate::engine::{Clip, TICKS_PER_BAR};
+    #[test]
+    fn wav_export_rejects_riff_size_overflow_before_opening_output() {
+        // The data fits u32, but adding the 36-byte RIFF payload header does not.
+        let mix = Mix {
+            frames: (u64::from(u32::MAX) - 36) / 4 + 1,
+            voices: Vec::new(),
+        };
+        // An invalid destination proves that admission runs before file creation,
+        // without writing a multi-gigabyte fixture on a broken implementation.
+        let error = mix
+            .write_wav(Path::new(""), &MasterChain::default())
+            .unwrap_err();
+        assert_eq!(error, "This song is too long for a WAV file.");
+    }
+
     fn song() -> Project {
         Project {
             master_gain: 1.0,

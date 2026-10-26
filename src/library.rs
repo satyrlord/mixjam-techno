@@ -1614,6 +1614,16 @@ impl Library {
         &mut self,
         imports: &[crate::engine::ImportedSample],
     ) -> Result<(), String> {
+        self.apply_checked_imports(imports, &HashMap::new())
+    }
+
+    /// Prefer probes made by project opening over cached palette metadata.
+    /// History restoration can omit them and reuse its unchanged entries.
+    pub(crate) fn apply_checked_imports(
+        &mut self,
+        imports: &[crate::engine::ImportedSample],
+        checked: &HashMap<u32, Sample>,
+    ) -> Result<(), String> {
         let mut resolved = Vec::with_capacity(imports.len());
         let mut ids = HashSet::new();
         let mut sources: HashMap<_, _> = self
@@ -1626,13 +1636,33 @@ impl Library {
             if !ids.insert(imported.id) {
                 return Err("The project has duplicate imported sample IDs.".into());
             }
-            let sample = match self.unchanged_import(imported) {
-                Some(sample) => sample.clone(),
-                None => {
-                    let path = fs::canonicalize(&imported.path).map_err(|e| {
-                        format!("Cannot open imported sample {}: {e}", imported.name)
-                    })?;
-                    imported_sample(imported, &probe_wav(&path, imported.origin)?, path)?
+            let sample = if let Some(sample) = checked.get(&imported.id) {
+                // Resolution can change the musical tempo after probing. Build
+                // the entry from the final metadata and the measured audio.
+                let probe = WavProbe {
+                    frame_count: sample.frame_count,
+                    sample_rate: sample.sample_rate,
+                    channels: sample.channels,
+                    length: sample.length,
+                    digest: sample.digest,
+                };
+                imported_sample(
+                    imported,
+                    &probe,
+                    sample
+                        .wav_path
+                        .clone()
+                        .ok_or("The imported sample has no path.")?,
+                )?
+            } else {
+                match self.unchanged_import(imported) {
+                    Some(sample) => sample.clone(),
+                    None => {
+                        let path = fs::canonicalize(&imported.path).map_err(|e| {
+                            format!("Cannot open imported sample {}: {e}", imported.name)
+                        })?;
+                        imported_sample(imported, &probe_wav(&path, imported.origin)?, path)?
+                    }
                 }
             };
             sources.insert(

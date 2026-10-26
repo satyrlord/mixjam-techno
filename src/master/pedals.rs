@@ -717,6 +717,8 @@ const LIMITER_LATENCY: usize = TruePeak::DELAY + LOOKAHEAD + SPREAD - 1;
 pub(super) struct Limiter {
     gain: Smoothed,
     ceiling: Smoothed,
+    /// The ceiling as it was when the samples now leaving came in.
+    planned: Delay<LIMITER_LATENCY>,
     detectors: [TruePeak; 2],
     delays: [Delay<LIMITER_LATENCY>; 2],
     needs: [f32; WINDOW],
@@ -736,6 +738,7 @@ impl Limiter {
         Self {
             gain: Smoothed::new(1.0),
             ceiling: Smoothed::new(1.0),
+            planned: Delay::filled(1.0),
             detectors: [TruePeak::ZERO; 2],
             delays: [Delay::ZERO; 2],
             needs: [1.0; WINDOW],
@@ -759,6 +762,7 @@ impl Limiter {
         (self.gain, self.ceiling) = (gain, ceiling);
         self.gain.settle();
         self.ceiling.settle();
+        self.planned = Delay::filled(self.ceiling.value() as f32);
     }
     pub(super) fn take_reduction(&mut self) -> f32 {
         std::mem::take(&mut self.most)
@@ -790,7 +794,15 @@ impl Limiter {
         if envelope < 1.0 {
             self.most = self.most.max(-gain_to_db(f64::from(envelope)) as f32);
         }
-        let limit = |sample: f32| (sample * envelope).clamp(-ceiling, ceiling);
+        // A leaving sample's gain was planned against the ceiling a little
+        // after it came in. While the ceiling falls, that is above the
+        // ceiling now, and clamping to the lower one would clip the sample;
+        // while it rises, it is below. Settings change at most once a
+        // playback block, so the ceiling turns at most once within the
+        // delay, and the higher of the two ends covers the plan.
+        let entered = self.planned.push(ceiling);
+        let bound = ceiling.max(entered);
+        let limit = |sample: f32| (sample * envelope).clamp(-bound, bound);
         (
             limit(self.delays[0].push(left)),
             limit(self.delays[1].push(right)),
@@ -1125,6 +1137,44 @@ mod tests {
             &input[..input.len() - Limiter::LATENCY]
         );
         assert_eq!(limiter.take_reduction(), 0.0);
+    }
+
+    #[test]
+    fn lowering_the_limiter_ceiling_during_play_does_not_clip() {
+        // The right channel is half the left. The gain reduction scales both
+        // alike; a clipped sample on the left alone would break the ratio.
+        let input: Vec<(f32, f32)> = (0..8820)
+            .map(|i| {
+                let t = i as f64 / RATE;
+                let v = (0.6 * (2.0 * PI * 100.0 * t).sin() + 0.35 * (2.0 * PI * 3000.0 * t).sin())
+                    as f32;
+                (v, v * 0.5)
+            })
+            .collect();
+        let mut limiter = Limiter::new();
+        let mut settings = settings::Limiter {
+            on: true,
+            gain: 6.0,
+            ceiling: 0.0,
+        };
+        limiter.set(&settings);
+        limiter.clear();
+        let mut output = Vec::new();
+        for (index, (l, r)) in input.iter().enumerate() {
+            if index == 4410 {
+                settings.ceiling = -3.0;
+                limiter.set(&settings);
+            }
+            output.push(limiter.process(*l, *r));
+        }
+        for (frame, (l, r)) in output.iter().enumerate() {
+            if l.abs() > 1e-3 {
+                assert!(
+                    (r / l - 0.5).abs() < 1e-4,
+                    "Frame {frame} clips: {l} and {r}"
+                );
+            }
+        }
     }
 
     #[test]

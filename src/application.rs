@@ -10,7 +10,7 @@ pub use crate::{
     library::Sample,
     master::{
         EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, Knob, KnobRange, MasterChain, MeterReading,
-        OVER_DBTP, PedalKind,
+        OVER_DBTP, PedalKind, presets,
     },
     products::Product,
     synth::StepSynthState,
@@ -286,8 +286,8 @@ pub struct Session {
     library: Arc<Library>,
     catalog_revision: u64,
     wave_scan: Option<WaveScan>,
-    /// A song to open once the startup folder scan has replaced the library.
-    pending_open: Option<(PathBuf, u64)>,
+    /// A deferred song, with the render revision and editor generation when queued.
+    pending_open: Option<(PathBuf, u64, u64)>,
     /// The deferred song, once opened, until a frontend reports it.
     opened_after_scan: Option<PathBuf>,
     /// A successful folder adoption, until the frontend resets its source selection.
@@ -1321,7 +1321,7 @@ impl Session {
         if let Some(scan) = self.wave_scan.take() {
             scan.progress.cancel();
         }
-        self.pending_open.take().map(|(path, _)| path)
+        self.pending_open.take().map(|(path, _, _)| path)
     }
 
     /// Report a successful folder adoption once, so views can discard stale IDs.
@@ -1338,7 +1338,7 @@ impl Session {
     /// no scan is running.
     pub fn open_after_scan(&mut self, path: &Path) -> Result<(), String> {
         if self.wave_scan.is_some() {
-            self.pending_open = Some((path.to_path_buf(), self.revision));
+            self.pending_open = Some((path.to_path_buf(), self.revision, self.editor.generation()));
             Ok(())
         } else {
             self.open(path)
@@ -1360,8 +1360,11 @@ impl Session {
         };
         let scan = self.wave_scan.take()?;
         let pending = self.pending_open.take();
-        let project_changed = pending.as_ref().is_some_and(|(_, revision)| {
-            *revision != self.revision || self.needs_save_confirmation()
+        let project_changed = pending.as_ref().is_some_and(|(_, revision, generation)| {
+            // Pedal edits change editor history without invalidating the dry mix.
+            *revision != self.revision
+                || *generation != self.editor.generation()
+                || self.needs_save_confirmation()
         });
         match result
             .and_then(|library| self.adopt_wave_folder(library, &scan.root, scan.source_bpm))
@@ -1373,7 +1376,7 @@ impl Session {
                 if !warnings.is_empty() {
                     notice.push_str(&format!(" {}", warnings.join(" ")));
                 }
-                if let Some((path, _)) = pending {
+                if let Some((path, _, _)) = pending {
                     if project_changed {
                         notice.push_str(&format!(
                             " {} was not opened because the current mix changed or has an unsaved take.",
@@ -1393,7 +1396,7 @@ impl Session {
                 self.notice = Some((notice, error));
             }
             Err(error) => match pending {
-                Some((path, _)) => {
+                Some((path, _, _)) => {
                     self.error(format!("{error} {} was not opened.", path.display()))
                 }
                 None => self.error(error),
@@ -3530,7 +3533,15 @@ mod boundary_tests {
         }
         .save(&other)
         .unwrap();
-        for action in ["edit", "edit_then_save", "new", "open", "take"] {
+        for action in [
+            "edit",
+            "edit_then_save",
+            "master_then_save",
+            "master_undo_then_save",
+            "new",
+            "open",
+            "take",
+        ] {
             let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
                 .unwrap()
                 .with_settings_root(dir.join(action));
@@ -3546,6 +3557,15 @@ mod boundary_tests {
                 "edit" => session.edit(EditCommand::SetTempo(160.0)).unwrap(),
                 "edit_then_save" => {
                     session.edit(EditCommand::SetTempo(160.0)).unwrap();
+                    session.save(&dir.join("saved.mixjam")).unwrap();
+                }
+                "master_then_save" | "master_undo_then_save" => {
+                    let mut master = session.project().master;
+                    master.trim = -3.0;
+                    session.edit(EditCommand::SetMaster(master)).unwrap();
+                    if action == "master_undo_then_save" {
+                        session.history_step(false).unwrap();
+                    }
                     session.save(&dir.join("saved.mixjam")).unwrap();
                 }
                 "new" => session.new_mix().unwrap(),

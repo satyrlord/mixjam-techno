@@ -304,7 +304,9 @@ the arrangement, browser, and Mixer retain their palettes.
 | Olive | Step synth | `#3c4428` | `#9db25e` |
 | Indigo | Mastering | `#2e3660` | `#96a6ec` |
 
-Mastering's pedals are painted enclosures on the Indigo board, each with its
+Mastering's board fills the lower panel under the header row, an Indigo
+Folded Metal surface with a 2-point inset. Its pedals are painted enclosures
+on the Indigo board, each with its
 own enamel and ink lettering, as stompboxes are. Light falls on them from the
 upper left, at 135 degrees, as it does on the knob caps. Each enclosure has a
 6-point rounded bevel that catches the light along its upper and left edges
@@ -340,8 +342,11 @@ Output unit shows loudness and true-peak readouts in dark wells, a loudness
 bar with a green `#6ec470` band at -14 LUFS, a true-peak bar with a red line at
 -1 dBTP, and a red OVER lamp in the place of a pedal's lamp. Gain-reduction
 lamps on the Bus compressor and Limiter are amber `#f6b240`. The strip below
-the board repeats each pedal's enamel in signal order, with a cream outline
-around the pedals in view. The whole pedal is painted: knobs sit directly
+the board, one 30-point row of chips in a dark well, repeats each pedal's
+enamel in signal order, with a cream outline around the pedals in view.
+Choosing a chip, or focusing any control above the strip, returns a scrolled
+board to its top, where the units and the whole row show; focusing a chip
+scrolls the board down to it. The whole pedal is painted: knobs sit directly
 on the enamel with ink scale marks, ink labels, and an ink focus ring, and
 values show in small dark windows with cream digits. The shared rotary draws
 ink marks wherever a caller turns egui's `dark_mode` off for a light painted
@@ -438,16 +443,28 @@ occupies 30 points below it. Its application version, prefixed with `v`, stays a
 margin, with space reserved before status text is truncated. Use 12-point Inter
 Medium and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
-Sounds and Mixer share this panel size. Switching modules preserves the resized
-height; opening Mixer first raises a panel below its minimum.
+Sounds, Mixer, and Mastering share this panel size. Switching modules
+preserves the resized height; opening Mixer or Mastering first raises a panel
+below its minimum. Mastering's minimum shows its whole 368-point board under
+the header row; a short window lowers it to 370 points, the same floor as
+Mixer, and the board then scrolls its chip strip below the pedals.
 
 A single Bottom module selector occupies the fixed left slot in the lower
 panel's 28-point header row. Its width is 136 points and its selected module
 uses 16-point bold Syncopate. The selector keeps the same horizontal anchor
-and control identity for Sounds and Mixer. Sound search and filters occupy
-the rest of this row when Sounds is selected. Module names appear in this
-selector; the module bodies start below it. The tool rail's Mixer shortcut
-opens Mixer and returns to Sounds when Mixer is already selected.
+and control identity for Sounds, Mixer, and Mastering. A long selected name
+truncates within this width; the popup and accessible value retain its full name.
+Sound search and
+filters occupy the rest of this row when Sounds is selected. With Mastering,
+the row holds the 150-point preset selector, the board's state in 12-point
+text that truncates, and the Mastering help button at the right margin. The
+preset list puts a rule after Subtle, Revive, and Loud, before the genres; the
+selector reads Choose a preset while every pedal is off at its defaults, and
+Custom when changed pedals match no preset. The trim, which belongs to the
+mix, affects neither. Module names appear
+in this selector; the module bodies start below it. The tool rail's Mixer and
+Mastering shortcuts open their module and return to Sounds when it is already
+selected.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. A soloed track counts as occupied even without

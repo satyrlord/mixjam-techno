@@ -25,7 +25,8 @@ fn set_collapsed(ctx: &egui::Context, identity: &str, value: bool) {
     ctx.request_repaint();
 }
 
-fn style(ui: &mut egui::Ui, palette: controls::Palette) {
+/// The type, spacing, and widget colours of painted hardware in `palette`.
+pub(super) fn hardware_style(ui: &mut egui::Ui, palette: controls::Palette) {
     let s = ui.style_mut();
     s.text_styles
         .insert(egui::TextStyle::Body, FontId::proportional(13.0));
@@ -141,7 +142,7 @@ fn show_shell<R>(
         .sense(Sense::CLICK | Sense::DRAG)
         .fade_in(false)
         .show(ctx, |ui| {
-            style(ui, spec.palette);
+            hardware_style(ui, spec.palette);
             if blocking {
                 let rect = ctx.content_rect();
                 let mut backdrop = ui.new_child(

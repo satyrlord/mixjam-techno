@@ -607,6 +607,20 @@ impl MixJamApp {
     }
 
     fn agent_start(&mut self, ctx: &egui::Context, request: Request) -> Result<Start, String> {
+        if matches!(
+            request,
+            Request::Place { .. }
+                | Request::MoveClips { .. }
+                | Request::DeleteClips { .. }
+                | Request::Select { .. }
+                | Request::Seek { .. }
+                | Request::SetLoop { .. }
+        ) && let Some(modal) = self.blocking_modal(ctx)
+        {
+            return Err(format!(
+                "Arrangement commands are disabled while the {modal} modal is open."
+            ));
+        }
         let visible = |pos: Pos2| {
             if ctx.viewport_rect().contains(pos) {
                 Ok(pos)
@@ -771,9 +785,10 @@ impl MixJamApp {
                         steps
                     }
                     "checkbox" | "radio" | "button" if node.checked.is_some() => {
-                        if node.checked == Some(truth(&value)?) {
+                        let checked = truth(&value)?;
+                        if node.checked == Some(checked) {
                             Vec::new()
-                        } else if node.role == "radio" {
+                        } else if node.role == "radio" && !checked {
                             return Err("Choose another radio button instead.".into());
                         } else {
                             vec![action(&node, accesskit::Action::Click, None)]
@@ -936,7 +951,10 @@ impl MixJamApp {
                 if !bars.is_finite() || bars.abs() > f64::from(u32::MAX) {
                     return Err("The bar distance is out of range.".into());
                 }
-                let clips = self.try_move_clips(&clips, tracks, ticks + bars as i64, copy)?;
+                let ticks = ticks
+                    .checked_add(bars as i64)
+                    .ok_or("The combined tick distance is out of range.")?;
+                let clips = self.try_move_clips(&clips, tracks, ticks, copy)?;
                 Start::Run {
                     steps: vec![Step::Idle],
                     clips,
@@ -1078,7 +1096,6 @@ impl MixJamApp {
             (self.show_master_help, "Mastering help"),
             (self.show_libraries, "Sample libraries"),
             (self.show_import_details, "Import details"),
-            (self.show_master, "Mastering"),
             (self.show_effects, "Effect Studio"),
             (self.show_step_synth, "Step synth"),
             (self.show_sample_edit, "Sample editor"),

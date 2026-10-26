@@ -60,31 +60,38 @@ enum BottomModule {
     #[default]
     Sounds,
     Mixer,
+    Mastering,
 }
 
 impl BottomModule {
-    const ALL: [Self; 2] = [Self::Sounds, Self::Mixer];
+    const ALL: [Self; 3] = [Self::Sounds, Self::Mixer, Self::Mastering];
     /// The panel minimum for a window whose content area is `available` points
-    /// high. Mixer prefers 400 points. A short window reduces it, down to 370,
-    /// and its gain rail shortens, so the arrangement keeps the transport, its
-    /// heading and ruler, and an 80-point lane viewport.
+    /// high. Mixer prefers 400 points and Mastering the height of its whole
+    /// board. A short window reduces either, down to 370, so the arrangement
+    /// keeps the transport, its heading and ruler, and an 80-point lane
+    /// viewport; Mixer's gain rail shortens and the board scrolls.
     fn minimum_height(self, available: f32) -> f32 {
         const ARRANGEMENT_RESERVE: f32 = 68.0 + 103.0 + 80.0;
         match self {
             Self::Sounds => 180.0,
             Self::Mixer => (available - ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
+            Self::Mastering => {
+                (available - ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
+            }
         }
     }
     fn label(self) -> &'static str {
         match self {
             Self::Sounds => "Sounds",
             Self::Mixer => "Mixer",
+            Self::Mastering => "Mastering",
         }
     }
     fn key(self) -> &'static str {
         match self {
             Self::Sounds => "sounds",
             Self::Mixer => "mixer",
+            Self::Mastering => "mastering",
         }
     }
 }
@@ -318,9 +325,10 @@ pub struct MixJamApp {
     capture_transport_focus: bool,
     capture_focus_ready: bool,
     show_effects: bool,
-    show_master: bool,
-    /// A pedal that the Mastering window brings into view on its next frame.
+    /// A pedal that the Mastering module brings into view on its next frame.
     master_reveal: Option<PedalKind>,
+    /// Replacing the project invalidates the board's active widget gestures.
+    master_view_generation: u64,
     show_step_synth: bool,
     show_sample_edit: bool,
     show_stretch: bool,
@@ -483,6 +491,8 @@ impl MixJamApp {
             search: String::new(),
             bottom_module: if capture_view.starts_with("mixer") {
                 BottomModule::Mixer
+            } else if capture_view.starts_with("master") {
+                BottomModule::Mastering
             } else {
                 BottomModule::Sounds
             },
@@ -537,12 +547,12 @@ impl MixJamApp {
                 "effects" | "effects-expanded" | "missing-effects"
             ),
             effects_feedback: EffectsFeedback::default(),
-            show_master: capture_view.starts_with("master"),
             master_reveal: match capture_view.as_str() {
                 "master-end" => Some(PedalKind::Limiter),
                 "master-metering" => Some(PedalKind::BusCompressor),
                 _ => None,
             },
+            master_view_generation: 0,
             show_step_synth: matches!(
                 capture_view.as_str(),
                 "step-synth" | "step-synth-effects" | "missing-step-synth"
@@ -607,6 +617,13 @@ impl MixJamApp {
         self.selected_sample = None;
         self.selected_clip = None;
         self.selected_clips.clear();
+        // Project and library replacement invalidate every in-flight gesture.
+        self.master_view_generation = self.master_view_generation.wrapping_add(1);
+        self.drag = None;
+        self.selection_origin = None;
+        self.selection_base.clear();
+        self.loop_start = None;
+        self.context_clip = None;
         self.context_missing_sample = None;
         self.show_sample_conflicts = false;
         self.sample_conflicts_dismissed = false;
@@ -644,9 +661,6 @@ impl MixJamApp {
         self.poll_stretch();
         if self.session.take_wave_folder_adopted() {
             self.clear_selection();
-            self.drag = None;
-            self.selection_origin = None;
-            self.selection_base.clear();
             self.edit_start = 0;
             self.edit_end = 0;
         }
@@ -830,9 +844,6 @@ impl MixJamApp {
         match self.session.open(path) {
             Ok(()) => {
                 self.clear_selection();
-                // A gesture begun on the previous mix names clips that are gone.
-                self.drag = None;
-                self.selection_origin = None;
                 self.message(with_import_summary(
                     format!("Opened {}.", path.display()),
                     self.session.project(),
@@ -2525,48 +2536,6 @@ impl MixJamApp {
             }
             self.show_effects = open;
         }
-        if self.show_master {
-            let mut open = true;
-            // A capture of the meters shows a fixed, representative reading.
-            let sample = self.capture_view_is("master-metering");
-            let metering = master::Metering {
-                reading: if sample {
-                    MeterReading {
-                        run: 1,
-                        input_vu: -1.5,
-                        input_peaks: [false, true],
-                        compressor_reduction: 1.7,
-                        limiter_reduction: 2.6,
-                        momentary: -12.6,
-                        short_term: -13.4,
-                        integrated: -13.9,
-                        true_peak: -2.4,
-                        true_peak_max: -0.8,
-                        overs: 1,
-                    }
-                } else {
-                    self.session.master_meters()
-                },
-                playing: sample || self.session.playing_mix(),
-            };
-            let reveal = self.master_reveal.take();
-            match master::show(
-                ctx,
-                &mut open,
-                &self.session.project().master,
-                &metering,
-                reveal,
-            ) {
-                master::Action::Change(chain) => {
-                    if let Err(error) = self.session.edit(EditCommand::SetMaster(chain)) {
-                        self.error(error);
-                    }
-                }
-                master::Action::Help => self.show_master_help = true,
-                master::Action::None => {}
-            }
-            self.show_master = open;
-        }
         if self.show_step_synth {
             let mut open = true;
             let explicit_file = self.step_synth_file.is_some();
@@ -2975,13 +2944,14 @@ fn stretch_help(ui: &mut egui::Ui) {
 
 fn master_help(ui: &mut egui::Ui) {
     for text in [
-        "Mastering processes the whole mix after the tracks are summed. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "Mastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
         "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
         "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
         "The Booster pedals are the eJay Booster of Dance 3, Dance 4, and Techno 3: a ten-band EQ, a compressor, and stereo wide. In the original's order (EQ, compressor, wide) they match the original sample for sample. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
         "The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband compresses lows, mids, and highs apart; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.",
-        "Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. Each move is one Undo step.",
-        "Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the status line shows the total, and exports remove it.",
+        "Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.",
+        "Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the board's state beside Preset shows the total, and exports remove it.",
         "Songs open with every pedal off unless their file switched one on. Importing a Dance 3, Dance 4, or Techno 3 song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.",
         "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.",
     ] {

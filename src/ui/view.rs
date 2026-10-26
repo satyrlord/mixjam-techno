@@ -230,21 +230,16 @@ impl MixJamApp {
                         self.delete_selection();
                     }
                     controls::rail_separator(ui);
-                    if rail_button(
-                        ui,
-                        &icons,
-                        RailIcon::Mixer,
-                        self.bottom_module == BottomModule::Mixer,
-                    )
-                    .clicked()
-                    {
-                        self.bottom_module = match self.bottom_module {
-                            BottomModule::Sounds => BottomModule::Mixer,
-                            BottomModule::Mixer => BottomModule::Sounds,
-                        };
-                    }
-                    if rail_button(ui, &icons, RailIcon::Master, self.show_master).clicked() {
-                        self.show_master = !self.show_master;
+                    // Each module button shows its module, or Sounds again
+                    // when its module already shows.
+                    for (icon, module) in [
+                        (RailIcon::Mixer, BottomModule::Mixer),
+                        (RailIcon::Master, BottomModule::Mastering),
+                    ] {
+                        let shown = self.bottom_module == module;
+                        if rail_button(ui, &icons, icon, shown).clicked() {
+                            self.bottom_module = if shown { BottomModule::Sounds } else { module };
+                        }
                     }
                     if rail_button(ui, &icons, RailIcon::Effects, self.show_effects).clicked() {
                         self.show_effects = !self.show_effects;
@@ -375,6 +370,7 @@ impl MixJamApp {
                 ui.spacing_mut().item_spacing.y = row_spacing;
                 match self.bottom_module {
                     BottomModule::Mixer => self.mixer(ui),
+                    BottomModule::Mastering => self.mastering(ui),
                     BottomModule::Sounds => self.palette(ui),
                 }
             });
@@ -504,20 +500,29 @@ impl MixJamApp {
                 ui.spacing_mut().interact_size.y = 28.0;
                 let button_padding = ui.spacing().button_padding;
                 ui.spacing_mut().button_padding.y = 3.0;
-                let response = egui::ComboBox::from_id_salt("bottom_module")
-                    .selected_text(heading(self.bottom_module.label(), 16.0))
-                    .width(136.0)
-                    .show_ui(ui, |ui| {
-                        for module in BottomModule::ALL {
-                            if ui.selectable_value(&mut self.bottom_module, module, module.label()).clicked() {
-                                ui.close();
+                // ComboBox width is a minimum. Bound its available space as
+                // well, so a longer module name cannot move adjacent controls.
+                let response = ui.allocate_ui(Vec2::new(136.0, 28.0), |ui| {
+                    egui::ComboBox::from_id_salt("bottom_module")
+                        .selected_text(heading(self.bottom_module.label(), 16.0))
+                        .width(136.0)
+                        .truncate()
+                        .show_ui(ui, |ui| {
+                            for module in BottomModule::ALL {
+                                if ui.selectable_value(&mut self.bottom_module, module, module.label()).clicked() {
+                                    ui.close();
+                                }
                             }
-                        }
-                    }).response;
+                        }).response
+                }).inner;
                 name_control(response, "Bottom module")
-                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, polarity and outputs.");
+                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, polarity and outputs; Mastering processes the whole mix on the master pedalboard.");
                 ui.spacing_mut().button_padding = button_padding;
-                if self.bottom_module == BottomModule::Sounds { self.palette_filters(ui); }
+                match self.bottom_module {
+                    BottomModule::Sounds => self.palette_filters(ui),
+                    BottomModule::Mastering => self.mastering_toolbar(ui),
+                    BottomModule::Mixer => {}
+                }
             });
         });
     }
@@ -708,6 +713,69 @@ impl MixJamApp {
             });
             self.apply(result);
             ui.ctx().request_repaint();
+        }
+    }
+
+    fn mastering_toolbar(&mut self, ui: &mut egui::Ui) {
+        if let Some(chain) = master::preset_selector(ui, &self.session.project().master) {
+            let result = self.session.edit(EditCommand::SetMaster(chain));
+            self.apply(result);
+        }
+        let (status, path) = master::status(&self.session.project().master);
+        let room = (ui.available_width() - 40.0).max(0.0);
+        ui.allocate_ui(Vec2::new(room, 28.0), |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(&status).size(12.0)).truncate())
+                .on_hover_text(path);
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
+            if controls::header_button(
+                ui,
+                rect,
+                "mastering-help",
+                "Mastering help",
+                controls::HeaderIcon::Help,
+            )
+            .clicked()
+            {
+                self.show_master_help = true;
+            }
+        });
+    }
+
+    pub(super) fn mastering(&mut self, ui: &mut egui::Ui) {
+        // A capture of the meters shows a fixed, representative reading.
+        let sample = self.capture_view_is("master-metering");
+        let metering = master::Metering {
+            reading: if sample {
+                MeterReading {
+                    run: 1,
+                    input_vu: -1.5,
+                    input_peaks: [false, true],
+                    compressor_reduction: 1.7,
+                    limiter_reduction: 2.6,
+                    momentary: -12.6,
+                    short_term: -13.4,
+                    integrated: -13.9,
+                    true_peak: -2.4,
+                    true_peak_max: -0.8,
+                    overs: 1,
+                }
+            } else {
+                self.session.master_meters()
+            },
+            playing: sample || self.session.playing_mix(),
+        };
+        let reveal = self.master_reveal.take();
+        let chain = self.session.project().master;
+        let action = ui
+            .push_id(self.master_view_generation, |ui| {
+                master::show(ui, &chain, &metering, reveal)
+            })
+            .inner;
+        if let master::Action::Change(chain) = action {
+            let result = self.session.edit(EditCommand::SetMaster(chain));
+            self.apply(result);
         }
     }
 

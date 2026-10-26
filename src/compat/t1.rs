@@ -83,7 +83,7 @@ fn convert(
     }
     let footer = MixFooter::parse(mix)
         .map_err(|error| format!("Cannot read the T1 MIX sample references: {error}"))?;
-    let title = footer.title.byte_view();
+    let title = decode_1252(&footer.title.0);
     let title = if title.is_empty() || title == "\x52ave \x65Jay 1.01" {
         mix_path.file_stem().map_or_else(
             || "Untitled".into(),
@@ -430,6 +430,18 @@ mod tests {
                 .iter()
                 .all(|track| track.left_enabled && track.right_enabled)
         );
+        project.validate().unwrap();
+    }
+
+    #[test]
+    fn title_uses_the_same_windows_code_page_as_import_labels() {
+        let mut mix = Mix::default();
+        mix.set_cell(0, 0, 731, 0).unwrap();
+        mix.trailer = MixFooter::new(ByteText(b"Night \x96 \x93Live\x94".to_vec()), [0; 8])
+            .to_bytes(&mix)
+            .unwrap();
+        let project = convert(&mix, Path::new("title.mix"), &Library::empty(), resolve).unwrap();
+        assert_eq!(project.title, "Night \u{2013} \u{201c}Live\u{201d}");
         project.validate().unwrap();
     }
 

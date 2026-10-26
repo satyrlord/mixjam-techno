@@ -387,23 +387,25 @@ mod tests {
             // The first frame after a density change still reports the old
             // screen; open the tool once the minimum window is in place.
             frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            app.show_master = true;
+            app.bottom_module = BottomModule::Mastering;
             let mut output = egui::FullOutput::default();
             for _ in 0..4 {
                 output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
-            let window = effects_control_rect(&output, "MASTERING");
+            let window = effects_control_rect(&output, "Mastering board");
             assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(window),
-                "The complete tool must fit at {density}x.");
+                "The board must fit the minimum window at {density}x.");
             assert_folded_assets(&ctx, &output, density, "Indigo");
-            // The input and output units and the strip stay in view however
-            // far the row scrolls.
-            let strip: Vec<String> = NAMES.iter().map(|name| format!("Show {name}")).collect();
-            for name in ["Trim", "Trim value", "Clear OVER"]
-                .into_iter()
-                .chain(strip.iter().map(String::as_str))
-            {
+            // The input and output units and the pedals stay in view however
+            // far the row scrolls. The minimum window scrolls the strip below.
+            for name in ["Trim", "Trim value", "Clear OVER"] {
                 assert!(window.contains_rect(effects_control_rect(&output, name)), "{name} must fit at {density}x.");
+            }
+            let first = effects_control_rect(&output, "Drag Booster EQ");
+            assert!(window.contains_rect(Rect::from_min_size(first.min, Vec2::new(first.width(), 304.0))),
+                "The pedals must fit at {density}x.");
+            for name in NAMES {
+                effects_control_rect(&output, &format!("Show {name}"));
             }
             for label in [
                 "Input level: no mix playing",
@@ -489,6 +491,8 @@ mod tests {
             frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            // From here the window has its default size, and the board follows it.
+            let window = effects_control_rect(&output, "Mastering board");
             assert!(window.contains_rect(pedal(&output, "Limiter")), "The Limiter must come into view at {density}x.");
             assert!(!window.contains_rect(pedal(&output, "Booster EQ")));
             // A pedal dropped past the limiter stays before it.
@@ -641,12 +645,299 @@ mod tests {
                     screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
                     ..Default::default()
                 }, |ctx| {
-                    let mut open = true;
-                    assert!(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None),
+                    assert!(matches!(board(ctx, &chain, &metering), master::Action::None),
                         "Showing a saved board must not change values between dial steps, even when its pedals are {on}.");
                 });
             }
         }
+    }
+
+    /// The board alone, filling the window.
+    fn board(ctx: &egui::Context, chain: &MasterChain, metering: &master::Metering) -> master::Action {
+        egui::CentralPanel::default().show(ctx, |ui| master::show(ui, chain, metering, None)).inner
+    }
+
+    /// The app with a saved board, opened in Mastering and settled.
+    fn mastering_fixture(change: impl Fn(&mut MasterChain)) -> (egui::Context, MixJamApp, egui::FullOutput) {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        change(&mut project.master);
+        app.session = Session::headless(Arc::new(Library::fixture(app.session.library().samples.to_vec())), project).unwrap();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.bottom_module = BottomModule::Mastering;
+        let mut output = egui::FullOutput::default();
+        for _ in 0..4 {
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        (ctx, app, output)
+    }
+
+    #[test]
+    fn mastering_value_windows_keep_saved_values_and_apply_typed_values_on_entry() {
+        let (ctx, mut app, output) = mastering_fixture(|master| {
+            master.trim = 1.04;
+            master.limiter.on = true;
+        });
+        // Focusing a value window and leaving it is no edit, even where the
+        // window shows the saved value rounded.
+        focus_control(&ctx, &mut app, &output, "Trim value");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Trim");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().master.trim, 1.04);
+        assert!(!app.session.unsaved(), "Focus alone must not edit the board.");
+
+        // A typed value applies once, on entry, not at each keystroke.
+        focus_control(&ctx, &mut app, &output, "Limiter gain value");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("1".into())], egui::Modifiers::COMMAND);
+        frame(&ctx, &mut app, vec![egui::Event::Text("0".into())], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().master.limiter.gain, 4.0, "Partial entries must not reach the board.");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().master.limiter.gain, 10.0);
+        assert!(app.session.history_step(false).unwrap());
+        assert_eq!(app.session.project().master.limiter.gain, 4.0);
+    }
+
+    #[test]
+    fn mastering_dial_held_still_mid_drag_keeps_its_step() {
+        let (ctx, mut app, _) = mastering_fixture(|master| master.bus_compressor.on = true);
+        app.master_reveal = Some(PedalKind::BusCompressor);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let window = effects_control_rect(&output, "Mastering board");
+        let dial = effects_control_rect(&output, "Bus compressor threshold").center();
+        assert!(window.contains(dial));
+        // The threshold steps by 0.5 dB, and the dial turns 0.2 dB a point.
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(dial)], egui::Modifiers::NONE);
+        pointer(&ctx, &mut app, dial, true, egui::Modifiers::NONE);
+        for step in 1..=12 {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(dial + Vec2::new(step as f32, 0.0))], egui::Modifiers::NONE);
+        }
+        let held = app.session.project().master.bus_compressor.threshold;
+        assert!(held > -16.0 && (held * 2.0).fract() == 0.0, "{held}");
+        for _ in 0..6 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.bus_compressor.threshold, held,
+                "A dial held still must not flip between the steps around the pointer.");
+        }
+        pointer(&ctx, &mut app, dial + Vec2::new(12.0, 0.0), false, egui::Modifiers::NONE);
+        assert_eq!(app.session.project().master.bus_compressor.threshold, held);
+    }
+
+    #[test]
+    fn new_mix_cancels_a_mastering_pedal_drag_before_release() {
+        for release_with_new in [false, true] {
+            let (ctx, mut app, output) = mastering_fixture(|_| {});
+            let grip = effects_control_rect(&output, "Drag Booster EQ").center();
+            let drop = effects_control_rect(&output, "Drag Booster compressor").right_center();
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip)], egui::Modifiers::NONE);
+            pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
+            for step in 1..=6 {
+                let at = grip + (drop - grip) * (step as f32 / 6.0);
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+            }
+            assert!(ctx.dragged_id().is_some(), "The pedal drag must be active.");
+            let mut events = vec![key_event(egui::Key::N, egui::Modifiers::COMMAND)];
+            if release_with_new {
+                events.push(egui::Event::PointerButton {
+                    pos: drop, button: egui::PointerButton::Primary, pressed: false,
+                    modifiers: egui::Modifiers::COMMAND,
+                });
+            }
+            frame(&ctx, &mut app, events, egui::Modifiers::COMMAND);
+            assert!(app.session.project().clips.is_empty(), "New must replace the previous song.");
+            assert!(!app.session.unsaved());
+            if !release_with_new {
+                pointer(&ctx, &mut app, drop, false, egui::Modifiers::NONE);
+            }
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.order, PedalKind::ALL,
+                "Releasing the previous song's pedal must not edit the new song.");
+            assert!(!app.session.unsaved());
+            assert!(!app.session.history_step(false).unwrap(), "The new song must have no undo entry.");
+        }
+    }
+
+    #[test]
+    fn mastering_pedal_drag_ends_with_the_window() {
+        let (ctx, mut app, output) = mastering_fixture(|_| {});
+        let grip = effects_control_rect(&output, "Drag Booster wide").center();
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip)], egui::Modifiers::NONE);
+        pointer(&ctx, &mut app, grip, true, egui::Modifiers::NONE);
+        for step in 1..=6 {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(grip - Vec2::new(10.0 * step as f32, 0.0))], egui::Modifiers::NONE);
+        }
+        // The window closes mid-drag, and the button lets go elsewhere.
+        app.bottom_module = BottomModule::Sounds;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let away = Pos2::new(4.0, 500.0);
+        pointer(&ctx, &mut app, away, false, egui::Modifiers::NONE);
+        app.bottom_module = BottomModule::Mastering;
+        for _ in 0..4 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        click(&ctx, &mut app, away, egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().master.order, PedalKind::ALL, "A later click must not drop a drag that ended.");
+        assert!(!app.session.unsaved());
+    }
+
+    #[test]
+    fn mastering_move_buttons_follow_their_pedal_and_keep_focus_at_the_end() {
+        let (ctx, mut app, output) = mastering_fixture(|_| {});
+        let window = effects_control_rect(&output, "Mastering board");
+        // The grips are for the pointer; the arrows move pedals from the keyboard.
+        assert!(!accessible_node(&output, "Drag Soft clip").1.supports_action(egui::accesskit::Action::Focus),
+            "A drag grip must not take a Tab stop.");
+        focus_control(&ctx, &mut app, &output, "Move Soft clip right");
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for place in 4..=11 {
+            frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().master.order[place], PedalKind::SoftClip);
+            let followed = if place == 11 { "Move Soft clip left" } else { "Move Soft clip right" };
+            assert!(window.contains_rect(effects_control_rect(&output, followed)), "{followed} must stay in view at place {place}.");
+        }
+        let focus = output.platform_output.accesskit_update.as_ref().unwrap().focus;
+        assert!(accessible_node(&output, "Move Soft clip right").1.is_disabled());
+        assert_eq!(focus, accessible_node(&output, "Move Soft clip left").0,
+            "Focus passes to the other arrow when the pressed one turns off.");
+    }
+
+    #[test]
+    fn mastering_shows_its_whole_board_from_1024_by_768() {
+        for size in [Vec2::new(1024.0, 768.0), Vec2::new(1440.0, 1000.0)] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.bottom_module = BottomModule::Mastering;
+            let mut output = egui::FullOutput::default();
+            for _ in 0..4 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let board = effects_control_rect(&output, "Mastering board");
+            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(board), "{size:?}");
+            for chip in ["Show Booster EQ", "Show Limiter"] {
+                assert!(board.contains_rect(effects_control_rect(&output, chip)), "{chip} at {size:?}");
+            }
+            // The toolbar holds the preset, the board's state, and its help.
+            let toolbar = effects_control_rect(&output, "Bottom module");
+            let preset = effects_control_rect(&output, "Mastering preset");
+            let status = text_rect(&output, "Every pedal is off and the trim is at 0 dB: the mix plays unprocessed.");
+            let help = effects_control_rect(&output, "Mastering help");
+            assert!(toolbar.right() < preset.left() && preset.right() < status.left(), "{size:?}");
+            assert!(status.right() <= help.left() && help.bottom() <= board.top(), "{size:?}");
+            text_rect(&output, "Choose a preset");
+        }
+    }
+
+    #[test]
+    fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
+        let size = Vec2::new(960.0, 720.0);
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.bottom_module = BottomModule::Mastering;
+        let mut output = egui::FullOutput::default();
+        for _ in 0..4 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let board = effects_control_rect(&output, "Mastering board");
+        assert!(!board.contains_rect(effects_control_rect(&output, "Show Limiter")),
+            "The minimum window scrolls the strip below the pedals.");
+        // The wheel scrolls the board down to the chips; choosing one scrolls
+        // the board back up to its whole pedal.
+        let inside = board.center();
+        frame_at_size(&ctx, &mut app, vec![egui::Event::PointerMoved(inside)], egui::Modifiers::NONE, size);
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -60.0), modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE, size);
+        }
+        // Smooth scrolling spends the wheel over the following frames.
+        for _ in 0..30 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let chip = effects_control_rect(&output, "Show Limiter");
+        assert!(board.contains_rect(chip), "The wheel must reach the strip: {chip:?} in {board:?}.");
+        for pressed in [true, false] {
+            frame_at_size(&ctx, &mut app, vec![egui::Event::PointerMoved(chip.center()), egui::Event::PointerButton {
+                pos: chip.center(), pressed, button: egui::PointerButton::Primary, modifiers: egui::Modifiers::NONE,
+            }], egui::Modifiers::NONE, size);
+        }
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let grip = effects_control_rect(&output, "Limiter always runs last");
+        assert!(board.contains_rect(Rect::from_min_size(grip.min, Vec2::new(grip.width(), 304.0))),
+            "The whole Limiter must come into view: {grip:?} in {board:?}.");
+        // Tab focus scrolls the board down to a chip; Enter on it scrolls back up.
+        let before = accessible_node(&output, "Show Multiband").0;
+        frame_at_size(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Focus, target: before, data: None,
+        })], egui::Modifiers::NONE, size);
+        frame_at_size(&ctx, &mut app, vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)], egui::Modifiers::NONE, size);
+        for _ in 0..2 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        assert!(board.contains_rect(effects_control_rect(&output, "Show Limiter")), "Tab must reveal the chip.");
+        frame_at_size(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE, size);
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let grip = effects_control_rect(&output, "Limiter always runs last");
+        assert!(board.contains_rect(Rect::from_min_size(grip.min, Vec2::new(grip.width(), 304.0))),
+            "Enter on a chip must bring the whole pedal into view: {grip:?} in {board:?}.");
+    }
+
+    #[test]
+    fn mastering_presets_set_every_pedal_keep_the_trim_and_undo_in_one_step() {
+        use mixjam_techno::application::presets::PRESETS;
+        let (context, mut app, port) = agent_fixture();
+        app.bottom_module = BottomModule::Mastering;
+        let mut booster = MasterChain::default();
+        booster.ejay_eq.on = true;
+        // The mix was too loud, so its trim is down 9 dB.
+        booster.trim = -9.0;
+        booster.move_pedal(0, 6);
+        app.session.edit(EditCommand::SetMaster(booster)).unwrap();
+        let reply = agent(&context, &mut app, &port, &["set", "target=Mastering preset", "value=Hard Techno"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let hard = PRESETS.iter().find(|preset| preset.name == "Hard Techno").unwrap();
+        let chain = app.session.project().master;
+        assert_eq!(chain, MasterChain { trim: -9.0, ..hard.chain });
+        assert!(!chain.ejay_eq.on && chain.order == PedalKind::ALL, "A preset sets every pedal.");
+        assert_eq!(chain.trim, -9.0, "A preset must keep the trim that suits the mix.");
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Hard Techno");
+        assert!(app.session.history_step(false).unwrap());
+        assert_eq!(app.session.project().master, booster, "One undo restores the board before the preset.");
+        assert!(app.session.history_step(true).unwrap());
+        // Any edit leaves the preset; the selector then reads Custom.
+        let reply = agent(&context, &mut app, &port, &["set", "target=Limiter gain value", "value=6"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.session.project().master.limiter.gain, 6.0);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Custom");
+    }
+
+    #[test]
+    fn the_rail_mastering_button_shows_the_module_and_returns_to_sounds() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for expected in [BottomModule::Mastering, BottomModule::Sounds] {
+            let button = accessible_node(&output, "Mastering").0;
+            frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest { action: egui::accesskit::Action::Click, target: button, data: None })], egui::Modifiers::NONE);
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.bottom_module, expected);
+        }
+        app.bottom_module = BottomModule::Mixer;
+        output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let button = accessible_node(&output, "Mastering").0;
+        frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest { action: egui::accesskit::Action::Click, target: button, data: None })], egui::Modifiers::NONE);
+        assert_eq!(app.bottom_module, BottomModule::Mastering, "Mastering replaces the Mixer.");
     }
 
     #[test]
@@ -655,15 +946,18 @@ mod tests {
         ctx.enable_accesskit();
         let chain = MasterChain::default();
         let mut reading = MeterReading { run: 1, ..MeterReading::default() };
+        let generation = std::cell::Cell::new(0_u64);
         let render = |reading, events| {
             ctx.run(egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
                 events,
                 ..Default::default()
             }, |ctx| {
-                let mut open = true;
                 let metering = master::Metering { reading, playing: true };
-                assert!(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None));
+                let action = egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.push_id(generation.get(), |ui| master::show(ui, &chain, &metering, None)).inner
+                }).inner;
+                assert!(matches!(action, master::Action::None));
             })
         };
         for _ in 0..3 {
@@ -681,6 +975,10 @@ mod tests {
         render(reading, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)]);
         let output = render(reading, vec![]);
         assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: clear."));
+        generation.set(1);
+        let output = render(reading, vec![]);
+        assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: clear."),
+            "Resetting project controls must preserve an acknowledged meter reading.");
         reading.overs = 2;
         let output = render(reading, vec![]);
         assert_eq!(accessible_node(&output, "Clear OVER").1.description(), Some("OVER: detected."));
@@ -691,7 +989,7 @@ mod tests {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         ctx.style_mut(|style| style.animation_time = 0.0);
-        app.show_master = true;
+        app.bottom_module = BottomModule::Mastering;
         let reading = MeterReading {
             run: 1, input_vu: -1.5, input_peaks: [false, true], compressor_reduction: 1.7,
             limiter_reduction: 2.6, momentary: -12.6, short_term: -13.4, integrated: -13.9,
@@ -709,8 +1007,7 @@ mod tests {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
                 ..Default::default()
             }, |ctx| {
-                let mut open = true;
-                action = Some(matches!(master::show(ctx, &mut open, &chain, &metering, None), master::Action::None));
+                action = Some(matches!(board(ctx, &chain, &metering), master::Action::None));
             });
         }
         assert_eq!(action, Some(true), "Showing readings must not edit the board.");
@@ -723,8 +1020,7 @@ mod tests {
         // the true peak of the playback remain.
         let stopped = master::Metering { reading, playing: false };
         let output = ctx.run(egui::RawInput::default(), |ctx| {
-            let mut open = true;
-            master::show(ctx, &mut open, &chain, &stopped, None);
+            board(ctx, &chain, &stopped);
         });
         accessible_label(&output, "Input level: no mix playing");
         accessible_label(&output, "Output loudness: momentary - LUFS, short-term - LUFS, integrated -13.9 LUFS, true peak -0.8 dBTP");
@@ -4230,7 +4526,7 @@ mod tests {
         for size in [Vec2::new(1440.0, 1000.0), Vec2::new(1024.0, 768.0), Vec2::new(960.0, 720.0),] {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
-            app.bottom_module = BottomModule::Mixer;
+            app.bottom_module = BottomModule::Mastering;
             app.search = "grasp".into();
             app.group = Some("Loop".into());
             app.palette_sort = PaletteSort::Name;
@@ -4243,13 +4539,14 @@ mod tests {
             assert!(panel.height() >= 370.0);
             assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(selector));
             assert!((selector.width() - 136.0).abs() <= 1.0,
-                "The selector must reserve the same fixed width for either module.");
+                "The selector must reserve the same fixed width for every module: {selector:?}.");
             assert_eq!(accessible_node(&output, "Bottom module").1.role(), egui::accesskit::Role::ComboBox);
-            accessible_node(&output, "Master gain");
+            accessible_node(&output, "Trim");
 
             // Choose Sounds with the pointer, Mixer with focus and Enter,
-            // then Sounds with the same accessibility actions used by agents.
-            for (method, module) in [(0, BottomModule::Sounds), (1, BottomModule::Mixer), (2, BottomModule::Sounds),] {
+            // then Mastering and Sounds with the accessibility actions used by agents.
+            for (method, module) in [(0, BottomModule::Sounds), (1, BottomModule::Mixer),
+                (2, BottomModule::Mastering), (2, BottomModule::Sounds),] {
                 let known: std::collections::HashSet<_> = output.platform_output.accesskit_update.as_ref().unwrap()
                     .nodes.iter().map(|(id, _)| *id).collect();
                 match method {
@@ -4286,6 +4583,8 @@ mod tests {
                 assert_eq!(app.bottom_module, module, "Method {method}, viewport {size:?}.");
                 assert!(!egui::Popup::is_any_open(&ctx), "Module choice must close after method {method}, viewport {size:?}.");
                 assert_eq!(accessible_node(&output, "Bottom module").0, selector_id);
+                assert_eq!(accessible_node(&output, "Bottom module").1.value(), Some(title_text(module.label()).as_str()),
+                    "The selected module's full name must remain accessible.");
                 assert_eq!(effects_control_rect(&output, "Bottom module"), selector,
                     "Module navigation must not move its selector at {size:?}.");
                 let title = title_text(module.label());
@@ -4313,7 +4612,7 @@ mod tests {
                     }
                     assert!(!nodes.iter().any(|(_, node)| node.label() == Some("Master gain")));
                 } else {
-                    accessible_node(&output, "Master gain");
+                    accessible_node(&output, if module == BottomModule::Mixer { "Master gain" } else { "Trim" });
                     assert!(!nodes.iter().any(|(_, node)| node.label() == Some("Find a sound")));
                 }
             }
@@ -5732,6 +6031,21 @@ mod tests {
     }
 
     #[test]
+    fn new_mix_cancels_a_sample_drag_before_its_pointer_release() {
+        let (context, mut app) = fixture();
+        app.new_mix();
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let target = app.timeline_drop_rect.unwrap().center();
+        pointer(&context, &mut app, target, true, egui::Modifiers::NONE);
+        app.drag = Some(DragItem::Sample(1));
+        app.request_action(PendingAction::New, &context);
+        pointer(&context, &mut app, target, false, egui::Modifiers::NONE);
+        assert!(app.session.project().clips.is_empty());
+        assert!(!app.session.unsaved());
+        assert!(app.drag.is_none());
+    }
+
+    #[test]
     fn scan_adoption_clears_selection_and_drag_from_the_previous_palette() {
         let dir = std::env::temp_dir().join(format!("mixjam-ui-scan-{}", std::process::id()));
         let old = dir.join("old");
@@ -5836,6 +6150,62 @@ mod tests {
             std::thread::sleep(Duration::from_millis(1));
         }
         serde_json::from_str(&client.join().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn agent_arrangement_requests_obey_blocking_dialogs_and_resume_when_collapsed() {
+        let (context, mut app, port) = agent_fixture();
+        app.pending_action = Some(PendingAction::New);
+        let project = app.session.project().clone();
+        for words in [
+            &["place", "sample=1", "track=3", "bar=1"][..],
+            &["move_clips", "clips=[1]", "bars=1"],
+            &["delete_clips", "clips=[1]"],
+            &["select", "clips=[1]"],
+            &["seek", "bar=2"],
+            &["set_loop", "first_bar=1", "last_bar=2"],
+        ] {
+            let reply = agent(&context, &mut app, &port, words);
+            assert_eq!(reply["ok"], false, "{words:?}: {reply}");
+            assert!(reply["error"].as_str().unwrap().contains("Save your changes?"), "{reply}");
+        }
+        assert_eq!(app.session.project(), &project);
+        assert_eq!(app.session.cursor_tick(), 0);
+        assert!(app.selected_clips.is_empty());
+        let reply = agent(&context, &mut app, &port, &["click", "target=Collapse Save your changes?"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let reply = agent(&context, &mut app, &port, &["place", "sample=1", "track=3", "bar=1"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.session.project().clips.len(), project.clips.len() + 1);
+    }
+
+    #[test]
+    fn agent_move_rejects_combined_tick_overflow_without_changing_the_song() {
+        let (context, mut app, port) = agent_fixture();
+        let project = app.session.project().clone();
+        for (ticks, bars) in [(i64::MAX, 1), (i64::MIN, -1)] {
+            let reply = agent(&context, &mut app, &port, &[
+                "move_clips", &format!("clips=[{}]", project.clips[0].id),
+                &format!("ticks={ticks}"), &format!("bars={bars}"),
+            ]);
+            assert_eq!(reply["ok"], false, "{reply}");
+            assert_eq!(app.session.project(), &project);
+        }
+    }
+
+    #[test]
+    fn agent_selects_radio_buttons_and_rejects_clearing_the_active_choice() {
+        let (context, mut app, port) = agent_fixture();
+        let reply = agent(&context, &mut app, &port, &["set", "target=Record on track 2", "value=true"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(app.armed_track, 1);
+        let reply = agent(&context, &mut app, &port, &["set", "target=Record on track 2", "value=true"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let reply = agent(&context, &mut app, &port, &["set", "target=Record on track 1", "value=false"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let reply = agent(&context, &mut app, &port, &["set", "target=Record on track 2", "value=false"]);
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert_eq!(app.armed_track, 1);
     }
 
     #[test]
