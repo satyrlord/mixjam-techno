@@ -256,12 +256,14 @@ impl Default for Imaging {
     }
 }
 
-/// A three-band compressor with one amount per band.
+/// A three-band peak limiter with one amount per band: each band is driven
+/// into a ceiling above its own recent peak, which lifts the sound under the
+/// peaks, and the sum never peaks above the mix's recent peak.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Multiband {
     pub on: bool,
-    /// Amounts below 120 Hz, from 120 Hz to 2 kHz, and above, in percent.
+    /// Amounts below 200 Hz, from 200 Hz to 3 kHz, and above, in percent.
     pub low: f32,
     pub mid: f32,
     pub high: f32,
@@ -381,6 +383,7 @@ impl PedalKind {
             Self::SoftClip => pedals::SoftClip::LATENCY,
             Self::Tube => pedals::Tube::LATENCY,
             Self::Maximizer => pedals::Maximizer::LATENCY,
+            Self::Multiband => pedals::Multiband::LATENCY,
             Self::Tape => pedals::Tape::LATENCY,
             Self::Limiter => pedals::Limiter::LATENCY,
             _ => 0,
@@ -766,7 +769,8 @@ impl MasterControl {
 const FADE: usize = 1323;
 /// Playback keeps this delay even as pedals switch, so the timeline and
 /// both sides of a crossfade stay aligned. Export uses only active delays.
-const LIVE_LATENCY: usize = 4 * dsp::Oversampler::LATENCY + pedals::Limiter::LATENCY;
+const LIVE_LATENCY: usize =
+    4 * dsp::Oversampler::LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY;
 
 /// Runs the board over stereo audio. Its state carries from one block to
 /// the next.
@@ -1245,7 +1249,7 @@ mod tests {
         );
         assert_eq!(
             mastered().latency(),
-            4 * dsp::Oversampler::LATENCY + pedals::Limiter::LATENCY
+            4 * dsp::Oversampler::LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY
         );
     }
 
@@ -1349,7 +1353,7 @@ mod tests {
             dry.integrated, wet.integrated, wet.true_peak_max
         );
         assert!((input_db + 18.0).abs() < 0.01);
-        assert!((wet.integrated + 13.0).abs() <= 1.0, "{wet:?}");
+        assert!((wet.integrated + 11.0).abs() <= 1.0, "{wet:?}");
         assert!(wet.integrated > dry.integrated + 3.0, "{dry:?} {wet:?}");
         assert!(wet.true_peak_max <= -1.0 + 1e-3, "{wet:?}");
     }

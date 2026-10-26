@@ -402,19 +402,19 @@ fn face(knob: Knob) -> (String, String, &'static str, Format) {
         Knob::MultibandLow => (
             "Low",
             "Multiband low",
-            "Compression below 120 Hz.",
+            "Below 200 Hz: holds the peaks and lifts the sound under them.",
             Format::whole("%"),
         ),
         Knob::MultibandMid => (
             "Mid",
             "Multiband mid",
-            "Compression from 120 Hz to 2 kHz.",
+            "From 200 Hz to 3 kHz: holds the peaks and lifts the sound under them.",
             Format::whole("%"),
         ),
         Knob::MultibandHigh => (
             "High",
             "Multiband high",
-            "Compression above 2 kHz.",
+            "Above 3 kHz: holds the peaks and lifts the sound under them.",
             Format::whole("%"),
         ),
         Knob::LimiterGain => (

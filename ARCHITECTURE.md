@@ -66,7 +66,7 @@ and the whole board state is fixed-size. Pedals that are off pass the signal on
 unchanged. Each pedal keeps its own state when the order changes; the mastering
 pedals glide to new settings over about 20 ms. During playback, switching or
 moving a pedal copies the board and crossfades from the old copy to the new one
-over 30 ms. Live playback pads both paths to a fixed 417-frame delay and fills
+over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills
 the new path before the fade starts, so switching pedals preserves their
 timeline alignment and the song's ending.
 `MasterChain::latency` is the delay of the pedals that are on:
@@ -89,7 +89,7 @@ from reaching the window. The cumulative OVER count carries its playback number
 in the same atomic value. A stale count cannot become the new playback's lamp
 baseline. The playback block is 1024 frames, so readings change more than 30
 times a second. At the end, playback finishes the peak detector without adding
-audio frames or loudness time. Output metering excludes the initial 417 frames
+audio frames or loudness time. Output metering excludes the initial 593 frames
 that playback removes, so loudness windows follow the audible program.
 Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
 size field for its header before it opens a destination file. The render worker prepares

@@ -6,13 +6,16 @@
 //! a mix that needed -9 dB would otherwise come out 9 dB louder. Every preset
 //! keeps the true peak at -1 dBTP or below through the Limiter and stays
 //! moderate, so that it suits a finished mix rather than reshaping it.
-//! Loudness comes mostly from the Maximizer, which rounds off the drops'
-//! peaks. Limiter gain and the Multiband compress loud sections more than
-//! quiet ones, so a song's breakdowns would rise toward its drops. A
+//! Loudness comes from the Maximizer, which rounds off the drops' peaks, and
+//! the Multiband, which lifts the sound under each band's peaks as much in a
+//! breakdown as in a drop. Limiter gain compresses loud sections more than
+//! quiet ones, so it stays small: a song's breakdowns would rise toward its
+//! drops. A
 //! board is "in" a preset while its pedals equal the preset's; the song saves
 //! the board, not the name.
 use super::{
-    BusCompressor, Imaging, LiftEq, Limiter, MasterChain, Maximizer, SoftClip, Tape, TrimEq, Tube,
+    BusCompressor, Imaging, LiftEq, Limiter, MasterChain, Maximizer, Multiband, SoftClip, Tape,
+    TrimEq, Tube,
 };
 use std::sync::LazyLock;
 
@@ -38,32 +41,36 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.trim_eq = trim_eq(20.0, -1.0, -0.5);
             b.bus_compressor = compressor(-9.0, 1.5, 30.0, 300.0);
             b.lift_eq = lift(0.5, 0.5);
-            b.limiter = limiter(3.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.5);
         }),
         preset("Revive", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(20.0, -1.5, -1.0);
             b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0);
-            b.maximizer = maximizer(8.0);
+            b.maximizer = maximizer(2.0);
             b.lift_eq = lift(1.0, 1.5);
             b.tape = tape(1.5, 30);
             b.imaging = imaging(110.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(2.0);
         }),
         preset("Loud", |b| {
             b.trim_eq = trim_eq(25.0, -1.5, -1.0);
             b.bus_compressor = compressor(-11.0, 2.5, 15.0, 150.0);
-            b.maximizer = maximizer(18.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 1.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Techno", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
             b.bus_compressor = compressor(-9.0, 2.0, 15.0, 150.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 30);
             b.imaging = imaging(105.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Minimal", |b| {
@@ -71,22 +78,25 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.bus_compressor = compressor(-10.0, 1.8, 20.0, 200.0);
             b.lift_eq = lift(0.5, 1.0);
             b.imaging = imaging(105.0, 120.0);
-            b.limiter = limiter(4.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(2.5);
         }),
         preset("Acid", |b| {
             b.tube = tube(3.0, 50.0);
             b.trim_eq = trim_eq(30.0, -1.5, -1.5);
             b.bus_compressor = compressor(-11.0, 2.0, 15.0, 150.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 0.5);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Hard Techno", |b| {
             b.trim_eq = trim_eq(30.0, -2.0, -1.5);
             b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0);
-            b.maximizer = maximizer(18.0);
+            b.maximizer = maximizer(12.0);
             b.tape = tape(3.0, 15);
             b.imaging = imaging(100.0, 150.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Dub Techno", |b| {
@@ -95,15 +105,17 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.lift_eq = lift(1.5, 0.0);
             b.tape = tape(2.5, 15);
             b.imaging = imaging(120.0, 120.0);
-            b.limiter = limiter(3.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.5);
         }),
         preset("House", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(25.0, -1.5, -1.0);
             b.bus_compressor = compressor(-11.0, 2.0, 15.0, 200.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 1.0);
             b.imaging = imaging(110.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Deep House", |b| {
@@ -112,22 +124,25 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.lift_eq = lift(1.5, 0.5);
             b.tape = tape(2.0, 15);
             b.imaging = imaging(110.0, 120.0);
-            b.limiter = limiter(4.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(2.5);
         }),
         preset("Tech House", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
             b.bus_compressor = compressor(-10.0, 2.2, 15.0, 150.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 1.0);
             b.imaging = imaging(105.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Trance", |b| {
             b.trim_eq = trim_eq(25.0, -1.5, -0.5);
             b.bus_compressor = compressor(-9.0, 2.0, 15.0, 250.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 1.5);
             b.imaging = imaging(115.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Progressive", |b| {
@@ -136,15 +151,17 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.lift_eq = lift(0.5, 1.5);
             b.tape = tape(1.5, 30);
             b.imaging = imaging(110.0, 120.0);
-            b.limiter = limiter(4.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(2.5);
         }),
         preset("Electro", |b| {
             b.tube = tube(2.5, 50.0);
             b.trim_eq = trim_eq(30.0, -1.5, -1.0);
             b.bus_compressor = compressor(-11.0, 2.5, 15.0, 120.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.0, 1.0);
             b.imaging = imaging(105.0, 120.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Breakbeat", |b| {
@@ -153,22 +170,25 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.bus_compressor = compressor(-11.0, 2.0, 20.0, 150.0);
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 30);
-            b.limiter = limiter(4.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(2.5);
         }),
         preset("Drum & Bass", |b| {
             b.trim_eq = trim_eq(30.0, -1.5, -1.5);
             b.bus_compressor = compressor(-10.0, 2.5, 15.0, 100.0);
-            b.maximizer = maximizer(18.0);
+            b.maximizer = maximizer(12.0);
             b.lift_eq = lift(1.5, 1.0);
             b.imaging = imaging(105.0, 150.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Hardcore", |b| {
             b.soft_clip = soft_clip(2.0, -0.5);
             b.trim_eq = trim_eq(35.0, -2.0, -2.0);
             b.bus_compressor = compressor(-11.0, 3.0, 15.0, 100.0);
-            b.maximizer = maximizer(18.0);
+            b.maximizer = maximizer(12.0);
             b.imaging = imaging(100.0, 150.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
         preset("Ambient", |b| {
@@ -177,7 +197,8 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.lift_eq = lift(0.5, 1.0);
             b.tape = tape(1.0, 30);
             b.imaging = imaging(120.0, 100.0);
-            b.limiter = limiter(2.5);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.0);
         }),
         preset("Downtempo", |b| {
             b.tube = tube(2.0, 40.0);
@@ -186,15 +207,17 @@ pub static PRESETS: LazyLock<Vec<Preset>> = LazyLock::new(|| {
             b.lift_eq = lift(1.0, 0.5);
             b.tape = tape(2.0, 15);
             b.imaging = imaging(110.0, 120.0);
-            b.limiter = limiter(3.0);
+            b.multiband = multiband(40.0);
+            b.limiter = limiter(1.5);
         }),
         preset("Hip-Hop", |b| {
             b.tube = tube(2.0, 40.0);
             b.trim_eq = trim_eq(25.0, -1.5, -1.0);
             b.bus_compressor = compressor(-12.0, 2.5, 15.0, 200.0);
-            b.maximizer = maximizer(16.0);
+            b.maximizer = maximizer(10.0);
             b.lift_eq = lift(1.5, 0.5);
             b.imaging = imaging(100.0, 150.0);
+            b.multiband = multiband(50.0);
             b.limiter = limiter(1.5);
         }),
     ]
@@ -247,6 +270,15 @@ fn compressor(threshold: f32, ratio: f32, attack: f32, release: f32) -> BusCompr
 }
 fn maximizer(boost: f32) -> Maximizer {
     Maximizer { on: true, boost }
+}
+/// The same amount in every band.
+fn multiband(amount: f32) -> Multiband {
+    Multiband {
+        on: true,
+        low: amount,
+        mid: amount,
+        high: amount,
+    }
 }
 fn lift(low: f32, air: f32) -> LiftEq {
     LiftEq { on: true, low, air }

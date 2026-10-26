@@ -575,48 +575,180 @@ impl Imaging {
     }
 }
 
-// Multiband compressor -----------------------------------------------------------------------
+// Multiband ------------------------------------------------------------------------------------
 
 /// The crossovers between the low, mid, and high bands.
-const CROSSOVERS: [f64; 2] = [120.0, 2000.0];
-/// Attack, release, and detector time constants of each band, in seconds.
-const BAND_TIMES: [[f64; 3]; 3] = [[0.03, 0.25, 0.02], [0.01, 0.15, 0.01], [0.003, 0.08, 0.005]];
-/// Each band's threshold at the smallest amount, in dBFS. Mixes near
-/// -18 dBFS RMS carry the low band about this loud, and the others softer.
-const BAND_THRESHOLDS: [f64; 3] = [-20.0, -22.0, -27.0];
+const CROSSOVERS: [f64; 2] = [200.0, 3000.0];
+/// How far each limiter looks ahead: 2 ms, so the gain is already down
+/// when a peak arrives.
+const BAND_LOOKAHEAD: usize = 88;
+/// How long each band keeps the gain a peak needs, in frames, and how fast
+/// it recovers after, in seconds. The low band holds 10 ms, so a bass wave
+/// is not reshaped within its cycle; the mids and highs hold 3.3 and 2.2 ms.
+const BAND_TIMES: [(usize, f64); 3] = [(441, 0.045), (146, 0.03), (96, 0.03)];
+/// The output stage holds 3.2 ms and recovers over 60 ms.
+const OUTPUT_TIMES: (usize, f64) = (141, 0.06);
+/// The longest span over which a limiter takes the lowest need.
+const SPAN: usize = BAND_LOOKAHEAD + 1 + BAND_TIMES[0].0;
+/// How long a recent peak lasts, in seconds. Ceilings sit at recent peaks,
+/// so they follow each section of a song and a breakdown is limited as
+/// hard as a drop.
+const PEAK_FALL: f64 = 1.5;
+/// At the largest amount, a band is driven 12 dB into a ceiling 6 dB above
+/// its recent peak.
+const DRIVE_DB: f64 = 12.0;
+const ROOM_DB: f64 = 6.0;
+/// The share of the limited band in the output; the rest is the band as it
+/// came in.
+const WET: f64 = 0.6;
 
+/// The smallest of the last `span` values pushed, `span` at most `N`: a
+/// queue of the values that can still become the smallest.
 #[derive(Clone, Copy)]
-struct Band {
-    power: f64,
-    reduction: f64,
-    attack: f64,
-    release: f64,
-    detector: f64,
+struct MovingMin<const N: usize> {
+    values: [f64; N],
+    times: [u32; N],
+    head: usize,
+    len: usize,
+    now: u32,
 }
-impl Band {
-    /// One amount sets the threshold and ratio together: from the band's
-    /// base threshold and 1:1 at none, to 10 dB lower and 4:1 at all.
-    fn gain(&mut self, left: f64, right: f64, amount: f64, base: f64) -> f64 {
-        let power = 0.5 * (left * left + right * right);
-        self.power = flush(power + (self.power - power) * self.detector);
-        let level = 10.0 * self.power.max(1e-12).log10();
-        let target = reduction(level, base - 10.0 * amount, 1.0 + 3.0 * amount, KNEE_DB);
-        let speed = if target > self.reduction {
-            self.attack
-        } else {
-            self.release
-        };
-        self.reduction = flush(target + (self.reduction - target) * speed);
-        if self.reduction == 0.0 {
-            1.0
-        } else {
-            db_to_gain(-self.reduction)
+impl<const N: usize> MovingMin<N> {
+    const EMPTY: Self = Self {
+        values: [0.0; N],
+        times: [0; N],
+        head: 0,
+        len: 0,
+        now: 0,
+    };
+
+    fn push(&mut self, value: f64, span: usize) -> f64 {
+        while self.len > 0 && self.values[(self.head + self.len - 1) % N] >= value {
+            self.len -= 1;
         }
+        let at = (self.head + self.len) % N;
+        (self.values[at], self.times[at]) = (value, self.now);
+        self.len += 1;
+        if self.now.wrapping_sub(self.times[self.head]) as usize >= span {
+            self.head = (self.head + 1) % N;
+            self.len -= 1;
+        }
+        self.now = self.now.wrapping_add(1);
+        self.values[self.head]
     }
 }
 
-/// Three bands split by fourth-order Linkwitz-Riley crossovers, each with
-/// its own stereo-linked compressor. The low band also passes the high
+/// A stereo-linked lookahead limiter on sample peaks. Each frame needs the
+/// gain that brings it under the threshold; the gain takes the lowest need
+/// within the hold, recovers after it, and ramps over the lookahead.
+#[derive(Clone, Copy)]
+struct PeakLimiter {
+    delays: [Delay<BAND_LOOKAHEAD>; 2],
+    needs: MovingMin<SPAN>,
+    span: usize,
+    held: f64,
+    ramp: [f64; BAND_LOOKAHEAD],
+    ramp_at: usize,
+    ramp_sum: f64,
+    release: f64,
+}
+impl PeakLimiter {
+    fn new((hold, release): (usize, f64)) -> Self {
+        Self {
+            delays: [Delay::ZERO; 2],
+            needs: MovingMin::EMPTY,
+            span: BAND_LOOKAHEAD + 1 + hold,
+            held: 1.0,
+            ramp: [1.0; BAND_LOOKAHEAD],
+            ramp_at: 0,
+            ramp_sum: BAND_LOOKAHEAD as f64,
+            release: pole(release),
+        }
+    }
+    fn clear(&mut self) {
+        let (span, release) = (self.span, self.release);
+        *self = Self::new((0, 1.0));
+        (self.span, self.release) = (span, release);
+    }
+    /// The frame `BAND_LOOKAHEAD` ago and the gain it gets.
+    fn process(&mut self, left: f64, right: f64, threshold: f64) -> ([f64; 2], f64) {
+        let level = left.abs().max(right.abs());
+        let need = if level > threshold {
+            threshold / level
+        } else {
+            1.0
+        };
+        let lowest = self.needs.push(need, self.span);
+        self.held = if lowest < self.held {
+            lowest
+        } else {
+            flush(lowest + (self.held - lowest) * self.release)
+        };
+        self.ramp_sum += self.held - self.ramp[self.ramp_at];
+        self.ramp[self.ramp_at] = self.held;
+        self.ramp_at += 1;
+        if self.ramp_at == BAND_LOOKAHEAD {
+            // Recount now and then, so rounding cannot build up.
+            self.ramp_at = 0;
+            self.ramp_sum = self.ramp.iter().sum();
+        }
+        let delayed = [
+            f64::from(self.delays[0].push(left as f32)),
+            f64::from(self.delays[1].push(right as f32)),
+        ];
+        (delayed, (self.ramp_sum / BAND_LOOKAHEAD as f64).min(1.0))
+    }
+}
+
+/// One band driven into a ceiling above its own recent peak and blended
+/// with the band as it came in. The drive lifts the quieter body of the
+/// band, and its peaks rise at most by the room.
+#[derive(Clone, Copy)]
+struct Band {
+    limiter: PeakLimiter,
+    peak: f64,
+    amount: f64,
+    drive: f64,
+    room: f64,
+    wet: f64,
+}
+impl Band {
+    fn new(times: (usize, f64)) -> Self {
+        Self {
+            limiter: PeakLimiter::new(times),
+            peak: 0.0,
+            amount: 0.0,
+            drive: 1.0,
+            room: 1.0,
+            wet: 0.0,
+        }
+    }
+    fn clear(&mut self) {
+        self.limiter.clear();
+        self.peak = 0.0;
+    }
+    /// Below a tenth, the amount fades the blend in rather than the drive,
+    /// so none at all leaves the band as it came in.
+    fn set_amount(&mut self, amount: f64) {
+        if amount != self.amount {
+            self.amount = amount;
+            self.drive = db_to_gain(DRIVE_DB * amount);
+            self.room = db_to_gain(ROOM_DB * amount);
+            self.wet = WET * (10.0 * amount).min(1.0);
+        }
+    }
+    fn process(&mut self, left: f64, right: f64, fall: f64) -> [f64; 2] {
+        self.peak = flush(left.abs().max(right.abs()).max(self.peak * fall));
+        let threshold = self.peak * self.room / self.drive;
+        let ([left, right], gain) = self.limiter.process(left, right, threshold);
+        let total = 1.0 + self.wet * (gain * self.drive - 1.0);
+        [left * total, right * total]
+    }
+}
+
+/// Three bands split by fourth-order Linkwitz-Riley crossovers, each driven
+/// into its own stereo-linked lookahead limiter, then an output limiter
+/// that keeps the sum under the mix's recent peak, so nothing comes out
+/// louder than recent peaks went in. The low band also passes the high
 /// crossover's all-pass, so with every amount at zero the bands sum to a
 /// flat all-pass.
 #[derive(Clone, Copy)]
@@ -627,8 +759,16 @@ pub(super) struct Multiband {
     all_pass: Biquad,
     bands: [Band; 3],
     amounts: [Smoothed; 3],
+    output: PeakLimiter,
+    /// The mix's recent peak, and its value as it was when the frames now
+    /// leaving the bands came in.
+    peak: f64,
+    planned: Delay<BAND_LOOKAHEAD>,
+    fall: f64,
 }
 impl Multiband {
+    pub(super) const LATENCY: usize = 2 * BAND_LOOKAHEAD;
+
     pub(super) fn new() -> Self {
         let q = FRAC_1_SQRT_2;
         let [low, high] = CROSSOVERS;
@@ -640,14 +780,12 @@ impl Multiband {
                 [Biquad::new(Coefficients::high_pass(high, q)); 2],
             ],
             all_pass: Biquad::new(Coefficients::all_pass(high, q)),
-            bands: BAND_TIMES.map(|[attack, release, detector]| Band {
-                power: 0.0,
-                reduction: 0.0,
-                attack: pole(attack),
-                release: pole(release),
-                detector: pole(detector),
-            }),
+            bands: BAND_TIMES.map(Band::new),
             amounts: [Smoothed::new(0.0); 3],
+            output: PeakLimiter::new(OUTPUT_TIMES),
+            peak: 0.0,
+            planned: Delay::ZERO,
+            fall: pole(PEAK_FALL),
         }
     }
     pub(super) fn set(&mut self, settings: &settings::Multiband) {
@@ -664,10 +802,11 @@ impl Multiband {
             split.clear();
         }
         self.all_pass.clear();
-        for band in &mut self.bands {
-            (band.power, band.reduction) = (0.0, 0.0);
-        }
+        self.bands.iter_mut().for_each(Band::clear);
         self.amounts.iter_mut().for_each(Smoothed::settle);
+        self.output.clear();
+        self.peak = 0.0;
+        self.planned = Delay::ZERO;
     }
     pub(super) fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
         let mut bands = [[0.0; 2]; 3];
@@ -683,14 +822,23 @@ impl Multiband {
             bands[1][channel] = section(mid_pass, rest);
             bands[2][channel] = section(top_pass, rest);
         }
-        let mut out = [0.0; 2];
-        for (index, [l, r]) in bands.into_iter().enumerate() {
-            let amount = self.amounts[index].next();
-            let gain = self.bands[index].gain(l, r, amount, BAND_THRESHOLDS[index]);
-            out[0] += l * gain;
-            out[1] += r * gain;
+        let mut sum = [0.0; 2];
+        let mut on = false;
+        for ((band, amount), [l, r]) in self.bands.iter_mut().zip(&mut self.amounts).zip(bands) {
+            band.set_amount(amount.next());
+            on |= band.amount > 0.0;
+            let [l, r] = band.process(l, r, self.fall);
+            sum[0] += l;
+            sum[1] += r;
         }
-        (out[0] as f32, out[1] as f32)
+        let level = f64::from(left.abs().max(right.abs()));
+        self.peak = flush(level.max(self.peak * self.fall));
+        let planned = f64::from(self.planned.push(self.peak as f32));
+        // With every amount at zero the bands sum to the all-pass, whose
+        // peaks may differ from the input's, so the output stage stands by.
+        let threshold = if on { planned } else { f64::INFINITY };
+        let ([l, r], gain) = self.output.process(sum[0], sum[1], threshold);
+        ((l * gain) as f32, (r * gain) as f32)
     }
 }
 
@@ -932,27 +1080,71 @@ mod tests {
         });
         multiband.clear();
         let q = FRAC_1_SQRT_2;
-        let mut reference = [
-            Biquad::new(Coefficients::all_pass(CROSSOVERS[0], q)),
-            Biquad::new(Coefficients::all_pass(CROSSOVERS[1], q)),
-        ];
-        for (l, r) in &input {
-            let (a, b) = multiband.process(*l, *r);
-            for (channel, (x, y)) in [(*l, a), (*r, b)].into_iter().enumerate() {
-                let first = reference[0].process(channel, f64::from(x));
-                let expected = reference[1].process(channel, first);
-                assert!((f64::from(y) - expected).abs() < 1e-6);
-            }
+        let [mut first, mut second] =
+            CROSSOVERS.map(|hz| Biquad::new(Coefficients::all_pass(hz, q)));
+        let expected: Vec<(f32, f32)> = run(&input, |l, r| {
+            let mut pass =
+                |channel, x| second.process(channel, first.process(channel, f64::from(x))) as f32;
+            (pass(0, l), pass(1, r))
+        });
+        let output = run(&input, |l, r| multiband.process(l, r));
+        for ((a, b), (x, y)) in output[Multiband::LATENCY..].iter().zip(&expected) {
+            assert!((a - x).abs() < 1e-6 && (b - y).abs() < 1e-6);
         }
-        // Amounts compress: the loud low band comes down.
+    }
+
+    #[test]
+    fn multiband_lifts_the_body_and_keeps_the_peaks() {
+        let input = program(4 * 44_100);
+        let peak = |frames: &[(f32, f32)]| {
+            frames
+                .iter()
+                .fold(0.0f32, |most, (l, r)| most.max(l.abs()).max(r.abs()))
+        };
+        let mut multiband = Multiband::new();
         multiband.set(&settings::Multiband {
             on: true,
             low: 100.0,
             mid: 100.0,
             high: 100.0,
         });
-        let squeezed = run(&input, |l, r| multiband.process(l, r));
-        assert!(rms_db(&squeezed[4096..]) < rms_db(&input[4096..]) - 3.0);
+        multiband.clear();
+        let output = run(&input, |l, r| multiband.process(l, r));
+        let output = &output[Multiband::LATENCY..];
+        assert!(peak(output) <= peak(&input) * 1.0001);
+        assert!(rms_db(&output[44_100..]) > rms_db(&input[44_100..]) + 2.0);
+    }
+
+    #[test]
+    fn multiband_lifts_a_breakdown_as_much_as_a_drop() {
+        // The same program 8 dB apart: each section's ceilings follow its
+        // own peaks, so both come out lifted alike.
+        let quiet = db_to_gain(-8.0) as f32;
+        let mut input = program(7 * 44_100);
+        for (l, r) in &mut input[3 * 44_100..] {
+            (*l, *r) = (*l * quiet, *r * quiet);
+        }
+        let mut multiband = Multiband::new();
+        multiband.set(&settings::Multiband {
+            on: true,
+            low: 60.0,
+            mid: 60.0,
+            high: 60.0,
+        });
+        multiband.clear();
+        let output = run(&input, |l, r| multiband.process(l, r));
+        let output = &output[Multiband::LATENCY..];
+        let lift =
+            |range: std::ops::Range<usize>| rms_db(&output[range.clone()]) - rms_db(&input[range]);
+        let (loud, soft) = (
+            lift(44_100..3 * 44_100),
+            lift(5 * 44_100..6 * 44_100 + 22_050),
+        );
+        assert!(loud > 1.0, "the drop is lifted {loud:.2} dB");
+        assert!(
+            (loud - soft).abs() < 0.3,
+            "drop {loud:.2} dB, breakdown {soft:.2} dB"
+        );
     }
 
     #[test]
