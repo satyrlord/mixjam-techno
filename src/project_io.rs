@@ -150,6 +150,23 @@ pub fn save_scan_cache(data_root: &Path, cache: &crate::library::ScanCache) -> R
     crate::atomic_file::write(&data_root.join("wav-scan-cache.json"), &bytes)
 }
 
+/// Open a sample folder through the probe cache in `data_root`. The probes
+/// of a failed or cancelled scan are kept for the next one; a cache that
+/// cannot be written only costs the next scan time.
+pub fn open_wav_folder_cached(
+    data_root: &Path,
+    root: &Path,
+    source_bpm: f64,
+    progress: Option<&crate::library::ScanProgress>,
+) -> Result<Library, String> {
+    let mut cache = load_scan_cache(data_root);
+    let result = Library::open_wav_folder_with(root, source_bpm, progress, Some(&mut cache));
+    if cache.has_changes() {
+        let _ = save_scan_cache(data_root, &cache);
+    }
+    result
+}
+
 pub fn save_wave_config_in(data_root: &Path, root: &Path, source_bpm: f64) -> Result<(), String> {
     if !source_bpm.is_finite() || source_bpm <= 0.0 {
         return Err("The source tempo must be finite and positive.".into());
@@ -754,6 +771,47 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_headless_open_reuses_and_extends_the_scan_cache() {
+        let root = std::env::temp_dir().join(format!("mixjam-cached-open-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (samples, data) = (root.join("Samples"), root.join("data"));
+        fs::create_dir_all(samples.join("Loop")).unwrap();
+        for path in [
+            samples.join("one.wav"),
+            samples.join("Loop").join("two.wav"),
+        ] {
+            crate::audio::Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 441],
+            }
+            .write_wav(&path)
+            .unwrap();
+        }
+        let first = open_wav_folder_cached(&data, &samples, 140.0, None).unwrap();
+        assert_eq!(first.samples.len(), 2);
+        assert_eq!(load_scan_cache(&data).len(), 2);
+        // Bytes that cannot be decoded, at the size and time the cache knows:
+        // only the cached probe can still read the file.
+        let path = samples.join("one.wav");
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        let length = fs::metadata(&path).unwrap().len() as usize;
+        fs::write(&path, vec![0u8; length]).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let cached = open_wav_folder_cached(&data, &samples, 140.0, None).unwrap();
+        assert_eq!(cached.samples.len(), 2);
+        assert!(cached.skipped_waves().is_empty());
+        let fresh = Library::open_wav_folder(&samples, 140.0).unwrap();
+        assert_eq!(fresh.samples.len(), 1);
+        fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn reopening_refreshes_changed_wave_metadata_at_the_same_path() {

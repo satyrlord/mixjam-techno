@@ -1295,14 +1295,23 @@ impl Library {
                 if entries_seen > MAX_WAV_FOLDER_ITEMS {
                     return Err("The WAV folder exceeds the 200,000-item limit.".into());
                 }
-                let path = fs::canonicalize(entry.path())
-                    .map_err(|e| format!("Cannot read {}: {e}", entry.path().display()))?;
-                if !path.starts_with(&root) {
-                    return Err("A WAV folder link points outside the selected folder.".into());
+                let error =
+                    |e: std::io::Error| format!("Cannot read {}: {e}", entry.path().display());
+                // The listing gives each entry's type. Only a link needs the
+                // file system again, to find and check its target. Opening
+                // every entry made a cached scan of 100,000 files 3 times slower.
+                let mut kind = entry.file_type().map_err(error)?;
+                let mut path = entry.path();
+                if kind.is_symlink() {
+                    path = fs::canonicalize(&path).map_err(error)?;
+                    if !path.starts_with(&root) {
+                        return Err("A WAV folder link points outside the selected folder.".into());
+                    }
+                    kind = fs::metadata(&path).map_err(error)?.file_type();
                 }
-                if path.is_dir() {
+                if kind.is_dir() {
                     pending.push((path, depth + 1));
-                } else if path.is_file()
+                } else if kind.is_file()
                     && path
                         .extension()
                         .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
@@ -1792,7 +1801,30 @@ fn probe_all(
         progress.files_total.store(paths.len(), Ordering::Relaxed);
         progress.files_done.store(0, Ordering::Relaxed);
     }
-    let stamps: Vec<Option<(u64, u128)>> = paths.iter().map(|p| ScanCache::stamp(p)).collect();
+    // Reading each file's size and time is most of a cached scan; the file
+    // system answers several requests at once.
+    let threads = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .clamp(1, 8);
+    let stamps: Vec<Option<(u64, u128)>> = std::thread::scope(|scope| {
+        let jobs: Vec<_> = paths
+            .chunks(paths.len().div_ceil(threads).max(1))
+            .map(|chunk| {
+                scope.spawn(|| {
+                    chunk
+                        .iter()
+                        .map(|p| ScanCache::stamp(p))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        jobs.into_iter()
+            .flat_map(|job| {
+                job.join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect()
+    });
     let mut probes: Vec<Option<Result<WavProbe, String>>> = paths
         .iter()
         .zip(&stamps)

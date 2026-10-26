@@ -1266,18 +1266,12 @@ impl Session {
         std::thread::Builder::new()
             .name("mixjam-techno-scan".into())
             .spawn(move || {
-                let mut cache = crate::project_io::load_scan_cache(&settings_root);
-                let result = Library::open_wav_folder_with(
+                let result = crate::project_io::open_wav_folder_cached(
+                    &settings_root,
                     &worker_root,
                     source_bpm,
                     Some(&worker_progress),
-                    Some(&mut cache),
                 );
-                // Keep the probes of a failed or cancelled scan for the next one.
-                // A cache that cannot be written only costs that scan time.
-                if cache.has_changes() {
-                    let _ = crate::project_io::save_scan_cache(&settings_root, &cache);
-                }
                 let _ = sender.send(result);
             })
             .map_err(|error| format!("Cannot start the sample folder scan: {error}"))?;

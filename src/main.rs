@@ -142,7 +142,7 @@ fn run() -> Result<(), String> {
     if let Some(root) = &samples
         && !background_scan
     {
-        match Library::open_wav_folder(root, source_bpm) {
+        match project_io::open_wav_folder_cached(&project_io::data_root(), root, source_bpm, None) {
             Ok(loaded) => library = loaded,
             Err(error) if command == "gui" => startup_messages.push(error),
             Err(error) => return Err(error),
