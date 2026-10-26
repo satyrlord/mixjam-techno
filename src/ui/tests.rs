@@ -4538,7 +4538,7 @@ mod tests {
             let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds")).unwrap().rect;
             assert!(panel.height() >= 370.0);
             assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(selector));
-            assert!((selector.width() - 136.0).abs() <= 1.0,
+            assert!((selector.width() - view::BOTTOM_MODULE_WIDTH).abs() <= 1.0,
                 "The selector must reserve the same fixed width for every module: {selector:?}.");
             assert_eq!(accessible_node(&output, "Bottom module").1.role(), egui::accesskit::Role::ComboBox);
             accessible_node(&output, "Trim");
@@ -4595,6 +4595,7 @@ mod tests {
                 assert!(painted.galley.job.sections.iter().all(|section|
                     section.format.font_id.family == egui::FontFamily::Name("Syncopate Bold".into())
                         && section.format.font_id.size == 16.0));
+                assert!(!painted.galley.elided, "The selector must show the whole name {title}.");
                 assert_eq!(egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds")).unwrap().rect, panel,
                     "Choosing a module must preserve the existing panel size.");
                 assert_eq!(app.search, "grasp");
@@ -4661,7 +4662,10 @@ mod tests {
                 current[2].right() < size.x - 64.0,
                 "Follow must fit beside the rail."
             );
-            let label = format!("{bar:03} : 4");
+            let tick = (bar - 1) * TICKS_PER_BAR + 3 * TICKS_PER_BAR / 4;
+            let seconds =
+                (tick as f64 * 240.0 / app.session.project().bpm / TICKS_PER_BAR as f64) as u32;
+            let label = format!("{:02} : {:02}", seconds / 60, seconds % 60);
             let time = text_rect(&output, &label);
             assert!(
                 time.left() >= 18.0 && time.right() <= 130.0,

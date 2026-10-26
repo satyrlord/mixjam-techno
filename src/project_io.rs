@@ -1088,7 +1088,14 @@ mod tests {
         );
         // The one read that opens a file also reports whether Save can replace it.
         let (reopened, _, replaceable) = open_song(&song, &library).unwrap();
-        assert_eq!(reopened, opened);
+        // The untitled project opens under its file name.
+        assert_eq!(
+            reopened,
+            Project {
+                title: "song".into(),
+                ..opened
+            }
+        );
         assert!(replaceable);
         assert!(!open_song(&file, &library).unwrap().2);
         fs::remove_file(song).unwrap();

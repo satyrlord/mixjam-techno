@@ -182,7 +182,17 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
     match header.format_version {
-        8..=song::FORMAT_VERSION => song::parse(&bytes).map(|project| (project, true)),
+        8..=song::FORMAT_VERSION => {
+            let mut project = song::parse(&bytes)?;
+            // Songs saved before Save named them after their file kept the
+            // default title.
+            if (project.title.is_empty() || project.title == crate::engine::DEFAULT_TITLE)
+                && let Some(stem) = path.file_stem()
+            {
+                project.title = stem.to_string_lossy().into_owned();
+            }
+            Ok((project, true))
+        }
         7 => {
             if bytes.len() > MAX_BYTES {
                 return Err("The MixJam project exceeds the 16 MiB limit.".into());

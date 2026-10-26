@@ -49,6 +49,9 @@ const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
 /// The clip inspector shows gain at or below this level as silence.
 const CLIP_SILENCE_DB: f32 = -60.0;
 pub(super) const DEFAULT_STATUS: &str = "Ready";
+/// Fits the longest module name, MASTERING, in 16-point Syncopate Bold
+/// beside the combo arrow.
+pub(super) const BOTTOM_MODULE_WIDTH: f32 = 168.0;
 const GROUPS: [&str; 10] = [
     "Loop",
     "Drum",
@@ -395,7 +398,7 @@ impl MixJamApp {
 
     pub(super) fn transport(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_centered(|ui| {
-            transport_position(ui, self.session.cursor_tick());
+            transport_position(ui, self.session.cursor_tick(), self.session.project().bpm);
             ui.add_space(12.0);
             if transport_button(
                 ui,
@@ -502,10 +505,10 @@ impl MixJamApp {
                 ui.spacing_mut().button_padding.y = 3.0;
                 // ComboBox width is a minimum. Bound its available space as
                 // well, so a longer module name cannot move adjacent controls.
-                let response = ui.allocate_ui(Vec2::new(136.0, 28.0), |ui| {
+                let response = ui.allocate_ui(Vec2::new(BOTTOM_MODULE_WIDTH, 28.0), |ui| {
                     egui::ComboBox::from_id_salt("bottom_module")
                         .selected_text(heading(self.bottom_module.label(), 16.0))
-                        .width(136.0)
+                        .width(BOTTOM_MODULE_WIDTH)
                         .truncate()
                         .show_ui(ui, |ui| {
                             for module in BottomModule::ALL {
@@ -1643,10 +1646,11 @@ fn follow_offset(
     ((next - offset).abs() > 0.5).then_some(next)
 }
 
-fn transport_position(ui: &mut egui::Ui, tick: u32) -> Response {
+fn transport_position(ui: &mut egui::Ui, tick: u32, bpm: f64) -> Response {
     let bars = tick / TICKS_PER_BAR + 1;
     let beat = (tick % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
-    let text = format!("{bars:03} : {beat}");
+    let seconds = (tick as f64 * 240.0 / bpm / TICKS_PER_BAR as f64) as u64;
+    let text = format!("{:02} : {:02}", seconds / 60, seconds % 60);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 42.0), Sense::hover());
     ui.painter().rect_filled(rect, 6.0, CANVAS);
     ui.painter()
@@ -1659,7 +1663,9 @@ fn transport_position(ui: &mut egui::Ui, tick: u32) -> Response {
             TEXT,
         );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
-    response.on_hover_text(format!("Bar {bars}, beat {beat}"))
+    response.on_hover_text(format!(
+        "{text} (minutes : seconds). Bar {bars}, beat {beat}"
+    ))
 }
 
 pub(super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {

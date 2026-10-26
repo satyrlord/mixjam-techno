@@ -1043,7 +1043,25 @@ impl Session {
         Ok(())
     }
     pub fn save(&mut self, path: &Path) -> Result<(), String> {
-        crate::project_io::save_with_library(self.project(), &self.library, path)?;
+        // A new song, or one named after its earlier file, takes the new
+        // file's name. An imported title stays.
+        let previous = self.project().title.clone();
+        let file_named = self
+            .file
+            .as_deref()
+            .and_then(Path::file_stem)
+            .is_some_and(|stem| stem.to_string_lossy() == previous);
+        if (previous.is_empty() || previous == crate::engine::DEFAULT_TITLE || file_named)
+            && let Some(stem) = path.file_stem()
+        {
+            self.editor.set_title(stem.to_string_lossy().into_owned());
+        }
+        if let Err(error) =
+            crate::project_io::save_with_library(self.project(), &self.library, path)
+        {
+            self.editor.set_title(previous);
+            return Err(error);
+        }
         // An edit after Save must be undoable back to the saved state.
         self.gesture = None;
         self.file = Some(path.to_path_buf());
@@ -3123,7 +3141,42 @@ mod boundary_tests {
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project(), &saved);
         assert!(session.history_step(false).unwrap());
-        assert_eq!(session.project(), &Project::default());
+        assert_eq!(
+            session.project(),
+            &Project {
+                title: "gesture".into(),
+                ..Project::default()
+            }
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn save_names_the_song_after_its_file_and_keeps_an_imported_title() {
+        let dir = fixture_dir();
+        let library = Arc::new(Library::empty());
+        let mut session = Session::headless(library.clone(), Project::default()).unwrap();
+        session.save(&dir.join("First.mixjam")).unwrap();
+        assert_eq!(session.project().title, "First");
+        // Save as follows the new name.
+        session.save(&dir.join("Second.mixjam")).unwrap();
+        assert_eq!(session.project().title, "Second");
+        session.open(&dir.join("First.mixjam")).unwrap();
+        assert_eq!(session.project().title, "First");
+        // An earlier save kept the default title; the file names it on open.
+        crate::project_io::save(&Project::default(), &dir.join("Old song.mixjam")).unwrap();
+        session.open(&dir.join("Old song.mixjam")).unwrap();
+        assert_eq!(session.project().title, "Old song");
+
+        let mut imported = Session::headless(
+            library,
+            Project {
+                title: "Night drive".into(),
+                ..Project::default()
+            },
+        )
+        .unwrap();
+        imported.save(&dir.join("copy.mixjam")).unwrap();
+        assert_eq!(imported.project().title, "Night drive");
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]

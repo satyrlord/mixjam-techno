@@ -1100,7 +1100,11 @@ mod tests {
             crate::mixjam::load_song(&path, &Library::empty())
                 .unwrap()
                 .0,
-            Project::default()
+            Project {
+                // An untitled song opens under its file name.
+                title: path.file_stem().unwrap().to_string_lossy().into_owned(),
+                ..Project::default()
+            }
         );
         fs::remove_file(path).unwrap();
     }

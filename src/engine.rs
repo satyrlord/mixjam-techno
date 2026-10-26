@@ -11,6 +11,8 @@ pub const TRACK_COUNT: usize = 64;
 pub const SUPPORTED_BPMS: [f64; 4] = [120.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
 pub const SOURCE_BPM: f64 = 140.0;
+/// A new song's title until it is saved under a file name.
+pub const DEFAULT_TITLE: &str = "Untitled";
 pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
 /// A guard against malformed songs. It is above the 262,144 one-bar clips
 /// that the 64-track timeline holds.
@@ -457,7 +459,7 @@ impl Default for Project {
     fn default() -> Self {
         Self {
             schema_version: PROJECT_SCHEMA_VERSION,
-            title: "Untitled".into(),
+            title: DEFAULT_TITLE.into(),
             author: String::new(),
             bpm: SOURCE_BPM,
             master_gain: 0.75,
@@ -844,6 +846,14 @@ impl Editor {
     /// and are not an edit, so history does not change.
     pub fn set_libraries(&mut self, libraries: Vec<crate::products::LibraryBinding>) {
         self.project.libraries = libraries;
+    }
+    /// Name the song after the file it is saved to. The name is not an edit,
+    /// so undo and redo keep it.
+    pub fn set_title(&mut self, title: String) {
+        for project in self.undo.iter_mut().chain(&mut self.redo) {
+            project.title.clone_from(&title);
+        }
+        self.project.title = title;
     }
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()

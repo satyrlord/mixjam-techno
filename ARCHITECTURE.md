@@ -231,7 +231,8 @@ instruction and leaves Master available.
 
 The frontend's `BottomModule` enum selects Sounds, Mixer, or Mastering. `src/ui/view.rs`
 owns their shared 28-point header and fixed left-side `Bottom module` combo.
-Its width is 136 points and the selected module uses 16-point bold Syncopate.
+Its width, `BOTTOM_MODULE_WIDTH`, is 168 points, which shows every module name
+in full; the selected module uses 16-point bold Syncopate.
 The combo has bounded layout space and truncates long selected text; its
 accessible value and popup retain the full name.
 The combo keeps its control ID and horizontal anchor across module changes.

@@ -38,6 +38,8 @@ colors:
   folded-granite-accent: "#adbabd"
   folded-red-accent: "#eb7468"
   folded-olive-accent: "#9db25e"
+  folded-indigo: "#2e3660"
+  folded-indigo-accent: "#96a6ec"
   folded-ink: "#121412"
   folded-cream: "#f9f2dc"
   folded-face: "#232624"
@@ -45,6 +47,10 @@ colors:
   folded-disabled-face: "#3d403c"
   folded-disabled-text: "#c9cbc0"
   folded-danger: "#833627"
+  mastering-ivory: "#f0e4be"
+  mastering-green: "#6ec470"
+  mastering-amber: "#f6b240"
+  mastering-red: "#e84838"
 typography:
   display:
     fontFamily: "Syncopate"
@@ -155,7 +161,7 @@ components:
     height: "30px"
   bottom-module:
     typography: "{typography.bottom-module}"
-    width: "136px"
+    width: "168px"
     height: "28px"
   mixer-strip:
     backgroundColor: "{colors.mixer-metal}"
@@ -232,7 +238,8 @@ painted metal, dark inset control bays, cream text, polished silver knobs, and
 pale metal primary buttons. Fine grain, minor scratches, and restrained edge wear
 suggest a well-maintained early-2000s synth. Keep the original tool palettes:
 dark marine cyan for Time Stretcher, dark granite gray for Sample Editor, synth
-red for Effect Studio, and dark olive for Step synth. Utility dialogs use neutral
+red for Effect Studio, dark olive for Step synth, and dark indigo for the
+Mastering board and its help. Utility dialogs use neutral
 metal with an optional orange-yellow accent. The common orange-yellow mock color
 does not replace these identities.
 One shell and control family covers musical tools and utility tasks. The main
@@ -289,11 +296,12 @@ dragged; it has no other use.
 Folded Metal palettes share dark inset bays and controls, cream lettering,
 polished silver knob caps, and pale metal primary buttons. Tool chassis colors
 remain distinct: Marine for Time Stretcher, Granite for Sample Editor, Red for
-Effect Studio, and Olive for Step synth. Utility is neutral and permits an
-orange-yellow accent. Use explicit names and states alongside color; Coral
-continues to identify errors and destructive actions. Palette changes must not
-change control geometry or behavior. Keep these colors local to floating windows;
-the arrangement, browser, and Mixer retain their palettes.
+Effect Studio, Olive for Step synth, and Indigo for Mastering. Utility is
+neutral and permits an orange-yellow accent. Use explicit names and states
+alongside color; Coral continues to identify errors and destructive actions.
+Palette changes must not change control geometry or behavior. Keep these
+colors local to floating windows and the Mastering board; the arrangement,
+browser, and Mixer retain their palettes.
 
 | Palette | Window | Chassis | Active accent |
 | --- | --- | --- | --- |
@@ -336,12 +344,13 @@ their family. A name too long for its pedal shrinks, down to 11 points, until
 it clears the lamp. The Limiter's rose sets it apart as the board's fixed last stage; it has no
 drag grip or move buttons, and its header line says it always runs last.
 The Input and Output units at the ends of the board are dark inset bays with
-cream lettering, like the other tools' bays. The VU meter has an ivory
-`#f0e4be` face, ink scale, a red zone above 0 VU, and red peak lamps. The
-Output unit shows loudness and true-peak readouts in dark wells, a loudness
-bar with a green `#6ec470` band at -14 LUFS, a true-peak bar with a red line at
--1 dBTP, and a red OVER lamp in the place of a pedal's lamp. Gain-reduction
-lamps on the Bus compressor and Limiter are amber `#f6b240`. The strip below
+cream lettering, like the other tools' bays. The VU meter has a Mastering
+Ivory face, ink scale, a red zone above 0 VU, and Mastering Red peak lamps.
+The Output unit shows loudness and true-peak readouts in dark wells, a
+loudness bar with a Mastering Green band at -14 LUFS, a true-peak bar with a
+Mastering Red line at -1 dBTP, and a Mastering Red OVER lamp in the place of
+a pedal's lamp. Gain-reduction lamps on the Bus compressor and Limiter are
+Mastering Amber. These four tokens are local to the board. The strip below
 the board, one 30-point row of chips in a dark well, repeats each pedal's
 enamel in signal order, with a cream outline around the pedals in view.
 Choosing a chip, or focusing any control above the strip, returns a scrolled
@@ -391,16 +400,17 @@ provenance with the application; see `assets/fonts/README.md`.
 
 Display is the MixJam name; Techno follows it in 14-point Syncopate and Muted.
 Headline is the standard native heading. Section
-labels identify Arrangement. Bottom Module supplies the shared Sounds/Mixer
-selector's 16-point Syncopate text. Title names the project. Body
+labels identify Arrangement. Bottom Module supplies the lower panel's module
+selector its 16-point Syncopate text. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
 use Inter Medium 500. Track labels and numeric controls also use Inter. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
-The bar-and-beat readout uses Inter Medium at 23 points in a fixed
-112 by 42-point container. Changes to digit widths or bar count must not move
-the adjacent transport controls. Status text
+The position readout shows elapsed minutes and seconds (`MM : SS`) in Inter
+Medium at 23 points in a fixed 112 by 42-point container; its tooltip adds the
+bar and beat. Changes to digit widths or song length must not move the
+adjacent transport controls. Status text
 uses Inter Medium at 12 points. These are local sizes within the same text family.
 
 All floating windows use the same live uppercase Syncopate title and Inter body,
@@ -429,8 +439,8 @@ retain the full name in a tooltip.
 
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
 720. The header is 66 points high. Transport occupies 68 points above the
-arrangement. A fixed 64-point tool rail sits at the right. The bottom Sounds/Mixer
-panel starts at 28% of the content height, clamped to 220-290 points. Drag its
+arrangement. A fixed 64-point tool rail sits at the right. The bottom panel
+(Sounds, Mixer, or Mastering) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
@@ -450,9 +460,10 @@ the header row; a short window lowers it to 370 points, the same floor as
 Mixer, and the board then scrolls its chip strip below the pedals.
 
 A single Bottom module selector occupies the fixed left slot in the lower
-panel's 28-point header row. Its width is 136 points and its selected module
-uses 16-point bold Syncopate. The selector keeps the same horizontal anchor
-and control identity for Sounds, Mixer, and Mastering. A long selected name
+panel's 28-point header row. Its width is 168 points, enough for the full name
+of every module, and its selected module uses 16-point bold Syncopate. The
+selector keeps the same horizontal anchor and control identity for Sounds,
+Mixer, and Mastering. A long selected name
 truncates within this width; the popup and accessible value retain its full name.
 Sound search and
 filters occupy the rest of this row when Sounds is selected. With Mastering,
@@ -541,6 +552,11 @@ windows add folded painted-metal edges, dark inset control bays, recessed values
 grain, and sparse hairline scratches. Use no decorative screws or fasteners.
 The folded lip, texture, and light wear provide the hardware character. Do not
 add heavy damage, oversized bevels, or ornamental hardware. Mixer retains its existing prepared material and faders.
+
+Mastering's pedals are the one lifted layer in the lower panel. Each stands
+off the Indigo board on a soft drop shadow cast down and right, with a
+6-point bevel and 4-point side walls, all lit from the upper left (see
+Colors). Floating windows share one window shadow. Nothing else casts one.
 
 Shared control rendering supplies hover, keyboard focus, pressed, selected, and
 disabled states. Keep state changes immediate and visible; color alone does not
@@ -868,8 +884,8 @@ unchanged. Collapse preserves edits and performs no processing.
 
 ### Utility windows and blocking dialogs
 
-Help, Time Stretcher help, Effect Studio help, Step synth help, Sample editor
-help, Sample libraries,
+Help, Time Stretcher help, Effect Studio help, Mastering help, Step synth help,
+Sample editor help, Sample libraries,
 Import details, Recorded take, Save your changes?, Sample conflicts, Choose path,
 and Import sound use the same shell and controls as musical tools. Preserve their
 stable identities and exact accessible names independently of uppercase titles.
@@ -891,7 +907,8 @@ Sample conflicts confirms only through Keep choices; dismissal does not confirm.
 Prepared material lives in `assets/folded-metal/<palette>/{100,150,200}/`;
 shared controls live in `assets/folded-metal/controls/{100,150,200}/`.
 `tools/assets/render-folded-metal.py` prepares the shared density variants. The
-shared material geometry supports Utility, Marine, Granite, Red, and Olive palettes. Fixed raster details
+shared material geometry supports Utility, Marine, Granite, Red, Olive, and
+Indigo palettes. Fixed raster details
 fade to a matching solid base; no window depends on a complete fixed-size skin.
 Check the open and collapsed states, both resize directions, long content, focus,
 and all button states at supported sizes. Native visual checks for this revision
