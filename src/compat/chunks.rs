@@ -504,7 +504,26 @@ fn read_wave_extension(
     {
         return Err("The native audio reference is invalid.".into());
     }
-    if matches!(product, Product::D2 | Product::D3) && raw.ends_with(&[0, 1]) {
+    // House saves this layout too when the path is framed and two nonempty
+    // framed labels follow, as in the album song "Salon": the file name, then
+    // its original path. Its 12-byte `02 00 00 01` extension starts like an
+    // empty label, so empty labels do not select this layout.
+    let framed_labels_follow = || {
+        let mut peek = Reader {
+            bytes: reader.bytes,
+            offset: reader.offset,
+        };
+        (0..2).all(|_| {
+            peek.block()
+                .is_ok_and(|label| (3..=262).contains(&label.len()) && label.ends_with(&[0, 1]))
+        }) && peek.take(8).is_ok()
+    };
+    let labelled = match product {
+        Product::D2 | Product::D3 => true,
+        Product::H1 => framed_labels_follow(),
+        _ => false,
+    };
+    if labelled && raw.ends_with(&[0, 1]) {
         // D2 and D3 save two labels followed by eight bytes of source metadata.
         // A metadata value can look like a text length, including an empty label.
         for index in 0..2 {
@@ -784,6 +803,84 @@ fn source_wave<'a>(
         frames,
         sample_rate,
     })
+}
+
+struct StretchedCopy {
+    wave: Wave<'static>,
+    name: String,
+    original: serde_json::Value,
+    target_bpm: f64,
+}
+
+/// Techno eJay 2's Time Stretcher (editor strings `TimeStretchOrginal`,
+/// `TimeStretchZiel`, `TIMESAV`) saves its result as `MIXWAVES\timeNNN.wav`.
+/// The song labels such a copy with its original: label 1 is the file name,
+/// label 2 its folder followed by `[time]`, as in `R1LA037.WAV` and
+/// `F:\samples\Rave\LOOP\-1[time]`. When the copy is gone, the original
+/// library sound is stretched from its tempo to fill its saved bars at the
+/// song tempo, keeping its pitch. The original stretch algorithm is not
+/// recovered; MixJam's own stretcher stands in for it. A name that matches no
+/// library sound, or several, leaves the copy missing.
+fn stretched_copy(
+    metadata: &BTreeMap<String, String>,
+    library: &Library,
+    song_bpm: f64,
+    declared_ticks: Option<u32>,
+) -> Result<Option<StretchedCopy>, String> {
+    let (Some(file), Some(folder)) = (
+        metadata.get("Native label 1"),
+        metadata.get("Native label 2"),
+    ) else {
+        return Ok(None);
+    };
+    let Some(stem) = file
+        .len()
+        .checked_sub(4)
+        .filter(|end| file[*end..].eq_ignore_ascii_case(".wav"))
+        .map(|end| &file[..end])
+    else {
+        return Ok(None);
+    };
+    if !folder.to_ascii_lowercase().ends_with("[time]") || stem.is_empty() {
+        return Ok(None);
+    }
+    // Library codes keep the original file name, as in `bn/r1la037.pxd`.
+    let code_stem = |code: &str| {
+        let name = basename(code);
+        name.rsplit_once('.')
+            .map_or(name, |(stem, _)| stem)
+            .to_string()
+    };
+    let mut matches = library
+        .samples
+        .iter()
+        .filter(|sample| code_stem(&sample.code).eq_ignore_ascii_case(stem));
+    let (Some(sample), None) = (matches.next(), matches.next()) else {
+        return Ok(None);
+    };
+    let bars = declared_ticks.map_or(sample.bars, |ticks| ticks / TICKS_PER_BAR);
+    if sample.bars == 0 || bars == 0 {
+        return Ok(None);
+    }
+    let target_bpm = song_bpm * f64::from(sample.bars) / f64::from(bars);
+    let pcm = library.read_pcm(sample.id)?;
+    let stretched = crate::sample_edit::time_stretch(&pcm, sample.source_bpm, target_bpm)?;
+    let frames =
+        u32::try_from(stretched.frames()).map_err(|_| "The stretched sound is too long.")?;
+    Ok(Some(StretchedCopy {
+        wave: Wave {
+            source_path: file.clone(),
+            bytes: Cow::Owned(encode_float_wave(&stretched)?),
+            frames,
+            sample_rate: stretched.sample_rate,
+        },
+        name: format!("{} {target_bpm} BPM", sample.name),
+        original: serde_json::json!({
+            "id": sample.id, "code": &sample.code, "name": &sample.name,
+            "bars": sample.bars, "source_bpm": sample.source_bpm,
+        }),
+        target_bpm,
+    }))
 }
 
 fn normalize_saved_path(path: &str) -> String {
@@ -1110,6 +1207,8 @@ pub(crate) fn build_project(
     // The cache holds metadata only. Owned audio belongs to the bounded,
     // content-deduplicated pending assets, including when many paths match it.
     let mut resolved_waves: HashMap<String, Result<RetainedWave, String>> = HashMap::new();
+    // Saved paths whose missing Time Stretcher copy was rebuilt, with its name.
+    let mut stretched_names: HashMap<String, String> = HashMap::new();
     let mut catalogs: HashMap<Product, Vec<crate::catalog::WaveMetadata>> = HashMap::new();
     // D3 keeps the earlier Dance 2 catalog IDs. T2's original loader admits
     // the D2 kind-2 catalog: the contiguous IDs 1..=1957. Do not search other
@@ -1222,6 +1321,50 @@ pub(crate) fn build_project(
                             } else {
                                 source_wave(&source_path, &embedded, library)
                             };
+                            let wave = match wave {
+                                Err(reason) if product == Product::T2 => {
+                                    match stretched_copy(
+                                        &metadata,
+                                        library,
+                                        header.bpm,
+                                        declared_ticks,
+                                    )? {
+                                        Some(copy) => {
+                                            let provenance = serde_json::json!({
+                                                "schema_version": 1, "product": product,
+                                                "source_mix_name": path.file_name().unwrap_or_default().to_string_lossy(),
+                                                "source_mix_sha256": mix_hash.get_or_insert_with(|| format!("{:x}", Sha256::digest(bytes))),
+                                                "saved_path": &source_path, "saved_labels": [metadata.get("Native label 1"), metadata.get("Native label 2")],
+                                                "original": copy.original, "target_bpm": copy.target_bpm,
+                                                "stretcher": "sample_edit::time_stretch",
+                                                "rendered_audio_sha256": format!("{:x}", Sha256::digest(&copy.wave.bytes)),
+                                            });
+                                            let provenance = serde_json::to_vec_pretty(&provenance)
+                                                .map_err(|error| error.to_string())?;
+                                            let destination = crate::project_io::data_root()
+                                                .join("imported-audio")
+                                                .join(format!(
+                                                    "{:x}.wav",
+                                                    Sha256::digest(&copy.wave.bytes)
+                                                ));
+                                            let provenance_hash =
+                                                format!("{:x}", Sha256::digest(&provenance));
+                                            queue_asset(
+                                                &mut pending_waves,
+                                                &mut pending_bytes,
+                                                destination.with_extension(format!(
+                                                    "{provenance_hash}.json"
+                                                )),
+                                                provenance,
+                                            )?;
+                                            stretched_names.insert(key.path.clone(), copy.name);
+                                            Ok(copy.wave)
+                                        }
+                                        None => Err(reason),
+                                    }
+                                }
+                                other => other,
+                            };
                             let resolved = match wave {
                                 Ok(wave) => {
                                     Ok(retain_wave(wave, &mut pending_waves, &mut pending_bytes)?)
@@ -1320,7 +1463,10 @@ pub(crate) fn build_project(
                             let id = next_import_id(&project)?;
                             project.imported_samples.push(ImportedSample {
                                 id,
-                                name: basename(&source_path).into(),
+                                name: stretched_names
+                                    .get(&key.path)
+                                    .cloned()
+                                    .unwrap_or_else(|| basename(&source_path).into()),
                                 group_name: "Imported".into(),
                                 path: destination.clone(),
                                 source_bpm: header.bpm,
@@ -2468,6 +2614,45 @@ mod tests {
             offset: 0,
         };
         assert!(read_wave_extension(&mut reader, 1, Product::D3).is_err());
+    }
+
+    #[test]
+    fn house_wave_records_with_two_labels_keep_their_bar_span() {
+        // As saved in the album song "Salon": a MIXWAVES path, the file name,
+        // the original path, and eight bytes with the bar count.
+        let mut extension = Vec::new();
+        text_block(
+            &mut extension,
+            b"D:\\eJay\\House\\MIXWAVES\\SYNTHPAD011.wav\0\x01",
+        );
+        text_block(&mut extension, b"SYNTHPAD011.wav\0\x01");
+        text_block(
+            &mut extension,
+            b"E:\\samples\\House\\Sphere\\SYNTHPAD011.wav\0\x01",
+        );
+        extension.extend_from_slice(&[10, 0, 4, 0, 0, 0, 0, 0]);
+        let mut reader = Reader {
+            bytes: &extension,
+            offset: 0,
+        };
+        let reference = read_wave_extension(&mut reader, 6, Product::H1).unwrap();
+        assert_eq!(reader.offset, extension.len());
+        assert_eq!(reference.declared_ticks, Some(4 * TICKS_PER_BAR));
+        assert_eq!(reference.metadata["Native label 1"], "SYNTHPAD011.wav");
+        // The 12-byte extension still reads as before, not as labels.
+        let mut extended = Vec::new();
+        text_block(&mut extended, b"C:\\old\\MIXWAVES\\take.wav\0\x01");
+        // Its bytes also frame an empty label and a short one; a record follows.
+        extended.extend_from_slice(&[2, 0, 0, 1, 4, 0, b'a', b'b', 0, 1, 0, 0]);
+        let end = extended.len();
+        extended.extend_from_slice(&[3, 0xff, 0xff, 0xff, 0xff, 174, 0, 0]);
+        let mut reader = Reader {
+            bytes: &extended,
+            offset: 0,
+        };
+        let reference = read_wave_extension(&mut reader, 1, Product::H1).unwrap();
+        assert_eq!(reader.offset, end);
+        assert_eq!(reference.declared_ticks, None);
     }
 
     #[test]

@@ -825,6 +825,87 @@ mod tests {
     }
 
     #[test]
+    fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
+        let root = std::env::temp_dir().join(format!(
+            "t2-stretch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        // Two bars at 180 BPM, as a Rave loop.
+        let samples = (0..117_600)
+            .map(|i| ((i % 100) * 200 - 10_000) as i16)
+            .collect();
+        fs::write(
+            root.join("r1la037.wav"),
+            legacy_format::wav::PcmWave {
+                sample_rate: 44_100,
+                channels: 1,
+                samples,
+            }
+            .encode()
+            .unwrap(),
+        )
+        .unwrap();
+        let mut library = Library::empty();
+        library.import_wav_folder(&root, 180.0).unwrap();
+        library
+            .register_wav_product(
+                Product::T1,
+                &root,
+                &[crate::catalog::WaveMetadata {
+                    native_id: 1193,
+                    code: "bn/r1la037.pxd".into(),
+                    name: "birdy 1".into(),
+                    group_name: "loop".into(),
+                    bars: 2,
+                    source_bpm: 180.0,
+                    frame_count: 117_600,
+                    pcm_digest: None,
+                }],
+            )
+            .unwrap();
+        let record = |file: &str, folder: &str| {
+            let mut bytes = vec![1];
+            bytes.extend_from_slice(&0i32.to_le_bytes());
+            bytes.extend_from_slice(&10211u16.to_le_bytes());
+            bytes.extend_from_slice(&[0; 10]);
+            text(&mut bytes, r"c:\ejay\MIXWAVES\time018.wav");
+            text(&mut bytes, file);
+            text(&mut bytes, folder);
+            bytes.extend_from_slice(&10u16.to_le_bytes());
+            bytes.extend_from_slice(&2u32.to_le_bytes());
+            bytes.extend_from_slice(&10200u16.to_le_bytes());
+            bytes
+        };
+        let stretched = record("R1LA037.WAV", r"F:\samples\Rave\LOOP\-1[time]");
+        let project = load_bytes(&custom_song("Techno eJay ", &[stretched]), &library).unwrap();
+        assert!(project.missing_samples.is_empty());
+        let sample = &project.imported_samples[0];
+        assert_eq!(sample.name, "birdy 1 140 BPM");
+        assert_eq!(sample.source_bpm, 140.0);
+        // Two bars at 140 BPM, at the original pitch.
+        assert_eq!(
+            crate::audio::read_wav(&sample.path).unwrap().frames(),
+            151_200
+        );
+        assert_eq!(project.clips[0].length_ticks, 512);
+        // A plain import, or a name the library lacks, stays missing.
+        for (file, folder) in [
+            ("R1LA037.WAV", r"F:\samples\Rave\LOOP\"),
+            ("R1LA999.WAV", r"F:\samples\Rave\LOOP\-1[time]"),
+        ] {
+            let song = custom_song("Techno eJay ", &[record(file, folder)]);
+            let project = load_bytes(&song, &library).unwrap();
+            assert_eq!(project.missing_samples.len(), 1, "{file} {folder}");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn reader_rejects_truncated_fields() {
         let mut reader = Reader {
             bytes: &[3, 0, b'A'],
