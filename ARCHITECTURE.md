@@ -336,8 +336,10 @@ Folder scans stream validated WAV samples into the catalog identity hash. Each
 worker retains a reader buffer, not the decoded audio. File lists, metadata, and
 the probe cache still grow with the corpus. A scan writes the cache only after
 new probes change it. `source_tempo.rs` resolves folder tempo from matching
-original audio before the duration-based fallback is used. Optional supplemental
-tempo identities are embedded at build time, like the native identity catalogs.
+original audio before the duration-based fallback is used. A pack's `BPM.INF`
+and tempo tokens in file names are stated tempos. They override the duration
+reading but not matching original audio. Optional supplemental tempo identities
+are embedded at build time, like the native identity catalogs.
 
 ## Agent control
 

@@ -1276,6 +1276,7 @@ impl Library {
         let mut pending = vec![(root.clone(), 0usize)];
         let mut visited = HashSet::new();
         let mut paths = Vec::new();
+        let mut stated = BTreeMap::new();
         let mut entries_seen = 0usize;
         while let Some((folder, depth)) = pending.pop() {
             if !visited.insert(folder.clone()) {
@@ -1317,6 +1318,18 @@ impl Library {
                         .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
                 {
                     paths.push(path);
+                } else if kind.is_file()
+                    && path
+                        .file_name()
+                        .is_some_and(|name| name.eq_ignore_ascii_case("bpm.inf"))
+                {
+                    // Optional pack metadata: an unreadable file states nothing.
+                    let tempo = fs::read(&path)
+                        .ok()
+                        .and_then(|bytes| stated_pack_tempo(&String::from_utf8_lossy(&bytes)));
+                    if let (Some(tempo), Some(pack)) = (tempo, path.parent()) {
+                        stated.insert(pack.to_path_buf(), tempo);
+                    }
                 }
             }
         }
@@ -1387,6 +1400,45 @@ impl Library {
             {
                 *tempo = octave;
             }
+        }
+        // A pack's BPM.INF states the tempo of every folder below it. Three
+        // bars at 120 are four at 160, so a duration reading that is not the
+        // stated tempo in some octave is replaced. A reading an octave away
+        // plays the same and stays, and the pack's untimed folders take the
+        // octave that most of its files settled on.
+        let pack_of = |folder: &Path| {
+            folder
+                .ancestors()
+                .take_while(|ancestor| ancestor.starts_with(&root))
+                .find_map(|ancestor| stated.get_key_value(ancestor))
+        };
+        let mut octaves: BTreeMap<&Path, BTreeMap<u64, usize>> = BTreeMap::new();
+        for (folder, durations) in &by_folder {
+            if let (Some((pack, stated)), Some(tempo)) = (pack_of(folder), tempos.get(folder))
+                && octave_apart(*tempo, *stated)
+            {
+                *octaves
+                    .entry(pack)
+                    .or_default()
+                    .entry(tempo.to_bits())
+                    .or_default() += durations.len();
+            }
+        }
+        for folder in by_folder.keys() {
+            let Some((pack, stated)) = pack_of(folder) else {
+                continue;
+            };
+            if tempos
+                .get(folder)
+                .is_some_and(|tempo| octave_apart(*tempo, *stated))
+            {
+                continue;
+            }
+            let settled = octaves
+                .get(pack.as_path())
+                .and_then(|counts| counts.iter().max_by_key(|(_, count)| **count))
+                .map_or(*stated, |(bits, _)| f64::from_bits(*bits));
+            tempos.insert(folder.clone(), settled);
         }
         // Authenticated original audio resolves duration-octave ambiguity.
         // Apply this after the heuristic so sibling guesses cannot change it.
@@ -2047,9 +2099,29 @@ fn map_waves(samples: &mut [Sample], embedded_names: &[String], root: &Path) -> 
     Ok(())
 }
 
-/// The number of whole bars, up to 32, a duration spans at a tempo, within
-/// four frames at 44.1 kHz plus 0.05 percent (at most 5 ms) for trimmed
-/// loops. Longer files are recordings, not loops, and fit no tempo.
+/// The tempo in a loop pack's BPM.INF: the `BPM` key of its `[Tempo]` section.
+/// Magix Soundpools put one such file in each pack folder.
+fn stated_pack_tempo(text: &str) -> Option<f64> {
+    let mut section = "";
+    text.lines().map(str::trim).find_map(|line| {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            section = name.trim();
+            return None;
+        }
+        let (key, value) = line.split_once('=')?;
+        let tempo: f64 = (section.eq_ignore_ascii_case("tempo")
+            && key.trim().eq_ignore_ascii_case("bpm"))
+        .then(|| value.trim().parse().ok())??;
+        (40.0..=300.0).contains(&tempo).then_some(tempo)
+    })
+}
+
+/// Whether two tempos are the same up to whole octaves, such as 80 and 160.
+fn octave_apart(a: f64, b: f64) -> bool {
+    let octaves = (a / b).log2();
+    (octaves - octaves.round()).abs() < 1e-6
+}
+
 /// The tempo that a loop pack states in a file name, such as 180 in
 /// `HARDCORE_BASS001_180_C_SL3.WAV`: a two- or three-digit BPM token followed by
 /// a key token, which is a note name with an optional sharp, flat, or minor
@@ -2069,6 +2141,9 @@ fn named_tempo(path: &Path) -> Option<f64> {
     })
 }
 
+/// The number of whole bars, up to 32, a duration spans at a tempo, within
+/// four frames at 44.1 kHz plus 0.05 percent (at most 5 ms) for trimmed
+/// loops. Longer files are recordings, not loops, and fit no tempo.
 fn whole_bars(seconds: f64, tempo: f64) -> Option<u32> {
     let bars = seconds * tempo / 240.0;
     let nearest = bars.round();
@@ -2730,6 +2805,66 @@ mod tests {
                 ("House".to_string(), 132.0, 1),
             ]
         );
+    }
+
+    #[test]
+    fn a_pack_bpm_inf_corrects_duration_guesses_in_its_folders() {
+        let folder = Folder::new();
+        let inf = |pack: &str, name: &str, bpm: u32| {
+            let text =
+                format!("[Tempo]\r\nBPM={bpm}\r\n\r\n[HarmonyTable]\r\nScale=c\r\nSample1=c\r\n");
+            fs::write(folder.0.join(pack).join(name), text).unwrap();
+        };
+        // Three bars at 120 are four at 160; the durations prefer four.
+        for index in 1..=3 {
+            folder.wave(&format!("Flamenco/Guitar/g{index}.wav"), 44_100, 264_600);
+        }
+        inf("Flamenco", "BPM.inf", 120);
+        // One bar at 80 reads as two at 160, which plays the same.
+        for index in 1..=3 {
+            folder.wave(&format!("Ambient/Pads/p{index}.wav"), 44_100, 132_300);
+        }
+        for (name, frames) in [("one", 9_001), ("two", 12_345), ("three", 23_456)] {
+            folder.wave(&format!("Ambient/Fx/{name}.wav"), 44_100, frames);
+        }
+        inf("Ambient", "BPM.INF", 80);
+        for (name, frames) in [("one", 9_001), ("two", 12_345), ("three", 23_456)] {
+            folder.wave(&format!("Hits/{name}.wav"), 44_100, frames);
+        }
+        let mut library = Library::empty();
+        library.import_wav_folder(&folder.0, 140.0).unwrap();
+        let tempo = |name: &str| {
+            library
+                .samples
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap()
+                .source_bpm
+        };
+        assert_eq!(tempo("g1"), 120.0);
+        assert_eq!(tempo("p1"), 160.0);
+        assert_eq!(tempo("two"), 160.0);
+        let hits = fs::canonicalize(folder.0.join("Hits/one.wav")).unwrap();
+        let hit = library
+            .samples
+            .iter()
+            .find(|s| s.wav_path.as_ref() == Some(&hits));
+        assert_eq!(hit.unwrap().source_bpm, 140.0);
+    }
+
+    #[test]
+    fn bpm_inf_tempo_is_the_bpm_key_of_the_tempo_section() {
+        let tempo = super::stated_pack_tempo;
+        assert_eq!(tempo("[Tempo]\nBPM=125\n"), Some(125.0));
+        assert_eq!(
+            tempo("[HarmonyTable]\nBPM=99\n[ tempo ]\r\n bpm = 87.5 \r\n"),
+            Some(87.5)
+        );
+        assert_eq!(tempo("BPM=125\n"), None);
+        assert_eq!(tempo("[Tempo]\nBPM=fast\n"), None);
+        assert_eq!(tempo("[Tempo]\nBPM=1250\n"), None);
+        assert!(super::octave_apart(80.0, 160.0) && super::octave_apart(180.0, 90.0));
+        assert!(!super::octave_apart(120.0, 160.0));
     }
 
     #[test]
