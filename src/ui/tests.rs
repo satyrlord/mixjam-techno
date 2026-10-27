@@ -2260,6 +2260,8 @@ mod tests {
             length_ticks: 4 * TICKS_PER_BAR,
             offset_frames: 150,
             gain: 0.75,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         project.missing_samples.push(missing);
         app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
@@ -2311,6 +2313,8 @@ mod tests {
                 length_ticks: TICKS_PER_BAR,
                 offset_frames: 50,
                 gain: 0.75,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
         }
         project
@@ -4472,6 +4476,8 @@ mod tests {
                 assert!(viewport.contains_rect(gain) && viewport.contains_rect(value)
                     && viewport.contains_rect(unity), "{track} gain controls must fit at {density}x.");
                 assert!(gain.height() >= 86.0, "The minimum-window rail must remain usable at {density}x.");
+                assert!(gain.height() - 32.0 >= 68.0,
+                    "The physical rail must retain at least 68 points of travel at {density}x.");
                 assert!(value.bottom() <= gain.top(), "The dB readout must have room above its rail.");
                 let cap = output.shapes.iter().find_map(|shape| match &shape.shape {
                     egui::Shape::Mesh(mesh) => {
@@ -4485,6 +4491,8 @@ mod tests {
                 }).unwrap_or_else(|| panic!("Missing {track} fader cap at {density}x."));
                 assert!(cap.top() - value.bottom() >= 4.0 - 1.0 / density,
                     "The fader cap must clear the dB readout even at +12 dB.");
+                assert!(gain.expand(1.0 / density).contains_rect(cap),
+                    "The whole fader cap must remain draggable at either endpoint.");
                 caps.push((track, cap));
                 assert!(gain.y_range().contains(unity.center().y), "Unity must sit directly beside the gain rail.");
                 assert!(unity.width() <= 48.0 && unity.height() <= 20.0, "Unity must be a small rail button.");
@@ -4505,6 +4513,13 @@ mod tests {
                         "Mute and Solo sit in their own row between Center and L/R.");
                 }
                 let cap = caps.iter().find(|(name, _)| *name == track).unwrap().1;
+                for bus in 1..=4 {
+                    let send = effects_control_rect(&output, &format!("{track} send FX {bus}"));
+                    assert!(!send.intersects(cap), "{track} send FX {bus} must clear the fader cap at {density}x.");
+                    assert!(!send.intersects(pan), "{track} send FX {bus} must clear pan at {density}x.");
+                    let gain = effects_control_rect(&output, &format!("{track} gain"));
+                    assert!(!send.intersects(gain), "{track} send FX {bus} must clear the gain hit area at {density}x.");
+                }
                 assert!(pan.top() - cap.bottom() >= 4.0 - 1.0 / density,
                     "The fader cap must clear pan even at silence.");
                 assert!(center.top() >= pan.bottom() - 1.0 / density
@@ -6891,6 +6906,8 @@ mod tests {
             length_ticks: 4 * TICKS_PER_BAR,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         project.missing_samples.push(other);
         app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
@@ -7006,5 +7023,198 @@ mod tests {
         frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND,);
         assert_eq!(app.session.project().tracks[0].gain, 1.0,
             "Undo must work directly after a pointer gain edit.");
+    }
+
+    #[test]
+    fn mixer_preserves_unedited_send_and_return_precision() {
+        let (ctx, mut app) = fixture();
+        let mut project = app.session.project().clone();
+        project.tracks[0].sends[0] = 0.12345;
+        project.fx.buses[0].return_level = 0.76543;
+        app.session = Session::headless(Arc::new(Library::fixture(vec![])), project.clone()).unwrap();
+        app.bottom_module = BottomModule::Mixer;
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert_eq!(app.session.project().tracks[0].sends, project.tracks[0].sends);
+        assert_eq!(app.session.project().fx, project.fx);
+    }
+
+    #[test]
+    fn inspector_shortening_preserves_fade_in_before_fade_out() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let clip = app.session.project().clips[0].clone();
+        let mut fades = clip.fades;
+        fades.fade_in.ticks = 128;
+        fades.fade_out.ticks = 128;
+        app.session.edit(EditCommand::SetClip {
+            id: clip.id, gain: clip.gain, offset_frames: clip.offset_frames,
+            length_ticks: clip.length_ticks, fades, pitch_cents: clip.pitch_cents,
+        }).unwrap();
+        app.selected_clip = Some(clip.id);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (target, _) = accessible_node(&output, "Clip length (bars)");
+        frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::SetValue, target,
+            data: Some(egui::accesskit::ActionData::NumericValue(0.5)),
+        })], egui::Modifiers::NONE);
+        let clip = &app.session.project().clips[0];
+        assert_eq!(clip.length_ticks, 128);
+        assert_eq!((clip.fades.fade_in.ticks, clip.fades.fade_out.ticks), (128, 0));
+    }
+
+    #[test]
+    fn automation_drag_adds_and_moves_a_point_in_one_undo_step() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        app.automation_lane = Some(Lane::Volume);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let canvas = app.timeline_rect.unwrap();
+        let start = Pos2::new(canvas.left() + app.timeline_bar_width, canvas.top() + app.timeline_row_height / 2.0);
+        let end = start + Vec2::new(app.timeline_bar_width, -6.0);
+        pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+        for step in 1..=4 {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(start + (end - start) * step as f32 / 4.0)], egui::Modifiers::NONE);
+        }
+        pointer(&ctx, &mut app, end, false, egui::Modifiers::NONE);
+        assert_eq!(app.session.project().tracks[0].automation.volume.len(), 1);
+        app.history_step(false);
+        assert!(app.session.project().tracks[0].automation.volume.is_empty());
+        app.history_step(true);
+        assert_eq!(app.session.project().tracks[0].automation.volume.len(), 1);
+        app.automation_drag = Some((0, 0));
+        app.clear_selection();
+        assert!(app.automation_drag.is_none());
+    }
+
+    #[test]
+    fn clip_inspector_controls_fit_the_minimum_window() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.name = "A long source name that must leave room for the clip controls ".repeat(4);
+        app.session = Session::headless(Arc::new(Library::fixture(vec![sample])), app.session.project().clone()).unwrap();
+        app.selected_clip = Some(1);
+        let size = Vec2::new(960.0, 720.0);
+        for _ in 0..3 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        for name in ["Clip gain", "Clip trim start (frames)", "Clip length (bars)", "Clip fade in (beats)", "Clip fade in curve", "Clip fade out (beats)", "Clip fade out curve", "Clip pitch (semitones)", "Clip pitch (cents)"] {
+            let bounds = accessible_node(&output, name).1.bounds().unwrap();
+            assert!(bounds.x1 <= f64::from(size.x), "{name}: {bounds:?}");
+        }
+    }
+
+    #[test]
+    fn mixer_sends_and_the_effects_module_edit_the_fx_buses() {
+        use mixjam_techno::application::fx::{Aetherform, Module};
+        let set = |ctx: &egui::Context, app: &mut MixJamApp, output: &egui::FullOutput, name: &str, value: f64| {
+            let (target, _) = accessible_node(output, name);
+            frame(ctx, app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::SetValue, target,
+                data: Some(egui::accesskit::ActionData::NumericValue(value)),
+            })], egui::Modifiers::NONE);
+        };
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        set(&ctx, &mut app, &output, "Track 1 send FX 2", 0.4);
+        assert_eq!(app.session.project().tracks[0].sends, [0.0, 0.4, 0.0, 0.0]);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(!accessible_node(&output, "FX 1 power").1.is_disabled());
+        set(&ctx, &mut app, &output, "FX 2 return level", 0.5);
+        assert_eq!(app.session.project().fx.buses[1].return_level, 0.5);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Edit FX 2");
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(app.bottom_module, BottomModule::Effects);
+
+        let mut buses = app.session.project().fx;
+        buses.buses[1].module = Module::AetherformReverb(Aetherform::default());
+        app.session.edit(EditCommand::SetEffects(buses)).unwrap();
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for name in ["FX 1 effect", "FX 2 preset", "FX 2 space", "FX 2 shimmer", "Clear FX 2 tail", "FX 2 bypass", "FX 4 limiter"] {
+            accessible_node(&output, name);
+        }
+        assert!(accessible_node(&output, "FX 2 shimmer amount").1.is_disabled(), "the amount waits for Shimmer");
+        set(&ctx, &mut app, &output, "FX 2 decay", 5.0);
+        let Module::AetherformReverb(reverb) = app.session.project().fx.buses[1].module else { panic!("FX 2 holds the reverb") };
+        assert_eq!(reverb.decay_seconds, 5.0);
+        frame(&ctx, &mut app, vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)], egui::Modifiers::COMMAND);
+        let Module::AetherformReverb(reverb) = app.session.project().fx.buses[1].module else { panic!("FX 2 holds the reverb") };
+        assert_eq!(reverb.decay_seconds, 2.8, "Undo restores the decay.");
+    }
+
+    #[test]
+    fn clip_fades_pitch_and_automation_points_edit_from_the_arrangement() {
+        use mixjam_techno::application::{FadeCurve, automation::Lane};
+        let set = |ctx: &egui::Context, app: &mut MixJamApp, name: &str, value: f64| {
+            let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+            let (target, _) = accessible_node(&output, name);
+            frame(ctx, app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::SetValue, target,
+                data: Some(egui::accesskit::ActionData::NumericValue(value)),
+            })], egui::Modifiers::NONE);
+        };
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_clip = Some(1);
+        for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+        set(&ctx, &mut app, "Clip fade in (beats)", 1.0);
+        set(&ctx, &mut app, "Clip fade out (beats)", 0.5);
+        set(&ctx, &mut app, "Clip pitch (semitones)", -2.0);
+        set(&ctx, &mut app, "Clip pitch (cents)", 25.0);
+        let clip = &app.session.project().clips[0];
+        assert_eq!((clip.fades.fade_in.ticks, clip.fades.fade_out.ticks), (64, 32));
+        assert_eq!(clip.fades.fade_in.curve, FadeCurve::Linear);
+        assert_eq!(clip.pitch_cents, -175);
+        // A fade cannot outgrow the clip: one bar is four beats.
+        set(&ctx, &mut app, "Clip fade in (beats)", 9.0);
+        assert_eq!(app.session.project().clips[0].fades.fade_in.ticks, 224);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Clip fade out curve");
+
+        // With a lane shown, a click adds a point and a right-click removes it.
+        app.automation_lane = Some(Lane::Volume);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Automation lane");
+        let canvas = app.timeline_rect.unwrap();
+        let pos = Pos2::new(
+            canvas.left() + app.timeline_bar_width * 2.0,
+            canvas.top() + app.timeline_row_height / 2.0,
+        );
+        pointer(&ctx, &mut app, pos, true, egui::Modifiers::NONE);
+        pointer(&ctx, &mut app, pos, false, egui::Modifiers::NONE);
+        let points = app.session.project().tracks[0].automation.volume.clone();
+        assert_eq!(points.len(), 1, "{points:?}");
+        assert_eq!(points[0].tick, 2 * TICKS_PER_BAR);
+        assert!((points[0].value - -27.0).abs() <= 1.0, "{points:?}");
+        assert_eq!(app.session.project().clips.len(), 2, "A lane click places no clip.");
+        // Dragging the point moves it a bar later and to the top of the row.
+        let top = Pos2::new(pos.x + app.timeline_bar_width, canvas.top());
+        pointer(&ctx, &mut app, pos, true, egui::Modifiers::NONE);
+        for step in 1..=4 {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(pos + (top - pos) * step as f32 / 4.0)], egui::Modifiers::NONE);
+        }
+        pointer(&ctx, &mut app, top, false, egui::Modifiers::NONE);
+        let points = app.session.project().tracks[0].automation.volume.clone();
+        assert_eq!((points.len(), points[0].tick, points[0].value), (1, 3 * TICKS_PER_BAR, 6.0));
+        let point = Pos2::new(top.x, canvas.top() + 4.0);
+        frame(&ctx, &mut app, vec![
+            egui::Event::PointerMoved(point),
+            egui::Event::PointerButton { pos: point, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::NONE },
+        ], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![
+            egui::Event::PointerButton { pos: point, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE },
+        ], egui::Modifiers::NONE);
+        assert!(app.session.project().tracks[0].automation.volume.is_empty());
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].automation.volume.len(), 1, "Undo restores the point.");
     }
 }

@@ -7,6 +7,7 @@ use mixjam_techno::application::agent::{
     self as wire, ArrangementView, Body, Modifier, Outcome, PathPromptView, PointerAction, Request,
     Responder, Selection, Server, StateView, Status, Tools, UiNode, Value,
 };
+use mixjam_techno::application::automation;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Mutex,
@@ -615,6 +616,7 @@ impl MixJamApp {
                 | Request::Select { .. }
                 | Request::Seek { .. }
                 | Request::SetLoop { .. }
+                | Request::Automate { .. }
         ) && let Some(modal) = self.blocking_modal(ctx)
         {
             return Err(format!(
@@ -1008,6 +1010,33 @@ impl MixJamApp {
                     }
                 };
                 self.session.edit(EditCommand::SetLoop(region))?;
+                self.sync_notice();
+                Start::run(vec![Step::Idle])
+            }
+            Request::Automate {
+                track,
+                lane,
+                points,
+            } => {
+                if !(1..=TRACK_COUNT).contains(&track) {
+                    return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
+                }
+                let lane = automation::Lane::from_key(&lane)
+                    .ok_or("Lanes are volume, send1, send2, send3, send4, and filter.")?;
+                let points = points
+                    .into_iter()
+                    .map(|[bar, value]| {
+                        Ok(automation::Point {
+                            tick: wire::position_tick(Some(bar), None)?,
+                            value: value as f32,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                self.session.edit(EditCommand::SetAutomation {
+                    track: track - 1,
+                    lane,
+                    points,
+                })?;
                 self.sync_notice();
                 Start::run(vec![Step::Idle])
             }

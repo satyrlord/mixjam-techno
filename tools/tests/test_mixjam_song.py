@@ -64,9 +64,58 @@ class SongProjectionTests(unittest.TestCase):
             self.assertTrue(all(not project['master'][key]['on']
                                 for key in project['master']['order']))
 
+    def test_version_13_keeps_sends_and_fx_buses_and_earlier_songs_default_them(self):
+        document = self.document(13)
+        document['master'] = self.project(self.document())['master']
+        document['lanes'][0]['sends'] = [0.0, 0.25, 0.0, 1.0]
+        buses = self.project(self.document())['fx']
+        buses[1] = {'module': {'type': 'aetherform-reverb', 'decaySeconds': 2.8},
+                    'powered': False, 'returnLevel': 0.5, 'limiter': True}
+        document['fxBuses'] = buses
+        project = self.project(document)
+        self.assertEqual(project['tracks'][0]['sends'], [0.0, 0.25, 0.0, 1.0])
+        self.assertEqual(project['fx'], buses)
+        earlier = self.project(self.document(10))
+        self.assertEqual(earlier['tracks'][0]['sends'], [0.0] * 4)
+        self.assertTrue(all(bus['module'] == {'type': 'empty'} for bus in earlier['fx']))
+
+    def test_version_14_keeps_fades_pitch_and_automation_and_earlier_songs_default_them(self):
+        document = self.document(14)
+        document['master'] = self.project(self.document())['master']
+        document['fxBuses'] = self.project(self.document())['fx']
+        document['lanes'][0]['sends'] = [0.0] * 4
+        fades = {'in': {'ticks': 64, 'curve': 'equal-power'},
+                 'out': {'ticks': 0, 'curve': 'linear'}}
+        automation = {'volume': [{'tick': 0, 'value': -60.0}, {'tick': 256, 'value': 0.0}],
+                      'filter': [{'tick': 512, 'value': -0.5}]}
+        document['lanes'][0]['automation'] = automation
+        document['lanes'][0]['placements'] = [
+            {'id': 1, 'sampleId': 5, 'startTick': 0, 'durationTicks': 256,
+             'offsetFrames': 0, 'gain': 1.0, 'fades': fades, 'pitchCents': -30},
+            {'id': 2, 'sampleId': 5, 'startTick': 256, 'durationTicks': 256,
+             'offsetFrames': 0, 'gain': 1.0}]
+        project = self.project(document)
+        self.assertEqual(project['tracks'][0]['automation'], automation)
+        self.assertEqual((project['clips'][0]['fades'], project['clips'][0]['pitch_cents']),
+                         (fades, -30))
+        self.assertEqual(project['clips'][1]['pitch_cents'], 0)
+        self.assertEqual(project['clips'][1]['fades']['in']['ticks'], 0)
+        self.assertEqual(self.project(self.document(10))['tracks'][0]['automation'], {})
+
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(13))
+            self.project(self.document(15))
+
+    def test_default_fades_are_independent_between_clips_and_reads(self):
+        document = self.document(10)
+        document['lanes'][0]['placements'] = [
+            {'id': index, 'sampleId': 5, 'startTick': index * 256,
+             'durationTicks': 256, 'offsetFrames': 0, 'gain': 1.0}
+            for index in (1, 2)]
+        project = self.project(document)
+        project['clips'][0]['fades']['in']['ticks'] = 64
+        self.assertEqual(project['clips'][1]['fades']['in']['ticks'], 0)
+        self.assertEqual(self.project(document)['clips'][0]['fades']['in']['ticks'], 0)
 
 
 if __name__ == '__main__':

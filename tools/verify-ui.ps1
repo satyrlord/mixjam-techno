@@ -4,8 +4,8 @@ param(
     [string]$OutputDirectory = '',
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    [ValidateSet('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')]
-    [string[]]$Views = @('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')
+    [ValidateSet('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')]
+    [string[]]$Views = @('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -106,7 +106,7 @@ import_details_project = deepcopy(project)
 import_details_project['title'] = 'Imported song details'
 import_details_project['import_notices'] = [dict(source_bpm=146, target_bpm=140)]
 import_details_project['source_notices'] = [
-    'MixJam v7: the master bus plays through the mastering pedals; return effects and clip edge fades are not rendered.',
+    'MixJam v7: the master bus plays through the mastering pedals and the return buses through the FX buses; clip edge fades are not rendered.',
     'MixJam v7 source controls: source 1; saved gain trim 0.75; edge fade 12 ms.',
 ]
 import_details = write_project('import-details', import_details_project)
@@ -162,7 +162,42 @@ mixer_project['tracks'][5]['solo'] = True
 mixer_project['master_gain'] = 0.7777778
 # A track can contain more than one sound; its strip must not invent one identity.
 mixer_project['clips'][0]['sample_id'] = samples[4]['id']
+# Track 1 and track 3 feed the FX buses; FX 1 holds a reverb and FX 2 a delay.
+echoform = dict(type='echoform-delay', mode='sync', divisionL='1/4', divisionR='1/8.',
+                timeMsL=420.0, timeMsR=610.0, feedback=68.0, pingPong=True, width=142.0,
+                lowCut=160.0, highCut=7800.0, modRate=0.38, modDepth=5.4, character='tape',
+                drive=0.0, duckAmount=34.0, duckRelease=620.0, outputDb=-1.5, bypass=False)
+aetherform = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.0,
+                  decaySeconds=2.8, sizePercent=68.0, character='vintage', drivePercent=0.0,
+                  widthPercent=148.0, lateBalancePercent=72.0, lowCutHz=180.0, highCutHz=8600.0,
+                  diffusionPercent=78.0, densityPercent=84.0, earlyReflectionsEnabled=True,
+                  modRateHz=0.32, modDepthPercent=18.0, shimmerEnabled=True,
+                  shimmerAmountPercent=24.0, shimmerIntervalSemitones=12,
+                  duckAmountPercent=28.0, duckReleaseMs=720.0, outputDb=-1.5, bypass=False)
+mixer_project['fx'] = [dict(module=module, powered=True, returnLevel=level, limiter=True)
+                       for module, level in ((aetherform, 0.88), (echoform, 0.82),
+                                             (dict(type='empty'), 1.0), (dict(type='empty'), 1.0))]
+mixer_project['fx'][1]['powered'] = False
+mixer_project['tracks'][0]['sends'] = [0.4, 0.0, 0.25, 0.0]
+mixer_project['tracks'][2]['sends'] = [0.0, 0.7, 0.0, 1.0]
 mixer_states = write_project('mixer-states', mixer_project)
+# Faded clips, a pitched clip, and automation lanes on the first tracks.
+shaped_project = deepcopy(project)
+shaped_project['title'] = 'Fades and automation'
+for clip in shaped_project['clips']:
+    if clip['track'] < 4:
+        clip['fades'] = {'in': {'ticks': 64 * (clip['track'] + 1), 'curve': 'equal-power'},
+                         'out': {'ticks': 128, 'curve': ('linear', 'exponential')[clip['track'] % 2]}}
+shaped_project['clips'][0]['pitch_cents'] = -175
+shaped_project['tracks'][0]['automation'] = {'volume': [
+    {'tick': 0, 'value': -60.0}, {'tick': 4 * 256, 'value': 0.0},
+    {'tick': 10 * 256, 'value': 0.0}, {'tick': 12 * 256, 'value': -18.0}]}
+shaped_project['tracks'][1]['automation'] = {'volume': [
+    {'tick': 2 * 256, 'value': 3.0}, {'tick': 6 * 256, 'value': -9.5}],
+    'filter': [{'tick': 0, 'value': -0.8}, {'tick': 8 * 256, 'value': 0.0}]}
+shaped_project['tracks'][2]['sends'] = [0.3, 0.0, 0.0, 0.0]
+shaped_project['tracks'][2]['automation'] = {'sends': [[], [{'tick': 0, 'value': 0.0}, {'tick': 8 * 256, 'value': 1.0}], [], []]}
+shaped = write_project('shaped', shaped_project)
 follow_project = deepcopy(project)
 follow_project['title'] = 'Follow the playhead'
 follow_project['loop_region'] = [32 * 256, 48 * 256]
@@ -211,6 +246,7 @@ for size in sizes:
             fixture = {
                 'sparse': sparse, 'track64': full, 'mixer-dense': full,
                 'mixer-empty': empty, 'mixer-states': mixer_states, 'follow': follow,
+                'fx-board': mixer_states, 'clip-fades': shaped, 'automation': shaped,
                 'missing': missing, 'missing-details': missing,
                 'missing-effects': missing, 'missing-edit': missing,
                 'missing-stretch': missing, 'missing-step-synth': missing,

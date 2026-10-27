@@ -78,7 +78,53 @@ pub fn time_stretch(input: &Pcm, source_bpm: f64, target_bpm: f64) -> Result<Pcm
     if source_bpm == target_bpm {
         return Ok(input.clone());
     }
-    let ratio = source_bpm / target_bpm;
+    stretch(input, source_bpm / target_bpm)
+}
+
+/// Change pitch by `cents` and keep the length: stretch the sound by the pitch
+/// ratio, then resample it back to its length. A sound too short to stretch
+/// keeps its pitch.
+pub fn repitch(input: &Pcm, cents: i32) -> Result<Pcm, String> {
+    input.validate()?;
+    if !(-crate::engine::MAX_PITCH_CENTS..=crate::engine::MAX_PITCH_CENTS).contains(&cents) {
+        return Err("Pitch must be from -24 to 24 semitones.".into());
+    }
+    let frames = input.frames() as usize;
+    if cents == 0 || frames < 8 {
+        return Ok(input.clone());
+    }
+    let ratio = 2.0f64.powf(f64::from(cents) / 1200.0);
+    let stretched = stretch(input, ratio)?;
+    let channels = input.channels as usize;
+    let last = stretched.frames() as usize - 1;
+    let step = stretched.frames() as f64 / frames as f64;
+    let at = |frame: isize, channel: usize| {
+        stretched.samples[frame.clamp(0, last as isize) as usize * channels + channel]
+    };
+    let mut samples = Vec::with_capacity(frames * channels);
+    for frame in 0..frames {
+        let position = frame as f64 * step;
+        let index = position.floor() as isize;
+        let t = (position - index as f64) as f32;
+        for channel in 0..channels {
+            // Catmull-Rom interpolation through the four nearest frames.
+            let [a, b, c, d] = [-1, 0, 1, 2].map(|offset| at(index + offset, channel));
+            let value = b + 0.5
+                * t
+                * (c - a + t * (2.0 * a - 5.0 * b + 4.0 * c - d + t * (3.0 * (b - c) + d - a)));
+            samples.push(value.clamp(-1.0, 1.0));
+        }
+    }
+    Ok(Pcm {
+        sample_rate: input.sample_rate,
+        channels: input.channels,
+        samples,
+    })
+}
+
+/// Make `input` `ratio` times as long and keep its pitch.
+fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
+    let source_frames = input.frames() as usize;
     let frames = (source_frames as f64 * ratio).round().max(1.0) as usize;
     let channels = input.channels as usize;
     if !fits_a_wav(frames, channels) {
@@ -234,6 +280,18 @@ mod tests {
                 frequency(&output)
             );
         }
+    }
+    #[test]
+    fn repitching_moves_the_tone_and_keeps_the_length() {
+        let input = sine(8000);
+        for (cents, expected) in [(1200, 880.0), (-1200, 220.0), (700, 659.26), (-35, 431.2)] {
+            let output = repitch(&input, cents).unwrap();
+            assert_eq!(output.frames(), 8000);
+            let measured = frequency(&output);
+            assert!((measured - expected).abs() < 3.0, "{cents}: {measured}");
+        }
+        assert_eq!(repitch(&input, 0).unwrap().samples, input.samples);
+        assert!(repitch(&input, 2401).is_err());
     }
     #[test]
     fn stretcher_keeps_stereo_channels_isolated_and_rejects_unknown_tempo() {

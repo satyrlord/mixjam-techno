@@ -838,6 +838,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -914,6 +916,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 11_025,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -1002,6 +1006,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 37_800,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -1064,6 +1070,8 @@ mod tests {
             length_ticks: 1,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let file = root.join("song.json");
         project.save(&file).unwrap();
@@ -1143,6 +1151,8 @@ mod tests {
             length_ticks: 1,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let file = root.join("song.json");
         project.save(&file).unwrap();
@@ -1245,6 +1255,8 @@ mod tests {
             length_ticks: 1,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let (opened, ready) = resolve(project.clone(), &library).unwrap();
         assert_eq!(opened.imported_samples[0].path, take);
@@ -1306,6 +1318,8 @@ mod tests {
             length_ticks: 256,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         project.save(&path).unwrap();
         let before = fs::read(&path).unwrap();
@@ -1351,6 +1365,8 @@ mod tests {
             length_ticks: 256,
             offset_frames: 4410,
             gain: 0.75,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let path = root.join("song.mixjam");
         save(&project, &path).unwrap();
@@ -1419,6 +1435,8 @@ mod tests {
             length_ticks: 8,
             offset_frames: 32,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         fs::remove_file(&wave).unwrap();
         let (opened, mut ready) = resolve(project.clone(), &library).unwrap();

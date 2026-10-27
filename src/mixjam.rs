@@ -1,11 +1,14 @@
-//! `.mixjam` songs: the application's own format version 12 (`song`) and a
+//! `.mixjam` songs: the application's own format version 14 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
 //! emulation. The master bus maps onto this application's mastering pedals,
 //! which are new designs with the same controls: its order, power switches,
-//! trim, and settings carry over. Return effects and edge fades remain serialized
-//! in source notices and are not rendered; the importer states both sound changes.
+//! trim, and settings carry over. The four return buses and the lane sends
+//! carry over too: Echoform Delay and Aetherform Reverb modules play through
+//! this application's own effects with their saved settings. Edge fades, and
+//! any other module type, remain serialized in source notices and are not
+//! rendered; the importer states the sound changes.
 //! Lane mute and solo become track Mute and Solo; MixJam plays a soloed lane
 //! even when it is muted, so such a lane imports unmuted. Later same-lane triggers truncate
 //! earlier clips. Playback tempo comes from the measured WAV duration and saved
@@ -176,7 +179,7 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8 to 12 song or import a version 7 project. The flag is true for
+/// Open a version 8 to 14 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
@@ -201,11 +204,11 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7 to 12 are supported.".into()),
+        _ => Err("Only MixJam format versions 7 to 14 are supported.".into()),
     }
 }
 
-/// Write the song as a format version 12 document.
+/// Write the song as a format version 14 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -376,8 +379,38 @@ fn master_from_bus(bus: &MasterBus) -> MasterChain {
     chain
 }
 
+/// The FX buses for validated MixJam return buses. A module of a type this
+/// application does not have imports as an empty slot.
+fn fx_from_buses(buses: &[FxBus]) -> Result<crate::fx::FxBuses, String> {
+    let mut fx = crate::fx::FxBuses::default();
+    for (slot, bus) in fx.buses.iter_mut().zip(buses) {
+        let mut module = bus.module.clone();
+        if let Some(fields) = module.as_object_mut() {
+            fields.remove("id");
+        }
+        let known = matches!(
+            module.get("type").and_then(Value::as_str),
+            Some("empty" | "echoform-delay" | "aetherform-reverb")
+        );
+        *slot = crate::fx::FxBus {
+            module: if known {
+                serde_json::from_value(module)
+                    .map_err(|error| format!("A MixJam return module is invalid: {error}"))?
+            } else {
+                crate::fx::Module::Empty
+            },
+            powered: bus.powered,
+            return_level: bus.return_level as f32,
+            limiter: bus.limiter_enabled,
+        };
+    }
+    fx.validate()?;
+    Ok(fx)
+}
+
 fn convert(document: Document, path: &Path, library: &Library) -> Result<Project, String> {
     validate(&document)?;
+    let fx = fx_from_buses(&document.fx_buses)?;
     let mut project = Project {
         title: path
             .file_stem()
@@ -387,9 +420,10 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
         bpm: document.song.bpm,
         master_gain: document.song.master_gain,
         master: master_from_bus(&document.master_bus),
+        fx,
         ..Project::default()
     };
-    project.source_notices.push("Imported MixJam v7 arrangement. The master bus plays through this application's mastering pedals with its saved order, switches, and settings; they are new designs, so the sound can differ. Return effects and clip edge fades are not rendered. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
+    project.source_notices.push("Imported MixJam v7 arrangement. The master bus plays through this application's mastering pedals with its saved order, switches, and settings; they are new designs, so the sound can differ. The return buses and lane sends play through this application's Echoform Delay and Aetherform Reverb, new designs with the same controls; another module type imports as an empty slot. Clip edge fades are not rendered. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
     project.source_notices.push(format!("MixJam v7 source controls: {}", serde_json::json!({
         "appVersion":document.app_version, "createdAt":document.created_at, "modifiedAt":document.modified_at,
         "masterBus":document.master_bus, "fxBuses":document.fx_buses,
@@ -407,6 +441,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
             pan: lane.pan,
             muted: lane.muted && !lane.solo,
             solo: lane.solo,
+            sends: lane.sends,
             ..Track::default()
         };
         // The format reader sorts equal-time placements by ID. MixJam gives the
@@ -528,6 +563,8 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
                 length_ticks: length * 8,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
         }
     }
@@ -545,11 +582,11 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(13);
+        document["formatVersion"] = json!(15);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(error, "Only MixJam format versions 7 to 12 are supported.");
+        assert_eq!(error, "Only MixJam format versions 7 to 14 are supported.");
     }
 
     #[test]
@@ -759,8 +796,51 @@ mod tests {
         assert!(projected.master.limiter.on);
         assert!(projected.source_notices[1].contains("\"lim\":true"));
         assert!(projected.source_notices[1].contains("\"type\":\"reverb\""));
+        assert!(projected.fx.buses[0].module.is_empty());
         fs::remove_file(wave).unwrap();
         fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn return_buses_and_sends_play_through_the_application_effects() {
+        let module = |value: serde_json::Value| {
+            let mut value = value;
+            value["id"] = json!("fx-module-1");
+            value
+        };
+        let delay = crate::fx::Echoform::preset("Dotted Motion").unwrap();
+        let reverb = crate::fx::Aetherform::preset("Vocal Plate").unwrap();
+        let mut document = fixture();
+        document["fxBuses"][1]["module"] =
+            module(serde_json::to_value(crate::fx::Module::EchoformDelay(delay)).unwrap());
+        document["fxBuses"][1]["returnLevel"] = json!(0.78);
+        document["fxBuses"][2]["module"] =
+            module(serde_json::to_value(crate::fx::Module::AetherformReverb(reverb)).unwrap());
+        document["fxBuses"][2]["powered"] = json!(false);
+        document["fxBuses"][2]["limiterEnabled"] = json!(false);
+        document["lanes"][0]["sends"] = json!([0, 0.5, 0.25, 0]);
+        let project = convert(
+            serde_json::from_value(document.clone()).unwrap(),
+            Path::new("song.mixjam"),
+            &Library::empty(),
+        )
+        .unwrap();
+        let buses = &project.fx.buses;
+        assert!(buses[0].module.is_empty());
+        assert_eq!(buses[1].module, crate::fx::Module::EchoformDelay(delay));
+        assert_eq!(buses[1].return_level, 0.78);
+        assert_eq!(buses[2].module, crate::fx::Module::AetherformReverb(reverb));
+        assert!(!buses[2].powered && !buses[2].limiter);
+        assert_eq!(project.tracks[0].sends, [0.0, 0.5, 0.25, 0.0]);
+        // A module of a known type with a setting out of range is refused.
+        document["fxBuses"][1]["module"]["feedback"] = json!(500);
+        let error = convert(
+            serde_json::from_value(document).unwrap(),
+            Path::new("song.mixjam"),
+            &Library::empty(),
+        )
+        .unwrap_err();
+        assert!(error.contains("Echoform"), "{error}");
     }
 
     #[test]

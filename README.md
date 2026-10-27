@@ -6,7 +6,7 @@ opens MixJam v7 `.mixjam` projects and several classic `.mix` song formats.
 
 The interface uses a dark graphite workspace, bundled Syncopate in uppercase
 for branding and titles, and Inter Medium for all other application text.
-Transport sits above the arrangement. Sounds and Mixer share the lower panel;
+Transport sits above the arrangement. Sounds, Mixer, Mastering, and Effects share the lower panel;
 use its left-side module selector to switch between them. Sample categories,
 search, and library filters stay together in Sounds; search and filters sit
 beside the selector.
@@ -60,6 +60,19 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   arrangement and mixer omit unused tracks.
 - Hold Shift to select clips. Drag an empty area to select a group. Hold Alt
   while dragging to copy. Use Delete, Undo, and Redo for edits.
+- Select a clip to edit it in the row under the arrangement: gain, trim start,
+  length, a fade in and a fade out in beats, each with a curve (Linear, Equal
+  power, or Exponential), and pitch in semitones and cents. The fade out ends
+  where the clip's sound ends, which can be before the clip's end, so a phrase
+  that stops abruptly can die away instead. Pitch keeps the clip's length and
+  timing. The arrangement shades each fade over its clip.
+- Choose a lane in Automation above the arrangement to draw it on every track:
+  Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
+  the send knob while the lane has points), or Filter (low-pass below the
+  middle, high-pass above it, open in the middle). Click a lane to add a
+  point, drag a point to move it, and double-click or right-click a point to
+  delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
+  points the value moves in a straight line. Choose Off to edit clips again.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
@@ -82,6 +95,11 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   S solos it: while any track is soloed, only soloed tracks play, and a muted
   track stays silent. The lane and mixer M/S/L/R controls mirror each other.
   Changing these controls does not change pan.
+  The four small knobs under the fader send the track to FX 1 to FX 4, from
+  0 to 100%, after its fader and pan. A ringed knob has an automation lane,
+  which sets the send while the song plays. After the tracks, a return strip for
+  each bus sets its return level and switches its input and limiter; Edit
+  opens the bus in the Effects module.
 - Use Mastering, the third module of the lower panel, for the master
   pedalboard. The mix enters the Input unit,
   where Trim sets its level against the VU meter, passes each pedal that is on
@@ -96,6 +114,12 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   boards. A preset sets every pedal and the order and turns the Booster pedals
   off; it keeps your Trim, so a mix you trimmed down stays down. Undo
   restores the board before it.
+- Use Effects, the fourth module of the lower panel, for the four FX buses
+  that the Mixer's sends feed. Choose Echoform Delay or Aetherform Reverb for
+  a bus, load a preset, and set its controls; the returns join the mix before
+  the master pedalboard. Sync sets the delay in note lengths at the song's
+  tempo. Input off lets the tail ring out; Clear tail cuts it at once. Export
+  lets the tails ring past the song's end.
 - Use Import for WAV files and enter the known source tempo.
 - Use Sample Editor to trim and change pitch. Start frame is included; End frame
   is excluded. The adjacent buttons change one frame or 0.1 semitone; hold Shift
@@ -108,11 +132,13 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   count-in. Stop and save the take as a WAV file.
 - Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
-A `.mixjam` song is JSON, format version 12. Earlier format-8 to format-10 songs
+A `.mixjam` song is JSON, format version 14. Earlier format-8 to format-10 songs
 open with their effective gain, polarity, and L/R outputs preserved, Mute and
 Solo off where they had none, and every master pedal off. Format-11 songs open
-with their eJay pedals as saved and the mastering pedals off. Saving them
-writes version 12, which earlier builds cannot open.
+with their eJay pedals as saved and the mastering pedals off. Songs before
+format 13 open with every FX bus empty and every send at 0, and songs before
+format 14 with no clip fades, clip pitch, or automation. Saving them writes
+version 14, which earlier builds cannot open.
 A song links to WAV files; it is not a
 portable audio bundle. After moving the sample folder, select its new location
 before opening the song.
@@ -211,8 +237,9 @@ python -m unittest discover -s tools/tests -v
 ~~~
 
 The Python tests check the `.mixjam` projection used by artifact verification.
-It reads formats 8 through 12 and preserves the master pedalboard when a
-verification script writes a schema-4 JSON project for rendering.
+It reads formats 8 through 14 and preserves the master pedalboard, FX buses,
+sends, automation, and clip fades and pitch when a verification script writes
+a schema-4 JSON project for rendering.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the enforced frontend/application
 boundary. `tools/verify-ui.ps1` captures the built native interface at all three
@@ -312,6 +339,6 @@ window can do, which includes saving files to a path that it supplies.
 
 - Original-format writing and portable project bundles are not implemented.
 - Imported songs do not reproduce every effect or level curve of their source
-  programs. MixJam return effects and clip fades are not rendered, and its
-  master bus plays through this application's own mastering pedals; the
-  importer shows a notice.
+  programs. MixJam clip fades are not rendered, and its master bus and return
+  effects play through this application's own mastering pedals and FX buses;
+  the importer shows a notice.

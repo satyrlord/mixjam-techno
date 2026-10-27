@@ -176,7 +176,7 @@ fn band_label(hz: f64) -> String {
 
 /// How a dial's value reads in its window.
 #[derive(Clone, Copy)]
-enum Format {
+pub(super) enum Format {
     /// The eJay pedals' 0 to 1000 positions.
     Plain,
     /// The gain of an eJay equaliser band, shown in decibels.
@@ -191,21 +191,21 @@ enum Format {
     Speed,
 }
 impl Format {
-    const fn db(signed: bool) -> Self {
+    pub(super) const fn db(signed: bool) -> Self {
         Self::Unit {
             unit: "dB",
             decimals: 1,
             signed,
         }
     }
-    const fn tenths(unit: &'static str) -> Self {
+    pub(super) const fn tenths(unit: &'static str) -> Self {
         Self::Unit {
             unit,
             decimals: 1,
             signed: false,
         }
     }
-    const fn whole(unit: &'static str) -> Self {
+    pub(super) const fn whole(unit: &'static str) -> Self {
         Self::Unit {
             unit,
             decimals: 0,
@@ -266,13 +266,13 @@ impl Format {
 }
 
 /// Everything a dial shows besides its value.
-struct Dial<'a> {
-    name: &'a str,
-    label: &'a str,
-    hint: &'a str,
-    range: KnobRange,
-    format: Format,
-    choices: &'a [f64],
+pub(super) struct Dial<'a> {
+    pub name: &'a str,
+    pub label: &'a str,
+    pub hint: &'a str,
+    pub range: KnobRange,
+    pub format: Format,
+    pub choices: &'a [f64],
 }
 
 /// The printed label, accessible name, description, and value format of a knob.
@@ -1146,7 +1146,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
 }
 
 /// A unit's or pedal's name with the smaller line under it.
-fn heading(ui: &egui::Ui, rect: Rect, title: &str, line: &str, color: Color32) {
+pub(super) fn heading(ui: &egui::Ui, rect: Rect, title: &str, line: &str, color: Color32) {
     let at = |y: f32| Pos2::new(rect.left() + PEDAL_PADDING, rect.top() + y);
     // A long name shrinks until it clears the lamp.
     let room = rect.width() - PEDAL_PADDING - 34.0;
@@ -1790,21 +1790,28 @@ pub(super) fn status(chain: &MasterChain) -> (String, String) {
 /// loses most of its color and some light, so the pedals in use stand out.
 /// Ink lettering keeps at least 5:1 contrast in both states.
 fn enamel(kind: PedalKind, on: bool) -> Color32 {
-    let [red, green, blue] = match kind {
-        PedalKind::EjayEq => [222, 172, 64],
-        PedalKind::EjayCompressor => [84, 184, 166],
-        PedalKind::EjayWide => [200, 150, 220],
-        PedalKind::SoftClip => [240, 150, 120],
-        PedalKind::Tube => [240, 166, 80],
-        PedalKind::TrimEq => [196, 204, 92],
-        PedalKind::BusCompressor => [120, 178, 228],
-        PedalKind::Maximizer => [130, 206, 150],
-        PedalKind::LiftEq => [236, 208, 108],
-        PedalKind::Tape => [206, 180, 140],
-        PedalKind::Imaging => [166, 160, 232],
-        PedalKind::Multiband => [100, 196, 204],
-        PedalKind::Limiter => [238, 140, 160],
-    };
+    enamel_of(
+        match kind {
+            PedalKind::EjayEq => [222, 172, 64],
+            PedalKind::EjayCompressor => [84, 184, 166],
+            PedalKind::EjayWide => [200, 150, 220],
+            PedalKind::SoftClip => [240, 150, 120],
+            PedalKind::Tube => [240, 166, 80],
+            PedalKind::TrimEq => [196, 204, 92],
+            PedalKind::BusCompressor => [120, 178, 228],
+            PedalKind::Maximizer => [130, 206, 150],
+            PedalKind::LiftEq => [236, 208, 108],
+            PedalKind::Tape => [206, 180, 140],
+            PedalKind::Imaging => [166, 160, 232],
+            PedalKind::Multiband => [100, 196, 204],
+            PedalKind::Limiter => [238, 140, 160],
+        },
+        on,
+    )
+}
+
+/// An enamel colour, lit when its unit is on, greyed and darkened when off.
+pub(super) fn enamel_of([red, green, blue]: [u8; 3], on: bool) -> Color32 {
     if on {
         return Color32::from_rgb(red, green, blue);
     }
@@ -1850,8 +1857,13 @@ const ALUMINIUM: Color32 = Color32::from_rgb(236, 238, 240);
 /// matte. The finish darkens the enamel by `GRAIN_DIP` and `SHEEN_DIP` at
 /// most, where the ink still keeps its contrast.
 fn enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
+    enclosure_of(ui, rect, enamel(kind, on), on, kind as u64 + 1);
+}
+
+/// An enclosure of any enamel. `seed` picks its part of the grain and its
+/// scratches, so units side by side differ.
+pub(super) fn enclosure_of(ui: &egui::Ui, rect: Rect, enamel: Color32, on: bool, seed: u64) {
     let painter = ui.painter();
-    let enamel = enamel(kind, on);
     let radius = egui::CornerRadius::same(CORNER as u8);
     let body = Rect::from_min_max(rect.min, rect.max + Vec2::splat(DEPTH));
     // A wide soft shadow, and a close dark one where the body meets the board.
@@ -1890,7 +1902,6 @@ fn enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
     let face = bevel(rect, enamel);
     if on {
         let finish = finish(ui.ctx());
-        let seed = kind as u64 + 1;
         // The grain keeps one texel to a screen pixel, from a different
         // part of the tile on each pedal.
         let pixels = ui.ctx().pixels_per_point();
@@ -2206,7 +2217,7 @@ fn lit(enamel: Color32, amount: f32) -> Color32 {
 }
 
 /// The pedal's lamp. Lit, it glows in the application's active lime.
-fn lamp(ui: &egui::Ui, center: Pos2, on: bool) {
+pub(super) fn lamp(ui: &egui::Ui, center: Pos2, on: bool) {
     let painter = ui.painter();
     if on {
         for (radius, alpha) in [(12.0, 28), (9.0, 54)] {
@@ -2263,7 +2274,13 @@ fn on_grid(value: f64, before: Option<f64>, range: &KnobRange) -> f64 {
 
 /// A rotary with its value window and label. The value moves on the knob's
 /// grid; the window takes typed values with or without the unit.
-fn dial(ui: &mut egui::Ui, positions: [Pos2; 3], value: &mut f64, spec: Dial<'_>, enabled: bool) {
+pub(super) fn dial(
+    ui: &mut egui::Ui,
+    positions: [Pos2; 3],
+    value: &mut f64,
+    spec: Dial<'_>,
+    enabled: bool,
+) {
     let [center, well, label] = positions;
     let range = spec.range;
     ui.painter().text(

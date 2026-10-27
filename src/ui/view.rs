@@ -1,5 +1,7 @@
 use super::*;
-use mixjam_techno::application::{amplitude_to_db, db_to_amplitude};
+use mixjam_techno::application::{
+    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_TICKS, amplitude_to_db, db_to_amplitude,
+};
 
 /// Format Windows filesystem paths for labels only. Stored paths and messages
 /// retain their original spelling for file operations and diagnostics.
@@ -374,6 +376,7 @@ impl MixJamApp {
                 match self.bottom_module {
                     BottomModule::Mixer => self.mixer(ui),
                     BottomModule::Mastering => self.mastering(ui),
+                    BottomModule::Effects => self.effects_module(ui),
                     BottomModule::Sounds => self.palette(ui),
                 }
             });
@@ -526,12 +529,12 @@ impl MixJamApp {
                         }).response
                 }).inner;
                 name_control(response, "Bottom module")
-                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, polarity and outputs; Mastering processes the whole mix on the master pedalboard.");
+                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, sends, polarity and outputs; Mastering processes the whole mix on the master pedalboard; Effects holds the four FX buses that the sends feed.");
                 ui.spacing_mut().button_padding = button_padding;
                 match self.bottom_module {
                     BottomModule::Sounds => self.palette_filters(ui),
                     BottomModule::Mastering => self.mastering_toolbar(ui),
-                    BottomModule::Mixer => {}
+                    BottomModule::Mixer | BottomModule::Effects => {}
                 }
             });
         });
@@ -709,19 +712,31 @@ impl MixJamApp {
     pub(super) fn mixer(&mut self, ui: &mut egui::Ui) {
         let mut tracks = self.session.project().tracks.clone();
         let mut master = self.session.project().master_gain;
-        let changed = mixer::show(
+        let mut buses = self.session.project().fx;
+        let changes = mixer::show(
             ui,
             self.session.project(),
             self.session.library(),
             &mut tracks,
             &mut master,
+            &mut buses,
         );
-        if changed {
+        if changes.tracks {
             let result = self.session.edit(EditCommand::SetMixer {
                 tracks,
                 master_gain: master,
             });
             self.apply(result);
+            ui.ctx().request_repaint();
+        }
+        if changes.fx {
+            let result = self.session.edit(EditCommand::SetEffects(buses));
+            self.apply(result);
+            ui.ctx().request_repaint();
+        }
+        if let Some(bus) = changes.open {
+            self.bottom_module = BottomModule::Effects;
+            self.fx_reveal = Some(bus);
             ui.ctx().request_repaint();
         }
     }
@@ -751,6 +766,24 @@ impl MixJamApp {
                 self.show_master_help = true;
             }
         });
+    }
+
+    pub(super) fn effects_module(&mut self, ui: &mut egui::Ui) {
+        let reveal = self.fx_reveal.take();
+        let buses = self.session.project().fx;
+        let action = ui
+            .push_id(self.master_view_generation, |ui| {
+                fx::show(ui, &buses, reveal)
+            })
+            .inner;
+        match action {
+            fx::Action::Change(buses) => {
+                let result = self.session.edit(EditCommand::SetEffects(*buses));
+                self.apply(result);
+            }
+            fx::Action::ClearTail(bus) => self.session.clear_fx_tail(bus),
+            fx::Action::None => {}
+        }
     }
 
     pub(super) fn mastering(&mut self, ui: &mut egui::Ui) {
@@ -810,8 +843,16 @@ impl MixJamApp {
         let mut gain = clip.gain;
         let mut offset = clip.offset_frames;
         let mut length = clip.length_ticks;
-        ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new(name).color(ACCENT).strong());
+        let mut fades = clip.fades;
+        let mut pitch = clip.pitch_cents;
+        // Two rows: the clip's level and span, then its fades and pitch.
+        let mut change = false;
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                Vec2::new(140.0, 20.0),
+                egui::Label::new(egui::RichText::new(&name).color(ACCENT).strong()).truncate(),
+            )
+            .on_hover_text(&name);
             ui.add_space(12.0);
             // The mixer shows dB, so the clip does too. An untouched value
             // keeps its exact saved amplitude.
@@ -821,7 +862,7 @@ impl MixJamApp {
             } else {
                 CLIP_SILENCE_DB
             };
-            let mut change = name_control(
+            change |= name_control(
                 ui.add(
                     egui::DragValue::new(&mut db)
                         .range(CLIP_SILENCE_DB..=amplitude_to_db(2.0))
@@ -879,16 +920,29 @@ impl MixJamApp {
                 length = (bars * TICKS_PER_BAR as f64).round().max(1.0) as u32;
                 change = true;
             }
-            if change {
-                let result = self.session.edit(EditCommand::SetClip {
-                    id,
-                    gain,
-                    offset_frames: offset,
-                    length_ticks: length,
-                });
-                self.apply(result);
-            }
         });
+        // Apply the model's shortening order before the controls constrain
+        // their individual ranges.
+        fades = fades.fit(length);
+        ui.horizontal(|ui| {
+            let room = length.saturating_sub(fades.fade_out.ticks);
+            change |= fade_controls(ui, "in", &mut fades.fade_in, room);
+            let room = length.saturating_sub(fades.fade_in.ticks);
+            change |= fade_controls(ui, "out", &mut fades.fade_out, room);
+            ui.add_space(12.0);
+            change |= pitch_controls(ui, &mut pitch);
+        });
+        if change {
+            let result = self.session.edit(EditCommand::SetClip {
+                id,
+                gain,
+                offset_frames: offset,
+                length_ticks: length,
+                fades,
+                pitch_cents: pitch,
+            });
+            self.apply(result);
+        }
     }
 
     pub(super) fn timeline(&mut self, ui: &mut egui::Ui) {
@@ -904,6 +958,8 @@ impl MixJamApp {
                 .size(12.0)
                 .color(MUTED),
             );
+            ui.add_space(16.0);
+            self.automation_selector(ui);
         });
         ui.add_space(12.0);
         self.timeline_rect = None;
@@ -939,7 +995,7 @@ impl MixJamApp {
         let label_width = 122.0;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
         let inspector_height = if self.selected_clip.is_some() {
-            34.0
+            64.0
         } else {
             0.0
         };
@@ -1093,6 +1149,7 @@ impl MixJamApp {
                                 self.selected_clips.contains(&clip.id),
                                 clip.gain,
                             );
+                            draw_fades(&painter, clip_rect, clip, sample, bar_width);
                         }
                     }
                     // Dim the lanes that Mute or another track's solo silences.
@@ -1114,9 +1171,12 @@ impl MixJamApp {
                     let incoming = match &self.drag {
                         Some(DragItem::Sample(id)) => Some(*id),
                         Some(DragItem::Clip { .. }) => None,
-                        None => self
-                            .selected_sample
-                            .filter(|_| self.place_on_click && !self.erase && response.hovered()),
+                        None => self.selected_sample.filter(|_| {
+                            self.place_on_click
+                                && !self.erase
+                                && self.automation_lane.is_none()
+                                && response.hovered()
+                        }),
                     };
                     if let Some(sample) =
                         incoming.and_then(|id| self.session.library().sample_by_id(id))
@@ -1141,6 +1201,8 @@ impl MixJamApp {
                                 length_ticks,
                                 offset_frames: 0,
                                 gain: 1.0,
+                                fades: Default::default(),
+                                pitch_cents: 0,
                             },
                             rect,
                         );
@@ -1173,6 +1235,11 @@ impl MixJamApp {
                         ],
                         Stroke::new(1.7_f32, ACCENT),
                     );
+                    if let Some(lane) = self.automation_lane {
+                        let rows = &visible_tracks[..occupied_count];
+                        self.automation_lanes(ui, &response, &painter, rect, lane, rows);
+                        return;
+                    }
                     if (response.clicked() || response.double_clicked())
                         && let Some(pos) = response.interact_pointer_pos()
                     {
@@ -2319,6 +2386,469 @@ pub(super) fn sample_details(sample: &Sample, product: Option<Product>) -> Strin
     display_paths(&rows.join("\n"))
 }
 
+impl MixJamApp {
+    /// The arrangement's automation lane: Off, or the lane that the track
+    /// rows show and edit.
+    fn automation_selector(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Automation").size(12.0).color(MUTED));
+        let current = self
+            .automation_lane
+            .map_or_else(|| "Off".to_string(), automation::Lane::label);
+        let mut choice = self.automation_lane;
+        let response = egui::ComboBox::from_id_salt("automation_lane")
+            .selected_text(current)
+            .width(112.0)
+            .show_ui(ui, |ui| {
+                if ui.selectable_label(choice.is_none(), "Off").clicked() {
+                    choice = None;
+                    ui.close();
+                }
+                for lane in automation::Lane::ALL {
+                    if ui
+                        .selectable_label(choice == Some(lane), lane.label())
+                        .clicked()
+                    {
+                        choice = Some(lane);
+                        ui.close();
+                    }
+                }
+            })
+            .response;
+        name_control(response, "Automation lane").on_hover_text(
+            "Show and edit one automation lane on every track. Click a lane to add a point, \
+             drag a point to move it, and double-click or right-click a point to delete it. \
+             Points snap to 1/16 bar; hold Ctrl for single ticks. Off edits clips again.",
+        );
+        if choice != self.automation_lane {
+            self.automation_lane = choice;
+            self.automation_drag = None;
+            self.session.end_automation_gesture();
+        }
+    }
+
+    /// The lane's row rectangle for a track the arrangement shows.
+    fn automation_row(&self, track: usize, rect: Rect) -> Option<Rect> {
+        let row = self.timeline_row_by_track[track]?;
+        Some(Rect::from_min_size(
+            Pos2::new(
+                rect.left(),
+                rect.top() + row as f32 * self.timeline_row_height,
+            ),
+            Vec2::new(rect.width(), self.timeline_row_height),
+        ))
+    }
+
+    fn automation_tick(&self, x: f32, rect: Rect, free: bool) -> u32 {
+        let raw = (x - rect.left()).max(0.0) / self.timeline_bar_width * TICKS_PER_BAR as f32;
+        let step = if free {
+            1.0
+        } else {
+            (TICKS_PER_BAR / 16) as f32
+        };
+        ((raw / step).round() * step) as u32
+    }
+
+    /// Draw `lane` on each row and edit its points with the pointer.
+    fn automation_lanes(
+        &mut self,
+        ui: &egui::Ui,
+        response: &Response,
+        painter: &egui::Painter,
+        rect: Rect,
+        lane: automation::Lane,
+        tracks: &[usize],
+    ) {
+        // Dim the clips so the lines stand out.
+        painter.rect_filled(rect, 0.0, CANVAS.gamma_multiply(0.45));
+        let project = self.session.project();
+        let mut hit = None;
+        let pointer = ui.input(|i| i.pointer.latest_pos());
+        let near = |a: Pos2, b: Pos2| a.distance(b) <= AUTOMATION_REACH;
+        for &track in tracks {
+            let Some(row) = self.automation_row(track, rect) else {
+                continue;
+            };
+            let points = project.tracks[track].automation.lane(lane);
+            let x = |tick: u32| {
+                rect.left() + tick as f32 / TICKS_PER_BAR as f32 * self.timeline_bar_width
+            };
+            if points.is_empty() {
+                // The value the track keeps without points.
+                let value = match lane {
+                    automation::Lane::Send(bus) => project.tracks[track].sends[bus],
+                    _ => 0.0,
+                };
+                let y = automation_y(lane, value, row);
+                painter.add(egui::Shape::dashed_line(
+                    &[Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+                    Stroke::new(1.0_f32, MUTED.gamma_multiply(0.6)),
+                    6.0,
+                    5.0,
+                ));
+                continue;
+            }
+            let mut line = vec![Pos2::new(
+                rect.left(),
+                automation_y(lane, points[0].value, row),
+            )];
+            line.extend(
+                points
+                    .iter()
+                    .map(|point| Pos2::new(x(point.tick), automation_y(lane, point.value, row))),
+            );
+            let last = points[points.len() - 1].value;
+            line.push(Pos2::new(rect.right(), automation_y(lane, last, row)));
+            painter.add(egui::Shape::line(
+                line.clone(),
+                Stroke::new(1.6_f32, ACCENT),
+            ));
+            for (index, point) in line[1..line.len() - 1].iter().enumerate() {
+                let active = self.automation_drag == Some((track, index));
+                let hovered = pointer.is_some_and(|pos| near(*point, pos));
+                if hovered {
+                    hit = Some((track, index));
+                }
+                painter.circle(
+                    *point,
+                    if active || hovered { 4.5 } else { 3.5 },
+                    if active { TEXT } else { ACCENT },
+                    Stroke::new(1.0_f32, CANVAS),
+                );
+            }
+        }
+        if let Some((track, index)) = self.automation_drag.or(hit)
+            && let Some(point) = project.tracks[track].automation.lane(lane).get(index)
+        {
+            response.clone().on_hover_text(format!(
+                "Track {}, bar {:.2}: {}",
+                track + 1,
+                f64::from(point.tick) / f64::from(TICKS_PER_BAR) + 1.0,
+                lane.format(point.value)
+            ));
+        }
+        let free = ui.input(|i| i.modifiers.ctrl);
+        // A click on a lane adds a point; a drag from a lane adds one and moves it.
+        if response.drag_started()
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        {
+            let hit = self.automation_hit(origin, rect, lane, tracks);
+            let track = hit.map(|(track, _)| track).or_else(|| {
+                self.timeline_track_at(origin)
+                    .filter(|track| tracks.contains(track))
+            });
+            if let Some(track) = track {
+                match self.session.begin_automation_gesture(track, lane) {
+                    Ok(()) => {
+                        self.automation_drag =
+                            hit.or_else(|| self.automation_add(origin, rect, lane, tracks, free));
+                        if self.automation_drag.is_none() {
+                            self.session.end_automation_gesture();
+                        }
+                    }
+                    Err(error) => self.error(error),
+                }
+            }
+        }
+        if let Some((track, index)) = self.automation_drag {
+            if response.dragged()
+                && let Some(pos) = pointer
+                && let Some(row) = self.automation_row(track, rect)
+            {
+                let mut points = self.session.project().tracks[track]
+                    .automation
+                    .lane(lane)
+                    .to_vec();
+                if index < points.len() {
+                    let low = index
+                        .checked_sub(1)
+                        .map_or(0, |before| points[before].tick + 1);
+                    let high = points
+                        .get(index + 1)
+                        .map_or(MAX_TICKS, |after| after.tick - 1);
+                    let tick = self.automation_tick(pos.x, rect, free);
+                    let point = automation::Point {
+                        tick: if low <= high {
+                            tick.clamp(low, high)
+                        } else {
+                            points[index].tick
+                        },
+                        value: automation_value(lane, pos.y, row),
+                    };
+                    if points[index] != point {
+                        points[index] = point;
+                        let result = self.session.edit(EditCommand::SetAutomation {
+                            track,
+                            lane,
+                            points,
+                        });
+                        self.apply(result);
+                    }
+                }
+            }
+            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+                self.automation_drag = None;
+                self.session.end_automation_gesture();
+            }
+        }
+        if let Some(pos) = response.interact_pointer_pos() {
+            let hit = self.automation_hit(pos, rect, lane, tracks);
+            if response.double_clicked() || response.secondary_clicked() {
+                if let Some((track, index)) = hit {
+                    let mut points = self.session.project().tracks[track]
+                        .automation
+                        .lane(lane)
+                        .to_vec();
+                    points.remove(index);
+                    let result = self.session.edit(EditCommand::SetAutomation {
+                        track,
+                        lane,
+                        points,
+                    });
+                    self.apply(result);
+                }
+            } else if response.clicked() && hit.is_none() {
+                self.automation_add(pos, rect, lane, tracks, free);
+            }
+        }
+    }
+
+    /// The point of `lane` within reach of `pos`, as its track and index.
+    fn automation_hit(
+        &self,
+        pos: Pos2,
+        rect: Rect,
+        lane: automation::Lane,
+        tracks: &[usize],
+    ) -> Option<(usize, usize)> {
+        tracks.iter().find_map(|&track| {
+            let row = self.automation_row(track, rect)?;
+            self.session.project().tracks[track]
+                .automation
+                .lane(lane)
+                .iter()
+                .position(|point| {
+                    let at = Pos2::new(
+                        rect.left()
+                            + point.tick as f32 / TICKS_PER_BAR as f32 * self.timeline_bar_width,
+                        automation_y(lane, point.value, row),
+                    );
+                    at.distance(pos) <= AUTOMATION_REACH
+                })
+                .map(|index| (track, index))
+        })
+    }
+
+    /// Add a point of `lane` where `pos` is, or set the value of the point
+    /// already at its tick. Returns the point's track and index.
+    fn automation_add(
+        &mut self,
+        pos: Pos2,
+        rect: Rect,
+        lane: automation::Lane,
+        tracks: &[usize],
+        free: bool,
+    ) -> Option<(usize, usize)> {
+        let track = self
+            .timeline_track_at(pos)
+            .filter(|track| tracks.contains(track))?;
+        let row = self.automation_row(track, rect)?;
+        let tick = self.automation_tick(pos.x, rect, free);
+        let value = automation_value(lane, pos.y, row);
+        let mut points = self.session.project().tracks[track]
+            .automation
+            .lane(lane)
+            .to_vec();
+        let index = points.partition_point(|point| point.tick < tick);
+        if points.get(index).is_some_and(|point| point.tick == tick) {
+            points[index].value = value;
+        } else {
+            points.insert(index, automation::Point { tick, value });
+        }
+        let result = self.session.edit(EditCommand::SetAutomation {
+            track,
+            lane,
+            points,
+        });
+        let added = result.is_ok();
+        self.apply(result);
+        added.then_some((track, index))
+    }
+}
+
+/// How far from a point, in points, the pointer still takes it.
+const AUTOMATION_REACH: f32 = 7.0;
+
+/// Where a lane value sits in a track row, 4 points in from its edges.
+fn automation_y(lane: automation::Lane, value: f32, row: Rect) -> f32 {
+    let (low, high) = lane.range();
+    let inner = row.shrink2(Vec2::new(0.0, 4.0));
+    inner.bottom() - (value - low) / (high - low) * inner.height()
+}
+
+/// The lane value at a height in a track row, rounded to the lane's steps.
+fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
+    let (low, high) = lane.range();
+    let inner = row.shrink2(Vec2::new(0.0, 4.0));
+    let value = low + (inner.bottom() - y) / inner.height() * (high - low);
+    let value = match lane {
+        automation::Lane::Volume => (value * 2.0).round() / 2.0,
+        automation::Lane::Send(_) => (value * 100.0).round() / 100.0,
+        // The middle opens the filter.
+        automation::Lane::Filter if value.abs() < 0.04 => 0.0,
+        automation::Lane::Filter => (value * 100.0).round() / 100.0,
+    };
+    value.clamp(low, high)
+}
+
+/// Shade a clip's fades above their curves. The fade out ends where the
+/// clip's sound ends, which can be before the clip's end.
+fn draw_fades(
+    painter: &egui::Painter,
+    rect: Rect,
+    clip: &Clip,
+    sample: Option<&Sample>,
+    bar_width: f32,
+) {
+    if clip.fades.is_none() {
+        return;
+    }
+    let tick_width = bar_width / TICKS_PER_BAR as f32;
+    let mut sound_end = rect.right();
+    if let Some(sample) = sample.filter(|sample| sample.sample_rate > 0) {
+        let frames = f64::from(sample.frame_count.saturating_sub(clip.offset_frames));
+        let ticks =
+            frames / f64::from(sample.sample_rate) * sample.source_bpm * f64::from(TICKS_PER_BAR)
+                / 240.0;
+        sound_end = sound_end.min(rect.left() + ticks as f32 * tick_width);
+    }
+    let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect));
+    let fade_in = clip.fades.fade_in;
+    let fade_out = clip.fades.fade_out;
+    let spans = [
+        (
+            rect.left(),
+            rect.left() + fade_in.ticks as f32 * tick_width,
+            fade_in,
+            true,
+        ),
+        (
+            sound_end - fade_out.ticks as f32 * tick_width,
+            sound_end,
+            fade_out,
+            false,
+        ),
+    ];
+    for (from, to, fade, rising) in spans {
+        if fade.ticks == 0 || to <= from {
+            continue;
+        }
+        const STEPS: usize = 24;
+        let points: Vec<Pos2> = (0..=STEPS)
+            .map(|step| {
+                let t = step as f32 / STEPS as f32;
+                let gain = fade.curve.gain(if rising { t } else { 1.0 - t });
+                Pos2::new(from + (to - from) * t, rect.bottom() - gain * rect.height())
+            })
+            .collect();
+        let mut mesh = egui::Mesh::default();
+        let shade = Color32::from_black_alpha(110);
+        for pair in points.windows(2) {
+            let base = mesh.vertices.len() as u32;
+            mesh.colored_vertex(Pos2::new(pair[0].x, rect.top()), shade);
+            mesh.colored_vertex(pair[0], shade);
+            mesh.colored_vertex(Pos2::new(pair[1].x, rect.top()), shade);
+            mesh.colored_vertex(pair[1], shade);
+            mesh.add_triangle(base, base + 1, base + 2);
+            mesh.add_triangle(base + 1, base + 3, base + 2);
+        }
+        clipped.add(egui::Shape::mesh(mesh));
+        clipped.add(egui::Shape::line(
+            points,
+            Stroke::new(1.0_f32, Color32::from_black_alpha(190)),
+        ));
+    }
+}
+
+/// Ticks in one beat, the unit of the fade controls.
+const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
+
+/// A clip fade's length in beats, at most `room` ticks, and its curve.
+fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> bool {
+    ui.label(format!("Fade {edge} (beats)"));
+    let mut beats = f64::from(fade.ticks) / f64::from(TICKS_PER_BEAT);
+    let mut change = false;
+    if name_control(
+        ui.add(
+            egui::DragValue::new(&mut beats)
+                .range(0.0..=f64::from(room) / f64::from(TICKS_PER_BEAT))
+                .speed(1.0 / 16.0)
+                .max_decimals(3),
+        ),
+        &format!("Clip fade {edge} (beats)"),
+    )
+    .on_hover_text(if edge == "in" {
+        "Fade in from the clip's start, in beats. 0 is no fade."
+    } else {
+        "Fade out to the end of the clip's sound, in beats: the clip's end, or earlier \
+         where the sound runs out. 0 is no fade."
+    })
+    .changed()
+    {
+        fade.ticks = ((beats * f64::from(TICKS_PER_BEAT)).round() as u32).min(room);
+        change = true;
+    }
+    let name = format!("Clip fade {edge} curve");
+    let response = egui::ComboBox::from_id_salt(&name)
+        .selected_text(fade.curve.label())
+        .width(104.0)
+        .show_ui(ui, |ui| {
+            for curve in FadeCurve::ALL {
+                if ui
+                    .selectable_label(fade.curve == curve, curve.label())
+                    .clicked()
+                {
+                    change |= fade.curve != curve;
+                    fade.curve = curve;
+                    ui.close();
+                }
+            }
+        })
+        .response;
+    name_control(response, &name).on_hover_text(
+        "Linear, Equal power for crossfades that keep their loudness, or Exponential, \
+         even steps in decibels like a natural decay.",
+    );
+    change
+}
+
+/// A clip's pitch as semitones and cents. Its timing does not change.
+fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
+    let mut semitones = *cents / 100;
+    let mut fine = *cents % 100;
+    ui.label("Pitch");
+    let mut change = name_control(
+        ui.add(
+            egui::DragValue::new(&mut semitones)
+                .range(-24..=24)
+                .speed(0.1),
+        ),
+        "Clip pitch (semitones)",
+    )
+    .on_hover_text("Transpose the clip in semitones. Its length and timing stay the same.")
+    .changed();
+    ui.label("Cents");
+    change |= name_control(
+        ui.add(egui::DragValue::new(&mut fine).range(-99..=99).speed(0.5)),
+        "Clip pitch (cents)",
+    )
+    .on_hover_text("Fine-tune the clip in cents, hundredths of a semitone.")
+    .changed();
+    if change {
+        *cents = (semitones * 100 + fine).clamp(-MAX_PITCH_CENTS, MAX_PITCH_CENTS);
+    }
+    change
+}
+
 pub(super) fn draw_clip(
     painter: &egui::Painter,
     rect: Rect,
@@ -2602,22 +3132,23 @@ pub(super) fn transport_button(
             );
         }
         TransportIcon::Loop => {
-            let points: Vec<Pos2> = (0..=20)
-                .map(|i| {
-                    let a = 0.4 + i as f32 / 20.0 * 5.3;
-                    center + Vec2::new(a.cos() * 12.0, a.sin() * 8.0)
-                })
-                .collect();
-            painter.add(egui::Shape::line(points, Stroke::new(2.2_f32, color)));
-            painter.add(egui::Shape::convex_polygon(
-                vec![
-                    center + Vec2::new(11.0, 3.0),
-                    center + Vec2::new(4.0, 2.0),
-                    center + Vec2::new(10.0, -4.0),
-                ],
-                color,
-                Stroke::NONE,
-            ));
+            // Two opposed arrows around a rounded rectangle; the second half
+            // is the first turned half a circle.
+            for side in [1.0_f32, -1.0] {
+                let at = |x: f32, y: f32| center + Vec2::new(x, y) * side;
+                let mut points = vec![at(-7.0, 0.5)];
+                points.extend((0..=6).map(|i| {
+                    let a = std::f32::consts::PI * (1.0 + i as f32 / 12.0);
+                    at(-4.0 + 3.0 * a.cos(), -2.0 + 3.0 * a.sin())
+                }));
+                points.push(at(4.5, -5.0));
+                painter.add(egui::Shape::line(points, Stroke::new(2.2_f32, color)));
+                painter.add(egui::Shape::convex_polygon(
+                    vec![at(10.0, -5.0), at(4.0, -9.5), at(4.0, -0.5)],
+                    color,
+                    Stroke::NONE,
+                ));
+            }
         }
     }
     // An outline marks an engaged loop, so the state does not rest on color.

@@ -45,8 +45,12 @@ Do not start a session on the owner's settings unless the owner requests it.
    error message lists the matches.
    Completion criterion: The request selects one control.
 3. Use `place`, `move_clips`, `delete_clips`, `select`, `seek`, and `set_loop`
-   for the arrangement lanes. Tracks and bars count from 1.
-   Completion criterion: The reply lists the affected clip ids.
+   for the arrangement lanes. Tracks and bars count from 1. Use `automate`
+   to replace a track's volume, send, or filter automation lane. Edit a
+   clip's fades and pitch with `select clips=` and the `Clip fade` and
+   `Clip pitch` controls.
+   Completion criterion: The reply lists the affected clip ids, or `state`
+   shows the track's automation.
 4. Use `select sample=` before you open Effect Studio, Step synth, Sample
    editor, or Time Stretcher. The selected sound is the source of these tools.
    Completion criterion: `state` shows the sound in `selection.sample`.

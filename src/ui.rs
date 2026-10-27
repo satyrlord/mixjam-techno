@@ -12,6 +12,8 @@ mod controls;
 mod dialog;
 #[path = "ui/effects.rs"]
 mod effects;
+#[path = "ui/fx.rs"]
+mod fx;
 #[path = "ui/master.rs"]
 mod master;
 #[path = "ui/mixer.rs"]
@@ -38,7 +40,7 @@ use mixjam_techno::application::{
     Clip, EQ_BAND_MAX, EQ_FREQUENCIES, EditCommand, EffectsState, LibraryView, MasterChain,
     MeterReading, MissingReference, MissingSample, Pcm, PedalKind, Product, Project,
     SUPPORTED_BPMS, Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR, TRACK_COUNT,
-    TrackSwitch,
+    TrackSwitch, automation,
 };
 
 /// What the filtered palette depends on.
@@ -61,10 +63,11 @@ enum BottomModule {
     Sounds,
     Mixer,
     Mastering,
+    Effects,
 }
 
 impl BottomModule {
-    const ALL: [Self; 3] = [Self::Sounds, Self::Mixer, Self::Mastering];
+    const ALL: [Self; 4] = [Self::Sounds, Self::Mixer, Self::Mastering, Self::Effects];
     /// The panel minimum for a window whose content area is `available` points
     /// high. Mixer prefers 400 points and Mastering the height of its whole
     /// board. A short window reduces either, down to 370, so the arrangement
@@ -78,6 +81,7 @@ impl BottomModule {
             Self::Mastering => {
                 (available - ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
             }
+            Self::Effects => (available - ARRANGEMENT_RESERVE).clamp(370.0, fx::MODULE_HEIGHT),
         }
     }
     fn label(self) -> &'static str {
@@ -85,6 +89,7 @@ impl BottomModule {
             Self::Sounds => "Sounds",
             Self::Mixer => "Mixer",
             Self::Mastering => "Mastering",
+            Self::Effects => "Effects",
         }
     }
     fn key(self) -> &'static str {
@@ -92,6 +97,7 @@ impl BottomModule {
             Self::Sounds => "sounds",
             Self::Mixer => "mixer",
             Self::Mastering => "mastering",
+            Self::Effects => "effects",
         }
     }
 }
@@ -297,6 +303,11 @@ pub struct MixJamApp {
     library_product: Product,
     rail_icons: Option<Result<Arc<RailIcons>, String>>,
     erase: bool,
+    /// The automation lane that the arrangement shows and edits, if any.
+    /// While one shows, the lanes edit its points instead of clips.
+    automation_lane: Option<automation::Lane>,
+    /// The track and index of the automation point being dragged.
+    automation_drag: Option<(usize, usize)>,
     zoom: f32,
     follow_playhead: bool,
     last_follow_position: Option<(u32, f32, f32)>,
@@ -329,6 +340,8 @@ pub struct MixJamApp {
     master_reveal: Option<PedalKind>,
     /// Replacing the project invalidates the board's active widget gestures.
     master_view_generation: u64,
+    /// An FX bus that the Effects module brings into view on its next frame.
+    fx_reveal: Option<usize>,
     show_step_synth: bool,
     show_sample_edit: bool,
     show_stretch: bool,
@@ -476,11 +489,15 @@ impl MixJamApp {
                 .then(|| session.library().samples.first().map(|sample| sample.id))
                 .flatten()
         };
+        // The clip row shows under the arrangement for a selected clip.
+        let capture_clip = (capture_view == "clip-fades")
+            .then(|| session.project().clips.first().map(|clip| clip.id))
+            .flatten();
         Self {
             session,
             selected_sample,
-            selected_clip: None,
-            selected_clips: BTreeSet::new(),
+            selected_clip: capture_clip,
+            selected_clips: capture_clip.into_iter().collect(),
             place_on_click: true,
             discard_take_armed: false,
             context_missing_sample: None,
@@ -493,6 +510,8 @@ impl MixJamApp {
                 BottomModule::Mixer
             } else if capture_view.starts_with("master") {
                 BottomModule::Mastering
+            } else if capture_view.starts_with("fx") {
+                BottomModule::Effects
             } else {
                 BottomModule::Sounds
             },
@@ -516,6 +535,8 @@ impl MixJamApp {
             library_product: Product::T1,
             rail_icons: None,
             erase: false,
+            automation_lane: (capture_view == "automation").then_some(automation::Lane::Volume),
+            automation_drag: None,
             zoom: 1.0,
             follow_playhead: true,
             last_follow_position: None,
@@ -553,6 +574,7 @@ impl MixJamApp {
                 _ => None,
             },
             master_view_generation: 0,
+            fx_reveal: None,
             show_step_synth: matches!(
                 capture_view.as_str(),
                 "step-synth" | "step-synth-effects" | "missing-step-synth"
@@ -620,6 +642,8 @@ impl MixJamApp {
         // Project and library replacement invalidate every in-flight gesture.
         self.master_view_generation = self.master_view_generation.wrapping_add(1);
         self.drag = None;
+        self.automation_drag = None;
+        self.session.end_automation_gesture();
         self.selection_origin = None;
         self.selection_base.clear();
         self.loop_start = None;
@@ -960,6 +984,8 @@ impl MixJamApp {
     }
 
     fn history_step(&mut self, redo: bool) {
+        self.automation_drag = None;
+        self.session.end_automation_gesture();
         match self.session.history_step(redo) {
             Ok(true) => {
                 self.reconcile_selection();
@@ -1163,6 +1189,8 @@ impl MixJamApp {
         }
         if transport && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.drag = None;
+            self.automation_drag = None;
+            self.session.end_automation_gesture();
             self.erase = false;
             self.place_on_click = false;
         }
@@ -1324,6 +1352,10 @@ impl MixJamApp {
     }
 
     fn finish_drag(&mut self, ctx: &egui::Context) {
+        if self.automation_drag.is_some() && !ctx.input(|i| i.pointer.primary_down()) {
+            self.automation_drag = None;
+            self.session.end_automation_gesture();
+        }
         let Some(drag) = &self.drag else {
             return;
         };

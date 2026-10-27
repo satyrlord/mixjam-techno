@@ -1,5 +1,7 @@
 use crate::{
-    engine::{Project, SOURCE_BPM},
+    automation::{Envelope, Filter},
+    engine::{FadeCurve, Project, SOURCE_BPM},
+    fx::{BUSES, FxBuses, ReturnsProcessor},
     library::Library,
     master::{MasterChain, MasterControl, MasterProcessor},
 };
@@ -119,6 +121,21 @@ pub(crate) fn visit_wav_samples(
     Ok((spec, count / u32::from(spec.channels)))
 }
 
+/// Stateful processing belongs to a reader, never to the shared audio data.
+pub struct RenderState {
+    filters: [Filter; crate::engine::TRACK_COUNT],
+    next_frame: Option<u64>,
+}
+
+impl Default for RenderState {
+    fn default() -> Self {
+        Self {
+            filters: [Filter::default(); crate::engine::TRACK_COUNT],
+            next_frame: None,
+        }
+    }
+}
+
 /// Audio that a player reads in blocks: decoded PCM or a mix made on demand.
 pub trait Frames: Send + Sync {
     fn channels(&self) -> u16;
@@ -127,6 +144,33 @@ pub trait Frames: Send + Sync {
     /// Fill `out` with interleaved samples from `first_frame` onward.
     /// Samples past the end are silent.
     fn read(&self, first_frame: u64, out: &mut [f32]);
+    /// The tempo of a song mix, whose sends feed the FX buses.
+    fn tempo(&self) -> Option<f64> {
+        None
+    }
+    /// Fill `out` with the dry stereo mix, not yet held to full scale, and
+    /// `sends` with the FX buses' feeds, `2 * BUSES` interleaved channels a
+    /// frame. False, with `sends` untouched, when nothing in the block sends.
+    fn read_sends(&self, first_frame: u64, out: &mut [f32], _sends: &mut [f32]) -> bool {
+        self.read(first_frame, out);
+        false
+    }
+    /// Read a block with history private to this playback or export.
+    fn read_block(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
+        sends: Option<&mut [f32]>,
+        _state: &mut RenderState,
+    ) -> bool {
+        match sends {
+            Some(sends) => self.read_sends(first_frame, out, sends),
+            None => {
+                self.read(first_frame, out);
+                false
+            }
+        }
+    }
 }
 
 impl Frames for Pcm {
@@ -158,6 +202,172 @@ struct Voice {
     step: f64,
     /// Left and right gains; `None` for a disabled output.
     channel_gains: [Option<f32>; 2],
+    /// The track's sends, applied after its gains.
+    sends: [f32; BUSES],
+    /// Fade lengths in frames. The fade out ends at `sound_end`, the clip's
+    /// end or the earlier end of its source audio.
+    fade_in: u64,
+    fade_out: u64,
+    curves: [FadeCurve; 2],
+    sound_end: u64,
+}
+
+impl Voice {
+    /// Add the voice to `out`, stereo frames from `first_frame`, and to
+    /// `sends` when given.
+    fn add(&self, first_frame: u64, out: &mut [f32], mut sends: Option<&mut [f32]>) {
+        let block_end = first_frame + (out.len() / 2) as u64;
+        let from = self.start.max(first_frame);
+        let to = self.end.min(block_end);
+        if from >= to {
+            return;
+        }
+        let source = &*self.source;
+        let source_frames = source.frames() as usize;
+        let source_channels = source.channels as usize;
+        let sending = sends.is_some() && self.sends.iter().any(|send| *send > 0.0);
+        for frame in from..to {
+            let pos = self.offset_frames as f64 + (frame - self.start) as f64 * self.step;
+            let index = pos.floor() as usize;
+            if index >= source_frames {
+                break;
+            }
+            let next = (index + 1).min(source_frames - 1);
+            let fraction = (pos - index as f64) as f32;
+            let at = (frame - first_frame) as usize;
+            let fade = self.fade(frame);
+            for (channel, channel_gain) in self.channel_gains.iter().enumerate() {
+                let Some(channel_gain) = channel_gain else {
+                    continue;
+                };
+                let ch = if source_channels == 1 { 0 } else { channel };
+                let a = source.samples[index * source_channels + ch];
+                let b = source.samples[next * source_channels + ch];
+                let value = (a + (b - a) * fraction) * channel_gain * fade;
+                out[at * 2 + channel] += value;
+                if sending && let Some(sends) = sends.as_deref_mut() {
+                    for (bus, send) in self.sends.iter().enumerate() {
+                        sends[at * 2 * BUSES + bus * 2 + channel] += value * send;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The fade gain at an output frame within the clip.
+    fn fade(&self, frame: u64) -> f32 {
+        let mut gain = 1.0;
+        let since = frame - self.start;
+        if since < self.fade_in {
+            gain = self.curves[0].gain((since as f32 + 0.5) / self.fade_in as f32);
+        }
+        let left = self.sound_end.saturating_sub(frame);
+        if left <= self.fade_out {
+            gain *= self.curves[1].gain((left as f32 - 0.5) / self.fade_out as f32);
+        }
+        gain
+    }
+}
+
+/// A track send: the knob's fixed amount, or its automation lane.
+enum SendLevel {
+    Fixed(f32),
+    Moving(Envelope),
+}
+
+impl SendLevel {
+    fn at(&self, frame: u64) -> f32 {
+        match self {
+            Self::Fixed(level) => *level,
+            Self::Moving(envelope) => envelope.at(frame),
+        }
+    }
+}
+
+/// A track with automation. Its voices mix into a short buffer that its
+/// filter, volume, and sends then shape, in that order.
+struct AutomatedTrack {
+    voices: Vec<Voice>,
+    volume: Option<Envelope>,
+    sends: [SendLevel; BUSES],
+    filter: Option<Envelope>,
+}
+
+impl AutomatedTrack {
+    /// The stack buffer used to sum voices before frame-by-frame automation.
+    const CHUNK: usize = 128;
+
+    fn new(track: &crate::engine::Track, frames_per_tick: f64) -> Self {
+        let automation = &track.automation;
+        Self {
+            voices: Vec::new(),
+            volume: Envelope::new(&automation.volume, frames_per_tick),
+            sends: std::array::from_fn(|bus| {
+                Envelope::new(&automation.sends[bus], frames_per_tick)
+                    .map_or(SendLevel::Fixed(track.sends[bus]), SendLevel::Moving)
+            }),
+            filter: Envelope::new(&automation.filter, frames_per_tick),
+        }
+    }
+
+    fn sends(&self) -> bool {
+        self.sends.iter().any(|send| match send {
+            SendLevel::Fixed(level) => *level > 0.0,
+            SendLevel::Moving(envelope) => envelope.any_positive(),
+        })
+    }
+
+    /// Add the track to `out` and `sends`. Runs on the audio thread: the
+    /// buffer is on the stack.
+    fn add(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
+        mut sends: Option<&mut [f32]>,
+        filter: &mut Filter,
+    ) {
+        let frames = out.len() / 2;
+        let mut buffer = [0.0_f32; Self::CHUNK * 2];
+        for chunk in (0..frames).step_by(Self::CHUNK) {
+            let count = Self::CHUNK.min(frames - chunk);
+            let at = first_frame + chunk as u64;
+            let buffer = &mut buffer[..count * 2];
+            buffer.fill(0.0);
+            for voice in &self.voices {
+                voice.add(at, buffer, None);
+            }
+            for index in 0..count {
+                let frame = at + index as u64;
+                if let Some(envelope) = &self.filter {
+                    filter.process(
+                        &mut buffer[index * 2..index * 2 + 2],
+                        envelope.at(frame),
+                        Mix::SAMPLE_RATE as f32,
+                    );
+                }
+                let gain = self.volume.as_ref().map_or(1.0, |envelope| {
+                    crate::automation::volume_gain(envelope.at(frame))
+                });
+                for channel in 0..2 {
+                    let value = buffer[index * 2 + channel] * gain;
+                    buffer[index * 2 + channel] = value;
+                    out[(chunk + index) * 2 + channel] += value;
+                }
+            }
+            let Some(sends) = sends.as_deref_mut() else {
+                continue;
+            };
+            for (bus, send) in self.sends.iter().enumerate() {
+                for index in 0..count {
+                    let level = send.at(at + index as u64);
+                    for channel in 0..2 {
+                        sends[(chunk + index) * 2 * BUSES + bus * 2 + channel] +=
+                            buffer[index * 2 + channel] * level;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// A project prepared for rendering. It holds the decoded sources and mixes
@@ -166,6 +376,11 @@ struct Voice {
 pub struct Mix {
     frames: u64,
     voices: Vec<Voice>,
+    /// The tracks with automation, which hold their own voices.
+    automated: Vec<AutomatedTrack>,
+    bpm: f64,
+    /// Whether any voice sends to an FX bus.
+    sends: bool,
 }
 
 impl Mix {
@@ -173,9 +388,10 @@ impl Mix {
     /// The longest mix that `to_pcm` holds in memory: about 12 minutes.
     const MAX_PCM_FRAMES: u64 = 32_000_000;
 
+    /// `samples` holds each source at each pitch that a clip plays it at.
     fn new(
         project: &Project,
-        samples: &HashMap<u32, Arc<Pcm>>,
+        samples: &HashMap<(u32, i32), Arc<Pcm>>,
         source_tempos: &HashMap<u32, f64>,
     ) -> Result<Self, String> {
         project.validate()?;
@@ -190,15 +406,17 @@ impl Mix {
         // Many clips share one source: check each source's audio once.
         let mut validated = std::collections::HashSet::new();
         let mut voices = Vec::new();
+        let mut automated = Vec::new();
+        let mut automated_index = [None; crate::engine::TRACK_COUNT];
         let any_solo = project.any_solo();
         for clip in &project.clips {
             if missing.contains(&clip.sample_id) {
                 continue;
             }
             let source = samples
-                .get(&clip.sample_id)
+                .get(&(clip.sample_id, clip.pitch_cents))
                 .ok_or_else(|| format!("Sample {} is missing.", clip.sample_id))?;
-            if validated.insert(clip.sample_id) {
+            if validated.insert((clip.sample_id, clip.pitch_cents)) {
                 source.validate()?;
             }
             let track = &project.tracks[clip.track];
@@ -221,8 +439,11 @@ impl Mix {
                 return Err("The source tempo cannot be represented for sample playback.".into());
             }
             let gain = clip.gain * track.effective_gain() * project.master_gain;
+            let frames_of = |ticks: u32| (f64::from(ticks) * frames_per_tick).round() as u64;
+            let source_left =
+                (source.frames() as f64 - f64::from(clip.offset_frames)).max(0.0) / step;
             // Pan and channel enables depend only on the track: resolve them once per clip.
-            voices.push(Voice {
+            let voice = Voice {
                 source: Arc::clone(source),
                 start,
                 end,
@@ -236,29 +457,53 @@ impl Mix {
                         .right_enabled
                         .then(|| gain * (1.0 + track.pan.min(0.0))),
                 ],
+                sends: track.sends,
+                fade_in: frames_of(clip.fades.fade_in.ticks),
+                fade_out: frames_of(clip.fades.fade_out.ticks),
+                curves: [clip.fades.fade_in.curve, clip.fades.fade_out.curve],
+                sound_end: end.min(start + source_left.ceil() as u64),
+            };
+            if track.automation.is_empty() {
+                voices.push(voice);
+                continue;
+            }
+            let index = *automated_index[clip.track].get_or_insert_with(|| {
+                automated.push(AutomatedTrack::new(track, frames_per_tick));
+                automated.len() - 1
             });
+            automated[index].voices.push(voice);
         }
-        Ok(Self { frames, voices })
+        let sends = voices
+            .iter()
+            .any(|voice| voice.sends.iter().any(|send| *send > 0.0))
+            || automated.iter().any(AutomatedTrack::sends);
+        Ok(Self {
+            frames,
+            voices,
+            automated,
+            bpm: project.bpm,
+            sends,
+        })
     }
 
     pub fn frames(&self) -> u64 {
         self.frames
     }
 
-    /// The whole mix in memory, through the master pedalboard. Long songs play
-    /// and export through `read` and `write_wav`, which have no length limit.
-    /// Pedals that delay the sound run on past the end, and the delay is
-    /// cut from the start, so the result lines up with the song.
-    pub fn to_pcm(&self, master: &MasterChain) -> Result<Pcm, String> {
+    /// The whole mix in memory, through the FX buses and the master
+    /// pedalboard. Long songs play and export through `read` and
+    /// `write_wav`, which have no length limit. Pedals that delay the sound
+    /// run on past the end, and the delay is cut from the start, so the
+    /// result lines up with the song; the buses' tails ring on after it.
+    pub fn to_pcm(&self, master: &MasterChain, fx: &FxBuses) -> Result<Pcm, String> {
         if self.frames > Self::MAX_PCM_FRAMES {
             return Err("This song is too long to hold in memory. Play or export it.".into());
         }
-        let mut processor = MasterProcessor::new(master);
-        let latency = processor.latency();
-        let mut samples = vec![0.0; (self.frames as usize + latency) * 2];
-        self.read(0, &mut samples);
-        processor.process(&mut samples);
-        samples.drain(..latency * 2);
+        let mut samples = Vec::new();
+        self.render(master, fx, |block| {
+            samples.extend_from_slice(block);
+            Ok(())
+        })?;
         Ok(Pcm {
             sample_rate: Self::SAMPLE_RATE,
             channels: 2,
@@ -266,12 +511,80 @@ impl Mix {
         })
     }
 
-    /// Write stereo PCM16 through the master pedalboard, mixing one block at a time.
-    pub fn write_wav(&self, path: &Path, master: &MasterChain) -> Result<(), String> {
+    /// Mix the song block by block through the buses and the board and hand
+    /// each finished block to `write`. The output starts with the song's
+    /// first frame and ends after the buses' tails, at most `TAIL_LIMIT`
+    /// frames past the song.
+    fn render(
+        &self,
+        master: &MasterChain,
+        fx: &FxBuses,
+        mut write: impl FnMut(&[f32]) -> Result<(), String>,
+    ) -> Result<(), String> {
         const BLOCK_FRAMES: u64 = 65_536;
+        /// Tails go in playback's short blocks, so the output ends soon after
+        /// they die, at the same frame as playback's.
+        const TAIL_BLOCK: u64 = PlaybackSource::BLOCK_FRAMES as u64;
+        let mut returns =
+            (self.sends && fx.is_active()).then(|| ReturnsProcessor::new(fx, self.bpm));
+        let mut master = MasterProcessor::new(master);
+        // The pedals run on past the end by their delay, which is cut
+        // from the start.
+        let latency = master.latency() as u64;
+        let mut block = vec![0.0; BLOCK_FRAMES as usize * 2];
+        let mut sends = vec![0.0; BLOCK_FRAMES as usize * 2 * BUSES];
+        // Frames fed into the board so far, and of them the tail's.
+        let (mut position, mut tail) = (0, 0);
+        let mut state = RenderState::default();
+        loop {
+            let ringing = returns.as_ref().is_some_and(ReturnsProcessor::ringing)
+                && tail < crate::fx::TAIL_LIMIT;
+            let count = if position < self.frames {
+                (self.frames - position).min(BLOCK_FRAMES)
+            } else if ringing {
+                (crate::fx::TAIL_LIMIT - tail).min(TAIL_BLOCK)
+            } else if position < self.frames + tail + latency {
+                (self.frames + tail + latency - position).min(BLOCK_FRAMES)
+            } else {
+                return Ok(());
+            } as usize;
+            let samples = &mut block[..count * 2];
+            if position < self.frames {
+                match &mut returns {
+                    Some(returns) => {
+                        let sends = &mut sends[..count * 2 * BUSES];
+                        let sending = self.read_block(position, samples, Some(sends), &mut state);
+                        returns.process(samples, sending.then_some(&*sends));
+                    }
+                    None => {
+                        self.read_block(position, samples, None, &mut state);
+                    }
+                }
+            } else {
+                samples.fill(0.0);
+                if let Some(returns) = returns.as_mut().filter(|_| ringing) {
+                    returns.process(samples, None);
+                    tail += count as u64;
+                }
+            }
+            master.process(samples);
+            let skip = latency.saturating_sub(position).min(count as u64) as usize;
+            write(&samples[skip * 2..])?;
+            position += count as u64;
+        }
+    }
+
+    /// Write stereo PCM16 through the FX buses and the master pedalboard,
+    /// mixing one block at a time.
+    pub fn write_wav(&self, path: &Path, master: &MasterChain, fx: &FxBuses) -> Result<(), String> {
         // Both the data chunk and the RIFF size are 32-bit. Stereo PCM16
         // uses four bytes per frame plus 36 bytes in the RIFF payload.
-        if self.frames > (u64::from(u32::MAX) - 36) / 4 {
+        let tail = if self.sends && fx.is_active() {
+            crate::fx::TAIL_LIMIT
+        } else {
+            0
+        };
+        if self.frames + tail > (u64::from(u32::MAX) - 36) / 4 {
             return Err("This song is too long for a WAV file.".into());
         }
         let spec = hound::WavSpec {
@@ -283,26 +596,40 @@ impl Mix {
         crate::atomic_file::write_with(path, |file| {
             let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)
                 .map_err(|e| e.to_string())?;
-            let mut block = vec![0.0; BLOCK_FRAMES as usize * 2];
-            let mut master = MasterProcessor::new(master);
-            // The pedals run on past the end by their delay, which is cut
-            // from the start, as in `to_pcm`.
-            let latency = master.latency() as u64;
-            let mut frame = 0;
-            while frame < self.frames + latency {
-                let count = (self.frames + latency - frame).min(BLOCK_FRAMES) as usize;
-                self.read(frame, &mut block[..count * 2]);
-                master.process(&mut block[..count * 2]);
-                let skip = latency.saturating_sub(frame).min(count as u64) as usize;
-                for &sample in &block[skip * 2..count * 2] {
+            self.render(master, fx, |block| {
+                block.iter().try_for_each(|&sample| {
                     writer
                         .write_sample(float_to_i16(sample))
-                        .map_err(|e| e.to_string())?;
-                }
-                frame += count as u64;
-            }
+                        .map_err(|e| e.to_string())
+                })
+            })?;
             writer.finalize().map_err(|e| e.to_string())
         })
+    }
+
+    /// Mix voices into `out`, and into `sends` when given and any voice sends.
+    /// Runs on the audio thread during playback: no allocation and no locks.
+    fn mix(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
+        mut sends: Option<&mut [f32]>,
+        state: &mut RenderState,
+    ) {
+        if state.next_frame != Some(first_frame) {
+            state.filters.fill(Filter::default());
+        }
+        out.fill(0.0);
+        if let Some(sends) = sends.as_deref_mut() {
+            sends.fill(0.0);
+        }
+        for voice in &self.voices {
+            voice.add(first_frame, out, sends.as_deref_mut());
+        }
+        for (track, filter) in self.automated.iter().zip(&mut state.filters) {
+            track.add(first_frame, out, sends.as_deref_mut(), filter);
+        }
+        state.next_frame = Some(first_frame + (out.len() / 2) as u64);
     }
 }
 
@@ -318,52 +645,87 @@ impl Frames for Mix {
     }
     /// Runs on the audio thread during playback: no allocation and no locks.
     fn read(&self, first_frame: u64, out: &mut [f32]) {
-        out.fill(0.0);
-        let block_end = first_frame + (out.len() / 2) as u64;
-        for voice in &self.voices {
-            let from = voice.start.max(first_frame);
-            let to = voice.end.min(block_end);
-            if from >= to {
-                continue;
-            }
-            let source = &*voice.source;
-            let source_frames = source.frames() as usize;
-            let source_channels = source.channels as usize;
-            for frame in from..to {
-                let pos = voice.offset_frames as f64 + (frame - voice.start) as f64 * voice.step;
-                let index = pos.floor() as usize;
-                if index >= source_frames {
-                    break;
-                }
-                let next = (index + 1).min(source_frames - 1);
-                let fraction = (pos - index as f64) as f32;
-                let out_frame = (frame - first_frame) as usize * 2;
-                for (channel, channel_gain) in voice.channel_gains.iter().enumerate() {
-                    let Some(channel_gain) = channel_gain else {
-                        continue;
-                    };
-                    let ch = if source_channels == 1 { 0 } else { channel };
-                    let a = source.samples[index * source_channels + ch];
-                    let b = source.samples[next * source_channels + ch];
-                    out[out_frame + channel] += (a + (b - a) * fraction) * channel_gain;
-                }
-            }
-        }
+        self.read_block(first_frame, out, None, &mut RenderState::default());
+    }
+    fn read_block(
+        &self,
+        first_frame: u64,
+        out: &mut [f32],
+        sends: Option<&mut [f32]>,
+        state: &mut RenderState,
+    ) -> bool {
+        let want_sends = sends.is_some();
+        self.mix(
+            first_frame,
+            out,
+            if self.sends { sends } else { None },
+            state,
+        );
         // Saturation is the reconstruction policy. Original mixer rounding and resampling remain to be measured.
-        for x in out {
-            *x = x.clamp(-1.0, 1.0);
+        if !want_sends {
+            for x in out {
+                *x = x.clamp(-1.0, 1.0);
+            }
         }
+        self.sends && want_sends
+    }
+    fn tempo(&self) -> Option<f64> {
+        Some(self.bpm)
+    }
+    fn read_sends(&self, first_frame: u64, out: &mut [f32], sends: &mut [f32]) -> bool {
+        self.read_block(first_frame, out, Some(sends), &mut RenderState::default())
     }
 }
 
 /// Render a whole project in memory. Use `prepare_project` for a song of any length.
 pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, String> {
-    prepare_project(project, library)?.to_pcm(&project.master)
+    prepare_project(project, library)?.to_pcm(&project.master, &project.fx)
 }
 
 /// Decode a project's sources and prepare its mix.
 pub fn prepare_project(project: &Project, library: &Library) -> Result<Mix, String> {
     prepare_project_reusing(project, library, &mut HashMap::new())
+}
+
+/// A decoded source at one clip pitch in cents. Pitch 0 is the source as it is.
+pub(crate) type SourceKey = (u32, i32);
+
+/// Fill `decoded` with exactly the sources and pitches that the project's
+/// clips play. Entries already there are reused; a pitched copy is made from
+/// the plain source.
+fn load_sources(
+    project: &Project,
+    decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
+    mut read: impl FnMut(u32) -> Result<Pcm, String>,
+) -> Result<(), String> {
+    let missing: std::collections::HashSet<_> = project
+        .missing_samples
+        .iter()
+        .map(|sample| sample.id)
+        .collect();
+    let used: std::collections::BTreeSet<SourceKey> = project
+        .clips
+        .iter()
+        .map(|clip| (clip.sample_id, clip.pitch_cents))
+        .filter(|(id, _)| !missing.contains(id))
+        .collect();
+    decoded.retain(|key, _| used.contains(key));
+    for &(id, cents) in &used {
+        if decoded.contains_key(&(id, cents)) {
+            continue;
+        }
+        let plain = match decoded.get(&(id, 0)) {
+            Some(plain) => Arc::clone(plain),
+            None => Arc::new(read(id)?),
+        };
+        let source = if cents == 0 {
+            plain
+        } else {
+            Arc::new(crate::sample_edit::repitch(&plain, cents)?)
+        };
+        decoded.insert((id, cents), source);
+    }
+    Ok(())
 }
 
 /// Prepare a mix with the sources that an earlier call for the same library
@@ -372,26 +734,10 @@ pub fn prepare_project(project: &Project, library: &Library) -> Result<Mix, Stri
 pub(crate) fn prepare_project_reusing(
     project: &Project,
     library: &Library,
-    decoded: &mut HashMap<u32, Arc<Pcm>>,
+    decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
 ) -> Result<Mix, String> {
     project.validate()?;
-    let missing: std::collections::HashSet<_> = project
-        .missing_samples
-        .iter()
-        .map(|sample| sample.id)
-        .collect();
-    let used: std::collections::HashSet<_> = project
-        .clips
-        .iter()
-        .map(|clip| clip.sample_id)
-        .filter(|id| !missing.contains(id))
-        .collect();
-    decoded.retain(|id, _| used.contains(id));
-    for id in used {
-        if let std::collections::hash_map::Entry::Vacant(e) = decoded.entry(id) {
-            e.insert(Arc::new(library.read_pcm(id)?));
-        }
-    }
+    load_sources(project, decoded, |id| library.read_pcm(id))?;
     let source_tempos = project
         .clips
         .iter()
@@ -417,11 +763,14 @@ pub(crate) fn mix_with_samples(
         .iter()
         .map(|s| (s.id, s.source_bpm))
         .collect();
-    let samples = samples
-        .iter()
-        .map(|(id, pcm)| (*id, Arc::new(pcm.clone())))
-        .collect();
-    Mix::new(project, &samples, &source_tempos)
+    let mut decoded = HashMap::new();
+    load_sources(project, &mut decoded, |id| {
+        samples
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| format!("Sample {id} is missing."))
+    })?;
+    Mix::new(project, &decoded, &source_tempos)
 }
 
 #[cfg(test)]
@@ -429,7 +778,7 @@ pub(crate) fn render_with_samples(
     project: &Project,
     samples: &HashMap<u32, Pcm>,
 ) -> Result<Pcm, String> {
-    mix_with_samples(project, samples)?.to_pcm(&project.master)
+    mix_with_samples(project, samples)?.to_pcm(&project.master, &project.fx)
 }
 
 pub struct Player {
@@ -444,6 +793,7 @@ pub struct Player {
 
 /// Reads audio in blocks for the output device, looping when asked to.
 struct PlaybackSource {
+    state: RenderState,
     audio: Arc<dyn Frames>,
     channels: usize,
     start: u64,
@@ -459,6 +809,12 @@ struct PlaybackSource {
     filled: usize,
     /// The master pedalboard of a stereo mix. Its state runs on through loops.
     master: Option<MasterProcessor>,
+    /// The FX buses of a song mix, with the block of their feeds. Their
+    /// tails ring on after the song, as in export.
+    returns: Option<ReturnsProcessor>,
+    sends: Vec<f32>,
+    /// Frames of the buses' tail played after the end.
+    ringing: u64,
     /// Frames of the pedals' delay still to drop at the start, so the song
     /// starts on time, and still to play out after the end.
     lead: usize,
@@ -475,9 +831,23 @@ impl PlaybackSource {
         master: Option<Arc<MasterControl>>,
     ) -> Self {
         let channels = audio.channels() as usize;
-        let master = master.filter(|_| channels == 2).map(MasterProcessor::live);
+        let master = master.filter(|_| channels == 2);
+        let returns = master
+            .as_ref()
+            .zip(audio.tempo())
+            .map(|(control, bpm)| ReturnsProcessor::live(Arc::clone(control), bpm));
+        let master = master.map(MasterProcessor::live);
         let latency = master.as_ref().map_or(0, MasterProcessor::latency);
+        let sends = if returns.is_some() {
+            vec![0.0; Self::BLOCK_FRAMES * 2 * BUSES]
+        } else {
+            Vec::new()
+        };
         Self {
+            state: RenderState::default(),
+            returns,
+            sends,
+            ringing: 0,
             channels,
             start,
             frame: start,
@@ -499,6 +869,21 @@ impl PlaybackSource {
             if self.frame >= self.end {
                 if let Some(start) = self.loop_start {
                     self.frame = start;
+                } else if let Some(returns) = self
+                    .returns
+                    .as_mut()
+                    .filter(|returns| returns.ringing() && self.ringing < crate::fx::TAIL_LIMIT)
+                {
+                    let count =
+                        Self::BLOCK_FRAMES.min((crate::fx::TAIL_LIMIT - self.ringing) as usize);
+                    self.ringing += count as u64;
+                    self.filled = count * self.channels;
+                    self.block[..self.filled].fill(0.0);
+                    returns.process(&mut self.block[..self.filled], None);
+                    if self.process() {
+                        return true;
+                    }
+                    continue;
                 } else if self.tail > 0 {
                     let count = self.tail.min(Self::BLOCK_FRAMES);
                     self.tail -= count;
@@ -520,7 +905,26 @@ impl PlaybackSource {
                 return false;
             }
             self.filled = count * self.channels;
-            self.audio.read(self.frame, &mut self.block[..self.filled]);
+            match &mut self.returns {
+                Some(returns) => {
+                    let sends = &mut self.sends[..count * 2 * BUSES];
+                    let sending = self.audio.read_block(
+                        self.frame,
+                        &mut self.block[..self.filled],
+                        Some(sends),
+                        &mut self.state,
+                    );
+                    returns.process(&mut self.block[..self.filled], sending.then_some(&*sends));
+                }
+                None => {
+                    self.audio.read_block(
+                        self.frame,
+                        &mut self.block[..self.filled],
+                        None,
+                        &mut self.state,
+                    );
+                }
+            }
             self.frame += count as u64;
             if self.process() {
                 return true;
@@ -673,11 +1077,14 @@ mod tests {
         let mix = Mix {
             frames: (u64::from(u32::MAX) - 36) / 4 + 1,
             voices: Vec::new(),
+            automated: Vec::new(),
+            bpm: 140.0,
+            sends: false,
         };
         // An invalid destination proves that admission runs before file creation,
         // without writing a multi-gigabyte fixture on a broken implementation.
         let error = mix
-            .write_wav(Path::new(""), &MasterChain::default())
+            .write_wav(Path::new(""), &MasterChain::default(), &FxBuses::default())
             .unwrap_err();
         assert_eq!(error, "This song is too long for a WAV file.");
     }
@@ -693,9 +1100,189 @@ mod tests {
                 length_ticks: TICKS_PER_BAR,
                 offset_frames: 1,
                 gain: 0.5,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         }
+    }
+
+    #[test]
+    fn review_export_during_playback_does_not_change_filter_history() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].automation.filter = vec![crate::automation::Point {
+            tick: 0,
+            value: -0.8,
+        }];
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.5; 75_600],
+            },
+        )]);
+        let mix = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let baseline: Vec<_> = PlaybackSource::new(mix.clone(), 0, None, None).collect();
+        let mut playback = PlaybackSource::new(mix.clone(), 0, None, None);
+        let mut actual: Vec<_> = playback.by_ref().take(2048).collect();
+        mix.to_pcm(&project.master, &project.fx).unwrap();
+        actual.extend(playback);
+        assert!(
+            actual == baseline,
+            "export changed the playing filter history"
+        );
+    }
+
+    #[test]
+    fn review_automation_reaches_breakpoints_inside_a_render_chunk() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].automation.sends[0] = [(0, 0.0), (1, 1.0), (2, 0.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .into();
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![1.0; 1000],
+            },
+        )]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let mut out = vec![0.0; 1024 * 2];
+        let mut sends = vec![0.0; 1024 * 2 * BUSES];
+        mix.read_sends(0, &mut out, &mut sends);
+        assert_eq!(sends[295 * 2 * BUSES], 0.5);
+    }
+
+    #[test]
+    fn automation_readers_are_independent_of_block_sizes_and_reset_after_seek() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].automation.filter = [(0, -0.9), (8, -0.2), (16, 0.4)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .into();
+        project.tracks[0].automation.volume = [(0, -20.0), (1, 0.0), (5, -6.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .into();
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: (0..6000).map(|i| (i as f32 * 0.05).sin() * 0.5).collect(),
+            },
+        )]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let mut expected = vec![0.0; 12_000];
+        mix.read_block(0, &mut expected, None, &mut RenderState::default());
+        let mut state = RenderState::default();
+        let mut actual = vec![0.0; expected.len()];
+        let mut start = 0;
+        for size in [1, 131, 79, 2049, 3, 997].into_iter().cycle() {
+            let end = (start + size).min(actual.len() / 2);
+            mix.read_block(
+                start as u64,
+                &mut actual[start * 2..end * 2],
+                None,
+                &mut state,
+            );
+            start = end;
+            if start == actual.len() / 2 {
+                break;
+            }
+        }
+        assert!(
+            actual == expected,
+            "block sizes changed the automation samples"
+        );
+        let mut seeked = [0.0; 512];
+        let mut fresh = [0.0; 512];
+        mix.read_block(1000, &mut seeked, None, &mut state);
+        mix.read_block(1000, &mut fresh, None, &mut RenderState::default());
+        assert_eq!(seeked, fresh);
+    }
+
+    #[test]
+    fn review_dry_wav_admission_keeps_the_full_riff_capacity() {
+        let mix = Mix {
+            frames: (u64::from(u32::MAX) - 36) / 4,
+            voices: Vec::new(),
+            automated: Vec::new(),
+            bpm: 140.0,
+            sends: false,
+        };
+        let error = mix
+            .write_wav(Path::new(""), &MasterChain::default(), &FxBuses::default())
+            .unwrap_err();
+        assert_ne!(error, "This song is too long for a WAV file.");
+    }
+
+    #[test]
+    fn review_playback_and_export_stop_at_the_same_tail_limit() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].sends[0] = 1.0;
+        project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform {
+            mode: crate::fx::TimeMode::Free,
+            time_ms_l: 10.0,
+            time_ms_r: 10.0,
+            feedback: 110.0,
+            character: crate::fx::DelayCharacter::Digital,
+            mod_depth: 0.0,
+            duck_amount: 0.0,
+            ..crate::fx::Echoform::default()
+        });
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: (0..4410).map(|i| (i as f32 * 0.05).sin() * 0.5).collect(),
+            },
+        )]);
+        let mix = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let exported = mix.to_pcm(&project.master, &project.fx).unwrap();
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        let played: Vec<_> = PlaybackSource::new(mix, 0, None, Some(control)).collect();
+        assert_eq!(played.len(), exported.samples.len());
+        assert!(played == exported.samples, "playback differs from export");
+    }
+
+    #[test]
+    fn zero_level_returns_have_identical_playback_and_export_duration() {
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.tracks[0].sends[0] = 1.0;
+        project.fx.buses[0].return_level = 0.0;
+        project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform {
+            feedback: 0.0,
+            mod_depth: 0.0,
+            ..crate::fx::Echoform::default()
+        });
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.5; 100],
+            },
+        )]);
+        let mix = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let exported = mix.to_pcm(&project.master, &project.fx).unwrap();
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        let played: Vec<_> = PlaybackSource::new(mix, 0, None, Some(control)).collect();
+        assert_eq!(played.len(), exported.samples.len());
+        assert!(played == exported.samples);
     }
     #[test]
     fn explicit_missing_source_is_silent_even_when_cached_audio_has_the_same_id() {
@@ -725,6 +1312,161 @@ mod tests {
         assert!(rendered.samples.iter().all(|sample| *sample == 0.0));
         project.missing_samples.clear();
         assert!(render_with_samples(&project, &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn clip_fades_shape_the_clip_and_the_fade_out_ends_with_its_sound() {
+        use crate::engine::{Fade, FadeCurve, Fades};
+        // One bar of sound in a two-bar clip: 75,600 frames at 140 BPM.
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.clips[0].length_ticks = 2 * TICKS_PER_BAR;
+        project.clips[0].fades = Fades {
+            fade_in: Fade {
+                ticks: 64,
+                curve: FadeCurve::Linear,
+            },
+            fade_out: Fade {
+                ticks: 64,
+                curve: FadeCurve::Exponential,
+            },
+        };
+        let samples = HashMap::from([(
+            5,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.5; 75_600],
+            },
+        )]);
+        let at = |project: &Project, frame: u64| {
+            let mut out = [0.0; 2];
+            Frames::read(
+                &mix_with_samples(project, &samples).unwrap(),
+                frame,
+                &mut out,
+            );
+            out[0]
+        };
+        // A quarter note is 18,900 frames.
+        assert!(at(&project, 0) < 1e-4);
+        assert!((at(&project, 9_450) - 0.125).abs() < 1e-4);
+        assert_eq!(at(&project, 30_000), 0.25);
+        let middle = 0.25 * (1000.0_f32.sqrt() - 1.0) / 999.0;
+        assert!((at(&project, 75_600 - 9_450) - middle).abs() < 1e-4);
+        assert!(at(&project, 75_599) < 1e-4);
+        assert_eq!(at(&project, 75_600), 0.0);
+        // A clip shorter than its sound fades out to the clip's end.
+        project.clips[0].length_ticks = 3 * TICKS_PER_BAR / 4;
+        project.clips[0].fades.fade_out.curve = FadeCurve::Linear;
+        assert!((at(&project, 56_700 - 9_450) - 0.125).abs() < 1e-4);
+        assert!(at(&project, 56_699) < 1e-4);
+        assert_eq!(at(&project, 28_350), 0.25);
+    }
+
+    #[test]
+    fn a_pitched_clip_plays_higher_in_the_same_time() {
+        // One bar of a 441 Hz tone at 140 BPM, played an octave up.
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project.clips[0].pitch_cents = 1200;
+        let tone = Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: (0..75_600)
+                .map(|frame| (std::f32::consts::TAU * 441.0 * frame as f32 / 44_100.0).sin() * 0.5)
+                .collect(),
+        };
+        let rendered = render_with_samples(&project, &HashMap::from([(5, tone)])).unwrap();
+        let left: Vec<f32> = rendered.samples.iter().step_by(2).copied().collect();
+        let crossings = |range: std::ops::Range<usize>| {
+            left[range.clone()]
+                .windows(2)
+                .filter(|pair| pair[0] <= 0.0 && pair[1] > 0.0)
+                .count() as f64
+                * 44_100.0
+                / range.len() as f64
+        };
+        let measured = crossings(10_000..60_000);
+        assert!((measured - 882.0).abs() < 4.0, "{measured}");
+        // The sound still fills its bar and stops where it did.
+        assert!(left[70_000..75_000].iter().any(|sample| sample.abs() > 0.2));
+        assert!(left[75_600..].iter().all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn automation_moves_the_volume_filter_and_sends_of_its_track() {
+        use crate::automation::Point;
+        let point = |tick, value| Point { tick, value };
+        let mut project = song();
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        let tone = |hz: f32| Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: (0..75_600)
+                .map(|frame| (std::f32::consts::TAU * hz * frame as f32 / 44_100.0).sin())
+                .collect(),
+        };
+        let level = |project: &Project, hz: f32, from: u64, sends: bool| {
+            let mix = mix_with_samples(project, &HashMap::from([(5, tone(hz))])).unwrap();
+            let mut out = vec![0.0; 2048];
+            let mut feeds = vec![0.0; 1024 * 2 * BUSES];
+            let sending = mix.read_sends(from, &mut out, &mut feeds);
+            let rms = |values: Vec<f32>| {
+                (values.iter().map(|x| x * x).sum::<f32>() / values.len() as f32).sqrt()
+            };
+            if sends {
+                assert!(sending);
+                rms(feeds
+                    .iter()
+                    .skip(2 * 2)
+                    .step_by(2 * BUSES)
+                    .copied()
+                    .collect())
+            } else {
+                rms(out.iter().step_by(2).copied().collect())
+            }
+        };
+        let plain = level(&project, 440.0, 30_000, false);
+        let later = level(&project, 440.0, 40_000, false);
+        // Volume rises from silence to unity over the first half bar.
+        project.tracks[0].automation.volume = vec![point(0, -60.0), point(128, 0.0)];
+        assert!(level(&project, 440.0, 0, false) < plain * 0.01);
+        let halfway = level(&project, 440.0, 18_900 - 512, false);
+        assert!((halfway / plain - 0.0316).abs() < 0.01, "{halfway}");
+        assert!((level(&project, 440.0, 40_000, false) - later).abs() < 1e-6);
+        // The low-pass removes a high tone and keeps a low one.
+        project.tracks[0].automation.volume.clear();
+        project.tracks[0].automation.filter = vec![point(0, -0.75)];
+        assert!(level(&project, 5000.0, 30_000, false) < plain * 0.02);
+        assert!(level(&project, 60.0, 30_000, false) > plain * 0.8);
+        // A send lane replaces the knob of its bus only.
+        project.tracks[0].automation.filter.clear();
+        project.tracks[0].sends[2] = 0.0;
+        project.tracks[0].automation.sends[2] = vec![point(0, 0.5)];
+        assert!((level(&project, 440.0, 30_000, true) - plain * 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn fade_curves_rise_from_silence_to_full() {
+        use crate::engine::{FadeCurve, Fades};
+        for curve in FadeCurve::ALL {
+            assert_eq!(curve.gain(0.0), 0.0);
+            assert!((curve.gain(1.0) - 1.0).abs() < 1e-6);
+            let steps: Vec<_> = (0..=100).map(|t| curve.gain(t as f32 / 100.0)).collect();
+            assert!(steps.windows(2).all(|pair| pair[1] > pair[0]), "{curve:?}");
+        }
+        assert!((FadeCurve::EqualPower.gain(0.5).powi(2) - 0.5).abs() < 1e-6);
+        let mut fades = Fades::default();
+        fades.fade_in.ticks = 300;
+        fades.fade_out.ticks = 100;
+        let fitted = fades.fit(256);
+        assert_eq!((fitted.fade_in.ticks, fitted.fade_out.ticks), (256, 0));
+        let fitted = fades.fit(350);
+        assert_eq!((fitted.fade_in.ticks, fitted.fade_out.ticks), (300, 50));
     }
 
     #[test]
@@ -896,7 +1638,9 @@ mod tests {
         editor.place(1, 63, 700, 256).unwrap();
         let samples = HashMap::from([(1, source.clone())]);
         let mix = mix_with_samples(editor.project(), &samples).unwrap();
-        let whole = mix.to_pcm(&editor.project().master).unwrap();
+        let whole = mix
+            .to_pcm(&editor.project().master, &editor.project().fx)
+            .unwrap();
         // Blocks of any size and position give the same samples, and silence past the end.
         for block_frames in [1, 7, 2048, 65_536] {
             let mut pieces = Vec::new();
@@ -916,7 +1660,10 @@ mod tests {
         long.place(1, 0, last_bar, 256).unwrap();
         let mix = mix_with_samples(long.project(), &samples).unwrap();
         assert!(mix.frames() > 300_000_000);
-        assert!(mix.to_pcm(&long.project().master).is_err());
+        assert!(
+            mix.to_pcm(&long.project().master, &long.project().fx)
+                .is_err()
+        );
         let first = (f64::from(last_bar) * long.project().frames_per_tick(44_100)).round() as u64;
         let mut block = vec![0.0; 2048 * 2];
         Frames::read(&mix, first, &mut block);
@@ -1016,6 +1763,53 @@ mod tests {
     }
 
     #[test]
+    fn sends_feed_the_fx_buses_whose_tails_ring_past_the_song_in_export_and_playback() {
+        let source = Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: (0..4410).map(|i| ((i as f32) * 0.05).sin() * 0.5).collect(),
+        };
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, source)]);
+        let dry = render_with_samples(&project, &samples).unwrap();
+        // A bus with an effect but no sends changes nothing.
+        project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform {
+            mode: crate::fx::TimeMode::Free,
+            time_ms_l: 500.0,
+            time_ms_r: 500.0,
+            feedback: 40.0,
+            duck_amount: 0.0,
+            ..crate::fx::Echoform::default()
+        });
+        assert_eq!(
+            render_with_samples(&project, &samples).unwrap().samples,
+            dry.samples
+        );
+        project.tracks[0].sends[0] = 0.8;
+        let wet = render_with_samples(&project, &samples).unwrap();
+        // The song is one bar at 140 BPM; the echoes ring on after it.
+        assert!(wet.samples.len() > dry.samples.len() + 44_100);
+        let echo = &wet.samples[2 * 22_050..2 * 26_460];
+        assert!(
+            echo.iter().any(|v| v.abs() > 0.05),
+            "the first echo is half a second in"
+        );
+        let end = &wet.samples[wet.samples.len() - 2048..];
+        assert!(
+            end.iter().all(|v| v.abs() < 1e-3),
+            "the tail dies out before the end"
+        );
+
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let played: Vec<f32> = PlaybackSource::new(mix, 0, None, Some(control)).collect();
+        assert_eq!(played, wet.samples);
+    }
+
+    #[test]
     fn playback_and_export_run_the_same_master_pedalboard() {
         let source = Pcm {
             sample_rate: 44_100,
@@ -1064,7 +1858,7 @@ mod tests {
         assert_eq!(exported.samples.len(), dry.samples.len());
         let mix = mix_with_samples(&delayed, &samples).unwrap();
         let path = std::env::temp_dir().join(format!("mixjam-master-{}.wav", std::process::id()));
-        mix.write_wav(&path, &delayed.master).unwrap();
+        mix.write_wav(&path, &delayed.master, &delayed.fx).unwrap();
         let written = read_wav(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(written.samples.len(), exported.samples.len());

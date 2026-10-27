@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 12) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 14) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -7,6 +7,7 @@ two saves of one song compare equal.
 """
 import json
 import math
+from copy import deepcopy
 from pathlib import Path
 
 
@@ -18,7 +19,7 @@ def _reference(reference):
 
 
 def _master(document):
-    if document['formatVersion'] == 12:
+    if document['formatVersion'] >= 12:
         return document['master']
     # Match MasterChain::default and the version-11 migration in song.rs.
     # Keep this projection usable as a schema-4 JSON input to the executable.
@@ -47,15 +48,29 @@ def _master(document):
     return master
 
 
+def _fx_buses(document):
+    # Match FxBuses::default: every bus empty, on, at full return, limited.
+    if document['formatVersion'] >= 13:
+        return document['fxBuses']
+    return [{'module': {'type': 'empty'}, 'powered': True, 'returnLevel': 1.0,
+             'limiter': True} for _ in range(4)]
+
+
+# Match Fades::default: no fade at either edge.
+_NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve': 'linear'}}
+
+
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in (8, 9, 10, 11, 12):
-        raise RuntimeError(f'{path} is not a format version 8 through 12 .mixjam song.')
+    if version not in (8, 9, 10, 11, 12, 13, 14):
+        raise RuntimeError(f'{path} is not a format version 8 through 14 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
-              'offset_frames': item['offsetFrames'], 'gain': item['gain']}
+              'offset_frames': item['offsetFrames'], 'gain': item['gain'],
+              'fades': deepcopy(item.get('fades', _NO_FADES)),
+              'pitch_cents': item.get('pitchCents', 0)}
              for track, lane in enumerate(document['lanes']) for item in lane['placements']]
     imported = []
     for item in document['samples']:
@@ -72,6 +87,7 @@ def read_song(path):
         'bpm': song['bpm'],
         'master_gain': song['masterGain'],
         'master': _master(document),
+        'fx': _fx_buses(document),
         'pitch_ratio': 1.0,
         'tracks': [{'gain': abs(lane['gain']) if version == 8 else lane['gain'],
                     'polarity_inverted': (math.copysign(1, lane['gain']) < 0
@@ -80,7 +96,9 @@ def read_song(path):
                     'left_enabled': lane['leftEnabled'],
                     'right_enabled': lane['rightEnabled'],
                     'muted': lane.get('muted', False),
-                    'solo': lane.get('solo', False)} for lane in document['lanes']],
+                    'solo': lane.get('solo', False),
+                    'sends': lane.get('sends', [0.0] * 4),
+                    'automation': lane.get('automation', {})} for lane in document['lanes']],
         'clips': sorted(clips, key=lambda clip: clip['id']),
         'loop_region': song['loopRegion'],
         'imported_samples': imported,

@@ -1637,6 +1637,8 @@ pub(crate) fn build_project(
             length_ticks,
             offset_frames: offset_frames as u32,
             gain: event.gain,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
     }
     let project = normalize_import(project)?;
@@ -2195,6 +2197,8 @@ mod tests {
                         length_ticks: 1,
                         offset_frames: 0,
                         gain: if track == 1 { 2.0 } else { 1.0 },
+                        fades: Default::default(),
+                        pitch_cents: 0,
                     })
                     .collect(),
                 ..Project::default()

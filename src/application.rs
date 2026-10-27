@@ -4,8 +4,9 @@ pub use crate::{
     audio::Pcm,
     effects::EffectsState,
     engine::{
-        Clip, MAX_MIXER_GAIN_DB, MissingReference, MissingSample, Project, SUPPORTED_BPMS,
-        SampleConflict, TICKS_PER_BAR, TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
+        Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_TICKS,
+        MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR,
+        TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
     },
     library::Sample,
     master::{
@@ -15,6 +16,19 @@ pub use crate::{
     products::Product,
     synth::StepSynthState,
 };
+/// Track automation lanes and their values.
+pub mod automation {
+    pub use crate::automation::{
+        Automation, Lane, Point, VOLUME_FLOOR_DB, filter_cutoff, value_at,
+    };
+}
+/// The FX buses, their effects, and the controls of both.
+pub mod fx {
+    pub use crate::fx::{
+        Aetherform, BUSES, DelayCharacter, DelayParam, Division, Echoform, FxBus, FxBuses, Module,
+        Range, ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel, TimeMode,
+    };
+}
 use crate::{
     audio::{self, Player},
     engine::Editor,
@@ -62,11 +76,14 @@ pub enum EditCommand {
         tracks: Vec<Track>,
         master_gain: f32,
     },
+    /// Fades that do not fit the new length are shortened, the fade out first.
     SetClip {
         id: u64,
         gain: f32,
         offset_frames: u32,
         length_ticks: u32,
+        fades: crate::engine::Fades,
+        pitch_cents: i32,
     },
     SetSwitch {
         track: usize,
@@ -76,6 +93,14 @@ pub enum EditCommand {
     DeleteClips(Vec<u64>),
     /// Replace the master pedalboard settings. Playback takes them as it plays.
     SetMaster(MasterChain),
+    /// Replace the FX buses' settings. Playback takes them as it plays.
+    SetEffects(crate::fx::FxBuses),
+    /// Replace one automation lane of a track.
+    SetAutomation {
+        track: usize,
+        lane: crate::automation::Lane,
+        points: Vec<crate::automation::Point>,
+    },
 }
 
 /// The on/off controls that the arrangement lane and the mixer strip share.
@@ -324,6 +349,8 @@ pub struct Session {
     recorded_take: Option<Arc<Pcm>>,
     /// The control changed by the last edit, while later edits may continue it.
     gesture: Option<(Gesture, std::time::Instant)>,
+    /// An arrangement point drag has an explicit lifetime, including pauses.
+    automation_gesture: Option<(usize, crate::automation::Lane)>,
     /// The pause that ends a gesture: `GESTURE_GAP`, except in some tests.
     gesture_gap: std::time::Duration,
     /// The master pedalboard settings that mix playback reads as it plays.
@@ -338,19 +365,32 @@ enum Gesture {
     Master,
     Track(usize, TrackControl),
     Clip(u64, ClipControl),
+    /// One automation lane, such as the frames of a point drag.
+    Automation(usize, crate::automation::Lane),
     /// The trim or one knob of the master pedalboard.
     Pedal(Knob),
+    Fx(usize, FxControl),
 }
 #[derive(Clone, Copy, PartialEq)]
 enum TrackControl {
     Gain,
     Pan,
+    Send(usize),
+}
+#[derive(Clone, Copy, PartialEq)]
+enum FxControl {
+    Return,
+    Delay(crate::fx::DelayParam),
+    Reverb(crate::fx::ReverbParam),
 }
 #[derive(Clone, Copy, PartialEq)]
 enum ClipControl {
     Gain,
     Trim,
     Length,
+    FadeIn,
+    FadeOut,
+    Pitch,
 }
 const GESTURE_GAP: std::time::Duration = std::time::Duration::from_millis(400);
 
@@ -364,9 +404,20 @@ impl Gesture {
                 gain,
                 offset_frames,
                 length_ticks,
+                fades,
+                pitch_cents,
             } => {
                 let clip = project.clips.iter().find(|clip| clip.id == *id)?;
                 let mut controls = Vec::new();
+                if clip.fades.fade_in != fades.fade_in {
+                    controls.push(ClipControl::FadeIn);
+                }
+                if clip.fades.fade_out != fades.fade_out {
+                    controls.push(ClipControl::FadeOut);
+                }
+                if clip.pitch_cents != *pitch_cents {
+                    controls.push(ClipControl::Pitch);
+                }
                 if clip.gain != *gain {
                     controls.push(ClipControl::Gain);
                 }
@@ -388,6 +439,7 @@ impl Gesture {
                 let mut controls = Vec::new();
                 for (index, (old, new)) in project.tracks.iter().zip(tracks).enumerate() {
                     if old.polarity_inverted != new.polarity_inverted
+                        || old.automation != new.automation
                         || TrackSwitch::ALL
                             .iter()
                             .any(|switch| switch.get(old) != switch.get(new))
@@ -400,6 +452,11 @@ impl Gesture {
                     if old.pan != new.pan {
                         controls.push(Self::Track(index, TrackControl::Pan));
                     }
+                    for (bus, (old, new)) in old.sends.iter().zip(new.sends).enumerate() {
+                        if *old != new {
+                            controls.push(Self::Track(index, TrackControl::Send(bus)));
+                        }
+                    }
                 }
                 if project.master_gain != *master_gain {
                     controls.push(Self::Master);
@@ -410,6 +467,43 @@ impl Gesture {
                 }
             }
             EditCommand::SetMaster(chain) => project.master.changed_knob(chain).map(Self::Pedal),
+            EditCommand::SetEffects(buses) => Self::fx(&project.fx, buses),
+            _ => None,
+        }
+    }
+
+    /// Only one continuous FX control can continue a drag. A switch, module
+    /// choice, preset, or multiple controls form a separate history step.
+    fn fx(before: &crate::fx::FxBuses, after: &crate::fx::FxBuses) -> Option<Self> {
+        use crate::fx::{DelayParam, Module, ReverbParam};
+        let mut changed = before
+            .buses
+            .iter()
+            .zip(&after.buses)
+            .enumerate()
+            .filter(|(_, (old, new))| old != new);
+        let (index, (old, new)) = changed.next()?;
+        if changed.next().is_some() || old.powered != new.powered || old.limiter != new.limiter {
+            return None;
+        }
+        if old.return_level != new.return_level {
+            return (old.module == new.module).then_some(Self::Fx(index, FxControl::Return));
+        }
+        match (old.module, new.module) {
+            (Module::EchoformDelay(old), Module::EchoformDelay(new)) => {
+                DelayParam::ALL.into_iter().find_map(|param| {
+                    let mut candidate = old;
+                    param.set(&mut candidate, param.get(&new));
+                    (candidate == new).then_some(Self::Fx(index, FxControl::Delay(param)))
+                })
+            }
+            (Module::AetherformReverb(old), Module::AetherformReverb(new)) => {
+                ReverbParam::ALL.into_iter().find_map(|param| {
+                    let mut candidate = old;
+                    param.set(&mut candidate, param.get(&new));
+                    (candidate == new).then_some(Self::Fx(index, FxControl::Reverb(param)))
+                })
+            }
             _ => None,
         }
     }
@@ -428,6 +522,7 @@ impl Session {
     pub fn headless(library: Arc<Library>, project: Project) -> Result<Self, String> {
         project.validate()?;
         let master = MasterControl::new(&project.master);
+        master.set_returns(&project.fx);
         Ok(Self {
             library,
             catalog_revision: 0,
@@ -463,6 +558,7 @@ impl Session {
             record_mix_started: false,
             recorded_take: None,
             gesture: None,
+            automation_gesture: None,
             gesture_gap: GESTURE_GAP,
             master,
         })
@@ -803,16 +899,45 @@ impl Session {
         self.render_dirty = true;
         self.revision = self.revision.wrapping_add(1);
         self.master.set(&self.editor.project().master);
+        self.master.set_returns(&self.editor.project().fx);
         if self.wants_playback {
             self.start_playback();
         }
     }
-    /// A change of the master pedalboard only. The prepared mix stays valid,
-    /// and playback continues with the new settings.
+    /// A change of the master pedalboard or the FX buses only. The prepared
+    /// mix stays valid, and playback continues with the new settings.
     fn master_changed(&mut self) {
         self.gesture = None;
         self.unsaved = true;
         self.master.set(&self.editor.project().master);
+        self.master.set_returns(&self.editor.project().fx);
+    }
+    /// Cut the ringing tail of one FX bus during playback. This changes no
+    /// setting and is not an undo step.
+    pub fn clear_fx_tail(&self, bus: usize) {
+        self.master.clear_tail(bus);
+    }
+    /// Begin one undo step for a point drag, including a point added by the drag.
+    pub fn begin_automation_gesture(
+        &mut self,
+        track: usize,
+        lane: crate::automation::Lane,
+    ) -> Result<(), String> {
+        if track >= TRACK_COUNT {
+            return Err("The track is outside the project.".into());
+        }
+        if matches!(lane, crate::automation::Lane::Send(bus) if bus >= crate::fx::BUSES) {
+            return Err("The FX bus does not exist.".into());
+        }
+        self.gesture = None;
+        self.automation_gesture = Some((track, lane));
+        Ok(())
+    }
+    /// End a point drag so the next drag or click has its own undo step.
+    pub fn end_automation_gesture(&mut self) {
+        if self.automation_gesture.take().is_some() {
+            self.gesture = None;
+        }
     }
     pub fn edit(&mut self, command: EditCommand) -> Result<(), String> {
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
@@ -821,8 +946,14 @@ impl Session {
                 id,
                 offset_frames,
                 length_ticks,
+                pitch_cents,
                 ..
             } => {
+                if !(-crate::engine::MAX_PITCH_CENTS..=crate::engine::MAX_PITCH_CENTS)
+                    .contains(pitch_cents)
+                {
+                    return Err("Clip pitch must be from -24 to 24 semitones.".into());
+                }
                 let clip = self
                     .project()
                     .clips
@@ -855,8 +986,18 @@ impl Session {
                     )?;
                 }
             }
-            EditCommand::SetSwitch { track, .. } if *track >= TRACK_COUNT => {
+            EditCommand::SetSwitch { track, .. } | EditCommand::SetAutomation { track, .. }
+                if *track >= TRACK_COUNT =>
+            {
                 return Err("The track is outside the project.".into());
+            }
+            EditCommand::SetAutomation { lane, points, .. } => {
+                if let crate::automation::Lane::Send(bus) = lane
+                    && *bus >= crate::fx::BUSES
+                {
+                    return Err("The FX bus does not exist.".into());
+                }
+                crate::automation::validate_points(*lane, points)?;
             }
             EditCommand::DeleteClips(ids) => {
                 let existing: std::collections::HashSet<_> =
@@ -867,14 +1008,30 @@ impl Session {
             }
             _ => {}
         }
-        let gesture = Gesture::of(&command, self.project());
+        let explicit_automation = match &command {
+            EditCommand::SetAutomation { track, lane, .. } => {
+                self.automation_gesture == Some((*track, *lane))
+            }
+            _ => false,
+        };
+        let gesture = if explicit_automation {
+            self.automation_gesture
+                .map(|(track, lane)| Gesture::Automation(track, lane))
+        } else {
+            self.end_automation_gesture();
+            Gesture::of(&command, self.project())
+        };
         let now = std::time::Instant::now();
         let continuing = gesture.is_some()
             && self.gesture.is_some_and(|(previous, at)| {
-                Some(previous) == gesture && now.duration_since(at) < self.gesture_gap
+                Some(previous) == gesture
+                    && (explicit_automation || now.duration_since(at) < self.gesture_gap)
             });
         let generation = self.editor.generation();
-        let master_only = matches!(command, EditCommand::SetMaster(_));
+        let master_only = matches!(
+            command,
+            EditCommand::SetMaster(_) | EditCommand::SetEffects(_)
+        );
         let apply = |project: &mut Project| match command {
             EditCommand::SetTempo(bpm) => project.bpm = bpm,
             EditCommand::SetLoop(region) => project.loop_region = region,
@@ -890,11 +1047,15 @@ impl Session {
                 gain,
                 offset_frames,
                 length_ticks,
+                fades,
+                pitch_cents,
             } => {
                 if let Some(clip) = project.clips.iter_mut().find(|clip| clip.id == id) {
                     clip.gain = gain;
                     clip.offset_frames = offset_frames;
                     clip.length_ticks = length_ticks;
+                    clip.fades = fades.fit(length_ticks);
+                    clip.pitch_cents = pitch_cents;
                 }
             }
             EditCommand::SetSwitch { track, switch, on } => {
@@ -905,6 +1066,12 @@ impl Session {
                 project.clips.retain(|clip| !ids.contains(&clip.id));
             }
             EditCommand::SetMaster(chain) => project.master = chain,
+            EditCommand::SetEffects(buses) => project.fx = buses,
+            EditCommand::SetAutomation {
+                track,
+                lane,
+                points,
+            } => *project.tracks[track].automation.lane_mut(lane) = points,
         };
         if continuing {
             self.editor.transact_continuing(apply)?;
@@ -972,6 +1139,7 @@ impl Session {
         if self.is_recording() {
             return Err("Stop recording before you undo or redo.".into());
         }
+        self.end_automation_gesture();
         let before = self.project().clone();
         let changed = if redo {
             self.editor.redo()
@@ -981,10 +1149,13 @@ impl Session {
         if !changed {
             return Ok(false);
         }
-        // A step of the master pedalboard alone leaves the mix and playback running.
-        let master_only = before.master != self.project().master
+        // A step of the master pedalboard or the FX buses alone leaves the
+        // mix and playback running.
+        let master_only = (before.master != self.project().master
+            || before.fx != self.project().fx)
             && Project {
                 master: self.project().master,
+                fx: self.project().fx,
                 ..before
             } == *self.project();
         if master_only {
@@ -1045,6 +1216,7 @@ impl Session {
         self.set_library(library);
         self.editor = Editor::new(project);
         self.master.set(&self.editor.project().master);
+        self.master.set_returns(&self.editor.project().fx);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.render_dirty = true;
@@ -1082,11 +1254,11 @@ impl Session {
     /// Render and write the mix on this thread. Headless callers use this;
     /// the GUI calls `start_export` so that the window stays responsive.
     pub fn export(&self, path: &Path) -> Result<(), String> {
-        let master = &self.project().master;
+        let (master, fx) = (&self.project().master, &self.project().fx);
         // Playback already rendered an unchanged mix; write that audio.
         match &self.render {
-            Some(mix) if !self.render_dirty => mix.write_wav(path, master),
-            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path, master),
+            Some(mix) if !self.render_dirty => mix.write_wav(path, master, fx),
+            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path, master, fx),
         }
     }
 
@@ -1105,9 +1277,9 @@ impl Session {
             .name("mixjam-techno-export".into())
             .spawn(move || {
                 let result = match rendered {
-                    Some(mix) => mix.write_wav(&target, &project.master),
+                    Some(mix) => mix.write_wav(&target, &project.master, &project.fx),
                     None => audio::prepare_project(&project, &library)
-                        .and_then(|mix| mix.write_wav(&target, &project.master)),
+                        .and_then(|mix| mix.write_wav(&target, &project.master, &project.fx)),
                 };
                 let _ = sender.send(result);
             })
@@ -1150,6 +1322,7 @@ impl Session {
             ..Project::default()
         });
         self.master.set(&self.editor.project().master);
+        self.master.set_returns(&self.editor.project().fx);
         self.revision = self.revision.wrapping_add(1);
         self.render = None;
         self.file = None;
@@ -1682,6 +1855,7 @@ impl Session {
             .loop_region
             .map(|[a, b]| [self.tick_to_frame(a, rate), self.tick_to_frame(b, rate)]);
         self.master.set(&self.editor.project().master);
+        self.master.set_returns(&self.editor.project().fx);
         let master = Some(self.master.clone());
         match self
             .player
@@ -2126,6 +2300,8 @@ mod tests {
                     length_ticks: 256,
                     offset_frames: 11_025,
                     gain: 0.75,
+                    fades: Default::default(),
+                    pitch_cents: 0,
                 })
                 .collect(),
             ..Project::default()
@@ -2493,6 +2669,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 11_025,
                 gain: 0.75,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -2584,6 +2762,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 4410,
                 gain: 0.75,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
         }
         let mut session = Session::headless(Arc::new(Library::empty()), project.clone())
@@ -2682,6 +2862,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 11_025,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -2727,6 +2909,8 @@ mod tests {
             length_ticks: 256,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let wave = root.join("chosen.wav");
         Pcm {
@@ -2788,6 +2972,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             }],
             ..Project::default()
         };
@@ -3091,6 +3277,8 @@ mod boundary_tests {
             gain: 1.0,
             offset_frames: offset,
             length_ticks: before.clips[0].length_ticks,
+            fades: Default::default(),
+            pitch_cents: 0,
         };
         assert!(session.edit(command(1000)).is_err());
         assert_eq!(session.project(), &before);
@@ -3190,6 +3378,195 @@ mod boundary_tests {
         assert_eq!(imported.project().title, "Night drive");
         std::fs::remove_dir_all(dir).unwrap();
     }
+    #[test]
+    fn automation_drags_include_additions_and_pauses_but_end_on_release() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let lane = crate::automation::Lane::Volume;
+        let set = |session: &mut Session, value| {
+            session
+                .edit(EditCommand::SetAutomation {
+                    track: 0,
+                    lane,
+                    points: vec![crate::automation::Point { tick: 0, value }],
+                })
+                .unwrap();
+        };
+        session.begin_automation_gesture(0, lane).unwrap();
+        set(&mut session, -12.0);
+        // A held pointer can pause for longer than the ordinary gesture timeout.
+        session.gesture = session
+            .gesture
+            .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
+        set(&mut session, -9.0);
+        session.end_automation_gesture();
+        // The next drag starts immediately, but remains a separate step.
+        session.begin_automation_gesture(0, lane).unwrap();
+        set(&mut session, -6.0);
+        set(&mut session, -3.0);
+        session.end_automation_gesture();
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[0].automation.volume[0].value, -9.0);
+        assert!(session.history_step(false).unwrap());
+        assert!(session.project().tracks[0].automation.volume.is_empty());
+        assert!(!session.has_history_step(false));
+        assert!(session.history_step(true).unwrap());
+        assert_eq!(session.project().tracks[0].automation.volume[0].value, -9.0);
+        assert!(session.begin_automation_gesture(TRACK_COUNT, lane).is_err());
+        assert!(
+            session
+                .begin_automation_gesture(0, crate::automation::Lane::Send(4))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn separate_automation_edits_are_separate_undo_steps() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let set = |session: &mut Session, value| {
+            session
+                .edit(EditCommand::SetAutomation {
+                    track: 0,
+                    lane: crate::automation::Lane::Volume,
+                    points: vec![crate::automation::Point { tick: 0, value }],
+                })
+                .unwrap();
+        };
+        set(&mut session, -12.0);
+        set(&mut session, -9.0);
+        set(&mut session, -6.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[0].automation.volume[0].value, -9.0);
+    }
+
+    #[test]
+    fn fx_switches_and_different_knobs_end_continuous_history_steps() {
+        use crate::fx::{Echoform, FxBuses, Module};
+        let mut project = Project::default();
+        project.fx.buses[0].module = Module::EchoformDelay(Echoform::default());
+        let mut session = Session::headless(Arc::new(Library::empty()), project).unwrap();
+        session.gesture_gap = std::time::Duration::MAX;
+        let mut states = vec![session.project().fx];
+        let mut change = |session: &mut Session, edit: &dyn Fn(&mut FxBuses)| {
+            let mut buses = session.project().fx;
+            edit(&mut buses);
+            session.edit(EditCommand::SetEffects(buses)).unwrap();
+            states.push(buses);
+        };
+        change(&mut session, &|buses| {
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.feedback = 50.0;
+            }
+        });
+        change(&mut session, &|buses| {
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.width = 100.0;
+            }
+        });
+        change(&mut session, &|buses| buses.buses[0].powered = false);
+        change(&mut session, &|buses| {
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.width = 90.0;
+            }
+        });
+        change(&mut session, &|buses| buses.buses[0].limiter = false);
+        change(&mut session, &|buses| {
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.bypass = true;
+                delay.width = 80.0;
+            }
+        });
+        change(&mut session, &|buses| {
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.width = 70.0;
+            }
+        });
+        states.pop();
+        for expected in states.into_iter().rev() {
+            assert!(session.history_step(false).unwrap());
+            assert_eq!(session.project().fx, expected);
+        }
+        assert!(!session.has_history_step(false));
+
+        // Track and bus identity separate send drags.
+        let mut states = vec![session.project().tracks.clone()];
+        for (track, bus) in [(0, 0), (0, 1), (1, 1)] {
+            for value in [0.25, 0.5] {
+                let mut tracks = session.project().tracks.clone();
+                tracks[track].sends[bus] = value;
+                session
+                    .edit(EditCommand::SetMixer {
+                        tracks,
+                        master_gain: session.project().master_gain,
+                    })
+                    .unwrap();
+            }
+            states.push(session.project().tracks.clone());
+        }
+        states.pop();
+        for expected in states.into_iter().rev() {
+            assert!(session.history_step(false).unwrap());
+            assert_eq!(session.project().tracks, expected);
+        }
+        assert!(!session.has_history_step(false));
+    }
+
+    #[test]
+    fn long_send_and_fx_drags_preserve_prior_history() {
+        use crate::fx::{Aetherform, Echoform, Module};
+        let mut project = Project::default();
+        project.fx.buses[0].module = Module::EchoformDelay(Echoform::default());
+        project.fx.buses[1].module = Module::AetherformReverb(Aetherform::default());
+        let initial = project.clone();
+        let mut session = Session::headless(Arc::new(Library::empty()), project).unwrap();
+        session.gesture_gap = std::time::Duration::MAX;
+        session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        for frame in 1..=150 {
+            let mut tracks = session.project().tracks.clone();
+            tracks[0].sends[0] = frame as f32 / 150.0;
+            session
+                .edit(EditCommand::SetMixer {
+                    tracks,
+                    master_gain: session.project().master_gain,
+                })
+                .unwrap();
+        }
+        for frame in 1..=150 {
+            let mut buses = session.project().fx;
+            if let Module::EchoformDelay(delay) = &mut buses.buses[0].module {
+                delay.feedback = frame as f32 / 2.0;
+            }
+            session.edit(EditCommand::SetEffects(buses)).unwrap();
+        }
+        for frame in 1..=150 {
+            let mut buses = session.project().fx;
+            buses.buses[0].return_level = 1.0 - frame as f32 / 150.0;
+            session.edit(EditCommand::SetEffects(buses)).unwrap();
+        }
+        for frame in 1..=150 {
+            let mut buses = session.project().fx;
+            if let Module::AetherformReverb(reverb) = &mut buses.buses[1].module {
+                reverb.decay_seconds = 1.0 + frame as f32 / 100.0;
+            }
+            session.edit(EditCommand::SetEffects(buses)).unwrap();
+        }
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().fx.buses[1], initial.fx.buses[1]);
+        assert_eq!(session.project().fx.buses[0].return_level, 0.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().fx.buses[0].return_level, 1.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().fx, initial.fx);
+        assert_eq!(session.project().tracks[0].sends[0], 1.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks, initial.tracks);
+        assert_eq!(session.project().bpm, 160.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &initial);
+        assert!(!session.has_history_step(false));
+    }
+
     #[test]
     fn master_pedal_edits_keep_the_mix_and_form_undo_steps() {
         let mut session =
@@ -3380,11 +3757,59 @@ mod boundary_tests {
             gain: 1.0,
             offset_frames: 0,
             length_ticks,
+            fades: Default::default(),
+            pitch_cents: 0,
         };
         assert!(session.edit(resize(length + 17)).is_err());
         assert_eq!(session.project(), &before);
         session.edit(resize(length + 16)).unwrap();
         assert_eq!(session.project().clips[0].length_ticks, length + 16);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_shorter_clip_shortens_its_fades_and_undo_restores_them() {
+        use crate::engine::{Fade, FadeCurve};
+        let dir = fixture_dir();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 4000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        let clip = session.place(source, 0, 0).unwrap();
+        let length = session.project().clips[0].length_ticks;
+        let fades = Fades {
+            fade_in: Fade {
+                ticks: 64,
+                curve: FadeCurve::EqualPower,
+            },
+            fade_out: Fade {
+                ticks: 128,
+                curve: FadeCurve::Exponential,
+            },
+        };
+        let set = |length_ticks, pitch_cents| EditCommand::SetClip {
+            id: clip,
+            gain: 1.0,
+            offset_frames: 0,
+            length_ticks,
+            fades,
+            pitch_cents,
+        };
+        session.edit(set(length, -30)).unwrap();
+        assert_eq!(session.project().clips[0].fades, fades);
+        assert_eq!(session.project().clips[0].pitch_cents, -30);
+        session.edit(set(100, -30)).unwrap();
+        let fitted = session.project().clips[0].fades;
+        assert_eq!((fitted.fade_in.ticks, fitted.fade_out.ticks), (64, 36));
+        assert!(session.edit(set(length, 2401)).is_err());
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().clips[0].fades, fades);
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
@@ -3408,6 +3833,8 @@ mod boundary_tests {
             gain,
             offset_frames,
             length_ticks,
+            fades: Default::default(),
+            pitch_cents: 0,
         };
         // Frames of a gain drag, then at once frames of a trim drag: two
         // controls, so two steps.
@@ -3807,15 +4234,15 @@ mod boundary_tests {
         let first =
             audio::prepare_project_reusing(session.project(), &session.library, &mut decoded)
                 .unwrap();
-        assert_eq!(decoded.keys().copied().collect::<Vec<_>>(), [source]);
+        assert_eq!(decoded.keys().copied().collect::<Vec<_>>(), [(source, 0)]);
         std::fs::remove_file(&wave).unwrap();
         let again =
             audio::prepare_project_reusing(session.project(), &session.library, &mut decoded)
                 .unwrap();
-        let master = &session.project().master;
+        let (master, fx) = (&session.project().master, &session.project().fx);
         assert_eq!(
-            again.to_pcm(master).unwrap().samples,
-            first.to_pcm(master).unwrap().samples
+            again.to_pcm(master, fx).unwrap().samples,
+            first.to_pcm(master, fx).unwrap().samples
         );
         let empty = Project::default();
         audio::prepare_project_reusing(&empty, &session.library, &mut decoded).unwrap();
@@ -3849,6 +4276,7 @@ mod boundary_tests {
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/fx.rs", include_str!("ui/fx.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/sample_editor.rs", include_str!("ui/sample_editor.rs")),
@@ -3886,6 +4314,7 @@ mod boundary_tests {
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
+            ("ui/fx.rs", include_str!("ui/fx.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/sample_editor.rs", include_str!("ui/sample_editor.rs")),

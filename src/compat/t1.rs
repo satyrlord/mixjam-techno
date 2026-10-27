@@ -271,6 +271,8 @@ fn convert(
             length_ticks: frame_to_tick(event.limit_frames)?,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
     }
     normalize_import(project)

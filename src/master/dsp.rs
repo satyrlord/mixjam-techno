@@ -5,25 +5,25 @@
 use std::{f64::consts::PI, sync::LazyLock};
 
 /// The mix rate, in frames per second.
-pub(super) const RATE: f64 = 44_100.0;
+pub(crate) const RATE: f64 = 44_100.0;
 
-pub(super) fn db_to_gain(db: f64) -> f64 {
+pub(crate) fn db_to_gain(db: f64) -> f64 {
     10f64.powf(db / 20.0)
 }
 
-pub(super) fn gain_to_db(gain: f64) -> f64 {
+pub(crate) fn gain_to_db(gain: f64) -> f64 {
     20.0 * gain.log10()
 }
 
 /// Zero for a value far below hearing, so that recursive states never turn
 /// denormal and slow the audio thread down.
 #[inline]
-pub(super) fn flush(value: f64) -> f64 {
+pub(crate) fn flush(value: f64) -> f64 {
     if value.abs() < 1e-30 { 0.0 } else { value }
 }
 
 /// The feedback coefficient of a one-pole filter with this time constant.
-pub(super) fn pole(seconds: f64) -> f64 {
+pub(crate) fn pole(seconds: f64) -> f64 {
     (-1.0 / (seconds * RATE)).exp()
 }
 
@@ -63,7 +63,7 @@ fn dot<const N: usize>(a: &[f32; N], b: &[f32; N]) -> f32 {
 /// A setting that glides to its target with a 5 ms time constant, so a knob
 /// turn reaches the sound within about 20 ms without zipper noise.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Smoothed {
+pub(crate) struct Smoothed {
     value: f64,
     target: f64,
 }
@@ -71,27 +71,27 @@ impl Smoothed {
     /// `1 - e^(-1 / (5 ms × 44.1 kHz))`.
     const STEP: f64 = 0.004_524_879;
 
-    pub(super) fn new(value: f64) -> Self {
+    pub(crate) fn new(value: f64) -> Self {
         Self {
             value,
             target: value,
         }
     }
-    pub(super) fn set(&mut self, target: f64) {
+    pub(crate) fn set(&mut self, target: f64) {
         self.target = target;
     }
     /// Move straight to the target.
-    pub(super) fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.value = self.target;
     }
-    pub(super) fn settled(&self) -> bool {
+    pub(crate) fn settled(&self) -> bool {
         self.value == self.target
     }
-    pub(super) fn value(&self) -> f64 {
+    pub(crate) fn value(&self) -> f64 {
         self.value
     }
     #[inline]
-    pub(super) fn next(&mut self) -> f64 {
+    pub(crate) fn next(&mut self) -> f64 {
         if self.value != self.target {
             let gap = self.target - self.value;
             self.value = if gap.abs() <= 1e-6 * (1.0 + self.target.abs()) {
@@ -109,7 +109,7 @@ impl Smoothed {
 /// Normalized biquad coefficients, designed with the formulas of Robert
 /// Bristow-Johnson's audio EQ cookbook.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct Coefficients {
+pub(crate) struct Coefficients {
     b0: f64,
     b1: f64,
     b2: f64,
@@ -117,7 +117,7 @@ pub(super) struct Coefficients {
     a2: f64,
 }
 impl Coefficients {
-    pub(super) const FLAT: Self = Self {
+    pub(crate) const FLAT: Self = Self {
         b0: 1.0,
         b1: 0.0,
         b2: 0.0,
@@ -138,7 +138,7 @@ impl Coefficients {
     fn angle(hz: f64) -> (f64, f64) {
         (2.0 * PI * hz / RATE).sin_cos()
     }
-    pub(super) fn low_pass(hz: f64, q: f64) -> Self {
+    pub(crate) fn low_pass(hz: f64, q: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let alpha = sin / (2.0 * q);
         let side = (1.0 - cos) / 2.0;
@@ -147,7 +147,7 @@ impl Coefficients {
             [1.0 + alpha, -2.0 * cos, 1.0 - alpha],
         )
     }
-    pub(super) fn high_pass(hz: f64, q: f64) -> Self {
+    pub(crate) fn high_pass(hz: f64, q: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let alpha = sin / (2.0 * q);
         let side = (1.0 + cos) / 2.0;
@@ -156,7 +156,7 @@ impl Coefficients {
             [1.0 + alpha, -2.0 * cos, 1.0 - alpha],
         )
     }
-    pub(super) fn all_pass(hz: f64, q: f64) -> Self {
+    pub(crate) fn all_pass(hz: f64, q: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let alpha = sin / (2.0 * q);
         Self::new(
@@ -164,7 +164,7 @@ impl Coefficients {
             [1.0 + alpha, -2.0 * cos, 1.0 - alpha],
         )
     }
-    pub(super) fn peaking(hz: f64, q: f64, db: f64) -> Self {
+    pub(crate) fn peaking(hz: f64, q: f64, db: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let alpha = sin / (2.0 * q);
         let a = 10f64.powf(db / 40.0);
@@ -179,7 +179,7 @@ impl Coefficients {
         let alpha = sin / 2.0 * ((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0).sqrt();
         (a, 2.0 * a.sqrt() * alpha)
     }
-    pub(super) fn low_shelf(hz: f64, slope: f64, db: f64) -> Self {
+    pub(crate) fn low_shelf(hz: f64, slope: f64, db: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let (a, root) = Self::shelf(sin, slope, db);
         Self::new(
@@ -195,7 +195,7 @@ impl Coefficients {
             ],
         )
     }
-    pub(super) fn high_shelf(hz: f64, slope: f64, db: f64) -> Self {
+    pub(crate) fn high_shelf(hz: f64, slope: f64, db: f64) -> Self {
         let (sin, cos) = Self::angle(hz);
         let (a, root) = Self::shelf(sin, slope, db);
         Self::new(
@@ -212,16 +212,16 @@ impl Coefficients {
         )
     }
     /// Coefficients given directly, for filters designed elsewhere.
-    pub(super) fn raw(b: [f64; 3], a: [f64; 3]) -> Self {
+    pub(crate) fn raw(b: [f64; 3], a: [f64; 3]) -> Self {
         Self::new(b, a)
     }
     #[cfg(test)]
-    pub(super) fn values(&self) -> [f64; 5] {
+    pub(crate) fn values(&self) -> [f64; 5] {
         [self.b0, self.b1, self.b2, self.a1, self.a2]
     }
     /// The magnitude response at a frequency.
     #[cfg(test)]
-    pub(super) fn magnitude(&self, hz: f64) -> f64 {
+    pub(crate) fn magnitude(&self, hz: f64) -> f64 {
         let w = 2.0 * PI * hz / RATE;
         let part = |c0: f64, c1: f64, c2: f64| {
             let re = c0 + c1 * w.cos() + c2 * (2.0 * w).cos();
@@ -235,27 +235,27 @@ impl Coefficients {
 /// A biquad in transposed direct form 2, in double precision, with state
 /// for two channels. Its coefficients may change between samples.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Biquad {
+pub(crate) struct Biquad {
     coefficients: Coefficients,
     state: [[f64; 2]; 2],
 }
 impl Biquad {
-    pub(super) const FLAT: Self = Self::new(Coefficients::FLAT);
+    pub(crate) const FLAT: Self = Self::new(Coefficients::FLAT);
 
-    pub(super) const fn new(coefficients: Coefficients) -> Self {
+    pub(crate) const fn new(coefficients: Coefficients) -> Self {
         Self {
             coefficients,
             state: [[0.0; 2]; 2],
         }
     }
-    pub(super) fn set(&mut self, coefficients: Coefficients) {
+    pub(crate) fn set(&mut self, coefficients: Coefficients) {
         self.coefficients = coefficients;
     }
-    pub(super) fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.state = [[0.0; 2]; 2];
     }
     #[inline]
-    pub(super) fn process(&mut self, channel: usize, input: f64) -> f64 {
+    pub(crate) fn process(&mut self, channel: usize, input: f64) -> f64 {
         let c = &self.coefficients;
         let [s1, s2] = &mut self.state[channel];
         let output = c.b0 * input + *s1;
@@ -323,7 +323,7 @@ impl<const TAPS: usize> Halfband<TAPS> {
 /// stages up, the curve on each of the four samples, and the same stages
 /// down. The output follows the input by a whole number of frames.
 #[derive(Clone, Copy)]
-pub(super) struct Oversampler {
+pub(crate) struct Oversampler {
     outer: Halfband<64>,
     inner: Halfband<12>,
     /// One sample at twice the rate. It makes the inner stage's delay of
@@ -332,15 +332,15 @@ pub(super) struct Oversampler {
 }
 impl Oversampler {
     /// 63 frames for the outer stage and 6 for the inner one.
-    pub(super) const LATENCY: usize = 69;
-    pub(super) const ZERO: Self = Self {
+    pub(crate) const LATENCY: usize = 69;
+    pub(crate) const ZERO: Self = Self {
         outer: Halfband::ZERO,
         inner: Halfband::ZERO,
         held: 0.0,
     };
 
     #[inline]
-    pub(super) fn process(&mut self, sample: f32, mut curve: impl FnMut(f32) -> f32) -> f32 {
+    pub(crate) fn process(&mut self, sample: f32, mut curve: impl FnMut(f32) -> f32) -> f32 {
         let (outer, inner) = (&*OUTER, &*INNER);
         let [a, b] = self.outer.up(outer, sample);
         let [p0, p1] = self.inner.up(inner, a);
@@ -357,18 +357,18 @@ impl Oversampler {
 
 /// A delay of exactly `N` frames for one channel.
 #[derive(Clone, Copy)]
-pub(super) struct Delay<const N: usize> {
+pub(crate) struct Delay<const N: usize> {
     buffer: [f32; N],
     position: usize,
 }
 impl<const N: usize> Delay<N> {
-    pub(super) const ZERO: Self = Self {
+    pub(crate) const ZERO: Self = Self {
         buffer: [0.0; N],
         position: 0,
     };
 
     /// A delay that has held `value` for as long as it reaches.
-    pub(super) const fn filled(value: f32) -> Self {
+    pub(crate) const fn filled(value: f32) -> Self {
         Self {
             buffer: [value; N],
             position: 0,
@@ -376,13 +376,13 @@ impl<const N: usize> Delay<N> {
     }
 
     #[inline]
-    pub(super) fn push(&mut self, sample: f32) -> f32 {
+    pub(crate) fn push(&mut self, sample: f32) -> f32 {
         self.push_delayed(sample, N)
     }
 
     /// Delay by up to the buffer's capacity, including zero frames.
     #[inline]
-    pub(super) fn push_delayed(&mut self, sample: f32, frames: usize) -> f32 {
+    pub(crate) fn push_delayed(&mut self, sample: f32, frames: usize) -> f32 {
         debug_assert!(frames <= N);
         let out = if frames == 0 {
             sample
@@ -419,19 +419,19 @@ static PHASES: LazyLock<[[f32; 32]; 3]> = LazyLock::new(|| {
 /// True-peak estimates for one channel by four-times interpolation, in the
 /// manner of ITU-R BS.1770: the peak of each interval between samples.
 #[derive(Clone, Copy)]
-pub(super) struct TruePeak {
+pub(crate) struct TruePeak {
     history: [f32; 32],
 }
 impl TruePeak {
     /// The interval that `push` measures starts this many frames before
     /// the sample it takes.
-    pub(super) const DELAY: usize = 16;
-    pub(super) const ZERO: Self = Self { history: [0.0; 32] };
+    pub(crate) const DELAY: usize = 16;
+    pub(crate) const ZERO: Self = Self { history: [0.0; 32] };
 
     /// Take the next sample and return the peak of the interval from the
     /// sample `DELAY` frames ago to the next one, both samples included.
     #[inline]
-    pub(super) fn push(&mut self, sample: f32) -> f32 {
+    pub(crate) fn push(&mut self, sample: f32) -> f32 {
         self.history.copy_within(..31, 1);
         self.history[0] = sample;
         PHASES
@@ -444,18 +444,18 @@ impl TruePeak {
 /// A first-order high-pass at 5 Hz that removes the offset an asymmetric
 /// curve leaves behind.
 #[derive(Clone, Copy)]
-pub(super) struct DcBlocker {
+pub(crate) struct DcBlocker {
     input: f64,
     output: f64,
 }
 impl DcBlocker {
-    pub(super) const ZERO: Self = Self {
+    pub(crate) const ZERO: Self = Self {
         input: 0.0,
         output: 0.0,
     };
 
     #[inline]
-    pub(super) fn process(&mut self, sample: f64, pole: f64) -> f64 {
+    pub(crate) fn process(&mut self, sample: f64, pole: f64) -> f64 {
         self.output = flush(sample - self.input + pole * self.output);
         self.input = sample;
         self.output
@@ -466,7 +466,7 @@ impl DcBlocker {
 /// line, bursts of noise like hi-hats, and a tone, a little different on
 /// each side.
 #[cfg(test)]
-pub(super) fn program(frames: usize) -> Vec<(f32, f32)> {
+pub(crate) fn program(frames: usize) -> Vec<(f32, f32)> {
     let mut seed: u32 = 0x1234_5678;
     let mut noise = move || {
         seed ^= seed << 13;

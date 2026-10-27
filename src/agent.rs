@@ -56,6 +56,11 @@ Arrangement (the lanes have no separate controls)
   select [clips=[ID,...]] [sample=ID|NAME]   The selected sound feeds the tools.
   seek bar=N|tick=N
   set_loop first_bar=N last_bar=N   Omit both to turn the loop off.
+  automate track=N lane=volume|send1..send4|filter points=[[BAR,VALUE],...]
+                         Replace one automation lane of a track; [] clears it.
+                         Volume is dB over the fader, -60 (silence) to 6;
+                         a send is 0 to 1 and replaces its knob; the filter
+                         is -1 (low-pass) to 1 (high-pass), open at 0.
 
 Other
   quit                   Close the window. Unsaved work opens the save modal.
@@ -237,6 +242,12 @@ pub enum Request {
         first_bar: Option<u32>,
         last_bar: Option<u32>,
     },
+    Automate {
+        track: usize,
+        #[serde(deserialize_with = "text")]
+        lane: String,
+        points: Vec<[f64; 2]>,
+    },
     Quit,
 }
 
@@ -290,6 +301,8 @@ pub struct ClipView {
     pub length_ticks: u32,
     pub offset_frames: u32,
     pub gain: f32,
+    pub fades: crate::engine::Fades,
+    pub pitch_cents: i32,
     /// Where the clip is in the window, when the arrangement shows its track.
     pub rect: Option<[f32; 4]>,
 }
@@ -304,6 +317,9 @@ pub struct TrackView {
     pub right: bool,
     pub muted: bool,
     pub solo: bool,
+    pub sends: [f32; crate::fx::BUSES],
+    /// Only lanes with points.
+    pub automation: crate::automation::Automation,
     pub clips: usize,
 }
 
@@ -545,6 +561,8 @@ pub fn song_view(session: &Session) -> SongView {
             right: track.right_enabled,
             muted: track.muted,
             solo: track.solo,
+            sends: track.sends,
+            automation: track.automation.clone(),
             clips,
         })
         .collect();
@@ -593,6 +611,8 @@ pub fn song_view(session: &Session) -> SongView {
                     length_ticks: clip.length_ticks,
                     offset_frames: clip.offset_frames,
                     gain: clip.gain,
+                    fades: clip.fades,
+                    pitch_cents: clip.pitch_cents,
                     rect: None,
                 }
             })
@@ -1138,6 +1158,21 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Request>(&request_line(&strings(&["state"])).unwrap()).unwrap(),
             Request::State
+        );
+        let line = request_line(&strings(&[
+            "automate",
+            "track=3",
+            "lane=send2",
+            "points=[[1,0],[4.5,0.75]]",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Automate {
+                track: 3,
+                lane: "send2".into(),
+                points: vec![[1.0, 0.0], [4.5, 0.75]],
+            }
         );
         for invalid in [
             &["place", "sample=1", "track=1", "bars=1"][..],

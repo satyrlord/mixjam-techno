@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 12.
+//! The application's own `.mixjam` song format, format version 14.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -6,7 +6,6 @@
 //! Versions 8 to 10 differ from version 7 where the editor does:
 //! - Ticks are the editor's 256 per bar, not MixJam's 32.
 //! - `lanes` always has 64 entries with gain, pan, and two channel switches.
-//!   Master processors, return buses, and sends do not exist here.
 //! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
 //!   signed lane gains migrate without changing their effective amplitude.
 //! - Version 10 adds lane Mute and Solo. Earlier songs open with both off.
@@ -15,6 +14,13 @@
 //! - Version 12's `master` adds the input trim and the mastering pedals.
 //!   Version 11 songs open with their eJay pedals first, in their saved
 //!   order, and the mastering pedals off after them.
+//! - Version 13 adds `fxBuses`, the four FX buses with their effects, and
+//!   each lane's `sends` to them, as version 7 saved them. Earlier songs
+//!   open with every bus empty and every send at 0.
+//! - Version 14 adds clip fades, clip pitch, and lane automation: a
+//!   placement may hold `fades` and `pitchCents`, and a lane `automation`.
+//!   Without them a clip has no fades and keeps its pitch, and a lane has no
+//!   automation.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -24,7 +30,7 @@
 use super::{Header, MAX_SONG_BYTES, text};
 use crate::{
     engine::{
-        Clip, ImportNotice, ImportedSample, MissingReference, MissingSample,
+        Clip, Fades, ImportNotice, ImportedSample, MissingReference, MissingSample,
         PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, Track,
     },
     master::{EjayCompressor, EjayEq, EjayWide, MasterChain, PedalKind},
@@ -38,7 +44,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 12;
+pub(super) const FORMAT_VERSION: u32 = 14;
 
 /// The `master` record. Its shape depends on the format version, so a
 /// record that is not the current board is kept as JSON until the version
@@ -106,6 +112,9 @@ struct Document {
     // Required from version 11; earlier versions have no master pedalboard.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     master: Option<SavedMaster>,
+    // Required from version 13; earlier versions have no FX buses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fx_buses: Option<crate::fx::FxBuses>,
     lanes: Vec<Lane>,
     samples: Vec<Sample>,
     missing_samples: Vec<Missing>,
@@ -152,6 +161,10 @@ struct Lane {
         skip_serializing_if = "Option::is_none"
     )]
     solo: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sends: Option<[f32; crate::fx::BUSES]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    automation: Option<crate::automation::Automation>,
     placements: Vec<Placement>,
 }
 #[derive(Deserialize, Serialize)]
@@ -163,6 +176,10 @@ struct Placement {
     duration_ticks: u32,
     offset_frames: u32,
     gain: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fades: Option<Fades>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pitch_cents: Option<i32>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -239,6 +256,8 @@ impl Document {
                 right_enabled: track.right_enabled,
                 muted: Some(track.muted),
                 solo: Some(track.solo),
+                sends: Some(track.sends),
+                automation: (!track.automation.is_empty()).then(|| track.automation.clone()),
                 placements: Vec::new(),
             })
             .collect();
@@ -250,6 +269,8 @@ impl Document {
                 duration_ticks: clip.length_ticks,
                 offset_frames: clip.offset_frames,
                 gain: clip.gain,
+                fades: (clip.fades != Fades::default()).then_some(clip.fades),
+                pitch_cents: (clip.pitch_cents != 0).then_some(clip.pitch_cents),
             });
         }
         Self {
@@ -265,6 +286,7 @@ impl Document {
                 loop_region: project.loop_region,
             },
             master: Some(SavedMaster::Board(project.master)),
+            fx_buses: Some(project.fx),
             lanes,
             samples: project
                 .imported_samples
@@ -354,15 +376,13 @@ impl Document {
         let invalid =
             |error: serde_json::Error| format!("The master pedalboard is invalid: {error}");
         let master = match (self.format_version, self.master) {
-            (FORMAT_VERSION, Some(SavedMaster::Board(master))) => master,
+            (12.., Some(SavedMaster::Board(master))) => master,
             // Reading the record again gives the reason it is not a board.
-            (FORMAT_VERSION, Some(master)) => {
-                serde_json::from_value(master.json()).map_err(invalid)?
-            }
+            (12.., Some(master)) => serde_json::from_value(master.json()).map_err(invalid)?,
             (11, Some(master)) => serde_json::from_value::<Booster>(master.json())
                 .map_err(invalid)?
                 .into_board(),
-            (version @ (11 | FORMAT_VERSION), None) => {
+            (version @ 11.., None) => {
                 return Err(format!("Version {version} songs require master."));
             }
             (_, None) => MasterChain::default(),
@@ -370,9 +390,35 @@ impl Document {
                 return Err(format!("Version {version} songs cannot contain master."));
             }
         };
+        let fx = match (self.format_version, self.fx_buses) {
+            (13.., Some(buses)) => buses,
+            (version @ 13.., None) => {
+                return Err(format!("Version {version} songs require fxBuses."));
+            }
+            (_, None) => crate::fx::FxBuses::default(),
+            (version, Some(_)) => {
+                return Err(format!("Version {version} songs cannot contain fxBuses."));
+            }
+        };
         let mut tracks = Vec::with_capacity(TRACK_COUNT);
         let mut clips = Vec::new();
         for (track, lane) in self.lanes.into_iter().enumerate() {
+            let sends = match (self.format_version, lane.sends) {
+                (13.., Some(sends)) => sends,
+                (version @ 13.., None) => {
+                    return Err(format!("Version {version} lanes require sends."));
+                }
+                (_, None) => [0.0; crate::fx::BUSES],
+                (version, Some(_)) => {
+                    return Err(format!("Version {version} lanes cannot contain sends."));
+                }
+            };
+            if self.format_version < 14 && lane.automation.is_some() {
+                return Err(format!(
+                    "Version {} lanes cannot contain automation.",
+                    self.format_version
+                ));
+            }
             let mut settings = Track {
                 gain: lane.gain,
                 polarity_inverted: lane.polarity_inverted.unwrap_or(false),
@@ -381,6 +427,8 @@ impl Document {
                 right_enabled: lane.right_enabled,
                 muted: lane.muted.unwrap_or(false),
                 solo: lane.solo.unwrap_or(false),
+                sends,
+                automation: lane.automation.unwrap_or_default(),
             };
             if self.format_version == 8 {
                 if lane.polarity_inverted.is_some() {
@@ -410,15 +458,27 @@ impl Document {
                 ));
             }
             tracks.push(settings);
-            clips.extend(lane.placements.into_iter().map(|placement| Clip {
-                id: placement.id,
-                sample_id: placement.sample_id,
-                track,
-                start_tick: placement.start_tick,
-                length_ticks: placement.duration_ticks,
-                offset_frames: placement.offset_frames,
-                gain: placement.gain,
-            }));
+            for placement in lane.placements {
+                if self.format_version < 14
+                    && (placement.fades.is_some() || placement.pitch_cents.is_some())
+                {
+                    return Err(format!(
+                        "Version {} placements cannot contain fades or pitchCents.",
+                        self.format_version
+                    ));
+                }
+                clips.push(Clip {
+                    id: placement.id,
+                    sample_id: placement.sample_id,
+                    track,
+                    start_tick: placement.start_tick,
+                    length_ticks: placement.duration_ticks,
+                    offset_frames: placement.offset_frames,
+                    gain: placement.gain,
+                    fades: placement.fades.unwrap_or_default(),
+                    pitch_cents: placement.pitch_cents.unwrap_or(0),
+                });
+            }
         }
         // Lanes group the placements. Identity order restores one arrangement
         // order for every lane layout, which is also the order of an import.
@@ -501,6 +561,7 @@ impl Document {
             source_settings: self.source_settings,
             libraries: self.libraries,
             master,
+            fx,
         };
         project.validate()?;
         Ok(project)
@@ -602,6 +663,8 @@ mod tests {
             length_ticks: 512,
             offset_frames: 4_410,
             gain: 0.75,
+            fades: Default::default(),
+            pitch_cents: 0,
         };
         let mut project = Project {
             title: "Night drive".into(),
@@ -660,8 +723,47 @@ mod tests {
             right_enabled: true,
             muted: true,
             solo: false,
+            sends: [0.25, 0.0, 0.5, 1.0],
+            automation: Default::default(),
         };
         project.tracks[6].solo = true;
+        project.clips[0].fades = Fades {
+            fade_in: crate::engine::Fade {
+                ticks: 64,
+                curve: crate::engine::FadeCurve::EqualPower,
+            },
+            fade_out: crate::engine::Fade {
+                ticks: 128,
+                curve: crate::engine::FadeCurve::Exponential,
+            },
+        };
+        project.clips[0].pitch_cents = -150;
+        project.tracks[5].automation.volume = vec![
+            crate::automation::Point {
+                tick: 0,
+                value: -60.0,
+            },
+            crate::automation::Point {
+                tick: 512,
+                value: 0.0,
+            },
+        ];
+        project.tracks[5].automation.sends[1] = vec![crate::automation::Point {
+            tick: 256,
+            value: 0.75,
+        }];
+        project.tracks[5].automation.filter = vec![crate::automation::Point {
+            tick: 1024,
+            value: -0.5,
+        }];
+        project.fx.buses[0].module = crate::fx::Module::AetherformReverb(
+            crate::fx::Aetherform::preset("Dark Hall").unwrap(),
+        );
+        project.fx.buses[0].return_level = 0.92;
+        project.fx.buses[2].module =
+            crate::fx::Module::EchoformDelay(crate::fx::Echoform::preset("Dub Feedback").unwrap());
+        project.fx.buses[2].powered = false;
+        project.fx.buses[3].limiter = false;
         project.master.ejay_compressor.on = true;
         project.master.ejay_compressor.drive = 368;
         project.master.ejay_eq.bands[9] = 0;
@@ -674,9 +776,21 @@ mod tests {
         project
     }
 
-    /// The same song as an earlier format version saves it: no master pedalboard.
+    /// The same song as an earlier format version saves it: no master
+    /// pedalboard, no FX buses, no sends, and no clip fades or pitch.
     fn earlier_document(expected: &mut Project, version: u32) -> serde_json::Value {
         expected.master = MasterChain::default();
+        expected.fx = crate::fx::FxBuses::default();
+        for track in &mut expected.tracks {
+            track.sends = [0.0; crate::fx::BUSES];
+        }
+        for clip in &mut expected.clips {
+            clip.fades = Fades::default();
+            clip.pitch_cents = 0;
+        }
+        for track in &mut expected.tracks {
+            track.automation = Default::default();
+        }
         let mut document = serde_json::to_value(Document::new(
             expected,
             "2020-01-02T03:04:05Z".into(),
@@ -685,6 +799,10 @@ mod tests {
         .unwrap();
         document["formatVersion"] = version.into();
         document.as_object_mut().unwrap().remove("master");
+        document.as_object_mut().unwrap().remove("fxBuses");
+        for lane in document["lanes"].as_array_mut().unwrap() {
+            lane.as_object_mut().unwrap().remove("sends");
+        }
         document
     }
 
@@ -696,7 +814,30 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_12_document_that_reopens_unchanged() {
+    fn zero_length_fades_keep_their_selected_curves_on_roundtrip() {
+        let mut project = project();
+        project.clips[0].fades = Fades {
+            fade_in: crate::engine::Fade {
+                ticks: 0,
+                curve: crate::engine::FadeCurve::EqualPower,
+            },
+            fade_out: crate::engine::Fade {
+                ticks: 0,
+                curve: crate::engine::FadeCurve::Exponential,
+            },
+        };
+        let document = Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            "2020-01-02T03:04:05Z".into(),
+        );
+        let saved = serde_json::to_vec(&document).unwrap();
+        let reopened: Document = serde_json::from_slice(&saved).unwrap();
+        assert_eq!(reopened.into_project().unwrap(), project);
+    }
+
+    #[test]
+    fn saved_song_is_a_version_14_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -704,8 +845,45 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 12);
+        assert_eq!(document["formatVersion"], 14);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
+        assert_eq!(
+            document["lanes"][63]["placements"][0]["fades"],
+            serde_json::json!({
+                "in": {"ticks": 64, "curve": "equal-power"},
+                "out": {"ticks": 128, "curve": "exponential"}
+            })
+        );
+        assert_eq!(document["lanes"][63]["placements"][0]["pitchCents"], -150);
+        assert_eq!(
+            document["lanes"][5]["automation"],
+            serde_json::json!({
+                "volume": [{"tick": 0, "value": -60.0}, {"tick": 512, "value": 0.0}],
+                "sends": [[], [{"tick": 256, "value": 0.75}], [], []],
+                "filter": [{"tick": 1024, "value": -0.5}]
+            })
+        );
+        assert!(document["lanes"][4].get("automation").is_none());
+        // A placement without fades or pitch saves neither.
+        let plain = document["lanes"][0]["placements"][0].as_object().unwrap();
+        assert!(!plain.contains_key("fades") && !plain.contains_key("pitchCents"));
+        assert_eq!(
+            document["lanes"][5]["sends"],
+            serde_json::json!([0.25, 0.0, 0.5, 1.0])
+        );
+        assert_eq!(
+            document["fxBuses"][0]["module"]["type"],
+            "aetherform-reverb"
+        );
+        assert_eq!(document["fxBuses"][0]["module"]["spaceModel"], "hall");
+        assert_eq!(document["fxBuses"][2]["module"]["divisionL"], "1/4.");
+        assert_eq!(document["fxBuses"][2]["powered"], false);
+        assert_eq!(
+            document["fxBuses"][1],
+            serde_json::json!({
+                "module": {"type": "empty"}, "powered": true, "returnLevel": 1.0, "limiter": true
+            })
+        );
         assert_eq!(document["master"]["ejayCompressor"]["on"], true);
         assert_eq!(document["master"]["ejayCompressor"]["drive"], 368);
         assert_eq!(document["master"]["ejayEq"]["bands"][9], 0);
@@ -750,6 +928,7 @@ mod tests {
                 "appVersion",
                 "createdAt",
                 "formatVersion",
+                "fxBuses",
                 "importNotices",
                 "lanes",
                 "libraries",
@@ -787,7 +966,7 @@ mod tests {
     }
 
     #[test]
-    fn version_8_signed_lanes_migrate_and_save_as_11_without_losing_polarity() {
+    fn version_8_signed_lanes_migrate_and_save_as_the_current_version_without_losing_polarity() {
         let root = std::env::temp_dir().join(format!("mixjam-polarity-v8-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -819,7 +998,7 @@ mod tests {
         assert!(migrated.tracks[1].polarity_inverted);
         save(&migrated, &path).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(saved["formatVersion"], 12);
+        assert_eq!(saved["formatVersion"], FORMAT_VERSION);
         assert_eq!(saved["createdAt"], "2020-01-02T03:04:05Z");
         assert_eq!(saved["lanes"][1]["gain"], 0.0);
         assert_eq!(saved["lanes"][1]["polarityInverted"], true);
@@ -838,7 +1017,7 @@ mod tests {
     }
 
     #[test]
-    fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_11() {
+    fn version_9_songs_open_unmuted_with_their_outputs_and_save_as_the_current_version() {
         let root = std::env::temp_dir().join(format!("mixjam-switches-v9-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -860,7 +1039,7 @@ mod tests {
         assert!(!opened.tracks[5].left_enabled);
         save(&opened, &path).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(saved["formatVersion"], 12);
+        assert_eq!(saved["formatVersion"], FORMAT_VERSION);
         assert_eq!(saved["createdAt"], "2020-01-02T03:04:05Z");
         assert_eq!(saved["lanes"][5]["muted"], false);
         for key in ["muted", "solo"] {
@@ -1040,7 +1219,48 @@ mod tests {
             ("/song/pitchRatio", serde_json::json!(1.0), "unknown field"),
             (
                 "/lanes/0/sends",
-                serde_json::json!([0, 0, 0, 0]),
+                serde_json::json!([0, 0, 0, 1.5]),
+                "sends must be",
+            ),
+            (
+                "/fxBuses/0/module/mix",
+                serde_json::json!(1),
+                "unknown field",
+            ),
+            (
+                "/fxBuses/0/returnLevel",
+                serde_json::json!(2),
+                "return level",
+            ),
+            (
+                "/lanes/63/placements/0/fades/in/ticks",
+                serde_json::json!(512),
+                "fades longer than the clip",
+            ),
+            (
+                "/lanes/63/placements/0/fades/in/curve",
+                serde_json::json!("s-curve"),
+                "unknown variant",
+            ),
+            (
+                "/lanes/63/placements/0/pitchCents",
+                serde_json::json!(2401),
+                "pitch must be",
+            ),
+            ("/formatVersion", serde_json::json!(13), "cannot contain"),
+            (
+                "/lanes/5/automation/volume/1/tick",
+                serde_json::json!(0),
+                "increasing tick order",
+            ),
+            (
+                "/lanes/5/automation/filter/0/value",
+                serde_json::json!(1.5),
+                "Filter automation values",
+            ),
+            (
+                "/lanes/5/automation/pan",
+                serde_json::json!([]),
                 "unknown field",
             ),
             ("/lanes", serde_json::json!([]), "64 lanes"),

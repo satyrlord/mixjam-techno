@@ -29,10 +29,12 @@ after each change. Typed `EditCommand` values change tempo, loop regions, clips,
 routing, and mixer settings. Separate operations place and move clips. Successful
 edits update history and mark the render for update. An accepted command that
 changes nothing is not an edit: it leaves history, the saved state, and the render
-unchanged. Changes to tempo or one gain, pan, or clip control that arrive within 400 ms
+unchanged. Changes to tempo or one gain, pan, send, FX knob, or clip control that arrive within 400 ms
 of each other form one history entry, so a slider drag is one undo step. Saving
 ends that group, so undo can return to the saved state after the next edit. A clip
-cannot be lengthened over the next clip on its track.
+cannot be lengthened over the next clip on its track. Automation point drags
+use explicit start and end boundaries, so a pause within a drag does not split
+its undo step and separate drags do not merge.
 
 Track gain is a nonnegative amplitude and polarity is a separate persistent
 boolean. Playback and export use `Track::effective_gain()` to apply the sign.
@@ -54,6 +56,31 @@ frames, with their decoded sources. It mixes any range of the song on demand.
 The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
 song and song length is bounded only by the timeline. The mix itself is dry.
+`Frames::read_sends` gives the dry sum together with the feeds of the four FX
+buses, eight interleaved channels a frame: each voice adds its sample, after the
+track's gains and pan, times the track's send. A voice applies its clip's fades
+per frame. `prepare_project` decodes each source once per clip pitch: a pitched
+copy is made off the audio thread by `sample_edit::repitch`, and the render
+worker keeps it until no clip uses that pitch. A track with automation mixes its
+voices into a 128-frame stack buffer, which its filter, volume, and send lanes
+then shape before the sum (`src/automation.rs`). Automation values are evaluated
+at each output frame, so short moves do not depend on the reader's block size.
+The shared mix is immutable. Each playback or export owns a `RenderState` with
+its filter histories and next-frame cursor, passed to `Frames::read_block`.
+A read that does not continue the previous one, after a seek or a loop, starts
+the filters from silence. `src/fx.rs` owns the buses:
+`FxBuses` is the saved settings, `DelayParam` and `ReverbParam` name each
+continuous control with its range, and `ReturnsProcessor` runs the buses on
+the feeds and adds their returns to the dry sum, before the master pedalboard.
+Its delay lines are sized and allocated when the processor is built, so the
+audio thread never allocates, including when a limiter resets. A bus with no
+input and no remaining internal tail sleeps; delay sleep allows enough time
+for a pending long echo. Bypass does not hide internal tail activity from this
+check. The safety limiter's fixed 220-frame lookahead comes off the delay's
+output tap, while feedback keeps the full selected time, so every repeat stays
+on the beat. Reverb compensates its pre-delay where possible. Export runs the stage on silence after the song
+while any bus rings, for at most `TAIL_LIMIT`, in playback's block size, so
+export and playback give the same samples.
 `src/master.rs` owns the master pedalboard: `MasterChain` is the saved
 settings, `Knob` names each continuous setting with its range, and
 `MasterProcessor` runs the board over the summed stereo mix in blocks, with
@@ -77,8 +104,9 @@ Export and `Mix::to_pcm` take the project's chain
 explicitly. Mix playback reads a `MasterControl` that the
 `Session` keeps equal to the project; the audio thread takes new settings at
 its next block with `try_lock`, so it never waits. An edit or history step that
-changes only the pedalboard is not a render change: the prepared mix stays
-valid and playback continues. Tool previews play without the pedalboard. Each
+changes only the pedalboard or the FX buses is not a render change: the prepared mix stays
+valid and playback continues. The same `MasterControl` carries the FX buses'
+settings and Clear Tail requests, which the `ReturnsProcessor` polls the same way. Tool previews play without the pedalboard. Each
 playback and export starts the pedalboard in the same settled state. A live
 processor also measures: after each block it publishes a `MeterReading` through
 atomics in the `MasterControl`, which `Session::master_meters` reads without

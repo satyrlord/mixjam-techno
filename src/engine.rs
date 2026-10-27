@@ -41,6 +41,11 @@ pub struct Track {
     pub right_enabled: bool,
     pub muted: bool,
     pub solo: bool,
+    /// The share of the track sent to each FX bus, from 0 to 1, after the
+    /// fader and pan.
+    pub sends: [f32; crate::fx::BUSES],
+    /// Lanes that move the volume, sends, and filter over the song.
+    pub automation: crate::automation::Automation,
 }
 impl Default for Track {
     fn default() -> Self {
@@ -52,6 +57,8 @@ impl Default for Track {
             right_enabled: true,
             muted: false,
             solo: false,
+            sends: [0.0; crate::fx::BUSES],
+            automation: Default::default(),
         }
     }
 }
@@ -94,6 +101,11 @@ impl<'de> Deserialize<'de> for Track {
             muted: bool,
             #[serde(default)]
             solo: bool,
+            // Projects saved before the FX buses existed send nothing.
+            #[serde(default)]
+            sends: [f32; crate::fx::BUSES],
+            #[serde(default)]
+            automation: crate::automation::Automation,
         }
         let saved = SavedTrack::deserialize(deserializer)?;
         let mut track = Self {
@@ -104,6 +116,8 @@ impl<'de> Deserialize<'de> for Track {
             right_enabled: saved.right_enabled,
             muted: saved.muted,
             solo: saved.solo,
+            sends: saved.sends,
+            automation: saved.automation,
         };
         if saved.polarity_inverted.is_none() {
             if !saved.gain.is_finite() || !(-2.0..=4.0).contains(&saved.gain) {
@@ -133,6 +147,81 @@ pub struct Clip {
     pub length_ticks: u32,
     pub offset_frames: u32,
     pub gain: f32,
+    /// The fade in from the clip's start and the fade out to the end of its
+    /// sound: the clip's end, or earlier where the source audio ends.
+    #[serde(default)]
+    pub fades: Fades,
+    /// A pitch change in cents that keeps the clip's timing.
+    #[serde(default)]
+    pub pitch_cents: i32,
+}
+
+/// The widest clip pitch change: two octaves either way.
+pub const MAX_PITCH_CENTS: i32 = 2400;
+
+/// The shape of a clip fade.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FadeCurve {
+    #[default]
+    Linear,
+    /// Constant power: two clips that cross with this curve keep their loudness.
+    EqualPower,
+    /// Even steps in decibels over 60 dB, like a natural decay.
+    Exponential,
+}
+
+impl FadeCurve {
+    pub const ALL: [Self; 3] = [Self::Linear, Self::EqualPower, Self::Exponential];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear",
+            Self::EqualPower => "Equal power",
+            Self::Exponential => "Exponential",
+        }
+    }
+
+    /// The gain at `progress` through a fade in, from 0 (silent) to 1 (full).
+    /// A fade out reads the same curve backward.
+    pub fn gain(self, progress: f32) -> f32 {
+        let t = progress.clamp(0.0, 1.0);
+        match self {
+            Self::Linear => t,
+            Self::EqualPower => (t * std::f32::consts::FRAC_PI_2).sin(),
+            Self::Exponential => (1000.0_f32.powf(t) - 1.0) / 999.0,
+        }
+    }
+}
+
+/// One clip edge's fade. Zero ticks is no fade.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Fade {
+    pub ticks: u32,
+    pub curve: FadeCurve,
+}
+
+/// A clip's two fades. Together they are no longer than the clip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Fades {
+    #[serde(rename = "in")]
+    pub fade_in: Fade,
+    #[serde(rename = "out")]
+    pub fade_out: Fade,
+}
+
+impl Fades {
+    pub fn is_none(&self) -> bool {
+        self.fade_in.ticks == 0 && self.fade_out.ticks == 0
+    }
+    /// Shorten the fades to fit a clip of `length_ticks`, the fade out first.
+    pub fn fit(mut self, length_ticks: u32) -> Self {
+        self.fade_in.ticks = self.fade_in.ticks.min(length_ticks);
+        self.fade_out.ticks = self.fade_out.ticks.min(length_ticks - self.fade_in.ticks);
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -441,6 +530,10 @@ pub struct Project {
     /// The master pedalboard. Every pedal is off unless the song switched it on.
     #[serde(default)]
     pub master: crate::master::MasterChain,
+    /// The four FX buses that the tracks' sends feed. All are empty unless
+    /// the song filled them.
+    #[serde(default)]
+    pub fx: crate::fx::FxBuses,
 }
 /// An absent version marks a legacy project. Zero is reserved for that case,
 /// so an explicit zero is not a supported version.
@@ -475,6 +568,7 @@ impl Default for Project {
             source_settings: BTreeMap::new(),
             libraries: Vec::new(),
             master: crate::master::MasterChain::default(),
+            fx: crate::fx::FxBuses::default(),
         }
     }
 }
@@ -548,6 +642,7 @@ impl Project {
             return Err("Master amplitude must be from 0 to 4.".into());
         }
         self.master.validate()?;
+        self.fx.validate()?;
         if self
             .tracks
             .iter()
@@ -561,6 +656,20 @@ impl Project {
             .any(|track| !track.pan.is_finite() || !(-1.0..=1.0).contains(&track.pan))
         {
             return Err("Track pan must be from -1 to 1.".into());
+        }
+        if self.tracks.iter().any(|track| {
+            track
+                .sends
+                .iter()
+                .any(|send| !send.is_finite() || !(0.0..=1.0).contains(send))
+        }) {
+            return Err("Track sends must be from 0 to 1.".into());
+        }
+        for (index, track) in self.tracks.iter().enumerate() {
+            track
+                .automation
+                .validate()
+                .map_err(|error| format!("Track {}: {error}", index + 1))?;
         }
         if self.clips.len() > MAX_CLIPS {
             return Err("The project has too many clips.".into());
@@ -637,6 +746,15 @@ impl Project {
             {
                 return Err(format!(
                     "Clip {} has invalid track, time, or volume data.",
+                    c.id
+                ));
+            }
+            if c.fades.fit(c.length_ticks) != c.fades {
+                return Err(format!("Clip {} has fades longer than the clip.", c.id));
+            }
+            if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(&c.pitch_cents) {
+                return Err(format!(
+                    "Clip {} pitch must be from -24 to 24 semitones.",
                     c.id
                 ));
             }
@@ -905,6 +1023,8 @@ impl Editor {
                 length_ticks,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             })
         })?;
         Ok(id)
@@ -1221,6 +1341,8 @@ mod tests {
                 right_enabled: true,
                 muted: true,
                 solo: true,
+                sends: [0.0; crate::fx::BUSES],
+                automation: Default::default(),
             };
             project.clips.push(Clip {
                 id: 37,
@@ -1230,6 +1352,8 @@ mod tests {
                 length_ticks: 31,
                 offset_frames: 7,
                 gain: 0.5,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
             project.loop_region = Some([3, 999]);
             let original = project.clone();
@@ -1266,6 +1390,8 @@ mod tests {
                 length_ticks: 256,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
             assert!(normalize_import(project).is_err());
         }
@@ -1397,6 +1523,8 @@ mod tests {
             length_ticks: 45,
             offset_frames: 9,
             gain: 0.5,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         original.import_notices.push(ImportNotice {
             source_bpm: 146.0,
@@ -1459,6 +1587,8 @@ mod tests {
             length_ticks: 256,
             offset_frames: 0,
             gain: 1.0,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         project.validate().unwrap();
         assert_eq!(
@@ -1514,6 +1644,8 @@ mod tests {
             length_ticks: 31,
             offset_frames: 23,
             gain: 0.4,
+            fades: Default::default(),
+            pitch_cents: 0,
         });
         let mut value = serde_json::to_value(&old_project).unwrap();
         value.as_object_mut().unwrap().remove("schema_version");

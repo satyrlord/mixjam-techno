@@ -287,6 +287,8 @@ fn convert(
                 length_ticks: length,
                 offset_frames: 0,
                 gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
             });
         }
     }

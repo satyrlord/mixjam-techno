@@ -17,7 +17,7 @@
 //! untouched. During playback, switching or moving a pedal crossfades from
 //! the old board to the new one, and meters read the input after the trim
 //! and the output after the last pedal (see `meters`).
-mod dsp;
+pub(crate) mod dsp;
 mod ejay;
 mod meters;
 mod pedals;
@@ -720,11 +720,15 @@ impl MasterChain {
 
 /// The link between the window and playback: settings that playback reads
 /// while it runs, and the meters it measures. An edit stores new settings;
-/// the audio thread takes them at its next block without waiting.
+/// the audio thread takes them at its next block without waiting. The FX
+/// buses (see `fx`) take their settings and Clear Tail requests here too.
 pub struct MasterControl {
     generation: AtomicU64,
     chain: Mutex<MasterChain>,
     meters: meters::Shared,
+    returns_generation: AtomicU64,
+    returns: Mutex<crate::fx::FxBuses>,
+    tail_clears: [AtomicU64; crate::fx::BUSES],
 }
 impl MasterControl {
     pub fn new(chain: &MasterChain) -> Arc<Self> {
@@ -732,7 +736,42 @@ impl MasterControl {
             generation: AtomicU64::new(0),
             chain: Mutex::new(*chain),
             meters: meters::Shared::new(),
+            returns_generation: AtomicU64::new(0),
+            returns: Mutex::new(crate::fx::FxBuses::default()),
+            tail_clears: std::array::from_fn(|_| AtomicU64::new(0)),
         })
+    }
+    pub fn set_returns(&self, buses: &crate::fx::FxBuses) {
+        let mut stored = self.returns.lock().unwrap_or_else(|e| e.into_inner());
+        if *stored == *buses {
+            return;
+        }
+        *stored = *buses;
+        drop(stored);
+        self.returns_generation.fetch_add(1, Ordering::Release);
+    }
+    pub fn returns(&self) -> crate::fx::FxBuses {
+        *self.returns.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    /// Cut the tail of one bus: it fades out over 12 ms and its effect
+    /// starts again from silence. This is not a setting and not an edit.
+    pub fn clear_tail(&self, bus: usize) {
+        if let Some(count) = self.tail_clears.get(bus) {
+            count.fetch_add(1, Ordering::Release);
+        }
+    }
+    pub(crate) fn tail_clears(&self, bus: usize) -> u64 {
+        self.tail_clears[bus].load(Ordering::Acquire)
+    }
+    /// New bus settings since `seen`, if the lock is free.
+    pub(crate) fn poll_returns(&self, seen: &mut u64) -> Option<crate::fx::FxBuses> {
+        let generation = self.returns_generation.load(Ordering::Acquire);
+        if generation == *seen {
+            return None;
+        }
+        let buses = *self.returns.try_lock().ok()?;
+        *seen = generation;
+        Some(buses)
     }
     pub fn set(&self, chain: &MasterChain) {
         let mut stored = self.chain.lock().unwrap_or_else(|e| e.into_inner());

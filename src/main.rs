@@ -274,10 +274,9 @@ fn run() -> Result<(), String> {
                 );
             }
             let mix = audio::prepare_project(&p, &library)?;
-            mix.write_wav(&target, &p.master)?;
+            mix.write_wav(&target, &p.master, &p.fx)?;
             println!(
-                "Wrote {} stereo frames at {} Hz to {}",
-                mix.frames(),
+                "Wrote stereo audio at {} Hz to {}",
                 audio::Mix::SAMPLE_RATE,
                 target.display()
             );

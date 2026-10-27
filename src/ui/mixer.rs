@@ -1,7 +1,18 @@
 //! Compact mixer presentation. Gain magnitude and polarity remain separate project edits.
+//! Each track strip also sends to the four FX buses, whose return strips follow the tracks.
 use super::view::switch_hint;
 use super::*;
+use mixjam_techno::application::fx::{BUSES, FxBus, FxBuses};
 use mixjam_techno::application::{MAX_MIXER_GAIN_DB, Track, amplitude_to_db, db_to_amplitude};
+
+/// What the mixer changed: the tracks and master level, the FX buses, and
+/// the bus whose return strip asked to open it in the Effects module.
+#[derive(Default)]
+pub(super) struct Changes {
+    pub tracks: bool,
+    pub fx: bool,
+    pub open: Option<usize>,
+}
 
 const INK: Color32 = Color32::from_rgb(28, 29, 26);
 const CREAM: Color32 = Color32::from_rgb(245, 232, 205);
@@ -164,7 +175,8 @@ pub(super) fn show(
     library: LibraryView<'_>,
     tracks: &mut [Track],
     master: &mut f32,
-) -> bool {
+    fx: &mut FxBuses,
+) -> Changes {
     let art = Artwork::load(ui.ctx());
     let art = match &art {
         Ok(art) => Some(art.as_ref()),
@@ -181,13 +193,15 @@ pub(super) fn show(
     if let Some(art) = art {
         art.tile(ui, 1, whole);
     }
-    // A 400-point panel gives the gain rail 112 points. A short window can
-    // reduce the panel to 370 points, and the rail to 84.
+    // A 400-point panel gives the physical gain rail 96 points. A short
+    // window can reduce the panel to 370 points and the rail to 68. Its
+    // interactive area also includes the cap's 16-point overhang at each end.
     let height = (ui.available_height() - 14.0).max(304.0 * scale);
     let bank_width = (ui.available_width() - width - 12.0 * scale).max(width);
     let occupied = occupied_tracks(project);
     let any_solo = project.any_solo();
     let mut changed = false;
+    let mut result = Changes::default();
     ui.horizontal_top(|ui| {
         ui.allocate_ui_with_layout(
             Vec2::new(bank_width, height + 14.0),
@@ -234,9 +248,27 @@ pub(super) fn show(
                                                     right: &mut track.right_enabled,
                                                     muted: &mut track.muted,
                                                     solo: &mut track.solo,
+                                                    automated: std::array::from_fn(|bus| {
+                                                        !track.automation.sends[bus].is_empty()
+                                                    }),
+                                                    sends: &mut track.sends,
                                                     any_solo,
                                                 }),
                                             );
+                                        },
+                                    );
+                                }
+                                // The returns follow the tracks that feed them.
+                                for (index, bus) in fx.buses.iter_mut().enumerate() {
+                                    ui.scope_builder(
+                                        egui::UiBuilder::new().id(("mixer_return", index)),
+                                        |ui| {
+                                            let (edited, open) =
+                                                return_strip(ui, art, scale, height, index, bus);
+                                            result.fx |= edited;
+                                            if open {
+                                                result.open = Some(index);
+                                            }
                                         },
                                     );
                                 }
@@ -261,7 +293,8 @@ pub(super) fn show(
             );
         });
     });
-    changed
+    result.tracks = changed;
+    result
 }
 
 struct TrackControls<'a> {
@@ -272,6 +305,9 @@ struct TrackControls<'a> {
     right: &'a mut bool,
     muted: &'a mut bool,
     solo: &'a mut bool,
+    sends: &'a mut [f32; BUSES],
+    /// Which sends an automation lane moves instead of the knob.
+    automated: [bool; BUSES],
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
 }
@@ -308,7 +344,8 @@ fn strip(
     .on_hover_text(detail);
     let value_rect = Rect::from_min_size(at(8.0, 42.0), Vec2::new(92.0, 22.0) * scale);
     let mut changed = gain_value(ui, value_rect, scale, name, gain);
-    let bottom = height / scale - 136.0;
+    // Leave room for the cap at silence above the send knobs.
+    let bottom = height / scale - 152.0;
     let rail = Rect::from_min_max(at(18.0, 84.0), at(50.0, bottom));
     changed |= gain_rail(ui, art, scale, rail, name, gain);
     let zero_y = egui::lerp(rail.bottom()..=rail.top(), gain_fraction(1.0));
@@ -380,9 +417,24 @@ fn strip(
         right,
         muted,
         solo,
+        sends,
+        automated,
         any_solo,
     }) = controls
     {
+        // The sends to FX 1 to 4, from left to right, in the gap between the
+        // rail and the pan.
+        for (bus, send) in sends.iter_mut().enumerate() {
+            let x = 15.0 + bus as f32 * 26.0;
+            changed |= send_knob(
+                ui,
+                Rect::from_center_size(at(x, height / scale - 123.0), Vec2::splat(13.0 * scale)),
+                scale,
+                &format!("{name} send FX {}", bus + 1),
+                send,
+                automated[bus],
+            );
+        }
         let pan_rect = Rect::from_min_size(
             at(8.0, height / scale - 116.0),
             Vec2::new(92.0, 16.0) * scale,
@@ -503,6 +555,227 @@ fn strip(
         );
     }
     changed
+}
+
+/// A small knob for a send amount from 0 to 1: drag, arrow keys (Shift for
+/// fine steps), Home and End, or a double-click back to 0.
+/// A small knob from 0 to 1. An `automated` knob is ringed: an automation
+/// lane sets its amount while the song plays.
+fn send_knob(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    value: &mut f32,
+    automated: bool,
+) -> bool {
+    let response = ui.interact(rect, ui.id().with(name), Sense::click_and_drag());
+    let before = *value;
+    let fine = ui.input(|input| input.modifiers.shift);
+    if response.dragged() {
+        let delta = ui.input(|input| input.pointer.delta());
+        *value += (delta.x - delta.y) / 120.0 * if fine { 0.1 } else { 1.0 };
+    }
+    if response.double_clicked() {
+        *value = 0.0;
+    }
+    if response.has_focus() {
+        ui.memory_mut(|memory| {
+            memory.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            )
+        });
+        let step = if fine { 0.01 } else { 0.05 };
+        ui.input_mut(|input| {
+            let modifiers = input.modifiers;
+            if input.consume_key(modifiers, egui::Key::ArrowUp)
+                || input.consume_key(modifiers, egui::Key::ArrowRight)
+            {
+                *value += step;
+            }
+            if input.consume_key(modifiers, egui::Key::ArrowDown)
+                || input.consume_key(modifiers, egui::Key::ArrowLeft)
+            {
+                *value -= step;
+            }
+            if input.consume_key(modifiers, egui::Key::Home) {
+                *value = 0.0;
+            }
+            if input.consume_key(modifiers, egui::Key::End) {
+                *value = 1.0;
+            }
+        });
+    }
+    ui.input(|input| {
+        use egui::accesskit::{Action, ActionData};
+        for request in input.accesskit_action_requests(response.id, Action::SetValue) {
+            if let Some(ActionData::NumericValue(draft)) = request.data
+                && draft.is_finite()
+            {
+                *value = draft as f32;
+            }
+        }
+        let turns = input.num_accesskit_action_requests(response.id, Action::Increment) as f32
+            - input.num_accesskit_action_requests(response.id, Action::Decrement) as f32;
+        *value += turns * 0.05;
+    });
+    // Keep saved precision and small fine-drag movements. Rounding belongs
+    // only to the displayed percentage.
+    *value = (*value).clamp(0.0, 1.0);
+    let center = rect.center();
+    let radius = rect.width() / 2.0;
+    ui.painter().circle_filled(center, radius, FACE);
+    ui.painter().circle_stroke(
+        center,
+        radius,
+        Stroke::new(1.0 * scale, if response.has_focus() { AMBER } else { SLOT }),
+    );
+    if *value > 0.0 {
+        let arc: Vec<Pos2> = (0..=24)
+            .map(|step| {
+                let angle = (-225.0 + 270.0 * *value * step as f32 / 24.0).to_radians();
+                center + Vec2::angled(angle) * (radius - 2.0 * scale)
+            })
+            .collect();
+        ui.painter()
+            .add(egui::Shape::line(arc, Stroke::new(2.0 * scale, AMBER)));
+    }
+    let pointer = Vec2::angled((-225.0 + 270.0 * *value).to_radians());
+    ui.painter().line_segment(
+        [center, center + pointer * (radius - 3.0 * scale)],
+        Stroke::new(1.5 * scale, CREAM),
+    );
+    if automated {
+        ui.painter().circle_stroke(
+            center,
+            radius + 2.0 * scale,
+            Stroke::new(1.0 * scale, CREAM),
+        );
+    }
+    focus_ring(ui, &response, rect, scale);
+    response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), f64::from(*value), name));
+    ui.ctx().accesskit_node_builder(response.id, |builder| {
+        use egui::accesskit::Action;
+        builder.set_min_numeric_value(0.0);
+        builder.set_max_numeric_value(1.0);
+        builder.set_numeric_value_step(0.01);
+        builder.add_action(Action::SetValue);
+        builder.add_action(Action::Increment);
+        builder.add_action(Action::Decrement);
+    });
+    response.on_hover_text(format!(
+        "{name}: {:.0}%. Drag or use arrow keys; Shift for fine steps; double-click for 0.{}",
+        *value * 100.0,
+        if automated {
+            "
+Automated: its automation lane sets the send while the song plays."
+        } else {
+            ""
+        }
+    ));
+    before != *value
+}
+
+/// The return of one FX bus: its effect, return level, input and limiter
+/// switches, and a button that opens it in the Effects module. Returns
+/// whether the bus changed and whether Edit was pressed.
+fn return_strip(
+    ui: &mut egui::Ui,
+    art: Option<&Artwork>,
+    scale: f32,
+    height: f32,
+    index: usize,
+    bus: &mut FxBus,
+) -> (bool, bool) {
+    let name = format!("FX {}", index + 1);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
+    if let Some(art) = art {
+        art.tile(ui, 1, rect);
+    } else {
+        ui.painter().rect_filled(rect, 2.0, FACE);
+    }
+    ui.painter().rect_stroke(
+        rect.shrink(0.5 * scale),
+        3.0,
+        Stroke::new(1.0 * scale, EDGE),
+        egui::StrokeKind::Inside,
+    );
+    let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
+    text(ui, at(54.0, 14.0), &name, 13.0 * scale, CREAM);
+    text(ui, at(54.0, 31.0), bus.module.label(), 11.0 * scale, CREAM);
+    let before = *bus;
+    let mut level = bus.return_level;
+    send_knob(
+        ui,
+        Rect::from_center_size(at(54.0, 82.0), Vec2::splat(44.0 * scale)),
+        scale,
+        &format!("{name} return level"),
+        &mut level,
+        false,
+    );
+    bus.return_level = level;
+    text(
+        ui,
+        at(54.0, 116.0),
+        &format!("Return {:.0}%", bus.return_level * 100.0),
+        11.0 * scale,
+        CREAM,
+    );
+    for (y, label, key, on, hint) in [
+        (
+            136.0,
+            "Input",
+            format!("{name} power"),
+            &mut bus.powered,
+            "Off stops new sound into the effect; its tail rings out.",
+        ),
+        (
+            164.0,
+            "Limiter",
+            format!("{name} limiter"),
+            &mut bus.limiter,
+            "Holds the return under -1 dBFS.",
+        ),
+    ] {
+        let response = button(
+            ui,
+            Rect::from_min_size(at(14.0, y), Vec2::new(80.0, 22.0) * scale),
+            label,
+            &key,
+            scale,
+            *on,
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, &key)
+        });
+        if response
+            .on_hover_text(format!("{key}: {}. {hint}", if *on { "on" } else { "off" }))
+            .clicked()
+        {
+            *on = !*on;
+        }
+    }
+    let edit = button(
+        ui,
+        Rect::from_min_size(
+            at(14.0, height / scale - 40.0),
+            Vec2::new(80.0, 24.0) * scale,
+        ),
+        "Edit",
+        &format!("Edit {name}"),
+        scale,
+        false,
+    )
+    .on_hover_text(format!(
+        "Show {name} in the Effects module, with all its controls."
+    ))
+    .clicked();
+    (*bus != before, edit)
 }
 
 fn text(ui: &egui::Ui, pos: Pos2, value: &str, size: f32, color: Color32) {
@@ -668,7 +941,9 @@ fn gain_rail(
 ) -> bool {
     let before = *gain;
     let mut response = ui.interact(
-        rect,
+        // The whole cap stays draggable at either end. Position mapping
+        // below still uses the physical rail and clamps beyond its ends.
+        rect.expand2(Vec2::new(0.0, 16.0 * scale)),
         ui.id().with(("gain-rail", name)),
         Sense::click_and_drag(),
     );
