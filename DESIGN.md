@@ -754,8 +754,14 @@ Rotaries share 150 logical points of full-range drag travel. Accumulate unrounde
 movement, apply Shift fine adjustment only to new movement, and stop changing a
 value when the pointer stops. Consume wheel events once. Preserve reset, exact
 entry, arrow keys, Home/End, and accessible numeric actions. Parameter definitions
-retain logarithmic mapping and discrete choices; Time Stretcher's Target BPM has
-four distinct values and pointer positions. Display rounding never changes a draft.
+retain logarithmic mapping and discrete choices. Display rounding never changes a
+draft.
+
+Tempo choices use the stepped tempo slider, after the eJay speed slider: one
+notch per supported tempo at even spacing, a silver cap, and snapping to the
+nearest notch on press, drag, wheel, arrow keys, Home/End, and accessible numeric
+actions. Arrow keys keep focus. The compact form, in the top bar and Step synth,
+reads the value at its right end; Time Stretcher's form labels every notch.
 
 Keep status inside the shared shell, with error text and recovery actions where
 needed. Long feedback wraps or scrolls. Preserve the full tooltip and accessible
@@ -767,9 +773,10 @@ and Mixer do not adopt this floating-window redesign.
 `src/ui/stretch.rs` supplies the body inside the common shell. The source selector
 supports search, bounded long names, full-name tooltips, and a virtualized list.
 Each opening starts with an empty focused search. Original BPM supports 30-300;
-Target offers 120, 140, 160, and 180. Both use shared rotary interaction. Double-click
-Original to restore the selected source tempo; double-click Target to reset to 140.
-Target positions span the dial distinctly. Hover alone never changes a value.
+Original uses shared rotary interaction. Target is the labelled tempo slider over
+120, 125, 130, 135, 140, 160, and 180. Double-click Original to restore the
+selected source tempo; double-click Target to reset to 140. Hover alone never
+changes a value.
 
 Listen and Save require available audio. Processing uses the application worker
 and disables duplicate requests. Listen becomes Stop listening while this tool's
@@ -837,7 +844,8 @@ step, and Space or Enter sets or clears the note; the cursor cell scrolls into
 view. Every cell stays a named pointer and assistive target. Expose selected
 state through accessible names and states.
 
-BPM offers 120, 140, 160, and 180. 1/16 cut ends a trigger after one sixteenth;
+BPM is the compact tempo slider over 120, 125, 130, 135, 140, 160, and 180. 1/16
+cut ends a trigger after one sixteenth;
 otherwise it continues until the next trigger or sequence end. Loop source repeats
 audio within that interval. Keep tooltips that explain retriggering, duration,
 combined behavior, whole-file repetition, and effects after source gating.

@@ -1,7 +1,7 @@
 # MixJam Techno
 
 A native Rust loop sequencer for Windows. Arrange WAV samples on up to 64 tracks
-at 120, 140, 160, or 180 BPM, mix them, and export stereo WAV. The editor also
+at 120, 125, 130, 135, 140, 160, or 180 BPM, mix them, and export stereo WAV. The editor also
 opens MixJam v7 `.mixjam` projects and several classic `.mix` song formats.
 
 The interface uses a dark graphite workspace, bundled Syncopate in uppercase

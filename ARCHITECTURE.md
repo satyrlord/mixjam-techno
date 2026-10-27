@@ -29,7 +29,7 @@ after each change. Typed `EditCommand` values change tempo, loop regions, clips,
 routing, and mixer settings. Separate operations place and move clips. Successful
 edits update history and mark the render for update. An accepted command that
 changes nothing is not an edit: it leaves history, the saved state, and the render
-unchanged. Changes to one gain, pan, or clip control that arrive within 400 ms
+unchanged. Changes to tempo or one gain, pan, or clip control that arrive within 400 ms
 of each other form one history entry, so a slider drag is one undo step. Saving
 ends that group, so undo can return to the saved state after the next edit. A clip
 cannot be lengthened over the next clip on its track.

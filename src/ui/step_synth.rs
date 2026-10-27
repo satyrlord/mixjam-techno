@@ -128,13 +128,13 @@ pub(super) fn show(
                 "Loop source",
                 &mut state.loop_source,
             );
-            left_text(&panel, point(330.0, 134.0), "BPM", 13.0, CREAM);
+            left_text(&panel, point(300.0, 134.0), "BPM", 13.0, CREAM);
             panel.scope_builder(
-                egui::UiBuilder::new().max_rect(rect(370.0, 120.0, 76.0, 28.0)),
+                egui::UiBuilder::new().max_rect(rect(336.0, 120.0, 112.0, 28.0)),
                 |ui| {
                     form_style(ui);
                     name_control(
-                        bpm_picker(ui, "step_synth_bpm", &mut state.bpm),
+                        bpm_picker(ui, "Step synth BPM", &mut state.bpm, 112.0),
                         "Step synth BPM",
                     );
                 },

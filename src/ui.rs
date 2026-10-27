@@ -2931,9 +2931,9 @@ impl MixJamApp {
 
 fn stretch_help(ui: &mut egui::Ui) {
     for text in [
-        "Original BPM describes the recording. Target BPM sets the result to 120, 140, 160, or 180 BPM.",
+        "Original BPM describes the recording. Target BPM sets the result to 120, 125, 130, 135, 140, 160, or 180 BPM.",
         "A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.",
-        "Click Original BPM for exact entry. Drag a knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes.",
+        "Click Original BPM for exact entry. Drag the Original knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes. For Target BPM, click or drag to a notch, use the mouse wheel, or focus the slider and press an arrow key.",
         "Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.",
         "Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.",
         "Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.",
@@ -2977,7 +2977,7 @@ fn step_synth_help(ui: &mut egui::Ui) {
         "Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.",
         "Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
         "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
-        "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 140, 160, and 180 BPM.",
+        "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
         "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
         "The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
         "Resampling, source looping, and effects are reconstruction policies. Original-engine audio equivalence is not established.",

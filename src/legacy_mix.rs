@@ -80,9 +80,20 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
         .saturating_sub(16 * 5 + TRAILER.len())
         .min(search_start + 4096);
     let mut arrangement = None;
+    let payload_ranges = chunks::embedded_wave_ranges(bytes)?;
+    let mut payload_index = 0;
     // Preamble bytes can resemble a track list. Resolve audio only after a
     // unique complete structural parse, independently of available samples.
     for start in search_start..=search_end {
+        while payload_index < payload_ranges.len() && payload_ranges[payload_index].end <= start {
+            payload_index += 1;
+        }
+        if payload_ranges
+            .get(payload_index)
+            .is_some_and(|range| range.contains(&start))
+        {
+            continue;
+        }
         if bytes.get(start) != Some(&1) {
             continue;
         }
@@ -124,8 +135,11 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
             return Err("Invalid clip count.".into());
         }
         for _ in 0..count {
+            // Source 0 is a product sound, 1 an imported WAV, and 3 a Sample
+            // Kit sound. Releases before the Yelsi editions saved kit sounds
+            // by their Dance eJay 2 index ID (kit archives 4-6).
             let source = reader.u8()?;
-            if !matches!(source, 0 | 1) {
+            if !matches!(source, 0 | 1 | 3) {
                 return Err("Unsupported clip source.".into());
             }
             let stored_position = reader.i32()?;
@@ -154,14 +168,16 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
                 .checked_mul(2)
                 .filter(|value| *value <= MAX_TICKS)
                 .ok_or("Invalid native clip trim.")?;
-            let reference = if source == 1 {
-                let mut reference = read_wave_extension(&mut reader)?;
-                reference
-                    .metadata
-                    .insert("Saved sample ID".into(), sample_id.to_string());
-                Reference::Wave(reference)
-            } else {
-                Reference::Native(sample_id)
+            let reference = match source {
+                1 => {
+                    let mut reference = read_wave_extension(&mut reader)?;
+                    reference
+                        .metadata
+                        .insert("Saved sample ID".into(), sample_id.to_string());
+                    Reference::Wave(reference)
+                }
+                3 => Reference::Kit(sample_id),
+                _ => Reference::Native(sample_id),
             };
             events.push(Event {
                 reference,
@@ -173,10 +189,48 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
             });
         }
     }
-    if reader.bytes.get(reader.offset..) != Some(TRAILER) {
+    if reader.take(TRAILER.len())? != TRAILER {
         return Err("Invalid mix trailer.".into());
     }
+    if reader.offset != reader.bytes.len() {
+        read_wave_appendix(&mut reader)?;
+    }
     Ok(events)
+}
+
+/// Releases before the Yelsi editions append the song's imported WAV files
+/// after the trailer, with a count even when it is zero. Each record is the
+/// saved path, the WAV size and the whole RIFF file; the block ends the file.
+/// The shared embedded-WAV scan resolves the audio, so this only checks that
+/// the block is complete.
+fn read_wave_appendix(reader: &mut Reader<'_>) -> Result<(), String> {
+    let count = reader.u32()? as usize;
+    if count > reader.bytes.len().saturating_sub(reader.offset) / 52 {
+        return Err("Invalid embedded WAV count.".into());
+    }
+    for _ in 0..count {
+        let path = reader.string()?;
+        if path.len() > 260
+            || path.as_bytes().get(1) != Some(&b':')
+            || !path.to_ascii_lowercase().ends_with(".wav")
+            || path.contains('\0')
+        {
+            return Err("Invalid embedded WAV path.".into());
+        }
+        let size = reader.u32()? as usize;
+        let wav = reader.take(size)?;
+        if size < 44
+            || &wav[..4] != b"RIFF"
+            || &wav[8..12] != b"WAVE"
+            || u32::from_le_bytes(wav[4..8].try_into().unwrap()) as usize + 8 != size
+        {
+            return Err("Invalid embedded WAV.".into());
+        }
+    }
+    if reader.offset != reader.bytes.len() {
+        return Err("Invalid data after the embedded WAV files.".into());
+    }
+    Ok(())
 }
 
 fn read_wave_extension(reader: &mut Reader<'_>) -> Result<WaveReference, String> {
@@ -394,6 +448,129 @@ mod tests {
         );
         fs::remove_file(saved).unwrap();
         fs::remove_dir(root).unwrap();
+    }
+
+    fn wave_appendix(waves: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut bytes = (waves.len() as u32).to_le_bytes().to_vec();
+        for (path, wav) in waves {
+            text(&mut bytes, path);
+            bytes.extend_from_slice(&(wav.len() as u32).to_le_bytes());
+            bytes.extend_from_slice(wav);
+        }
+        bytes
+    }
+
+    #[test]
+    fn embedded_pcm_cannot_supply_an_arrangement_candidate() {
+        // These are valid PCM16 samples and also a complete empty arrangement.
+        // The leading byte keeps the PCM byte count even.
+        let mut pcm = vec![0];
+        for track in 1..=16 {
+            pcm.push(track);
+            pcm.extend_from_slice(&0u32.to_le_bytes());
+        }
+        pcm.extend_from_slice(TRAILER);
+        let wav = legacy_format::wav::PcmWave {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: pcm
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+                .collect(),
+        }
+        .encode()
+        .unwrap();
+        let path = r"C:\absent\timeline-audio.wav";
+        let arrangement_start = custom_song("Techno eJay 2 ", &[]).len() - 16 * 5 - TRAILER.len();
+        let mut bytes = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        bytes.extend(wave_appendix(&[(path, &wav)]));
+        let project = load_bytes(&bytes, &Library::empty()).unwrap();
+        assert_eq!(project.clips.len(), 1);
+        assert_eq!(project.imported_samples.len(), 1);
+        assert!(project.missing_samples.is_empty());
+
+        // The same audio cannot hide damage to the real arrangement.
+        bytes[arrangement_start] = 99;
+        assert!(load_bytes(&bytes, &Library::empty()).is_err());
+    }
+
+    #[test]
+    fn early_release_wave_appendix_supplies_the_imported_audio() {
+        let wav = legacy_format::wav::PcmWave {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![8192; 75_600],
+        }
+        .encode()
+        .unwrap();
+        let path = r"c:\ejay\MIXWAVES\absent-take.wav";
+        let mut bytes = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        bytes.extend(wave_appendix(&[(path, &wav)]));
+        let project = load_bytes(&bytes, &Library::empty()).unwrap();
+        assert!(project.missing_samples.is_empty());
+        assert_eq!(project.imported_samples.len(), 1);
+        assert_eq!(project.clips.len(), 1);
+
+        let mut empty = custom_song("Techno eJay 2 ", &[]);
+        empty.extend(wave_appendix(&[]));
+        assert!(
+            load_bytes(&empty, &Library::empty())
+                .unwrap()
+                .clips
+                .is_empty()
+        );
+
+        let mut extra = bytes.clone();
+        extra.push(0);
+        let mut wrong_count = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        wrong_count.extend(wave_appendix(&[(path, &wav)]));
+        let count_at = wrong_count.len() - wav.len() - 4 - (path.len() + 4) - 4;
+        wrong_count[count_at] = 2;
+        let mut not_wave = custom_song("Techno eJay 2 ", &[]);
+        not_wave.extend(wave_appendix(&[(path, &[0; 64])]));
+        let mut invalid_path = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        invalid_path.extend(wave_appendix(&[("c:\\ejay\\\0absent-take.wav", &wav)]));
+        for invalid in [
+            &bytes[..bytes.len() - 1],
+            &extra,
+            &wrong_count,
+            &not_wave,
+            &invalid_path,
+        ] {
+            let error = load_bytes(invalid, &Library::empty()).unwrap_err();
+            assert!(
+                error.contains("Cannot decode the original mix arrangement"),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn sample_kit_clips_resolve_by_their_dance_ejay_2_index_id() {
+        let record = |source: u8| {
+            let mut bytes = vec![source];
+            bytes.extend_from_slice(&(-1i32).to_le_bytes());
+            bytes.extend_from_slice(&6295u16.to_le_bytes());
+            bytes
+        };
+        let library = Library::empty();
+        let kit = load_bytes(&custom_song("Techno eJay 2 ", &[record(3)]), &library).unwrap();
+        assert_eq!(
+            kit.clips[0].sample_id,
+            Product::D2.global_sample_id(6295).unwrap()
+        );
+        assert_eq!(
+            kit.missing_samples[0].reason,
+            library.describe_missing(Product::D2, 6295)
+        );
+        // The same number as a product sound is not a kit sound.
+        let native = load_bytes(&custom_song("Techno eJay 2 ", &[record(0)]), &library).unwrap();
+        assert_eq!(
+            native.clips[0].sample_id,
+            Product::T2.global_sample_id(6295).unwrap()
+        );
     }
 
     #[test]

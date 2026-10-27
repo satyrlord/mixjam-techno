@@ -551,6 +551,9 @@ mod tests {
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             assert!(!accessible_node(&output, "Booster compressor drive").1.is_disabled());
             assert!(accessible_node(&output, "Booster width").1.is_disabled());
+            // The keys and the double-click are one gesture; frames drawn under
+            // load must not count as the user's pause.
+            app.session.hold_gestures();
             focus_control(&ctx, &mut app, &output, "Booster compressor drive");
             for (key, modifiers, expected) in [
                 (egui::Key::ArrowUp, egui::Modifiers::NONE, 501),
@@ -1128,7 +1131,7 @@ mod tests {
         app.show_stretch = true;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        for label in ["Original BPM knob", "Target BPM knob"] {
+        for label in ["Original BPM knob", "Target BPM"] {
             let bounds = accessible_node(&output, label).1.bounds().unwrap();
             let position = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0,);
             let before = (app.stretch_source_bpm, app.stretch_target_bpm);
@@ -1153,43 +1156,59 @@ mod tests {
     #[test]
     fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
         for density in [1.0, 1.5, 2.0] {
-            for target in [false, true] {
-                let (ctx, mut app) = fixture();
-                ctx.set_pixels_per_point(density);
-                ctx.enable_accesskit();
-                app.selected_sample = Some(1);
-                app.show_stretch = true;
-                for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
-                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-                let label = if target { "Target BPM knob" } else { "Original BPM knob" };
-                let bounds = accessible_node(&output, label).1.bounds().unwrap();
-                let origin = Pos2::new(
-                    (bounds.x0 + bounds.x1) as f32 / 2.0,
-                    (bounds.y0 + bounds.y1) as f32 / 2.0,
-                );
-                let scale = if target { 2.5 } else { 150.0 / 270.0 };
-                let value = |app: &MixJamApp| { if target { app.stretch_target_bpm } else { app.stretch_source_bpm
-                    } };
-                // Pause and reverse within the same gesture, then start a new one.
-                for (start, offsets) in [(origin, [12.0, 24.0, 36.0, 24.0, 0.0]), (origin, [-12.0, -24.0, -36.0, -24.0, 0.0]),] {
-                    pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
-                    for (index,offset) in offsets.into_iter().enumerate() {
-                        let position = start + Vec2::new(offset * scale, 0.0);
-                        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(position)], egui::Modifiers::NONE,);
-                        let expected = if !target {140.0+f64::from(offset)}
-                            else if offsets[0]>0.0 {[160.0,160.0,180.0,160.0,140.0][index]}
-                            else {[120.0,120.0,120.0,140.0,160.0][index]};
-                        assert_eq!(value(&app), expected, "{label} at {density}x, offset {offset}");
-                        for _ in 0..3 {
-                            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-                            assert_eq!(value(&app), expected, "Holding {label} still must retain its value.");
-                        }
+            let (ctx, mut app) = fixture();
+            ctx.set_pixels_per_point(density);
+            ctx.enable_accesskit();
+            app.selected_sample = Some(1);
+            app.show_stretch = true;
+            for _ in 0..3 { frame(&ctx, &mut app, vec![], egui::Modifiers::NONE); }
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let label = "Original BPM knob";
+            let bounds = accessible_node(&output, label).1.bounds().unwrap();
+            let origin = Pos2::new(
+                (bounds.x0 + bounds.x1) as f32 / 2.0,
+                (bounds.y0 + bounds.y1) as f32 / 2.0,
+            );
+            let scale = 150.0 / 270.0;
+            // Pause and reverse within the same gesture, then start a new one.
+            for offsets in [[12.0, 24.0, 36.0, 24.0, 0.0], [-12.0, -24.0, -36.0, -24.0, 0.0]] {
+                pointer(&ctx, &mut app, origin, true, egui::Modifiers::NONE);
+                for offset in offsets {
+                    let position = origin + Vec2::new(offset * scale, 0.0);
+                    frame(&ctx, &mut app, vec![egui::Event::PointerMoved(position)], egui::Modifiers::NONE,);
+                    let expected = 140.0 + f64::from(offset);
+                    assert_eq!(app.stretch_source_bpm, expected, "{label} at {density}x, offset {offset}");
+                    for _ in 0..3 {
+                        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                        assert_eq!(app.stretch_source_bpm, expected, "Holding {label} still must retain its value.");
                     }
-                    pointer(&ctx, &mut app, start, false, egui::Modifiers::NONE);
-                    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-                    assert_eq!(value(&app),if target && offsets[0]<0.0 {160.0} else {140.0},"Reversing away from a hard stop must immediately move the shared dial.");
                 }
+                pointer(&ctx, &mut app, origin, false, egui::Modifiers::NONE);
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                assert_eq!(app.stretch_source_bpm, 140.0);
             }
+
+            // The target slider snaps to the nearest notch during a drag.
+            let bounds = accessible_node(&output, "Target BPM").1.bounds().unwrap();
+            let notch = |index: usize| {
+                let (left, right) = (bounds.x0 as f32 + 8.0, bounds.x1 as f32 - 8.0);
+                Pos2::new(left + (right - left) * index as f32 / 6.0, bounds.y0 as f32 + 10.0)
+            };
+            pointer(&ctx, &mut app, notch(4), true, egui::Modifiers::NONE);
+            for (position, expected) in [
+                (notch(6), 180.0),
+                (notch(0), 120.0),
+                (notch(2) + Vec2::new(3.0, 0.0), 130.0),
+                (notch(4) - Vec2::new(4.0, 0.0), 140.0),
+            ] {
+                frame(&ctx, &mut app, vec![egui::Event::PointerMoved(position)], egui::Modifiers::NONE,);
+                assert_eq!(app.stretch_target_bpm, expected, "Target BPM at {density}x");
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                assert_eq!(app.stretch_target_bpm, expected, "Holding the slider still must retain its value.");
+            }
+            pointer(&ctx, &mut app, notch(4), false, egui::Modifiers::NONE);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.stretch_target_bpm, 140.0);
         }
     }
 
@@ -1207,7 +1226,7 @@ mod tests {
         assert!(app.show_stretch);
         assert_eq!(app.stretch_source_bpm, 160.0);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        let (node_id, node) = accessible_node(&output, "Target BPM knob");
+        let (node_id, node) = accessible_node(&output, "Target BPM");
         assert_eq!(node.min_numeric_value(), Some(120.0));
         assert_eq!(node.max_numeric_value(), Some(180.0));
         frame(&ctx, &mut app, vec![egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
@@ -1370,11 +1389,11 @@ mod tests {
         frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowUp, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         assert_eq!(app.stretch_source_bpm, 141.0);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        focus_control(&ctx, &mut app, &output, "Target BPM knob");
+        focus_control(&ctx, &mut app, &output, "Target BPM");
         let focused_knob = ctx.memory(|memory| memory.focused());
         frame(&ctx, &mut app, vec![key_event(egui::Key::ArrowRight, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         assert_eq!(app.stretch_target_bpm, 160.0);
-        assert_eq!(ctx.memory(|memory| memory.focused()), focused_knob, "Arrow keys must keep focus on the target knob.");
+        assert_eq!(ctx.memory(|memory| memory.focused()), focused_knob, "Arrow keys must keep focus on the target slider.");
         frame(&ctx, &mut app, vec![key_event(egui::Key::End, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
         assert_eq!(app.stretch_target_bpm, 180.0);
         frame(&ctx, &mut app, vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
@@ -1498,7 +1517,7 @@ mod tests {
     }
 
     #[test]
-    fn stretch_target_pointer_spans_the_full_arc_and_original_reset_uses_source_tempo() {
+    fn stretch_target_notches_are_even_and_resets_use_140_and_source_tempo() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         let mut sample = app.session.library().samples[0].clone();
@@ -1507,13 +1526,14 @@ mod tests {
         app.selected_sample = Some(1);
         app.show_stretch = true;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        for (bpm, angle) in [(120.0, -225.0_f32), (140.0, -135.0), (160.0, -45.0), (180.0, 45.0),] {
+        for (index, bpm) in SUPPORTED_BPMS.into_iter().enumerate() {
             app.stretch_target_bpm = bpm;
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            let bounds = accessible_node(&output, "Target BPM knob").1.bounds().unwrap();
-            let center = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, (bounds.y0 + bounds.y1) as f32 / 2.0,);
-            let expected = center + Vec2::angled(angle.to_radians()) * (18.0 * 0.62);
-            assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::LineSegment { points, stroke } if (stroke.width - 2.0).abs() < 0.01 && points[1].distance(expected) < 0.05)), "No pointer at {bpm} BPM / {angle} degrees");
+            let bounds = accessible_node(&output, "Target BPM").1.bounds().unwrap();
+            let (left, right) = (bounds.x0 as f32 + 8.0, bounds.x1 as f32 - 8.0);
+            let expected = Pos2::new(left + (right - left) * index as f32 / 6.0, bounds.y0 as f32 + 10.0);
+            assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Circle(circle) if (circle.radius - 7.0).abs() < 0.01 && circle.center.distance(expected) < 0.05)), "No cap at {bpm} BPM");
+            assert!(text_rect(&output, &format!("{bpm:.0}")).center().x - expected.x < 0.5, "{bpm} BPM must be labelled under its notch");
         }
         app.stretch_source_bpm = 100.0;
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -1522,6 +1542,19 @@ mod tests {
         click(&ctx, &mut app, center, egui::Modifiers::NONE);
         click(&ctx, &mut app, center, egui::Modifiers::NONE);
         assert_eq!(app.stretch_source_bpm, 160.0);
+        // Test frames share one instant, so check the target reset in a fresh
+        // context; four clicks in one would count as a quadruple click.
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selected_sample = Some(1);
+        app.show_stretch = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Target BPM").1.bounds().unwrap();
+        let end = Pos2::new(bounds.x1 as f32 - 8.0, bounds.y0 as f32 + 10.0);
+        click(&ctx, &mut app, end, egui::Modifiers::NONE);
+        click(&ctx, &mut app, end, egui::Modifiers::NONE);
+        assert_eq!(app.stretch_target_bpm, 140.0, "Double-click must reset the target to 140 BPM.");
     }
 
     #[test]
@@ -1856,7 +1889,7 @@ mod tests {
             assert!(app.show_stretch_help);
             for _ in 0..3 { frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size); }
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            let label = "Original BPM describes the recording. Target BPM sets the result to 120, 140, 160, or 180 BPM.";
+            let label = "Original BPM describes the recording. Target BPM sets the result to 120, 125, 130, 135, 140, 160, or 180 BPM.";
             let bounds = text_rect(&output, label);
             assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(bounds));
         }
@@ -3592,9 +3625,10 @@ mod tests {
         let output = activate_control(&ctx, &mut app, &output, "1/16 cut");
         let output = activate_control(&ctx, &mut app, &output, "Loop source");
         assert!(app.step_synth.cut_sixteenth && app.step_synth.loop_source);
-        let output = activate_control(&ctx, &mut app, &output, "Step synth BPM");
-        focus_control(&ctx, &mut app, &output, "160");
-        frame(&ctx, &mut app, vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)], egui::Modifiers::NONE,);
+        focus_control(&ctx, &mut app, &output, "Step synth BPM");
+        for key in [egui::Key::End, egui::Key::ArrowLeft] {
+            frame(&ctx, &mut app, vec![key_event(key, egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        }
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(app.step_synth.bpm, 160.0);
         let output = activate_control(&ctx, &mut app, &output, "Active 2");
@@ -5321,10 +5355,38 @@ mod tests {
     }
 
     #[test]
-    fn native_tempo_menu_and_pan_controls_accept_user_input() {
+    fn project_tempo_slider_drag_is_one_undo_step() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        // Simulated frames can take longer than the user's gesture under load.
+        app.session.hold_gestures();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Project BPM").1.bounds().unwrap();
+        let notch = |index: usize| {
+            let (left, right) = (bounds.x0 as f32 + 8.0, bounds.x1 as f32 - 32.0);
+            Pos2::new(left + (right - left) * index as f32 / 6.0, (bounds.y0 + bounds.y1) as f32 / 2.0)
+        };
+        assert_eq!(app.session.project().bpm, 140.0);
+        assert!(!app.session.unsaved());
+        pointer(&ctx, &mut app, notch(4), true, egui::Modifiers::NONE);
+        for (index, expected) in [(3, 135.0), (2, 130.0), (1, 125.0)] {
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(notch(index))], egui::Modifiers::NONE);
+            assert_eq!(app.session.project().bpm, expected);
+        }
+        pointer(&ctx, &mut app, notch(1), false, egui::Modifiers::NONE);
+        assert!(app.session.unsaved());
+        assert!(app.session.history_step(false).unwrap());
+        assert_eq!(app.session.project().bpm, 140.0, "Undo must restore the tempo before the complete drag.");
+        assert!(!app.session.history_step(false).unwrap());
+        assert!(app.session.history_step(true).unwrap());
+        assert_eq!(app.session.project().bpm, 125.0);
+    }
+
+    #[test]
+    fn native_tempo_slider_and_pan_controls_accept_user_input() {
         let ctx = egui::Context::default();
         configure_style(&ctx);
-        let mut bpm = 140.0;
+        let bpm = std::cell::Cell::new(140.0);
         let mut pan = 0.0;
         let mut draw = |events: Vec<egui::Event>| {
             let mut tempo_rect = Rect::NOTHING;
@@ -5338,7 +5400,9 @@ mod tests {
                 },
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        tempo_rect = bpm_picker(ui, "fixture_tempo", &mut bpm).rect;
+                        let mut value = bpm.get();
+                        tempo_rect = bpm_picker(ui, "Fixture tempo", &mut value, 150.0).rect;
+                        bpm.set(value);
                         pan_rect = pan_control(ui, 0, &mut pan).rect;
                     });
                 },
@@ -5357,24 +5421,35 @@ mod tests {
                 },
             ]
         };
-        draw(mouse(tempo.center(), true));
-        draw(mouse(tempo.center(), false));
-        let (output, _, _) = draw(vec![]);
-        let choice = output
-            .shapes
-            .iter()
-            .find_map(|shape| {
-                if let egui::Shape::Text(text) = &shape.shape
-                    && text.galley.job.text == "180"
-                {
-                    Some(Rect::from_min_size(text.pos, text.galley.size()).center())
-                } else {
-                    None
-                }
-            })
-            .expect("The open tempo menu must offer 180 BPM.");
-        draw(mouse(choice, true));
-        draw(mouse(choice, false));
+        // Seven even notches between the cap's end positions; the value
+        // reads in the last 24 points.
+        let notch = |index: usize| {
+            let (left, right) = (tempo.left() + 8.0, tempo.right() - 32.0);
+            Pos2::new(left + (right - left) * index as f32 / 6.0, tempo.center().y)
+        };
+        for (index, expected) in [(3, 135.0), (1, 125.0), (6, 180.0)] {
+            draw(mouse(notch(index), true));
+            draw(mouse(notch(index), false));
+            assert_eq!(bpm.get(), expected, "notch {index}");
+        }
+        // Dragging snaps to the nearest notch; the arrow keys then step.
+        draw(mouse(notch(0), true));
+        draw(vec![egui::Event::PointerMoved(notch(2) + Vec2::new(4.0, 0.0))]);
+        draw(mouse(notch(2) + Vec2::new(4.0, 0.0), false));
+        assert_eq!(bpm.get(), 130.0);
+        let key = |key| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        draw(vec![key(egui::Key::ArrowRight)]);
+        assert_eq!(bpm.get(), 135.0);
+        draw(vec![key(egui::Key::End)]);
+        assert_eq!(bpm.get(), 180.0);
+        draw(vec![key(egui::Key::ArrowLeft)]);
+        assert_eq!(bpm.get(), 160.0);
         let (_, _, pan_rect) = draw(vec![]);
         draw(mouse(
             Pos2::new(pan_rect.right() - 2.0, pan_rect.center().y),
@@ -5384,7 +5459,7 @@ mod tests {
             Pos2::new(pan_rect.right() - 2.0, pan_rect.center().y),
             false,
         ));
-        assert_eq!(bpm, 180.0);
+        assert_eq!(bpm.get(), 160.0);
         assert!(pan > 0.95 && pan <= 1.0);
     }
     #[test]
@@ -6221,7 +6296,7 @@ mod tests {
         let nodes = reply["nodes"].as_array().unwrap();
         for (label, role) in [
             ("Play / pause (Space)", "button"),
-            ("Project BPM", "combo_box"),
+            ("Project BPM", "slider"),
             ("Bottom module", "combo_box"),
             ("Zoom", "slider"),
             ("Find a sound", "text_input"),
@@ -6255,14 +6330,12 @@ mod tests {
         assert!(app.effects.filter.is_none());
 
         let reply = send(&mut app, &["set", "target=Project BPM", "value=160"]);
-        assert_eq!(reply["control"]["text"], "160", "{reply}");
+        assert_eq!(reply["control"]["number"], 160.0, "{reply}");
         assert_eq!(app.session.project().bpm, 160.0);
-        assert!(!egui::Popup::is_any_open(&context));
-        let reply = send(&mut app, &["set", "target=Project BPM", "value=150"]);
-        assert_eq!(reply["ok"], false);
-        assert!(reply["error"].as_str().unwrap().contains("120, 140, 160, 180"), "{reply}");
-        assert!(!egui::Popup::is_any_open(&context));
-        assert_eq!(app.session.project().bpm, 160.0);
+        // The tempo slider snaps a value between notches to the nearest one.
+        let reply = send(&mut app, &["set", "target=Project BPM", "value=133"]);
+        assert_eq!(reply["control"]["number"], 135.0, "{reply}");
+        assert_eq!(app.session.project().bpm, 135.0);
 
         // The module selector and the Sounds panel actions have distinct names.
         let reply = send(&mut app, &["click", "target=Step synth"]);

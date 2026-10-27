@@ -157,20 +157,17 @@ pub(super) fn show(
                     choices: &[],
                 },
             );
-            controls::rotary(
-                ui,
-                rect(452.0, 98.0, 52.0, 52.0),
-                target,
-                controls::RotarySpec {
-                    name: "Target BPM knob",
-                    low: 120.0,
-                    high: 180.0,
-                    reset: 140.0,
-                    step: 20.0,
-                    decimals: 0,
-                    logarithmic: false,
-                    choices: &SUPPORTED_BPMS,
-                },
+            name_control(
+                controls::stepped_slider(
+                    ui,
+                    rect(352.0, 114.0, 252.0, 40.0),
+                    target,
+                    &SUPPORTED_BPMS,
+                    "Target BPM",
+                    true,
+                    Some(140.0),
+                ),
+                "Target BPM",
             );
             controls::well(ui, rect(104.0, 164.0, 116.0, 30.0));
             ui.scope(|ui| {
@@ -183,32 +180,6 @@ pub(super) fn show(
                 );
                 name_control(value, "Original BPM")
                     .on_hover_text("Original BPM: drag, or click to enter a value.");
-            });
-            at(ui, rect(420.0, 164.0, 116.0, 30.0), |ui| {
-                let picker = egui::ComboBox::from_id_salt("target-picker")
-                    .width(112.0)
-                    .selected_text(format!("{target:.0}"))
-                    .show_ui(ui, |ui| {
-                        for bpm in SUPPORTED_BPMS {
-                            if controls::button(
-                                ui,
-                                &format!("{bpm:.0} BPM"),
-                                if *target == bpm {
-                                    controls::ButtonRole::Primary
-                                } else {
-                                    controls::ButtonRole::Secondary
-                                },
-                            )
-                            .clicked()
-                            {
-                                *target = bpm;
-                                ui.close();
-                            }
-                        }
-                    })
-                    .response;
-                name_control(picker, "Target BPM")
-                    .on_hover_text("Target BPM: 120, 140, 160, or 180.");
             });
             let previewed =
                 feedback

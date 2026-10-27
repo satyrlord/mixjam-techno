@@ -725,7 +725,7 @@ mod tests {
             &library,
         )
         .unwrap();
-        assert_eq!(project.bpm, 120.0);
+        assert_eq!(project.bpm, 125.0);
         assert_eq!(project.import_notices[0].source_bpm, 127.0);
         assert_eq!(project.clips.len(), 2);
         assert_eq!(project.clips[0].start_tick, 32);

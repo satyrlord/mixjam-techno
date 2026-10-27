@@ -8,7 +8,7 @@ use std::{
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 4;
 pub const TRACK_COUNT: usize = 64;
-pub const SUPPORTED_BPMS: [f64; 4] = [120.0, 140.0, 160.0, 180.0];
+pub const SUPPORTED_BPMS: [f64; 7] = [120.0, 125.0, 130.0, 135.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
 pub const SOURCE_BPM: f64 = 140.0;
 /// A new song's title until it is saved under a file name.
@@ -519,7 +519,7 @@ impl Project {
             return Err("The project must have 64 track slots.".into());
         }
         if !SUPPORTED_BPMS.contains(&self.bpm) {
-            return Err("Tempo must be 120, 140, 160, or 180 BPM.".into());
+            return Err("Tempo must be 120, 125, 130, 135, 140, 160, or 180 BPM.".into());
         }
         if self.pitch_ratio != 1.0 {
             return Err("Project pitch must be 1.0.".into());
@@ -1281,8 +1281,13 @@ mod tests {
         for (source, target) in [
             (0.001, 120.0),
             (120.0, 120.0),
-            (130.0, 120.0),
-            (130.001, 140.0),
+            (122.5, 120.0),
+            (122.501, 125.0),
+            (127.5, 125.0),
+            (130.0, 130.0),
+            (132.501, 135.0),
+            (137.5, 135.0),
+            (137.501, 140.0),
             (150.0, 140.0),
             (150.001, 160.0),
             (170.0, 160.0),

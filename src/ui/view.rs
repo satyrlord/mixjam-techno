@@ -473,12 +473,19 @@ impl MixJamApp {
             ui.add_space(12.0);
             ui.label(egui::RichText::new("BPM").color(MUTED));
             let mut bpm = self.session.project().bpm;
-            if name_control(bpm_picker(ui, "project_bpm", &mut bpm), "Project BPM").changed() {
+            if name_control(
+                bpm_picker(ui, "Project BPM", &mut bpm, 104.0),
+                "Project BPM",
+            )
+            .changed()
+            {
                 let result = self.session.edit(EditCommand::SetTempo(bpm));
                 self.apply(result);
             }
             ui.add_space(10.0);
             ui.label(egui::RichText::new("Zoom").color(MUTED));
+            // A shorter zoom rail leaves room for the stepped tempo slider.
+            ui.spacing_mut().slider_width = 64.0;
             name_control(
                 ui.add(
                     egui::Slider::new(&mut self.zoom, 0.55..=2.0)
@@ -1953,21 +1960,10 @@ pub(super) fn mixer_sample_summary(
     (summary, names.join("\n"))
 }
 
-pub(super) fn bpm_picker(ui: &mut egui::Ui, id: &str, bpm: &mut f64) -> Response {
-    let before = *bpm;
-    let mut response = egui::ComboBox::from_id_salt(id)
-        .selected_text(format!("{bpm:.0}"))
-        .width(64.0)
-        .show_ui(ui, |ui| {
-            for value in SUPPORTED_BPMS {
-                ui.selectable_value(bpm, value, format!("{value:.0}"));
-            }
-        })
-        .response;
-    if *bpm != before {
-        response.mark_changed();
-    }
-    response
+/// The compact tempo slider: one notch per supported tempo, value at the end.
+pub(super) fn bpm_picker(ui: &mut egui::Ui, name: &str, bpm: &mut f64, width: f32) -> Response {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 24.0), Sense::hover());
+    controls::stepped_slider(ui, rect, bpm, &SUPPORTED_BPMS, name, false, None)
 }
 
 pub(super) fn recording_destination(

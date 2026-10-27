@@ -225,6 +225,8 @@ fn decode_pan(value: u16) -> Result<f32, String> {
 #[derive(Debug, PartialEq)]
 pub(crate) enum Reference {
     Native(u16),
+    /// A Dance eJay 2 Sample Kit sound (kit archives 4-6), by its D2 index ID.
+    Kit(u16),
     Wave(WaveReference),
     Drum(drums::Pattern),
 }
@@ -260,10 +262,7 @@ fn read_timeline(bytes: &[u8], lower_bound: usize, product: Product) -> Result<T
     let mut payload_ranges: Vec<_> = if product == Product::D2 {
         Vec::new()
     } else {
-        embedded_wave_records(bytes)?
-            .into_iter()
-            .map(|source| source.range)
-            .collect()
+        embedded_wave_ranges(bytes)?
     };
     let mut payload_index = 0;
     // Audio payloads can contain the marker bytes. Match a complete counted
@@ -718,6 +717,14 @@ fn embedded_wave_records(bytes: &[u8]) -> Result<Vec<EmbeddedSource<'_>>, String
     Ok(sources)
 }
 
+/// Framed WAV payloads are audio, even when their bytes resemble a timeline.
+pub(crate) fn embedded_wave_ranges(bytes: &[u8]) -> Result<Vec<std::ops::Range<usize>>, String> {
+    Ok(embedded_wave_records(bytes)?
+        .into_iter()
+        .map(|source| source.range)
+        .collect())
+}
+
 fn embedded_waves(bytes: &[u8]) -> Result<Vec<Wave<'_>>, String> {
     embedded_wave_records(bytes)?
         .into_iter()
@@ -993,6 +1000,7 @@ pub(crate) fn build_project(
     }
     let source_key = |reference: &Reference| match reference {
         Reference::Native(id) => Some(format!("native:{id}")),
+        Reference::Kit(id) => Some(format!("kit:{id}")),
         Reference::Wave(source) => Some(format!("external:{}", normalize_saved_path(&source.path))),
         Reference::Drum(_) => None,
     };
@@ -1111,18 +1119,23 @@ pub(crate) fn build_project(
             .and_then(|key| inferred_sources.get(&key).copied())
             .unwrap_or(TICKS_PER_BAR);
         let (sample_id, frames, rate, source_bpm, declared_ticks) = match event.reference {
-            Reference::Native(native_id) => {
-                let native_id = u32::from(native_id);
+            reference @ (Reference::Native(_) | Reference::Kit(_)) => {
+                let (native_id, kit) = match reference {
+                    Reference::Native(id) => (u32::from(id), false),
+                    Reference::Kit(id) => (u32::from(id), true),
+                    _ => unreachable!(),
+                };
                 let current_id = product.global_sample_id(native_id)?;
                 let inherited = matches!(
                     (product, native_id),
                     (Product::D3, 1..=12999) | (Product::T2, 1..=1957)
                 );
-                let source_product = if library.sample_by_id(current_id).is_none() && inherited {
-                    Product::D2
-                } else {
-                    product
-                };
+                let source_product =
+                    if kit || library.sample_by_id(current_id).is_none() && inherited {
+                        Product::D2
+                    } else {
+                        product
+                    };
                 let id = source_product.global_sample_id(native_id)?;
                 if let Some(sample) = library.sample_by_id(id) {
                     (
@@ -3057,10 +3070,9 @@ mod tests {
                                 "{} drum audio is silent",
                                 path.display()
                             );
-                            assert_eq!(
-                                pcm.frames(),
-                                (44100.0 * 240.0 / project.bpm).round() as u64
-                            );
+                            // Render length rounds up, as a bar need not
+                            // be a whole number of frames (130 BPM).
+                            assert_eq!(pcm.frames(), (44100.0 * 240.0 / project.bpm).ceil() as u64);
                             drum_audio_projects += 1;
                         }
                         if parsed == 0 {

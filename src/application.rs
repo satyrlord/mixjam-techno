@@ -324,6 +324,8 @@ pub struct Session {
     recorded_take: Option<Arc<Pcm>>,
     /// The control changed by the last edit, while later edits may continue it.
     gesture: Option<(Gesture, std::time::Instant)>,
+    /// The pause that ends a gesture: `GESTURE_GAP`, except in some tests.
+    gesture_gap: std::time::Duration,
     /// The master pedalboard settings that mix playback reads as it plays.
     master: Arc<MasterControl>,
 }
@@ -332,6 +334,7 @@ pub struct Session {
 /// succession, such as the frames of a slider drag, form one undo step.
 #[derive(Clone, Copy, PartialEq)]
 enum Gesture {
+    Tempo,
     Master,
     Track(usize, TrackControl),
     Clip(u64, ClipControl),
@@ -355,6 +358,7 @@ impl Gesture {
     /// The control a command adjusts, when it adjusts exactly one.
     fn of(command: &EditCommand, project: &Project) -> Option<Self> {
         match command {
+            EditCommand::SetTempo(_) => Some(Self::Tempo),
             EditCommand::SetClip {
                 id,
                 gain,
@@ -459,6 +463,7 @@ impl Session {
             record_mix_started: false,
             recorded_take: None,
             gesture: None,
+            gesture_gap: GESTURE_GAP,
             master,
         })
     }
@@ -467,6 +472,12 @@ impl Session {
     pub(crate) fn with_settings_root(mut self, root: PathBuf) -> Self {
         self.settings_root = root;
         self
+    }
+    /// Let a gesture continue through any pause. Gestures end after a pause in
+    /// wall-clock time, and test frames under load can take longer than one.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn hold_gestures(&mut self) {
+        self.gesture_gap = std::time::Duration::MAX;
     }
     pub fn new(library: Arc<Library>, project: Project) -> Result<Self, String> {
         let mut session = Self::headless(library, project)?;
@@ -860,7 +871,7 @@ impl Session {
         let now = std::time::Instant::now();
         let continuing = gesture.is_some()
             && self.gesture.is_some_and(|(previous, at)| {
-                Some(previous) == gesture && now.duration_since(at) < GESTURE_GAP
+                Some(previous) == gesture && now.duration_since(at) < self.gesture_gap
             });
         let generation = self.editor.generation();
         let master_only = matches!(command, EditCommand::SetMaster(_));
