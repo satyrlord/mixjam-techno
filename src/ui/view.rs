@@ -703,7 +703,7 @@ impl MixJamApp {
                 17.0,
             ));
             if self.session.library().samples.is_empty() {
-                if action_button(ui, "Choose WAV folder", true).clicked() {
+                if action_button(ui, "Open sample libraries", true).clicked() {
                     self.show_libraries = true;
                     self.close_libraries_after_scan = false;
                 }

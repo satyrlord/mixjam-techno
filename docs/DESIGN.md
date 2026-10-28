@@ -957,7 +957,7 @@ or native file pickers.
 
 ### Empty states and feedback
 
-The empty sound browser offers Choose WAV folder. Filtered empty
+The empty sound browser offers Open sample libraries. Filtered empty
 results offer Clear filters. The status strip truncates long messages and gives
 the full text on hover. Import details remain available when a project carries
 compatibility notices.

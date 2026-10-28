@@ -30,7 +30,7 @@ The launcher builds `target\release\mixjam-techno.exe` when it is absent. Use
 .\tools\runtime\cargo.ps1 build --release --locked
 ~~~
 
-On first launch, select **Libraries → Choose WAV folder**. Settings, the scan
+On first launch, select **Libraries → Add library folder**. Settings, the scan
 cache, and generated audio use `%LOCALAPPDATA%\MixJam Techno`; set
 `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 

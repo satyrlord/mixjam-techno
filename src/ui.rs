@@ -39,8 +39,8 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Response, Sense, S
 
 use crate::ui_icons::{RailIcon, RailIcons};
 use mixjam_techno::application::{
-    Clip, EQ_BAND_MAX, EQ_FREQUENCIES, EditCommand, EffectsState, LibraryView, MasterChain,
-    MeterReading, MissingReference, MissingSample, Pcm, PedalKind, Product, Project,
+    Clip, EQ_BAND_MAX, EQ_FREQUENCIES, EditCommand, EffectsState, LibraryView, MAX_LIBRARY_FOLDERS,
+    MasterChain, MeterReading, MissingReference, MissingSample, Pcm, PedalKind, Product, Project,
     SUPPORTED_BPMS, Sample, Session, StepSynthState, StretchSettings, TICKS_PER_BAR, TRACK_COUNT,
     TrackSwitch, automation,
 };
@@ -200,7 +200,7 @@ enum FileRequest {
         stretch: Option<StretchSettings>,
     },
     SaveTake,
-    SampleFolder,
+    LibraryFolder,
     ProviderFolder(Product),
     SynthSource,
     SavePattern,
@@ -787,11 +787,11 @@ impl MixJamApp {
                         .is_none_or(|shown| *shown == self.status) =>
             {
                 self.status = if scan.files_total == 0 {
-                    format!("Listing {}…", scan.root.display())
+                    format!("Listing {}…", scan_subject(&scan.roots))
                 } else {
                     format!(
                         "Scanning {}: {} of {} WAVs",
-                        scan.root.display(),
+                        scan_subject(&scan.roots),
                         scan.files_done,
                         scan.files_total
                     )
@@ -929,7 +929,9 @@ impl MixJamApp {
         let root = self
             .session
             .library()
-            .wav_root()
+            .wav_roots()
+            .first()
+            .map(PathBuf::as_path)
             .or_else(|| self.session.library().source_root(Product::T2))
             .map(Path::to_path_buf)
             .or_else(|| {
@@ -1002,15 +1004,40 @@ impl MixJamApp {
         }
     }
 
-    fn select_wave_folder(&mut self, root: &Path) {
-        self.close_libraries_after_scan = false;
-        match self.session.start_wave_scan(root, self.fallback_bpm) {
-            Ok(()) => {
-                self.clear_selection();
-                self.message(format!("Scanning {}…", root.display()));
-            }
-            Err(error) => self.error(error),
+    /// Add a library folder after the current ones and scan them all.
+    fn add_library_folder(&mut self, root: &Path) {
+        let mut roots = self.session.library().wav_roots().to_vec();
+        roots.push(root.to_path_buf());
+        self.scan_library_folders(roots);
+    }
+
+    /// Scan the library folders without the one at `index`.
+    fn remove_library_folder(&mut self, index: usize) {
+        let mut roots = self.session.library().wav_roots().to_vec();
+        if index < roots.len() {
+            roots.remove(index);
+            self.scan_library_folders(roots);
         }
+    }
+
+    /// Scan these library folders. The sound browser changes when the scan ends.
+    fn scan_library_folders(&mut self, roots: Vec<PathBuf>) {
+        if let Err(error) = self.try_scan_library_folders(roots, self.fallback_bpm) {
+            self.error(error);
+        }
+    }
+
+    fn try_scan_library_folders(
+        &mut self,
+        roots: Vec<PathBuf>,
+        fallback_bpm: f64,
+    ) -> Result<(), String> {
+        self.session.start_wave_scan(&roots, fallback_bpm)?;
+        self.fallback_bpm = fallback_bpm;
+        self.close_libraries_after_scan = false;
+        self.clear_selection();
+        self.message(format!("Scanning {}…", scan_subject(&roots)));
+        Ok(())
     }
 
     fn remove_library(&mut self, product: Product) {
@@ -2085,7 +2112,9 @@ impl MixJamApp {
                 Some("Recording.wav".into()),
                 None,
             ),
-            FileRequest::SampleFolder => ("Choose WAV folder".into(), Folder, None, None, None),
+            FileRequest::LibraryFolder => {
+                ("Choose library folder".into(), Folder, None, None, None)
+            }
             FileRequest::ProviderFolder(product) => (
                 format!("Choose {} folder", product.label()),
                 Folder,
@@ -2101,7 +2130,9 @@ impl MixJamApp {
                 Some(
                     self.session
                         .library()
-                        .wav_root()
+                        .wav_roots()
+                        .first()
+                        .map(PathBuf::as_path)
                         .or_else(|| self.session.library().source_root(Product::T2))
                         .unwrap_or_else(|| Path::new("."))
                         .to_path_buf(),
@@ -2327,7 +2358,7 @@ impl MixJamApp {
                 }
                 Err(error) => self.error(error),
             },
-            FileRequest::SampleFolder => self.select_wave_folder(&path),
+            FileRequest::LibraryFolder => self.add_library_folder(&path),
             FileRequest::ProviderFolder(product) => self.add_library(product, &path),
             FileRequest::SynthSource => {
                 self.step_synth_file = Some(path);
@@ -2465,13 +2496,21 @@ impl MixJamApp {
                 .constrain_to(ctx.viewport_rect().shrink(12.0))
                 .show(ctx, |ui| {
                     let scan = self.session.wave_scan();
-                    if scan.is_none() && self.session.library().wav_root().is_none() {
-                        ui.label(
-                            "Choose a folder of WAV files to fill the Sounds panel. Subfolders \
-                             are included. Fallback BPM applies only to sounds whose tempo cannot \
-                             be recognized.",
-                        );
+                    let folders = self.session.library().wav_roots().to_vec();
+                    if scan.is_none() && folders.is_empty() {
+                        ui.label(format!(
+                            "Add a folder of WAV files to fill the Sounds panel. Subfolders are \
+                             included. Up to {MAX_LIBRARY_FOLDERS} library folders share the \
+                             browser. Fallback BPM applies only to sounds whose tempo cannot be \
+                             recognized."
+                        ));
                     }
+                    let idle = !self.session.is_recording() && scan.is_none();
+                    let busy = if scan.is_some() {
+                        "Wait for the current scan to finish or cancel it."
+                    } else {
+                        "Stop recording before you change the library folders."
+                    };
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
                         controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM")
@@ -2481,23 +2520,43 @@ impl MixJamApp {
                                  lengths, then this fallback. Unresolved half/double matches \
                                  prefer 88–176 BPM unless the fallback selects the other tempo.",
                             );
+                        let room = folders.len() < MAX_LIBRARY_FOLDERS;
                         if ui
-                            .add_enabled_ui(!self.session.is_recording() && scan.is_none(), |ui| {
+                            .add_enabled_ui(idle && room, |ui| {
                                 controls::button(
                                     ui,
-                                    "Choose WAV folder",
+                                    "Add library folder",
                                     controls::ButtonRole::Secondary,
                                 )
                             })
                             .inner
-                            .on_disabled_hover_text(if scan.is_some() {
-                                "Wait for the current scan to finish or cancel it."
+                            .on_disabled_hover_text(if room {
+                                busy.to_string()
                             } else {
-                                "Stop recording before you change the sample folder."
+                                format!(
+                                    "The browser holds up to {MAX_LIBRARY_FOLDERS} library \
+                                     folders. Remove one first."
+                                )
                             })
                             .clicked()
                         {
-                            self.ask_path(FileRequest::SampleFolder);
+                            self.ask_path(FileRequest::LibraryFolder);
+                        }
+                        if !folders.is_empty()
+                            && ui
+                                .add_enabled_ui(idle, |ui| {
+                                    controls::button(
+                                        ui,
+                                        "Scan again",
+                                        controls::ButtonRole::Secondary,
+                                    )
+                                })
+                                .inner
+                                .on_hover_text("Read every library folder again.")
+                                .on_disabled_hover_text(busy)
+                                .clicked()
+                        {
+                            self.scan_library_folders(folders.clone());
                         }
                     });
                     if let Some(scan) = &scan {
@@ -2519,17 +2578,42 @@ impl MixJamApp {
                                 self.sync_notice();
                             }
                         });
-                        ui.small(format!(
-                            "Scanning {}",
-                            display_paths(&scan.root.to_string_lossy())
-                        ));
-                    } else if let Some(root) = self.session.library().wav_root() {
-                        ui.label(display_paths(&root.to_string_lossy()));
+                        ui.small(format!("Scanning {}", scan_subject(&scan.roots)));
                     }
                     let library = self.session.library();
-                    if let Some(root) = library.wav_root()
-                        && !library.folder_tempos().is_empty()
-                    {
+                    let mut remove = None;
+                    for (index, folder) in folders.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("Library {}", index + 1));
+                            let response = ui
+                                .add_enabled_ui(idle && folders.len() > 1, |ui| {
+                                    controls::button(ui, "Remove", controls::ButtonRole::Secondary)
+                                })
+                                .inner
+                                .on_disabled_hover_text(if folders.len() > 1 {
+                                    busy
+                                } else {
+                                    "Add another library folder before you remove this one."
+                                });
+                            if name_control(response, &format!("Remove library {}", index + 1))
+                                .clicked()
+                            {
+                                remove = Some(index);
+                            }
+                        });
+                        let path = display_paths(&folder.to_string_lossy());
+                        ui.add(egui::Label::new(&path).truncate())
+                            .on_hover_text(&path);
+                        if let Some((_, error)) = library
+                            .unloaded_roots()
+                            .iter()
+                            .find(|(root, _)| root == folder)
+                        {
+                            ui.colored_label(CORAL, format!("Not loaded: {error}"));
+                        }
+                        ui.add_space(4.0);
+                    }
+                    if !library.folder_tempos().is_empty() {
                         controls::disclosure(format!(
                             "Folder tempos ({})",
                             library.folder_tempos().len()
@@ -2537,32 +2621,24 @@ impl MixJamApp {
                         .default_open(self.capture_view_is("library-tempos"))
                         .show(ui, |ui| {
                             for (folder, bpm, count) in library.folder_tempos() {
-                                let relative = folder.strip_prefix(root).unwrap_or(folder);
-                                let name = if relative.as_os_str().is_empty() {
-                                    ".".to_string()
-                                } else {
-                                    display_paths(&relative.to_string_lossy())
-                                };
+                                let name = library_relative(library, folder);
                                 ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
                             }
                         });
                     }
-                    if let Some(root) = library.wav_root()
-                        && !library.skipped_waves().is_empty()
-                    {
+                    if !library.skipped_waves().is_empty() {
                         controls::disclosure(format!(
                             "Skipped WAVs ({})",
                             library.skipped_waves().len()
                         ))
                         .show(ui, |ui| {
                             for (path, error) in library.skipped_waves() {
-                                let relative = path.strip_prefix(root).unwrap_or(path);
-                                ui.small(format!(
-                                    "{}: {error}",
-                                    display_paths(&relative.to_string_lossy())
-                                ));
+                                ui.small(format!("{}: {error}", library_relative(library, path)));
                             }
                         });
+                    }
+                    if let Some(index) = remove {
+                        self.remove_library_folder(index);
                     }
                     controls::disclosure("Optional product providers")
                         .default_open(self.capture_view_is("library-providers"))
@@ -3292,6 +3368,33 @@ fn occupied_tracks(project: &Project) -> Vec<usize> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+/// What a scan reads, for the status line: one library folder, or a count.
+fn scan_subject(roots: &[PathBuf]) -> String {
+    match roots {
+        [root] => root.display().to_string(),
+        _ => format!("{} library folders", roots.len()),
+    }
+}
+
+/// A path below a library folder as the Libraries window shows it: relative
+/// to its folder, after the folder's own name when there are several.
+fn library_relative(library: LibraryView<'_>, path: &Path) -> String {
+    let Some(root) = library.wav_root_of(path) else {
+        return display_paths(&path.to_string_lossy());
+    };
+    let base = if library.wav_roots().len() > 1 {
+        root.parent().unwrap_or(root)
+    } else {
+        root
+    };
+    let relative = path.strip_prefix(base).unwrap_or(path);
+    if relative.as_os_str().is_empty() {
+        ".".into()
+    } else {
+        display_paths(&relative.to_string_lossy())
+    }
 }
 
 fn with_import_summary(text: String, project: &Project) -> String {

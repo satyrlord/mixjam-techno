@@ -10,8 +10,12 @@ They open no window and play no sound.
 .\target\release\mixjam-techno.exe render --samples '.\samples' --mix 'song.mixjam' --stems '.\song tracks'
 ~~~
 
-`--samples PATH` selects a WAV folder. `--source-bpm BPM` supplies the fallback
-tempo for unrecognized WAVs in folders whose loop lengths do not agree on one.
+`--samples PATH` selects a WAV folder. Give `--samples` up to 9 times to use
+several library folders; the application merges them into one set of sounds, as
+the Libraries window does. A folder that cannot be read is left out with a
+warning on standard error; the command fails when no folder can be read.
+`--source-bpm BPM` supplies the fallback tempo for unrecognized WAVs in folders
+whose loop lengths do not agree on one.
 `inspect` reports how many identities the audio verified and lists WAVs whose
 audio differs from the sample they are named after. `convert` saves a `.mixjam` song;
 `render` writes stereo WAV. With `--stems FOLDER` instead of `--output`, `render`
@@ -21,10 +25,16 @@ master pedalboard. A track or return that exceeds the 16-bit range stops the
 export before destination files change. Lower its level or the master gain
 and retry. The files sum to the bypassed mix when that mix does not clip.
 
-To start the window with a WAV folder and a song, use the launcher:
+~~~powershell
+.\target\release\mixjam-techno.exe render --samples '.\drums' --samples '.\loops' --mix 'song.mixjam' --output 'song.wav'
+~~~
+
+To start the window with a WAV folder and a song, use the launcher. `-Samples`
+takes a list of up to 9 folders:
 
 ~~~powershell
 .\run.ps1 -Samples '.\samples' -Mix '.\song.mixjam'
+.\run.ps1 -Samples '.\drums','.\loops' -Mix '.\song.mixjam'
 ~~~
 
 `mixjam-techno --help` lists every option. [AGENT-CONTROL.md](AGENT-CONTROL.md)

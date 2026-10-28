@@ -29,13 +29,29 @@ Hover over the right-hand tool icons for action names.
 
 ## Sample libraries
 
-On first launch, select **Libraries → Choose WAV folder**. The folder can have
-WAV files in subfolders. The scan runs in the background. The Libraries window
-shows progress and has a Cancel button. You can use the window during the scan.
-The application changes the active folder when the scan is complete. It caches
+On first launch, select **Libraries → Add library folder**. A library folder can
+have WAV files in subfolders. You can add up to 9 library folders. The application
+scans all of them and shows their sounds together in Sounds. The Libraries window
+lists the folders in order. **Remove** next to a folder takes it out of the list;
+the list keeps at least one folder. **Scan again** reads every folder again, for
+example after you add files or connect a drive. A library folder cannot be inside
+another one.
+
+The scan runs in the background. The Libraries window shows progress and has a
+Cancel button. You can use the window during the scan. The application changes
+the sounds when the scan is complete; a cancelled scan changes nothing. It caches
 probe results and decodes changed files again on a later scan. Unchanged scans
 leave the cache file intact. Scans process WAV audio as a stream to limit memory
-use. Expand **Folder tempos** to see each folder's source tempo; long lists scroll.
+use. There is no limit on the number of WAV files. Expand **Folder tempos** to see
+each folder's source tempo; long lists scroll.
+
+If a library folder cannot be read, or has no readable WAV, the other folders
+still load. The status line names the folder and the reason, and the Libraries
+window shows it under the folder. The folder stays in the list, but its sounds
+are not in Sounds until a later scan can read it. Songs that use those sounds
+show them as missing. When no folder can be read, the scan fails and the sounds
+do not change. When several folders contain original product samples, each
+product's samples come from the first folder in the list that has them.
 
 The application identifies extracted product samples by their audio, regardless
 of filename. These samples keep their original tempo and length. A folder also
@@ -174,8 +190,10 @@ Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
 
 A `.mixjam` song is JSON, format version 16; [SONG-FORMAT.md](SONG-FORMAT.md)
 describes it and how earlier versions open. A song links to WAV files; it is
-not a portable audio bundle. After moving the sample folder, select its new
-location before opening the song.
+not a portable audio bundle. A song finds a WAV that moved within a library
+folder, or to another library folder, by the end of its path: the file name and
+the folders just above it. After moving a library folder, add its new location
+before you open the song.
 
 ## Open songs from other programs
 

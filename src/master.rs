@@ -481,7 +481,7 @@ impl Knob {
             Self::TrimEqHarsh => range(-3.0, 0.0, -1.0, 0.1),
             Self::CompressorThreshold => range(-30.0, 0.0, -16.0, 0.5),
             Self::CompressorRatio => ratio_range(1.5, 10.0, 2.0, 0.1),
-            Self::CompressorAttack => ratio_range(0.1, 30.0, 10.0, 0.1),
+            Self::CompressorAttack => ratio_range(0.1, 100.0, 10.0, 0.1),
             Self::CompressorRelease => ratio_range(50.0, 1200.0, 300.0, 10.0),
             Self::MaximizerBoost => range(0.0, 25.0, 10.0, 1.0),
             Self::LiftLow | Self::LiftAir => range(0.0, 2.0, 1.0, 0.1),

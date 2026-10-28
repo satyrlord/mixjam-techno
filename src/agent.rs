@@ -72,6 +72,13 @@ Arrangement (the lanes have no separate controls)
                          -2400 to 2400 cents and keeps the timing. Use
                          move_clips to move a clip.
 
+Libraries
+  libraries              The library folders in order, and why any did not load.
+  set_libraries folders=[\"PATH\",...] [fallback_bpm=N]   Replace the list with
+                         1 to 9 folders and scan them, as the Sample libraries
+                         window does. The sounds change when the scan ends;
+                         `wait idle=true` waits for it.
+
 Other
   quit                   Close the window. Unsaved work opens the save modal.
 
@@ -109,6 +116,21 @@ fn optional_text<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<String>, D::Error> {
     Ok(Option::<Value>::deserialize(deserializer)?.map(|value| value.text()))
+}
+
+/// Accept one path as text, or a JSON list of paths. A Windows path with
+/// single backslashes is not JSON, so it arrives as text.
+fn paths<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<PathBuf>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Paths {
+        One(PathBuf),
+        Many(Vec<PathBuf>),
+    }
+    Ok(match Paths::deserialize(deserializer)? {
+        Paths::One(path) => vec![path],
+        Paths::Many(paths) => paths,
+    })
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -270,6 +292,13 @@ pub enum Request {
         fade_out_curve: Option<crate::engine::FadeCurve>,
         pitch_cents: Option<i32>,
     },
+    Libraries,
+    /// Replace the library folders and scan them.
+    SetLibraries {
+        #[serde(deserialize_with = "paths")]
+        folders: Vec<PathBuf>,
+        fallback_bpm: Option<f64>,
+    },
     Quit,
 }
 
@@ -368,9 +397,18 @@ pub struct ProviderView {
     pub root: PathBuf,
 }
 
+/// A library folder that the last scan could not load.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct UnloadedView {
+    pub folder: PathBuf,
+    pub error: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct LibraryState {
-    pub folder: Option<PathBuf>,
+    /// The library folders of the last scan, in order, loaded or not.
+    pub folders: Vec<PathBuf>,
+    pub unloaded: Vec<UnloadedView>,
     pub samples: usize,
     pub groups: Vec<String>,
     pub providers: Vec<ProviderView>,
@@ -423,7 +461,7 @@ pub struct Tools {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ScanView {
-    pub root: PathBuf,
+    pub folders: Vec<PathBuf>,
     pub files_done: usize,
     pub files_total: usize,
 }
@@ -512,6 +550,14 @@ pub enum Body {
         width: usize,
         height: usize,
         pixels_per_point: f32,
+    },
+    Libraries {
+        folders: Vec<PathBuf>,
+        unloaded: Vec<UnloadedView>,
+        /// The most folders that the list can hold.
+        max_folders: usize,
+        fallback_bpm: f64,
+        scan: Option<ScanView>,
     },
     Done(Box<Outcome>),
 }
@@ -676,7 +722,8 @@ pub fn song_view(session: &Session) -> SongView {
             .chain(project.source_notices.iter().cloned())
             .collect(),
         library: LibraryState {
-            folder: library.wav_root().map(PathBuf::from),
+            folders: library.wav_roots().to_vec(),
+            unloaded: unloaded_views(session),
             samples: library.samples.len(),
             groups,
             providers: library
@@ -700,10 +747,23 @@ pub fn transport(session: &Session) -> Transport {
     }
 }
 
+/// The library folders that the last scan could not load.
+pub fn unloaded_views(session: &Session) -> Vec<UnloadedView> {
+    session
+        .library()
+        .unloaded_roots()
+        .iter()
+        .map(|(folder, error)| UnloadedView {
+            folder: folder.clone(),
+            error: error.clone(),
+        })
+        .collect()
+}
+
 pub fn busy(session: &Session) -> Busy {
     Busy {
         scan: session.wave_scan().map(|scan| ScanView {
-            root: scan.root,
+            folders: scan.roots,
             files_done: scan.files_done,
             files_total: scan.files_total,
         }),
@@ -1224,6 +1284,28 @@ mod tests {
                 fade_out_ticks: Some(128),
                 fade_out_curve: Some(crate::engine::FadeCurve::EqualPower),
                 pitch_cents: None,
+            }
+        );
+        let line = request_line(&strings(&[
+            "set_libraries",
+            r#"folders=["C:/one","D:/two"]"#,
+            "fallback_bpm=160",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::SetLibraries {
+                folders: vec![PathBuf::from("C:/one"), PathBuf::from("D:/two")],
+                fallback_bpm: Some(160.0),
+            }
+        );
+        // One Windows path is text, not JSON.
+        let line = request_line(&strings(&["set_libraries", r"folders=C:\one folder"])).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::SetLibraries {
+                folders: vec![PathBuf::from(r"C:\one folder")],
+                fallback_bpm: None,
             }
         );
         for invalid in [

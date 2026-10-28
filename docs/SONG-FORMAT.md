@@ -71,7 +71,7 @@ version 16 are:
 | `softClip` | `amount` from 0 to 6 dB and `ceiling` from -6 to 0 dBFS |
 | `tube` | `drive` from 0 to 10 and `mix` from 0 to 100 percent |
 | `trimEq` | `highPass` from 10 to 40 Hz, and `mud` and `harsh` from -3 to 0 dB |
-| `busCompressor` | `threshold` from -30 to 0 dBFS, `ratio` from 1.5 to 10, `attack` from 0.1 to 30 ms, and `release` from 50 to 1200 ms |
+| `busCompressor` | `threshold` from -30 to 0 dBFS, `ratio` from 1.5 to 10, `attack` from 0.1 to 100 ms, and `release` from 50 to 1200 ms |
 | `maximizer` | `boost` from 0 to 25 percent |
 | `liftEq` | `low` and `air` from 0 to 2 dB |
 | `tape` | `drive` from 0 to 10 and `speed`, 15 or 30 inches per second |

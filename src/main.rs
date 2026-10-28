@@ -7,7 +7,7 @@ use mixjam_techno::{
     agent, audio,
     engine::Project,
     legacy_mix,
-    library::Library,
+    library::{Library, MAX_LIBRARY_FOLDERS},
     products::{LibraryBinding, Product},
     project_io,
 };
@@ -45,7 +45,7 @@ fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let mut app: Option<PathBuf> = None;
-    let mut samples: Option<PathBuf> = None;
+    let mut samples: Vec<PathBuf> = Vec::new();
     let mut source_bpm: Option<f64> = None;
     let mut mix = None;
     let mut command = "gui".to_string();
@@ -86,9 +86,14 @@ fn run() -> Result<(), String> {
                 });
             }
             "--samples" => {
-                samples = Some(PathBuf::from(
+                samples.push(PathBuf::from(
                     args.next().ok_or("--samples needs a WAV folder path.")?,
-                ))
+                ));
+                if samples.len() > MAX_LIBRARY_FOLDERS {
+                    return Err(format!(
+                        "--samples can be given up to {MAX_LIBRARY_FOLDERS} times."
+                    ));
+                }
             }
             "--source-bpm" => {
                 source_bpm = Some(
@@ -116,7 +121,7 @@ fn run() -> Result<(), String> {
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH ...] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH, or up to 9 library folders with one --samples for each; the app merges them into one sound browser. Libraries in the app does the same. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
@@ -128,10 +133,10 @@ fn run() -> Result<(), String> {
     }
     let mut library = Library::empty();
     let mut startup_messages = Vec::new();
-    if samples.is_none() && command == "gui" {
+    if samples.is_empty() && command == "gui" {
         match project_io::load_wave_config() {
             Ok(Some(config)) => {
-                samples = Some(config.root);
+                samples = config.roots;
                 // A tempo given on the command line overrides the saved one.
                 source_bpm = source_bpm.or(Some(config.source_bpm));
             }
@@ -143,13 +148,27 @@ fn run() -> Result<(), String> {
     // The window opens at once and scans its sample folder in the background.
     // Interface captures keep the synchronous scan so that they are complete.
     let background_scan = command == "gui"
-        && samples.is_some()
+        && !samples.is_empty()
         && std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO").is_none();
-    if let Some(root) = &samples
-        && !background_scan
-    {
-        match project_io::open_wav_folder_cached(&project_io::data_root(), root, source_bpm, None) {
-            Ok(loaded) => library = loaded,
+    if !samples.is_empty() && !background_scan {
+        match project_io::open_wav_folders_cached(
+            &project_io::data_root(),
+            &samples,
+            source_bpm,
+            None,
+        ) {
+            Ok(loaded) => {
+                // The other library folders load without the one that cannot.
+                for (root, error) in loaded.unloaded_roots() {
+                    let warning = format!("Library {} was not loaded: {error}", root.display());
+                    if command == "gui" {
+                        startup_messages.push(warning);
+                    } else {
+                        eprintln!("{warning}");
+                    }
+                }
+                library = loaded;
+            }
             Err(error) if command == "gui" => startup_messages.push(error),
             Err(error) => return Err(error),
         }
@@ -203,7 +222,8 @@ fn run() -> Result<(), String> {
                 .count();
             println!(
                 "{}",
-                serde_json::json!({"samples":library.samples.len(),"name_and_frame_matched_wavs":mapped,"unresolved_wav_mappings":library.samples.len()-mapped,"archive":library.archive_path,"samples_root":samples,
+                serde_json::json!({"samples":library.samples.len(),"name_and_frame_matched_wavs":mapped,"unresolved_wav_mappings":library.samples.len()-mapped,"archive":library.archive_path,"sample_folders":library.wav_roots(),
+                    "unloaded_sample_folders":library.unloaded_roots().iter().map(|(folder,error)| serde_json::json!({"folder":folder,"error":error})).collect::<Vec<_>>(),
                     "audio_verified_identities":library.verified_count(),
                     "folder_tempos":library.folder_tempos().iter().map(|(folder,bpm,count)| serde_json::json!({"folder":folder,"bpm":bpm,"wavs":count})).collect::<Vec<_>>(),
                     "wavs_with_different_audio":library.unverified_waves().map(|(id,path)| serde_json::json!({"id":id,"path":path})).collect::<Vec<_>>(),
@@ -370,8 +390,8 @@ fn run() -> Result<(), String> {
                             mixjam_techno::application::Session::new(Arc::new(library), project)?;
                         let mut messages = startup_messages;
                         session.prefer_providers(&explicit_providers);
-                        if background_scan && let Some(root) = &samples {
-                            if let Err(error) = session.start_wave_scan(root, source_bpm) {
+                        if background_scan {
+                            if let Err(error) = session.start_wave_scan(&samples, source_bpm) {
                                 messages.push(error);
                             }
                             if let Some(path) = &mix

@@ -33,6 +33,12 @@ port.
   `delete_clips`, `select`, `seek`, `set_loop`, `automate`, and `clip` edit them
   without positions. `clip` sets gain, trim, length, fades, and pitch for one clip.
   These edits use the same history as edits made by hand.
+- `libraries` lists the library folders in order and the reason any did not
+  load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with
+  1 to 9 folders and scans them, as the Libraries window does. One folder can be
+  given as text: `folders=D:\drums`. The sounds change when the scan ends; send
+  `wait idle=true` before you use them. `state` also has the folders under
+  `song.library`.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
   window in place of the native dialog. Set its **Path** field and select
   **Confirm path**. A person can type the path too.

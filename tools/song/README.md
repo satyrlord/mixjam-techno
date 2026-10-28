@@ -15,7 +15,8 @@ A tool that needs a missing key stops and names the key.
 
 | Key | Used by |
 |---|---|
-| `SAMPLES_FOLDER` | `bright.py` (relative patterns) |
+| `SAMPLES_FOLDER_1` to `SAMPLES_FOLDER_9` | `samples.py` (the libraries it indexes) and `bright.py` (relative patterns are tried under each library) |
+| `SAMPLE_INDEX` | `samples.py`; optional, default `local-data/samples/index.tsv` |
 | `REFERENCE_ALBUM_FOLDER` | `master.py --album` |
 | `ARTIST_PROFILE` | the song-review skill; `reference.json` beside it is the default reference profile |
 | `REFERENCE_PROFILE` | `master.py` and `measure.py` (targets and reference columns); optional |
@@ -32,6 +33,7 @@ A tool that needs a missing key stops and names the key.
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--fit DB]` | Renders a board over a premaster and compares it with the reference profile. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`; a board copied from a format-15 song has the earlier keys and fails to render until you rename them. |
 | `master.py --album` | `master.py --album [DIR] [--track NAME ...] [--out PROFILE.json]` | Measures a reference album and writes the reference profile. |
 | `stereo.py` | `stereo.py [--bpm N] WAV...` | Low-end share, width above 120 Hz, and side level of sounds. |
+| `samples.py` | `samples.py index` / `samples.py find [WORD ...] [--bpm N] [--key KEY] [--kind KIND] [--loops]` / `samples.py summary` | Indexes WAV headers and WAV/MIDI path metadata (tempo, key, chord, root note, bars, kind, and where each came from), and searches the index. Later runs read headers again when file size, modification time, or pack metadata changes. MIDI notes are not read. |
 | `bright.py` | `bright.py PATTERN...` | Brightness of sounds, to find harsh hats. |
 | `drumfamily.py` | `drumfamily.py [--bpm N] WAV...` | Rhythm and tone likeness of drum loops. |
 | `midinotes.py` | `midinotes.py SEMITONES MIDI...` | Notes per bar of MIDI loops. |

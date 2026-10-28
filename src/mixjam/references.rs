@@ -1,4 +1,5 @@
 //! Resolve preserved MixJam Sample Folder-relative paths after folder moves.
+//! Every library folder of the sound browser is searched.
 use crate::library::Library;
 use std::{
     collections::{HashMap, HashSet},
@@ -6,15 +7,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// The measured curated/original tree contains 101,874 entries. Do not turn a
-// missing reference into an unbounded scan of another disk or parent folder.
-const MAX_SCAN_ENTRIES: usize = 200_000;
+// The measured curated/original tree contains 101,874 entries. Each scan
+// covers the parent of one `_original` library folder: the bound keeps a
+// missing reference from becoming an unbounded scan of another disk, far
+// above any sample library that a parent folder holds.
+const MAX_SCAN_ENTRIES: usize = 2_000_000;
 type Index = HashMap<String, Vec<PathBuf>>;
 
 pub(crate) struct ReferenceResolver<'a> {
     library: &'a Library,
     selected: Option<Index>,
-    parent: Option<Result<Index, String>>,
+    /// The scan of each legacy parent folder, made when a reference needs it.
+    parents: HashMap<PathBuf, Result<Index, String>>,
     cache: HashMap<String, Result<Vec<PathBuf>, String>>,
 }
 
@@ -23,7 +27,7 @@ impl<'a> ReferenceResolver<'a> {
         Self {
             library,
             selected: None,
-            parent: None,
+            parents: HashMap::new(),
             cache: HashMap::new(),
         }
     }
@@ -43,8 +47,17 @@ impl<'a> ReferenceResolver<'a> {
         result
     }
 
-    fn legacy_parent(&self) -> Option<&Path> {
-        legacy_parent(self.library.wav_root()?)
+    /// The parent of each `_original` library folder, once, in library order.
+    fn legacy_parents(&self) -> Vec<PathBuf> {
+        let mut parents: Vec<PathBuf> = Vec::new();
+        for root in self.library.wav_roots() {
+            if let Some(parent) = legacy_parent(root)
+                && !parents.iter().any(|known| known == parent)
+            {
+                parents.push(parent.to_path_buf());
+            }
+        }
+        parents
     }
 
     fn resolve_uncached(&mut self, reference: &str) -> Result<Vec<PathBuf>, String> {
@@ -70,17 +83,19 @@ impl<'a> ReferenceResolver<'a> {
                 .map(|path| vec![path])
                 .map_err(|error| error.to_string());
         }
+        let parents = self.legacy_parents();
         if !absolute {
             let relative = parts.iter().collect::<PathBuf>();
-            if let Some(root) = self.library.wav_root()
-                && let Some(path) = exact_file(root, &relative)
-            {
-                return Ok(vec![path]);
-            }
-            if let Some(root) = self.legacy_parent()
-                && let Some(path) = exact_file(root, &relative)
-            {
-                return Ok(vec![path]);
+            for roots in [self.library.wav_roots(), parents.as_slice()] {
+                let mut matches: Vec<_> = roots
+                    .iter()
+                    .filter_map(|root| exact_file(root, &relative))
+                    .collect();
+                matches.sort();
+                matches.dedup();
+                if !matches.is_empty() {
+                    return Ok(matches);
+                }
             }
         }
         let name = parts.last().unwrap().to_lowercase();
@@ -93,18 +108,28 @@ impl<'a> ReferenceResolver<'a> {
             }
             index
         });
+        // An absolute path that moved, even to another library folder,
+        // matches by its longest path suffix.
         let mut candidates = selected.get(&name).cloned().unwrap_or_default();
-        if let Some(root) = self.legacy_parent().map(Path::to_path_buf) {
-            if self.parent.is_none() {
-                self.parent = Some(scan(&root));
-            }
-            match self.parent.as_ref().unwrap() {
+        let mut scan_error = None;
+        for root in parents {
+            match self
+                .parents
+                .entry(root)
+                .or_insert_with_key(|root| scan(root))
+            {
                 Ok(index) => candidates.extend(index.get(&name).into_iter().flatten().cloned()),
-                // The selected folder's own matches remain usable without the
+                // The library folders' own matches remain usable without the
                 // containing-directory scan.
-                Err(error) if candidates.is_empty() => return Err(error.clone()),
-                Err(_) => {}
+                Err(error) => {
+                    scan_error.get_or_insert_with(|| error.clone());
+                }
             }
+        }
+        if candidates.is_empty()
+            && let Some(error) = scan_error
+        {
+            return Err(error);
         }
         let mut best_score = 0;
         let mut best = HashSet::new();
@@ -199,7 +224,8 @@ fn scan(root: &Path) -> Result<Index, String> {
             count += 1;
             if count > MAX_SCAN_ENTRIES {
                 return Err(
-                    "The legacy MixJam sample folder exceeds the 200,000-entry scan limit.".into(),
+                    "The legacy MixJam sample folder exceeds the 2,000,000-entry scan limit."
+                        .into(),
                 );
             }
             let path = entry.path();
@@ -273,7 +299,7 @@ mod tests {
         assert!(resolver.selected.is_none());
         assert_eq!(resolver.resolve("Genre/kick.wav").unwrap(), selected);
         assert_eq!(resolver.resolve("Genre/snare.wav").unwrap(), parent);
-        assert!(resolver.parent.is_none());
+        assert!(resolver.parents.is_empty());
         assert!(resolver.selected.is_none());
     }
 
@@ -304,7 +330,64 @@ mod tests {
         assert!(resolver.resolve("../A/snare.wav").is_err());
         assert!(resolver.resolve("./A/snare.wav").is_err());
         assert!(resolver.resolve("").is_err());
-        assert!(resolver.parent.is_some());
+        assert!(!resolver.parents.is_empty());
+    }
+
+    #[test]
+    fn exact_matches_in_multiple_libraries_keep_every_conflict_candidate() {
+        let folder = Folder::new();
+        let first = folder.wave("First/_original/Genre/kick.wav", 0.1);
+        let second = folder.wave("Second/_original/Genre/kick.wav", 0.2);
+        folder.wave("First/Genre/kick.wav", 0.3);
+        let parent_first = folder.wave("First/Genre/snare.wav", 0.4);
+        let parent_second = folder.wave("Second/Genre/snare.wav", 0.5);
+        let library = Library::open_wav_folders_with(
+            &[
+                folder.0.join("Second/_original"),
+                folder.0.join("First/_original"),
+            ],
+            140.0,
+            None,
+            None,
+        )
+        .unwrap();
+        let mut resolver = ReferenceResolver::new(&library);
+        // Exact selected-folder matches precede the parent tier. Ties use
+        // stable path order, independent of the library order.
+        assert_eq!(
+            resolver.resolve_candidates("Genre/kick.wav").unwrap(),
+            vec![first, second]
+        );
+        assert_eq!(
+            resolver.resolve_candidates("Genre/snare.wav").unwrap(),
+            vec![parent_first, parent_second]
+        );
+        assert!(resolver.parents.is_empty());
+        assert!(resolver.selected.is_none());
+    }
+
+    #[test]
+    fn references_resolve_in_every_library_folder() {
+        let folder = Folder::new();
+        folder.wave("First/fixture-seed.wav", 0.01);
+        let relative = folder.wave("Second/Genre/hat.wav", 0.2);
+        let moved = folder.wave("Second/Pack/Loops/kick.wav", 0.1);
+        let library = Library::open_wav_folders_with(
+            &[folder.0.join("First"), folder.0.join("Second")],
+            140.0,
+            None,
+            None,
+        )
+        .unwrap();
+        let mut resolver = ReferenceResolver::new(&library);
+        // A folder-relative reference finds its file in the second folder.
+        assert_eq!(resolver.resolve("Genre/hat.wav").unwrap(), relative);
+        // An absolute path into the first folder, where the pack used to be,
+        // resolves where it is now.
+        let old = folder.0.join("First/Moved pack/Pack/Loops/kick.wav");
+        assert_eq!(resolver.resolve(old.to_str().unwrap()).unwrap(), moved);
+        // Neither folder is named _original: no parent folder is scanned.
+        assert!(resolver.parents.is_empty());
     }
 
     #[test]
@@ -314,7 +397,7 @@ mod tests {
         let library = folder.library("Selected");
         let mut resolver = ReferenceResolver::new(&library);
         assert!(resolver.resolve("Elsewhere/kick.wav").is_err());
-        assert!(resolver.parent.is_none());
+        assert!(resolver.parents.is_empty());
     }
 
     #[test]
@@ -343,7 +426,7 @@ mod tests {
         let expected = folder.wave("Drum/kick.wav", 0.1);
         let mut library = Library::empty();
         library.import_wav_folder(&folder.0, 140.0).unwrap();
-        assert!(library.wav_root().is_none());
+        assert!(library.wav_roots().is_empty());
         let mut resolver = ReferenceResolver::new(&library);
         assert_eq!(resolver.resolve("Old/Drum/kick.wav").unwrap(), expected);
         assert_eq!(

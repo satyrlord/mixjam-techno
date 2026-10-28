@@ -406,12 +406,19 @@ conflicts that no longer affect any clip.
 
 `src/main.rs` is the composition root. It resolves command-line options and builds
 the initial library/project before it creates a session. Normal GUI startup then
-scans the WAV folder through `Session`; a queued song opens only if no intervening
+scans the library folders through `Session`; a queued song opens only if no intervening
 project change or unsaved take requires its cancellation. Successful folder
 adoption tells the frontend to clear selections and active drags. Headless CLI
 commands can use library services directly. The GUI modules are compiled into the native
 binary, not exported by the production Rust library.
 
+A scan lists up to 9 library folders, probes their WAVs with one progress
+total, and merges them into one `Library`. A folder that cannot be listed, or
+has no readable WAV, goes to `Library::unloaded_roots` and the others load; the
+scan fails only when none loads. `sample-folder.json` keeps the ordered folder
+list, and reads the single `root` that earlier versions wrote. A scan drops the
+cache entries of files that its folders no longer list. Imported sample IDs
+start at 1,000,000, above the 800,000 native IDs, and grow with the library.
 Folder scans stream validated WAV samples into the catalog identity hash. Each
 worker retains a reader buffer, not the decoded audio. File lists, metadata, and
 the probe cache still grow with the corpus. A scan writes the cache only after

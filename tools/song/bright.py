@@ -3,7 +3,7 @@
 python -I tools/song/bright.py PATTERN...
 
 A pattern is a path or a glob (`**` allowed). A relative pattern that matches nothing from the
-current folder is tried under SAMPLES_FOLDER (see .env.example). Per file, darkest first: RMS in
+current folder is tried under each sample library, SAMPLES_FOLDER_1 to _9 (see .env.example). Per file, darkest first: RMS in
 dB, the share of energy above 5 kHz and above 8 kHz, and the level of the 6-12 kHz band against
 the whole, so that harsh hi-hats can be found before they are placed.
 """
@@ -19,12 +19,14 @@ from mixjam import read_wav  # noqa: E402
 
 
 def expand(pattern):
-    """The files a pattern names, from the current folder or else from SAMPLES_FOLDER."""
+    """The files a pattern names, from the current folder or else from the sample libraries."""
     found = glob.glob(pattern, recursive=True)
     if found or Path(pattern).is_absolute():
         return found or [pattern]
-    root = env.path('SAMPLES_FOLDER')
-    return glob.glob(str(root / pattern), recursive=True) or [pattern]
+    roots = env.sample_folders()
+    if not roots:
+        env.require('SAMPLES_FOLDER_1')
+    return [path for root in roots for path in glob.glob(str(root / pattern), recursive=True)] or [pattern]
 
 
 def brightness(mono, rate):

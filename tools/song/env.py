@@ -64,6 +64,15 @@ def path(key, required=True, root=ROOT):
     return value if value.is_absolute() else Path(root) / value
 
 
+SAMPLE_LIBRARIES = 9
+
+
+def sample_folders(root=ROOT):
+    """The sample libraries SAMPLES_FOLDER_1 to SAMPLES_FOLDER_9 that are set, in number order."""
+    keys = [f'SAMPLES_FOLDER_{n}' for n in range(1, SAMPLE_LIBRARIES + 1)]
+    return [found for key in keys if (found := path(key, required=False, root=root)) is not None]
+
+
 def exe(root=ROOT):
     """The release build of the application, which the tools use to render."""
     name = 'mixjam-techno.exe' if sys.platform == 'win32' else 'mixjam-techno'

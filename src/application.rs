@@ -8,7 +8,7 @@ pub use crate::{
         MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR,
         TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
     },
-    library::Sample,
+    library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
         EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, Knob, KnobRange, MasterChain, MeterReading,
         OVER_DBTP, PedalKind, presets,
@@ -58,8 +58,17 @@ impl<'a> LibraryView<'a> {
     pub fn bindings(self) -> &'a [crate::products::LibraryBinding] {
         self.library.bindings()
     }
-    pub fn wav_root(self) -> Option<&'a Path> {
-        self.library.wav_root()
+    /// The library folders of the last folder scan, in order.
+    pub fn wav_roots(self) -> &'a [PathBuf] {
+        self.library.wav_roots()
+    }
+    /// Library folders that the last folder scan could not load, with the reason.
+    pub fn unloaded_roots(self) -> &'a [(PathBuf, String)] {
+        self.library.unloaded_roots()
+    }
+    /// The library folder that holds `path`, if any.
+    pub fn wav_root_of(self, path: &Path) -> Option<&'a Path> {
+        self.library.wav_root_of(path)
     }
     pub fn folder_tempos(self) -> &'a [(PathBuf, f64, usize)] {
         self.library.folder_tempos()
@@ -274,10 +283,10 @@ impl RenderWorker {
     }
 }
 
-/// A sample folder scan running on its own thread. The result replaces the
+/// A library folder scan running on its own thread. The result replaces the
 /// library only when it arrives through `poll`; dropping the job abandons it.
 struct WaveScan {
-    root: PathBuf,
+    roots: Vec<PathBuf>,
     source_bpm: f64,
     progress: Arc<crate::library::ScanProgress>,
     receiver: mpsc::Receiver<Result<Library, String>>,
@@ -304,10 +313,10 @@ struct StretchJob {
     receiver: mpsc::Receiver<Result<Pcm, String>>,
 }
 
-/// What a frontend may show about a running sample folder scan.
+/// What a frontend may show about a running library folder scan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveScanStatus {
-    pub root: PathBuf,
+    pub roots: Vec<PathBuf>,
     pub files_done: usize,
     pub files_total: usize,
 }
@@ -1434,7 +1443,7 @@ impl Session {
         checked.validate()?;
         let persisted: Vec<_> = bindings
             .iter()
-            .filter(|binding| library.wav_root() != Some(binding.root.as_path()))
+            .filter(|binding| !library.wav_roots().contains(&binding.root))
             .cloned()
             .collect();
         crate::project_io::save_library_config(&persisted)?;
@@ -1468,15 +1477,21 @@ impl Session {
         self.preferred_providers = products.to_vec();
     }
 
-    /// Replace the library with a scanned folder, keeping the product
-    /// providers already in use. Returns the providers that could not be kept.
+    /// Replace the library with scanned library folders, keeping the product
+    /// providers already in use. Returns the warnings for the status line:
+    /// library folders that did not load, unreadable WAVs, and providers that
+    /// could not be kept.
     fn adopt_wave_folder(
         &mut self,
         mut library: Library,
-        root: &Path,
+        roots: &[PathBuf],
         source_bpm: f64,
     ) -> Result<Vec<String>, String> {
-        let mut warnings = Vec::new();
+        let mut warnings: Vec<String> = library
+            .unloaded_roots()
+            .iter()
+            .map(|(root, error)| format!("Library {} was not loaded: {error}", root.display()))
+            .collect();
         if let Some((path, error)) = library.skipped_waves().first() {
             let count = library.skipped_waves().len();
             let files = if count == 1 { "WAV" } else { "WAVs" };
@@ -1485,10 +1500,9 @@ impl Session {
                 path.display()
             ));
         }
-        let previous_root = self.library.wav_root();
         for binding in self.library.bindings() {
-            // Bindings at the previous sample folder came from its WAVs.
-            if previous_root == Some(binding.root.as_path()) {
+            // Bindings at the previous library folders came from their WAVs.
+            if self.library.wav_roots().contains(&binding.root) {
                 continue;
             }
             let mut candidate = library.clone();
@@ -1522,7 +1536,7 @@ impl Session {
             }
         }
         let (project, library) = crate::project_io::resolve(self.project().clone(), &library)?;
-        crate::project_io::save_wave_config_in(&self.settings_root, root, source_bpm)?;
+        crate::project_io::save_wave_config_in(&self.settings_root, roots, source_bpm)?;
         self.stop();
         // New sample sources are not an edit: a saved or untouched mix stays so.
         let unsaved = self.unsaved;
@@ -1534,16 +1548,17 @@ impl Session {
         Ok(warnings)
     }
 
-    /// Start scanning a sample folder on another thread. A scan already
-    /// running is abandoned. The library changes only when `poll` receives
-    /// the result; `wave_scan` reports progress until then.
-    pub fn start_wave_scan(&mut self, root: &Path, source_bpm: f64) -> Result<(), String> {
+    /// Start scanning 1 to 9 library folders on another thread. A scan
+    /// already running is abandoned. The library changes only when `poll`
+    /// receives the result; `wave_scan` reports progress until then.
+    pub fn start_wave_scan(&mut self, roots: &[PathBuf], source_bpm: f64) -> Result<(), String> {
         if self.is_recording() {
             return Err("Stop recording before you change the sample folder.".into());
         }
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
             return Err("The source tempo must be finite and positive.".into());
         }
+        crate::library::check_library_folders(roots)?;
         if let Some(path) = self.abandon_wave_scan() {
             self.error(format!(
                 "{} was not opened because another folder was selected.",
@@ -1553,14 +1568,14 @@ impl Session {
         let progress = Arc::new(crate::library::ScanProgress::default());
         let (sender, receiver) = mpsc::channel();
         let worker_progress = Arc::clone(&progress);
-        let worker_root = root.to_path_buf();
+        let worker_roots = roots.to_vec();
         let settings_root = self.settings_root.clone();
         std::thread::Builder::new()
             .name("mixjam-techno-scan".into())
             .spawn(move || {
-                let result = crate::project_io::open_wav_folder_cached(
+                let result = crate::project_io::open_wav_folders_cached(
                     &settings_root,
-                    &worker_root,
+                    &worker_roots,
                     source_bpm,
                     Some(&worker_progress),
                 );
@@ -1568,7 +1583,7 @@ impl Session {
             })
             .map_err(|error| format!("Cannot start the sample folder scan: {error}"))?;
         self.wave_scan = Some(WaveScan {
-            root: root.to_path_buf(),
+            roots: roots.to_vec(),
             source_bpm,
             progress,
             receiver,
@@ -1580,7 +1595,7 @@ impl Session {
         self.wave_scan.as_ref().map(|scan| {
             let (files_done, files_total) = scan.progress.counts();
             WaveScanStatus {
-                root: scan.root.clone(),
+                roots: scan.roots.clone(),
                 files_done,
                 files_total,
             }
@@ -1654,11 +1669,11 @@ impl Session {
                 || self.needs_save_confirmation()
         });
         match result
-            .and_then(|library| self.adopt_wave_folder(library, &scan.root, scan.source_bpm))
+            .and_then(|library| self.adopt_wave_folder(library, &scan.roots, scan.source_bpm))
         {
             Ok(warnings) => {
                 let count = self.library.samples.len();
-                let mut notice = format!("Sample folder loaded: {count} sounds.");
+                let mut notice = format!("Sample libraries loaded: {count} sounds.");
                 let mut error = !warnings.is_empty();
                 if !warnings.is_empty() {
                     notice.push_str(&format!(" {}", warnings.join(" ")));
@@ -3138,7 +3153,7 @@ mod tests {
         let unsaved = app.unsaved;
 
         // The recording guard must run before a scan of any path starts.
-        let error = app.start_wave_scan(Path::new(""), 140.0).unwrap_err();
+        let error = app.start_wave_scan(&[PathBuf::new()], 140.0).unwrap_err();
 
         assert_eq!(error, "Stop recording before you change the sample folder.");
         assert_eq!(*app.editor.project(), project);
@@ -4228,7 +4243,7 @@ mod boundary_tests {
             }
             assert!(
                 session
-                    .adopt_wave_folder(scanned, &folder, 140.0)
+                    .adopt_wave_folder(scanned, std::slice::from_ref(&folder), 140.0)
                     .unwrap()
                     .is_empty()
             );
@@ -4293,7 +4308,7 @@ mod boundary_tests {
         Project::default().save(&song).unwrap();
         let (sender, receiver) = mpsc::channel();
         session.wave_scan = Some(WaveScan {
-            root: new,
+            roots: vec![new],
             source_bpm: 140.0,
             progress: Arc::new(crate::library::ScanProgress::default()),
             receiver,
@@ -4338,7 +4353,7 @@ mod boundary_tests {
                 .with_settings_root(dir.join(action));
             let (sender, receiver) = mpsc::channel();
             session.wave_scan = Some(WaveScan {
-                root: dir.clone(),
+                roots: vec![dir.clone()],
                 source_bpm: 140.0,
                 progress: Arc::new(crate::library::ScanProgress::default()),
                 receiver,
@@ -4411,9 +4426,11 @@ mod boundary_tests {
             .unwrap()
             .with_settings_root(data.clone());
         assert!(session.wave_scan().is_none());
-        session.start_wave_scan(&dir, 120.0).unwrap();
+        session
+            .start_wave_scan(std::slice::from_ref(&dir), 120.0)
+            .unwrap();
         let status = session.wave_scan().unwrap();
-        assert_eq!(status.root, dir);
+        assert_eq!(status.roots, std::slice::from_ref(&dir));
         assert!(status.files_done <= 5);
         // The song opens once the scanned library can resolve it.
         session.open_after_scan(&song).unwrap();
@@ -4443,7 +4460,7 @@ mod boundary_tests {
         assert!(data.join("sample-folder.json").is_file());
         // A cancelled scan never replaces the library, even after its thread ends.
         let before = session.library().samples.len();
-        session.start_wave_scan(&dir.join("Loop"), 140.0).unwrap();
+        session.start_wave_scan(&[dir.join("Loop")], 140.0).unwrap();
         session.open_after_scan(&song).unwrap();
         session.cancel_wave_scan();
         assert!(session.wave_scan().is_none());
@@ -4452,7 +4469,11 @@ mod boundary_tests {
         std::thread::sleep(std::time::Duration::from_millis(200));
         assert_eq!(session.poll(), None);
         assert_eq!(session.library().samples.len(), before);
-        assert!(session.start_wave_scan(&dir, f64::NAN).is_err());
+        assert!(
+            session
+                .start_wave_scan(std::slice::from_ref(&dir), f64::NAN)
+                .is_err()
+        );
         // The cancelled scan's song is not opened by a later scan; a queued one is.
         let finish = |session: &mut Session| {
             while session.wave_scan().is_some() {
@@ -4465,7 +4486,9 @@ mod boundary_tests {
             }
         };
         std::fs::remove_file(dir.join("broken.wav")).unwrap();
-        session.start_wave_scan(&dir, 120.0).unwrap();
+        session
+            .start_wave_scan(std::slice::from_ref(&dir), 120.0)
+            .unwrap();
         finish(&mut session);
         assert!(session.library().skipped_waves().is_empty());
         assert_eq!(
@@ -4475,19 +4498,77 @@ mod boundary_tests {
         );
         let (notice, error) = session.take_notice().unwrap();
         assert!(
-            !error && notice.starts_with("Sample folder loaded"),
+            !error && notice.starts_with("Sample libraries loaded"),
             "{notice}"
         );
         assert_eq!(session.take_opened_after_scan(), None);
         let source = session.library().samples[0].id;
         session.place(source, 0, 0).unwrap();
         session.save(&song).unwrap();
-        session.start_wave_scan(&dir, 120.0).unwrap();
+        session
+            .start_wave_scan(std::slice::from_ref(&dir), 120.0)
+            .unwrap();
         session.open_after_scan(&song).unwrap();
         finish(&mut session);
         assert_eq!(session.take_opened_after_scan(), Some(song.clone()));
         assert_eq!(session.project().clips.len(), 1);
         assert!(!session.unsaved());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn a_partial_library_scan_accepts_relative_folders_and_saves_absolute_paths() {
+        let dir =
+            PathBuf::from("tmp").join(format!("mixjam-relative-libraries-{}", std::process::id()));
+        let (kept, offline) = (dir.join("Kept"), dir.join("Offline"));
+        std::fs::create_dir_all(&kept).unwrap();
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 441],
+        }
+        .write_wav(&kept.join("sound.wav"))
+        .unwrap();
+        let data = dir.join("data");
+        let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(data.clone());
+        let ten: Vec<_> = (0..10).map(|index| dir.join(format!("L{index}"))).collect();
+        assert!(session.start_wave_scan(&ten, 140.0).is_err());
+        assert!(session.wave_scan().is_none());
+        let roots = [offline.clone(), kept.clone()];
+        session.start_wave_scan(&roots, 140.0).unwrap();
+        assert_eq!(session.wave_scan().unwrap().roots, roots);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while session.wave_scan().is_some() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the scan did not finish"
+            );
+            session.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(session.library().samples.len(), 1);
+        let (notice, error) = session.take_notice().unwrap();
+        assert!(error, "{notice}");
+        assert!(
+            notice.starts_with("Sample libraries loaded: 1 sounds."),
+            "{notice}"
+        );
+        assert!(
+            notice.contains("was not loaded") && notice.contains("Offline"),
+            "{notice}"
+        );
+        // The offline folder stays in the list for the next scan.
+        let saved = crate::project_io::load_wave_config_in(&data)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            saved.roots,
+            [
+                std::path::absolute(offline).unwrap(),
+                std::fs::canonicalize(&kept).unwrap()
+            ]
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]

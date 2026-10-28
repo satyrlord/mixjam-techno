@@ -1,7 +1,8 @@
 param(
     [string]$App = '',
     [string]$Mix = '',
-    [string]$Samples = '',
+    # Up to 9 library folders.
+    [string[]]$Samples = @(),
     [double]$SourceBpm = 140,
     [switch]$Build,
     # Let a local agent operate the window. See "Agent control" in README.md.
@@ -23,7 +24,8 @@ try {
     }
     $arguments = @('gui')
     if ($App) { $arguments += @('--app',$App) }
-    if ($Samples) { $arguments += @('--samples',$Samples,'--source-bpm',$SourceBpm.ToString([Globalization.CultureInfo]::InvariantCulture)) }
+    foreach ($folder in $Samples) { $arguments += @('--samples',$folder) }
+    if ($Samples) { $arguments += @('--source-bpm',$SourceBpm.ToString([Globalization.CultureInfo]::InvariantCulture)) }
     if ($Mix) { $arguments += @('--mix',$Mix) }
     if ($AgentPort) { $arguments += @('--agent-port',$AgentPort) } elseif ($Agent) { $arguments += '--agent' }
     & $executable @arguments

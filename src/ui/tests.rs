@@ -8937,6 +8937,50 @@ mod tests {
     }
 
     #[test]
+    fn sample_libraries_name_each_library_folder_control() {
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-folders-{}", std::process::id()));
+        let roots = [dir.join("First"), dir.join("Second")];
+        for root in &roots {
+            std::fs::create_dir_all(root).unwrap();
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 441],
+            }
+            .write_wav(&root.join("sound.wav"))
+            .unwrap();
+        }
+        let shown = |roots: &[PathBuf], check: &dyn Fn(&egui::FullOutput)| {
+            let library = Library::open_wav_folders_with(roots, 140.0, None, None).unwrap();
+            let session = Session::headless(Arc::new(library), Project::default()).unwrap();
+            let mut app = MixJamApp::from_session(session, String::new(), false);
+            app.show_libraries = true;
+            let context = egui::Context::default();
+            configure_style(&context);
+            context.enable_accesskit();
+            for _ in 0..3 {
+                frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            check(&frame(&context, &mut app, vec![], egui::Modifiers::NONE));
+        };
+        shown(&roots, &|output| {
+            for name in [
+                "Add library folder",
+                "Scan again",
+                "Remove library 1",
+                "Remove library 2",
+            ] {
+                assert!(!accessible_node(output, name).1.is_disabled(), "{name}");
+            }
+        });
+        // The list keeps at least one folder.
+        shown(&roots[..1], &|output| {
+            assert!(accessible_node(output, "Remove library 1").1.is_disabled());
+        });
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn folder_tempo_list_scrolls_to_provider_controls_at_compact_size() {
         let dir = std::env::temp_dir().join(format!("mixjam-ui-tempos-{}", std::process::id()));
         for index in 0..60 {
@@ -9045,7 +9089,7 @@ mod tests {
             .with_settings_root(dir.join("settings"));
         let mut app = MixJamApp::from_session(session, String::new(), false);
         let context = egui::Context::default();
-        app.select_wave_folder(&new);
+        app.scan_library_folders(vec![new.clone()]);
         app.selected_sample = Some(source);
         app.drag = Some(DragItem::Sample(source));
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
@@ -9085,11 +9129,13 @@ mod tests {
             let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
                 .unwrap()
                 .with_settings_root(dir.join("settings"));
-            session.start_wave_scan(root, 140.0).unwrap();
+            session
+                .start_wave_scan(&[root.to_path_buf()], 140.0)
+                .unwrap();
             let mut app = MixJamApp::from_session(session, String::new(), false);
             assert!(app.show_libraries);
             if manual {
-                app.select_wave_folder(root);
+                app.scan_library_folders(vec![root.to_path_buf()]);
             }
             let deadline = std::time::Instant::now() + Duration::from_secs(30);
             while app.session.wave_scan().is_some() {
@@ -9190,6 +9236,23 @@ mod tests {
             std::thread::sleep(Duration::from_millis(1));
         }
         serde_json::from_str(&client.join().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn agent_rejected_library_request_preserves_fallback_tempo() {
+        let (context, mut app, port) = agent_fixture();
+        let fallback_bpm = app.fallback_bpm;
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["set_libraries", "folders=[]", "fallback_bpm=160"],
+        );
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert!(app.session.wave_scan().is_none());
+        assert_eq!(app.fallback_bpm, fallback_bpm);
+        let reply = agent(&context, &mut app, &port, &["libraries"]);
+        assert_eq!(reply["fallback_bpm"], fallback_bpm);
     }
 
     #[test]

@@ -102,35 +102,70 @@ pub(crate) fn retain_manual_wave(path: &Path, root: &Path) -> Result<PathBuf, St
     result
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+/// The library folders that the sound browser merges, in order, and the
+/// fallback tempo of their scans. Stored in `sample-folder.json`.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct WaveFolderConfig {
-    pub root: PathBuf,
+    pub roots: Vec<PathBuf>,
     pub source_bpm: f64,
 }
 
+const MAX_WAVE_CONFIG_BYTES: u64 = 16 * 1024;
+
+/// `sample-folder.json` as written by every version: earlier versions wrote
+/// one `root`, later ones a `roots` list.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredWaveConfig {
+    root: Option<PathBuf>,
+    roots: Option<Vec<PathBuf>>,
+    source_bpm: f64,
+}
+
 pub fn load_wave_config() -> Result<Option<WaveFolderConfig>, String> {
-    let path = data_root().join("sample-folder.json");
+    load_wave_config_in(&data_root())
+}
+
+/// Read the library folders. A file with the earlier single `root` reads as
+/// a list of that one folder; the next save writes the list.
+pub fn load_wave_config_in(data_root: &Path) -> Result<Option<WaveFolderConfig>, String> {
+    let path = data_root.join("sample-folder.json");
     if !path.exists() {
         return Ok(None);
     }
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
-    const LIMIT: u64 = 16 * 1024;
-    file.take(LIMIT + 1)
+    file.take(MAX_WAVE_CONFIG_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() as u64 > LIMIT {
+    if bytes.len() as u64 > MAX_WAVE_CONFIG_BYTES {
         return Err("The sample folder settings exceed the size limit.".into());
     }
-    let config: WaveFolderConfig = serde_json::from_slice(&bytes)
+    let stored: StoredWaveConfig = serde_json::from_slice(&bytes)
         .map_err(|e| format!("Cannot read sample folder settings: {e}"))?;
-    if !config.root.is_absolute() || !config.source_bpm.is_finite() || config.source_bpm <= 0.0 {
+    let roots = match (stored.root, stored.roots) {
+        (Some(root), None) => vec![root],
+        (None, Some(roots)) => roots,
+        _ => {
+            return Err(
+                "The sample folder settings need either one root or a list of roots.".into(),
+            );
+        }
+    };
+    if roots.iter().any(|root| !root.is_absolute())
+        || !stored.source_bpm.is_finite()
+        || stored.source_bpm <= 0.0
+    {
         return Err(
-            "The sample folder settings need an absolute path and a positive source tempo.".into(),
+            "The sample folder settings need absolute paths and a positive source tempo.".into(),
         );
     }
-    Ok(Some(config))
+    crate::library::check_library_folders(&roots)
+        .map_err(|error| format!("Cannot use the sample folder settings: {error}"))?;
+    Ok(Some(WaveFolderConfig {
+        roots,
+        source_bpm: stored.source_bpm,
+    }))
 }
 
 /// The probe cache of earlier folder scans. A missing, oversized, or
@@ -141,7 +176,8 @@ pub fn load_scan_cache(data_root: &Path) -> crate::library::ScanCache {
         return Default::default();
     };
     let mut bytes = Vec::new();
-    const LIMIT: u64 = 256 * 1024 * 1024;
+    // About 260 bytes an entry: room for every entry that the cache keeps.
+    const LIMIT: u64 = 1024 * 1024 * 1024;
     if file.take(LIMIT + 1).read_to_end(&mut bytes).is_err() || bytes.len() as u64 > LIMIT {
         return Default::default();
     }
@@ -154,31 +190,49 @@ pub fn save_scan_cache(data_root: &Path, cache: &crate::library::ScanCache) -> R
     crate::atomic_file::write(&data_root.join("wav-scan-cache.json"), &bytes)
 }
 
-/// Open a sample folder through the probe cache in `data_root`. The probes
+/// Open library folders through the probe cache in `data_root`. The probes
 /// of a failed or cancelled scan are kept for the next one; a cache that
 /// cannot be written only costs the next scan time.
-pub fn open_wav_folder_cached(
+pub fn open_wav_folders_cached(
     data_root: &Path,
-    root: &Path,
+    roots: &[PathBuf],
     source_bpm: f64,
     progress: Option<&crate::library::ScanProgress>,
 ) -> Result<Library, String> {
     let mut cache = load_scan_cache(data_root);
-    let result = Library::open_wav_folder_with(root, source_bpm, progress, Some(&mut cache));
+    let result = Library::open_wav_folders_with(roots, source_bpm, progress, Some(&mut cache));
     if cache.has_changes() {
         let _ = save_scan_cache(data_root, &cache);
     }
     result
 }
 
-pub fn save_wave_config_in(data_root: &Path, root: &Path, source_bpm: f64) -> Result<(), String> {
+/// Save the library folders, in order. A folder that exists is saved as its
+/// canonical path; one that is unavailable now keeps its absolute path.
+pub fn save_wave_config_in(
+    data_root: &Path,
+    roots: &[PathBuf],
+    source_bpm: f64,
+) -> Result<(), String> {
     if !source_bpm.is_finite() || source_bpm <= 0.0 {
         return Err("The source tempo must be finite and positive.".into());
     }
-    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
-    let bytes = serde_json::to_vec_pretty(&WaveFolderConfig { root, source_bpm })
+    crate::library::check_library_folders(roots)?;
+    let roots = roots
+        .iter()
+        .map(|root| {
+            fs::canonicalize(root)
+                .or_else(|_| std::path::absolute(root))
+                .map_err(|error| error.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::library::check_library_folders(&roots)?;
+    let bytes = serde_json::to_vec_pretty(&WaveFolderConfig { roots, source_bpm })
         .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_WAVE_CONFIG_BYTES {
+        return Err("The sample folder settings exceed the size limit.".into());
+    }
+    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
     crate::atomic_file::write(&data_root.join("sample-folder.json"), &bytes)
 }
 
@@ -712,7 +766,7 @@ fn rebase_asset(
         imported.path = paths[0].clone();
         return Ok(paths);
     }
-    if library.wav_root().is_some() && !is_retained {
+    if !library.wav_roots().is_empty() && !is_retained {
         let paths = library.find_wav_candidates(&reference)?;
         if let Some(path) = paths.first() {
             imported.path = path.clone();
@@ -799,7 +853,8 @@ mod tests {
             .write_wav(&path)
             .unwrap();
         }
-        let first = open_wav_folder_cached(&data, &samples, 140.0, None).unwrap();
+        let first =
+            open_wav_folders_cached(&data, std::slice::from_ref(&samples), 140.0, None).unwrap();
         assert_eq!(first.samples.len(), 2);
         assert_eq!(load_scan_cache(&data).len(), 2);
         // Bytes that cannot be decoded, at the size and time the cache knows:
@@ -814,7 +869,8 @@ mod tests {
             .unwrap()
             .set_modified(modified)
             .unwrap();
-        let cached = open_wav_folder_cached(&data, &samples, 140.0, None).unwrap();
+        let cached =
+            open_wav_folders_cached(&data, std::slice::from_ref(&samples), 140.0, None).unwrap();
         assert_eq!(cached.samples.len(), 2);
         assert!(cached.skipped_waves().is_empty());
         let fresh = Library::open_wav_folder(&samples, 140.0).unwrap();
@@ -876,6 +932,165 @@ mod tests {
         assert_eq!(load_song_folder(&settings), Some(songs.clone()));
         fs::remove_dir(&songs).unwrap();
         assert_eq!(load_song_folder(&settings), None);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_earlier_single_folder_setting_reads_as_a_list_and_saves_as_one() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-folder-config-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let settings = root.join("settings");
+        let (first, second) = (root.join("First"), root.join("Second"));
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+        fs::create_dir_all(&settings).unwrap();
+        let file = settings.join("sample-folder.json");
+        assert_eq!(load_wave_config_in(&settings), Ok(None));
+        // The file that earlier versions wrote: one root.
+        fs::write(
+            &file,
+            serde_json::to_vec(&serde_json::json!({"root": first, "source_bpm": 160.0})).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            load_wave_config_in(&settings),
+            Ok(Some(WaveFolderConfig {
+                roots: vec![first.clone()],
+                source_bpm: 160.0,
+            }))
+        );
+        // A save writes the list. A folder that is offline keeps its path.
+        let offline = root.join("Offline");
+        save_wave_config_in(
+            &settings,
+            &[first.clone(), offline.clone(), second.clone()],
+            150.0,
+        )
+        .unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+        assert!(
+            saved.get("root").is_none() && saved["roots"].is_array(),
+            "{saved}"
+        );
+        assert_eq!(
+            load_wave_config_in(&settings).unwrap().unwrap(),
+            WaveFolderConfig {
+                roots: vec![
+                    fs::canonicalize(&first).unwrap(),
+                    offline,
+                    fs::canonicalize(&second).unwrap()
+                ],
+                source_bpm: 150.0,
+            }
+        );
+        // Ten folders are refused, in a save and in a file.
+        let ten: Vec<_> = (0..10)
+            .map(|index| root.join(format!("L{index}")))
+            .collect();
+        assert!(save_wave_config_in(&settings, &ten, 140.0).is_err());
+        fs::write(
+            &file,
+            serde_json::to_vec(&serde_json::json!({"roots": ten, "source_bpm": 140.0})).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            load_wave_config_in(&settings)
+                .unwrap_err()
+                .contains("up to 9")
+        );
+        fs::write(
+            &file,
+            serde_json::to_vec(
+                &serde_json::json!({"root": first, "roots": [second], "source_bpm": 140.0}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(load_wave_config_in(&settings).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn oversized_folder_settings_do_not_replace_a_readable_list() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-folder-config-size-{}", std::process::id()));
+        let settings = root.join("settings");
+        let roots = |depth| {
+            (0..crate::library::MAX_LIBRARY_FOLDERS)
+                .map(|index| {
+                    let mut path = root.join(format!("Offline{index}"));
+                    for _ in 0..depth {
+                        path.push("a".repeat(80));
+                    }
+                    path
+                })
+                .collect::<Vec<_>>()
+        };
+        let accepted = roots(10);
+        save_wave_config_in(&settings, &accepted, 140.0).unwrap();
+        let expected = WaveFolderConfig {
+            roots: accepted,
+            source_bpm: 140.0,
+        };
+        assert_eq!(load_wave_config_in(&settings), Ok(Some(expected.clone())));
+        let file = settings.join("sample-folder.json");
+        let before = fs::read(&file).unwrap();
+
+        let error = save_wave_config_in(&settings, &roots(30), 160.0).unwrap_err();
+        assert!(error.contains("size limit"), "{error}");
+        assert_eq!(fs::read(&file).unwrap(), before);
+        assert_eq!(load_wave_config_in(&settings), Ok(Some(expected)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_song_relinks_a_file_moved_into_another_library_folder() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-moved-library-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (first, second) = (root.join("First"), root.join("Second"));
+        fs::create_dir_all(first.join("Drums")).unwrap();
+        fs::create_dir_all(second.join("Pack/Loops")).unwrap();
+        write_wave(&first.join("Drums/snare.wav"));
+        let moved = second.join("Pack/Loops/kick.wav");
+        write_wave(&moved);
+        let library =
+            Library::open_wav_folders_with(&[first.clone(), second.clone()], 140.0, None, None)
+                .unwrap();
+        let mut imported = library
+            .imported_samples()
+            .into_iter()
+            .find(|sample| sample.name == "kick")
+            .unwrap();
+        // The song names the file where it was before the pack moved from
+        // a subfolder of the first library to the second library.
+        imported.path = first.join("Moved pack/Pack/Loops/kick.wav");
+        let project = Project {
+            imported_samples: vec![imported.clone()].into(),
+            clips: vec![crate::engine::Clip {
+                id: 1,
+                sample_id: imported.id,
+                track: 0,
+                start_tick: 0,
+                length_ticks: 1,
+                offset_frames: 0,
+                gain: 1.0,
+                fades: Default::default(),
+                pitch_cents: 0,
+            }],
+            ..Project::default()
+        };
+        let song = root.join("song.mixjam");
+        save(&project, &song).unwrap();
+        let (opened, _, _) = open_song(&song, &library).unwrap();
+        assert!(opened.missing_samples.is_empty());
+        let clip_source = opened
+            .imported_samples
+            .iter()
+            .find(|sample| sample.id == opened.clips[0].sample_id)
+            .unwrap();
+        assert_eq!(clip_source.path, fs::canonicalize(&moved).unwrap());
         fs::remove_dir_all(root).unwrap();
     }
 

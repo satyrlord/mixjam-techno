@@ -9,8 +9,60 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-// Every WAV can become a project import when this palette is adopted.
-const MAX_WAV_FOLDER_ITEMS: usize = crate::engine::MAX_IMPORTED_SAMPLES;
+/// The most library folders that one scan merges into the sound browser.
+pub const MAX_LIBRARY_FOLDERS: usize = 9;
+
+/// Check a list of library folders: 1 to [`MAX_LIBRARY_FOLDERS`] folders,
+/// none the same as or inside another. Existing ancestors are canonicalized
+/// so unavailable folders compare with available roots and absolute aliases.
+pub fn check_library_folders(roots: &[PathBuf]) -> Result<(), String> {
+    if roots.is_empty() {
+        return Err("Choose at least one library folder.".into());
+    }
+    if roots.len() > MAX_LIBRARY_FOLDERS {
+        return Err(format!(
+            "The sound browser holds up to {MAX_LIBRARY_FOLDERS} library folders."
+        ));
+    }
+    let resolved: Vec<PathBuf> = roots
+        .iter()
+        .map(|root| library_folder_identity(root))
+        .collect::<Result<_, _>>()?;
+    for (index, root) in resolved.iter().enumerate() {
+        for other in &resolved[index + 1..] {
+            if root == other {
+                return Err(format!(
+                    "{} is already a library folder.",
+                    roots[index].display()
+                ));
+            }
+            let (inner, outer) = if other.starts_with(root) {
+                (other, root)
+            } else if root.starts_with(other) {
+                (root, other)
+            } else {
+                continue;
+            };
+            return Err(format!(
+                "{} is inside the library folder {}. Choose folders that do not contain each other.",
+                inner.display(),
+                outer.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn library_folder_identity(root: &Path) -> Result<PathBuf, String> {
+    let absolute = std::path::absolute(root)
+        .map_err(|error| format!("Cannot resolve {}: {error}", root.display()))?;
+    for ancestor in absolute.ancestors() {
+        if let Ok(canonical) = fs::canonicalize(ancestor) {
+            return Ok(canonical.join(absolute.strip_prefix(ancestor).unwrap()));
+        }
+    }
+    Ok(absolute)
+}
 
 /// Retain a file choice once per saved reference and link every imported source.
 pub(crate) fn record_wav_conflict(
@@ -112,6 +164,33 @@ impl ScanCache {
         self.changed
     }
 
+    /// Drop the probes of files below the listed folders that their
+    /// complete listings no longer have, so that moved or deleted files do
+    /// not fill the cache. Probes of other folders stay.
+    fn forget_unlisted(&mut self, listings: &[WavListing]) {
+        // Keys are the listed paths' text: compare text, once per entry.
+        let roots: Vec<String> = listings
+            .iter()
+            .filter_map(|listing| listing.root.to_str())
+            .map(|root| root.trim_end_matches(std::path::MAIN_SEPARATOR).to_owned())
+            .collect();
+        let listed: HashSet<&str> = listings
+            .iter()
+            .flat_map(|listing| &listing.paths)
+            .filter_map(|path| path.to_str())
+            .collect();
+        let below = |key: &str| {
+            roots.iter().any(|root| {
+                key.strip_prefix(root.as_str())
+                    .is_some_and(|rest| rest.starts_with(std::path::MAIN_SEPARATOR))
+            })
+        };
+        let before = self.entries.len();
+        self.entries
+            .retain(|key, _| listed.contains(key.as_str()) || !below(key));
+        self.changed |= self.entries.len() != before;
+    }
+
     fn stamp(path: &Path) -> Option<(u64, u128)> {
         let metadata = fs::metadata(path).ok()?;
         let modified = metadata
@@ -180,7 +259,11 @@ pub struct Library {
     by_id: HashMap<u32, usize>,
     sources: HashMap<u32, AudioSource>,
     bindings: Vec<LibraryBinding>,
-    wav_root: Option<PathBuf>,
+    /// The library folders of the last folder scan, in order, including the
+    /// ones in `unloaded_roots`.
+    wav_roots: Vec<PathBuf>,
+    /// Library folders that the scan could not load, with the reason.
+    unloaded_roots: Vec<(PathBuf, String)>,
     /// Native identities whose WAV audio matched the catalog digest.
     verified: HashSet<u32>,
     /// Native identities that only a WAV with the right name and duration but
@@ -227,7 +310,8 @@ impl Library {
             by_id: HashMap::new(),
             sources: HashMap::new(),
             bindings: Vec::new(),
-            wav_root: None,
+            wav_roots: Vec::new(),
+            unloaded_roots: Vec::new(),
             verified: HashSet::new(),
             unverified: HashMap::new(),
             folder_tempos: Vec::new(),
@@ -282,8 +366,23 @@ impl Library {
         &self.bindings
     }
 
-    pub fn wav_root(&self) -> Option<&Path> {
-        self.wav_root.as_deref()
+    /// The library folders of the last folder scan, in order. It includes
+    /// the folders in [`Self::unloaded_roots`].
+    pub fn wav_roots(&self) -> &[PathBuf] {
+        &self.wav_roots
+    }
+
+    /// Library folders that the last folder scan could not load, with the reason.
+    pub fn unloaded_roots(&self) -> &[(PathBuf, String)] {
+        &self.unloaded_roots
+    }
+
+    /// The library folder that holds `path`, if any.
+    pub fn wav_root_of(&self, path: &Path) -> Option<&Path> {
+        self.wav_roots
+            .iter()
+            .find(|root| path.starts_with(root))
+            .map(PathBuf::as_path)
     }
 
     pub fn is_wav_product(&self, product: Product) -> bool {
@@ -421,17 +520,103 @@ impl Library {
         progress: Option<&ScanProgress>,
         cache: Option<&mut ScanCache>,
     ) -> Result<Self, String> {
-        let mut library = Self::empty();
-        library.import_wav_folder_with(root, source_bpm, progress, cache)?;
-        let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-        library.wav_root = Some(root.clone());
-        for product in Product::ALL {
-            library.register_wav_product(
-                product,
-                &root,
-                crate::catalog::bundled_wave_metadata(product)?,
-            )?;
+        Self::open_wav_folders_with(&[root.to_path_buf()], source_bpm, progress, cache)
+    }
+
+    /// Open up to [`MAX_LIBRARY_FOLDERS`] WAV folders as one library. One
+    /// progress total covers every folder. A folder that cannot be read, or
+    /// that has no readable WAV, is left out and listed in
+    /// [`Self::unloaded_roots`]; the other folders load. The scan fails only
+    /// when no folder loads, or when it is cancelled. A product's original
+    /// samples come from the first folder, in list order, that identifies any.
+    pub fn open_wav_folders_with(
+        roots: &[PathBuf],
+        source_bpm: f64,
+        progress: Option<&ScanProgress>,
+        mut cache: Option<&mut ScanCache>,
+    ) -> Result<Self, String> {
+        check_library_folders(roots)?;
+        if !source_bpm.is_finite() || source_bpm <= 0.0 {
+            return Err("The WAV folder needs a finite positive source tempo.".into());
         }
+        let cancelled = || progress.is_some_and(ScanProgress::is_cancelled);
+        let mut library = Self::empty();
+        let mut unloaded = Vec::new();
+        let mut listings = Vec::new();
+        for root in roots {
+            match list_wav_folder(root, progress) {
+                Ok(listing) => {
+                    library.wav_roots.push(listing.root.clone());
+                    listings.push(listing);
+                }
+                Err(_) if cancelled() => return Err(SCAN_CANCELLED.into()),
+                Err(error) => {
+                    let root = fs::canonicalize(root).unwrap_or_else(|_| root.clone());
+                    library.wav_roots.push(root.clone());
+                    unloaded.push((root, error));
+                }
+            }
+        }
+        if let Some(cache) = cache.as_deref_mut() {
+            cache.forget_unlisted(&listings);
+        }
+        let paths: Vec<PathBuf> = listings
+            .iter()
+            .flat_map(|listing| listing.paths.iter().cloned())
+            .collect();
+        let mut probes = probe_all(&paths, progress, cache)?.into_iter();
+        drop(paths);
+        for listing in listings {
+            let root = listing.root.clone();
+            let probes = probes.by_ref().take(listing.paths.len()).collect();
+            match library.import_listing(listing, probes, source_bpm) {
+                Ok((_, tempos, skipped)) => {
+                    library.folder_tempos.extend(tempos);
+                    library.skipped_waves.extend(skipped);
+                }
+                Err(error) => unloaded.push((root, error)),
+            }
+        }
+        if unloaded.len() == roots.len() {
+            return Err(match &unloaded[..] {
+                [(_, error)] => error.clone(),
+                _ => format!(
+                    "No library folder could be loaded. {}",
+                    unloaded
+                        .iter()
+                        .map(|(root, error)| format!("{}: {error}", root.display()))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+            });
+        }
+        unloaded.sort_by_key(|(root, _)| library.wav_roots.iter().position(|known| known == root));
+        library.unloaded_roots = unloaded;
+        let loaded: Vec<PathBuf> = library
+            .wav_roots
+            .iter()
+            .filter(|root| {
+                !library
+                    .unloaded_roots
+                    .iter()
+                    .any(|(failed, _)| failed == *root)
+            })
+            .cloned()
+            .collect();
+        for product in Product::ALL {
+            let metadata = crate::catalog::bundled_wave_metadata(product)?;
+            for root in &loaded {
+                if library.source_root(product).is_some() {
+                    break;
+                }
+                library.register_wav_product(product, root, metadata)?;
+            }
+        }
+        // A folder later in the list can serve an identity that an earlier
+        // folder only had a different recording of.
+        library
+            .unverified
+            .retain(|id, _| !library.by_id.contains_key(id));
         // A display label and duration cannot distinguish different native IDs.
         // Keep ambiguous files as ordinary WAVs until their path identifies them.
         // Identities whose audio digest matched may share one file: the audio
@@ -1173,7 +1358,7 @@ impl Library {
     }
 
     pub fn step_synth_sources(&self) -> Result<Vec<(PathBuf, String)>, String> {
-        if self.wav_root.is_some() {
+        if !self.wav_roots.is_empty() {
             return Ok(self
                 .samples
                 .iter()
@@ -1241,84 +1426,48 @@ impl Library {
         root: &Path,
         source_bpm: f64,
         progress: Option<&ScanProgress>,
-        cache: Option<&mut ScanCache>,
+        mut cache: Option<&mut ScanCache>,
     ) -> Result<Vec<crate::engine::ImportedSample>, String> {
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
             return Err("The WAV folder needs a finite positive source tempo.".into());
         }
-        let root =
-            fs::canonicalize(root).map_err(|e| format!("Cannot open the WAV folder: {e}"))?;
-        if !root.is_dir() {
-            return Err("Select a folder that contains WAV samples.".into());
+        let listing = list_wav_folder(root, progress)?;
+        if let Some(cache) = cache.as_deref_mut() {
+            cache.forget_unlisted(std::slice::from_ref(&listing));
         }
-        let cancelled = || progress.is_some_and(ScanProgress::is_cancelled);
-        let mut pending = vec![(root.clone(), 0usize)];
-        let mut visited = HashSet::new();
-        let mut paths = Vec::new();
-        let mut stated = BTreeMap::new();
-        let mut entries_seen = 0usize;
-        while let Some((folder, depth)) = pending.pop() {
-            if !visited.insert(folder.clone()) {
-                continue;
-            }
-            if depth > 64 {
-                return Err("The WAV folder exceeds the 64-level folder limit.".into());
-            }
-            if cancelled() {
-                return Err(SCAN_CANCELLED.into());
-            }
-            for entry in fs::read_dir(&folder)
-                .map_err(|e| format!("Cannot read {}: {e}", folder.display()))?
-            {
-                let entry = entry.map_err(|e| format!("Cannot read {}: {e}", folder.display()))?;
-                entries_seen += 1;
-                if entries_seen > MAX_WAV_FOLDER_ITEMS {
-                    return Err("The WAV folder exceeds the 200,000-item limit.".into());
-                }
-                let error =
-                    |e: std::io::Error| format!("Cannot read {}: {e}", entry.path().display());
-                // The listing gives each entry's type. Only a link needs the
-                // file system again, to find and check its target. Opening
-                // every entry made a cached scan of 100,000 files 3 times slower.
-                let mut kind = entry.file_type().map_err(error)?;
-                let mut path = entry.path();
-                if kind.is_symlink() {
-                    path = fs::canonicalize(&path).map_err(error)?;
-                    if !path.starts_with(&root) {
-                        return Err("A WAV folder link points outside the selected folder.".into());
-                    }
-                    kind = fs::metadata(&path).map_err(error)?.file_type();
-                }
-                if kind.is_dir() {
-                    pending.push((path, depth + 1));
-                } else if kind.is_file()
-                    && path
-                        .extension()
-                        .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
-                {
-                    paths.push(path);
-                } else if kind.is_file()
-                    && path
-                        .file_name()
-                        .is_some_and(|name| name.eq_ignore_ascii_case("bpm.inf"))
-                {
-                    // Optional pack metadata: an unreadable file states nothing.
-                    let tempo = fs::read(&path)
-                        .ok()
-                        .and_then(|bytes| stated_pack_tempo(&String::from_utf8_lossy(&bytes)));
-                    if let (Some(tempo), Some(pack)) = (tempo, path.parent()) {
-                        stated.insert(pack.to_path_buf(), tempo);
-                    }
-                }
-            }
-        }
-        paths.sort();
-        paths.dedup();
+        let probes = probe_all(&listing.paths, progress, cache)?;
+        let (imported, tempos, skipped) = self.import_listing(listing, probes, source_bpm)?;
+        self.folder_tempos = tempos;
+        self.skipped_waves = skipped;
+        Ok(imported)
+    }
+
+    /// Import the probed WAVs of one listed folder, in listing order. Returns
+    /// the imports, the folder tempos, and the WAVs that could not be read.
+    /// An error leaves this library unchanged.
+    #[allow(clippy::type_complexity)]
+    fn import_listing(
+        &mut self,
+        listing: WavListing,
+        probes: Vec<Result<WavProbe, String>>,
+        source_bpm: f64,
+    ) -> Result<
+        (
+            Vec<crate::engine::ImportedSample>,
+            Vec<(PathBuf, f64, usize)>,
+            Vec<(PathBuf, String)>,
+        ),
+        String,
+    > {
+        let WavListing {
+            root,
+            paths,
+            stated,
+        } = listing;
         if paths.is_empty() {
             return Err("The selected folder contains no WAV samples.".into());
         }
         // An unreadable file is reported and left out; the rest of the folder loads.
-        let probes = probe_all(&paths, progress, cache)?;
         let mut skipped = Vec::new();
         let (paths, probes): (Vec<_>, Vec<_>) = paths
             .into_iter()
@@ -1463,9 +1612,9 @@ impl Library {
             .into_iter()
             .map(|((folder, bits), count)| (folder.to_path_buf(), f64::from_bits(bits), count))
             .collect();
-        let mut candidate = self.clone();
-        let mut allocator = ImportAllocator::new(&candidate);
-        let mut imported = Vec::with_capacity(paths.len());
+        // Check every record before the first one is stored.
+        let mut allocator = ImportAllocator::new(self);
+        let mut prepared = Vec::with_capacity(paths.len());
         for ((path, probe), tempo) in paths.into_iter().zip(probes).zip(file_tempos) {
             let folder = path.parent().unwrap_or(&root);
             let tempo = tempo.unwrap_or(source_bpm);
@@ -1489,23 +1638,36 @@ impl Library {
                 source_sample_rate: None,
                 origin: None,
             };
-            imported.push(candidate.adopt_import(record, &probe, existing)?);
+            let (record, sample) = prepare_import(record, &probe)?;
+            prepared.push((record, sample, existing));
         }
-        candidate.folder_tempos = folder_tempos;
-        candidate.skipped_waves = skipped;
-        *self = candidate;
-        Ok(imported)
+        let mut imported = Vec::with_capacity(prepared.len());
+        for (record, sample, existing) in prepared {
+            self.store_import(&record, sample, existing);
+            imported.push(record);
+        }
+        Ok((imported, folder_tempos, skipped))
     }
 
     /// Store a probed import under its ID, replacing an entry at `existing`.
     fn adopt_import(
         &mut self,
-        mut imported: crate::engine::ImportedSample,
+        imported: crate::engine::ImportedSample,
         probe: &WavProbe,
         existing: Option<usize>,
     ) -> Result<crate::engine::ImportedSample, String> {
-        imported.source_sample_rate = Some(probe.sample_rate);
-        let sample = imported_sample(&imported, probe, imported.path.clone())?;
+        let (imported, sample) = prepare_import(imported, probe)?;
+        self.store_import(&imported, sample, existing);
+        Ok(imported)
+    }
+
+    /// Store a checked import under its ID, replacing an entry at `existing`.
+    fn store_import(
+        &mut self,
+        imported: &crate::engine::ImportedSample,
+        sample: Sample,
+        existing: Option<usize>,
+    ) {
         self.sources.insert(
             imported.id,
             AudioSource::Wave {
@@ -1519,7 +1681,6 @@ impl Library {
             self.by_id.insert(imported.id, self.samples.len());
             self.samples.push(sample);
         }
-        Ok(imported)
     }
 
     /// Resolve a moved WAV by its longest matching path suffix. Ties use the
@@ -1775,6 +1936,94 @@ pub fn read_packed_file(path: &Path) -> Result<crate::audio::Pcm, String> {
             .into_iter()
             .map(|sample| sample as f32 / 32768.0)
             .collect(),
+    })
+}
+
+/// Set an import's probed rate and build its catalog entry.
+fn prepare_import(
+    mut imported: crate::engine::ImportedSample,
+    probe: &WavProbe,
+) -> Result<(crate::engine::ImportedSample, Sample), String> {
+    imported.source_sample_rate = Some(probe.sample_rate);
+    let sample = imported_sample(&imported, probe, imported.path.clone())?;
+    Ok((imported, sample))
+}
+
+/// The WAVs below one library folder, sorted, and the pack tempos that its
+/// `BPM.INF` files state.
+struct WavListing {
+    root: PathBuf,
+    paths: Vec<PathBuf>,
+    stated: BTreeMap<PathBuf, f64>,
+}
+
+/// List the WAVs below `root`. A folder that cannot be read fails the listing.
+fn list_wav_folder(root: &Path, progress: Option<&ScanProgress>) -> Result<WavListing, String> {
+    let root = fs::canonicalize(root).map_err(|e| format!("Cannot open the WAV folder: {e}"))?;
+    if !root.is_dir() {
+        return Err("Select a folder that contains WAV samples.".into());
+    }
+    let cancelled = || progress.is_some_and(ScanProgress::is_cancelled);
+    let mut pending = vec![(root.clone(), 0usize)];
+    let mut visited = HashSet::new();
+    let mut paths = Vec::new();
+    let mut stated = BTreeMap::new();
+    while let Some((folder, depth)) = pending.pop() {
+        if !visited.insert(folder.clone()) {
+            continue;
+        }
+        if depth > 64 {
+            return Err("The WAV folder exceeds the 64-level folder limit.".into());
+        }
+        if cancelled() {
+            return Err(SCAN_CANCELLED.into());
+        }
+        for entry in
+            fs::read_dir(&folder).map_err(|e| format!("Cannot read {}: {e}", folder.display()))?
+        {
+            let entry = entry.map_err(|e| format!("Cannot read {}: {e}", folder.display()))?;
+            let error = |e: std::io::Error| format!("Cannot read {}: {e}", entry.path().display());
+            // The listing gives each entry's type. Only a link needs the
+            // file system again, to find and check its target. Opening
+            // every entry made a cached scan of 100,000 files 3 times slower.
+            let mut kind = entry.file_type().map_err(error)?;
+            let mut path = entry.path();
+            if kind.is_symlink() {
+                path = fs::canonicalize(&path).map_err(error)?;
+                if !path.starts_with(&root) {
+                    return Err("A WAV folder link points outside the selected folder.".into());
+                }
+                kind = fs::metadata(&path).map_err(error)?.file_type();
+            }
+            if kind.is_dir() {
+                pending.push((path, depth + 1));
+            } else if kind.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+            {
+                paths.push(path);
+            } else if kind.is_file()
+                && path
+                    .file_name()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("bpm.inf"))
+            {
+                // Optional pack metadata: an unreadable file states nothing.
+                let tempo = fs::read(&path)
+                    .ok()
+                    .and_then(|bytes| stated_pack_tempo(&String::from_utf8_lossy(&bytes)));
+                if let (Some(tempo), Some(pack)) = (tempo, path.parent()) {
+                    stated.insert(pack.to_path_buf(), tempo);
+                }
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(WavListing {
+        root,
+        paths,
+        stated,
     })
 }
 
@@ -2289,29 +2538,28 @@ mod tests {
     static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
-    fn a_full_wav_folder_palette_fits_the_project_import_budget() {
+    fn a_palette_larger_than_the_former_cap_validates_as_project_imports() {
         use crate::engine::{ImportedSample, Project};
-        let imported = |index: usize| ImportedSample {
-            id: IMPORTED_ID_START + index as u32,
-            name: "Sample".into(),
-            group_name: "Wave".into(),
-            path: std::path::PathBuf::from(format!("sample-{index}.wav")),
-            source_bpm: 140.0,
-            source_sample_rate: Some(44_100),
-            origin: None,
-        };
-        let mut project = Project {
-            imported_samples: (0..MAX_WAV_FOLDER_ITEMS).map(imported).collect(),
+        // The former limit was 200,000 imports; these are records, not files.
+        let count = 200_001;
+        let project = Project {
+            imported_samples: (0..count)
+                .map(|index| ImportedSample {
+                    id: IMPORTED_ID_START + index as u32,
+                    name: "Sample".into(),
+                    group_name: "Wave".into(),
+                    path: PathBuf::from(format!("sample-{index}.wav")),
+                    source_bpm: 140.0,
+                    source_sample_rate: Some(44_100),
+                    origin: None,
+                })
+                .collect(),
             ..Project::default()
         };
         project.validate().unwrap();
-        project
-            .imported_samples
-            .push(imported(MAX_WAV_FOLDER_ITEMS));
-        assert_eq!(
-            project.validate().unwrap_err(),
-            "The project has too many imported samples."
-        );
+        // Imported IDs stay above every product region.
+        let last = project.imported_samples.last().unwrap().id;
+        assert!(Product::sample_key(last).is_none());
     }
 
     #[test]
@@ -2695,6 +2943,207 @@ mod tests {
     }
 
     #[test]
+    fn library_folders_merge_into_one_browser_with_one_progress_total() {
+        let folder = Folder::new();
+        let first = folder.mono("First/Drums/kick.wav", &waveform(1, 300));
+        let second = folder.mono("Second/Drums/kick.wav", &waveform(2, 300));
+        let top = folder.mono("Second/top.wav", &waveform(3, 120));
+        let roots = [folder.0.join("First"), folder.0.join("Second")];
+        let progress = ScanProgress::default();
+        let mut cache = ScanCache::default();
+        let library =
+            Library::open_wav_folders_with(&roots, 140.0, Some(&progress), Some(&mut cache))
+                .unwrap();
+        assert_eq!(progress.counts(), (3, 3));
+        assert_eq!(cache.len(), 3);
+        assert_eq!(
+            library.wav_roots(),
+            [
+                fs::canonicalize(&roots[0]).unwrap(),
+                fs::canonicalize(&roots[1]).unwrap()
+            ]
+        );
+        assert!(library.unloaded_roots().is_empty());
+        let mut paths: Vec<_> = library
+            .samples
+            .iter()
+            .filter_map(|sample| sample.wav_path.clone())
+            .collect();
+        paths.sort();
+        let mut expected = vec![first.clone(), second.clone(), top.clone()];
+        expected.sort();
+        assert_eq!(paths, expected);
+        let ids: HashSet<_> = library.samples.iter().map(|sample| sample.id).collect();
+        assert_eq!(ids.len(), 3, "Each folder's sounds keep their own IDs.");
+        let group = |path: &Path| {
+            library
+                .samples
+                .iter()
+                .find(|sample| sample.wav_path.as_deref() == Some(path))
+                .unwrap()
+                .group_name
+                .clone()
+        };
+        assert_eq!(group(&first), "Drums");
+        assert_eq!(
+            group(&top),
+            "Wave",
+            "A file at a library's top is a plain WAV."
+        );
+        assert_eq!(
+            library.wav_root_of(&second),
+            Some(library.wav_roots()[1].as_path())
+        );
+    }
+
+    #[test]
+    fn an_unreadable_library_folder_leaves_the_others_loaded() {
+        let folder = Folder::new();
+        let kept = folder.mono("Kept/kick.wav", &waveform(1, 300));
+        fs::create_dir_all(folder.0.join("Empty")).unwrap();
+        let roots = [
+            folder.0.join("Missing"),
+            folder.0.join("Kept"),
+            folder.0.join("Empty"),
+        ];
+        let library = Library::open_wav_folders_with(&roots, 140.0, None, None).unwrap();
+        assert_eq!(library.samples.len(), 1);
+        assert_eq!(library.samples[0].wav_path.as_deref(), Some(kept.as_path()));
+        // The list keeps every folder in order; the two that failed say why.
+        assert_eq!(library.wav_roots().len(), 3);
+        assert_eq!(library.wav_roots()[0], roots[0]);
+        let unloaded = library.unloaded_roots();
+        assert_eq!(unloaded.len(), 2);
+        assert_eq!(unloaded[0].0, roots[0]);
+        assert!(unloaded[0].1.contains("Cannot open"), "{}", unloaded[0].1);
+        assert_eq!(unloaded[1].0, fs::canonicalize(&roots[2]).unwrap());
+        assert!(unloaded[1].1.contains("no WAV"), "{}", unloaded[1].1);
+        // With no folder left, the scan fails and names each one.
+        let error = Library::open_wav_folders_with(
+            &[roots[0].clone(), roots[2].clone()],
+            140.0,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            error.starts_with("No library folder could be loaded."),
+            "{error}"
+        );
+        assert!(
+            error.contains("Missing") && error.contains("Empty"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn library_folder_lists_hold_one_to_nine_separate_folders() {
+        let folder = Folder::new();
+        let roots: Vec<PathBuf> = (0..=MAX_LIBRARY_FOLDERS)
+            .map(|index| {
+                folder.mono(&format!("Library {index}/a.wav"), &waveform(1, 100));
+                folder.0.join(format!("Library {index}"))
+            })
+            .collect();
+        check_library_folders(&roots[..MAX_LIBRARY_FOLDERS]).unwrap();
+        let error = check_library_folders(&roots).unwrap_err();
+        assert!(error.contains("up to 9"), "{error}");
+        assert!(Library::open_wav_folders_with(&roots, 140.0, None, None).is_err());
+        assert!(check_library_folders(&[]).is_err());
+        let same = [roots[0].clone(), folder.0.join("Library 0/.")];
+        assert!(
+            check_library_folders(&same)
+                .unwrap_err()
+                .contains("already")
+        );
+        let nested = [folder.0.clone(), roots[1].clone()];
+        assert!(
+            check_library_folders(&nested)
+                .unwrap_err()
+                .contains("inside")
+        );
+    }
+
+    #[test]
+    fn library_folder_lists_reject_offline_aliases() {
+        let relative = PathBuf::from(format!(
+            "tmp/unavailable-library-{}-{}",
+            std::process::id(),
+            NEXT_FOLDER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let absolute = std::path::absolute(&relative).unwrap();
+        assert!(!absolute.exists());
+        assert!(
+            check_library_folders(&[relative, absolute])
+                .unwrap_err()
+                .contains("already")
+        );
+    }
+
+    #[test]
+    fn library_folder_lists_reject_missing_children() {
+        let folder = Folder::new();
+        let child = folder.0.join("Unavailable/Pack");
+        assert!(!child.exists());
+        assert!(
+            check_library_folders(&[folder.0.clone(), child])
+                .unwrap_err()
+                .contains("inside")
+        );
+    }
+
+    #[test]
+    fn a_scan_forgets_cached_files_when_a_library_folder_becomes_empty() {
+        let folder = Folder::new();
+        let removed = folder.mono("First/kick.wav", &[1, 2, 3]);
+        folder.mono("Second/snare.wav", &[4, 5, 6]);
+        let roots = [folder.0.join("First"), folder.0.join("Second")];
+        let mut cache = ScanCache::default();
+        Library::open_wav_folders_with(&roots, 140.0, None, Some(&mut cache)).unwrap();
+        assert_eq!(cache.len(), 2);
+        fs::remove_file(removed).unwrap();
+        cache = serde_json::from_str(&serde_json::to_string(&cache).unwrap()).unwrap();
+        let library =
+            Library::open_wav_folders_with(&roots, 140.0, None, Some(&mut cache)).unwrap();
+        assert_eq!(library.samples.len(), 1);
+        assert_eq!(library.unloaded_roots().len(), 1);
+        assert!(library.unloaded_roots()[0].1.contains("no WAV"));
+        assert_eq!(cache.len(), 1);
+        assert!(cache.has_changes());
+    }
+
+    #[test]
+    fn a_scan_has_no_item_cap_and_forgets_cached_files_that_moved() {
+        // The former limit was 200,000 entries; a modest count shows the
+        // listing takes every file without a ceiling of its own.
+        let folder = Folder::new();
+        for index in 0..600 {
+            folder.mono(&format!("One/Pack {}/{index}.wav", index % 7), &[1, 2, 3]);
+        }
+        for index in 0..400 {
+            folder.mono(&format!("Two/{index}.wav"), &[4, 5, 6]);
+        }
+        let roots = [folder.0.join("One"), folder.0.join("Two")];
+        let mut cache = ScanCache::default();
+        let library =
+            Library::open_wav_folders_with(&roots, 140.0, None, Some(&mut cache)).unwrap();
+        assert_eq!(library.samples.len(), 1000);
+        assert_eq!(cache.len(), 1000);
+        // Files moved out of a scanned folder leave the cache; the probes of
+        // a folder outside this scan stay.
+        let elsewhere = folder.mono("Elsewhere/kept.wav", &[7, 8, 9]);
+        Library::open_wav_folder_with(elsewhere.parent().unwrap(), 140.0, None, Some(&mut cache))
+            .unwrap();
+        fs::rename(folder.0.join("Two"), folder.0.join("Moved")).unwrap();
+        fs::create_dir_all(folder.0.join("Two")).unwrap();
+        folder.mono("Two/new.wav", &[1, 1, 1]);
+        cache = serde_json::from_str(&serde_json::to_string(&cache).unwrap()).unwrap();
+        Library::open_wav_folders_with(&roots, 140.0, None, Some(&mut cache)).unwrap();
+        assert!(cache.has_changes());
+        assert_eq!(cache.len(), 600 + 1 + 1);
+    }
+
+    #[test]
     fn folders_import_with_their_own_tempo_and_report_it() {
         let folder = Folder::new();
         for (name, frames) in [("a", 75_600), ("b", 151_200), ("c", 75_600)] {
@@ -2909,10 +3358,7 @@ mod tests {
         let mut library = Library::open_wav_folder(&folder.0, 160.0).unwrap();
         assert!(library.archive_path.as_os_str().is_empty());
         assert!(library.bindings().is_empty());
-        assert_eq!(
-            library.wav_root(),
-            Some(fs::canonicalize(&folder.0).unwrap().as_path())
-        );
+        assert_eq!(library.wav_roots(), [fs::canonicalize(&folder.0).unwrap()]);
         assert_eq!(library.samples.len(), 2);
         let bass = library
             .samples
@@ -3085,7 +3531,7 @@ mod tests {
             pcm_digest: None,
         };
         library.remove_product(Product::T1);
-        let root = library.wav_root().unwrap().to_path_buf();
+        let root = library.wav_roots()[0].clone();
         library
             .register_wav_product(
                 Product::T1,

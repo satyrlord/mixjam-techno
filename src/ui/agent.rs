@@ -1058,6 +1058,29 @@ impl MixJamApp {
                     control: None,
                 }
             }
+            Request::Libraries => Start::Reply(Body::Libraries {
+                folders: self.session.library().wav_roots().to_vec(),
+                unloaded: wire::unloaded_views(&self.session),
+                max_folders: MAX_LIBRARY_FOLDERS,
+                fallback_bpm: self.fallback_bpm,
+                scan: wire::busy(&self.session).scan,
+            }),
+            Request::SetLibraries {
+                folders,
+                fallback_bpm,
+            } => {
+                if let Some(modal) = self.blocking_modal(ctx) {
+                    return Err(format!(
+                        "The library folders cannot change while the {modal} modal is open."
+                    ));
+                }
+                if fallback_bpm.is_some_and(|bpm| !bpm.is_finite() || !(1.0..=999.0).contains(&bpm))
+                {
+                    return Err("The fallback BPM is 1 to 999.".into());
+                }
+                self.try_scan_library_folders(folders, fallback_bpm.unwrap_or(self.fallback_bpm))?;
+                Start::run(vec![Step::Idle])
+            }
             Request::Quit => {
                 self.request_action(PendingAction::Close, ctx);
                 // Unsaved work opens a modal instead. The loop replies at

@@ -17,7 +17,6 @@ pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
 /// A guard against malformed songs. It is above the 262,144 one-bar clips
 /// that the 64-track timeline holds.
 pub const MAX_CLIPS: usize = 1_000_000;
-pub const MAX_IMPORTED_SAMPLES: usize = 200_000;
 // Guards against a file that is not a project, as the song reader's limit does.
 const MAX_PROJECT_BYTES: usize = 1024 * 1024 * 1024;
 pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
@@ -757,9 +756,9 @@ impl Project {
         }
         let mut ids = HashSet::new();
         let mut imported_ids = HashSet::new();
-        if self.imported_samples.len() > MAX_IMPORTED_SAMPLES {
-            return Err("The project has too many imported samples.".into());
-        }
+        // The open project holds the whole sound browser as imports, so its
+        // count follows the library. The song and project readers' byte
+        // limits bound what a file can declare.
         for sample in &self.imported_samples {
             validate_import_metadata(sample)?;
             if !imported_ids.insert(sample.id) {
