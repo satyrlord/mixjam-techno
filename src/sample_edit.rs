@@ -122,7 +122,17 @@ pub fn repitch(input: &Pcm, cents: i32) -> Result<Pcm, String> {
     })
 }
 
+/// The split between the stretcher's two bands, in hertz.
+const BAND_SPLIT_HZ: f64 = 150.0;
+
 /// Make `input` `ratio` times as long and keep its pitch.
+///
+/// A grain must span a period of the tone it carries, or the overlap-add
+/// follows the waveform slowly and changes the pitch with the length. Short
+/// grains keep transients tight but miss periods longer than about 10 ms, so
+/// the sound is split at 150 Hz: the bass band gets grains long enough for
+/// tones down to about 30 Hz, the rest keeps the short grains, and the bands
+/// sum back to the whole sound.
 fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
     let source_frames = input.frames() as usize;
     let frames = (source_frames as f64 * ratio).round().max(1.0) as usize;
@@ -130,9 +140,80 @@ fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
     if !fits_a_wav(frames, channels) {
         return Err("The stretched sample is too large.".into());
     }
-    let window = (input.sample_rate as usize / 50).max(32).min(source_frames);
+    let rate = input.sample_rate as usize;
+    let low = zero_phase_low_pass(input, BAND_SPLIT_HZ);
+    let high: Vec<f64> = input
+        .samples
+        .iter()
+        .zip(&low)
+        .map(|(sample, low)| f64::from(*sample) - low)
+        .collect();
+    let low = overlap_add(&low, channels, frames, ratio, rate / 15, rate / 60);
+    let high = overlap_add(&high, channels, frames, ratio, rate / 50, rate / 200);
+    let samples = low
+        .iter()
+        .zip(&high)
+        .map(|(low, high)| (low + high).clamp(-1.0, 1.0) as f32)
+        .collect();
+    let result = Pcm {
+        sample_rate: input.sample_rate,
+        channels: input.channels,
+        samples,
+    };
+    result.validate()?;
+    Ok(result)
+}
+
+/// A second-order Butterworth low-pass run forward and backward, so the band
+/// keeps its phase and the rest of the sound is the input minus this band.
+fn zero_phase_low_pass(input: &Pcm, cutoff: f64) -> Vec<f64> {
+    let channels = input.channels as usize;
+    let frames = input.frames() as usize;
+    let omega = 2.0 * std::f64::consts::PI * cutoff.min(f64::from(input.sample_rate) * 0.45)
+        / f64::from(input.sample_rate);
+    let alpha = omega.sin() / std::f64::consts::SQRT_2;
+    let cos = omega.cos();
+    let a0 = 1.0 + alpha;
+    let b0 = (1.0 - cos) / 2.0 / a0;
+    let b1 = (1.0 - cos) / a0;
+    let a1 = -2.0 * cos / a0;
+    let a2 = (1.0 - alpha) / a0;
+    let mut band: Vec<f64> = input
+        .samples
+        .iter()
+        .map(|sample| f64::from(*sample))
+        .collect();
+    for channel in 0..channels {
+        for backward in [false, true] {
+            let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
+            for step in 0..frames {
+                let frame = if backward { frames - 1 - step } else { step };
+                let index = frame * channels + channel;
+                let x = band[index];
+                let y = b0 * x + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+                (x2, x1, y2, y1) = (x1, x, y1, y);
+                band[index] = y;
+            }
+        }
+    }
+    band
+}
+
+/// Waveform-aligned overlap-add of interleaved `samples` into `frames` frames:
+/// grains of `window` frames, each placed where it best continues the output
+/// within `search` frames of its nominal position.
+fn overlap_add(
+    samples: &[f64],
+    channels: usize,
+    frames: usize,
+    ratio: f64,
+    window: usize,
+    search: usize,
+) -> Vec<f64> {
+    let source_frames = samples.len() / channels;
+    let window = window.max(32).min(source_frames);
     let hop = (window / 2).max(1);
-    let search = (input.sample_rate as usize / 200).max(1);
+    let search = search.max(1);
     let mut output = vec![0.0f64; frames * channels];
     let mut weights = vec![0.0f64; frames];
     let window_weights: Vec<_> = (0..window)
@@ -161,7 +242,7 @@ fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
                     for channel in 0..channels {
                         let a = output[destination_frame * channels + channel]
                             / weights[destination_frame];
-                        let b = input.samples[(candidate + index) * channels + channel] as f64;
+                        let b = samples[(candidate + index) * channels + channel];
                         dot += a * b;
                         a_power += a * a;
                         b_power += b * b;
@@ -197,22 +278,15 @@ fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
             weights[destination + index] += weight;
             for channel in 0..channels {
                 output[(destination + index) * channels + channel] +=
-                    input.samples[(best + index) * channels + channel] as f64 * weight;
+                    samples[(best + index) * channels + channel] * weight;
             }
         }
     }
-    let samples = output
+    output
         .iter()
         .enumerate()
-        .map(|(index, sample)| (sample / weights[index / channels]).clamp(-1.0, 1.0) as f32)
-        .collect();
-    let result = Pcm {
-        sample_rate: input.sample_rate,
-        channels: input.channels,
-        samples,
-    };
-    result.validate()?;
-    Ok(result)
+        .map(|(index, sample)| sample / weights[index / channels])
+        .collect()
 }
 
 #[cfg(test)]
@@ -227,12 +301,15 @@ mod tests {
         assert!(!fits_a_wav(usize::MAX, 2));
     }
     fn sine(frames: usize) -> Pcm {
+        tone(440.0, frames)
+    }
+    fn tone(hertz: f32, frames: usize) -> Pcm {
         Pcm {
             sample_rate: 8000,
             channels: 1,
             samples: (0..frames)
                 .map(|frame| {
-                    (2.0 * std::f32::consts::PI * 440.0 * frame as f32 / 8000.0).sin() * 0.5
+                    (2.0 * std::f32::consts::PI * hertz * frame as f32 / 8000.0).sin() * 0.5
                 })
                 .collect(),
         }
@@ -292,6 +369,26 @@ mod tests {
         }
         assert_eq!(repitch(&input, 0).unwrap().samples, input.samples);
         assert!(repitch(&input, 2401).is_err());
+    }
+    #[test]
+    fn bass_tones_move_with_the_pitch_and_keep_it_through_a_stretch() {
+        // A grain shorter than the period would leave these tones where they were.
+        for (hertz, cents, expected) in
+            [(50.0, 219, 56.68), (45.0, -300, 37.84), (40.0, 100, 42.38)]
+        {
+            let output = repitch(&tone(hertz, 32000), cents).unwrap();
+            let measured = frequency(&output);
+            assert!(
+                (measured - expected).abs() < 1.0,
+                "{hertz} Hz {cents}: {measured}"
+            );
+        }
+        let output = time_stretch(&tone(50.0, 32000), 140.0, 100.0).unwrap();
+        assert!(
+            (frequency(&output) - 50.0).abs() < 1.0,
+            "{}",
+            frequency(&output)
+        );
     }
     #[test]
     fn stretcher_keeps_stereo_channels_isolated_and_rejects_unknown_tempo() {

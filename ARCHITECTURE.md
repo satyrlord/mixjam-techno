@@ -39,6 +39,9 @@ ends that group, so undo can return to the saved state after the next edit. A cl
 cannot be lengthened over the next clip on its track. Automation point drags
 use explicit start and end boundaries, so a pause within a drag does not split
 its undo step and separate drags do not merge.
+Clip handle drags keep a frontend preview and submit one `edit_discrete` action
+on release. This ends continuous-control grouping before and after the edit,
+so separate drags and agent `clip` requests each keep their own undo step.
 
 Track gain is a nonnegative amplitude and polarity is a separate persistent
 boolean. Playback and export use `Track::effective_gain()` to apply the sign.

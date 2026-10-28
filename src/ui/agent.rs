@@ -617,6 +617,7 @@ impl MixJamApp {
                 | Request::Seek { .. }
                 | Request::SetLoop { .. }
                 | Request::Automate { .. }
+                | Request::Clip { .. }
         ) && let Some(modal) = self.blocking_modal(ctx)
         {
             return Err(format!(
@@ -1041,6 +1042,22 @@ impl MixJamApp {
                 self.sync_notice();
                 Start::run(vec![Step::Idle])
             }
+            request @ Request::Clip { clip: id, .. } => {
+                let clip = self
+                    .session
+                    .project()
+                    .clips
+                    .iter()
+                    .find(|clip| clip.id == id)
+                    .ok_or(format!("Clip {id} does not exist."))?;
+                self.session.edit_discrete(clip_edit(clip, request)?)?;
+                self.sync_notice();
+                Start::Run {
+                    steps: vec![Step::Idle],
+                    clips: vec![id],
+                    control: None,
+                }
+            }
             Request::Quit => {
                 self.request_action(PendingAction::Close, ctx);
                 // Unsaved work opens a modal instead. The loop replies at
@@ -1219,5 +1236,128 @@ impl MixJamApp {
                     tracks: self.timeline_tracks.iter().map(|track| track + 1).collect(),
                 }),
         }
+    }
+}
+
+/// The edit for a `clip` request: `clip` with the request's fields changed.
+fn clip_edit(clip: &Clip, request: Request) -> Result<EditCommand, String> {
+    let Request::Clip {
+        gain_db,
+        offset_frames,
+        length_ticks,
+        fade_in_ticks,
+        fade_in_curve,
+        fade_out_ticks,
+        fade_out_curve,
+        pitch_cents,
+        ..
+    } = request
+    else {
+        return Err("The request does not change a clip.".into());
+    };
+    let gain = match gain_db {
+        Some(db) if db.is_finite() && (-60.0..=clip_gain_db(2.0)).contains(&db) => {
+            clip_gain_from_db(db)
+        }
+        Some(_) => return Err("gain_db must be from -60 (silence) to 6.".into()),
+        None => clip.gain,
+    };
+    let length_ticks = length_ticks.unwrap_or(clip.length_ticks);
+    if length_ticks == 0 {
+        return Err("length_ticks must be at least 1.".into());
+    }
+    // A fade that is given must fit. A fade left out is shortened with the
+    // clip, as a resize in the window does.
+    let mut fades = clip.fades;
+    fades.fade_in.ticks = fade_in_ticks.unwrap_or(fades.fade_in.ticks);
+    fades.fade_out.ticks = fade_out_ticks.unwrap_or(fades.fade_out.ticks);
+    fades.fade_in.curve = fade_in_curve.unwrap_or(fades.fade_in.curve);
+    fades.fade_out.curve = fade_out_curve.unwrap_or(fades.fade_out.curve);
+    if (fade_in_ticks.is_some() || fade_out_ticks.is_some()) && fades.fit(length_ticks) != fades {
+        return Err("The fades together are longer than the clip.".into());
+    }
+    Ok(EditCommand::SetClip {
+        id: clip.id,
+        start_tick: clip.start_tick,
+        gain,
+        offset_frames: offset_frames.unwrap_or(clip.offset_frames),
+        length_ticks,
+        fades,
+        pitch_cents: pitch_cents.unwrap_or(clip.pitch_cents),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mixjam_techno::application::FadeCurve;
+
+    /// A `clip` request for clip 4 with the given gain, length, and fade in.
+    fn change(
+        gain_db: Option<f32>,
+        length_ticks: Option<u32>,
+        fade_in: Option<(u32, FadeCurve)>,
+    ) -> Request {
+        Request::Clip {
+            clip: 4,
+            gain_db,
+            offset_frames: None,
+            length_ticks,
+            fade_in_ticks: fade_in.map(|(ticks, _)| ticks),
+            fade_in_curve: fade_in.map(|(_, curve)| curve),
+            fade_out_ticks: None,
+            fade_out_curve: None,
+            pitch_cents: None,
+        }
+    }
+
+    #[test]
+    fn a_clip_request_changes_only_the_fields_it_gives() {
+        let mut clip = Clip {
+            id: 4,
+            sample_id: 1,
+            track: 2,
+            start_tick: 512,
+            length_ticks: 256,
+            offset_frames: 10,
+            gain: 0.5,
+            fades: Default::default(),
+            pitch_cents: -100,
+        };
+        clip.fades.fade_out.ticks = 64;
+        let EditCommand::SetClip {
+            id,
+            start_tick,
+            gain,
+            offset_frames,
+            length_ticks,
+            fades,
+            pitch_cents,
+        } = clip_edit(
+            &clip,
+            change(Some(0.0), None, Some((32, FadeCurve::Exponential))),
+        )
+        .unwrap()
+        else {
+            panic!("A clip request makes a clip edit.")
+        };
+        assert_eq!((id, start_tick, gain), (4, 512, 1.0));
+        assert_eq!((offset_frames, length_ticks, pitch_cents), (10, 256, -100));
+        assert_eq!(fades.fade_in.ticks, 32);
+        assert_eq!(fades.fade_in.curve, FadeCurve::Exponential);
+        assert_eq!(fades.fade_out, clip.fades.fade_out);
+
+        let silent = clip_edit(&clip, change(Some(-60.0), None, None)).unwrap();
+        assert!(matches!(silent, EditCommand::SetClip { gain: 0.0, .. }));
+        for invalid in [
+            change(Some(-60.1), None, None),
+            change(Some(7.0), None, None),
+            change(None, Some(0), None),
+            change(None, None, Some((200, FadeCurve::Linear))),
+        ] {
+            assert!(clip_edit(&clip, invalid.clone()).is_err(), "{invalid:?}");
+        }
+        // A shorter clip shortens a fade that the request leaves out.
+        assert!(clip_edit(&clip, change(None, Some(32), None)).is_ok());
     }
 }

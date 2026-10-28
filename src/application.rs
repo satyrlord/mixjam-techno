@@ -77,8 +77,10 @@ pub enum EditCommand {
         master_gain: f32,
     },
     /// Fades that do not fit the new length are shortened, the fade out first.
+    /// A trim of the clip's left edge changes its start, trim, and length.
     SetClip {
         id: u64,
+        start_tick: u32,
         gain: f32,
         offset_frames: u32,
         length_ticks: u32,
@@ -386,6 +388,7 @@ enum FxControl {
 }
 #[derive(Clone, Copy, PartialEq)]
 enum ClipControl {
+    Start,
     Gain,
     Trim,
     Length,
@@ -402,6 +405,7 @@ impl Gesture {
             EditCommand::SetTempo(_) => Some(Self::Tempo),
             EditCommand::SetClip {
                 id,
+                start_tick,
                 gain,
                 offset_frames,
                 length_ticks,
@@ -410,6 +414,9 @@ impl Gesture {
             } => {
                 let clip = project.clips.iter().find(|clip| clip.id == *id)?;
                 let mut controls = Vec::new();
+                if clip.start_tick != *start_tick {
+                    controls.push(ClipControl::Start);
+                }
                 if clip.fades.fade_in != fades.fade_in {
                     controls.push(ClipControl::FadeIn);
                 }
@@ -940,11 +947,20 @@ impl Session {
             self.gesture = None;
         }
     }
+    /// Apply a completed action as its own undo step, outside continuous controls.
+    pub fn edit_discrete(&mut self, command: EditCommand) -> Result<(), String> {
+        self.end_automation_gesture();
+        self.gesture = None;
+        let result = self.edit(command);
+        self.gesture = None;
+        result
+    }
     pub fn edit(&mut self, command: EditCommand) -> Result<(), String> {
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
         match &command {
             EditCommand::SetClip {
                 id,
+                start_tick,
                 offset_frames,
                 length_ticks,
                 pitch_cents,
@@ -973,14 +989,17 @@ impl Session {
                 if *offset_frames > max_offset.saturating_sub(1) {
                     return Err("The trim start must be within the source audio.".into());
                 }
-                // A longer clip must not cover its neighbor. Other clip edits
+                // A wider clip must not cover its neighbor. Other clip edits
                 // stay available for imported arrangements that already overlap.
-                if *length_ticks > clip.length_ticks {
+                let end = u64::from(*start_tick) + u64::from(*length_ticks);
+                if *start_tick < clip.start_tick
+                    || end > u64::from(clip.start_tick) + u64::from(clip.length_ticks)
+                {
                     crate::engine::ensure_space(
                         self.project(),
                         Some(*id),
                         clip.track,
-                        clip.start_tick,
+                        *start_tick,
                         *length_ticks,
                     )?;
                 }
@@ -1043,6 +1062,7 @@ impl Session {
             }
             EditCommand::SetClip {
                 id,
+                start_tick,
                 gain,
                 offset_frames,
                 length_ticks,
@@ -1050,6 +1070,7 @@ impl Session {
                 pitch_cents,
             } => {
                 if let Some(clip) = project.clips.iter_mut().find(|clip| clip.id == id) {
+                    clip.start_tick = start_tick;
                     clip.gain = gain;
                     clip.offset_frames = offset_frames;
                     clip.length_ticks = length_ticks;
@@ -3276,6 +3297,7 @@ mod boundary_tests {
         let revision = session.revision;
         let command = |offset| EditCommand::SetClip {
             id: clip,
+            start_tick: 0,
             gain: 1.0,
             offset_frames: offset,
             length_ticks: before.clips[0].length_ticks,
@@ -3756,6 +3778,7 @@ mod boundary_tests {
         let before = session.project().clone();
         let resize = |length_ticks| EditCommand::SetClip {
             id: first,
+            start_tick: 0,
             gain: 1.0,
             offset_frames: 0,
             length_ticks,
@@ -3766,6 +3789,25 @@ mod boundary_tests {
         assert_eq!(session.project(), &before);
         session.edit(resize(length + 16)).unwrap();
         assert_eq!(session.project().clips[0].length_ticks, length + 16);
+        // The left edge of the second clip cannot reach back into the first.
+        let second = session.project().clips[1].clone();
+        let start = |start_tick| EditCommand::SetClip {
+            id: second.id,
+            start_tick,
+            gain: 1.0,
+            offset_frames: 0,
+            length_ticks: second.start_tick + second.length_ticks - start_tick,
+            fades: Default::default(),
+            pitch_cents: 0,
+        };
+        let before = session.project().clone();
+        assert!(session.edit(start(second.start_tick - 1)).is_err());
+        assert_eq!(session.project(), &before);
+        session.edit(start(second.start_tick + 16)).unwrap();
+        assert_eq!(
+            session.project().clips[1].start_tick,
+            second.start_tick + 16
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
@@ -3796,6 +3838,7 @@ mod boundary_tests {
         };
         let set = |length_ticks, pitch_cents| EditCommand::SetClip {
             id: clip,
+            start_tick: 0,
             gain: 1.0,
             offset_frames: 0,
             length_ticks,
@@ -3831,6 +3874,7 @@ mod boundary_tests {
         let length = session.project().clips[0].length_ticks;
         let set = |gain, offset_frames, length_ticks| EditCommand::SetClip {
             id: clip,
+            start_tick: 0,
             gain,
             offset_frames,
             length_ticks,

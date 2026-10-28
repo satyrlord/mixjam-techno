@@ -61,6 +61,16 @@ Arrangement (the lanes have no separate controls)
                          Volume is dB over the fader, -60 (silence) to 6;
                          a send is 0 to 1 and replaces its knob; the filter
                          is -1 (low-pass) to 1 (high-pass), open at 0.
+  clip clip=ID [gain_db= offset_frames= length_ticks= fade_in_ticks=
+                         fade_in_curve= fade_out_ticks= fade_out_curve=
+                         pitch_cents=]
+                         Change one clip; a field left out keeps its value.
+                         gain_db is -60 (silence) to 6; state reports gain as
+                         amplitude. offset_frames skips that many source frames.
+                         Curves are linear, equal-power, or exponential. The
+                         fade out ends where the clip's sound ends. Pitch is
+                         -2400 to 2400 cents and keeps the timing. Use
+                         move_clips to move a clip.
 
 Other
   quit                   Close the window. Unsaved work opens the save modal.
@@ -247,6 +257,18 @@ pub enum Request {
         #[serde(deserialize_with = "text")]
         lane: String,
         points: Vec<[f64; 2]>,
+    },
+    /// Change one clip. A field that is left out keeps its value.
+    Clip {
+        clip: u64,
+        gain_db: Option<f32>,
+        offset_frames: Option<u32>,
+        length_ticks: Option<u32>,
+        fade_in_ticks: Option<u32>,
+        fade_in_curve: Option<crate::engine::FadeCurve>,
+        fade_out_ticks: Option<u32>,
+        fade_out_curve: Option<crate::engine::FadeCurve>,
+        pitch_cents: Option<i32>,
     },
     Quit,
 }
@@ -1176,11 +1198,34 @@ mod tests {
                 points: vec![[1.0, 0.0], [4.5, 0.75]],
             }
         );
+        let line = request_line(&strings(&[
+            "clip",
+            "clip=7",
+            "gain_db=-3.5",
+            "fade_out_ticks=128",
+            "fade_out_curve=equal-power",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Clip {
+                clip: 7,
+                gain_db: Some(-3.5),
+                offset_frames: None,
+                length_ticks: None,
+                fade_in_ticks: None,
+                fade_in_curve: None,
+                fade_out_ticks: Some(128),
+                fade_out_curve: Some(crate::engine::FadeCurve::EqualPower),
+                pitch_cents: None,
+            }
+        );
         for invalid in [
             &["place", "sample=1", "track=1", "bars=1"][..],
             &["frobnicate"],
             &["click"],
             &["state", "loose"],
+            &["clip", "clip=1", "fade_in_curve=sharp"],
             &[],
         ] {
             assert!(request_line(&strings(invalid)).is_err(), "{invalid:?}");

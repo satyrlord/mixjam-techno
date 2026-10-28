@@ -60,9 +60,11 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   arrangement and mixer omit unused tracks.
 - Hold Shift to select clips. Drag an empty area to select a group. Hold Alt
   while dragging to copy. Use Delete, Undo, and Redo for edits.
-- Select a clip to edit it in the row under the arrangement: gain, trim start,
-  length, a fade in and a fade out in beats, each with a curve (Linear, Equal
-  power, or Exponential), and pitch in semitones and cents. The fade out ends
+- Drag a clip's side edges to trim it. Drag its top corner handles to set fades,
+  or its top edge between the handles to set gain. Each completed drag is one
+  undo step. Right-click a clip, or select it and press Shift+F10, for exact gain,
+  trim start, length, fades in beats with their curves (Linear, Equal power, or
+  Exponential), and pitch in semitones and cents. The fade out ends
   where the clip's sound ends, which can be before the clip's end, so a phrase
   that stops abruptly can die away instead. Pitch keeps the clip's length and
   timing. The arrangement shades each fade over its clip.
@@ -332,7 +334,8 @@ port.
 - `key`, `type`, `pointer`, and `scroll` send keyboard and mouse input to a
   position. `state` gives the position of the arrangement and of each clip.
 - The arrangement lanes are one painted surface. `place`, `move_clips`,
-  `delete_clips`, `select`, `seek`, and `set_loop` edit them without positions.
+  `delete_clips`, `select`, `seek`, `set_loop`, `automate`, and `clip` edit them
+  without positions. `clip` sets gain, trim, length, fades, and pitch for one clip.
   These edits use the same history as edits made by hand.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
   window in place of the native dialog. Set its **Path** field and select

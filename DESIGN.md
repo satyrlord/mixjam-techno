@@ -672,10 +672,25 @@ empty lane then only clears the selection. Enter on a focused sound tile places
 it on the recording track at the playhead. Lane M/S/L/R letters gain a short
 bar when their switch is on. The lanes are one Tab stop with an Accent outline:
 arrow keys choose a clip, Alt+arrows move the selection by a bar or a track,
-Ctrl+Alt+arrows by a sixteenth, Enter previews, and Delete removes. Ctrl+A
-selects every clip and Ctrl+D copies the selection to the bars that follow. A
-right-click on a clip offers Preview, Duplicate, Delete, and, for a missing
-sound, Resolve manually. The clip inspector shows gain in dB like the Mixer.
+Ctrl+Alt+arrows by a sixteenth, Enter previews, Delete removes, and Shift+F10
+opens the selected clip's menu under the clip. Delete and Shift+F10 also work
+when no control has focus. Ctrl+A selects every clip and Ctrl+D copies
+the selection to the bars that follow. A right-click on a clip offers Preview,
+Duplicate, Delete, and, for a missing sound, Resolve manually.
+
+A clip is edited on the clip itself, as in other DAWs. Its side edges trim it:
+the right edge sets its length, and the left edge moves its start and trim
+together, so the sound stays where it plays. Edges snap to bars, or to
+sixteenths with Ctrl. Small dark squares on the top edge set the fade in and
+fade out; they snap to sixteenths, or to ticks with Ctrl. The rest of the top
+edge sets the gain: the gain line moves as far as the pointer, in 0.5 dB steps
+or 0.1 dB with Ctrl. A label at the pointer shows the value, and the release
+makes one undo step. The middle of the clip still moves it. The right-click
+menu also holds the exact values: gain in dB like the Mixer, trim start in
+frames, length, fades with their curves, and pitch in semitones and cents.
+The arrangement has no clip strip under the lanes. Clips with available audio
+show their name without a hover tooltip. Missing clips keep their metadata and
+resolution guidance in a tooltip.
 
 ### Mixer and tool windows
 

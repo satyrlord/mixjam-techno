@@ -48,8 +48,26 @@ pub(super) const DRAG_LABEL: Color32 = Color32::from_rgb(245, 220, 146);
 /// Alternate arrangement rows and the bar lines between four-bar marks.
 const ROW_ALTERNATE: Color32 = Color32::from_rgb(24, 28, 32);
 const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
-/// The clip inspector shows gain at or below this level as silence.
+/// A clip gain at or below this level is silence.
 const CLIP_SILENCE_DB: f32 = -60.0;
+
+/// A clip's gain in dB, from `CLIP_SILENCE_DB` for silence to +6 dB.
+pub(super) fn clip_gain_db(gain: f32) -> f32 {
+    if gain > 0.0 {
+        amplitude_to_db(gain).max(CLIP_SILENCE_DB)
+    } else {
+        CLIP_SILENCE_DB
+    }
+}
+
+/// A clip's gain amplitude from dB. `CLIP_SILENCE_DB` and below are silence.
+pub(super) fn clip_gain_from_db(db: f32) -> f32 {
+    if db <= CLIP_SILENCE_DB {
+        0.0
+    } else {
+        db_to_amplitude(db).min(2.0)
+    }
+}
 pub(super) const DEFAULT_STATUS: &str = "Ready";
 /// Fits the longest module name, MASTERING, in 16-point Syncopate Bold
 /// beside the combo arrow.
@@ -228,6 +246,7 @@ impl MixJamApp {
                     controls::rail_separator(ui);
                     if rail_button(ui, &icons, RailIcon::Libraries, self.show_libraries).clicked() {
                         self.show_libraries = !self.show_libraries;
+                        self.close_libraries_after_scan = false;
                     }
                     if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
                         self.erase = !self.erase;
@@ -363,7 +382,7 @@ impl MixJamApp {
                 });
             });
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
-        // Reserve the transport and a usable arrangement, including its inspector.
+        // Reserve the transport and a usable arrangement.
         let available = ctx.available_rect().height();
         let min_height = self.bottom_module.minimum_height(available);
         // Keep the resized section stable when switching to a shorter module.
@@ -663,6 +682,7 @@ impl MixJamApp {
             if self.session.library().samples.is_empty() {
                 if action_button(ui, "Choose WAV folder", true).clicked() {
                     self.show_libraries = true;
+                    self.close_libraries_after_scan = false;
                 }
             } else if action_button(ui, "Clear filters", false).clicked() {
                 self.search.clear();
@@ -850,8 +870,9 @@ impl MixJamApp {
         }
     }
 
-    pub(super) fn selected_inspector(&mut self, ui: &mut egui::Ui) {
-        let Some(id) = self.selected_clip else { return };
+    /// Exact values for one clip, in its context menu. Drags on the clip's
+    /// edges, fade handles, and gain line change the same values.
+    fn clip_properties(&mut self, ui: &mut egui::Ui, id: u64) {
         let Some(clip) = self
             .session
             .project()
@@ -860,109 +881,110 @@ impl MixJamApp {
             .find(|c| c.id == id)
             .cloned()
         else {
-            self.selected_clip = None;
             return;
         };
-        let Some(sample) = self.session.library().sample_by_id(clip.sample_id) else {
+        let Some(max_frames) = self
+            .session
+            .library()
+            .sample_by_id(clip.sample_id)
+            .map(|sample| sample.frame_count)
+        else {
             return;
         };
-        let name = sample.name.clone();
-        let max_frames = sample.frame_count;
+        ui.separator();
+        // The menu style hides widget frames; the value fields need theirs.
+        ui.style_mut().visuals.widgets = ui.ctx().style().visuals.widgets.clone();
         let mut gain = clip.gain;
         let mut offset = clip.offset_frames;
         let mut length = clip.length_ticks;
-        let mut fades = clip.fades;
         let mut pitch = clip.pitch_cents;
-        // Two rows: the clip's level and span, then its fades and pitch.
         let mut change = false;
-        ui.horizontal(|ui| {
-            ui.add_sized(
-                Vec2::new(140.0, 20.0),
-                egui::Label::new(egui::RichText::new(&name).color(ACCENT).strong()).truncate(),
-            )
-            .on_hover_text(&name);
-            ui.add_space(12.0);
-            // The mixer shows dB, so the clip does too. An untouched value
-            // keeps its exact saved amplitude.
-            ui.label("Gain (dB)");
-            let mut db = if gain > 0.0 {
-                amplitude_to_db(gain).max(CLIP_SILENCE_DB)
-            } else {
-                CLIP_SILENCE_DB
-            };
-            change |= name_control(
-                ui.add(
-                    egui::DragValue::new(&mut db)
-                        .range(CLIP_SILENCE_DB..=amplitude_to_db(2.0))
-                        .speed(0.1)
-                        .custom_formatter(|value, _| {
-                            if value <= f64::from(CLIP_SILENCE_DB) {
-                                "-inf".into()
-                            } else {
-                                format!("{value:+.1}")
-                            }
-                        })
-                        .custom_parser(|text| {
-                            let text = text.trim().to_lowercase();
-                            let text = text.trim_end_matches("db").trim();
-                            if matches!(text, "-inf" | "-infinity" | "silence") {
-                                Some(f64::from(CLIP_SILENCE_DB))
-                            } else {
-                                text.parse().ok()
-                            }
-                        }),
-                ),
-                "Clip gain",
-            )
-            .on_hover_text("Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.")
-            .changed();
-            if change {
-                gain = if db <= CLIP_SILENCE_DB {
-                    0.0
-                } else {
-                    db_to_amplitude(db).min(2.0)
-                };
-            }
-            ui.label("Trim start (frames)");
-            change |= name_control(
-                ui.add(
-                    egui::DragValue::new(&mut offset)
-                        .range(0..=max_frames.saturating_sub(1))
-                        .speed(100),
-                ),
-                "Clip trim start (frames)",
-            )
-            .changed();
-            ui.label("Length (bars)");
-            let mut bars = length as f64 / TICKS_PER_BAR as f64;
-            if name_control(
-                ui.add(
-                    egui::DragValue::new(&mut bars)
-                        .range(1.0 / 16.0..=256.0)
-                        .speed(1.0 / 16.0),
-                ),
-                "Clip length (bars)",
-            )
-            .changed()
-            {
-                length = (bars * TICKS_PER_BAR as f64).round().max(1.0) as u32;
-                change = true;
-            }
-        });
-        // Apply the model's shortening order before the controls constrain
-        // their individual ranges.
-        fades = fades.fit(length);
-        ui.horizontal(|ui| {
-            let room = length.saturating_sub(fades.fade_out.ticks);
-            change |= fade_controls(ui, "in", &mut fades.fade_in, room);
-            let room = length.saturating_sub(fades.fade_in.ticks);
-            change |= fade_controls(ui, "out", &mut fades.fade_out, room);
-            ui.add_space(12.0);
-            change |= pitch_controls(ui, &mut pitch);
-        });
+        let mut fades = clip.fades;
+        egui::Grid::new("clip_properties")
+            .num_columns(2)
+            .spacing(Vec2::new(10.0, 6.0))
+            .show(ui, |ui| {
+                // The mixer shows dB, so the clip does too. An untouched value
+                // keeps its exact saved amplitude.
+                ui.label("Gain (dB)");
+                let mut db = clip_gain_db(gain);
+                if name_control(
+                    ui.add(
+                        egui::DragValue::new(&mut db)
+                            .range(CLIP_SILENCE_DB..=amplitude_to_db(2.0))
+                            .speed(0.1)
+                            .custom_formatter(|value, _| {
+                                if value <= f64::from(CLIP_SILENCE_DB) {
+                                    "-inf".into()
+                                } else {
+                                    format!("{value:+.1}")
+                                }
+                            })
+                            .custom_parser(|text| {
+                                let text = text.trim().to_lowercase();
+                                let text = text.trim_end_matches("db").trim();
+                                if matches!(text, "-inf" | "-infinity" | "silence") {
+                                    Some(f64::from(CLIP_SILENCE_DB))
+                                } else {
+                                    text.parse().ok()
+                                }
+                            }),
+                    ),
+                    "Clip gain",
+                )
+                .on_hover_text(
+                    "Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.",
+                )
+                .changed()
+                {
+                    gain = clip_gain_from_db(db);
+                    change = true;
+                }
+                ui.end_row();
+                ui.label("Trim start (frames)");
+                change |= name_control(
+                    ui.add(
+                        egui::DragValue::new(&mut offset)
+                            .range(0..=max_frames.saturating_sub(1))
+                            .speed(100),
+                    ),
+                    "Clip trim start (frames)",
+                )
+                .on_hover_text("Source frames that the clip skips. The clip does not move.")
+                .changed();
+                ui.end_row();
+                ui.label("Length (bars)");
+                let mut bars = length as f64 / TICKS_PER_BAR as f64;
+                if name_control(
+                    ui.add(
+                        egui::DragValue::new(&mut bars)
+                            .range(1.0 / 16.0..=256.0)
+                            .speed(1.0 / 16.0),
+                    ),
+                    "Clip length (bars)",
+                )
+                .changed()
+                {
+                    length = (bars * TICKS_PER_BAR as f64).round().max(1.0) as u32;
+                    change = true;
+                }
+                ui.end_row();
+                // Apply the model's shortening order before the controls
+                // constrain their individual ranges.
+                fades = fades.fit(length);
+                let room = length.saturating_sub(fades.fade_out.ticks);
+                change |= fade_controls(ui, "in", &mut fades.fade_in, room);
+                ui.end_row();
+                let room = length.saturating_sub(fades.fade_in.ticks);
+                change |= fade_controls(ui, "out", &mut fades.fade_out, room);
+                ui.end_row();
+                change |= pitch_controls(ui, &mut pitch);
+                ui.end_row();
+            });
         if change {
             let result = self.session.edit(EditCommand::SetClip {
                 id,
+                start_tick: clip.start_tick,
                 gain,
                 offset_frames: offset,
                 length_ticks: length,
@@ -971,6 +993,200 @@ impl MixJamApp {
             });
             self.apply(result);
         }
+    }
+
+    /// Open the lane context menu for the selected clip, at the clip, as a
+    /// right-click there does. Shift+F10 asks for it.
+    fn open_clip_menu(&mut self, ctx: &egui::Context, response: &Response, rect: Rect) {
+        let Some(clip) = self.selected_clip.and_then(|id| {
+            self.session
+                .project()
+                .clips
+                .iter()
+                .find(|clip| clip.id == id)
+        }) else {
+            return;
+        };
+        self.context_clip = Some(clip.id);
+        self.context_missing_sample = self
+            .session
+            .missing_sample(clip.sample_id)
+            .map(|missing| missing.id);
+        self.context_anchor = self.clip_rect(clip, rect).left_bottom();
+        egui::Popup::open_id(ctx, egui::Popup::default_response_id(response));
+    }
+
+    /// The clip and handle under `pos`. A clip whose sound is missing has none.
+    fn clip_handle_at(&self, pos: Pos2, rect: Rect) -> Option<(u64, ClipHandle)> {
+        let clip = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .rev()
+            .find(|clip| self.clip_rect(clip, rect).contains(pos))?;
+        let sample = self.session.library().sample_by_id(clip.sample_id)?;
+        let handle = handle_at(
+            pos,
+            self.clip_rect(clip, rect),
+            clip,
+            sample,
+            self.timeline_bar_width,
+        )?;
+        Some((clip.id, handle))
+    }
+
+    /// Start, follow, and finish a drag of a clip handle. The clip shows the
+    /// change during the drag, and the release makes one edit.
+    fn handle_drag_step(&mut self, ui: &egui::Ui, response: &Response, rect: Rect) {
+        if self.handle_drag.is_none()
+            && response.drag_started_by(egui::PointerButton::Primary)
+            && !ui.input(|i| i.modifiers.alt)
+            && let Some(pos) = ui.input(|i| i.pointer.press_origin())
+            && let Some((id, handle)) = self.clip_handle_at(pos, rect)
+            && let Some(clip) = self
+                .session
+                .project()
+                .clips
+                .iter()
+                .find(|clip| clip.id == id)
+                .cloned()
+        {
+            if !self.selected_clips.contains(&id) {
+                self.select_clip(id, false);
+            }
+            self.place_on_click = false;
+            self.handle_drag = Some(HandleDrag {
+                handle,
+                origin: pos,
+                preview: clip.clone(),
+                clip,
+            });
+        }
+        let Some(drag) = &self.handle_drag else {
+            return;
+        };
+        if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
+            let preview = self.reshape(drag, pos, rect, ui.input(|i| i.modifiers.ctrl));
+            drag_label(ui.ctx(), pos, &handle_readout(drag.handle, &preview));
+            if let Some(drag) = self.handle_drag.as_mut() {
+                drag.preview = preview;
+            }
+        }
+        if (response.drag_stopped() || ui.input(|i| i.pointer.any_released()))
+            && let Some(HandleDrag { clip, preview, .. }) = self.handle_drag.take()
+            && preview != clip
+        {
+            let result = self.session.edit_discrete(EditCommand::SetClip {
+                id: preview.id,
+                start_tick: preview.start_tick,
+                gain: preview.gain,
+                offset_frames: preview.offset_frames,
+                length_ticks: preview.length_ticks,
+                fades: preview.fades,
+                pitch_cents: preview.pitch_cents,
+            });
+            self.apply(result);
+        }
+    }
+
+    /// The dragged clip with its handle at `pos`. Edges snap to bars, or to
+    /// sixteenths with Ctrl; fades snap to sixteenths, or to ticks with Ctrl.
+    /// The clip's neighbors and its sound bound the edges.
+    fn reshape(&self, drag: &HandleDrag, pos: Pos2, rect: Rect, fine: bool) -> Clip {
+        let clip = &drag.clip;
+        let mut shaped = clip.clone();
+        let Some(sample) = self.session.library().sample_by_id(clip.sample_id) else {
+            return shaped;
+        };
+        let tick = f64::from((pos.x - rect.left()).max(0.0) / self.timeline_bar_width)
+            * f64::from(TICKS_PER_BAR);
+        let snap = |ticks: f64, step: u32| {
+            ((ticks / f64::from(step)).round() * f64::from(step)).max(0.0) as u32
+        };
+        let (edge_step, fade_step) = if fine {
+            (TICKS_PER_BAR / 16, 1)
+        } else {
+            (TICKS_PER_BAR, TICKS_PER_BAR / 16)
+        };
+        let end = clip.start_tick + clip.length_ticks;
+        let shortest = (TICKS_PER_BAR / 16).min(clip.length_ticks);
+        let others = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .filter(|other| other.track == clip.track && other.id != clip.id);
+        match drag.handle {
+            ClipHandle::Start => {
+                // The left edge can reveal the trimmed start of the sound.
+                let frames_per_tick = frames_per_tick(sample);
+                let revealable = if frames_per_tick > 0.0 {
+                    (f64::from(clip.offset_frames) / frames_per_tick) as u32
+                } else {
+                    0
+                };
+                let previous_end = others
+                    .filter(|other| other.start_tick < clip.start_tick)
+                    .map(|other| other.start_tick + other.length_ticks)
+                    .max()
+                    .unwrap_or(0)
+                    .min(clip.start_tick);
+                let first = previous_end.max(clip.start_tick.saturating_sub(revealable));
+                let remaining = sample
+                    .frame_count
+                    .saturating_sub(1)
+                    .saturating_sub(clip.offset_frames);
+                let trimmable = if frames_per_tick > 0.0 {
+                    (f64::from(remaining) / frames_per_tick) as u32
+                } else {
+                    0
+                };
+                let last = (end - shortest).min(clip.start_tick.saturating_add(trimmable));
+                let start = snap(tick, edge_step).clamp(first, last);
+                let moved = f64::from(start) - f64::from(clip.start_tick);
+                shaped.start_tick = start;
+                shaped.length_ticks = end - start;
+                shaped.offset_frames = (f64::from(clip.offset_frames) + moved * frames_per_tick)
+                    .round()
+                    .clamp(0.0, f64::from(sample.frame_count.saturating_sub(1)))
+                    as u32;
+                shaped.fades = clip.fades.fit(shaped.length_ticks);
+            }
+            ClipHandle::End => {
+                let next_start = others
+                    .filter(|other| other.start_tick > clip.start_tick)
+                    .map(|other| other.start_tick.max(end))
+                    .min()
+                    .unwrap_or(MAX_TICKS);
+                let new_end = snap(tick, edge_step).clamp(clip.start_tick + shortest, next_start);
+                shaped.length_ticks = new_end - clip.start_tick;
+                shaped.fades = clip.fades.fit(shaped.length_ticks);
+            }
+            ClipHandle::FadeIn => {
+                shaped.fades.fade_in.ticks = snap(tick - f64::from(clip.start_tick), fade_step)
+                    .min(clip.length_ticks - clip.fades.fade_out.ticks);
+            }
+            ClipHandle::FadeOut => {
+                let sound_end = clip.start_tick + sound_ticks(clip, sample);
+                shaped.fades.fade_out.ticks = snap(f64::from(sound_end) - tick, fade_step)
+                    .min(clip.length_ticks - clip.fades.fade_in.ticks);
+            }
+            ClipHandle::Gain => {
+                // The gain line moves as far as the pointer does.
+                let clip_rect = self.clip_rect(clip, rect);
+                let delta = pos.y - drag.origin.y;
+                if delta != 0.0 {
+                    // The painted line has an inset at silence. Start from
+                    // the saved amplitude so that inset cannot raise the gain.
+                    let amplitude = (clip.gain - delta / clip_rect.height() * 2.0).clamp(0.0, 2.0);
+                    let step = if fine { 0.1 } else { 0.5 };
+                    shaped.gain =
+                        clip_gain_from_db((clip_gain_db(amplitude) / step).round() * step);
+                }
+            }
+        }
+        shaped
     }
 
     pub(super) fn timeline(&mut self, ui: &mut egui::Ui) {
@@ -1022,12 +1238,7 @@ impl MixJamApp {
         let width = bars as f32 * bar_width;
         let label_width = 122.0;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
-        let inspector_height = if self.selected_clip.is_some() {
-            64.0
-        } else {
-            0.0
-        };
-        let viewport_height = (ui.available_height() - 26.0 - inspector_height - 8.0).max(80.0);
+        let viewport_height = (ui.available_height() - 26.0 - 8.0).max(80.0);
         let (ruler_strip, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
         let body_left = ruler_strip.left();
@@ -1085,7 +1296,12 @@ impl MixJamApp {
                     if response.has_focus() {
                         self.lane_keys(ui, &response, rect);
                     }
+                    if std::mem::take(&mut self.clip_menu_key) {
+                        self.open_clip_menu(ui.ctx(), &response, rect);
+                    }
                     self.timeline_rect = Some(rect);
+                    // A clip paints its own name, so only a missing sound has a
+                    // tooltip. The canvas is one widget, so it follows the pointer.
                     if response.hovered()
                         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
                         && let Some(clip) = self
@@ -1095,19 +1311,14 @@ impl MixJamApp {
                             .iter()
                             .rev()
                             .find(|clip| self.clip_rect(clip, rect).contains(pos))
+                        && let Some(missing) = self.session.missing_sample(clip.sample_id)
                     {
-                        if let Some(missing) = self.session.missing_sample(clip.sample_id) {
-                            response.clone().on_hover_text(format!(
-                                "{}\n{}\nRight-click to resolve. Import details has copyable \
-                                 metadata.",
-                                missing_sample_details(missing),
-                                missing_clip_details(clip)
-                            ));
-                        } else if let Some(sample) =
-                            self.session.library().sample_by_id(clip.sample_id)
-                        {
-                            response.clone().on_hover_text(&sample.name);
-                        }
+                        response.clone().on_hover_text_at_pointer(format!(
+                            "{}\n{}\nRight-click to resolve. Import details has copyable \
+                             metadata.",
+                            missing_sample_details(missing),
+                            missing_clip_details(clip)
+                        ));
                     }
                     self.timeline_drop_rect = Some(rect.intersect(ui.clip_rect()));
                     let painter = ui.painter_at(rect).with_clip_rect(canvas_clip);
@@ -1163,7 +1374,42 @@ impl MixJamApp {
                             painter.galley(area.min, hint, MUTED);
                         }
                     }
+                    let pointer = ui.input(|i| i.pointer.latest_pos());
+                    // Clip handles work while the lanes edit clips.
+                    let handles = self.automation_lane.is_none() && !self.erase;
+                    if handles {
+                        self.handle_drag_step(ui, &response, rect);
+                    } else {
+                        self.handle_drag = None;
+                    }
+                    let hovered_handle = pointer
+                        .filter(|_| handles && response.hovered() && self.drag.is_none())
+                        .and_then(|pos| self.clip_handle_at(pos, rect));
+                    if let Some(handle) = self
+                        .handle_drag
+                        .as_ref()
+                        .map(|drag| drag.handle)
+                        .or(hovered_handle.map(|(_, handle)| handle))
+                    {
+                        ui.ctx().set_cursor_icon(handle.cursor());
+                    }
+                    let preview = self.handle_drag.as_ref().map(|drag| &drag.preview);
+                    // The clip that shows its fade handles: the reshaped or hovered one.
+                    let shows_handles = preview.map(|clip| clip.id).or_else(|| {
+                        pointer
+                            .filter(|_| handles && response.hovered())
+                            .and_then(|pos| {
+                                self.session
+                                    .project()
+                                    .clips
+                                    .iter()
+                                    .rev()
+                                    .find(|clip| self.clip_rect(clip, rect).contains(pos))
+                                    .map(|clip| clip.id)
+                            })
+                    });
                     for clip in &self.session.project().clips {
+                        let clip = preview.filter(|p| p.id == clip.id).unwrap_or(clip);
                         let clip_rect = self.clip_rect(clip, rect);
                         if visible.intersects(clip_rect) {
                             let sample = self.session.library().sample_by_id(clip.sample_id);
@@ -1173,9 +1419,15 @@ impl MixJamApp {
                                 sample,
                                 self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
-                                clip.gain,
                             );
                             draw_fades(&painter, clip_rect, clip, sample, bar_width);
+                            let handles = shows_handles == Some(clip.id);
+                            if handles || self.selected_clips.contains(&clip.id) {
+                                draw_gain_line(&painter, clip_rect, clip.gain);
+                            }
+                            if handles && let Some(sample) = sample {
+                                draw_fade_handles(&painter, clip_rect, clip, sample, bar_width);
+                            }
                         }
                     }
                     // Dim the lanes that Mute or another track's solo silences.
@@ -1318,6 +1570,9 @@ impl MixJamApp {
                                 .map(|clip| clip.id)
                         });
                         self.context_clip = hit;
+                        if let Some(pos) = response.interact_pointer_pos() {
+                            self.context_anchor = pos;
+                        }
                         if let Some(id) = hit.filter(|id| !self.selected_clips.contains(id)) {
                             self.select_clip(id, false);
                             self.place_on_click = false;
@@ -1335,31 +1590,46 @@ impl MixJamApp {
                             });
                     }
                     if self.context_clip.is_some() || self.context_missing_sample.is_some() {
-                        response.context_menu(|ui| {
-                            if let Some(sample_id) = self.context_missing_sample
-                                && ui.button("Resolve manually").clicked()
-                            {
-                                ui.close();
-                                self.resolve_missing_sample(sample_id);
-                            }
-                            if let Some(id) = self.context_clip {
-                                if ui.button("Preview").clicked() {
+                        // A context menu that Shift+F10 can also open at the
+                        // selected clip. Clicks inside it edit the clip's values.
+                        let open = if response.secondary_clicked() {
+                            Some(egui::SetOpenCommand::Bool(true))
+                        } else if response.clicked() {
+                            Some(egui::SetOpenCommand::Bool(false))
+                        } else {
+                            None
+                        };
+                        egui::Popup::menu(&response)
+                            .open_memory(open)
+                            .at_position(self.context_anchor)
+                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                            .show(|ui| {
+                                if let Some(sample_id) = self.context_missing_sample
+                                    && ui.button("Resolve manually").clicked()
+                                {
                                     ui.close();
-                                    // The menu's clip need not be the primary one.
-                                    self.preview_clip(id);
+                                    self.resolve_missing_sample(sample_id);
                                 }
-                                if ui.button("Duplicate (Ctrl+D)").clicked() {
-                                    ui.close();
-                                    self.duplicate_selection();
+                                if let Some(id) = self.context_clip {
+                                    if ui.button("Preview").clicked() {
+                                        ui.close();
+                                        // The menu's clip need not be the primary one.
+                                        self.preview_clip(id);
+                                    }
+                                    if ui.button("Duplicate (Ctrl+D)").clicked() {
+                                        ui.close();
+                                        self.duplicate_selection();
+                                    }
+                                    if ui.button("Delete (Delete)").clicked() {
+                                        ui.close();
+                                        self.delete_selection();
+                                    }
+                                    self.clip_properties(ui, id);
                                 }
-                                if ui.button("Delete (Delete)").clicked() {
-                                    ui.close();
-                                    self.delete_selection();
-                                }
-                            }
-                        });
+                            });
                     }
                     if response.drag_started()
+                        && self.handle_drag.is_none()
                         && let Some(pos) = ui.input(|i| i.pointer.press_origin())
                     {
                         if let Some(clip) = self
@@ -1642,12 +1912,11 @@ impl MixJamApp {
             // new switch state even when the pointer stops after this click.
             ui.ctx().request_repaint();
         }
-        ui.add_space(3.0);
-        self.selected_inspector(ui);
     }
 
     /// Keys for the focused lanes: arrows choose a clip, Alt+arrows move the
-    /// selection, Enter previews it, and Delete removes it.
+    /// selection, Enter previews it, Delete removes it, and Shift+F10 opens
+    /// its context menu.
     fn lane_keys(&mut self, ui: &egui::Ui, response: &Response, rect: Rect) {
         controls::keep_transport_key(ui.ctx(), response.id);
         ui.memory_mut(|memory| {
@@ -1661,7 +1930,7 @@ impl MixJamApp {
             )
         });
         let (mut step, mut shift) = ((0, 0), (0, 0));
-        let (mut preview, mut delete, mut fine) = (false, false, false);
+        let (mut preview, mut delete, mut fine, mut menu) = (false, false, false, false);
         ui.input_mut(|input| {
             for (key, x, y) in [
                 (egui::Key::ArrowLeft, -1, 0),
@@ -1682,7 +1951,9 @@ impl MixJamApp {
             }
             preview = input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
             delete = input.consume_key(egui::Modifiers::NONE, egui::Key::Delete);
+            menu = input.consume_key(egui::Modifiers::SHIFT, egui::Key::F10);
         });
+        self.clip_menu_key |= menu;
         if step != (0, 0) {
             self.step_clip_selection(step.0, step.1);
         }
@@ -2566,7 +2837,7 @@ impl MixJamApp {
         if let Some((track, index)) = self.automation_drag.or(hit)
             && let Some(point) = project.tracks[track].automation.lane(lane).get(index)
         {
-            response.clone().on_hover_text(format!(
+            response.clone().on_hover_text_at_pointer(format!(
                 "Track {}, bar {:.2}: {}",
                 track + 1,
                 f64::from(point.tick) / f64::from(TICKS_PER_BAR) + 1.0,
@@ -2760,14 +3031,9 @@ fn draw_fades(
         return;
     }
     let tick_width = bar_width / TICKS_PER_BAR as f32;
-    let mut sound_end = rect.right();
-    if let Some(sample) = sample.filter(|sample| sample.sample_rate > 0) {
-        let frames = f64::from(sample.frame_count.saturating_sub(clip.offset_frames));
-        let ticks =
-            frames / f64::from(sample.sample_rate) * sample.source_bpm * f64::from(TICKS_PER_BAR)
-                / 240.0;
-        sound_end = sound_end.min(rect.left() + ticks as f32 * tick_width);
-    }
+    let sound_end = sample.map_or(rect.right(), |sample| {
+        (rect.left() + sound_ticks(clip, sample) as f32 * tick_width).min(rect.right())
+    });
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect));
     let fade_in = clip.fades.fade_in;
     let fade_out = clip.fades.fade_out;
@@ -2816,80 +3082,215 @@ fn draw_fades(
     }
 }
 
+/// Source frames in one tick of a sound at its own tempo.
+fn frames_per_tick(sample: &Sample) -> f64 {
+    f64::from(sample.sample_rate) * 240.0 / sample.source_bpm / f64::from(TICKS_PER_BAR)
+}
+
+/// The ticks from a clip's start to where its sound ends, at most its length.
+fn sound_ticks(clip: &Clip, sample: &Sample) -> u32 {
+    if sample.sample_rate == 0 {
+        return clip.length_ticks;
+    }
+    let frames = f64::from(sample.frame_count.saturating_sub(clip.offset_frames));
+    ((frames / frames_per_tick(sample)) as u32).min(clip.length_ticks)
+}
+
+/// The height of a clip's gain line: unity in the middle, +6 dB at the top.
+fn gain_y(rect: Rect, gain: f32) -> f32 {
+    rect.bottom() - (gain.min(2.0) / 2.0 * rect.height()).max(2.0)
+}
+
+/// The centers of a clip's fade handles on its top edge: where the fade in
+/// ends and where the fade out starts. A handle without a fade sits in its corner.
+fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32) -> [Pos2; 2] {
+    let tick_width = bar_width / TICKS_PER_BAR as f32;
+    let sound_end = (rect.left() + sound_ticks(clip, sample) as f32 * tick_width).min(rect.right());
+    let inset = FADE_HANDLE / 2.0;
+    let place = |x: f32| {
+        Pos2::new(
+            x.clamp(
+                rect.left() + inset,
+                (rect.right() - inset).max(rect.left() + inset),
+            ),
+            rect.top() + inset + 1.0,
+        )
+    };
+    [
+        place(rect.left() + clip.fades.fade_in.ticks as f32 * tick_width),
+        place(sound_end - clip.fades.fade_out.ticks as f32 * tick_width),
+    ]
+}
+
+/// The side of a fade handle's square.
+const FADE_HANDLE: f32 = 9.0;
+
+/// The handle under `pos` in a clip's rectangle. The fade handles sit on the
+/// top edge, the trims take the side edges, and the rest of the top edge sets
+/// the gain. The middle stays free to move the clip.
+fn handle_at(
+    pos: Pos2,
+    rect: Rect,
+    clip: &Clip,
+    sample: &Sample,
+    bar_width: f32,
+) -> Option<ClipHandle> {
+    // A narrow clip is only for moving.
+    if rect.width() < 16.0 {
+        return None;
+    }
+    if pos.y <= rect.top() + 12.0 {
+        let [fade_in, fade_out] = fade_handles(rect, clip, sample, bar_width);
+        let (to_in, to_out) = ((pos.x - fade_in.x).abs(), (pos.x - fade_out.x).abs());
+        if to_in.min(to_out) <= 7.0 {
+            return Some(if to_in <= to_out {
+                ClipHandle::FadeIn
+            } else {
+                ClipHandle::FadeOut
+            });
+        }
+    }
+    if pos.x <= rect.left() + 5.0 {
+        Some(ClipHandle::Start)
+    } else if pos.x >= rect.right() - 5.0 {
+        Some(ClipHandle::End)
+    } else if pos.y <= rect.top() + 5.0 {
+        Some(ClipHandle::Gain)
+    } else {
+        None
+    }
+}
+
+fn draw_fade_handles(
+    painter: &egui::Painter,
+    rect: Rect,
+    clip: &Clip,
+    sample: &Sample,
+    bar_width: f32,
+) {
+    if rect.width() < 16.0 {
+        return;
+    }
+    // A light rim keeps the dark squares visible on fills and fade shading.
+    for center in fade_handles(rect, clip, sample, bar_width) {
+        let square = Rect::from_center_size(center, Vec2::splat(FADE_HANDLE));
+        painter.rect_filled(square, 1.5, CANVAS);
+        painter.rect_stroke(
+            square,
+            1.5,
+            Stroke::new(1.0_f32, TEXT),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
+/// What a handle drag changes, for the label at the pointer.
+fn handle_readout(handle: ClipHandle, clip: &Clip) -> String {
+    let beats = |ticks: u32| f64::from(ticks) / f64::from(TICKS_PER_BEAT);
+    match handle {
+        ClipHandle::Start => format!(
+            "Start: bar {:.2}",
+            f64::from(clip.start_tick) / f64::from(TICKS_PER_BAR) + 1.0
+        ),
+        ClipHandle::End => format!(
+            "Length: {:.2} bars",
+            f64::from(clip.length_ticks) / f64::from(TICKS_PER_BAR)
+        ),
+        ClipHandle::FadeIn => format!("Fade in: {:.2} beats", beats(clip.fades.fade_in.ticks)),
+        ClipHandle::FadeOut => format!("Fade out: {:.2} beats", beats(clip.fades.fade_out.ticks)),
+        ClipHandle::Gain if clip.gain == 0.0 => "Gain: -inf dB".into(),
+        ClipHandle::Gain => format!("Gain: {:+.1} dB", clip_gain_db(clip.gain)),
+    }
+}
+
 /// Ticks in one beat, the unit of the fade controls.
 const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
 
-/// A clip fade's length in beats, at most `room` ticks, and its curve.
+/// A clip fade's length in beats, at most `room` ticks, and its curve: one
+/// row of the clip properties grid.
 fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> bool {
     ui.label(format!("Fade {edge} (beats)"));
-    let mut beats = f64::from(fade.ticks) / f64::from(TICKS_PER_BEAT);
-    let mut change = false;
-    if name_control(
-        ui.add(
-            egui::DragValue::new(&mut beats)
-                .range(0.0..=f64::from(room) / f64::from(TICKS_PER_BEAT))
-                .speed(1.0 / 16.0)
-                .max_decimals(3),
-        ),
-        &format!("Clip fade {edge} (beats)"),
-    )
-    .on_hover_text(if edge == "in" {
-        "Fade in from the clip's start, in beats. 0 is no fade."
-    } else {
-        "Fade out to the end of the clip's sound, in beats: the clip's end, or earlier \
+    ui.horizontal(|ui| {
+        let mut beats = f64::from(fade.ticks) / f64::from(TICKS_PER_BEAT);
+        let mut change = false;
+        if name_control(
+            ui.add(
+                egui::DragValue::new(&mut beats)
+                    .range(0.0..=f64::from(room) / f64::from(TICKS_PER_BEAT))
+                    .speed(1.0 / 16.0)
+                    .max_decimals(3),
+            ),
+            &format!("Clip fade {edge} (beats)"),
+        )
+        .on_hover_text(if edge == "in" {
+            "Fade in from the clip's start, in beats. 0 is no fade."
+        } else {
+            "Fade out to the end of the clip's sound, in beats: the clip's end, or earlier \
          where the sound runs out. 0 is no fade."
-    })
-    .changed()
-    {
-        fade.ticks = ((beats * f64::from(TICKS_PER_BEAT)).round() as u32).min(room);
-        change = true;
-    }
-    let name = format!("Clip fade {edge} curve");
-    let response = egui::ComboBox::from_id_salt(&name)
-        .selected_text(fade.curve.label())
-        .width(104.0)
-        .show_ui(ui, |ui| {
-            for curve in FadeCurve::ALL {
-                if ui
-                    .selectable_label(fade.curve == curve, curve.label())
-                    .clicked()
-                {
-                    change |= fade.curve != curve;
-                    fade.curve = curve;
-                    ui.close();
-                }
-            }
         })
-        .response;
-    name_control(response, &name).on_hover_text(
-        "Linear, Equal power for crossfades that keep their loudness, or Exponential, \
+        .changed()
+        {
+            fade.ticks = ((beats * f64::from(TICKS_PER_BEAT)).round() as u32).min(room);
+            change = true;
+        }
+        // A submenu, because a combo box inside the context menu would close it.
+        let name = format!("Clip fade {edge} curve");
+        let response = ui
+            .menu_button(fade.curve.label(), |ui| {
+                for curve in FadeCurve::ALL {
+                    if ui
+                        .selectable_label(fade.curve == curve, curve.label())
+                        .clicked()
+                    {
+                        change |= fade.curve != curve;
+                        fade.curve = curve;
+                        ui.close();
+                    }
+                }
+            })
+            .response;
+        name_control(response, &name).on_hover_text(
+            "Linear, Equal power for crossfades that keep their loudness, or Exponential, \
          even steps in decibels like a natural decay.",
-    );
-    change
+        );
+        change
+    })
+    .inner
 }
 
-/// A clip's pitch as semitones and cents. Its timing does not change.
+/// A clip's pitch as semitones and cents: one row of the clip properties
+/// grid. Its timing does not change.
 fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
     let mut semitones = *cents / 100;
     let mut fine = *cents % 100;
     ui.label("Pitch");
-    let mut change = name_control(
-        ui.add(
-            egui::DragValue::new(&mut semitones)
-                .range(-24..=24)
-                .speed(0.1),
-        ),
-        "Clip pitch (semitones)",
-    )
-    .on_hover_text("Transpose the clip in semitones. Its length and timing stay the same.")
-    .changed();
-    ui.label("Cents");
-    change |= name_control(
-        ui.add(egui::DragValue::new(&mut fine).range(-99..=99).speed(0.5)),
-        "Clip pitch (cents)",
-    )
-    .on_hover_text("Fine-tune the clip in cents, hundredths of a semitone.")
-    .changed();
+    let change = ui
+        .horizontal(|ui| {
+            let semitone_change = name_control(
+                ui.add(
+                    egui::DragValue::new(&mut semitones)
+                        .range(-24..=24)
+                        .speed(0.1)
+                        .suffix(" st"),
+                ),
+                "Clip pitch (semitones)",
+            )
+            .on_hover_text("Transpose the clip in semitones. Its length and timing stay the same.")
+            .changed();
+            let cent_change = name_control(
+                ui.add(
+                    egui::DragValue::new(&mut fine)
+                        .range(-99..=99)
+                        .speed(0.5)
+                        .suffix(" ct"),
+                ),
+                "Clip pitch (cents)",
+            )
+            .on_hover_text("Fine-tune the clip in cents, hundredths of a semitone.")
+            .changed();
+            semitone_change || cent_change
+        })
+        .inner;
     if change {
         *cents = (semitones * 100 + fine).clamp(-MAX_PITCH_CENTS, MAX_PITCH_CENTS);
     }
@@ -2902,7 +3303,6 @@ pub(super) fn draw_clip(
     sample: Option<&Sample>,
     missing: Option<&MissingSample>,
     selected: bool,
-    gain: f32,
 ) {
     let color = if missing.is_some() {
         RAISED
@@ -2944,16 +3344,20 @@ pub(super) fn draw_clip(
         ));
         clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, text_color);
     }
-    if selected {
-        let y = rect.bottom() - (gain.min(2.0) / 2.0 * rect.height()).max(2.0);
-        clipped.line_segment(
+}
+
+/// The gain line of a selected or hovered clip. The top edge drags it.
+fn draw_gain_line(painter: &egui::Painter, rect: Rect, gain: f32) {
+    let y = gain_y(rect, gain);
+    painter
+        .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
+        .line_segment(
             [
                 Pos2::new(rect.left() + 4.0, y),
                 Pos2::new(rect.right() - 4.0, y),
             ],
-            Stroke::new(1.0_f32, Color32::from_black_alpha(100)),
+            Stroke::new(1.5_f32, Color32::from_black_alpha(170)),
         );
-    }
 }
 
 pub(super) fn missing_clip_details(clip: &Clip) -> String {

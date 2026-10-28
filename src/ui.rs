@@ -145,6 +145,36 @@ enum DragItem {
     Clip { id: u64, offset: u32, copy: bool },
 }
 
+/// The part of a clip that a drag reshapes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ClipHandle {
+    /// The left edge. The start and the trim move together, so the sound
+    /// stays where it plays.
+    Start,
+    End,
+    FadeIn,
+    FadeOut,
+    /// The top edge between the fade handles. It moves the gain line.
+    Gain,
+}
+
+impl ClipHandle {
+    fn cursor(self) -> egui::CursorIcon {
+        match self {
+            Self::Gain => egui::CursorIcon::ResizeVertical,
+            _ => egui::CursorIcon::ResizeHorizontal,
+        }
+    }
+}
+
+/// A drag of a clip handle. The lanes show `preview`; the release makes one edit.
+struct HandleDrag {
+    handle: ClipHandle,
+    origin: Pos2,
+    clip: Clip,
+    preview: Clip,
+}
+
 #[derive(Clone, Copy)]
 enum PendingAction {
     New,
@@ -283,6 +313,10 @@ pub struct MixJamApp {
     context_missing_sample: Option<u32>,
     /// The clip that the lane context menu was opened on.
     context_clip: Option<u64>,
+    /// Where the lane context menu opens: the pointer, or the clip for a key.
+    context_anchor: Pos2,
+    /// Shift+F10 asked for the selected clip's menu; the lanes open it.
+    clip_menu_key: bool,
     group: Option<String>,
     palette_product: Option<Product>,
     palette_sort: PaletteSort,
@@ -295,6 +329,9 @@ pub struct MixJamApp {
     show_sample_edit_help: bool,
     show_master_help: bool,
     show_libraries: bool,
+    /// Startup opened Sample libraries for its folder scan; close the window
+    /// when the scan fills the library, unless the user takes it over first.
+    close_libraries_after_scan: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
     /// Escape hid the resolver without confirming; the status bar reopens it.
@@ -312,6 +349,7 @@ pub struct MixJamApp {
     follow_playhead: bool,
     last_follow_position: Option<(u32, f32, f32)>,
     drag: Option<DragItem>,
+    handle_drag: Option<HandleDrag>,
     timeline_rect: Option<Rect>,
     timeline_drop_rect: Option<Rect>,
     timeline_ruler_rect: Option<Rect>,
@@ -476,6 +514,7 @@ impl MixJamApp {
             .flatten();
         let needs_sample_folder =
             session.library().samples.is_empty() && session.project().clips.is_empty();
+        let startup_scan = session.wave_scan().is_some();
         let selected_sample = if capture_view.starts_with("missing") {
             session.missing_samples().first().map(|sample| sample.id)
         } else if capture_view == "sample-details" {
@@ -489,7 +528,7 @@ impl MixJamApp {
                 .then(|| session.library().samples.first().map(|sample| sample.id))
                 .flatten()
         };
-        // The clip row shows under the arrangement for a selected clip.
+        // Select the clip whose fades the capture demonstrates.
         let capture_clip = (capture_view == "clip-fades")
             .then(|| session.project().clips.first().map(|clip| clip.id))
             .flatten();
@@ -502,6 +541,8 @@ impl MixJamApp {
             discard_take_armed: false,
             context_missing_sample: None,
             context_clip: None,
+            context_anchor: Pos2::ZERO,
+            clip_menu_key: false,
             group: None,
             palette_product: None,
             palette_sort: PaletteSort::default(),
@@ -525,6 +566,7 @@ impl MixJamApp {
                 capture_view.as_str(),
                 "libraries" | "library-providers" | "library-tempos"
             ) || needs_sample_folder,
+            close_libraries_after_scan: needs_sample_folder && startup_scan,
             show_import_details: matches!(
                 capture_view.as_str(),
                 "missing-details" | "import-details"
@@ -541,6 +583,7 @@ impl MixJamApp {
             follow_playhead: true,
             last_follow_position: None,
             drag: None,
+            handle_drag: None,
             timeline_rect: None,
             timeline_drop_rect: None,
             timeline_ruler_rect: None,
@@ -642,6 +685,7 @@ impl MixJamApp {
         // Project and library replacement invalidate every in-flight gesture.
         self.master_view_generation = self.master_view_generation.wrapping_add(1);
         self.drag = None;
+        self.handle_drag = None;
         self.automation_drag = None;
         self.session.end_automation_gesture();
         self.selection_origin = None;
@@ -721,7 +765,15 @@ impl MixJamApp {
                 self.scan_status = Some(self.status.clone());
             }
             Some(_) => {}
-            None => self.scan_status = None,
+            None => {
+                self.scan_status = None;
+                if std::mem::take(&mut self.close_libraries_after_scan)
+                    && !self.status_error
+                    && !self.session.library().samples.is_empty()
+                {
+                    self.show_libraries = false;
+                }
+            }
         }
         if recording && !self.session.is_recording() && self.session.has_recorded_take() {
             self.save_recorded_take();
@@ -917,6 +969,7 @@ impl MixJamApp {
     }
 
     fn select_wave_folder(&mut self, root: &Path) {
+        self.close_libraries_after_scan = false;
         match self.session.start_wave_scan(root, self.fallback_bpm) {
             Ok(()) => {
                 self.clear_selection();
@@ -984,6 +1037,7 @@ impl MixJamApp {
     }
 
     fn history_step(&mut self, redo: bool) {
+        self.handle_drag = None;
         self.automation_drag = None;
         self.session.end_automation_gesture();
         match self.session.history_step(redo) {
@@ -1162,6 +1216,9 @@ impl MixJamApp {
         if free && ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
             self.delete_selection();
         }
+        if free && ctx.input(|i| i.modifiers.shift) && pressed_once(egui::Key::F10) {
+            self.clip_menu_key = true;
+        }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z)) {
             let redo = ctx.input(|i| i.modifiers.shift);
             self.history_step(redo);
@@ -1189,6 +1246,7 @@ impl MixJamApp {
         }
         if transport && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.drag = None;
+            self.handle_drag = None;
             self.automation_drag = None;
             self.session.end_automation_gesture();
             self.erase = false;
@@ -1360,10 +1418,6 @@ impl MixJamApp {
             return;
         };
         if let Some(pos) = ctx.input(|i| i.pointer.latest_pos()) {
-            let painter = ctx.layer_painter(egui::LayerId::new(
-                egui::Order::Tooltip,
-                egui::Id::new("drag_sound"),
-            ));
             let label = match drag {
                 DragItem::Sample(id) => self
                     .session
@@ -1375,15 +1429,7 @@ impl MixJamApp {
                     if *copy { "Copy sound" } else { "Move sound" }.into()
                 }
             };
-            let rect = Rect::from_min_size(pos + Vec2::new(14.0, 14.0), Vec2::new(150.0, 30.0));
-            painter.rect_filled(rect, 4.0, DRAG_LABEL);
-            painter.text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                label,
-                FontId::proportional(12.0),
-                CANVAS,
-            );
+            drag_label(ctx, pos, &label);
         }
         if !ctx.input(|i| i.pointer.any_released()) {
             return;
@@ -1440,7 +1486,26 @@ impl MixJamApp {
             self.message(format!("{action} canceled. Drop on {destination}."));
         }
     }
+}
 
+/// The label that follows the pointer during a drag.
+fn drag_label(ctx: &egui::Context, pos: Pos2, label: &str) {
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Tooltip,
+        egui::Id::new("drag_label"),
+    ));
+    let rect = Rect::from_min_size(pos + Vec2::new(14.0, 14.0), Vec2::new(150.0, 30.0));
+    painter.rect_filled(rect, 4.0, DRAG_LABEL);
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        label,
+        FontId::proportional(12.0),
+        CANVAS,
+    );
+}
+
+impl MixJamApp {
     /// Pending file choices suspend their parent confirmation, even while collapsed.
     fn blocking_modal(&self, ctx: &egui::Context) -> Option<&'static str> {
         if self.path_prompt.is_some() {
@@ -1535,8 +1600,9 @@ impl MixJamApp {
                             ),
                             (
                                 "Clip menu",
-                                "Right-click a clip for Preview, Duplicate, Delete, and Resolve \
-                                 manually.",
+                                "Right-click a clip or press Shift+F10 for exact gain, trim, \
+                                 length, fades, pitch, Preview, Duplicate, Delete, and Resolve \
+                                 manually for a missing sound.",
                             ),
                             (
                                 "Clips by key",

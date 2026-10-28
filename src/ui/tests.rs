@@ -5068,6 +5068,36 @@ mod tests {
         );
     }
 
+    /// Right-click a clip so its context menu shows its properties.
+    fn open_clip_menu(context: &egui::Context, app: &mut MixJamApp, id: u64) {
+        frame(context, app, vec![], egui::Modifiers::NONE);
+        let clip = app
+            .session
+            .project()
+            .clips
+            .iter()
+            .find(|clip| clip.id == id)
+            .unwrap()
+            .clone();
+        let pos = app.clip_rect(&clip, app.timeline_rect.unwrap()).center();
+        for pressed in [true, false] {
+            frame(
+                context,
+                app,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+            );
+        }
+    }
+
     fn click(context: &egui::Context, app: &mut MixJamApp, pos: Pos2, modifiers: egui::Modifiers) {
         pointer(context, app, pos, true, modifiers);
         pointer(context, app, pos, false, modifiers);
@@ -9018,6 +9048,55 @@ mod tests {
     }
 
     #[test]
+    fn startup_scan_closes_sample_libraries_only_when_it_fills_the_library() {
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-startup-{}", std::process::id()));
+        let full = dir.join("full");
+        let empty = dir.join("empty");
+        std::fs::create_dir_all(&full).unwrap();
+        std::fs::create_dir_all(&empty).unwrap();
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 1000],
+        }
+        .write_wav(&full.join("sound.wav"))
+        .unwrap();
+        let context = egui::Context::default();
+        let startup = |root: &Path, manual: bool| {
+            let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+                .unwrap()
+                .with_settings_root(dir.join("settings"));
+            session.start_wave_scan(root, 140.0).unwrap();
+            let mut app = MixJamApp::from_session(session, String::new(), false);
+            assert!(app.show_libraries);
+            if manual {
+                app.select_wave_folder(root);
+            }
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
+            while app.session.wave_scan().is_some() {
+                assert!(std::time::Instant::now() < deadline);
+                app.poll_application(&context);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            app.poll_application(&context);
+            app.show_libraries
+        };
+        assert!(
+            !startup(&full, false),
+            "The startup scan filled the library."
+        );
+        assert!(
+            startup(&empty, false),
+            "An empty library still needs a folder."
+        );
+        assert!(
+            startup(&full, true),
+            "The user chose this folder in the window."
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn adoption_status_and_import_notice_survive_the_next_application_poll() {
         let (context, mut app) = fixture();
         let path =
@@ -10431,7 +10510,7 @@ mod tests {
     }
 
     #[test]
-    fn inspector_shortening_preserves_fade_in_before_fade_out() {
+    fn clip_menu_shortening_preserves_fade_in_before_fade_out() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         let clip = app.session.project().clips[0].clone();
@@ -10441,6 +10520,7 @@ mod tests {
         app.session
             .edit(EditCommand::SetClip {
                 id: clip.id,
+                start_tick: clip.start_tick,
                 gain: clip.gain,
                 offset_frames: clip.offset_frames,
                 length_ticks: clip.length_ticks,
@@ -10448,7 +10528,7 @@ mod tests {
                 pitch_cents: clip.pitch_cents,
             })
             .unwrap();
-        app.selected_clip = Some(clip.id);
+        open_clip_menu(&ctx, &mut app, clip.id);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let (target, _) = accessible_node(&output, "Clip length (bars)");
         frame(
@@ -10506,20 +10586,35 @@ mod tests {
     }
 
     #[test]
-    fn clip_inspector_controls_fit_the_minimum_window() {
+    fn clip_menu_controls_fit_the_minimum_window() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        let mut sample = app.session.library().samples[0].clone();
-        sample.name = "A long source name that must leave room for the clip controls ".repeat(4);
-        app.session = Session::headless(
-            Arc::new(Library::fixture(vec![sample])),
-            app.session.project().clone(),
-        )
-        .unwrap();
-        app.selected_clip = Some(1);
         let size = Vec2::new(960.0, 720.0);
         for _ in 0..3 {
             frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        // The menu opens at the pointer; the lowest clip leaves it the least room.
+        let clip = app.session.project().clips[1].clone();
+        let pos = app
+            .clip_rect(&clip, app.timeline_rect.unwrap())
+            .right_bottom()
+            - Vec2::splat(4.0);
+        for pressed in [true, false] {
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+                size,
+            );
         }
         let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         for name in [
@@ -10535,7 +10630,295 @@ mod tests {
         ] {
             let bounds = accessible_node(&output, name).1.bounds().unwrap();
             assert!(bounds.x1 <= f64::from(size.x), "{name}: {bounds:?}");
+            assert!(bounds.y1 <= f64::from(size.y), "{name}: {bounds:?}");
         }
+    }
+
+    /// Press at `from`, move to `to` over a few frames, and release.
+    fn drag(
+        ctx: &egui::Context,
+        app: &mut MixJamApp,
+        from: Pos2,
+        to: Pos2,
+        modifiers: egui::Modifiers,
+    ) {
+        pointer(ctx, app, from, true, modifiers);
+        for step in 1..=4 {
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::PointerMoved(
+                    from + (to - from) * step as f32 / 4.0,
+                )],
+                modifiers,
+            );
+        }
+        pointer(ctx, app, to, false, modifiers);
+    }
+
+    #[test]
+    fn clip_edges_fades_and_gain_line_reshape_the_clip_in_one_undo_step_each() {
+        let (ctx, mut app) = fixture();
+        let lanes = app.timeline_rect.unwrap();
+        let bar = app.timeline_bar_width;
+        let rect = |app: &MixJamApp, index: usize| {
+            app.clip_rect(&app.session.project().clips[index], lanes)
+        };
+        let before = app.session.project().clone();
+
+        // The right edge snaps to the bar it is dropped near.
+        let first = rect(&app, 0);
+        let edge = Pos2::new(first.right() - 2.0, first.center().y + 8.0);
+        drag(
+            &ctx,
+            &mut app,
+            edge,
+            edge + Vec2::new(bar, 0.0),
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.session.project().clips[0].length_ticks,
+            2 * TICKS_PER_BAR
+        );
+        assert!(app.handle_drag.is_none());
+
+        // The fade in handle starts in the top left corner; fades snap to sixteenths.
+        let first = rect(&app, 0);
+        let corner = first.left_top() + Vec2::new(3.0, 4.0);
+        drag(
+            &ctx,
+            &mut app,
+            corner,
+            Pos2::new(first.left() + bar * 0.52, corner.y),
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().clips[0].fades.fade_in.ticks, 128);
+
+        // The left edge, on the fine grid with Ctrl, trims the start and
+        // keeps the sound where it plays.
+        let second = rect(&app, 1);
+        let edge = Pos2::new(second.left() + 1.0, second.center().y + 8.0);
+        drag(
+            &ctx,
+            &mut app,
+            edge,
+            edge + Vec2::new(bar / 2.0, 0.0),
+            egui::Modifiers::CTRL,
+        );
+        let clip = &app.session.project().clips[1];
+        assert_eq!(
+            (clip.start_tick, clip.length_ticks, clip.offset_frames),
+            (TICKS_PER_BAR * 3 / 2, TICKS_PER_BAR / 2, 37800)
+        );
+
+        // The top edge between the fade handles moves the gain line as far
+        // as the pointer, in half-dB steps. Unity is at half height.
+        let first = rect(&app, 0);
+        let top = Pos2::new(first.left() + bar * 1.5, first.top() + 2.0);
+        drag(
+            &ctx,
+            &mut app,
+            top,
+            top + Vec2::new(0.0, first.height() / 4.0),
+            egui::Modifiers::NONE,
+        );
+        let gain = app.session.project().clips[0].gain;
+        assert!((gain - 0.501).abs() < 0.001, "{gain}");
+
+        for _ in 0..4 {
+            app.history_step(false);
+        }
+        assert_eq!(
+            app.session.project(),
+            &before,
+            "Each drag is one undo step."
+        );
+    }
+
+    #[test]
+    fn clip_copy_drags_at_an_edge_do_not_resize_the_source() {
+        for (button, modifiers) in [
+            (egui::PointerButton::Primary, egui::Modifiers::ALT),
+            (egui::PointerButton::Secondary, egui::Modifiers::NONE),
+        ] {
+            let (ctx, mut app) = fixture();
+            let source = app.session.project().clips[0].clone();
+            let rect = app.clip_rect(&source, app.timeline_rect.unwrap());
+            let from = Pos2::new(rect.right() - 2.0, rect.center().y + 8.0);
+            let to = from + Vec2::new(2.0 * app.timeline_bar_width, 0.0);
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(from),
+                    egui::Event::PointerButton {
+                        pos: from,
+                        button,
+                        pressed: true,
+                        modifiers,
+                    },
+                ],
+                modifiers,
+            );
+            for step in 1..=4 {
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![egui::Event::PointerMoved(
+                        from + (to - from) * step as f32 / 4.0,
+                    )],
+                    modifiers,
+                );
+            }
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerButton {
+                    pos: to,
+                    button,
+                    pressed: false,
+                    modifiers,
+                }],
+                modifiers,
+            );
+            assert_eq!(app.session.project().clips[0], source);
+            assert_eq!(app.session.project().clips.len(), 3);
+        }
+    }
+
+    #[test]
+    fn clip_handle_releases_are_separate_undo_steps() {
+        let (ctx, mut app) = fixture();
+        app.session.hold_gestures();
+        let original = app.session.project().clips[0].clone();
+        let bar = app.timeline_bar_width;
+        for _ in 0..2 {
+            let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+            let edge = Pos2::new(rect.right() - 2.0, rect.center().y + 8.0);
+            drag(
+                &ctx,
+                &mut app,
+                edge,
+                edge + Vec2::new(bar, 0.0),
+                egui::Modifiers::NONE,
+            );
+        }
+        assert_eq!(
+            app.session.project().clips[0].length_ticks,
+            3 * TICKS_PER_BAR
+        );
+        app.history_step(false);
+        assert_eq!(
+            app.session.project().clips[0].length_ticks,
+            2 * TICKS_PER_BAR
+        );
+        app.history_step(false);
+        assert_eq!(app.session.project().clips[0], original);
+    }
+
+    #[test]
+    fn clip_left_edge_stops_before_its_source_runs_out() {
+        let (ctx, mut app) = fixture();
+        let clip = app.session.project().clips[0].clone();
+        app.session
+            .edit(EditCommand::SetClip {
+                id: clip.id,
+                start_tick: clip.start_tick,
+                gain: clip.gain,
+                offset_frames: clip.offset_frames,
+                length_ticks: 4 * TICKS_PER_BAR,
+                fades: clip.fades,
+                pitch_cents: clip.pitch_cents,
+            })
+            .unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+        let edge = Pos2::new(rect.left() + 1.0, rect.center().y + 8.0);
+        let bar = app.timeline_bar_width;
+        drag(
+            &ctx,
+            &mut app,
+            edge,
+            edge + Vec2::new(2.0 * bar, 0.0),
+            egui::Modifiers::CTRL,
+        );
+        let clip = &app.session.project().clips[0];
+        assert!(
+            clip.start_tick < TICKS_PER_BAR,
+            "The source is only one bar long."
+        );
+        let sample = app.session.library().sample_by_id(clip.sample_id).unwrap();
+        let expected = (f64::from(clip.start_tick) * f64::from(sample.sample_rate) * 240.0
+            / sample.source_bpm
+            / f64::from(TICKS_PER_BAR))
+        .round() as u32;
+        assert_eq!(
+            clip.offset_frames, expected,
+            "Trim and start must move together."
+        );
+    }
+
+    #[test]
+    fn clip_gain_handle_preserves_gain_without_vertical_motion() {
+        for gain in [0.0, 0.0001, 0.712345] {
+            let (ctx, mut app) = fixture();
+            let clip = app.session.project().clips[0].clone();
+            app.session
+                .edit(EditCommand::SetClip {
+                    id: clip.id,
+                    start_tick: clip.start_tick,
+                    gain,
+                    offset_frames: clip.offset_frames,
+                    length_ticks: clip.length_ticks,
+                    fades: clip.fades,
+                    pitch_cents: clip.pitch_cents,
+                })
+                .unwrap();
+            let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+            let top = Pos2::new(rect.center().x, rect.top() + 2.0);
+            drag(
+                &ctx,
+                &mut app,
+                top,
+                top + Vec2::new(10.0, 0.0),
+                egui::Modifiers::NONE,
+            );
+            assert_eq!(app.session.project().clips[0].gain, gain);
+        }
+    }
+
+    #[test]
+    fn shift_f10_opens_the_selected_clips_menu() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        // After a click on a clip nothing has focus, as for Delete.
+        app.select_clip(2, false);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let shift_f10 = |ctx: &egui::Context, app: &mut MixJamApp| {
+            frame(
+                ctx,
+                app,
+                vec![key_event(egui::Key::F10, egui::Modifiers::SHIFT)],
+                egui::Modifiers::SHIFT,
+            );
+            frame(ctx, app, vec![], egui::Modifiers::NONE)
+        };
+        let menu = shift_f10(&ctx, &mut app);
+        assert_eq!(app.context_clip, Some(2));
+        accessible_node(&menu, "Clip gain");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        // The focused lanes take the key themselves.
+        app.context_clip = None;
+        focus_control(&ctx, &mut app, &output, "Arrangement lanes");
+        let menu = shift_f10(&ctx, &mut app);
+        assert_eq!(app.context_clip, Some(2));
+        accessible_node(&menu, "Clip gain");
+        accessible_node(&menu, "Clip pitch (cents)");
     }
 
     #[test]
@@ -10645,10 +11028,7 @@ mod tests {
         };
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        app.selected_clip = Some(1);
-        for _ in 0..3 {
-            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        }
+        open_clip_menu(&ctx, &mut app, 1);
         set(&ctx, &mut app, "Clip fade in (beats)", 1.0);
         set(&ctx, &mut app, "Clip fade out (beats)", 0.5);
         set(&ctx, &mut app, "Clip pitch (semitones)", -2.0);
@@ -10665,6 +11045,26 @@ mod tests {
         assert_eq!(app.session.project().clips[0].fades.fade_in.ticks, 224);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         accessible_node(&output, "Clip fade out curve");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let open = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| node.label() == Some("Clip gain"));
+        assert!(!open, "Escape closes the clip menu.");
+        // Each frame is 1/60 s. Let the double-click time of the right-click pass.
+        for _ in 0..20 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
 
         // With a lane shown, a click adds a point and a right-click removes it.
         app.automation_lane = Some(Lane::Volume);
