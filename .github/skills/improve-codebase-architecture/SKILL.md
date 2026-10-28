@@ -16,10 +16,11 @@ description: >
 
 ## 2. Establish the system map
 
-1. Read `AGENTS.md`, `PRODUCT.md`, `COMPATIBILITY.md`, and applicable design
-   or feature documents.
+1. Read applicable design or feature documents. If they exist, also read
+   `AGENTS.md`, `local-data/research/PRODUCT.md`, and
+   `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know the approved architecture and product boundary.
-2. Read [ARCHITECTURE.md](../../../ARCHITECTURE.md) and the relevant Cargo manifests.
+2. Read [ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) and the relevant Cargo manifests.
    Completion criterion: You know the `Session` API, native UI, composition root,
    and crate boundaries.
 3. Inspect the source tree, dependency graph, and relevant tests.

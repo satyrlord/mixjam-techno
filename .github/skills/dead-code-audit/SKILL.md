@@ -16,8 +16,9 @@ description: >
 
 ## 2. Establish the graph
 
-1. Read `AGENTS.md`, `PRODUCT.md`, `COMPATIBILITY.md`, `ARCHITECTURE.md`,
-   Cargo manifests, build inputs, and relevant contracts.
+1. Read `docs/ARCHITECTURE.md`, Cargo manifests, build inputs, and relevant
+   contracts. If they exist, also read `AGENTS.md`,
+   `local-data/research/PRODUCT.md`, and `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know all configured graph tools and protected paths.
 2. List each executable, library, feature, test, build script, CLI command,
    generated catalog, runtime asset, and preservation entry.

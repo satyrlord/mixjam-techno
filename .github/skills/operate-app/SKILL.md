@@ -10,7 +10,7 @@ description: >
 
 The application accepts requests only when it starts with `--agent`. The
 `agent` command of the same executable sends them. `agent help` is the
-authoritative request list. Read `Agent control` in `README.md` for the model.
+authoritative request list. Read `docs/AGENT-CONTROL.md` for the model.
 
 ## 1. Start an isolated session
 

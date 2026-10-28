@@ -19,8 +19,9 @@ explicit approval.
 
 ## 2. Discover the current gate
 
-1. Read `AGENTS.md`, `PRODUCT.md`, `COMPATIBILITY.md`, `ARCHITECTURE.md`,
-   `README.md`, Cargo manifests, and affected source or tests.
+1. Read `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, Cargo manifests, and
+   affected source or tests. If they exist, also read `AGENTS.md`,
+   `local-data/research/PRODUCT.md`, and `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know the current contracts and documented checks.
 2. Read `tools/runtime/cargo.ps1` and any applicable verifier before running it.
    Completion criterion: You know the toolchain, inputs, and side effects.
@@ -32,7 +33,7 @@ Read [REFERENCE.md](REFERENCE.md) for applicability and stop conditions.
 
 ## 3. Run applicable checks
 
-Use the current commands in `README.md` and `ARCHITECTURE.md`:
+Use the current commands in `docs/DEVELOPMENT.md` and `docs/ARCHITECTURE.md`:
 
 1. Run `cargo.ps1 -CargoArguments @('fmt','--all','--','--check')` and
    `python tools/check-rust-format.py`.

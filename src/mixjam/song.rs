@@ -1,18 +1,18 @@
-//! The application's own `.mixjam` song format, format version 14.
+//! The application's own `.mixjam` song format, format version 16.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
 //! timestamps, `song`, and lanes that own their placements in visible order.
-//! Versions 8 to 14 differ from version 7 where the editor does:
+//! Versions 8 to 16 differ from version 7 where the editor does:
 //! - Ticks are the editor's 256 per bar, not MixJam's 32.
 //! - `lanes` always has 64 entries with gain, pan, and two channel switches.
 //! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
 //!   signed lane gains migrate without changing their effective amplitude.
 //! - Version 10 adds lane Mute and Solo. Earlier songs open with both off.
-//! - Version 11 adds `master`, the master pedalboard with the eJay pedals.
+//! - Version 11 adds `master`, the master pedalboard with the Booster pedals.
 //!   Earlier songs open with every pedal off, so they sound as they did.
 //! - Version 12's `master` adds the input trim and the mastering pedals.
-//!   Version 11 songs open with their eJay pedals first, in their saved
+//!   Version 11 songs open with their Booster pedals first, in their saved
 //!   order, and the mastering pedals off after them.
 //! - Version 13 adds `fxBuses`, the four FX buses with their effects, and
 //!   each lane's `sends` to them, as version 7 saved them. Earlier songs
@@ -21,6 +21,12 @@
 //!   placement may hold `fades` and `pitchCents`, and a lane `automation`.
 //!   Without them a clip has no fades and keeps its pitch, and a lane has no
 //!   automation.
+//! - Version 15 adds the channel EQ, a lane's `eq`, and the master board's
+//!   `bypass`. A lane without `eq` has its EQ off at the default settings,
+//!   and a board without `bypass` is not bypassed.
+//! - Version 16 renames the Booster pedals' keys in `master` and its
+//!   `order` (`BOOSTER_KEYS`). Versions 11 to 15 keep their earlier keys
+//!   and open with the same settings; only version 16 accepts the new keys.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -33,7 +39,7 @@ use crate::{
         Clip, Fades, ImportNotice, ImportedSample, MissingReference, MissingSample,
         PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, Track,
     },
-    master::{EjayCompressor, EjayEq, EjayWide, MasterChain, PedalKind},
+    master::{BoosterCompressor, BoosterEq, BoosterWide, MasterChain, PedalKind},
     products::{LibraryBinding, Product},
 };
 use serde::{Deserialize, Serialize};
@@ -44,7 +50,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 14;
+pub(super) const FORMAT_VERSION: u32 = 16;
+/// The Booster pedals' keys in a saved board and its `order`: the key of
+/// versions 11 to 15, then the key of version 16 and later. The earlier
+/// keys must match the saved files byte for byte.
+const BOOSTER_KEYS: [(&str, &str); 3] = [
+    ("ejayEq", "boosterEq"),
+    ("ejayCompressor", "boosterCompressor"),
+    ("ejayWide", "boosterWide"),
+];
 
 /// The `master` record. Its shape depends on the format version, so a
 /// record that is not the current board is kept as JSON until the version
@@ -64,41 +78,79 @@ impl SavedMaster {
     }
 }
 
-/// The version 11 `master` record: the eJay pedals alone.
+/// The version 11 `master` record: the Booster pedals alone, with the
+/// keys of version 16.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Booster {
     order: [BoosterPedal; 3],
-    ejay_eq: EjayEq,
-    ejay_compressor: EjayCompressor,
-    ejay_wide: EjayWide,
+    booster_eq: BoosterEq,
+    booster_compressor: BoosterCompressor,
+    booster_wide: BoosterWide,
 }
 #[derive(Clone, Copy, Deserialize)]
 enum BoosterPedal {
-    #[serde(rename = "ejayEq")]
+    #[serde(rename = "boosterEq")]
     Eq,
-    #[serde(rename = "ejayCompressor")]
+    #[serde(rename = "boosterCompressor")]
     Compressor,
-    #[serde(rename = "ejayWide")]
+    #[serde(rename = "boosterWide")]
     Wide,
 }
 impl Booster {
-    /// The eJay pedals lead the board in their saved order; the mastering
+    /// The Booster pedals lead the board in their saved order; the mastering
     /// pedals follow, off.
     fn into_board(self) -> MasterChain {
         let mut chain = MasterChain {
-            ejay_eq: self.ejay_eq,
-            ejay_compressor: self.ejay_compressor,
-            ejay_wide: self.ejay_wide,
+            booster_eq: self.booster_eq,
+            booster_compressor: self.booster_compressor,
+            booster_wide: self.booster_wide,
             ..MasterChain::default()
         };
         chain.order[..3].copy_from_slice(&self.order.map(|pedal| match pedal {
-            BoosterPedal::Eq => PedalKind::EjayEq,
-            BoosterPedal::Compressor => PedalKind::EjayCompressor,
-            BoosterPedal::Wide => PedalKind::EjayWide,
+            BoosterPedal::Eq => PedalKind::BoosterEq,
+            BoosterPedal::Compressor => PedalKind::BoosterCompressor,
+            BoosterPedal::Wide => PedalKind::BoosterWide,
         }));
         chain
     }
+}
+
+/// A version 11 to 15 board with the Booster pedals' earlier keys, in
+/// the record and in its `order`, changed to the current keys. These
+/// versions reject the current keys.
+fn current_booster_keys(
+    mut master: serde_json::Value,
+    version: u32,
+) -> Result<serde_json::Value, String> {
+    let rejected = |key: &str| format!("Version {version} songs cannot contain master {key}.");
+    let Some(record) = master.as_object_mut() else {
+        return Ok(master);
+    };
+    for (earlier, current) in BOOSTER_KEYS {
+        if record.contains_key(current) {
+            return Err(rejected(current));
+        }
+        if let Some(pedal) = record.remove(earlier) {
+            record.insert(current.into(), pedal);
+        }
+    }
+    if let Some(order) = record
+        .get_mut("order")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        for name in order {
+            for (earlier, current) in BOOSTER_KEYS {
+                if name.as_str() == Some(current) {
+                    return Err(rejected(current));
+                }
+                if name.as_str() == Some(earlier) {
+                    *name = current.into();
+                }
+            }
+        }
+    }
+    Ok(master)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -165,6 +217,8 @@ struct Lane {
     sends: Option<[f32; crate::fx::BUSES]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation: Option<crate::automation::Automation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    eq: Option<crate::eq::ChannelEq>,
     placements: Vec<Placement>,
 }
 #[derive(Deserialize, Serialize)]
@@ -258,6 +312,7 @@ impl Document {
                 solo: Some(track.solo),
                 sends: Some(track.sends),
                 automation: (!track.automation.is_empty()).then(|| track.automation.clone()),
+                eq: (!track.eq.is_default()).then_some(track.eq),
                 placements: Vec::new(),
             })
             .collect();
@@ -376,12 +431,18 @@ impl Document {
         let invalid =
             |error: serde_json::Error| format!("The master pedalboard is invalid: {error}");
         let master = match (self.format_version, self.master) {
-            (12.., Some(SavedMaster::Board(master))) => master,
+            (16.., Some(SavedMaster::Board(master))) => master,
             // Reading the record again gives the reason it is not a board.
-            (12.., Some(master)) => serde_json::from_value(master.json()).map_err(invalid)?,
-            (11, Some(master)) => serde_json::from_value::<Booster>(master.json())
-                .map_err(invalid)?
-                .into_board(),
+            (16.., Some(master)) => serde_json::from_value(master.json()).map_err(invalid)?,
+            (version @ 12.., Some(master)) => {
+                serde_json::from_value(current_booster_keys(master.json(), version)?)
+                    .map_err(invalid)?
+            }
+            (11, Some(master)) => {
+                serde_json::from_value::<Booster>(current_booster_keys(master.json(), 11)?)
+                    .map_err(invalid)?
+                    .into_board()
+            }
             (version @ 11.., None) => {
                 return Err(format!("Version {version} songs require master."));
             }
@@ -390,6 +451,12 @@ impl Document {
                 return Err(format!("Version {version} songs cannot contain master."));
             }
         };
+        if self.format_version < 15 && master.bypass {
+            return Err(format!(
+                "Version {} songs cannot contain master bypass.",
+                self.format_version
+            ));
+        }
         let fx = match (self.format_version, self.fx_buses) {
             (13.., Some(buses)) => buses,
             (version @ 13.., None) => {
@@ -419,6 +486,12 @@ impl Document {
                     self.format_version
                 ));
             }
+            if self.format_version < 15 && lane.eq.is_some() {
+                return Err(format!(
+                    "Version {} lanes cannot contain eq.",
+                    self.format_version
+                ));
+            }
             let mut settings = Track {
                 gain: lane.gain,
                 polarity_inverted: lane.polarity_inverted.unwrap_or(false),
@@ -429,6 +502,7 @@ impl Document {
                 solo: lane.solo.unwrap_or(false),
                 sends,
                 automation: lane.automation.unwrap_or_default(),
+                eq: lane.eq.unwrap_or_default(),
             };
             if self.format_version == 8 {
                 if lane.polarity_inverted.is_some() {
@@ -725,8 +799,16 @@ mod tests {
             solo: false,
             sends: [0.25, 0.0, 0.5, 1.0],
             automation: Default::default(),
+            eq: crate::eq::ChannelEq {
+                on: true,
+                low_cut: 80.0,
+                high_db: -7.5,
+                ..Default::default()
+            },
         };
         project.tracks[6].solo = true;
+        // An EQ that is off keeps its settings.
+        project.tracks[7].eq.mid_db = 3.0;
         project.clips[0].fades = Fades {
             fade_in: crate::engine::Fade {
                 ticks: 64,
@@ -764,27 +846,29 @@ mod tests {
             crate::fx::Module::EchoformDelay(crate::fx::Echoform::preset("Dub Feedback").unwrap());
         project.fx.buses[2].powered = false;
         project.fx.buses[3].limiter = false;
-        project.master.ejay_compressor.on = true;
-        project.master.ejay_compressor.drive = 368;
-        project.master.ejay_eq.bands[9] = 0;
+        project.master.booster_compressor.on = true;
+        project.master.booster_compressor.drive = 368;
+        project.master.booster_eq.bands[9] = 0;
         project.master.move_pedal(2, 0);
         project.master.trim = -2.5;
         project.master.limiter.on = true;
         project.master.limiter.ceiling = -0.3;
         project.master.tape.speed = 15;
         project.master.bus_compressor.attack = 0.1;
+        project.master.bypass = true;
         project
     }
 
     /// The same song as an earlier format version saves it: no master
-    /// pedalboard, no FX buses, no sends, no clip fades or pitch, and no
-    /// automation.
+    /// pedalboard, no FX buses, no sends, no clip fades or pitch, no
+    /// automation, and no channel EQ.
     fn earlier_document(expected: &mut Project, version: u32) -> serde_json::Value {
         expected.master = MasterChain::default();
         expected.fx = crate::fx::FxBuses::default();
         for track in &mut expected.tracks {
             track.sends = [0.0; crate::fx::BUSES];
             track.automation = Default::default();
+            track.eq = Default::default();
         }
         for clip in &mut expected.clips {
             clip.fades = Fades::default();
@@ -803,6 +887,25 @@ mod tests {
             lane.as_object_mut().unwrap().remove("sends");
         }
         document
+    }
+
+    /// The board of a version 11 to 15 document: the Booster pedals'
+    /// current keys, in the record and its order, changed to the earlier ones.
+    fn with_earlier_booster_keys(document: &mut serde_json::Value) {
+        let record = document["master"].as_object_mut().unwrap();
+        for (earlier, current) in BOOSTER_KEYS {
+            if let Some(pedal) = record.remove(current) {
+                record.insert(earlier.into(), pedal);
+            }
+        }
+        for name in record["order"].as_array_mut().unwrap() {
+            if let Some((earlier, _)) = BOOSTER_KEYS
+                .iter()
+                .find(|(_, current)| name.as_str() == Some(*current))
+            {
+                *name = (*earlier).into();
+            }
+        }
     }
 
     #[test]
@@ -836,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_14_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_16_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -844,8 +947,20 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 14);
+        assert_eq!(document["formatVersion"], 16);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
+        assert_eq!(
+            document["lanes"][5]["eq"],
+            serde_json::json!({
+                "on": true, "lowCut": 80.0, "lowHz": 100.0, "lowDb": 0.0, "midHz": 1000.0,
+                "midDb": 0.0, "midQ": 1.0, "highHz": 8000.0, "highDb": -7.5, "highCut": 20000.0
+            })
+        );
+        assert_eq!(document["lanes"][7]["eq"]["on"], false);
+        assert_eq!(document["lanes"][7]["eq"]["midDb"], 3.0);
+        // A lane whose EQ is as a new track has it saves none.
+        assert!(document["lanes"][4].get("eq").is_none());
+        assert_eq!(document["master"]["bypass"], true);
         assert_eq!(
             document["lanes"][63]["placements"][0]["fades"],
             serde_json::json!({
@@ -883,16 +998,16 @@ mod tests {
                 "module": {"type": "empty"}, "powered": true, "returnLevel": 1.0, "limiter": true
             })
         );
-        assert_eq!(document["master"]["ejayCompressor"]["on"], true);
-        assert_eq!(document["master"]["ejayCompressor"]["drive"], 368);
-        assert_eq!(document["master"]["ejayEq"]["bands"][9], 0);
-        assert_eq!(document["master"]["ejayWide"]["on"], false);
+        assert_eq!(document["master"]["boosterCompressor"]["on"], true);
+        assert_eq!(document["master"]["boosterCompressor"]["drive"], 368);
+        assert_eq!(document["master"]["boosterEq"]["bands"][9], 0);
+        assert_eq!(document["master"]["boosterWide"]["on"], false);
         assert_eq!(
             document["master"]["order"],
             serde_json::json!([
-                "ejayWide",
-                "ejayEq",
-                "ejayCompressor",
+                "boosterWide",
+                "boosterEq",
+                "boosterCompressor",
                 "softClip",
                 "tube",
                 "trimEq",
@@ -1078,12 +1193,15 @@ mod tests {
                 .contains("require master")
         );
         for (pointer, value) in [
-            ("/master/ejayEq/bands/0", serde_json::Value::from(101)),
-            ("/master/ejayCompressor/speed", 1001.into()),
-            ("/master/ejayWide/spread", (-1).into()),
-            ("/master/ejayWide/on", serde_json::Value::Null),
-            ("/master/order/0", "ejayEq".into()),
-            ("/master/order", serde_json::json!(["ejayEq", "ejayWide"])),
+            ("/master/boosterEq/bands/0", serde_json::Value::from(101)),
+            ("/master/boosterCompressor/speed", 1001.into()),
+            ("/master/boosterWide/spread", (-1).into()),
+            ("/master/boosterWide/on", serde_json::Value::Null),
+            ("/master/order/0", "boosterEq".into()),
+            (
+                "/master/order",
+                serde_json::json!(["boosterEq", "boosterWide"]),
+            ),
             ("/master/order/2", "limiter".into()),
             ("/master/order/12", "tape".into()),
             ("/master/order/5", "reverb".into()),
@@ -1100,7 +1218,7 @@ mod tests {
             );
         }
         let mut unknown = current;
-        unknown["master"]["ejayWide"]["width"] = 3.into();
+        unknown["master"]["boosterWide"]["width"] = 3.into();
         assert!(
             parse(&serde_json::to_vec(&unknown).unwrap())
                 .unwrap_err()
@@ -1109,45 +1227,51 @@ mod tests {
     }
 
     #[test]
-    fn version_11_songs_open_with_their_ejay_pedals_first_and_the_rest_off() {
+    fn version_11_songs_open_with_their_booster_pedals_first_and_the_rest_off() {
         let mut expected = project();
         let mut document = earlier_document(&mut expected, 11);
-        document["master"] = serde_json::json!({
-            "order": ["ejayWide", "ejayCompressor", "ejayEq"],
-            "ejayEq": {"on": false, "bands": [50, 50, 50, 50, 50, 50, 50, 50, 50, 0]},
-            "ejayCompressor": {"on": true, "drive": 368, "speed": 500, "gain": 500},
-            "ejayWide": {"on": true, "spread": 700},
-        });
+        let [eq, compressor, wide] = BOOSTER_KEYS.map(|(earlier, _)| earlier);
+        document["master"] = serde_json::json!({"order": [wide, compressor, eq]});
+        document["master"][eq] =
+            serde_json::json!({"on": false, "bands": [50, 50, 50, 50, 50, 50, 50, 50, 50, 0]});
+        document["master"][compressor] =
+            serde_json::json!({"on": true, "drive": 368, "speed": 500, "gain": 500});
+        document["master"][wide] = serde_json::json!({"on": true, "spread": 700});
         let opened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         let master = opened.master;
         assert_eq!(
             master.order[..3],
             [
-                PedalKind::EjayWide,
-                PedalKind::EjayCompressor,
-                PedalKind::EjayEq
+                PedalKind::BoosterWide,
+                PedalKind::BoosterCompressor,
+                PedalKind::BoosterEq
             ]
         );
         assert_eq!(master.order[3..], PedalKind::ALL[3..]);
-        assert!(master.ejay_compressor.on && master.ejay_wide.on && !master.ejay_eq.on);
-        assert_eq!((master.ejay_wide.spread, master.ejay_eq.bands[9]), (700, 0));
+        assert!(master.booster_compressor.on && master.booster_wide.on && !master.booster_eq.on);
+        assert_eq!(
+            (master.booster_wide.spread, master.booster_eq.bands[9]),
+            (700, 0)
+        );
         assert!(
             PedalKind::ALL
                 .iter()
-                .filter(|kind| !kind.is_ejay())
+                .filter(|kind| !kind.is_booster())
                 .all(|kind| !master.is_on(*kind))
         );
         assert_eq!(master.trim, 0.0);
         assert_eq!(opened, Project { master, ..expected });
 
-        // A version 11 song keeps the eJay record's strict shape.
+        // A version 11 song keeps the Booster record's strict shape and its
+        // earlier keys.
         for (pointer, value) in [
-            ("/master/order", serde_json::json!(["ejayEq", "ejayWide"])),
-            ("/master/order/0", "ejayCompressor".into()),
-            ("/master/ejayWide/spread", 1001.into()),
+            ("/master/order".to_string(), serde_json::json!([eq, wide])),
+            ("/master/order/0".into(), compressor.into()),
+            ("/master/order/0".into(), "boosterWide".into()),
+            (format!("/master/{wide}/spread"), 1001.into()),
         ] {
             let mut changed = document.clone();
-            *changed.pointer_mut(pointer).unwrap() = value;
+            *changed.pointer_mut(&pointer).unwrap() = value;
             assert!(
                 parse(&serde_json::to_vec(&changed).unwrap()).is_err(),
                 "{pointer}"
@@ -1247,6 +1371,18 @@ mod tests {
                 "pitch must be",
             ),
             ("/formatVersion", serde_json::json!(13), "cannot contain"),
+            ("/formatVersion", serde_json::json!(14), "cannot contain"),
+            (
+                "/lanes/5/eq/highCut",
+                serde_json::json!(20_001),
+                "channel EQ setting",
+            ),
+            (
+                "/lanes/5/eq/midQ",
+                serde_json::json!(0.2),
+                "channel EQ setting",
+            ),
+            ("/lanes/5/eq/gain", serde_json::json!(1), "unknown field"),
             (
                 "/lanes/5/automation/volume/1/tick",
                 serde_json::json!(0),
@@ -1278,6 +1414,93 @@ mod tests {
             let error = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
             assert!(error.contains(expected), "{pointer}: {error}");
         }
+    }
+
+    #[test]
+    fn version_14_songs_open_with_every_eq_off_and_the_board_in_use() {
+        let mut expected = project();
+        expected.master.bypass = false;
+        for track in &mut expected.tracks {
+            track.eq = Default::default();
+        }
+        let mut document =
+            serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
+        document["formatVersion"] = 14.into();
+        with_earlier_booster_keys(&mut document);
+        assert_eq!(
+            parse(&serde_json::to_vec(&document).unwrap()).unwrap(),
+            expected
+        );
+        let mut with_eq = document.clone();
+        with_eq["lanes"][2]["eq"] = serde_json::to_value(crate::eq::ChannelEq::default()).unwrap();
+        let error = parse(&serde_json::to_vec(&with_eq).unwrap()).unwrap_err();
+        assert_eq!(error, "Version 14 lanes cannot contain eq.");
+        let mut bypassed = document;
+        bypassed["master"]["bypass"] = true.into();
+        let error = parse(&serde_json::to_vec(&bypassed).unwrap()).unwrap_err();
+        assert_eq!(error, "Version 14 songs cannot contain master bypass.");
+    }
+
+    #[test]
+    fn version_12_to_15_boards_keep_their_earlier_booster_keys() {
+        let expected = project();
+        let current =
+            serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
+        let mut earlier = current.clone();
+        earlier["formatVersion"] = 15.into();
+        with_earlier_booster_keys(&mut earlier);
+        // The same board opens from either key set, each at its own version.
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap()).unwrap(),
+            expected
+        );
+        assert_eq!(
+            parse(&serde_json::to_vec(&current).unwrap()).unwrap(),
+            expected
+        );
+        let (eq, booster_eq) = BOOSTER_KEYS[0];
+        for version in 12..=15 {
+            let mut document = earlier.clone();
+            document["formatVersion"] = version.into();
+            document["master"].as_object_mut().unwrap().remove("bypass");
+            let mut current_key = document.clone();
+            let pedal = current_key["master"]
+                .as_object_mut()
+                .unwrap()
+                .remove(eq)
+                .unwrap();
+            current_key["master"][booster_eq] = pedal;
+            assert_eq!(
+                parse(&serde_json::to_vec(&current_key).unwrap()).unwrap_err(),
+                format!("Version {version} songs cannot contain master {booster_eq}.")
+            );
+            let mut current_order = document.clone();
+            current_order["master"]["order"][0] = "boosterWide".into();
+            assert_eq!(
+                parse(&serde_json::to_vec(&current_order).unwrap()).unwrap_err(),
+                format!("Version {version} songs cannot contain master boosterWide.")
+            );
+        }
+        // Version 16 accepts only the new keys, and later versions do not open.
+        let mut earlier_key = current.clone();
+        let pedal = earlier_key["master"]
+            .as_object_mut()
+            .unwrap()
+            .remove(booster_eq)
+            .unwrap();
+        earlier_key["master"][eq] = pedal;
+        let error = parse(&serde_json::to_vec(&earlier_key).unwrap()).unwrap_err();
+        assert!(error.contains(&format!("unknown field `{eq}`")), "{error}");
+        let mut earlier_order = current.clone();
+        earlier_order["master"]["order"][0] = earlier["master"]["order"][0].clone();
+        let error = parse(&serde_json::to_vec(&earlier_order).unwrap()).unwrap_err();
+        assert!(error.contains("unknown variant"), "{error}");
+        let mut later = current;
+        later["formatVersion"] = 17.into();
+        assert_eq!(
+            parse(&serde_json::to_vec(&later).unwrap()).unwrap_err(),
+            "This MixJam format version is not supported."
+        );
     }
 
     #[test]

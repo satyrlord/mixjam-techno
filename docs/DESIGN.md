@@ -246,8 +246,9 @@ One shell and control family covers musical tools and utility tasks. The main
 graphite workspace and Mixer's graphite and ivory strips keep their current design.
 Native operating-system windows and file pickers retain their OS presentation.
 
-RaveFold supplies artistic references only. Product behavior remains governed by
-`PRODUCT.md` and `COMPATIBILITY.md`.
+RaveFold supplies artistic references only. It does not govern product
+behavior; if `local-data/research/PRODUCT.md` and
+`local-data/research/COMPATIBILITY.md` exist, they do.
 
 **Key Characteristics:**
 
@@ -339,7 +340,7 @@ enamel always appears with the pedal's printed name:
 | Stereo (violets) | Booster wide `#c896dc`, Stereo imaging `#a6a0e8` |
 
 The Booster pedals print the original's names (EQ, Compressor, Stereo wide)
-over an "eJay Booster" line; the mastering pedals print their names over
+over a "Booster" line; the mastering pedals print their names over
 their family. A name too long for its pedal shrinks, down to 11 points, until
 it clears the lamp. The Limiter's rose sets it apart as the board's fixed last stage; it has no
 drag grip or move buttons, and its header line says it always runs last.
@@ -467,8 +468,9 @@ Mixer, Mastering, and Effects. A long selected name
 truncates within this width; the popup and accessible value retain its full name.
 Sound search and
 filters occupy the rest of this row when Sounds is selected. With Mastering,
-the row holds the 150-point preset selector, the board's state in 12-point
-text that truncates, and the Mastering help button at the right margin. The
+the row holds the 150-point preset selector, the 112-point Bypass all switch,
+the board's state in 12-point text that truncates, and the Mastering help
+button at the right margin. With Mixer, it holds the Export tracks… button. The
 preset list puts a rule after Subtle, Revive, and Loud, before the genres; the
 selector reads Choose a preset while every pedal is off at its defaults, and
 Custom when changed pedals match no preset. The trim, which belongs to the
@@ -697,7 +699,8 @@ resolution guidance in a tooltip.
 Mixer uses compact ivory strips against a graphite material surround. Track
 identity and gain lead the hierarchy. L/R routing uses small named toggle
 buttons with live enabled indicators. Mute and Solo sit in their own row
-above polarity and L/R. The status line under pan names why a track is
+above polarity and L/R, after a 26 by 24-point EQ button above polarity that
+fills amber while the track's EQ is on. The status line under pan names why a track is
 silent: Muted, then No output (both L and R off), then Solo elsewhere.
 Gain runs from
 negative infinity (silence) to +12 dB with 0 dB at unity. Negative dB attenuates
@@ -706,7 +709,17 @@ shows full precision. Focus without an edit must not change saved amplitude
 or audio. Relative increases must leave silence and raise very quiet positive
 gains. A saved gain below -96 dB must not become silent when increased.
 Master uses the same dB presentation and remains outside the scroller. In
-place of pan and routing it shows Main output and L + R.
+place of pan and routing it shows Main output and L + R, and under them an
+80 by 24-point Bypass button that fills amber while the master pedalboard is
+bypassed. A bypassed Mastering board draws at 45% opacity and stays usable.
+
+The channel EQ window uses the neutral Utility palette. A power switch and
+Reset share its top row; the response curve, from 20 Hz to 20 kHz and ±24 dB
+on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB steps,
+follows; five columns below name the bands, Low cut, Low shelf, Mid peak, High
+shelf, and High cut, with their Mastering dials stacked. The curve uses the
+palette's print color while the EQ is on and faint cream while it is off;
+the dials are disabled while it is off.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
@@ -773,7 +786,7 @@ entry, arrow keys, Home/End, and accessible numeric actions. Parameter definitio
 retain logarithmic mapping and discrete choices. Display rounding never changes a
 draft.
 
-Tempo choices use the stepped tempo slider, after the eJay speed slider: one
+Tempo choices use the stepped tempo slider, after the original products' speed slider: one
 notch per supported tempo at even spacing, a silver cap, and snapping to the
 nearest notch on press, drag, wheel, arrow keys, Home/End, and accessible numeric
 actions. Arrow keys keep focus. The compact form, in the top bar and Step synth,
@@ -983,7 +996,7 @@ defects.
   shortcut.
 - The Sounds panel keeps both the category menu and the category row. The menu
   lists the library's own categories, including Uncategorized.
-- `PRODUCT.md` leaves Platform unclassified. No value of the design skill
+- The product notes leave Platform unclassified. No value of the design skill
   describes a Windows desktop application.
 
 ### Avoid

@@ -5,8 +5,8 @@
 //! the board's order, and leaves for the output. The limiter is always the
 //! last pedal, so nothing after it can raise the peaks it holds; the user can
 //! put the others in any order. Two kinds of pedal share the board:
-//! - The eJay pedals are the Booster of Dance 3, Dance 4, and Techno 3 (see
-//!   `ejay`). They match the original library sample for sample and work on
+//! - The Booster pedals are the master effects of the D3, D4, and T3
+//!   products (see `booster`). They match the original library sample for sample and work on
 //!   16-bit samples, as the original does.
 //! - The mastering pedals are this application's own designs (see
 //!   `pedals`). They work on floats. Those with a curve or a lookahead delay
@@ -14,26 +14,28 @@
 //!   further into the mix.
 //!
 //! A board with every pedal off and the trim at 0 dB leaves the mix
-//! untouched. During playback, switching or moving a pedal crossfades from
-//! the old board to the new one, and meters read the input after the trim
-//! and the output after the last pedal (see `meters`).
+//! untouched, and so does a bypassed board, whatever its settings: Bypass
+//! skips the trim and every pedal, and the pedals keep their switches.
+//! During playback, switching or moving a pedal, or the bypass, crossfades
+//! from the old board to the new one, and meters read the input after the
+//! trim and the output after the last pedal (see `meters`).
+mod booster;
 pub(crate) mod dsp;
-mod ejay;
 mod meters;
 mod pedals;
 pub mod presets;
 
 pub use meters::{MeterReading, OVER_DBTP};
 
+use booster::clamp16;
 use dsp::{Smoothed, db_to_gain};
-use ejay::clamp16;
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
 
-/// Knob positions of the eJay pedals run from 0 to this value, as the
+/// Knob positions of the Booster pedals run from 0 to this value, as the
 /// library's setters take them.
 pub const KNOB_MAX: u16 = 1000;
 /// Equaliser bands run from 0 to this value; half of it is flat.
@@ -46,11 +48,11 @@ pub const EQ_FREQUENCIES: [f64; 10] = [
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct EjayEq {
+pub struct BoosterEq {
     pub on: bool,
     pub bands: [u8; 10],
 }
-impl Default for EjayEq {
+impl Default for BoosterEq {
     fn default() -> Self {
         Self {
             on: false,
@@ -61,13 +63,13 @@ impl Default for EjayEq {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct EjayCompressor {
+pub struct BoosterCompressor {
     pub on: bool,
     pub drive: u16,
     pub speed: u16,
     pub gain: u16,
 }
-impl Default for EjayCompressor {
+impl Default for BoosterCompressor {
     fn default() -> Self {
         Self {
             on: false,
@@ -80,11 +82,11 @@ impl Default for EjayCompressor {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct EjayWide {
+pub struct BoosterWide {
     pub on: bool,
     pub spread: u16,
 }
-impl Default for EjayWide {
+impl Default for BoosterWide {
     fn default() -> Self {
         Self {
             on: false,
@@ -303,9 +305,9 @@ impl Default for Limiter {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PedalKind {
-    EjayEq,
-    EjayCompressor,
-    EjayWide,
+    BoosterEq,
+    BoosterCompressor,
+    BoosterWide,
     SoftClip,
     Tube,
     TrimEq,
@@ -318,12 +320,12 @@ pub enum PedalKind {
     Limiter,
 }
 impl PedalKind {
-    /// Every pedal in the board's first order: the eJay pedals in the
+    /// Every pedal in the board's first order: the Booster pedals in the
     /// original's order, then the mastering pedals, with the limiter last.
     pub const ALL: [Self; 13] = [
-        Self::EjayEq,
-        Self::EjayCompressor,
-        Self::EjayWide,
+        Self::BoosterEq,
+        Self::BoosterCompressor,
+        Self::BoosterWide,
         Self::SoftClip,
         Self::Tube,
         Self::TrimEq,
@@ -336,8 +338,11 @@ impl PedalKind {
         Self::Limiter,
     ];
     #[cfg(test)]
-    pub(crate) fn is_ejay(self) -> bool {
-        matches!(self, Self::EjayEq | Self::EjayCompressor | Self::EjayWide)
+    pub(crate) fn is_booster(self) -> bool {
+        matches!(
+            self,
+            Self::BoosterEq | Self::BoosterCompressor | Self::BoosterWide
+        )
     }
     /// Whether the pedal can change places. The limiter stays last.
     pub fn movable(self) -> bool {
@@ -347,20 +352,20 @@ impl PedalKind {
     pub fn knobs(self) -> &'static [Knob] {
         use Knob::*;
         match self {
-            Self::EjayEq => &[
-                EjayBand(0),
-                EjayBand(1),
-                EjayBand(2),
-                EjayBand(3),
-                EjayBand(4),
-                EjayBand(5),
-                EjayBand(6),
-                EjayBand(7),
-                EjayBand(8),
-                EjayBand(9),
+            Self::BoosterEq => &[
+                BoosterBand(0),
+                BoosterBand(1),
+                BoosterBand(2),
+                BoosterBand(3),
+                BoosterBand(4),
+                BoosterBand(5),
+                BoosterBand(6),
+                BoosterBand(7),
+                BoosterBand(8),
+                BoosterBand(9),
             ],
-            Self::EjayCompressor => &[EjayDrive, EjaySpeed, EjayGain],
-            Self::EjayWide => &[EjaySpread],
+            Self::BoosterCompressor => &[BoosterDrive, BoosterSpeed, BoosterGain],
+            Self::BoosterWide => &[BoosterSpread],
             Self::SoftClip => &[SoftClipAmount, SoftClipCeiling],
             Self::Tube => &[TubeDrive, TubeMix],
             Self::TrimEq => &[TrimEqHighPass, TrimEqMud, TrimEqHarsh],
@@ -396,11 +401,11 @@ impl PedalKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Knob {
     Trim,
-    EjayBand(usize),
-    EjayDrive,
-    EjaySpeed,
-    EjayGain,
-    EjaySpread,
+    BoosterBand(usize),
+    BoosterDrive,
+    BoosterSpeed,
+    BoosterGain,
+    BoosterSpread,
     SoftClipAmount,
     SoftClipCeiling,
     TubeDrive,
@@ -435,7 +440,7 @@ pub struct KnobRange {
     /// The dial spreads the range by ratio rather than by difference.
     pub logarithmic: bool,
 }
-const fn range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
+pub(crate) const fn range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
     KnobRange {
         low,
         high,
@@ -444,7 +449,7 @@ const fn range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
         logarithmic: false,
     }
 }
-const fn ratio_range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
+pub(crate) const fn ratio_range(low: f32, high: f32, default: f32, step: f32) -> KnobRange {
     KnobRange {
         logarithmic: true,
         ..range(low, high, default, step)
@@ -463,8 +468,8 @@ impl Knob {
     pub const fn range(self) -> KnobRange {
         match self {
             Self::Trim => range(-24.0, 24.0, 0.0, 0.1),
-            Self::EjayBand(_) => range(0.0, EQ_BAND_MAX as f32, (EQ_BAND_MAX / 2) as f32, 1.0),
-            Self::EjayDrive | Self::EjaySpeed | Self::EjayGain | Self::EjaySpread => {
+            Self::BoosterBand(_) => range(0.0, EQ_BAND_MAX as f32, (EQ_BAND_MAX / 2) as f32, 1.0),
+            Self::BoosterDrive | Self::BoosterSpeed | Self::BoosterGain | Self::BoosterSpread => {
                 range(0.0, KNOB_MAX as f32, (KNOB_MAX / 2) as f32, 1.0)
             }
             Self::SoftClipAmount => range(0.0, 6.0, 1.5, 0.1),
@@ -498,11 +503,11 @@ impl Knob {
     pub fn get(self, chain: &MasterChain) -> f32 {
         match self {
             Self::Trim => chain.trim,
-            Self::EjayBand(band) => f32::from(chain.ejay_eq.bands[band]),
-            Self::EjayDrive => f32::from(chain.ejay_compressor.drive),
-            Self::EjaySpeed => f32::from(chain.ejay_compressor.speed),
-            Self::EjayGain => f32::from(chain.ejay_compressor.gain),
-            Self::EjaySpread => f32::from(chain.ejay_wide.spread),
+            Self::BoosterBand(band) => f32::from(chain.booster_eq.bands[band]),
+            Self::BoosterDrive => f32::from(chain.booster_compressor.drive),
+            Self::BoosterSpeed => f32::from(chain.booster_compressor.speed),
+            Self::BoosterGain => f32::from(chain.booster_compressor.gain),
+            Self::BoosterSpread => f32::from(chain.booster_wide.spread),
             Self::SoftClipAmount => chain.soft_clip.amount,
             Self::SoftClipCeiling => chain.soft_clip.ceiling,
             Self::TubeDrive => chain.tube.drive,
@@ -527,7 +532,7 @@ impl Knob {
             Self::LimiterCeiling => chain.limiter.ceiling,
         }
     }
-    /// Set the knob, held to its range. The eJay knobs take whole positions.
+    /// Set the knob, held to its range. The Booster knobs take whole positions.
     pub fn set(self, chain: &mut MasterChain, value: f32) {
         let range = self.range();
         let value = if value.is_nan() {
@@ -538,11 +543,11 @@ impl Knob {
         let whole = value.round() as u16;
         match self {
             Self::Trim => chain.trim = value,
-            Self::EjayBand(band) => chain.ejay_eq.bands[band] = whole as u8,
-            Self::EjayDrive => chain.ejay_compressor.drive = whole,
-            Self::EjaySpeed => chain.ejay_compressor.speed = whole,
-            Self::EjayGain => chain.ejay_compressor.gain = whole,
-            Self::EjaySpread => chain.ejay_wide.spread = whole,
+            Self::BoosterBand(band) => chain.booster_eq.bands[band] = whole as u8,
+            Self::BoosterDrive => chain.booster_compressor.drive = whole,
+            Self::BoosterSpeed => chain.booster_compressor.speed = whole,
+            Self::BoosterGain => chain.booster_compressor.gain = whole,
+            Self::BoosterSpread => chain.booster_wide.spread = whole,
             Self::SoftClipAmount => chain.soft_clip.amount = value,
             Self::SoftClipCeiling => chain.soft_clip.ceiling = value,
             Self::TubeDrive => chain.tube.drive = value,
@@ -575,14 +580,18 @@ impl Knob {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct MasterChain {
+    /// Skip the whole board, trim included, for playback and export. The
+    /// pedals keep their settings and switches.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bypass: bool,
     /// The gain before the first pedal, in dB.
     pub trim: f32,
     /// Each pedal once, from the mixer's output to the master output,
     /// ending with the limiter.
     pub order: [PedalKind; 13],
-    pub ejay_eq: EjayEq,
-    pub ejay_compressor: EjayCompressor,
-    pub ejay_wide: EjayWide,
+    pub booster_eq: BoosterEq,
+    pub booster_compressor: BoosterCompressor,
+    pub booster_wide: BoosterWide,
     pub soft_clip: SoftClip,
     pub tube: Tube,
     pub trim_eq: TrimEq,
@@ -597,11 +606,12 @@ pub struct MasterChain {
 impl Default for MasterChain {
     fn default() -> Self {
         Self {
+            bypass: false,
             trim: 0.0,
             order: PedalKind::ALL,
-            ejay_eq: EjayEq::default(),
-            ejay_compressor: EjayCompressor::default(),
-            ejay_wide: EjayWide::default(),
+            booster_eq: BoosterEq::default(),
+            booster_compressor: BoosterCompressor::default(),
+            booster_wide: BoosterWide::default(),
             soft_clip: SoftClip::default(),
             tube: Tube::default(),
             trim_eq: TrimEq::default(),
@@ -616,15 +626,21 @@ impl Default for MasterChain {
     }
 }
 impl MasterChain {
-    /// Whether the board changes the mix: a pedal is on or the trim is not 0 dB.
+    /// Whether the board changes the mix: it is not bypassed, and a pedal is
+    /// on or the trim is not 0 dB.
     pub fn is_active(&self) -> bool {
-        self.trim != 0.0 || PedalKind::ALL.into_iter().any(|kind| self.is_on(kind))
+        !self.bypass
+            && (self.trim != 0.0 || PedalKind::ALL.into_iter().any(|kind| self.is_on(kind)))
+    }
+    /// Whether a pedal processes the mix: it is on and the board is not bypassed.
+    pub fn runs(&self, kind: PedalKind) -> bool {
+        !self.bypass && self.is_on(kind)
     }
     pub fn is_on(&self, kind: PedalKind) -> bool {
         match kind {
-            PedalKind::EjayEq => self.ejay_eq.on,
-            PedalKind::EjayCompressor => self.ejay_compressor.on,
-            PedalKind::EjayWide => self.ejay_wide.on,
+            PedalKind::BoosterEq => self.booster_eq.on,
+            PedalKind::BoosterCompressor => self.booster_compressor.on,
+            PedalKind::BoosterWide => self.booster_wide.on,
             PedalKind::SoftClip => self.soft_clip.on,
             PedalKind::Tube => self.tube.on,
             PedalKind::TrimEq => self.trim_eq.on,
@@ -639,9 +655,9 @@ impl MasterChain {
     }
     pub fn set_on(&mut self, kind: PedalKind, on: bool) {
         match kind {
-            PedalKind::EjayEq => self.ejay_eq.on = on,
-            PedalKind::EjayCompressor => self.ejay_compressor.on = on,
-            PedalKind::EjayWide => self.ejay_wide.on = on,
+            PedalKind::BoosterEq => self.booster_eq.on = on,
+            PedalKind::BoosterCompressor => self.booster_compressor.on = on,
+            PedalKind::BoosterWide => self.booster_wide.on = on,
             PedalKind::SoftClip => self.soft_clip.on = on,
             PedalKind::Tube => self.tube.on = on,
             PedalKind::TrimEq => self.trim_eq.on = on,
@@ -654,11 +670,11 @@ impl MasterChain {
             PedalKind::Limiter => self.limiter.on = on,
         }
     }
-    /// The frames by which the pedals that are on delay the sound.
+    /// The frames by which the pedals that run delay the sound.
     pub fn latency(&self) -> usize {
         self.order
             .iter()
-            .filter(|kind| self.is_on(**kind))
+            .filter(|kind| self.runs(**kind))
             .map(|kind| kind.latency())
             .sum()
     }
@@ -680,7 +696,8 @@ impl MasterChain {
     /// The one knob that differs from `other`, when no switch, speed, or
     /// position differs too.
     pub fn changed_knob(&self, other: &Self) -> Option<Knob> {
-        if self.order != other.order
+        if self.bypass != other.bypass
+            || self.order != other.order
             || self.tape.speed != other.tape.speed
             || PedalKind::ALL
                 .into_iter()
@@ -692,6 +709,14 @@ impl MasterChain {
         match (changed.next(), changed.next()) {
             (Some(knob), None) => Some(knob),
             _ => None,
+        }
+    }
+    /// The trim as a gain: unity while the board is bypassed.
+    fn trim_gain(&self) -> f64 {
+        if self.bypass {
+            1.0
+        } else {
+            db_to_gain(f64::from(self.trim))
         }
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -829,7 +854,7 @@ pub struct MasterProcessor {
     meter_lead: usize,
 }
 impl MasterProcessor {
-    /// Playback and export start with the eJay compressor's smoothed
+    /// Playback and export start with the Booster compressor's smoothed
     /// controls at their targets, every mastering pedal at its settings,
     /// and every other state cleared. The original starts the smoothed
     /// controls at a fixed value when the library loads and never resets
@@ -840,7 +865,7 @@ impl MasterProcessor {
         board.settle();
         Self {
             control: None,
-            trim: Smoothed::new(db_to_gain(f64::from(chain.trim))),
+            trim: Smoothed::new(chain.trim_gain()),
             previous: board.clone(),
             board,
             fade: 0,
@@ -871,7 +896,7 @@ impl MasterProcessor {
         }
     }
     fn update(&mut self, chain: &MasterChain) {
-        self.trim.set(db_to_gain(f64::from(chain.trim)));
+        self.trim.set(chain.trim_gain());
         if self.board.rewired(chain) {
             *self.previous = *self.board;
             self.board.padding = [dsp::Delay::ZERO; 2];
@@ -917,12 +942,12 @@ impl MasterProcessor {
         }
         if let (Some(meters), Some((control, _))) = (&mut self.meters, &self.control) {
             let board = &mut self.board;
-            let compressor = if board.chain.bus_compressor.on {
+            let compressor = if board.chain.runs(PedalKind::BusCompressor) {
                 board.bus_compressor.take_reduction()
             } else {
                 0.0
             };
-            let limiter = if board.chain.limiter.on {
+            let limiter = if board.chain.runs(PedalKind::Limiter) {
                 board.limiter.take_reduction()
             } else {
                 0.0
@@ -962,13 +987,13 @@ impl MasterProcessor {
 enum Frame {
     /// Normalized floats, as the mix and the mastering pedals use.
     Audio(f32, f32),
-    /// 16-bit samples, as the eJay pedals take them.
+    /// 16-bit samples, as the Booster pedals take them.
     Integers(i32, i32),
-    /// 16-bit samples as floats, as the eJay equaliser gives them.
+    /// 16-bit samples as floats, as the Booster equaliser gives them.
     Floats(f32, f32),
 }
 impl Frame {
-    /// Leaving the eJay pedals, samples are clamped to 16 bits, as at the
+    /// Leaving the Booster pedals, samples are clamped to 16 bits, as at the
     /// end of the original's stereo path.
     fn audio(self) -> (f32, f32) {
         match self {
@@ -1013,9 +1038,9 @@ struct Board {
     padding: [dsp::Delay<LIVE_LATENCY>; 2],
     /// Whether any pedal is on.
     active: bool,
-    equalizer: ejay::Equalizer,
-    compressor: ejay::Compressor,
-    wide: ejay::Wide,
+    equalizer: booster::Equalizer,
+    compressor: booster::Compressor,
+    wide: booster::Wide,
     soft_clip: pedals::SoftClip,
     tube: pedals::Tube,
     trim_eq: pedals::TrimEq,
@@ -1034,9 +1059,9 @@ impl Board {
             live: false,
             padding: [dsp::Delay::ZERO; 2],
             active: false,
-            equalizer: ejay::Equalizer::new(),
-            compressor: ejay::Compressor::at_load(),
-            wide: ejay::Wide::new(),
+            equalizer: booster::Equalizer::new(),
+            compressor: booster::Compressor::at_load(),
+            wide: booster::Wide::new(),
             soft_clip: pedals::SoftClip::new(),
             tube: pedals::Tube::new(),
             trim_eq: pedals::TrimEq::new(),
@@ -1054,23 +1079,24 @@ impl Board {
     /// state, and the mastering pedals glide to their new settings.
     fn apply(&mut self, chain: &MasterChain) {
         let old = self.chain;
-        let switched_on = |kind| chain.is_on(kind) && !old.is_on(kind);
-        if switched_on(PedalKind::EjayEq) {
+        // Leaving bypass switches on every pedal that is on.
+        let switched_on = |kind| chain.runs(kind) && !old.runs(kind);
+        if switched_on(PedalKind::BoosterEq) {
             self.equalizer.clear();
         }
-        if chain.ejay_eq.bands != old.ejay_eq.bands {
-            self.equalizer.set(&chain.ejay_eq.bands);
+        if chain.booster_eq.bands != old.booster_eq.bands {
+            self.equalizer.set(&chain.booster_eq.bands);
         }
-        if switched_on(PedalKind::EjayCompressor) {
+        if switched_on(PedalKind::BoosterCompressor) {
             self.compressor.clear();
         }
-        let compressor = &chain.ejay_compressor;
+        let compressor = &chain.booster_compressor;
         self.compressor
             .set(compressor.drive, compressor.speed, compressor.gain);
-        if switched_on(PedalKind::EjayWide) {
+        if switched_on(PedalKind::BoosterWide) {
             self.wide.clear();
         }
-        self.wide.set(chain.ejay_wide.spread);
+        self.wide.set(chain.booster_wide.spread);
 
         self.soft_clip.set(&chain.soft_clip);
         self.tube.set(&chain.tube);
@@ -1088,7 +1114,7 @@ impl Board {
             }
         }
         self.chain = *chain;
-        self.active = PedalKind::ALL.into_iter().any(|kind| chain.is_on(kind));
+        self.active = PedalKind::ALL.into_iter().any(|kind| chain.runs(kind));
     }
     /// Clear a mastering pedal's state and move it straight to its settings.
     fn clear(&mut self, kind: PedalKind) {
@@ -1103,7 +1129,7 @@ impl Board {
             PedalKind::Imaging => self.imaging.clear(),
             PedalKind::Multiband => self.multiband.clear(),
             PedalKind::Limiter => self.limiter.clear(),
-            PedalKind::EjayEq | PedalKind::EjayCompressor | PedalKind::EjayWide => {}
+            PedalKind::BoosterEq | PedalKind::BoosterCompressor | PedalKind::BoosterWide => {}
         }
     }
     /// Begin as a board that has run with its settings for a while.
@@ -1113,9 +1139,10 @@ impl Board {
             self.clear(kind);
         }
     }
-    /// Whether new settings switch or move a pedal.
+    /// Whether new settings switch or move a pedal, or bypass the board.
     fn rewired(&self, chain: &MasterChain) -> bool {
-        chain.order != self.chain.order
+        chain.bypass != self.chain.bypass
+            || chain.order != self.chain.order
             || PedalKind::ALL
                 .into_iter()
                 .any(|kind| chain.is_on(kind) != self.chain.is_on(kind))
@@ -1134,29 +1161,29 @@ impl Board {
         }
     }
     /// One frame through the pedals that are on, in order. As in
-    /// `FX_RenderStereo`, the eJay equaliser works on floats and the other
-    /// eJay pedals on integers; the samples change kind only where two
-    /// neighbouring pedals differ. In the original's order the eJay pedals
+    /// `FX_RenderStereo`, the Booster equaliser works on floats and the other
+    /// Booster pedals on integers; the samples change kind only where two
+    /// neighbouring pedals differ. In the original's order the Booster pedals
     /// are the library's stereo path.
     fn run(&mut self, mut frame: Frame) -> Frame {
         for kind in self.chain.order {
-            if !self.chain.is_on(kind) {
+            if !self.chain.runs(kind) {
                 continue;
             }
             frame = match kind {
-                PedalKind::EjayEq => {
+                PedalKind::BoosterEq => {
                     let (left, right) = frame.floats();
                     Frame::Floats(
                         self.equalizer.process(0, left),
                         self.equalizer.process(1, right),
                     )
                 }
-                PedalKind::EjayCompressor => {
+                PedalKind::BoosterCompressor => {
                     let (left, right) = frame.integers();
                     let (left, right) = self.compressor.process(left, right);
                     Frame::Integers(left, right)
                 }
-                PedalKind::EjayWide => {
+                PedalKind::BoosterWide => {
                     let (left, right) = frame.integers();
                     let (left, right) = self.wide.process(left, right);
                     Frame::Integers(left, right)
@@ -1235,7 +1262,7 @@ mod tests {
 
     fn mastered() -> MasterChain {
         let mut chain = MasterChain::default();
-        for kind in PedalKind::ALL.into_iter().filter(|kind| !kind.is_ejay()) {
+        for kind in PedalKind::ALL.into_iter().filter(|kind| !kind.is_booster()) {
             chain.set_on(kind, true);
         }
         chain
@@ -1246,17 +1273,17 @@ mod tests {
         let mut block = vec![0.123_456_7, -0.987_654_3, 1.0, -1.0];
         let original = block.clone();
         let mut chain = MasterChain::default();
-        chain.ejay_eq.bands = [100; 10];
+        chain.booster_eq.bands = [100; 10];
         chain.limiter.gain = 12.0;
         MasterProcessor::new(&chain).process(&mut block);
         assert_eq!(block, original);
         assert!(!chain.is_active());
 
-        // Any eJay pedal on gives 16-bit samples, as the original's Booster
-        // does; the mastering pedals keep full precision.
+        // Any Booster pedal on gives 16-bit samples, as the original's effects
+        // do; the mastering pedals keep full precision.
         let mut wide = chain;
-        wide.ejay_wide.on = true;
-        wide.ejay_wide.spread = 0;
+        wide.booster_wide.on = true;
+        wide.booster_wide.spread = 0;
         MasterProcessor::new(&wide).process(&mut block);
         assert!(block.iter().all(|v| (v * 32768.0).fract() == 0.0));
         let mut lift = chain;
@@ -1278,7 +1305,7 @@ mod tests {
     fn delaying_pedals_add_up_and_others_add_nothing() {
         let mut chain = MasterChain::default();
         assert_eq!(chain.latency(), 0);
-        chain.ejay_wide.on = true;
+        chain.booster_wide.on = true;
         chain.lift_eq.on = true;
         assert_eq!(chain.latency(), 0);
         chain.soft_clip.on = true;
@@ -1404,8 +1431,8 @@ mod tests {
         let mut moved = chain;
         Knob::CompressorAttack.set(&mut moved, 0.3);
         assert_eq!(chain.changed_knob(&moved), Some(Knob::CompressorAttack));
-        Knob::EjayBand(4).set(&mut moved, 70.4);
-        assert_eq!(moved.ejay_eq.bands[4], 70);
+        Knob::BoosterBand(4).set(&mut moved, 70.4);
+        assert_eq!(moved.booster_eq.bands[4], 70);
         assert_eq!(chain.changed_knob(&moved), None);
         let mut switched = chain;
         switched.tape.speed = 15;
@@ -1429,15 +1456,15 @@ mod tests {
     fn settings_are_validated() {
         let mut chain = MasterChain::default();
         assert!(chain.validate().is_ok());
-        chain.order[1] = PedalKind::EjayEq;
+        chain.order[1] = PedalKind::BoosterEq;
         assert!(chain.validate().is_err());
         chain.order = PedalKind::ALL;
-        chain.ejay_eq.bands[3] = 101;
+        chain.booster_eq.bands[3] = 101;
         assert!(chain.validate().is_err());
-        chain.ejay_eq.bands[3] = 100;
-        chain.ejay_compressor.speed = 1001;
+        chain.booster_eq.bands[3] = 100;
+        chain.booster_compressor.speed = 1001;
         assert!(chain.validate().is_err());
-        chain.ejay_compressor.speed = 1000;
+        chain.booster_compressor.speed = 1000;
         assert!(chain.validate().is_ok());
         for (knob, value) in [
             (Knob::Trim, 24.5),
@@ -1480,6 +1507,9 @@ mod tests {
             "No move reaches the limiter's place."
         );
         chain.move_pedal(0, 11);
-        assert_eq!(chain.order[11..], [PedalKind::EjayEq, PedalKind::Limiter]);
+        assert_eq!(
+            chain.order[11..],
+            [PedalKind::BoosterEq, PedalKind::Limiter]
+        );
     }
 }

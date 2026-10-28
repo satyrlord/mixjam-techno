@@ -11,12 +11,11 @@
 # Temporary files
 /tmp/
 
-# Research notes, original-format tooling, and local agent instructions
+# Original-format tooling and local agent instructions
+/CLAUDE.md
 /AGENTS.md
-/PRODUCT.md
-/COMPATIBILITY.md
-/RECONSTRUCTION.md
-/docs/
+/.claude/settings.local.json
+/.claude/worktrees/
 /examples/
 /tools/assets/inspect_assets.py
 /tools/migration/

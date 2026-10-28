@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 14) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 16) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -18,15 +18,31 @@ def _reference(reference):
     return reference
 
 
+# The Booster pedals' keys in a saved board and its order: the key of versions 11
+# to 15, then the key of version 16, which the projection uses. Match BOOSTER_KEYS
+# in src/mixjam/song.rs.
+BOOSTER_KEYS = (('ejayEq', 'boosterEq'), ('ejayCompressor', 'boosterCompressor'),
+                ('ejayWide', 'boosterWide'))
+
+
+def _current_booster_keys(master):
+    current = dict(BOOSTER_KEYS)
+    board = {current.get(key, key): value for key, value in master.items()}
+    board['order'] = [current.get(name, name) for name in master['order']]
+    return board
+
+
 def _master(document):
-    if document['formatVersion'] >= 12:
+    if document['formatVersion'] >= 16:
         return document['master']
+    if document['formatVersion'] >= 12:
+        return _current_booster_keys(document['master'])
     # Match MasterChain::default and the version-11 migration in song.rs.
     # Keep this projection usable as a schema-4 JSON input to the executable.
     pedals = {
-        'ejayEq': {'on': False, 'bands': [50] * 10},
-        'ejayCompressor': {'on': False, 'drive': 500, 'speed': 500, 'gain': 500},
-        'ejayWide': {'on': False, 'spread': 500},
+        'boosterEq': {'on': False, 'bands': [50] * 10},
+        'boosterCompressor': {'on': False, 'drive': 500, 'speed': 500, 'gain': 500},
+        'boosterWide': {'on': False, 'spread': 500},
         'softClip': {'on': False, 'amount': 1.5, 'ceiling': -0.5},
         'tube': {'on': False, 'drive': 2.5, 'mix': 100.0},
         'trimEq': {'on': False, 'highPass': 20.0, 'mud': -1.5, 'harsh': -1.0},
@@ -41,9 +57,9 @@ def _master(document):
     }
     master = {'trim': 0.0, 'order': list(pedals), **pedals}
     if document['formatVersion'] == 11:
-        saved = document['master']
+        saved = _current_booster_keys(document['master'])
         master['order'][:3] = saved['order']
-        for name in ('ejayEq', 'ejayCompressor', 'ejayWide'):
+        for _, name in BOOSTER_KEYS:
             master[name] = saved[name]
     return master
 
@@ -56,6 +72,10 @@ def _fx_buses(document):
              'limiter': True} for _ in range(4)]
 
 
+# Match ChannelEq::default: the EQ off, every band flat.
+_FLAT_EQ = {'on': False, 'lowCut': 20.0, 'lowHz': 100.0, 'lowDb': 0.0, 'midHz': 1000.0,
+            'midDb': 0.0, 'midQ': 1.0, 'highHz': 8000.0, 'highDb': 0.0, 'highCut': 20000.0}
+
 # Match Fades::default: no fade at either edge.
 _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve': 'linear'}}
 
@@ -63,8 +83,8 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in (8, 9, 10, 11, 12, 13, 14):
-        raise RuntimeError(f'{path} is not a format version 8 through 14 .mixjam song.')
+    if version not in range(8, 17):
+        raise RuntimeError(f'{path} is not a format version 8 through 16 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
@@ -98,7 +118,8 @@ def read_song(path):
                     'muted': lane.get('muted', False),
                     'solo': lane.get('solo', False),
                     'sends': lane.get('sends', [0.0] * 4),
-                    'automation': lane.get('automation', {})} for lane in document['lanes']],
+                    'automation': lane.get('automation', {}),
+                    'eq': deepcopy(lane.get('eq', _FLAT_EQ))} for lane in document['lanes']],
         'clips': sorted(clips, key=lambda clip: clip['id']),
         'loop_region': song['loopRegion'],
         'imported_samples': imported,

@@ -1018,8 +1018,8 @@ pub(super) fn slider(
     .inner
 }
 
-/// A stepped slider over fixed choices, after the eJay speed slider. Notches
-/// sit at even spacing whatever their values. With `labels`, each notch is
+/// A stepped slider over fixed choices, after the original products' speed
+/// slider. Notches sit at even spacing whatever their values. With `labels`, each notch is
 /// named below the rail; otherwise the value reads at the right end.
 pub(super) fn stepped_slider(
     ui: &mut egui::Ui,

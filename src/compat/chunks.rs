@@ -224,7 +224,7 @@ fn decode_pan(value: u16) -> Result<f32, String> {
 #[derive(Debug, PartialEq)]
 pub(crate) enum Reference {
     Native(u16),
-    /// A Dance eJay 2 Sample Kit sound (kit archives 4-6), by its D2 index ID.
+    /// A D2 Sample Kit sound (kit archives 4-6), by its D2 index ID.
     Kit(u16),
     Wave(WaveReference),
     Drum(drums::Pattern),
@@ -811,7 +811,7 @@ struct StretchedCopy {
     target_bpm: f64,
 }
 
-/// Techno eJay 2's Time Stretcher (editor strings `TimeStretchOrginal`,
+/// The T2 editor's Time Stretcher (editor strings `TimeStretchOrginal`,
 /// `TimeStretchZiel`, `TIMESAV`) saves its result as `MIXWAVES\timeNNN.wav`.
 /// The song labels such a copy with its original: label 1 is the file name,
 /// label 2 its folder followed by `[time]`, as in `R1LA037.WAV` and
@@ -1209,7 +1209,7 @@ pub(crate) fn build_project(
     // Saved paths whose missing Time Stretcher copy was rebuilt, with its name.
     let mut stretched_names: HashMap<String, String> = HashMap::new();
     let mut catalogs: HashMap<Product, Vec<crate::catalog::WaveMetadata>> = HashMap::new();
-    // D3 keeps the earlier Dance 2 catalog IDs. T2's original loader admits
+    // D3 keeps the earlier D2 catalog IDs. T2's original loader admits
     // the D2 kind-2 catalog: the contiguous IDs 1..=1957. Do not search other
     // products by ID; identical numbers can identify unrelated sounds.
     for event in events {
@@ -2105,9 +2105,9 @@ mod tests {
                 assert_eq!(project.source_notices.len(), 1);
                 assert!(project.source_notices[0].starts_with("House saved 5 settings"));
             } else {
-                assert!(project.master.ejay_compressor.on);
-                assert!(!project.master.ejay_eq.on && !project.master.ejay_wide.on);
-                assert_eq!(project.master.ejay_compressor.drive, 369);
+                assert!(project.master.booster_compressor.on);
+                assert!(!project.master.booster_eq.on && !project.master.booster_wide.on);
+                assert_eq!(project.master.booster_compressor.drive, 369);
                 assert!(project.source_notices.is_empty());
             }
             let reopened: Project =
@@ -2342,9 +2342,9 @@ mod tests {
                 // on becomes a pedal that is on.
                 let (master, unusable) = settings::booster(product, &saved);
                 assert!(unusable.is_empty(), "{}", path.display());
-                pedals[0] += usize::from(master.ejay_eq.on);
-                pedals[1] += usize::from(master.ejay_compressor.on);
-                pedals[2] += usize::from(master.ejay_wide.on);
+                pedals[0] += usize::from(master.booster_eq.on);
+                pedals[1] += usize::from(master.booster_compressor.on);
+                pedals[2] += usize::from(master.booster_wide.on);
             }
             assert_eq!((songs, lists, switches), expected, "{}", product.label());
             assert_eq!(pedals, expected.2, "{}", product.label());
@@ -2621,7 +2621,7 @@ mod tests {
         let mut extension = Vec::new();
         text_block(
             &mut extension,
-            b"D:\\eJay\\House\\MIXWAVES\\SYNTHPAD011.wav\0\x01",
+            b"D:\\Legacy\\House\\MIXWAVES\\SYNTHPAD011.wav\0\x01",
         );
         text_block(&mut extension, b"SYNTHPAD011.wav\0\x01");
         text_block(

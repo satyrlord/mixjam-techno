@@ -12,6 +12,8 @@ mod controls;
 mod dialog;
 #[path = "ui/effects.rs"]
 mod effects;
+#[path = "ui/eq.rs"]
+mod eq;
 #[path = "ui/fx.rs"]
 mod fx;
 #[path = "ui/master.rs"]
@@ -188,6 +190,7 @@ enum FileRequest {
     OpenSong,
     SaveSong,
     ExportMix,
+    ExportTracks,
     ImportSound,
     SaveSound {
         pcm: Pcm,
@@ -380,6 +383,8 @@ pub struct MixJamApp {
     master_view_generation: u64,
     /// An FX bus that the Effects module brings into view on its next frame.
     fx_reveal: Option<usize>,
+    /// The track whose channel EQ window is open.
+    eq_track: Option<usize>,
     show_step_synth: bool,
     show_sample_edit: bool,
     show_stretch: bool,
@@ -474,26 +479,54 @@ impl MixJamApp {
         }
         if matches!(
             capture_view.as_str(),
-            "master-active" | "master-reordered" | "master-end" | "master-metering"
+            "master-active"
+                | "master-reordered"
+                | "master-end"
+                | "master-metering"
+                | "master-bypass"
         ) {
-            // The Booster of Dance 4's "Summer night at the beach", and
+            // The Booster settings of a D4 factory song, and
             // every mastering pedal at its default.
             let mut chain = session.project().master;
             for kind in PedalKind::ALL {
                 chain.set_on(kind, true);
             }
             chain.trim = -3.0;
-            chain.ejay_eq.bands = [62, 58, 50, 44, 50, 54, 60, 64, 66, 70];
-            (chain.ejay_compressor.drive, chain.ejay_compressor.speed) = (1000, 1000);
-            chain.ejay_compressor.gain = 278;
-            chain.ejay_wide.spread = 444;
+            chain.booster_eq.bands = [62, 58, 50, 44, 50, 54, 60, 64, 66, 70];
+            (
+                chain.booster_compressor.drive,
+                chain.booster_compressor.speed,
+            ) = (1000, 1000);
+            chain.booster_compressor.gain = 278;
+            chain.booster_wide.spread = 444;
             if capture_view == "master-reordered" {
                 chain.move_pedal(9, 0);
                 chain.move_pedal(3, 5);
-                chain.ejay_compressor.on = false;
+                chain.booster_compressor.on = false;
                 chain.tube.on = false;
             }
+            if capture_view == "master-bypass" {
+                chain.bypass = true;
+            }
             let _ = session.edit(EditCommand::SetMaster(chain));
+        }
+        if capture_view == "mixer-eq" {
+            // Hi-hats tamed: a low cut, a dip at the harsh band, and less top.
+            let mut tracks = session.project().tracks.clone();
+            tracks[0].eq = mixjam_techno::application::eq::ChannelEq {
+                on: true,
+                low_cut: 180.0,
+                mid_hz: 3500.0,
+                mid_db: -4.5,
+                mid_q: 1.6,
+                high_db: -9.0,
+                ..Default::default()
+            };
+            let master_gain = session.project().master_gain;
+            let _ = session.edit(EditCommand::SetMixer {
+                tracks,
+                master_gain,
+            });
         }
         if capture_view == "unsaved" {
             let bpm = if session.project().bpm == 160.0 {
@@ -618,6 +651,7 @@ impl MixJamApp {
             },
             master_view_generation: 0,
             fx_reveal: None,
+            eq_track: (capture_view == "mixer-eq").then_some(0),
             show_step_synth: matches!(
                 capture_view.as_str(),
                 "step-synth" | "step-synth-effects" | "missing-step-synth"
@@ -1621,7 +1655,11 @@ impl MixJamApp {
                                  MIXJAM, or JSON; save MIXJAM.",
                             ),
                             ("New song", "Ctrl+N"),
-                            ("Export", "Stereo WAV"),
+                            (
+                                "Export",
+                                "Stereo WAV of the mix. Export tracks… in the Mixer writes each \
+                                 track and FX return to its own WAV.",
+                            ),
                             ("Help", "F1"),
                         ] {
                             ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
@@ -1656,6 +1694,25 @@ impl MixJamApp {
                     "The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys \
                      change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End \
                      sets +12 dB.",
+                );
+                ui.label(
+                    "EQ opens a track's channel EQ, and lights while it is on: a low cut and a \
+                     high cut at 12 dB per octave, a low shelf, a peak with its Q, and a high \
+                     shelf, drawn as a curve. It acts on the track's clips before its automation \
+                     and fader. An EQ that is off keeps its settings and leaves the track as it \
+                     was; Reset flattens every band. To tame harsh hi-hats, lower the high gain.",
+                );
+                ui.label(
+                    "Bypass on the Master strip skips the master pedalboard for playback and \
+                     export, as Mastering's Bypass all does.",
+                );
+                ui.label(
+                    "Export tracks… in the Mixer's toolbar writes each track that plays, and the \
+                     return of each FX bus that it feeds, to its own WAV file in a folder. A \
+                     track's file holds the track alone after its EQ, automation, fader, pan, \
+                     and outputs, without its sends; the FX returns hold the sends. The master \
+                     pedalboard is left out, every file is as long as the mix export, and the \
+                     files sum to the mix with the board bypassed.",
                 );
                 ui.label(
                     "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and \
@@ -2012,6 +2069,7 @@ impl MixJamApp {
                 Some(format!("{song}.wav")),
                 None,
             ),
+            FileRequest::ExportTracks => ("Export tracks".into(), Folder, None, None, None),
             FileRequest::ImportSound => ("Import sound".into(), OpenFile, WAV, None, None),
             FileRequest::SaveSound { name, .. } => (
                 "Save sound".into(),
@@ -2180,6 +2238,10 @@ impl MixJamApp {
             }
             FileRequest::ExportMix => {
                 let result = self.session.start_export(&path);
+                self.apply(result);
+            }
+            FileRequest::ExportTracks => {
+                let result = self.session.start_track_export(&path);
                 self.apply(result);
             }
             FileRequest::ImportSound => {
@@ -2392,6 +2454,7 @@ impl MixJamApp {
     }
 
     fn tool_windows(&mut self, ctx: &egui::Context) {
+        self.eq_window(ctx);
         if self.show_libraries {
             let mut open = true;
             dialog::window("Sample libraries")
@@ -3159,11 +3222,12 @@ fn master_help(ui: &mut egui::Ui) {
         "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
         "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
         "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
-        "The Booster pedals are the eJay Booster of Dance 3, Dance 4, and Techno 3: a ten-band EQ, a compressor, and stereo wide. In the original's order (EQ, compressor, wide) they match the original sample for sample. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
+        "The Booster pedals are the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. In the original's order (EQ, compressor, wide) they match the original sample for sample. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
         "The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband holds the peaks of the lows, mids, and highs apart and lifts the sound under them; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.",
         "Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.",
+        "Bypass all, beside Preset, skips the whole board, Trim included, for playback and export, so you can export the mix and master it elsewhere. The pedals keep their settings and switches, and the board dims. Switching it during playback crossfades over 30 ms. Presets leave it as it is. The Mixer's Master strip has the same switch.",
         "Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the board's state beside Preset shows the total, and exports remove it.",
-        "Songs open with every pedal off unless their file switched one on. Importing a Dance 3, Dance 4, or Techno 3 song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.",
+        "Songs open with every pedal off unless their file switched one on. Importing a legacy D3, D4, or T3 .mix song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.",
         "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.",
     ] {
         ui.add(egui::Label::new(text).wrap());

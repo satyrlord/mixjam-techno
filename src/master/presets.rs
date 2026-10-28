@@ -1,9 +1,10 @@
 //! Factory boards for the mastering pedals.
 //!
 //! A preset sets every pedal: its switch and knobs, and the first order. The
-//! eJay pedals are off, since a preset does not carry a song's Booster
+//! Booster pedals are off, since a preset does not carry a song's Booster
 //! settings. The trim stays as it was: it matches the board to the mix, and
-//! a mix that needed -9 dB would otherwise come out 9 dB louder. Every preset
+//! a mix that needed -9 dB would otherwise come out 9 dB louder. The bypass
+//! stays as it was too. Every preset
 //! keeps the true peak at -1 dBTP or below through the Limiter and stays
 //! moderate, so that it suits a finished mix rather than reshaping it.
 //! Loudness comes from the Maximizer, which rounds off the drops' peaks, and
@@ -24,9 +25,10 @@ pub struct Preset {
     pub chain: MasterChain,
 }
 impl Preset {
-    /// The preset's pedals with the trim of `board`.
+    /// The preset's pedals with the trim and the bypass of `board`.
     pub fn applied_to(&self, board: &MasterChain) -> MasterChain {
         MasterChain {
+            bypass: board.bypass,
             trim: board.trim,
             ..self.chain
         }
@@ -328,7 +330,7 @@ mod tests {
             assert!(
                 PedalKind::ALL
                     .into_iter()
-                    .filter(|kind| kind.is_ejay())
+                    .filter(|kind| kind.is_booster())
                     .all(|kind| !chain.is_on(kind))
             );
             assert!(
@@ -430,7 +432,7 @@ mod tests {
 
     #[test]
     fn presets_stay_moderate_and_hold_the_ceiling() {
-        // The test mix stands in for an eJay song, which arrives near -18 LUFS
+        // The test mix stands in for a legacy .mix song, which arrives near -18 LUFS
         // with its peaks well below full scale; the hot input is 6 dB above it.
         let program = dsp::program(3 * 44_100);
         let measure = |chain: &MasterChain, gain: f32| {

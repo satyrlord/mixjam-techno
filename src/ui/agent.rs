@@ -1133,7 +1133,8 @@ impl MixJamApp {
         }
     }
 
-    fn open_windows(&self) -> Vec<&'static str> {
+    fn open_windows(&self) -> Vec<String> {
+        let eq = self.eq_track.map(|track| format!("Track {} EQ", track + 1));
         [
             (self.show_help, "Help"),
             (self.show_stretch_help, "Time Stretcher help"),
@@ -1153,7 +1154,9 @@ impl MixJamApp {
             ),
         ]
         .into_iter()
-        .filter_map(|(open, title)| open.then_some(title))
+        .filter(|(open, _)| *open)
+        .map(|(_, title)| title.to_owned())
+        .chain(eq)
         .collect()
     }
 

@@ -47,6 +47,8 @@ pub struct Track {
     pub sends: [f32; crate::fx::BUSES],
     /// Lanes that move the volume, sends, and filter over the song.
     pub automation: crate::automation::Automation,
+    /// The channel EQ, between the clips and the automation.
+    pub eq: crate::eq::ChannelEq,
 }
 impl Default for Track {
     fn default() -> Self {
@@ -60,6 +62,7 @@ impl Default for Track {
             solo: false,
             sends: [0.0; crate::fx::BUSES],
             automation: Default::default(),
+            eq: Default::default(),
         }
     }
 }
@@ -107,6 +110,9 @@ impl<'de> Deserialize<'de> for Track {
             sends: [f32; crate::fx::BUSES],
             #[serde(default)]
             automation: crate::automation::Automation,
+            // Projects saved before the channel EQ existed have it off.
+            #[serde(default)]
+            eq: crate::eq::ChannelEq,
         }
         let saved = SavedTrack::deserialize(deserializer)?;
         let mut track = Self {
@@ -119,6 +125,7 @@ impl<'de> Deserialize<'de> for Track {
             solo: saved.solo,
             sends: saved.sends,
             automation: saved.automation,
+            eq: saved.eq,
         };
         if saved.polarity_inverted.is_none() {
             if !saved.gain.is_finite() || !(-2.0..=4.0).contains(&saved.gain) {
@@ -529,12 +536,75 @@ pub struct Project {
     #[serde(default)]
     pub libraries: Vec<crate::products::LibraryBinding>,
     /// The master pedalboard. Every pedal is off unless the song switched it on.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_project_master")]
     pub master: crate::master::MasterChain,
     /// The four FX buses that the tracks' sends feed. All are empty unless
     /// the song filled them.
     #[serde(default)]
     pub fx: crate::fx::FxBuses,
+}
+
+/// Earlier JSON projects have no board-format version. Accept their saved
+/// Booster names here, without changing the strict versioned song reader.
+fn deserialize_project_master<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<crate::master::MasterChain, D::Error> {
+    use crate::master::*;
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields, rename_all = "camelCase")]
+    struct Board {
+        #[serde(default)]
+        bypass: bool,
+        trim: f32,
+        order: [String; 13],
+        #[serde(alias = "ejayEq")]
+        booster_eq: BoosterEq,
+        #[serde(alias = "ejayCompressor")]
+        booster_compressor: BoosterCompressor,
+        #[serde(alias = "ejayWide")]
+        booster_wide: BoosterWide,
+        soft_clip: SoftClip,
+        tube: Tube,
+        trim_eq: TrimEq,
+        bus_compressor: BusCompressor,
+        maximizer: Maximizer,
+        lift_eq: LiftEq,
+        tape: Tape,
+        imaging: Imaging,
+        multiband: Multiband,
+        limiter: Limiter,
+    }
+    let board = Board::deserialize(deserializer)?;
+    let mut order = PedalKind::ALL;
+    for (pedal, name) in order.iter_mut().zip(board.order) {
+        let name = match name.as_str() {
+            "ejayEq" => "boosterEq",
+            "ejayCompressor" => "boosterCompressor",
+            "ejayWide" => "boosterWide",
+            name => name,
+        };
+        *pedal = serde_json::from_value(serde_json::Value::String(name.into()))
+            .map_err(serde::de::Error::custom)?;
+    }
+    Ok(MasterChain {
+        bypass: board.bypass,
+        trim: board.trim,
+        order,
+        booster_eq: board.booster_eq,
+        booster_compressor: board.booster_compressor,
+        booster_wide: board.booster_wide,
+        soft_clip: board.soft_clip,
+        tube: board.tube,
+        trim_eq: board.trim_eq,
+        bus_compressor: board.bus_compressor,
+        maximizer: board.maximizer,
+        lift_eq: board.lift_eq,
+        tape: board.tape,
+        imaging: board.imaging,
+        multiband: board.multiband,
+        limiter: board.limiter,
+    })
 }
 /// An absent version marks a legacy project. Zero is reserved for that case,
 /// so an explicit zero is not a supported version.
@@ -679,6 +749,7 @@ impl Project {
             track
                 .automation
                 .validate()
+                .and_then(|()| track.eq.validate())
                 .map_err(|error| format!("Track {}: {error}", index + 1))?;
         }
         if self.clips.len() > MAX_CLIPS {
@@ -1292,6 +1363,29 @@ mod tests {
     }
 
     #[test]
+    fn earlier_json_master_keys_keep_the_board_settings_and_order() {
+        let mut project = Project::default();
+        project.master.booster_eq.on = true;
+        project.master.booster_eq.bands[4] = 71;
+        project.master.booster_compressor.drive = 731;
+        project.master.booster_wide.spread = 217;
+        project.master.move_pedal(2, 0);
+        let current = serde_json::to_string(&project).unwrap();
+        let earlier = current
+            .replace("boosterEq", "ejayEq")
+            .replace("boosterCompressor", "ejayCompressor")
+            .replace("boosterWide", "ejayWide");
+        let opened = Project::parse_json(earlier.as_bytes()).unwrap();
+        assert_eq!(opened, project);
+        assert_eq!(
+            Project::parse_json(&serde_json::to_vec(&opened).unwrap()).unwrap(),
+            project
+        );
+        let duplicate = earlier.replace("\"ejayWide\":", "\"boosterWide\":{},\"ejayWide\":");
+        assert!(Project::parse_json(duplicate.as_bytes()).is_err());
+    }
+
+    #[test]
     fn paired_native_labels_and_signed_track_levels_survive_json() {
         let mut project = Project::default();
         project.tracks[31].set_legacy_gain(-2.0 / 65536.0);
@@ -1353,6 +1447,7 @@ mod tests {
                 solo: true,
                 sends: [0.0; crate::fx::BUSES],
                 automation: Default::default(),
+                eq: Default::default(),
             };
             project.clips.push(Clip {
                 id: 37,

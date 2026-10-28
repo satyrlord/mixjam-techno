@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod compat;
 pub mod effects;
 pub mod engine;
+pub mod eq;
 pub mod fx;
 pub mod legacy_mix;
 pub mod library;

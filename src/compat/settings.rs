@@ -1,4 +1,4 @@
-//! Settings list that Dance 3, Dance 4, Techno 3, and House save after the song
+//! Settings list that D3, D4, T3, and H1 save after the song
 //! title. Each entry is `KEY#°_#VALUE%°_%`, where `°` is byte 0xB0. The reader
 //! keeps every entry as text. Import applies the Booster entries to the master
 //! pedalboard; the others are kept only.
@@ -54,7 +54,7 @@ pub(super) fn parse(title_block: &[u8]) -> Saved {
     saved
 }
 
-/// The Booster's saved settings as the eJay master pedals. A switch saved as
+/// The original's saved master-effect settings as the Booster pedals. A switch saved as
 /// `1` turns its pedal on; a pedal keeps its default for a missing value.
 /// The editor scales a saved knob from 0 to 32767 to the library's 0 to 1000
 /// and divides an equaliser band by 100. A switched-on pedal with a value
@@ -94,13 +94,13 @@ pub(super) fn booster(product: Product, saved: &Saved) -> (MasterChain, Vec<&'st
         .collect();
     match bands {
         Some(bands) => {
-            chain.ejay_eq.bands.copy_from_slice(&bands);
-            chain.ejay_eq.on = on("BoostEQ");
+            chain.booster_eq.bands.copy_from_slice(&bands);
+            chain.booster_eq.on = on("BoostEQ");
         }
         None if on("BoostEQ") => unusable.push("EQ"),
         None => {}
     }
-    let compressor = &mut chain.ejay_compressor;
+    let compressor = &mut chain.booster_compressor;
     match (
         knob("BoostCompressorDrive", compressor.drive),
         knob("BoostCompressorSpeed", compressor.speed),
@@ -113,10 +113,10 @@ pub(super) fn booster(product: Product, saved: &Saved) -> (MasterChain, Vec<&'st
         _ if on("BoostCompressorLED") => unusable.push("compressor"),
         _ => {}
     }
-    match knob("BoostStereoWide", chain.ejay_wide.spread) {
+    match knob("BoostStereoWide", chain.booster_wide.spread) {
         Some(spread) => {
-            chain.ejay_wide.spread = spread;
-            chain.ejay_wide.on = on("BoostStereoLED");
+            chain.booster_wide.spread = spread;
+            chain.booster_wide.on = on("BoostStereoLED");
         }
         None if on("BoostStereoLED") => unusable.push("stereo wide"),
         None => {}
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn booster_settings_become_master_pedals() {
-        // "Summer night at the beach" of Dance 4 saves these values.
+        // A D4 factory song saves these values.
         let mut entries = vec![
             ("BoostCompressorLED", "1"),
             ("BoostCompressorSpeed", "32767"),
@@ -260,17 +260,17 @@ mod tests {
         let saved = parse(&block("Title", &entries));
         let (chain, unusable) = booster(Product::D4, &saved);
         assert!(unusable.is_empty());
-        assert!(chain.ejay_eq.on && chain.ejay_compressor.on && chain.ejay_wide.on);
+        assert!(chain.booster_eq.on && chain.booster_compressor.on && chain.booster_wide.on);
         assert_eq!(
-            chain.ejay_eq.bands,
+            chain.booster_eq.bands,
             [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
         );
-        let compressor = &chain.ejay_compressor;
+        let compressor = &chain.booster_compressor;
         assert_eq!(
             (compressor.drive, compressor.speed, compressor.gain),
             (1000, 1000, 278)
         );
-        assert_eq!(chain.ejay_wide.spread, 444);
+        assert_eq!(chain.booster_wide.spread, 444);
         assert!(notices(Product::D4, &saved, false).is_empty());
         assert_eq!(booster(Product::D2, &saved).0, MasterChain::default());
         assert_eq!(booster(Product::H1, &saved).0, MasterChain::default());
@@ -287,8 +287,8 @@ mod tests {
         ));
         let (chain, _) = booster(Product::T3, &quiet);
         assert!(!chain.is_active());
-        assert_eq!(chain.ejay_compressor.drive, 500);
-        assert_eq!(chain.ejay_wide.spread, 652);
+        assert_eq!(chain.booster_compressor.drive, 500);
+        assert_eq!(chain.booster_wide.spread, 652);
         assert_eq!(
             booster(Product::T3, &Saved::default()).0,
             MasterChain::default()

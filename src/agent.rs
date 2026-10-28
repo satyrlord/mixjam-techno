@@ -342,6 +342,8 @@ pub struct TrackView {
     pub sends: [f32; crate::fx::BUSES],
     /// Only lanes with points.
     pub automation: crate::automation::Automation,
+    /// Whether the track's channel EQ is on.
+    pub eq_on: bool,
     pub clips: usize,
 }
 
@@ -382,6 +384,8 @@ pub struct SongView {
     pub unsaved: bool,
     pub bpm: f64,
     pub master_gain: f32,
+    /// Whether the master pedalboard is bypassed.
+    pub master_bypass: bool,
     /// The first and last looped bar.
     pub loop_bars: Option<[u32; 2]>,
     pub end_tick: u32,
@@ -463,7 +467,7 @@ pub struct StateView {
     pub status: Status,
     pub modal: Option<&'static str>,
     pub path_prompt: Option<PathPromptView>,
-    pub windows: Vec<&'static str>,
+    pub windows: Vec<String>,
     pub selection: Selection,
     pub tools: Tools,
     pub busy: Busy,
@@ -475,7 +479,7 @@ pub struct StateView {
 pub struct Outcome {
     pub status: Status,
     pub modal: Option<&'static str>,
-    pub windows: Vec<&'static str>,
+    pub windows: Vec<String>,
     /// The action closed the application.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub closing: bool,
@@ -585,6 +589,7 @@ pub fn song_view(session: &Session) -> SongView {
             solo: track.solo,
             sends: track.sends,
             automation: track.automation.clone(),
+            eq_on: track.eq.on,
             clips,
         })
         .collect();
@@ -601,6 +606,7 @@ pub fn song_view(session: &Session) -> SongView {
         unsaved: session.unsaved(),
         bpm: project.bpm,
         master_gain: project.master_gain,
+        master_bypass: project.master.bypass,
         loop_bars: project.loop_region.map(|[start, end]| {
             [
                 start / TICKS_PER_BAR + 1,

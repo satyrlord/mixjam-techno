@@ -1,17 +1,21 @@
 //! Compact mixer presentation. Gain magnitude and polarity remain separate project edits.
-//! Each track strip also sends to the four FX buses, whose return strips follow the tracks.
+//! Each track strip also sends to the four FX buses, whose return strips follow the tracks,
+//! and opens its channel EQ. The Master strip can bypass the master pedalboard.
 use super::view::switch_hint;
 use super::*;
 use mixjam_techno::application::fx::{BUSES, FxBus, FxBuses};
 use mixjam_techno::application::{MAX_MIXER_GAIN_DB, Track, amplitude_to_db, db_to_amplitude};
 
-/// What the mixer changed: the tracks and master level, the FX buses, and
-/// the bus whose return strip asked to open it in the Effects module.
+/// What the mixer changed: the tracks and master level, the FX buses, the
+/// master pedalboard's bypass, the bus whose return strip asked to open it
+/// in the Effects module, and the track whose EQ button was pressed.
 #[derive(Default)]
 pub(super) struct Changes {
     pub tracks: bool,
     pub fx: bool,
+    pub bypass: bool,
     pub open: Option<usize>,
+    pub eq: Option<usize>,
 }
 
 const INK: Color32 = Color32::from_rgb(28, 29, 26);
@@ -176,6 +180,7 @@ pub(super) fn show(
     tracks: &mut [Track],
     master: &mut f32,
     fx: &mut FxBuses,
+    bypass: &mut bool,
 ) -> Changes {
     let art = Artwork::load(ui.ctx());
     let art = match &art {
@@ -229,6 +234,7 @@ pub(super) fn show(
                                             let (summary, detail) =
                                                 mixer_sample_summary(project, library, index);
                                             let track = &mut tracks[index];
+                                            let mut open_eq = false;
                                             changed |= strip(
                                                 ui,
                                                 art,
@@ -253,8 +259,13 @@ pub(super) fn show(
                                                     }),
                                                     sends: &mut track.sends,
                                                     any_solo,
+                                                    eq_on: track.eq.on,
+                                                    open_eq: &mut open_eq,
                                                 }),
                                             );
+                                            if open_eq {
+                                                result.eq = Some(index);
+                                            }
                                         },
                                     );
                                 }
@@ -291,6 +302,32 @@ pub(super) fn show(
                 master,
                 None,
             );
+            // Below the output labels, where a track strip has its switches.
+            let rect = Rect::from_min_size(
+                ui.min_rect().min + Vec2::new(14.0, height / scale - 56.0) * scale,
+                Vec2::new(80.0, 24.0) * scale,
+            );
+            let response = button(ui, rect, "Bypass", "Master bypass", scale, *bypass);
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::Checkbox,
+                    response.enabled(),
+                    *bypass,
+                    "Master bypass",
+                )
+            });
+            if response
+                .on_hover_text(format!(
+                    "Master bypass: {}. Bypass skips the master pedalboard, trim included, for \
+                     playback and export, so you can master the exported mix elsewhere. The \
+                     pedals keep their settings. Mastering's Bypass all is the same switch.",
+                    if *bypass { "on" } else { "off" }
+                ))
+                .clicked()
+            {
+                *bypass = !*bypass;
+                result.bypass = true;
+            }
         });
     });
     result.tracks = changed;
@@ -310,6 +347,10 @@ struct TrackControls<'a> {
     automated: [bool; BUSES],
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
+    /// Whether the track's channel EQ is on, and whether its EQ button was
+    /// pressed.
+    eq_on: bool,
+    open_eq: &'a mut bool,
 }
 
 fn strip(
@@ -420,6 +461,8 @@ fn strip(
         sends,
         automated,
         any_solo,
+        eq_on,
+        open_eq,
     }) = controls
     {
         // The sends to FX 1 to 4, from left to right, in the gap between the
@@ -480,6 +523,37 @@ fn strip(
             11.0 * scale,
             INK,
         );
+        // The EQ button completes the row of Mute and Solo, above polarity.
+        let eq_name = format!("{name} EQ");
+        let response = button(
+            ui,
+            Rect::from_min_size(
+                at(8.0, height / scale - 56.0),
+                Vec2::new(26.0, 24.0) * scale,
+            ),
+            "EQ",
+            &eq_name,
+            scale,
+            eq_on,
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::Button,
+                response.enabled(),
+                eq_on,
+                &eq_name,
+            )
+        });
+        if response
+            .on_hover_text(format!(
+                "{name} EQ: {}. Open the channel EQ window: low and high cuts, shelves, and a \
+                 peak, before the track's automation and fader.",
+                if eq_on { "on" } else { "off" }
+            ))
+            .clicked()
+        {
+            *open_eq = true;
+        }
         for (switch, x, on) in [
             (TrackSwitch::Mute, 40.0, muted),
             (TrackSwitch::Solo, 72.0, solo),

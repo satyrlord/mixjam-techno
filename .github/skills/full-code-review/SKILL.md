@@ -22,9 +22,11 @@ Start with a read-only review. Repair findings only when the user requests fixes
 5. Map affected behavior to current tests and artifact evidence.
    Completion criterion: Each relevant check is passed, failed, blocked, or not run.
 
-Use the owner's current decisions, `PRODUCT.md`, and `COMPATIBILITY.md` for
-product scope. Use `ARCHITECTURE.md` for application ownership. Read `DESIGN.md`
-for native UI work. Treat `docs/MERGE.md` and donor material as dated evidence.
+Use the owner's current decisions for product scope, and, if they exist,
+`local-data/research/PRODUCT.md` and `local-data/research/COMPATIBILITY.md`.
+Use `docs/ARCHITECTURE.md` for application ownership. Read `docs/DESIGN.md`
+for native UI work. Treat `local-data/research/MERGE.md`, if it exists, and
+donor material as dated evidence.
 Use original product artifacts and measured behavior to assess parity claims.
 If skills are in scope, read them through `.github/skills` once. `.agents`,
 `.claude`, and `.codex` link to that directory.

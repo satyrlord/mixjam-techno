@@ -11,8 +11,9 @@ If the user does not authorize workspace edits, remain read-only.
 
 ## 1. Prepare the decision tree
 
-1. Read `AGENTS.md`, `PRODUCT.md`, `COMPATIBILITY.md`, `ARCHITECTURE.md`,
-   and the applicable design or feature document.
+1. Read `docs/ARCHITECTURE.md` and the applicable design or feature document.
+   If they exist, also read `AGENTS.md`, `local-data/research/PRODUCT.md`,
+   and `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know the approved contract and open questions.
 2. Inspect implementation that the plan claims already exists.
    Completion criterion: Each implementation claim has direct evidence.

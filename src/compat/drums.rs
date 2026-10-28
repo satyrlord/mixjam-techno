@@ -1,6 +1,6 @@
 //! Observed D2/D3/4 drum import projection. Original pattern and pad bytes remain available.
 //! The dry renderer follows the documented sixteen-step, one-bar drum matrix.
-//! It applies the Dance 2 Groove Generator volume and no other saved effect.
+//! It applies the D2 Groove Generator volume and no other saved effect.
 use crate::{
     audio::Pcm,
     library::{Library, decode_1252},
@@ -52,7 +52,7 @@ pub(super) struct Pad {
     pub opaque_native_settings: Vec<u8>,
 }
 
-/// The nine words that Dance 2 saves after its ten pads, in file order. The
+/// The nine words that D2 saves after its ten pads, in file order. The
 /// editor sends each to the audio engine unchanged (`DFilterLed`, `DCutOff`,
 /// `DResonance`, `DEchoLed`, `DEchoTime`, `DFeedback`, `DDistortionLed`,
 /// `DDistortion`, `DVolume`). A saved switch is 0 or 65535.
@@ -99,7 +99,7 @@ pub(super) struct Kit {
     pub source_offset: usize,
     pub source_end: usize,
     pub opaque_native_settings: Vec<u8>,
-    /// Dance 2 only: `opaque_native_settings` by name.
+    /// D2 only: `opaque_native_settings` by name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub groove_effects: Option<GrooveEffects>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -338,7 +338,7 @@ pub(super) struct PreparedKit {
     volume: f32,
 }
 
-/// A notice for a Dance 2 kit whose saved effects the renderer does not apply.
+/// A notice for a D2 kit whose saved effects the renderer does not apply.
 pub(super) fn effects_notice(kit: &Kit) -> Option<String> {
     let effects = kit.groove_effects?;
     let active: Vec<_> = [

@@ -1015,7 +1015,7 @@ mod tests {
             );
             assert_eq!(
                 app.session.project().master.order[..3],
-                [EjayEq, EjayWide, EjayCompressor]
+                [BoosterEq, BoosterWide, BoosterCompressor]
             );
             focus_control(&ctx, &mut app, &output, "Show Booster EQ");
             frame(
@@ -1047,14 +1047,14 @@ mod tests {
             }
             assert_eq!(
                 app.session.project().master.order[..3],
-                [EjayEq, EjayWide, EjayCompressor],
+                [BoosterEq, BoosterWide, BoosterCompressor],
                 "Dragging previews the place; only the drop moves the pedal."
             );
             pointer(&ctx, &mut app, past, false, egui::Modifiers::NONE);
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             assert_eq!(
                 app.session.project().master.order[..3],
-                [EjayWide, EjayEq, EjayCompressor]
+                [BoosterWide, BoosterEq, BoosterCompressor]
             );
             assert_eq!(app.session.project().master.order[3..], PedalKind::ALL[3..]);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -1062,7 +1062,7 @@ mod tests {
             assert!(app.session.history_step(false).unwrap());
             assert_eq!(
                 app.session.project().master.order[..3],
-                [EjayEq, EjayWide, EjayCompressor]
+                [BoosterEq, BoosterWide, BoosterCompressor]
             );
             assert!(app.session.history_step(false).unwrap());
             assert_eq!(app.session.project().master.order, PedalKind::ALL);
@@ -1075,7 +1075,7 @@ mod tests {
                 vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
                 egui::Modifiers::NONE,
             );
-            assert!(app.session.project().master.ejay_compressor.on);
+            assert!(app.session.project().master.booster_compressor.on);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             assert!(
                 !accessible_node(&output, "Booster compressor drive")
@@ -1094,14 +1094,17 @@ mod tests {
                 (egui::Key::Home, egui::Modifiers::NONE, 0),
             ] {
                 frame(&ctx, &mut app, vec![key_event(key, modifiers)], modifiers);
-                assert_eq!(app.session.project().master.ejay_compressor.drive, expected);
+                assert_eq!(
+                    app.session.project().master.booster_compressor.drive,
+                    expected
+                );
             }
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let center = effects_control_rect(&output, "Booster compressor drive").center();
             click(&ctx, &mut app, center, egui::Modifiers::NONE);
             click(&ctx, &mut app, center, egui::Modifiers::NONE);
             assert_eq!(
-                app.session.project().master.ejay_compressor.drive,
+                app.session.project().master.booster_compressor.drive,
                 500,
                 "Double-click must restore the default."
             );
@@ -1109,8 +1112,8 @@ mod tests {
 
             // The knob gesture undoes as one step, then the switch.
             assert!(app.session.history_step(false).unwrap());
-            assert_eq!(app.session.project().master.ejay_compressor.drive, 500);
-            assert!(app.session.project().master.ejay_compressor.on);
+            assert_eq!(app.session.project().master.booster_compressor.drive, 500);
+            assert!(app.session.project().master.booster_compressor.on);
             assert!(app.session.history_step(false).unwrap());
             assert!(!app.session.project().master.is_active());
 
@@ -1203,7 +1206,7 @@ mod tests {
                 chain.set_on(kind, on);
             }
             for knob in Knob::all() {
-                if knob.pedal().is_some_and(PedalKind::is_ejay) {
+                if knob.pedal().is_some_and(PedalKind::is_booster) {
                     continue;
                 }
                 let range = knob.range();
@@ -1687,7 +1690,7 @@ mod tests {
         let (context, mut app, port) = agent_fixture();
         app.bottom_module = BottomModule::Mastering;
         let mut booster = MasterChain::default();
-        booster.ejay_eq.on = true;
+        booster.booster_eq.on = true;
         // The mix was too loud, so its trim is down 9 dB.
         booster.trim = -9.0;
         booster.move_pedal(0, 6);
@@ -1712,7 +1715,7 @@ mod tests {
             }
         );
         assert!(
-            !chain.ejay_eq.on && chain.order == PedalKind::ALL,
+            !chain.booster_eq.on && chain.order == PedalKind::ALL,
             "A preset sets every pedal."
         );
         assert_eq!(
@@ -6949,12 +6952,20 @@ mod tests {
                 let right = effects_control_rect(&output, &format!("{track} right output"));
                 let mute = effects_control_rect(&output, &format!("{track} mute"));
                 let solo = effects_control_rect(&output, &format!("{track} solo"));
-                for rect in [pan, center, polarity, left, right, mute, solo] {
+                let eq = effects_control_rect(&output, &format!("{track} EQ"));
+                for rect in [pan, center, polarity, left, right, mute, solo, eq] {
                     assert!(
                         viewport.contains_rect(rect),
                         "{track} lower controls must fit at {density}x."
                     );
                 }
+                assert!(
+                    (eq.top() - mute.top()).abs() <= 1.0 / density
+                        && eq.right() <= mute.left()
+                        && eq.bottom() <= polarity.top()
+                        && (eq.center().x - polarity.center().x).abs() <= 1.0 / density,
+                    "EQ starts the row of Mute and Solo, above polarity."
+                );
                 for rect in [mute, solo] {
                     assert!(
                         rect.top() >= center.bottom() && rect.bottom() <= left.top(),
@@ -7001,6 +7012,14 @@ mod tests {
                     egui::accesskit::Role::CheckBox
                 );
             }
+            let bypass = effects_control_rect(&output, "Master bypass");
+            let master = effects_control_rect(&output, "Master gain");
+            assert!(
+                viewport.contains_rect(bypass)
+                    && bypass.top() > master.bottom()
+                    && bypass.width() <= 108.0,
+                "Master bypass must fit under the master rail at {density}x."
+            );
         }
     }
 
@@ -9609,6 +9628,156 @@ mod tests {
         send(&mut app, &["key", "key=Enter"]);
         assert_eq!(app.session.file(), Some(song.as_path()));
         assert_eq!(app.session.project().clips.len(), 3);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_eq_window_edits_its_track_and_each_dial_turn_is_an_undo_step() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        app.bottom_module = BottomModule::Mixer;
+        let reply = send(&mut app, &["ui", "contains=Track 1 EQ"]);
+        let button = &reply["nodes"][0];
+        assert_eq!(button["label"], "Track 1 EQ", "{reply}");
+        assert_eq!(button["checked"], false, "{reply}");
+        let reply = send(&mut app, &["click", "target=Track 1 EQ"]);
+        assert_eq!(
+            reply["windows"],
+            serde_json::json!(["Track 1 EQ"]),
+            "{reply}"
+        );
+        // The dials wait for the power switch.
+        let reply = send(&mut app, &["ui", "all=true", "window=Track 1 EQ"]);
+        let nodes = reply["nodes"].as_array().unwrap();
+        let named = |label: &str| {
+            nodes
+                .iter()
+                .find(|node| node["label"] == label)
+                .unwrap_or_else(|| panic!("Missing {label}: {reply}"))
+        };
+        for param in [
+            "low cut",
+            "low frequency",
+            "low gain",
+            "mid frequency",
+            "mid gain",
+            "mid Q",
+            "high frequency",
+            "high gain",
+            "high cut",
+        ] {
+            assert_eq!(named(&format!("Track 1 EQ {param}"))["enabled"], false);
+        }
+        named("Track 1 EQ response curve");
+        named("Reset Track 1 EQ");
+        let reply = send(&mut app, &["set", "target=Track 1 EQ power", "value=true"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().tracks[0].eq.on);
+        assert!(app.session.unsaved());
+        // An accessibility SetValue names a place on the dial.
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 EQ high gain", "value=-9"],
+        );
+        assert_eq!(reply["control"]["number"], -9.0, "{reply}");
+        assert_eq!(app.session.project().tracks[0].eq.high_db, -9.0);
+        send(
+            &mut app,
+            &["set", "target=Track 1 EQ high frequency", "value=6500"],
+        );
+        assert_eq!(app.session.project().tracks[0].eq.high_hz, 6500.0);
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["tracks"][0]["eq_on"], true, "{state}");
+        assert_eq!(state["song"]["tracks"][1]["eq_on"], false, "{state}");
+        let reply = send(&mut app, &["ui", "contains=Track 1 EQ"]);
+        assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].eq.high_hz, 8000.0);
+        assert_eq!(app.session.project().tracks[0].eq.high_db, -9.0);
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].eq.high_db, 0.0);
+        assert!(app.session.project().tracks[0].eq.on);
+        // Reset flattens every band and keeps the switch.
+        app.history_step(true);
+        send(&mut app, &["click", "target=Reset Track 1 EQ"]);
+        let eq = app.session.project().tracks[0].eq;
+        assert!(eq.on && eq.high_db == 0.0);
+        // Another track's button switches the window to that track.
+        let reply = send(&mut app, &["click", "target=Track 2 EQ"]);
+        assert_eq!(
+            reply["windows"],
+            serde_json::json!(["Track 2 EQ"]),
+            "{reply}"
+        );
+        let reply = send(&mut app, &["click", "target=Close Track 2 EQ"]);
+        assert_eq!(reply["windows"], serde_json::json!([]), "{reply}");
+    }
+
+    #[test]
+    fn bypass_all_and_master_bypass_are_one_switch_and_track_export_asks_for_a_folder() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        let mut chain = app.session.project().master;
+        chain.limiter.on = true;
+        app.session.edit(EditCommand::SetMaster(chain)).unwrap();
+        app.bottom_module = BottomModule::Mastering;
+        let reply = send(&mut app, &["set", "target=Bypass all pedals", "value=true"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().master.bypass);
+        assert!(app.session.project().master.limiter.on);
+        let reply = send(&mut app, &["ui", "all=true", "contains=Bypassed:"]);
+        assert_eq!(reply["nodes"].as_array().unwrap().len(), 1, "{reply}");
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["master_bypass"], true, "{state}");
+        app.bottom_module = BottomModule::Mixer;
+        let reply = send(&mut app, &["ui", "contains=Master bypass"]);
+        assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
+        send(&mut app, &["click", "target=Master bypass"]);
+        assert!(!app.session.project().master.bypass);
+        app.history_step(false);
+        assert!(app.session.project().master.bypass);
+
+        // A song whose sound has audio, on track 3.
+        let dir = std::env::temp_dir().join(format!("mixjam-ui-tracks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 4410],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let placeholder =
+            Session::headless(Arc::new(Library::fixture(vec![])), Project::default()).unwrap();
+        app.session = std::mem::replace(&mut app.session, placeholder)
+            .with_settings_root(dir.join("settings"));
+        app.session.new_mix().unwrap();
+        let source = app.session.register_file(&wave, "Wave", 140.0).unwrap();
+        app.session.place(source, 2, 0).unwrap();
+        let reply = send(&mut app, &["click", "target=Export tracks"]);
+        assert_eq!(reply["modal"], "Choose path", "{reply}");
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["path_prompt"]["kind"], "folder", "{state}");
+        assert_eq!(state["path_prompt"]["title"], "Export tracks", "{state}");
+        send(
+            &mut app,
+            &["set", "target=Path", &format!("value={}", dir.display())],
+        );
+        let reply = send(&mut app, &["click", "target=Confirm path"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let reply = send(&mut app, &["wait", "idle=true", "timeout_ms=30000"]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["busy"]["exporting"], false, "{state}");
+        assert_eq!(
+            state["status"]["text"],
+            format!("Exported 1 track and 0 FX returns to {}.", dir.display()),
+            "{state}"
+        );
+        let title = app.session.project().title.clone();
+        let part = crate::audio::read_wav(&dir.join(format!("{title} - Track 03.wav"))).unwrap();
+        assert!(part.samples.iter().any(|sample| *sample > 0.1));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

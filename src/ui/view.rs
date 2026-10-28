@@ -573,18 +573,41 @@ impl MixJamApp {
                     .inner;
                 name_control(response, "Bottom module").on_hover_text(
                     "Choose the module shown in this section. Sounds selects source audio; Mixer \
-                     adjusts track levels, pan, sends, polarity and outputs; Mastering processes \
-                     the whole mix on the master pedalboard; Effects holds the four FX buses \
-                     that the sends feed.",
+                     adjusts track levels, pan, EQ, sends, polarity and outputs; Mastering \
+                     processes the whole mix on the master pedalboard; Effects holds the four FX \
+                     buses that the sends feed.",
                 );
                 ui.spacing_mut().button_padding = button_padding;
                 match self.bottom_module {
                     BottomModule::Sounds => self.palette_filters(ui),
                     BottomModule::Mastering => self.mastering_toolbar(ui),
-                    BottomModule::Mixer | BottomModule::Effects => {}
+                    BottomModule::Mixer => self.mixer_toolbar(ui),
+                    BottomModule::Effects => {}
                 }
             });
         });
+    }
+
+    /// The Mixer's toolbar: Export tracks, which writes each track and FX
+    /// return to its own WAV file for mixing elsewhere.
+    fn mixer_toolbar(&mut self, ui: &mut egui::Ui) {
+        let response = ui.add_enabled(
+            !self.session.is_exporting(),
+            egui::Button::new(egui::RichText::new("Export tracks…").size(13.0)),
+        );
+        if name_control(response, "Export tracks")
+            .on_hover_text(
+                "Write each track and each FX return to its own stereo WAV file in a folder, \
+                 for mixing in another application. Tracks play alone after their EQ, \
+                 automation, fader, pan, and outputs, without their sends; the FX returns \
+                 hold every send. The master pedalboard is left out. Together the files sum \
+                 to the mix with the board bypassed.",
+            )
+            .on_disabled_hover_text("Wait for the current export to finish.")
+            .clicked()
+        {
+            self.ask_path(FileRequest::ExportTracks);
+        }
     }
 
     fn palette_filters(&mut self, ui: &mut egui::Ui) {
@@ -761,6 +784,7 @@ impl MixJamApp {
         let mut tracks = self.session.project().tracks.clone();
         let mut master = self.session.project().master_gain;
         let mut buses = self.session.project().fx;
+        let mut board = self.session.project().master;
         let changes = mixer::show(
             ui,
             self.session.project(),
@@ -768,6 +792,7 @@ impl MixJamApp {
             &mut tracks,
             &mut master,
             &mut buses,
+            &mut board.bypass,
         );
         if changes.tracks {
             let result = self.session.edit(EditCommand::SetMixer {
@@ -782,15 +807,29 @@ impl MixJamApp {
             self.apply(result);
             ui.ctx().request_repaint();
         }
+        if changes.bypass {
+            let result = self.session.edit(EditCommand::SetMaster(board));
+            self.apply(result);
+            ui.ctx().request_repaint();
+        }
         if let Some(bus) = changes.open {
             self.bottom_module = BottomModule::Effects;
             self.fx_reveal = Some(bus);
+            ui.ctx().request_repaint();
+        }
+        if let Some(track) = changes.eq {
+            self.eq_track = Some(track);
             ui.ctx().request_repaint();
         }
     }
 
     fn mastering_toolbar(&mut self, ui: &mut egui::Ui) {
         if let Some(chain) = master::preset_selector(ui, &self.session.project().master) {
+            let result = self.session.edit(EditCommand::SetMaster(chain));
+            self.apply(result);
+        }
+        let mut chain = self.session.project().master;
+        if master::bypass_switch(ui, &mut chain.bypass) {
             let result = self.session.edit(EditCommand::SetMaster(chain));
             self.apply(result);
         }

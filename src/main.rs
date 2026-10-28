@@ -50,6 +50,7 @@ fn run() -> Result<(), String> {
     let mut mix = None;
     let mut command = "gui".to_string();
     let mut output = None;
+    let mut stems: Option<PathBuf> = None;
     let mut additional_libraries = Vec::new();
     let mut agent_port: Option<u16> = None;
     while let Some(arg) = args.next() {
@@ -107,10 +108,15 @@ fn run() -> Result<(), String> {
                     args.next().ok_or("--output needs a WAV path.")?,
                 ))
             }
+            "--stems" => {
+                stems = Some(PathBuf::from(
+                    args.next().ok_or("--stems needs a folder path.")?,
+                ))
+            }
             "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
             "--help" | "-h" => {
                 println!(
-                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--source-bpm BPM] [--mix PATH] [--output PATH] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender and convert require --mix and --output. convert saves a .mixjam song.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
+                    "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH or Libraries in the app. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
@@ -264,7 +270,16 @@ fn run() -> Result<(), String> {
         }
         "render" => {
             let path = mix.ok_or("render requires --mix PATH.")?;
-            let target = output.ok_or("render requires --output WAV.")?;
+            /// Where `render` writes: one mix, or each track and FX return.
+            enum Target {
+                Mix(PathBuf),
+                Stems(PathBuf),
+            }
+            let target = match (output, stems) {
+                (Some(wav), None) => Target::Mix(wav),
+                (None, Some(folder)) => Target::Stems(folder),
+                _ => return Err("render requires either --output WAV or --stems FOLDER.".into()),
+            };
             let (p, resolved_library) = project_io::open(&path, &library)?;
             library = resolved_library;
             for notice in &p.import_notices {
@@ -274,12 +289,26 @@ fn run() -> Result<(), String> {
                 );
             }
             let mix = audio::prepare_project(&p, &library)?;
-            mix.write_wav(&target, &p.master, &p.fx)?;
-            println!(
-                "Wrote stereo audio at {} Hz to {}",
-                audio::Mix::SAMPLE_RATE,
-                target.display()
-            );
+            match target {
+                Target::Mix(target) => {
+                    mix.write_wav(&target, &p.master, &p.fx)?;
+                    println!(
+                        "Wrote stereo audio at {} Hz to {}",
+                        audio::Mix::SAMPLE_RATE,
+                        target.display()
+                    );
+                }
+                Target::Stems(folder) => {
+                    std::fs::create_dir_all(&folder)
+                        .map_err(|error| format!("Cannot create {}: {error}", folder.display()))?;
+                    let written = mix.write_stems(&folder, &p.title, &p.fx)?;
+                    println!(
+                        "Wrote {written} as stereo audio at {} Hz to {}",
+                        audio::Mix::SAMPLE_RATE,
+                        folder.display()
+                    );
+                }
+            }
             Ok(())
         }
         _ => {

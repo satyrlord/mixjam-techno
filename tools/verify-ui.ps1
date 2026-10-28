@@ -4,8 +4,8 @@ param(
     [string]$OutputDirectory = '',
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    [ValidateSet('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')]
-    [string[]]$Views = @('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')
+    [ValidateSet('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')]
+    [string[]]$Views = @('arrangement', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'libraries', 'library-tempos', 'library-expanded', 'library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -114,7 +114,7 @@ missing_project = deepcopy(project)
 missing_project.update(schema_version=3, title='Missing source recovery', loop_region=[0, 16 * 256])
 missing_project['missing_samples'] = [dict(id=1001000, name='Original tape atmosphere', source_bpm=140,
     sample_rate=44100, nominal_ticks=4 * 256, length_inferred=False,
-    reference=dict(type='external', path=r'Z:\Original sessions\Dance3\MIXWAVES\atmosphere.wav', origin='d3'),
+    reference=dict(type='external', path=r'Z:\Original sessions\D3\MIXWAVES\atmosphere.wav', origin='d3'),
     reason='The original WAV file is unavailable.',
     metadata={'Native label 1':'Original tape', 'Native label 2':'atmosphere',
               'Saved sample ID':'10204', 'Declared bars':'4',
@@ -245,7 +245,8 @@ for size in sizes:
         if view != 'first-run':
             fixture = {
                 'sparse': sparse, 'track64': full, 'mixer-dense': full,
-                'mixer-empty': empty, 'mixer-states': mixer_states, 'follow': follow,
+                'mixer-empty': empty, 'mixer-states': mixer_states, 'mixer-eq': mixer_states,
+                'follow': follow,
                 'fx-board': mixer_states, 'clip-fades': shaped, 'automation': shaped,
                 'missing': missing, 'missing-details': missing,
                 'missing-effects': missing, 'missing-edit': missing,

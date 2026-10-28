@@ -224,6 +224,10 @@ fn overlap_add(
                 .max(0.000001)
         })
         .collect();
+    // The output that each candidate grain must continue, as offsets from a
+    // grain's first sample and their values. It is the same for every
+    // candidate, so it is read once per grain.
+    let mut target: Vec<(usize, f64)> = Vec::new();
     for destination in (0..frames).step_by(hop) {
         let nominal = (destination as f64 / ratio).round() as usize;
         let nominal = nominal.min(source_frames - window);
@@ -232,21 +236,26 @@ fn overlap_add(
         if destination != 0 && overlap > 4 {
             let first = nominal.saturating_sub(search);
             let last = (nominal + search).min(source_frames - window);
+            target.clear();
+            let mut a_power = 0.0;
+            for index in (0..overlap).step_by(8) {
+                let destination_frame = destination + index;
+                if weights[destination_frame] == 0.0 {
+                    continue;
+                }
+                for channel in 0..channels {
+                    let a =
+                        output[destination_frame * channels + channel] / weights[destination_frame];
+                    a_power += a * a;
+                    target.push((index * channels + channel, a));
+                }
+            }
             let correlation = |candidate: usize| {
-                let (mut dot, mut a_power, mut b_power) = (0.0, 0.0, 0.0);
-                for index in (0..overlap).step_by(8) {
-                    let destination_frame = destination + index;
-                    if weights[destination_frame] == 0.0 {
-                        continue;
-                    }
-                    for channel in 0..channels {
-                        let a = output[destination_frame * channels + channel]
-                            / weights[destination_frame];
-                        let b = samples[(candidate + index) * channels + channel];
-                        dot += a * b;
-                        a_power += a * a;
-                        b_power += b * b;
-                    }
+                let (mut dot, mut b_power) = (0.0, 0.0);
+                for &(offset, a) in &target {
+                    let b = samples[candidate * channels + offset];
+                    dot += a * b;
+                    b_power += b * b;
                 }
                 let magnitude = (a_power * b_power).sqrt();
                 if magnitude > 1e-12 {

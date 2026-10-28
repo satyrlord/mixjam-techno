@@ -8,6 +8,7 @@ window, file-dialog, or screenshot dependency.
 Native views and input                  Headless application
 src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/effects.rs
+             + src/ui/eq.rs
              + src/ui/step_synth.rs
              + src/ui/dialog.rs
              + src/ui/controls.rs
@@ -33,7 +34,7 @@ after each change. Typed `EditCommand` values change tempo, loop regions, clips,
 routing, and mixer settings. Separate operations place and move clips. Successful
 edits update history and mark the render for update. An accepted command that
 changes nothing is not an edit: it leaves history, the saved state, and the render
-unchanged. Changes to tempo or one gain, pan, send, FX knob, or clip control that arrive within 400 ms
+unchanged. Changes to tempo or one gain, pan, send, channel EQ dial, FX knob, or clip control that arrive within 400 ms
 of each other form one history entry, so a slider drag is one undo step. Saving
 ends that group, so undo can return to the saved state after the next edit. A clip
 cannot be lengthened over the next clip on its track. Automation point drags
@@ -51,7 +52,8 @@ Mixer edits normally stop at +12 dB (about 3.9811 amplitude). Earlier exact
 track values of 4 survive load and focus. Clip gain remains 0 through 2.
 Changing polarity ends a gain or pan gesture and creates a discrete undo
 step. Silence retains polarity; Unity changes only amplitude. L/R, Mute, and
-Solo are discrete undo steps too. `Track::audible()` applies Mute and Solo
+Solo are discrete undo steps too, and so are the channel EQ's switch and
+Reset. `Track::audible()` applies Mute and Solo
 for playback and export: when any track is soloed, only soloed tracks play,
 and Mute wins over Solo.
 
@@ -66,17 +68,27 @@ song and song length is bounded only by the timeline. The mix itself is dry.
 `Frames::read_block` with a sends buffer gives the dry sum together with the
 feeds of the four FX buses, eight interleaved channels a frame: each voice adds
 its sample, after the track's gains and pan, times the track's send. A voice
-applies its clip's fades per frame. `prepare_project` decodes each source once
-per clip pitch: a pitched copy is made off the audio thread by
-`sample_edit::repitch`, and the render worker keeps it until no clip uses that
-pitch. A track with automation mixes its voices into a 128-frame stack buffer,
-which its filter, volume, and send lanes then shape before the sum
-(`src/automation.rs`). Automation values are evaluated at each output frame,
+applies its clip's fades per frame. `prepare_project` decodes and checks each
+source once, and makes one copy per clip pitch off the audio thread with
+`sample_edit::repitch`; both steps share the sources out among all but one of
+the processor's cores. The render worker keeps each copy until no clip uses that
+pitch. A track whose channel EQ is on, or that has automation, is a
+`TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
+(`src/eq.rs`), then its filter, volume, and send lanes (`src/automation.rs`)
+shape before the sum. The fader, pan, and outputs are already in each voice;
+every stage is linear and per channel, so this order sounds as the signal
+order clips, EQ, automation, fader and pan, sends. A track with neither mixes
+its voices straight into the sum, so an EQ that is off leaves the render bit
+for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
+`EqParam`, each control with its range; a mix designs a chain's EQ curve once
+from the master board's shared RBJ biquads (`master::dsp`). An EQ edit is a
+track edit, so it prepares a new mix and playback resumes on it, as a gain
+edit does. Automation values are evaluated at each output frame,
 so short moves do not depend on the reader's block size.
 The shared mix is immutable. Each playback or export owns a `RenderState` with
-its filter histories and next-frame cursor, passed to `Frames::read_block`.
-A read that does not continue the previous one, after a seek or a loop, starts
-the filters from silence. `src/fx.rs` owns the buses:
+the EQ and filter histories of each chain and the next-frame cursor, passed to
+`Frames::read_block`. A read that does not continue the previous one, after a
+seek or a loop, starts the histories from silence. `src/fx.rs` owns the buses:
 `FxBuses` is the saved settings, `DelayParam` and `ReverbParam` name each
 continuous control with its range, and `ReturnsProcessor` runs the buses on
 the feeds and adds their returns to the dry sum, before the master pedalboard.
@@ -92,8 +104,8 @@ export and playback give the same samples.
 `src/master.rs` owns the master pedalboard: `MasterChain` is the saved
 settings, `Knob` names each continuous setting with its range, and
 `MasterProcessor` runs the board over the summed stereo mix in blocks, with
-state that carries from block to block. Its submodules hold the eJay Booster
-DSP (`ejay`), this application's mastering pedals (`pedals`), their shared
+state that carries from block to block. Its submodules hold the Booster
+pedals' DSP (`booster`), this application's mastering pedals (`pedals`), their shared
 filters, oversampling, and true-peak interpolation (`dsp`), and the playback
 meters (`meters`). `MasterChain` is `Copy` and its `order` a fixed array that
 names each pedal once, so a settings copy never allocates on the audio thread,
@@ -103,8 +115,13 @@ pedals glide to new settings over about 20 ms. During playback, switching or
 moving a pedal copies the board and crossfades from the old copy to the new one
 over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills
 the new path before the fade starts, so switching pedals preserves their
-timeline alignment and the song's ending.
-`MasterChain::latency` is the delay of the pedals that are on:
+timeline alignment and the song's ending. `MasterChain::bypass` skips the trim
+and every pedal: `MasterChain::runs` is false for every pedal, the trim glides
+to unity, and the board's latency is zero, so export carries no pedal delay.
+During playback the bypassed board still pads to the fixed delay and meters,
+and switching the bypass crossfades as a pedal switch does. Leaving bypass
+starts the pedals that are on from a clear state.
+`MasterChain::latency` is the delay of the pedals that run:
 `Mix::to_pcm` and `Mix::write_wav` run the pedals past the end by that much and
 cut it from the start. Playback drops its fixed delay before the first sample
 and drains the same number of frames at the end, so both stay on the timeline.
@@ -128,11 +145,25 @@ times a second. At the end, playback finishes the peak detector without adding
 audio frames or loudness time. Output metering excludes the initial 593 frames
 that playback removes, so loudness windows follow the audible program.
 Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
-size field for its header before it opens a destination file. The render worker prepares
+size field for its header before it opens a destination file.
+`Mix::write_stems` exports the premaster in parts, one pass over the song:
+each sounding track mixes alone through its own `RenderState`, its sends
+summed into the buses' feeds, and `ReturnsProcessor::split` gives each bus's
+return apart, without clamping. Parts follow `render`'s blocks and tail rule,
+so every file is as long as the mix export, and they skip the master
+pedalboard. PCM16 stem export rejects a non-finite or out-of-range part before
+publishing files, instead of clipping each part separately. The parts sum to
+the bypassed mix when that mix does not clip. `atomic_file::write_many` stages
+every file before it replaces any. The render worker prepares
 the mix, keeps the decoded sources of the last one, and discards them when the
-library is replaced. `Session::start_export` renders and writes on its own
+library is replaced. With audio output, the `Session` asks it for each new
+revision as soon as a song opens or a render edit lands, so Play finds the mix
+ready; a revision whose preparation fails waits for Play, which asks again and
+reports the error. `Session::start_export` renders and writes on its own
 thread and reports through `poll`; `Session::export` stays synchronous for
-headless callers. `Session::catalog_revision` advances when the library is
+headless callers. `Session::start_track_export` and `Session::export_tracks`
+do the same for the parts. One export of either kind runs at a time.
+`Session::catalog_revision` advances when the library is
 replaced; the frontend keeps its filtered palette until then. Folder adoption
 takes providers that are already loaded from the current library and reads a
 provider from disk only when its folder is gone.
@@ -146,7 +177,12 @@ can still reuse existing metadata without reading each source again.
 
 `src/atomic_file.rs` owns file replacement. Projects, settings, the scan cache,
 synth patterns, and WAV exports are staged beside the destination and renamed
-over it. A failed write leaves the existing file intact.
+over it. A failed single-file write leaves the existing file intact. A stem
+batch rejects duplicate or non-file destinations, stages all files, and keeps
+the originals as sibling backups until every replacement succeeds. A commit
+failure restores the originals; if restoration fails, the error names the
+retained backups for recovery. A process interruption can leave a partial batch
+and backups. The batch is not an atomic filesystem transaction.
 
 MIX import caches resolved paths and audio metadata. Only the pending asset list
 owns retained audio bytes, and distinct payloads share its 500 MB limit. Saving
@@ -253,7 +289,14 @@ tempo; cancelling a file choice does not report success.
 
 `src/ui/mixer.rs` owns Mixer's compact graphite and ivory hardware presentation.
 Each strip is 108 logical points wide. Master remains outside the horizontally
-scrolling occupied-track bank. Native controls paint live labels, dB values,
+scrolling occupied-track bank. Each track strip's EQ button starts the row of
+Mute and Solo, above polarity, and the Master strip's Bypass sits under its
+output labels; both mirror project state. `src/ui/eq.rs` owns the channel EQ
+window: the frontend keeps which track it shows, and the window edits a copy
+of that track's `ChannelEq`, sent as `EditCommand::SetMixer`. It reuses the
+Mastering dials and paints its response curve. The Mixer's toolbar holds
+Export tracks, which asks for a folder through `ask_path`. Native controls
+paint live labels, dB values,
 rail marks, pan, routing, polarity, focus, and hover. Gain uses a piecewise dB
 taper with 72% of travel between -24 and +12 dB; the bottom section maps linear
 amplitude to exact silence. Unity sits at 0 dB on the gain rail. Center aligns
@@ -299,8 +342,8 @@ section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
 processing job or establish original-product DSP parity.
 
-`src/ui/master.rs` owns the Mastering module of the lower panel and its
-preset selector: a horizontal pedalboard in
+`src/ui/master.rs` owns the Mastering module of the lower panel, its
+preset selector, and its Bypass all switch: a horizontal pedalboard in
 signal order. The Input unit (trim and VU meter) stays at the left and the
 Output unit (loudness, true peak, OVER) at the right; between them the pedal
 row scrolls, joined by painted cables. A strip below names every pedal in
@@ -318,9 +361,9 @@ It edits a copy of the project's `MasterChain`; `src/ui/view.rs` sends a changed
 copy as `EditCommand::SetMaster` and passes the session's meter reading. The
 preset selector offers the factory boards of `src/master/presets.rs`, which
 the frontend reaches through `application::presets`; a chosen preset is one
-`SetMaster` edit that keeps the board's trim (`Preset::applied_to`), and the
+`SetMaster` edit that keeps the board's trim and bypass (`Preset::applied_to`), and the
 selector names the preset whose pedals the board's equal, whatever the trim. Dial
-values read in their units, the eJay EQ in decibels and the other eJay knobs in
+values read in their units, the Booster EQ in decibels and the other Booster knobs in
 the original's 0 to 1000 steps. Dials move on their knob's grid, and a fine
 step still moves one; a typed value takes the nearest step. Displaying or
 focusing a dial preserves saved values between steps. The OVER control exposes

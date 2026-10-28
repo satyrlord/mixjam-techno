@@ -7,10 +7,11 @@ Preservation date: 2026-10-10.
 The remaining files preserve RaveFold font and license bytes for reference.
 RaveFold guides artistic direction only. These assets do not bring its feature
 specifications, roadmap, architecture, or agent instructions into this product.
-The owner-local provenance record `docs/legacy/ravefold/PROVENANCE.md` gives the
-scope. The owner-local manifest `docs/legacy/ravefold/preservation-manifest.json`
-records source paths, destination paths, sizes and SHA-256 hashes. The `docs/`
-folder is not published.
+The owner-local provenance record `local-data/research/legacy/ravefold/PROVENANCE.md`
+gives the scope. The owner-local manifest
+`local-data/research/legacy/ravefold/preservation-manifest.json` records source
+paths, destination paths, sizes and SHA-256 hashes. The `local-data/` folder is
+not published.
 
 | Preserved location | Original source | Purpose |
 | --- | --- | --- |

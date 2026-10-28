@@ -1,8 +1,9 @@
 # MixJam Techno agent skills
 
-These repository skills follow `AGENTS.md` and the current owner decisions in
-`PRODUCT.md` and `COMPATIBILITY.md`. `ARCHITECTURE.md` describes the native
-application boundary. Use current repository files to verify commands and
+These repository skills follow the current owner decisions. If they exist,
+`AGENTS.md` and the private notes `local-data/research/PRODUCT.md` and
+`local-data/research/COMPATIBILITY.md` record them; the skills work without
+them. `docs/ARCHITECTURE.md` describes the native application boundary. Use current repository files to verify commands and
 behavior. Historical donor instructions do not apply to this workspace.
 
 | Skill | Primary action |
@@ -16,3 +17,8 @@ behavior. Historical donor instructions do not apply to this workspace.
 | [operate-app](operate-app/SKILL.md) | Operate the running application through its agent control channel. |
 | [refactor](refactor/SKILL.md) | Improve structure while preserving behavior. |
 | [run-quality-gate](run-quality-gate/SKILL.md) | Run or repair documented Rust and native checks. |
+| [song-review](song-review/SKILL.md) | Review, rate, or master a song made with the application. |
+
+The song-review roles also have agent definitions for each harness:
+`.claude/agents/` for Claude Code and `.codex/agents/` for Codex. Each one is a
+thin wrapper that points to the skill.

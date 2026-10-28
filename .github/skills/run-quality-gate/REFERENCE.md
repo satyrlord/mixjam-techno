@@ -2,7 +2,7 @@
 
 ## Applicability
 
-`README.md` and `ARCHITECTURE.md` document the current Cargo checks. Use the
+`docs/DEVELOPMENT.md` and `docs/ARCHITECTURE.md` document the current Cargo checks. Use the
 repository toolchain wrapper and keep exact command results. For a required
 check without a documented procedure, report the gap. Do not invent a pass.
 

@@ -975,7 +975,7 @@ impl Library {
         source_bpm: f64,
     ) -> Result<Self, String> {
         let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-        let packed = root.join("\x65Jay").join("\x50XD");
+        let packed = packed_folder(&root);
         let archive_path = packed.join(archive_name);
         let index = fs::read(packed.join(format!("{archive_name}.inf")))
             .map_err(|e| format!("Cannot read the original sample index: {e}"))?;
@@ -2074,7 +2074,7 @@ fn map_waves(samples: &mut [Sample], embedded_names: &[String], root: &Path) -> 
 }
 
 /// The tempo in a loop pack's BPM.INF: the `BPM` key of its `[Tempo]` section.
-/// Magix Soundpools put one such file in each pack folder.
+/// Some commercial loop collections put one such file in each pack folder.
 fn stated_pack_tempo(text: &str) -> Option<f64> {
     let mut section = "";
     text.lines().map(str::trim).find_map(|line| {
@@ -2212,6 +2212,12 @@ fn canonical_group(group: &str) -> String {
 
 /// Whether the nearest product-named folder, from the file up to the
 /// selected folder, names another product.
+/// The folder of an original installation that holds its packed sample
+/// archives and their indexes.
+pub(crate) fn packed_folder(root: &Path) -> PathBuf {
+    root.join("\x65Jay").join("\x50XD")
+}
+
 fn in_foreign_product_folder(path: &Path, root: &Path, product: Product) -> bool {
     path.ancestors()
         .skip(1)

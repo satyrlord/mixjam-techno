@@ -16,6 +16,10 @@ pub use crate::{
     products::Product,
     synth::StepSynthState,
 };
+/// The channel EQ of each track and its controls.
+pub mod eq {
+    pub use crate::eq::{ChannelEq, EqParam};
+}
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
@@ -279,10 +283,11 @@ struct WaveScan {
     receiver: mpsc::Receiver<Result<Library, String>>,
 }
 
-/// A mix export running on its own thread.
+/// An export running on its own thread. It reports the finished status
+/// line, or an error that `failure` introduces.
 struct Export {
-    path: PathBuf,
-    receiver: mpsc::Receiver<Result<(), String>>,
+    failure: &'static str,
+    receiver: mpsc::Receiver<Result<String, String>>,
     thread: std::thread::JoinHandle<()>,
 }
 
@@ -328,12 +333,17 @@ pub struct Session {
     settings_root: PathBuf,
     editor: Editor,
     player: Option<Player>,
-    /// The prepared mix of the current revision; it is rendered on demand.
+    /// The prepared mix of the current revision. With audio output, each
+    /// revision is prepared as it appears; otherwise when it is needed.
     render: Option<Arc<audio::Mix>>,
     render_dirty: bool,
     render_worker: RenderWorker,
     revision: u64,
     requested_revision: Option<u64>,
+    /// Whether each revision is prepared before Play asks for it.
+    prepares_ahead: bool,
+    /// A revision whose preparation failed, which waits for Play to try again.
+    failed_revision: Option<u64>,
     wants_playback: bool,
     playback_frames_per_tick: f64,
     seek_pending: bool,
@@ -379,6 +389,7 @@ enum TrackControl {
     Gain,
     Pan,
     Send(usize),
+    Eq(crate::eq::EqParam),
 }
 #[derive(Clone, Copy, PartialEq)]
 enum FxControl {
@@ -448,6 +459,7 @@ impl Gesture {
                 for (index, (old, new)) in project.tracks.iter().zip(tracks).enumerate() {
                     if old.polarity_inverted != new.polarity_inverted
                         || old.automation != new.automation
+                        || old.eq.on != new.eq.on
                         || TrackSwitch::ALL
                             .iter()
                             .any(|switch| switch.get(old) != switch.get(new))
@@ -463,6 +475,11 @@ impl Gesture {
                     for (bus, (old, new)) in old.sends.iter().zip(new.sends).enumerate() {
                         if *old != new {
                             controls.push(Self::Track(index, TrackControl::Send(bus)));
+                        }
+                    }
+                    for param in crate::eq::EqParam::ALL {
+                        if param.get(&old.eq) != param.get(&new.eq) {
+                            controls.push(Self::Track(index, TrackControl::Eq(param)));
                         }
                     }
                 }
@@ -550,6 +567,8 @@ impl Session {
             render_worker: RenderWorker::new(),
             revision: 0,
             requested_revision: None,
+            prepares_ahead: false,
+            failed_revision: None,
             wants_playback: false,
             playback_frames_per_tick: 1.0,
             seek_pending: false,
@@ -586,7 +605,11 @@ impl Session {
     pub fn new(library: Arc<Library>, project: Project) -> Result<Self, String> {
         let mut session = Self::headless(library, project)?;
         match Player::new() {
-            Ok(player) => session.player = Some(player),
+            Ok(player) => {
+                session.player = Some(player);
+                session.prepares_ahead = true;
+                session.prepare_ahead();
+            }
             Err(error) => session.error(format!("Audio output is unavailable: {error}")),
         }
         Ok(session)
@@ -910,6 +933,8 @@ impl Session {
         self.master.set_returns(&self.editor.project().fx);
         if self.wants_playback {
             self.start_playback();
+        } else {
+            self.prepare_ahead();
         }
     }
     /// A change of the master pedalboard or the FX buses only. The prepared
@@ -1242,6 +1267,7 @@ impl Session {
         self.render = None;
         self.render_dirty = true;
         self.unsaved = false;
+        self.prepare_ahead();
         // Save replaces a song. An import or earlier JSON project asks for a new file.
         self.file = song.then(|| path.to_path_buf());
         Ok(())
@@ -1272,42 +1298,85 @@ impl Session {
         self.unsaved = false;
         Ok(())
     }
+    /// The mix prepared for the project as it is now: playback's, when it
+    /// is current, or a new one.
+    fn current_mix(&self) -> Result<Arc<audio::Mix>, String> {
+        match &self.render {
+            Some(mix) if !self.render_dirty => Ok(Arc::clone(mix)),
+            _ => audio::prepare_project(self.project(), &self.library).map(Arc::new),
+        }
+    }
+
     /// Render and write the mix on this thread. Headless callers use this;
     /// the GUI calls `start_export` so that the window stays responsive.
     pub fn export(&self, path: &Path) -> Result<(), String> {
         let (master, fx) = (&self.project().master, &self.project().fx);
         // Playback already rendered an unchanged mix; write that audio.
-        match &self.render {
-            Some(mix) if !self.render_dirty => mix.write_wav(path, master, fx),
-            _ => audio::prepare_project(self.project(), &self.library)?.write_wav(path, master, fx),
-        }
+        self.current_mix()?.write_wav(path, master, fx)
+    }
+
+    /// Export each track and each FX return as its own WAV file in
+    /// `folder`, on this thread, and give the status line that reports it.
+    /// The files are the premaster: the master pedalboard is skipped.
+    pub fn export_tracks(&self, folder: &Path) -> Result<String, String> {
+        let stems =
+            self.current_mix()?
+                .write_stems(folder, &self.project().title, &self.project().fx)?;
+        Ok(tracks_exported(stems, folder))
     }
 
     /// Export the mix as it is now on another thread. `poll` reports the
     /// result as a notice. Later edits do not change the exported audio.
     pub fn start_export(&mut self, path: &Path) -> Result<(), String> {
+        let (master, fx) = (self.project().master, self.project().fx);
+        let target = path.to_path_buf();
+        self.start_export_job("Cannot export mix", move |mix| {
+            mix.write_wav(&target, &master, &fx)
+                .map(|()| format!("Exported {}.", target.display()))
+        })?;
+        self.message(format!("Exporting {}.", path.display()));
+        Ok(())
+    }
+
+    /// Export each track and each FX return as its own WAV file in `folder`
+    /// on another thread, as `export_tracks` does.
+    pub fn start_track_export(&mut self, folder: &Path) -> Result<(), String> {
+        let (title, fx) = (self.project().title.clone(), self.project().fx);
+        let target = folder.to_path_buf();
+        self.start_export_job("Cannot export tracks", move |mix| {
+            mix.write_stems(&target, &title, &fx)
+                .map(|stems| tracks_exported(stems, &target))
+        })?;
+        self.message(format!("Exporting tracks to {}.", folder.display()));
+        Ok(())
+    }
+
+    /// Run `write` on the mix as it is now on the export thread. One export
+    /// runs at a time.
+    fn start_export_job(
+        &mut self,
+        failure: &'static str,
+        write: impl FnOnce(&audio::Mix) -> Result<String, String> + Send + 'static,
+    ) -> Result<(), String> {
         if self.export.is_some() {
             return Err("Wait for the current export to finish.".into());
         }
         let rendered = self.render.clone().filter(|_| !self.render_dirty);
         let project = self.project().clone();
         let library = self.library.clone();
-        let target = path.to_path_buf();
         let (sender, receiver) = mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("mixjam-techno-export".into())
             .spawn(move || {
                 let result = match rendered {
-                    Some(mix) => mix.write_wav(&target, &project.master, &project.fx),
-                    None => audio::prepare_project(&project, &library)
-                        .and_then(|mix| mix.write_wav(&target, &project.master, &project.fx)),
+                    Some(mix) => write(&mix),
+                    None => audio::prepare_project(&project, &library).and_then(|mix| write(&mix)),
                 };
                 let _ = sender.send(result);
             })
             .map_err(|error| format!("Cannot start the export: {error}"))?;
-        self.message(format!("Exporting {}.", path.display()));
         self.export = Some(Export {
-            path: path.to_path_buf(),
+            failure,
             receiver,
             thread,
         });
@@ -1328,8 +1397,8 @@ impl Session {
         let export = self.export.take()?;
         let _ = export.thread.join();
         match result {
-            Ok(()) => self.message(format!("Exported {}.", export.path.display())),
-            Err(error) => self.error(format!("Cannot export mix: {error}")),
+            Ok(status) => self.message(status),
+            Err(error) => self.error(format!("{}: {error}", export.failure)),
         }
         None
     }
@@ -1836,18 +1905,34 @@ impl Session {
         // the render worker has produced its first playback buffer.
         self.preview_revision = self.preview_revision.wrapping_add(1);
         if self.render_dirty || self.render.is_none() {
-            if self.requested_revision != Some(self.revision) {
-                match self.request_render() {
-                    Ok(()) => self.message("Preparing mix audio."),
-                    Err(error) => {
-                        self.wants_playback = false;
-                        self.error(error);
-                    }
-                }
+            // The revision may be preparing already, ahead of Play.
+            if self.requested_revision != Some(self.revision)
+                && let Err(error) = self.request_render()
+            {
+                self.wants_playback = false;
+                self.error(error);
+                return;
             }
+            self.message("Preparing mix audio.");
             return;
         }
         self.apply_playback_buffer();
+    }
+
+    /// Prepare the current revision before Play asks for it, so that Play
+    /// does not wait for the sources to load and their pitched copies.
+    /// Play itself reports a failure, so a failed revision waits for it.
+    fn prepare_ahead(&mut self) {
+        if self.prepares_ahead
+            && !self.wants_playback
+            && (self.render_dirty || self.render.is_none())
+            && self.requested_revision != Some(self.revision)
+            && self.failed_revision != Some(self.revision)
+            && !self.project().clips.is_empty()
+        {
+            // Play reports a stopped worker when it asks again.
+            let _ = self.request_render();
+        }
     }
 
     /// Queue a render of the current revision. `poll_render` stores the result.
@@ -1921,8 +2006,11 @@ impl Session {
                 }
             }
             Err(error) => {
-                self.wants_playback = false;
-                self.error(format!("Cannot render this mix: {error}"));
+                self.failed_revision = Some(result.revision);
+                if self.wants_playback {
+                    self.wants_playback = false;
+                    self.error(format!("Cannot render this mix: {error}"));
+                }
             }
         }
     }
@@ -2015,6 +2103,7 @@ impl Session {
             (a, b) => a.or(b),
         };
         self.poll_render();
+        self.prepare_ahead();
         if self.wants_playback
             && !self.render_dirty
             && self.requested_revision.is_none()
@@ -2153,6 +2242,11 @@ impl Session {
 }
 
 /// The highest imported sample ID in use; new imports follow it.
+/// The status line of a finished track export.
+fn tracks_exported(stems: audio::Stems, folder: &Path) -> String {
+    format!("Exported {stems} to {}.", folder.display())
+}
+
 fn last_imported_id(project: &Project, library: &Library) -> u32 {
     project
         .imported_samples
@@ -2545,7 +2639,7 @@ mod tests {
         }
         project.sample_conflicts[0].source_spans.clear();
         for source in &mut project.imported_samples {
-            source.group_name = "Techno 1".into();
+            source.group_name = "T1 sounds".into();
             source.source_bpm = 140.0;
             source.source_sample_rate = Some(44_100);
             source.origin = Some(Product::T1);
@@ -3191,6 +3285,53 @@ mod tests {
     }
 
     #[test]
+    fn with_audio_output_each_edit_is_prepared_before_play() {
+        let mut app = fixture();
+        let (sender, requests) = mpsc::channel();
+        let (results, receiver) = mpsc::channel();
+        app.render_worker = RenderWorker {
+            sender,
+            receiver,
+            in_flight: false,
+            current_revision: None,
+            pending: None,
+        };
+        app.prepares_ahead = true;
+        app.place(1, 2, 0).unwrap();
+        assert_eq!(requests.try_recv().unwrap().revision, app.revision);
+        let mix = Arc::new(audio::prepare_project(&Project::default(), &Library::empty()).unwrap());
+        results
+            .send(RenderResult {
+                revision: app.revision,
+                mix: Ok(mix),
+            })
+            .unwrap();
+        app.poll();
+        assert!(app.render.is_some() && !app.render_dirty);
+        assert!(
+            !app.wants_playback,
+            "A mix prepared ahead does not start playback."
+        );
+        assert!(requests.try_recv().is_err());
+
+        // A failure waits for Play, which tries again and reports it.
+        app.take_notice();
+        app.place(1, 3, 0).unwrap();
+        let revision = requests.try_recv().unwrap().revision;
+        results
+            .send(RenderResult {
+                revision,
+                mix: Err("Fixture failure".into()),
+            })
+            .unwrap();
+        app.poll();
+        app.poll();
+        assert!(app.take_notice().is_none());
+        assert!(requests.try_recv().is_err());
+        assert!(app.render_dirty);
+    }
+
+    #[test]
     fn unavailable_library_rejects_undo_atomically_until_the_source_returns() {
         let mut app = fixture();
         let original_library = app.library.clone();
@@ -3602,13 +3743,16 @@ mod boundary_tests {
             change(&mut chain);
             session.edit(EditCommand::SetMaster(chain))
         };
-        set(&mut session, &|chain| chain.ejay_compressor.on = true).unwrap();
+        set(&mut session, &|chain| chain.booster_compressor.on = true).unwrap();
         // A drag of one knob is one step; another knob or a switch starts a new one.
         for drive in [510, 520, 530] {
-            set(&mut session, &|chain| chain.ejay_compressor.drive = drive).unwrap();
+            set(&mut session, &|chain| {
+                chain.booster_compressor.drive = drive
+            })
+            .unwrap();
         }
-        set(&mut session, &|chain| chain.ejay_eq.bands[2] = 70).unwrap();
-        set(&mut session, &|chain| chain.ejay_eq.bands[2] = 80).unwrap();
+        set(&mut session, &|chain| chain.booster_eq.bands[2] = 70).unwrap();
+        set(&mut session, &|chain| chain.booster_eq.bands[2] = 80).unwrap();
         // The mastering pedals and the trim form gestures the same way.
         for attack in [5.0, 2.0] {
             set(&mut session, &|chain| chain.bus_compressor.attack = attack).unwrap();
@@ -3617,7 +3761,7 @@ mod boundary_tests {
         set(&mut session, &|chain| chain.trim = -4.0).unwrap();
         // Moving a pedal is a step of its own, even within a knob gesture.
         set(&mut session, &|chain| chain.move_pedal(0, 2)).unwrap();
-        assert_eq!(session.project().master.order[2], PedalKind::EjayEq);
+        assert_eq!(session.project().master.order[2], PedalKind::BoosterEq);
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project().master.order, PedalKind::ALL);
         assert_eq!(session.project().master.trim, -4.0);
@@ -3625,7 +3769,7 @@ mod boundary_tests {
         assert_eq!(session.project().master.trim, 0.0);
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project().master.bus_compressor.attack, 10.0);
-        assert_eq!(session.project().master.ejay_eq.bands[2], 80);
+        assert_eq!(session.project().master.booster_eq.bands[2], 80);
         assert!(session.unsaved());
         assert_eq!(session.master.get(), session.project().master);
         // The prepared mix does not include the pedalboard, so it stays valid.
@@ -3633,19 +3777,19 @@ mod boundary_tests {
         assert!(!session.render_dirty);
 
         assert!(session.history_step(false).unwrap());
-        assert_eq!(session.project().master.ejay_eq.bands[2], 50);
-        assert_eq!(session.master.get().ejay_eq.bands[2], 50);
+        assert_eq!(session.project().master.booster_eq.bands[2], 50);
+        assert_eq!(session.master.get().booster_eq.bands[2], 50);
         assert!(session.history_step(false).unwrap());
-        assert_eq!(session.project().master.ejay_compressor.drive, 500);
+        assert_eq!(session.project().master.booster_compressor.drive, 500);
         assert!(session.history_step(false).unwrap());
         assert!(!session.project().master.is_active());
         assert!(!session.render_dirty);
 
         let mut invalid = session.project().master;
-        invalid.ejay_wide.spread = KNOB_MAX + 1;
+        invalid.booster_wide.spread = KNOB_MAX + 1;
         assert!(session.edit(EditCommand::SetMaster(invalid)).is_err());
         assert!(session.history_step(true).unwrap());
-        assert!(session.project().master.ejay_compressor.on);
+        assert!(session.project().master.booster_compressor.on);
     }
 
     #[test]
@@ -3757,6 +3901,123 @@ mod boundary_tests {
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project(), &Project::default());
         assert!(!session.history_step(false).unwrap());
+    }
+    #[test]
+    fn an_eq_dial_drag_is_one_undo_step_and_its_switch_another() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let eq = |session: &Session, change: &dyn Fn(&mut crate::eq::ChannelEq)| {
+            let mut tracks = session.project().tracks.clone();
+            change(&mut tracks[2].eq);
+            EditCommand::SetMixer {
+                tracks,
+                master_gain: session.project().master_gain,
+            }
+        };
+        let command = eq(&session, &|eq| eq.on = true);
+        session.edit(command).unwrap();
+        for step in 1..=20 {
+            let command = eq(&session, &|eq| eq.high_db = -0.5 * step as f32);
+            session.edit(command).unwrap();
+        }
+        // Another dial starts its own step.
+        let command = eq(&session, &|eq| eq.high_hz = 6000.0);
+        session.edit(command).unwrap();
+        assert!(session.unsaved());
+        assert_eq!(session.project().tracks[2].eq.high_db, -10.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[2].eq.high_hz, 8000.0);
+        assert_eq!(session.project().tracks[2].eq.high_db, -10.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[2].eq.high_db, 0.0);
+        assert!(session.project().tracks[2].eq.on);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &Project::default());
+        // Out-of-range settings are not an edit.
+        let command = eq(&session, &|eq| eq.mid_q = 9.0);
+        assert!(session.edit(command).is_err());
+    }
+    #[test]
+    fn bypass_is_one_undo_step_that_keeps_the_mix_prepared() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let mut chain = session.project().master;
+        chain.limiter.on = true;
+        session.edit(EditCommand::SetMaster(chain)).unwrap();
+        chain.bypass = true;
+        session.edit(EditCommand::SetMaster(chain)).unwrap();
+        assert!(session.project().master.bypass && session.project().master.limiter.on);
+        assert!(session.master.get().bypass);
+        assert!(session.history_step(false).unwrap());
+        assert!(!session.project().master.bypass && session.project().master.limiter.on);
+        // A preset keeps the bypass as it keeps the trim.
+        let preset = crate::master::presets::PRESETS[0].applied_to(&chain);
+        assert!(preset.bypass);
+    }
+    #[test]
+    fn track_export_writes_each_track_on_another_thread_and_reports_the_counts() {
+        let dir = fixture_dir();
+        let wave = dir.join("source.wav");
+        Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.25; 1000],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        session.place(source, 0, 0).unwrap();
+        session.place(source, 9, 0).unwrap();
+        let folder = dir.join("tracks");
+        std::fs::create_dir_all(&folder).unwrap();
+        assert_eq!(
+            session.export_tracks(&folder).unwrap(),
+            format!(
+                "Exported 2 tracks and 0 FX returns to {}.",
+                folder.display()
+            )
+        );
+        session.start_track_export(&folder).unwrap();
+        assert!(session.is_exporting());
+        assert!(session.start_export(&dir.join("mix.wav")).is_err());
+        while session.is_exporting() {
+            session.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(
+            session.take_notice(),
+            Some((
+                format!(
+                    "Exported 2 tracks and 0 FX returns to {}.",
+                    folder.display()
+                ),
+                false
+            ))
+        );
+        let title = &session.project().title;
+        for track in ["01", "10"] {
+            let part = audio::read_wav(&folder.join(format!("{title} - Track {track}.wav")));
+            assert!(
+                part.unwrap()
+                    .samples
+                    .iter()
+                    .any(|sample| sample.abs() > 0.1)
+            );
+        }
+        // A folder that is gone fails with a reason, as the mix export does.
+        session.start_track_export(&dir.join("gone")).unwrap();
+        while session.is_exporting() {
+            session.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let (notice, error) = session.take_notice().unwrap();
+        assert!(
+            error && notice.starts_with("Cannot export tracks: "),
+            "{notice}"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn a_longer_clip_cannot_cover_the_next_clip_on_its_track() {
@@ -3902,7 +4163,7 @@ mod boundary_tests {
     fn folder_adoption_keeps_optional_providers_and_respects_explicit_priority() {
         let dir = fixture_dir();
         let provider_root = dir.join("provider");
-        let packed = provider_root.join("eJay/PXD");
+        let packed = crate::library::packed_folder(&provider_root);
         std::fs::create_dir_all(&packed).unwrap();
         // A complete one-record native House provider, with five silent frames.
         let mut record = b"tPxD\x02\0\0T".to_vec();
@@ -3944,7 +4205,7 @@ mod boundary_tests {
         };
         let complete_count = crate::catalog::wave_metadata(Product::H1).unwrap().len();
         for (house_count, preferred, expect_provider) in [
-            (0, false, true), // A Dance 4 only folder must keep House.
+            (0, false, true), // A D4-only folder must keep H1.
             (1, false, true), // Shared audio must not displace House.
             (complete_count, false, false),
             (complete_count, true, true),
@@ -4325,6 +4586,7 @@ mod boundary_tests {
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/fx.rs", include_str!("ui/fx.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
+            ("ui/eq.rs", include_str!("ui/eq.rs")),
             ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
             ("ui/sample_editor.rs", include_str!("ui/sample_editor.rs")),
             ("ui/mixer.rs", include_str!("ui/mixer.rs")),

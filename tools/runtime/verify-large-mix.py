@@ -78,7 +78,7 @@ def write_exact_fixture(path):
         output.write(struct.pack('<IIHI', 0x2571, 0, 140, 140))
         output.write(text_block(b'Large MIX check\0#SKKENNUNG#:0000000\0\1'))
         output.write(text_block(b'Exact 500 MB fixture\0Mixer text'))
-        # Dance 3 saves 32 sample lanes plus the generated-audio mixer lane.
+        # D3 saves 32 sample lanes plus the generated-audio mixer lane.
         output.write(struct.pack('<HHI', 128, 16384, 0) * 33)
         for index, source_path in enumerate(paths):
             output.write(text_block(source_path + b'\0\1'))

@@ -1,5 +1,5 @@
-//! The eJay pedals: the Booster of Dance 3, Dance 4, and Techno 3 from
-//! `fxstudio.dll`. They follow the reference models in
+//! The Booster pedals: the master effects of the D3, D4, and T3 products,
+//! from their effects library. They follow the reference models in
 //! `tools/runtime/fx-reference.py` and match the library's renders sample
 //! for sample. They work on 16-bit samples, as the original does.
 use super::EQ_FREQUENCIES;
@@ -187,7 +187,7 @@ static COMPRESSOR_SHAPE: LazyLock<[u16; 4096]> = LazyLock::new(|| {
     })
 });
 
-/// The compressor of `fxstudio.dll`. The level follows the absolute value
+/// The compressor of the original effects library. The level follows the absolute value
 /// of `mono - previous / 2` through a fixed integer low-pass; the gain table
 /// and a division set the gain, and the shape table limits each channel.
 #[derive(Clone, Copy)]
@@ -546,7 +546,7 @@ mod tests {
             // The oracle sets the gains directly; express them as saved bands.
             let mut board = Board::new();
             board.compressor = compressor;
-            board.chain.ejay_eq.on = render.eq.is_some();
+            board.chain.booster_eq.on = render.eq.is_some();
             if let Some(gains) = render.eq {
                 for (band, gain) in gains.iter().enumerate() {
                     board.equalizer.gains[band] = *gain;
@@ -555,12 +555,12 @@ mod tests {
                 }
             }
             if let Some([drive, speed, gain]) = render.compressor {
-                board.chain.ejay_compressor.on = true;
+                board.chain.booster_compressor.on = true;
                 board.compressor.clear();
                 board.compressor.set(drive, speed, gain);
             }
             if let Some(spread) = render.wide {
-                board.chain.ejay_wide.on = true;
+                board.chain.booster_wide.on = true;
                 board.wide.set(spread);
             }
             // The oracle renders whole blocks only.
@@ -587,15 +587,15 @@ mod tests {
     #[test]
     fn switching_a_pedal_on_clears_its_state_and_settings_reach_live_playback() {
         let mut chain = MasterChain::default();
-        chain.ejay_wide.on = true;
-        chain.ejay_wide.spread = 1000;
+        chain.booster_wide.on = true;
+        chain.booster_wide.spread = 1000;
         let control = MasterControl::new(&chain);
         let mut processor = MasterProcessor::live(control.clone());
         let mut block = [0.5, -0.5].repeat(64);
         processor.process(&mut block);
         assert!(processor.board.wide.buffer.iter().any(|v| *v != 0));
 
-        chain.ejay_wide.on = false;
+        chain.booster_wide.on = false;
         control.set(&chain);
         // The switch crossfades to the dry mix, which then passes untouched.
         processor.process(&mut vec![0.0; 2 * (FADE + processor.latency())]);
@@ -603,7 +603,7 @@ mod tests {
         processor.process(&mut quiet);
         assert_eq!(&quiet[processor.latency() * 2..], &[0.25, 0.0]);
 
-        chain.ejay_wide.on = true;
+        chain.booster_wide.on = true;
         control.set(&chain);
         processor.process(&mut [0.0, 0.0]);
         assert_eq!(
@@ -623,32 +623,35 @@ mod tests {
         use PedalKind::*;
         let mut chain = MasterChain::default();
         chain.move_pedal(2, 0);
-        assert_eq!(chain.order[..3], [EjayWide, EjayEq, EjayCompressor]);
+        assert_eq!(
+            chain.order[..3],
+            [BoosterWide, BoosterEq, BoosterCompressor]
+        );
         chain.move_pedal(0, 2);
         assert_eq!(chain.order, PedalKind::ALL);
         chain.move_pedal(1, 1);
         chain.move_pedal(0, 13);
         assert_eq!(chain.order, PedalKind::ALL);
         chain.move_pedal(0, 11);
-        assert_eq!(chain.order[11], EjayEq);
-        assert_eq!(chain.order[..2], [EjayCompressor, EjayWide]);
+        assert_eq!(chain.order[11], BoosterEq);
+        assert_eq!(chain.order[..2], [BoosterCompressor, BoosterWide]);
         chain.move_pedal(11, 0);
         assert_eq!(chain.order, PedalKind::ALL);
 
         chain.move_pedal(2, 0);
-        for kind in [EjayEq, EjayCompressor, EjayWide] {
+        for kind in [BoosterEq, BoosterCompressor, BoosterWide] {
             chain.set_on(kind, true);
         }
-        chain.ejay_eq.bands = [90, 50, 50, 70, 50, 50, 50, 50, 20, 100];
-        chain.ejay_compressor.drive = 800;
-        chain.ejay_wide.spread = 1000;
+        chain.booster_eq.bands = [90, 50, 50, 70, 50, 50, 50, 50, 20, 100];
+        chain.booster_compressor.drive = 800;
+        chain.booster_wide.spread = 1000;
         let mut board = Board::settled(&chain);
         // The same pedals by hand: wide on integers, the equaliser on floats,
         // a truncation, then the compressor.
         let mut wide = Wide::new();
         wide.set(1000);
         let mut equalizer = Equalizer::new();
-        equalizer.set(&chain.ejay_eq.bands);
+        equalizer.set(&chain.booster_eq.bands);
         let mut compressor = Compressor::at_load();
         compressor.set(800, 500, 500);
         compressor.settle();

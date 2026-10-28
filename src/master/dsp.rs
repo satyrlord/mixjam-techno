@@ -220,7 +220,6 @@ impl Coefficients {
         [self.b0, self.b1, self.b2, self.a1, self.a2]
     }
     /// The magnitude response at a frequency.
-    #[cfg(test)]
     pub(crate) fn magnitude(&self, hz: f64) -> f64 {
         let w = 2.0 * PI * hz / RATE;
         let part = |c0: f64, c1: f64, c2: f64| {

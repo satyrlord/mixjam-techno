@@ -50,9 +50,9 @@ const DARK_LAMP: Color32 = Color32::from_rgb(44, 48, 42);
 
 fn name(kind: PedalKind) -> &'static str {
     match kind {
-        PedalKind::EjayEq => "Booster EQ",
-        PedalKind::EjayCompressor => "Booster compressor",
-        PedalKind::EjayWide => "Booster wide",
+        PedalKind::BoosterEq => "Booster EQ",
+        PedalKind::BoosterCompressor => "Booster compressor",
+        PedalKind::BoosterWide => "Booster wide",
         PedalKind::SoftClip => "Soft clip",
         PedalKind::Tube => "Tube",
         PedalKind::TrimEq => "Trim EQ",
@@ -70,9 +70,9 @@ fn name(kind: PedalKind) -> &'static str {
 /// names; their family line says where they come from.
 fn title(kind: PedalKind) -> &'static str {
     match kind {
-        PedalKind::EjayEq => "EQ",
-        PedalKind::EjayCompressor => "Compressor",
-        PedalKind::EjayWide => "Stereo wide",
+        PedalKind::BoosterEq => "EQ",
+        PedalKind::BoosterCompressor => "Compressor",
+        PedalKind::BoosterWide => "Stereo wide",
         _ => name(kind),
     }
 }
@@ -80,9 +80,9 @@ fn title(kind: PedalKind) -> &'static str {
 /// The pedal's name on the strip below the board.
 fn short_name(kind: PedalKind) -> &'static str {
     match kind {
-        PedalKind::EjayEq => "EQ",
-        PedalKind::EjayCompressor => "Comp",
-        PedalKind::EjayWide => "Wide",
+        PedalKind::BoosterEq => "EQ",
+        PedalKind::BoosterCompressor => "Comp",
+        PedalKind::BoosterWide => "Wide",
         PedalKind::SoftClip => "Clip",
         PedalKind::Tube => "Tube",
         PedalKind::TrimEq => "Trim",
@@ -99,7 +99,7 @@ fn short_name(kind: PedalKind) -> &'static str {
 /// The line under the pedal's name: where it comes from or what it does.
 fn family(kind: PedalKind) -> &'static str {
     match kind {
-        PedalKind::EjayEq | PedalKind::EjayCompressor | PedalKind::EjayWide => "eJay Booster",
+        PedalKind::BoosterEq | PedalKind::BoosterCompressor | PedalKind::BoosterWide => "Booster",
         PedalKind::SoftClip | PedalKind::Tube | PedalKind::Tape => "Saturation",
         PedalKind::TrimEq | PedalKind::LiftEq => "Equaliser",
         PedalKind::Imaging => "Stereo",
@@ -111,9 +111,9 @@ fn family(kind: PedalKind) -> &'static str {
 /// Knob columns and rows of a pedal.
 fn grid(kind: PedalKind) -> (usize, usize) {
     match kind {
-        PedalKind::EjayEq => (5, 2),
-        PedalKind::EjayWide | PedalKind::Maximizer => (1, 1),
-        PedalKind::EjayCompressor
+        PedalKind::BoosterEq => (5, 2),
+        PedalKind::BoosterWide | PedalKind::Maximizer => (1, 1),
+        PedalKind::BoosterCompressor
         | PedalKind::TrimEq
         | PedalKind::BusCompressor
         | PedalKind::Multiband => (2, 2),
@@ -177,9 +177,9 @@ fn band_label(hz: f64) -> String {
 /// How a dial's value reads in its window.
 #[derive(Clone, Copy)]
 pub(super) enum Format {
-    /// The eJay pedals' 0 to 1000 positions.
+    /// The Booster pedals' 0 to 1000 positions.
     Plain,
-    /// The gain of an eJay equaliser band, shown in decibels.
+    /// The gain of a Booster equaliser band, shown in decibels.
     Band(usize),
     /// A number in a unit.
     Unit {
@@ -189,6 +189,8 @@ pub(super) enum Format {
     },
     /// The tape speed, in inches per second.
     Speed,
+    /// A frequency: hertz below 1 kHz, kilohertz from there.
+    Hertz,
 }
 impl Format {
     pub(super) const fn db(signed: bool) -> Self {
@@ -218,6 +220,7 @@ impl Format {
             Self::Band(_) => "dB",
             Self::Unit { unit, .. } => unit,
             Self::Speed => "ips",
+            Self::Hertz => "Hz",
         }
     }
     fn show(self, value: f64) -> String {
@@ -227,6 +230,9 @@ impl Format {
             Self::Plain => format!("{value:.0}"),
             Self::Band(band) => format!("{:+.1}", band_db(band, value) + 0.0),
             Self::Speed => format!("{value:.0} ips"),
+            Self::Hertz if value >= 10_000.0 => format!("{:.1} kHz", value / 1000.0),
+            Self::Hertz if value >= 1000.0 => format!("{:.2} kHz", value / 1000.0),
+            Self::Hertz => format!("{value:.0} Hz"),
             Self::Unit {
                 unit,
                 decimals,
@@ -248,6 +254,18 @@ impl Format {
     /// A typed value, with or without its unit.
     fn read(self, text: &str, high: f64) -> Option<f64> {
         let text = text.trim();
+        if let Self::Hertz = self {
+            let lower = text.to_lowercase();
+            let (number, scale) = match lower.strip_suffix("khz").or(lower.strip_suffix('k')) {
+                Some(number) => (number, 1000.0),
+                None => (lower.strip_suffix("hz").unwrap_or(&lower), 1.0),
+            };
+            return number
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|number| number * scale);
+        }
         let unit = self.unit();
         let text = if !unit.is_empty() && text.to_lowercase().ends_with(&unit.to_lowercase()) {
             &text[..text.len() - unit.len()]
@@ -278,7 +296,7 @@ pub(super) struct Dial<'a> {
 /// The printed label, accessible name, description, and value format of a knob.
 fn face(knob: Knob) -> (String, String, &'static str, Format) {
     let (label, name, hint, format) = match knob {
-        Knob::EjayBand(band) => {
+        Knob::BoosterBand(band) => {
             let hz = EQ_FREQUENCIES[band];
             return (
                 band_label(hz),
@@ -293,10 +311,10 @@ fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "Gain into the board. The meter reads 0 VU at -18 dBFS, where the mastering pedals work best.",
             Format::db(true),
         ),
-        Knob::EjayDrive => ("Drive", "Booster compressor drive", "", Format::Plain),
-        Knob::EjaySpeed => ("Speed", "Booster compressor speed", "", Format::Plain),
-        Knob::EjayGain => ("Gain", "Booster compressor gain", "", Format::Plain),
-        Knob::EjaySpread => ("Width", "Booster width", "", Format::Plain),
+        Knob::BoosterDrive => ("Drive", "Booster compressor drive", "", Format::Plain),
+        Knob::BoosterSpeed => ("Speed", "Booster compressor speed", "", Format::Plain),
+        Knob::BoosterGain => ("Gain", "Booster compressor gain", "", Format::Plain),
+        Knob::BoosterSpread => ("Width", "Booster width", "", Format::Plain),
         Knob::SoftClipAmount => (
             "Amount",
             "Soft clip amount",
@@ -471,6 +489,7 @@ pub(super) const MODULE_HEIGHT: f32 = BOARD_HEIGHT + 2.0 * BOARD_INSET + 64.0;
 /// the board of a chosen preset. The trim is the mix's, so neither changes it.
 pub(super) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<MasterChain> {
     let untouched = MasterChain {
+        bypass: chain.bypass,
         trim: chain.trim,
         ..MasterChain::default()
     };
@@ -502,10 +521,25 @@ pub(super) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<
         .response;
     name_control(response, "Mastering preset").on_hover_text(
         "Load a factory board. A preset sets every pedal and the pedal order, and turns \
-         the eJay Booster pedals off. Trim stays as you set it for the mix. Undo restores \
+         the Booster pedals off. Trim stays as you set it for the mix. Undo restores \
          the board before it.",
     );
     chosen
+}
+
+/// The module toolbar's Bypass all switch, which the Mixer's Master bypass
+/// mirrors. True when it was clicked.
+pub(super) fn bypass_switch(ui: &mut egui::Ui, bypass: &mut bool) -> bool {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(112.0, 28.0), Sense::hover());
+    let response = controls::toggle_at(ui, rect, "Bypass all pedals", "Bypass all", bypass);
+    let clicked = response.clicked();
+    name_control(response, "Bypass all pedals").on_hover_text(format!(
+        "Bypass all: {}. Skip the whole board, trim included, for playback and export, so you \
+         can master the exported mix elsewhere. The pedals keep their settings and switches; \
+         presets leave this switch alone. The Mixer's Master bypass is the same switch.",
+        if *bypass { "on" } else { "off" }
+    ));
+    clicked
 }
 
 /// Show the board in the space left in `ui`. `reveal` brings a pedal into
@@ -540,6 +574,10 @@ pub(super) fn show(
             .id_salt("mastering-content")
             .max_rect(area.shrink(BOARD_INSET)),
     );
+    // A bypassed board stays in reach but steps back: the mix skips it.
+    if chain.bypass {
+        content.multiply_opacity(0.45);
+    }
     // A short section scrolls the board. Every control but the strip's
     // chips lives in the units and the row at its top, so bringing one of
     // them into view returns the board to the top, where all of it shows.
@@ -1751,7 +1789,9 @@ pub(super) fn status(chain: &MasterChain) -> (String, String) {
         .filter(|kind| chain.is_on(**kind))
         .count();
     let latency = chain.latency() as f32 / 44.1;
-    let status = if chain.is_active() {
+    let status = if chain.bypass {
+        "Bypassed: the mix plays and exports without the trim and pedals.".to_owned()
+    } else if chain.is_active() {
         let pedals = if on == 1 {
             "1 pedal on".to_owned()
         } else {
@@ -1784,7 +1824,14 @@ pub(super) fn status(chain: &MasterChain) -> (String, String) {
         .collect();
     (
         status,
-        format!("Signal: mixer → {} → output.", path.join(" → ")),
+        if chain.bypass {
+            format!(
+                "Signal: mixer → output. The bypassed board holds {}.",
+                path.join(" → ")
+            )
+        } else {
+            format!("Signal: mixer → {} → output.", path.join(" → "))
+        },
     )
 }
 
@@ -1797,9 +1844,9 @@ pub(super) fn status(chain: &MasterChain) -> (String, String) {
 fn enamel(kind: PedalKind, on: bool) -> Color32 {
     enamel_of(
         match kind {
-            PedalKind::EjayEq => [222, 172, 64],
-            PedalKind::EjayCompressor => [84, 184, 166],
-            PedalKind::EjayWide => [200, 150, 220],
+            PedalKind::BoosterEq => [222, 172, 64],
+            PedalKind::BoosterCompressor => [84, 184, 166],
+            PedalKind::BoosterWide => [200, 150, 220],
             PedalKind::SoftClip => [240, 150, 120],
             PedalKind::Tube => [240, 166, 80],
             PedalKind::TrimEq => [196, 204, 92],
@@ -2259,7 +2306,7 @@ fn arrow(ui: &egui::Ui, center: Pos2, direction: f32, enabled: bool) {
 
 /// A setting as the decimal it was written as: `0.1_f32` is 0.1, not the
 /// binary value just above it, so grid steps count true.
-fn decimal(value: f32) -> f64 {
+pub(super) fn decimal(value: f32) -> f64 {
     (f64::from(value) * 1e6).round() / 1e6
 }
 
@@ -2442,6 +2489,13 @@ mod tests {
         assert_eq!(Format::whole("Hz").read(" 120 ", 300.0), Some(120.0));
         assert_eq!(Format::Band(4).read("+18", 100.0), Some(100.0));
         assert_eq!(Format::whole("ms").read("fast", 1200.0), None);
+        assert_eq!(Format::Hertz.show(80.0), "80 Hz");
+        assert_eq!(Format::Hertz.show(8000.0), "8.00 kHz");
+        assert_eq!(Format::Hertz.show(20_000.0), "20.0 kHz");
+        assert_eq!(Format::Hertz.read("12k", 20_000.0), Some(12_000.0));
+        assert_eq!(Format::Hertz.read("2.5 kHz", 20_000.0), Some(2500.0));
+        assert_eq!(Format::Hertz.read("180 hz", 20_000.0), Some(180.0));
+        assert_eq!(Format::Hertz.read("400", 20_000.0), Some(400.0));
     }
 
     #[test]

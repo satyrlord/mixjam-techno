@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'runtime'))
-from mixjam_song import read_song
+from mixjam_song import BOOSTER_KEYS, read_song
 
 
 class SongProjectionTests(unittest.TestCase):
@@ -40,13 +40,15 @@ class SongProjectionTests(unittest.TestCase):
     def test_version_11_preserves_booster_and_adds_disabled_pedals(self):
         document = self.document(11)
         defaults = self.project(self.document())['master']
-        document['master'] = {key: copy.deepcopy(defaults[key])
-                              for key in ('ejayEq', 'ejayCompressor', 'ejayWide')}
-        document['master']['order'] = ['ejayWide', 'ejayEq', 'ejayCompressor']
-        document['master']['ejayWide'].update(on=True, spread=700)
+        (eq, booster_eq), (compressor, booster_compressor), (wide, booster_wide) = BOOSTER_KEYS
+        document['master'] = {earlier: copy.deepcopy(defaults[current])
+                              for earlier, current in BOOSTER_KEYS}
+        document['master']['order'] = [wide, eq, compressor]
+        document['master'][wide].update(on=True, spread=700)
         result = self.project(document)['master']
-        self.assertEqual(result['order'][:3], document['master']['order'])
-        self.assertEqual(result['ejayWide'], {'on': True, 'spread': 700})
+        self.assertEqual(result['order'][:3], [booster_wide, booster_eq, booster_compressor])
+        self.assertEqual(result[booster_wide], {'on': True, 'spread': 700})
+        self.assertNotIn(wide, result)
         self.assertEqual(result['trim'], 0.0)
         for key in defaults['order'][3:]:
             self.assertEqual(result[key], defaults[key])
@@ -102,9 +104,45 @@ class SongProjectionTests(unittest.TestCase):
         self.assertEqual(project['clips'][1]['fades']['in']['ticks'], 0)
         self.assertEqual(self.project(self.document(10))['tracks'][0]['automation'], {})
 
+    def test_version_15_keeps_the_channel_eq_and_bypass_and_earlier_songs_default_them(self):
+        document = self.document(15)
+        master = self.project(self.document())['master']
+        master['bypass'] = True
+        document['master'] = master
+        document['fxBuses'] = self.project(self.document())['fx']
+        document['lanes'][0]['sends'] = [0.0] * 4
+        eq = dict(self.project(self.document())['tracks'][0]['eq'], on=True, highDb=-9.0)
+        document['lanes'][0]['eq'] = eq
+        document['lanes'].append(copy.deepcopy(document['lanes'][0]))
+        del document['lanes'][1]['eq']
+        project = self.project(document)
+        self.assertEqual(project['master']['bypass'], True)
+        self.assertEqual(project['tracks'][0]['eq'], eq)
+        self.assertFalse(project['tracks'][1]['eq']['on'])
+        self.assertEqual(project['tracks'][1]['eq']['highCut'], 20000.0)
+        earlier = self.project(self.document(10))
+        self.assertFalse(earlier['tracks'][0]['eq']['on'])
+        self.assertNotIn('bypass', earlier['master'])
+        # Each lane's default is its own copy.
+        earlier['tracks'][0]['eq']['on'] = True
+        self.assertFalse(self.project(self.document(10))['tracks'][0]['eq']['on'])
+
+    def test_version_16_keeps_its_booster_keys_and_earlier_songs_rename_theirs(self):
+        current = self.project(self.document())['master']
+        current['boosterWide'].update(on=True, spread=700)
+        current['order'][:3] = ['boosterWide', 'boosterEq', 'boosterCompressor']
+        renamed = {current_key: earlier for earlier, current_key in BOOSTER_KEYS}
+        earlier = {renamed.get(key, key): value for key, value in current.items()}
+        earlier['order'] = [renamed.get(name, name) for name in current['order']]
+        for version, master in ((12, earlier), (15, earlier), (16, current)):
+            document = self.document(version)
+            document['master'] = copy.deepcopy(master)
+            document['fxBuses'] = self.project(self.document())['fx']
+            self.assertEqual(self.project(document)['master'], current, version)
+
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(15))
+            self.project(self.document(17))
 
     def test_default_fades_are_independent_between_clips_and_reads(self):
         document = self.document(10)

@@ -10,6 +10,9 @@ use crate::{
 use std::path::Path;
 
 const TRAILER: &[u8] = &[17, 0, 0, 0, 0, 0xa9, 0x7a, 0x8a, 1];
+/// The product labels that custom 0x889 files save: the product's own, the
+/// earlier one, or none. The reader compares the trimmed label with these.
+const OBSERVED_LABELS: [&str; 3] = ["\x54echno \x65Jay 2", "\x54echno \x65Jay", ""];
 
 pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
     load_named_bytes(
@@ -68,10 +71,7 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
     // Custom 0x889 files also save the earlier label or an empty label. Admit
     // only those observed labels, then require the entire counted arrangement
     // and exact trailer before resolving any sample or writing imported audio.
-    if !matches!(
-        product.trim(),
-        "\x54echno \x65Jay 2" | "\x54echno \x65Jay" | ""
-    ) {
+    if !OBSERVED_LABELS.contains(&product.trim()) {
         return Err("The mix belongs to a different product.".into());
     }
     let search_start = reader.offset;
@@ -139,8 +139,8 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
         }
         for _ in 0..count {
             // Source 0 is a product sound, 1 an imported WAV, and 3 a Sample
-            // Kit sound. Releases before the Yelsi editions saved kit sounds
-            // by their Dance eJay 2 index ID (kit archives 4-6).
+            // Kit sound. Early releases saved kit sounds by their D2 index ID
+            // (kit archives 4-6).
             let source = reader.u8()?;
             if !matches!(source, 0 | 1 | 3) {
                 return Err("Unsupported clip source.".into());
@@ -201,7 +201,7 @@ fn parse_arrangement(bytes: &[u8], start: usize) -> Result<Vec<Event>, String> {
     Ok(events)
 }
 
-/// Releases before the Yelsi editions append the song's imported WAV files
+/// Early releases append the song's imported WAV files
 /// after the trailer, with a count even when it is zero. Each record is the
 /// saved path, the WAV size and the whole RIFF file; the block ends the file.
 /// The shared embedded-WAV scan resolves the audio, so this only checks that
@@ -347,6 +347,15 @@ mod tests {
         bytes.extend_from_slice(&[0, 1]);
     }
 
+    /// The current product label as files save it, with a trailing space.
+    fn current_label() -> String {
+        format!("{} ", OBSERVED_LABELS[0])
+    }
+    /// The earlier product label as files save it.
+    fn earlier_label() -> String {
+        format!("{} ", OBSERVED_LABELS[1])
+    }
+
     fn custom_song(product: &str, records: &[Vec<u8>]) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&0x889u32.to_le_bytes());
@@ -395,7 +404,8 @@ mod tests {
 
     #[test]
     fn observed_product_labels_require_a_complete_supported_arrangement() {
-        for label in ["Techno eJay 2 ", "Techno eJay ", ""] {
+        for label in [current_label(), earlier_label(), String::new()] {
+            let label = label.as_str();
             let bytes = custom_song(label, &[]);
             assert!(load_bytes(&bytes, &Library::empty()).is_ok(), "{label:?}");
             let mut invalid = bytes.clone();
@@ -406,7 +416,12 @@ mod tests {
             unknown_source.extend_from_slice(&174u16.to_le_bytes());
             assert!(load_bytes(&custom_song(label, &[unknown_source]), &Library::empty()).is_err());
         }
-        for label in ["Dance eJay 2", "Another product", "Techno eJay 3"] {
+        let next_release = format!("{} 3", OBSERVED_LABELS[1]);
+        for label in [
+            "Another product 2",
+            "Another product",
+            next_release.as_str(),
+        ] {
             assert_eq!(
                 load_bytes(&custom_song(label, &[]), &Library::empty()).unwrap_err(),
                 "The mix belongs to a different product."
@@ -500,8 +515,8 @@ mod tests {
         .encode()
         .unwrap();
         let path = r"C:\absent\timeline-audio.wav";
-        let arrangement_start = custom_song("Techno eJay 2 ", &[]).len() - 16 * 5 - TRAILER.len();
-        let mut bytes = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        let arrangement_start = custom_song(&current_label(), &[]).len() - 16 * 5 - TRAILER.len();
+        let mut bytes = custom_song(&current_label(), &[wave_record(path, -1, 1)]);
         bytes.extend(wave_appendix(&[(path, &wav)]));
         let project = load_bytes(&bytes, &Library::empty()).unwrap();
         assert_eq!(project.clips.len(), 1);
@@ -522,15 +537,15 @@ mod tests {
         }
         .encode()
         .unwrap();
-        let path = r"c:\ejay\MIXWAVES\absent-take.wav";
-        let mut bytes = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        let path = r"c:\legacy\MIXWAVES\absent-take.wav";
+        let mut bytes = custom_song(&current_label(), &[wave_record(path, -1, 1)]);
         bytes.extend(wave_appendix(&[(path, &wav)]));
         let project = load_bytes(&bytes, &Library::empty()).unwrap();
         assert!(project.missing_samples.is_empty());
         assert_eq!(project.imported_samples.len(), 1);
         assert_eq!(project.clips.len(), 1);
 
-        let mut empty = custom_song("Techno eJay 2 ", &[]);
+        let mut empty = custom_song(&current_label(), &[]);
         empty.extend(wave_appendix(&[]));
         assert!(
             load_bytes(&empty, &Library::empty())
@@ -541,14 +556,14 @@ mod tests {
 
         let mut extra = bytes.clone();
         extra.push(0);
-        let mut wrong_count = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
+        let mut wrong_count = custom_song(&current_label(), &[wave_record(path, -1, 1)]);
         wrong_count.extend(wave_appendix(&[(path, &wav)]));
         let count_at = wrong_count.len() - wav.len() - 4 - (path.len() + 4) - 4;
         wrong_count[count_at] = 2;
-        let mut not_wave = custom_song("Techno eJay 2 ", &[]);
+        let mut not_wave = custom_song(&current_label(), &[]);
         not_wave.extend(wave_appendix(&[(path, &[0; 64])]));
-        let mut invalid_path = custom_song("Techno eJay 2 ", &[wave_record(path, -1, 1)]);
-        invalid_path.extend(wave_appendix(&[("c:\\ejay\\\0absent-take.wav", &wav)]));
+        let mut invalid_path = custom_song(&current_label(), &[wave_record(path, -1, 1)]);
+        invalid_path.extend(wave_appendix(&[("c:\\legacy\\\0absent-take.wav", &wav)]));
         for invalid in [
             &bytes[..bytes.len() - 1],
             &extra,
@@ -565,7 +580,7 @@ mod tests {
     }
 
     #[test]
-    fn sample_kit_clips_resolve_by_their_dance_ejay_2_index_id() {
+    fn sample_kit_clips_resolve_by_their_d2_index_id() {
         let record = |source: u8| {
             let mut bytes = vec![source];
             bytes.extend_from_slice(&(-1i32).to_le_bytes());
@@ -573,7 +588,7 @@ mod tests {
             bytes
         };
         let library = Library::empty();
-        let kit = load_bytes(&custom_song("Techno eJay 2 ", &[record(3)]), &library).unwrap();
+        let kit = load_bytes(&custom_song(&current_label(), &[record(3)]), &library).unwrap();
         assert_eq!(
             kit.clips[0].sample_id,
             Product::D2.global_sample_id(6295).unwrap()
@@ -583,7 +598,7 @@ mod tests {
             library.describe_missing(Product::D2, 6295)
         );
         // The same number as a product sound is not a kit sound.
-        let native = load_bytes(&custom_song("Techno eJay 2 ", &[record(0)]), &library).unwrap();
+        let native = load_bytes(&custom_song(&current_label(), &[record(0)]), &library).unwrap();
         assert_eq!(
             native.clips[0].sample_id,
             Product::T2.global_sample_id(6295).unwrap()
@@ -593,7 +608,7 @@ mod tests {
     #[test]
     fn missing_wave_diagnostic_requires_the_complete_arrangement() {
         let bytes = custom_song(
-            "Techno eJay ",
+            &earlier_label(),
             &[wave_record(r"C:\absent\missing-t2-take.wav", -1, 2)],
         );
         let project = load_bytes(&bytes, &Library::empty()).unwrap();
@@ -630,7 +645,7 @@ mod tests {
         text(&mut bytes, "Composer");
         text(&mut bytes, "Missing sample");
         bytes.extend_from_slice(&[0; 74]);
-        text(&mut bytes, "\x54echno \x65Jay 2");
+        text(&mut bytes, OBSERVED_LABELS[0]);
         bytes.extend_from_slice(preamble);
         for track in 1..=16 {
             bytes.push(track);
@@ -719,7 +734,7 @@ mod tests {
         text(&mut bytes, "Standalone song");
         bytes.extend_from_slice(&[0; 64]);
         bytes.extend_from_slice(&[0; 10]);
-        text(&mut bytes, "\x54echno \x65Jay 2");
+        text(&mut bytes, OBSERVED_LABELS[0]);
         for track in 1..=16 {
             bytes.push(track);
             bytes.extend_from_slice(&u32::from(track == 1).to_le_bytes());
@@ -865,7 +880,7 @@ mod tests {
             bytes.extend_from_slice(&0i32.to_le_bytes());
             bytes.extend_from_slice(&10211u16.to_le_bytes());
             bytes.extend_from_slice(&[0; 10]);
-            text(&mut bytes, r"c:\ejay\MIXWAVES\time018.wav");
+            text(&mut bytes, r"c:\legacy\MIXWAVES\time018.wav");
             text(&mut bytes, file);
             text(&mut bytes, folder);
             bytes.extend_from_slice(&10u16.to_le_bytes());
@@ -874,7 +889,7 @@ mod tests {
             bytes
         };
         let stretched = record("R1LA037.WAV", r"F:\samples\Rave\LOOP\-1[time]");
-        let project = load_bytes(&custom_song("Techno eJay ", &[stretched]), &library).unwrap();
+        let project = load_bytes(&custom_song(&earlier_label(), &[stretched]), &library).unwrap();
         assert!(project.missing_samples.is_empty());
         let sample = &project.imported_samples[0];
         assert_eq!(sample.name, "birdy 1 140 BPM");
@@ -890,7 +905,7 @@ mod tests {
             ("R1LA037.WAV", r"F:\samples\Rave\LOOP\"),
             ("R1LA999.WAV", r"F:\samples\Rave\LOOP\-1[time]"),
         ] {
-            let song = custom_song("Techno eJay ", &[record(file, folder)]);
+            let song = custom_song(&earlier_label(), &[record(file, folder)]);
             let project = load_bytes(&song, &library).unwrap();
             assert_eq!(project.missing_samples.len(), 1, "{file} {folder}");
         }

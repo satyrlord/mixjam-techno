@@ -9,8 +9,9 @@ description: >
 
 ## 1. Establish the invariant
 
-1. Read `AGENTS.md`, `PRODUCT.md`, `COMPATIBILITY.md`, `ARCHITECTURE.md`,
-   the relevant source, and tests.
+1. Read `docs/ARCHITECTURE.md`, the relevant source, and tests. If they
+   exist, also read `AGENTS.md`, `local-data/research/PRODUCT.md`, and
+   `local-data/research/COMPATIBILITY.md`.
    Completion criterion: The preserved behavior and affected seams are explicit.
 2. Exclude feature work and unrelated cleanup from the scope.
    Completion criterion: Every planned line serves the stated refactor.

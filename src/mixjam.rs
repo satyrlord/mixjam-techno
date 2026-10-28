@@ -1,4 +1,4 @@
-//! `.mixjam` songs: the application's own format version 14 (`song`) and a
+//! `.mixjam` songs: the application's own format version 16 (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
@@ -178,7 +178,7 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8 to 14 song or import a version 7 project. The flag is true for
+/// Open a version 8 to 16 song or import a version 7 project. The flag is true for
 /// a song, which Save can replace; a version 7 project is an import and stays
 /// unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
@@ -200,11 +200,14 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
         }
-        _ => Err("Only MixJam format versions 7 to 14 are supported.".into()),
+        _ => Err(format!(
+            "Only MixJam format versions 7 to {} are supported.",
+            song::FORMAT_VERSION
+        )),
     }
 }
 
-/// Write the song as a format version 14 document.
+/// Write the song as a format version 16 document.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -344,7 +347,7 @@ fn validate(document: &Document) -> Result<(), String> {
     Ok(())
 }
 
-/// The master pedalboard for a validated MixJam master bus: the eJay pedals
+/// The master pedalboard for a validated MixJam master bus: the Booster pedals
 /// off at the front, then the mastering pedals in the bus's order with its
 /// switches and settings, except that the limiter always comes last. A
 /// parameter the file leaves out keeps its default.
@@ -590,11 +593,11 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(15);
+        document["formatVersion"] = json!(17);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(error, "Only MixJam format versions 7 to 14 are supported.");
+        assert_eq!(error, "Only MixJam format versions 7 to 16 are supported.");
     }
 
     #[test]
@@ -640,7 +643,7 @@ mod tests {
         assert_eq!(master.order[12], PedalKind::Limiter);
         assert!(master.validate().is_ok());
         assert!(master.limiter.on && master.tape.on && master.imaging.on && !master.tube.on);
-        assert!(!master.ejay_eq.on && !master.ejay_compressor.on && !master.ejay_wide.on);
+        assert!(!master.booster_eq.on && !master.booster_compressor.on && !master.booster_wide.on);
         assert_eq!(
             (master.trim, master.limiter.ceiling, master.limiter.gain),
             (-6.5, -0.3, 7.0)

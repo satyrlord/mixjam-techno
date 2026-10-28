@@ -245,6 +245,34 @@ impl ReturnsProcessor {
             *sample = sample.clamp(-1.0, 1.0);
         }
     }
+    /// Each bus's return alone, for an export in parts: `returns` gets the
+    /// four returns, eight interleaved channels a frame as `sends` holds the
+    /// feeds, without the dry mix and not held to full scale. The buses run
+    /// as `process` runs them.
+    pub fn split(&mut self, returns: &mut [f32], sends: Option<&[f32]>) {
+        self.poll();
+        returns.fill(0.0);
+        if sends.is_none() && !self.ringing() {
+            return;
+        }
+        let bpm = self.bpm;
+        for (frame, out) in returns
+            .as_chunks_mut::<{ 2 * BUSES }>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
+            for (index, bus) in self.buses.iter_mut().enumerate() {
+                let (left, right) = sends.map_or((0.0, 0.0), |sends| {
+                    let at = frame * 2 * BUSES + index * 2;
+                    (f64::from(sends[at]), f64::from(sends[at + 1]))
+                });
+                let (l, r) = bus.process(left, right, bpm);
+                out[index * 2] = l as f32;
+                out[index * 2 + 1] = r as f32;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

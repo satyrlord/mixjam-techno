@@ -284,8 +284,8 @@ fn load_packed(root: &Path, archive: &str, bpm: f64) -> Result<Vec<NativeSample>
 }
 
 /// House index records carry numeric groups without labels. The shipped
-/// program's string table names the sample groups (House10.exe,
-/// SP_LOOP, SP_DRUM, SP_BASS, SP_EFFECTS, SP_KEYS, SP_GUITARS, SP_XTRA,
+/// program's string table names the sample groups (SP_LOOP,
+/// SP_DRUM, SP_BASS, SP_EFFECTS, SP_KEYS, SP_GUITARS, SP_XTRA,
 /// SP_GROOVE, SP_VOICE). The kind letters that follow the `HS1` prefix and the
 /// bank letter in each code select the group; drum pads keep their header labels.
 fn house_group_name(code: &str) -> Option<&'static str> {
