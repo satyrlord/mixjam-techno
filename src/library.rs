@@ -210,25 +210,14 @@ enum AudioSource {
 impl Library {
     #[cfg(test)]
     pub(crate) fn fixture(samples: Vec<Sample>) -> Self {
-        let by_id = samples
-            .iter()
-            .enumerate()
-            .map(|(index, sample)| (sample.id, index))
-            .collect();
         let sources = samples_sources(&samples);
-        Self {
+        let mut library = Self {
             samples,
-            archive_path: PathBuf::new(),
-            by_id,
             sources,
-            bindings: Vec::new(),
-            wav_root: None,
-            verified: HashSet::new(),
-            unverified: HashMap::new(),
-            folder_tempos: Vec::new(),
-            skipped_waves: Vec::new(),
-            reserved_import_id: IMPORTED_ID_START - 1,
-        }
+            ..Self::empty()
+        };
+        library.reindex();
+        library
     }
 
     pub fn empty() -> Self {
@@ -419,12 +408,13 @@ impl Library {
         Ok(restored_metadata)
     }
 
-    pub fn open_wav_folder(root: &Path, source_bpm: f64) -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn open_wav_folder(root: &Path, source_bpm: f64) -> Result<Self, String> {
         Self::open_wav_folder_with(root, source_bpm, None, None)
     }
 
-    /// [`Self::open_wav_folder`] with progress reporting, cancellation, and a
-    /// probe cache, for a scan that runs on another thread.
+    /// Open a WAV folder as a library, with progress reporting, cancellation,
+    /// and a probe cache, for a scan that runs on another thread.
     pub fn open_wav_folder_with(
         root: &Path,
         source_bpm: f64,
@@ -483,12 +473,7 @@ impl Library {
                     .as_ref()
                     .is_none_or(|path| !native_paths.contains(path))
         });
-        library.by_id = library
-            .samples
-            .iter()
-            .enumerate()
-            .map(|(index, sample)| (sample.id, index))
-            .collect();
+        library.reindex();
         library
             .sources
             .retain(|id, _| library.by_id.contains_key(id));
@@ -758,7 +743,7 @@ impl Library {
             .map(|binding| binding.root.as_path())
     }
 
-    pub fn remove_product(&mut self, product: Product) -> Result<(), String> {
+    pub fn remove_product(&mut self, product: Product) {
         self.samples
             .retain(|sample| Product::sample_key(sample.id).is_none_or(|(p, _)| p != product));
         self.sources
@@ -768,13 +753,7 @@ impl Library {
             .retain(|id| Product::sample_key(*id).is_none_or(|(p, _)| p != product));
         self.unverified
             .retain(|id, _| Product::sample_key(*id).is_none_or(|(p, _)| p != product));
-        self.by_id = self
-            .samples
-            .iter()
-            .enumerate()
-            .map(|(index, sample)| (sample.id, index))
-            .collect();
-        Ok(())
+        self.reindex();
     }
 
     pub fn register(
@@ -810,12 +789,7 @@ impl Library {
             }
             wav.samples.retain(|sample| sample.id < IMPORTED_ID_START);
             wav.sources.retain(|id, _| *id < IMPORTED_ID_START);
-            wav.by_id = wav
-                .samples
-                .iter()
-                .enumerate()
-                .map(|(index, sample)| (sample.id, index))
-                .collect();
+            wav.reindex();
             wav
         } else {
             match product {
@@ -1118,13 +1092,18 @@ impl Library {
             by_id,
             sources,
             bindings: vec![LibraryBinding { product, root }],
-            wav_root: None,
-            verified: HashSet::new(),
-            unverified: HashMap::new(),
-            folder_tempos: Vec::new(),
-            skipped_waves: Vec::new(),
-            reserved_import_id: IMPORTED_ID_START - 1,
+            ..Self::empty()
         })
+    }
+
+    /// Rebuild the ID index after samples were removed or replaced.
+    fn reindex(&mut self) {
+        self.by_id = self
+            .samples
+            .iter()
+            .enumerate()
+            .map(|(index, sample)| (sample.id, index))
+            .collect();
     }
 
     pub fn sample_by_id(&self, id: u32) -> Option<&Sample> {
@@ -1741,12 +1720,7 @@ impl Library {
         self.samples.retain(|sample| sample.id < IMPORTED_ID_START);
         self.samples.extend(resolved);
         self.sources = sources;
-        self.by_id = self
-            .samples
-            .iter()
-            .enumerate()
-            .map(|(index, sample)| (sample.id, index))
-            .collect();
+        self.reindex();
         Ok(())
     }
 }
@@ -2304,11 +2278,15 @@ fn compact_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
+
     #[test]
     fn a_full_wav_folder_palette_fits_the_project_import_budget() {
         use crate::engine::{ImportedSample, Project};
         let imported = |index: usize| ImportedSample {
-            id: super::IMPORTED_ID_START + index as u32,
+            id: IMPORTED_ID_START + index as u32,
             name: "Sample".into(),
             group_name: "Wave".into(),
             path: std::path::PathBuf::from(format!("sample-{index}.wav")),
@@ -2317,22 +2295,18 @@ mod tests {
             origin: None,
         };
         let mut project = Project {
-            imported_samples: (0..super::MAX_WAV_FOLDER_ITEMS).map(imported).collect(),
+            imported_samples: (0..MAX_WAV_FOLDER_ITEMS).map(imported).collect(),
             ..Project::default()
         };
         project.validate().unwrap();
         project
             .imported_samples
-            .push(imported(super::MAX_WAV_FOLDER_ITEMS));
+            .push(imported(MAX_WAV_FOLDER_ITEMS));
         assert_eq!(
             project.validate().unwrap_err(),
             "The project has too many imported samples."
         );
     }
-
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT_FOLDER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn product_folder_hints_come_from_the_selected_folder_and_below() {
@@ -2380,6 +2354,11 @@ mod tests {
             .write_wav(&path)
             .unwrap();
             fs::canonicalize(path).unwrap()
+        }
+    }
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
         }
     }
 
@@ -2854,7 +2833,7 @@ mod tests {
 
     #[test]
     fn bpm_inf_tempo_is_the_bpm_key_of_the_tempo_section() {
-        let tempo = super::stated_pack_tempo;
+        let tempo = stated_pack_tempo;
         assert_eq!(tempo("[Tempo]\nBPM=125\n"), Some(125.0));
         assert_eq!(
             tempo("[HarmonyTable]\nBPM=99\n[ tempo ]\r\n bpm = 87.5 \r\n"),
@@ -2863,13 +2842,13 @@ mod tests {
         assert_eq!(tempo("BPM=125\n"), None);
         assert_eq!(tempo("[Tempo]\nBPM=fast\n"), None);
         assert_eq!(tempo("[Tempo]\nBPM=1250\n"), None);
-        assert!(super::octave_apart(80.0, 160.0) && super::octave_apart(180.0, 90.0));
-        assert!(!super::octave_apart(120.0, 160.0));
+        assert!(octave_apart(80.0, 160.0) && octave_apart(180.0, 90.0));
+        assert!(!octave_apart(120.0, 160.0));
     }
 
     #[test]
     fn named_tempo_needs_a_bpm_token_followed_by_a_key_token() {
-        let tempo = |name: &str| super::named_tempo(Path::new(name));
+        let tempo = |name: &str| named_tempo(Path::new(name));
         assert_eq!(tempo("HARDCORE_BASS001_180_C_SL3.WAV"), Some(180.0));
         assert_eq!(tempo("DANCE_VOCALS001_140_X_SL1.wav"), Some(140.0));
         assert_eq!(tempo("SNTH_96_F#m_SC4(L).wav"), Some(96.0));
@@ -2914,11 +2893,6 @@ mod tests {
         assert_eq!(path(12), second);
         assert_eq!(library.verified_count(), 3);
         assert!(library.unverified_waves().next().is_none());
-    }
-    impl Drop for Folder {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
     }
 
     #[test]
@@ -3104,7 +3078,7 @@ mod tests {
             frame_count: 200,
             pcm_digest: None,
         };
-        library.remove_product(Product::T1).unwrap();
+        library.remove_product(Product::T1);
         let root = library.wav_root().unwrap().to_path_buf();
         library
             .register_wav_product(
@@ -3215,10 +3189,8 @@ mod tests {
 
     #[test]
     fn imported_wav_roundtrips_and_missing_file_is_atomic() {
-        let folder =
-            std::env::temp_dir().join(format!("mixjam-techno-import-{}", std::process::id()));
-        fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("sample.wav");
+        let folder = Folder::new();
+        let path = folder.0.join("sample.wav");
         crate::audio::Pcm {
             sample_rate: 22050,
             channels: 2,
@@ -3249,20 +3221,16 @@ mod tests {
         let restored: crate::engine::Project = serde_json::from_slice(&saved).unwrap();
         library.apply_imports(&restored.imported_samples).unwrap();
         let mut missing = imported;
-        missing.path = folder.join("missing.wav");
+        missing.path = folder.0.join("missing.wav");
         assert!(library.apply_imports(&[missing]).is_err());
         assert_eq!(library.samples.len(), 1);
         assert_eq!(library.samples[0].name, "My sample");
-        fs::remove_file(path).unwrap();
-        fs::remove_dir(folder).unwrap();
     }
 
     #[test]
     fn native_packed_reads_unicode_host_paths_without_native_ansi_limits() {
-        let folder =
-            std::env::temp_dir().join(format!("mixjam-techno-packed-host-{}", std::process::id()));
-        fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("音源.\x70xd");
+        let folder = Folder::new();
+        let path = folder.0.join("音源.\x70xd");
         let mut bytes = b"t\x50xD\0T".to_vec();
         bytes.extend(2u32.to_le_bytes());
         bytes.extend(37u16.to_le_bytes());
@@ -3290,8 +3258,6 @@ mod tests {
             .insert(100_731, AudioSource::T1Packed { path: path.clone() });
         let pcm = library.read_pcm(100_731).unwrap();
         assert_eq!(pcm.samples, vec![74.0 / 32768.0; 3]);
-        fs::remove_file(path).unwrap();
-        fs::remove_dir(folder).unwrap();
     }
 
     #[test]

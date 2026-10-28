@@ -678,9 +678,11 @@ fn pedal_row(
             // The limiter has none: it stays last, just before the output.
             let handle = Rect::from_min_size(rect.min, Vec2::new(rect.width() - 30.0, HEADER));
             if !kind.movable() {
-                let header = ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::hover());
+                let header =
+                    ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::hover());
                 name_region(header, &format!("{} always runs last", name(*kind))).on_hover_text(
-                    "The limiter always runs last, just before the output, so no pedal can raise the peaks it holds.",
+                    "The limiter always runs last, just before the output, so no pedal can raise \
+                     the peaks it holds.",
                 );
                 continue;
             }
@@ -972,7 +974,8 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
     ui.ctx()
         .accesskit_node_builder(response.id, |node| node.set_description(state));
     response.on_hover_text(format!(
-        "{state} Lights when the output's true peak passes {OVER_DBTP:.0} dBTP, and stays lit until you click it."
+        "{state} Lights when the output's true peak passes {OVER_DBTP:.0} dBTP, and stays lit \
+         until you click it."
     ));
 
     let rows: [(&str, f32, &str); 4] = [
@@ -1038,7 +1041,8 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
         &format!("Output loudness: {summary}"),
     );
     readings.on_hover_text(
-        "Momentary and short-term loudness follow the last 400 ms and 3 s. Integrated loudness and the true peak cover the playback so far.",
+        "Momentary and short-term loudness follow the last 400 ms and 3 s. Integrated loudness \
+         and the true peak cover the playback so far.",
     );
 
     // Bars: loudness from -36 to 0 LUFS with the -14 LUFS band, true peak
@@ -1460,7 +1464,8 @@ fn pedal(
                 Dial {
                     name: "Tape speed",
                     label: "Speed",
-                    hint: "15 or 30 inches per second: moves the low-end bump and the treble roll-off.",
+                    hint: "15 or 30 inches per second: moves the low-end bump and the treble \
+                           roll-off.",
                     range: KnobRange {
                         low: 15.0,
                         high: 30.0,

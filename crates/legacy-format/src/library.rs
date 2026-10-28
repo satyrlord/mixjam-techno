@@ -202,7 +202,8 @@ mod tests {
     use super::*;
     #[test]
     fn catalog_preserves_labels_secondary_and_signed_length_bound() {
-        let input = b"\"ba\\one.\x70xd\"\r\n\"opaque\"\r\n\"bass\"\r\n\"2\"\r\n\" a \"\r\n\"say \"\"yes\"\"\"\r\n";
+        let input = b"\"ba\\one.\x70xd\"\r\n\"opaque\"\r\n\"bass\"\r\n\"2\"\r\n\" a \"\r\n\"say \"\
+                      \"yes\"\"\"\r\n";
         let records = parse_catalog(input).unwrap();
         assert_eq!(records[0].nominal_bars, 2);
         assert_eq!(records[0].fields[1], "opaque");

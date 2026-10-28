@@ -4,7 +4,10 @@ use crate::{
     packed::{self, HeaderKind},
     source::SampleSource,
 };
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug)]
 pub struct PlaybackError(pub String);
@@ -24,25 +27,7 @@ impl From<packed::PackedError> for PlaybackError {
 /// Files shorter than the original 270-byte probe return zero. This value is
 /// an estimated 44.1 kHz stereo byte length, not the physical file size.
 pub fn wave_duration_bytes(bytes: &[u8]) -> Result<i32, PlaybackError> {
-    if bytes.len() > 128 * 1024 * 1024 {
-        return Err(PlaybackError(
-            "WAV source exceeds the 128 MiB playback bound".into(),
-        ));
-    }
-    let wave = crate::wav::PcmWave::parse(bytes).map_err(|e| PlaybackError(e.to_string()))?;
-    if !matches!(wave.sample_rate, 11025 | 22050 | 44100) {
-        return Err(PlaybackError(
-            "WAV playback supports 11025, 22050, or 44100 Hz".into(),
-        ));
-    }
-    if bytes.get(12..16) != Some(b"fmt ")
-        || bytes.get(16..20) != Some(&16u32.to_le_bytes())
-        || bytes.get(36..40) != Some(b"data")
-    {
-        return Err(PlaybackError(
-            "Native WAV admission needs the canonical 16-byte format header".into(),
-        ));
-    }
+    let wave = admit_wave(bytes)?;
     if bytes.len() < 270 {
         return Ok(0);
     }
@@ -76,6 +61,44 @@ pub fn wave_duration_bytes(bytes: &[u8]) -> Result<i32, PlaybackError> {
     Ok(length)
 }
 
+/// Canonical PCM WAV within the playback bound, at an original rate.
+fn admit_wave(bytes: &[u8]) -> Result<crate::wav::PcmWave, PlaybackError> {
+    if bytes.len() > 128 * 1024 * 1024 {
+        return Err(PlaybackError(
+            "WAV source exceeds the 128 MiB playback bound".into(),
+        ));
+    }
+    let wave = crate::wav::PcmWave::parse(bytes).map_err(|e| PlaybackError(e.to_string()))?;
+    if !matches!(wave.sample_rate, 11025 | 22050 | 44100) {
+        return Err(PlaybackError(
+            "WAV playback supports 11025, 22050, or 44100 Hz".into(),
+        ));
+    }
+    if bytes.get(12..16) != Some(b"fmt ")
+        || bytes.get(16..20) != Some(&16u32.to_le_bytes())
+        || bytes.get(36..40) != Some(b"data")
+    {
+        return Err(PlaybackError(
+            "Native WAV admission needs the canonical 16-byte format header".into(),
+        ));
+    }
+    Ok(wave)
+}
+
+/// A sample path that the original's ANSI path field can hold.
+fn admit_path(path: &Path) -> Result<(), PlaybackError> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| PlaybackError("Sample path is not Unicode text".into()))?;
+    if text.chars().any(|c| u32::from(c) > 255) || text.chars().count() > 179 || text.contains('\0')
+    {
+        return Err(PlaybackError(
+            "Sample path exceeds the admitted original ANSI path range".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct FileSample {
     pcm: Vec<i16>,
@@ -92,17 +115,7 @@ impl FileSample {
                     .into(),
             ));
         }
-        let text = path
-            .to_str()
-            .ok_or_else(|| PlaybackError("Sample path is not Unicode text".into()))?;
-        if text.chars().any(|c| u32::from(c) > 255)
-            || text.chars().count() > 179
-            || text.contains('\0')
-        {
-            return Err(PlaybackError(
-                "Sample path exceeds the admitted original ANSI path range".into(),
-            ));
-        }
+        admit_path(&path)?;
         if bytes.len() > i32::MAX as usize {
             return Err(PlaybackError(
                 "Sample file exceeds the native signed byte range".into(),
@@ -114,36 +127,8 @@ impl FileSample {
     /// Original canonical PCM WAV path: first source lane, half gain, and
     /// nearest sample hold at the admitted 11.025/22.05/44.1 kHz rates.
     pub fn from_wave(path: PathBuf, bytes: &[u8]) -> Result<Self, PlaybackError> {
-        if bytes.len() > 128 * 1024 * 1024 {
-            return Err(PlaybackError(
-                "WAV source exceeds the 128 MiB playback bound".into(),
-            ));
-        }
-        let wave = crate::wav::PcmWave::parse(bytes).map_err(|e| PlaybackError(e.to_string()))?;
-        if !matches!(wave.sample_rate, 11025 | 22050 | 44100) {
-            return Err(PlaybackError(
-                "WAV playback supports 11025, 22050, or 44100 Hz".into(),
-            ));
-        }
-        if bytes.get(12..16) != Some(b"fmt ")
-            || bytes.get(16..20) != Some(&16u32.to_le_bytes())
-            || bytes.get(36..40) != Some(b"data")
-        {
-            return Err(PlaybackError(
-                "Native WAV admission needs the canonical 16-byte format header".into(),
-            ));
-        }
-        let text = path
-            .to_str()
-            .ok_or_else(|| PlaybackError("Sample path is not Unicode text".into()))?;
-        if text.chars().any(|c| u32::from(c) > 255)
-            || text.chars().count() > 179
-            || text.contains('\0')
-        {
-            return Err(PlaybackError(
-                "Sample path exceeds the admitted original ANSI path range".into(),
-            ));
-        }
+        let wave = admit_wave(bytes)?;
+        admit_path(&path)?;
         let physical = i64::try_from(bytes.len())
             .map_err(|_| PlaybackError("WAV file exceeds the native signed byte range".into()))?;
         let riff = i64::from(u32::from_le_bytes(bytes[4..8].try_into().unwrap()));

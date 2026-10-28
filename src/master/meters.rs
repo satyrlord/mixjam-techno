@@ -6,7 +6,7 @@
 //!
 //! The audio thread publishes a reading after each block through atomics;
 //! the window reads the latest one without waiting.
-use super::dsp::{Biquad, Coefficients, RATE, TruePeak, db_to_gain, flush, pole};
+use super::dsp::{Biquad, Coefficients, RATE, TruePeak, db_to_gain, flush, gain_to_db, pole};
 use std::{
     f64::consts::PI,
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
@@ -172,7 +172,7 @@ fn k_weighting(rate: f64) -> [Coefficients; 2] {
             0.707_175_236_955_419_6,
         );
         let k = (PI * hz / rate).tan();
-        let high = 10f64.powf(db / 20.0);
+        let high = db_to_gain(db);
         let band = high.powf(0.499_666_774_154_541_6);
         Coefficients::raw(
             [
@@ -386,16 +386,15 @@ impl Meters {
     }
     /// Publish the block's reading and start the next block.
     pub(super) fn publish(&mut self, shared: &Shared, compressor: f32, limiter: f32) {
-        let decibels = |gain: f64| 20.0 * gain.log10();
         let needle = self.needle[0][1].max(self.needle[1][1]);
-        let block_peak = decibels(f64::from(self.block_peak)) as f32;
+        let block_peak = gain_to_db(f64::from(self.block_peak)) as f32;
         self.peak = self.peak.max(self.block_peak);
         if block_peak > OVER_DBTP {
             self.overs += 1;
         }
         shared.store_current(&MeterReading {
             run: self.run,
-            input_vu: (decibels(needle) + SINE_FORM_DB - REFERENCE_DBFS) as f32,
+            input_vu: (gain_to_db(needle) + SINE_FORM_DB - REFERENCE_DBFS) as f32,
             input_peaks: std::mem::take(&mut self.input_peaks),
             compressor_reduction: compressor,
             limiter_reduction: limiter,
@@ -403,7 +402,7 @@ impl Meters {
             short_term: self.loudness.short_term as f32,
             integrated: self.loudness.integrated as f32,
             true_peak: block_peak,
-            true_peak_max: decibels(f64::from(self.peak)) as f32,
+            true_peak_max: gain_to_db(f64::from(self.peak)) as f32,
             overs: self.overs,
         });
         self.block_peak = 0.0;

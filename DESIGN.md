@@ -440,7 +440,7 @@ retain the full name in a tooltip.
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
 720. The header is 66 points high. Transport occupies 68 points above the
 arrangement. A fixed 64-point tool rail sits at the right. The bottom panel
-(Sounds, Mixer, or Mastering) starts at 28% of the content height, clamped to 220-290 points. Drag its
+(Sounds, Mixer, Mastering, or Effects) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
@@ -453,9 +453,9 @@ occupies 30 points below it. Its application version, prefixed with `v`, stays a
 margin, with space reserved before status text is truncated. Use 12-point Inter
 Medium and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
-Sounds, Mixer, and Mastering share this panel size. Switching modules
-preserves the resized height; opening Mixer or Mastering first raises a panel
-below its minimum. Mastering's minimum shows its whole 368-point board under
+Sounds, Mixer, Mastering, and Effects share this panel size. Switching modules
+preserves the resized height; opening Mixer, Mastering, or Effects first raises
+a panel below its minimum. Mastering's minimum shows its whole 368-point board under
 the header row; a short window lowers it to 370 points, the same floor as
 Mixer, and the board then scrolls its chip strip below the pedals.
 
@@ -463,7 +463,7 @@ A single Bottom module selector occupies the fixed left slot in the lower
 panel's 28-point header row. Its width is 168 points, enough for the full name
 of every module, and its selected module uses 16-point bold Syncopate. The
 selector keeps the same horizontal anchor and control identity for Sounds,
-Mixer, and Mastering. A long selected name
+Mixer, Mastering, and Effects. A long selected name
 truncates within this width; the popup and accessible value retain its full name.
 Sound search and
 filters occupy the rest of this row when Sounds is selected. With Mastering,
@@ -518,7 +518,8 @@ controls reachable.
 All in-app tools, utility windows, and blocking dialogs use one resizable shell.
 Initial dimensions follow the content; they are not fixed raster dimensions.
 Drag any edge or corner to resize. Reflow or scroll the body without scaling its
-controls. Source names, action labels, and long feedback must remain reachable at
+controls. A body that overflows shows a solid scroll bar with a cream handle, so
+hidden content is visible as such. Source names, action labels, and long feedback must remain reachable at
 the minimum supported viewport. Keep a common title bar, margins, gaps, and action
 hierarchy. Specialized bodies such as the note grid keep their domain layout.
 
@@ -919,8 +920,12 @@ shared material geometry supports Utility, Marine, Granite, Red, Olive, and
 Indigo palettes. Fixed raster details
 fade to a matching solid base; no window depends on a complete fixed-size skin.
 Check the open and collapsed states, both resize directions, long content, focus,
-and all button states at supported sizes. Native visual checks for this revision
-are pending; concept approval is not verification.
+and all button states at supported sizes. Native captures from
+`tools/verify-ui.ps1` on 2026-10-27 show open windows with long content and
+disabled actions: an overflowing body shows its scroll bar, and short blocking
+dialogs follow the height of their content. They do not cover collapsed windows, resizing,
+keyboard focus, hover or pressed states, high DPI, accessibility, physical audio,
+or native file pickers.
 
 ### Empty states and feedback
 

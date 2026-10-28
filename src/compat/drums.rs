@@ -8,7 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-pub(super) const RENDERER_POLICY: &str = "dry-drum-import-v3: bit-zero-first; sixteen steps per bar; equal-temperament pitch; per-pad reverse and L/R routing; native 1.25 fader curve with Q16 truncation; independent hits; one-bar output; final saturation; then Groove Generator volume as floor(word / 4) / 8192; saved filter, echo, and distortion named and not applied";
+const RENDERER_POLICY: &str = "dry-drum-import-v3: bit-zero-first; sixteen steps per bar; equal-temperament pitch; per-pad reverse and L/R routing; native 1.25 fader curve with Q16 truncation; independent hits; one-bar output; final saturation; then Groove Generator volume as floor(word / 4) / 8192; saved filter, echo, and distortion named and not applied";
 const GEN3_RENDERER_POLICY: &str = "dry-drum-import-v2: bit-zero-first; sixteen pads and sixteen steps per bar; equal-temperament pitch; per-pad reverse and linear pan attenuation; explicit dry linear stored/32767 pad gain projection; independent hits; one-bar output; final saturation; opaque native effects retained without interpretation";
 
 pub(super) fn renderer_policy(product: Product) -> &'static str {
@@ -413,8 +413,10 @@ pub(super) fn prepare_kit<'a>(
         pads.push(Some(PreparedPad {
             pcm,
             pitch: 2.0f64.powf(f64::from(pad.pitch_semitones) / 12.0),
+            // D2 packed32d4 RDrum, RVA 0xf9c6, uses the 1.25 fader curve and
+            // signed Q16 output.
             gain: if product == Product::D2 {
-                native_pad_gain(pad.gain_native)
+                super::chunks::native_fader_gain(pad.gain_native, 1.25)
             } else {
                 f32::from(pad.gain_native) / 32767.0
             },
@@ -432,17 +434,6 @@ pub(super) fn prepare_kit<'a>(
         1.0
     };
     Ok(PreparedKit { pads, volume })
-}
-
-// D2 packed32d4 RDrum, RVA 0xf9c6, uses the 1.25 curve and signed Q16 output.
-fn native_pad_gain(value: u16) -> f32 {
-    let value = f64::from(value as i16) / 32767.0 * 1.25;
-    let value = if value > 1.0 {
-        value * value * value
-    } else {
-        value
-    };
-    ((value * 65536.0).trunc() / 65536.0) as f32
 }
 
 pub(super) fn render(prepared: &PreparedKit, pattern: &Pattern, bpm: f64) -> Result<Pcm, String> {

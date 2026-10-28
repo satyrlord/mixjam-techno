@@ -12,6 +12,10 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/dialog.rs
              + src/ui/controls.rs
              + src/ui/sample_editor.rs
+             + src/ui/mixer.rs
+             + src/ui/master.rs
+             + src/ui/fx.rs
+             + src/ui/agent.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -56,15 +60,16 @@ frames, with their decoded sources. It mixes any range of the song on demand.
 The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
 song and song length is bounded only by the timeline. The mix itself is dry.
-`Frames::read_sends` gives the dry sum together with the feeds of the four FX
-buses, eight interleaved channels a frame: each voice adds its sample, after the
-track's gains and pan, times the track's send. A voice applies its clip's fades
-per frame. `prepare_project` decodes each source once per clip pitch: a pitched
-copy is made off the audio thread by `sample_edit::repitch`, and the render
-worker keeps it until no clip uses that pitch. A track with automation mixes its
-voices into a 128-frame stack buffer, which its filter, volume, and send lanes
-then shape before the sum (`src/automation.rs`). Automation values are evaluated
-at each output frame, so short moves do not depend on the reader's block size.
+`Frames::read_block` with a sends buffer gives the dry sum together with the
+feeds of the four FX buses, eight interleaved channels a frame: each voice adds
+its sample, after the track's gains and pan, times the track's send. A voice
+applies its clip's fades per frame. `prepare_project` decodes each source once
+per clip pitch: a pitched copy is made off the audio thread by
+`sample_edit::repitch`, and the render worker keeps it until no clip uses that
+pitch. A track with automation mixes its voices into a 128-frame stack buffer,
+which its filter, volume, and send lanes then shape before the sum
+(`src/automation.rs`). Automation values are evaluated at each output frame,
+so short moves do not depend on the reader's block size.
 The shared mix is immutable. Each playback or export owns a `RenderState` with
 its filter histories and next-frame cursor, passed to `Frames::read_block`.
 A read that does not continue the previous one, after a seek or a loop, starts
@@ -160,7 +165,8 @@ or cancellation means. Native operating-system windows and file pickers are outs
 this shell.
 
 `src/ui/controls.rs` owns reusable control presentation and interaction: buttons,
-header icons, rotaries, sliders, numeric values, and switches. Roles and states
+header icons, rotaries, sliders, numeric values, switches, and the scrolling
+status text of tool footers. Roles and states
 share the same rendering and keyboard/accessibility behavior. Rotary full travel
 is 150 logical points; Shift applies fine adjustment to new movement. Parameter
 specifications retain ranges, reset values, logarithmic mapping, and discrete
@@ -257,7 +263,7 @@ at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
 to one physical pixel, with no texture resizing. The empty bank gives one
 instruction and leaves Master available.
 
-The frontend's `BottomModule` enum selects Sounds, Mixer, or Mastering. `src/ui/view.rs`
+The frontend's `BottomModule` enum selects Sounds, Mixer, Mastering, or Effects. `src/ui/view.rs`
 owns their shared 28-point header and fixed left-side `Bottom module` combo.
 Its width, `BOTTOM_MODULE_WIDTH`, is 168 points, which shows every module name
 in full; the selected module uses 16-point bold Syncopate.
@@ -268,9 +274,9 @@ Sounds filters render inline to its right. Each module renders only its body
 below that header. The Mixer and Mastering tool-rail shortcuts select their
 module, and select Sounds when that module is already selected. Selection and
 shared panel height are frontend session state. Switching preserves resized
-height; opening Mixer or Mastering raises a shorter panel to its minimum:
-400 points for Mixer, or the whole board for Mastering. Both yield down to
-370 points in a window too short to keep an 80-point lane viewport. Sounds
+height; opening Mixer, Mastering, or Effects raises a shorter panel to its
+minimum: 400 points for Mixer, or the whole board for Mastering and Effects.
+Each yields down to 370 points in a window too short to keep an 80-point lane viewport. Sounds
 retains its 180-point minimum.
 Later modules can extend the enum and the same selector.
 
@@ -446,7 +452,12 @@ GUI dependencies. The source guard does not check the full dependency graph.
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --locked
 .\tools\runtime\cargo.ps1 -CargoArguments @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
 .\tools\runtime\cargo.ps1 -CargoArguments @('fmt','--all','--','--check')
+python tools/check-rust-format.py
 ```
+
+`tools/check-rust-format.py` reports Rust code that the format check passes but
+rustfmt does not format: statements with a line too long to fit, and files that
+reach the crate only through `include!`.
 
 PowerShell removes a bare `--` from positional script arguments. Use the
 `-CargoArguments` form for any command that passes arguments after `--`.

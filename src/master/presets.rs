@@ -10,9 +10,8 @@
 //! the Multiband, which lifts the sound under each band's peaks as much in a
 //! breakdown as in a drop. Limiter gain compresses loud sections more than
 //! quiet ones, so it stays small: a song's breakdowns would rise toward its
-//! drops. A
-//! board is "in" a preset while its pedals equal the preset's; the song saves
-//! the board, not the name.
+//! drops. A board is "in" a preset while its pedals equal the preset's; the
+//! song saves the board, not the name.
 use super::{
     BusCompressor, Imaging, LiftEq, Limiter, MasterChain, Maximizer, Multiband, SoftClip, Tape,
     TrimEq, Tube,

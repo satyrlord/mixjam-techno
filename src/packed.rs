@@ -1,6 +1,7 @@
 //! The packed sample decoder recovered from packed32r4.dll.
 //!
-//! Static authority: decoder RVA 0x75ac and table builder RVA 0x3095.
+//! Static authority: decoder RVA 0x75ac and table builder RVA 0x3095, which
+//! builds `ORIGINAL_DPCM_STEPS`.
 //! Original predictors wrap at 16 bits. Dictionary token zero initially emits
 //! five unchanged predictor values. Other dictionary tokens must be defined.
 
@@ -11,26 +12,6 @@ pub struct DecodedSample {
 }
 
 const MAX_FRAMES: usize = 64_000_000;
-
-fn delta_table() -> [i16; 256] {
-    let mut levels = [0_i16; 257];
-    let mut growth = 2.2_f64;
-    let mut factor = 1.0565_f64;
-    for index in 1..128 {
-        let step = if index < 6 {
-            1
-        } else {
-            (growth - 0.52).trunc() as i16
-        };
-        levels[128 + index] = levels[127 + index] + step;
-        growth *= factor;
-        factor -= 0.00022;
-    }
-    for index in 1..=128 {
-        levels[128 - index] = -levels[128 + index];
-    }
-    std::array::from_fn(|index| levels[index] * 2)
-}
 
 /// Decode one complete packed archive record to 44.1 kHz mono PCM.
 pub fn decode_record(record: &[u8]) -> Result<DecodedSample, String> {
@@ -49,7 +30,7 @@ pub fn decode_record(record: &[u8]) -> Result<DecodedSample, String> {
     // FUN_1000af92 skips the final header word. The channel state, rather
     // than that word, supplies the original decoder's starting predictor.
     let mut predictor = 0_i16;
-    let table = delta_table();
+    let table = &legacy_format::packed::ORIGINAL_DPCM_STEPS;
     let mut dictionary: [Option<Vec<i16>>; 256] = std::array::from_fn(|_| None);
     dictionary[0] = Some(vec![0; 5]);
     let mut samples = Vec::with_capacity(frames);

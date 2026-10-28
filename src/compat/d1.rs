@@ -6,7 +6,7 @@ use crate::{
         normalize_import,
     },
     library::{Library, decode_1252},
-    products::{IMPORTED_ID_START, Product},
+    products::Product,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -127,9 +127,7 @@ fn convert(
             let bars = (pcm.frames() as f64 / pcm.sample_rate as f64 * 140.0 / 240.0).ceil() as u32;
             Ok((path, bars, pcm.sample_rate, candidates))
         });
-        let id = IMPORTED_ID_START
-            .checked_add((project.imported_samples.len() + project.missing_samples.len()) as u32)
-            .ok_or("Imported sample ID limit reached.")?;
+        let id = project.next_import_id()?;
         let name = format!("{} {}", fields[0], fields[1]).trim().to_owned();
         let name = if name.is_empty() {
             format!("Imported sample {source_id}")
@@ -196,7 +194,11 @@ fn convert(
             })
             .map(|(_, region)| region);
         let resolved = if unresolved_kit.is_some() {
-            Err("The saved D1 expansion kit name or ID range cannot be matched to the active catalog.".into())
+            Err(
+                "The saved D1 expansion kit name or ID range cannot be matched to the active \
+                 catalog."
+                    .into(),
+            )
         } else {
             resolve(event.sample)
         };
@@ -229,11 +231,7 @@ fn convert(
                         .insert("kit_last_id".into(), last.to_string());
                 }
                 if let Some((first, last, name)) = unresolved_kit {
-                    missing.id = IMPORTED_ID_START
-                        .checked_add(
-                            (project.imported_samples.len() + project.missing_samples.len()) as u32,
-                        )
-                        .ok_or("Imported sample ID limit reached.")?;
+                    missing.id = project.next_import_id()?;
                     missing.reference = MissingReference::Generated {
                         product: Product::D1,
                         kind: "unresolved-kit".into(),
@@ -549,6 +547,7 @@ fn resolve_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::products::IMPORTED_ID_START;
     fn mix() -> Vec<u8> {
         let mut b = vec![0; TRAILER_OFFSET];
         b[..2].copy_from_slice(&[6, 10]);

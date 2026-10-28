@@ -1,4 +1,4 @@
-//! packed container and dictionary expansion recovered from the installed corpus.
+//! Packed container and dictionary expansion recovered from the installed corpus.
 //!
 //! The original DLL table and decoder were called by an isolated x86 oracle.
 //! `original_pcm` matches that decoder with an empty destination mix buffer.
@@ -66,13 +66,36 @@ impl fmt::Display for PackedError {
         match self {
             Self::InvalidHeader => write!(f, "Invalid packed header"),
             Self::MissingAudioMarker => write!(f, "Missing packed audio marker"),
-            Self::AllocationLimit { requested } => write!(f, "packed sample count exceeds allocation limit: {requested}"),
-            Self::ImpossibleExpansion { requested, compressed } => write!(f, "packed sample count {requested} exceeds expansion bound for {compressed} compressed bytes"),
-            Self::TruncatedOpcode { offset } => write!(f, "Incomplete packed opcode at byte {offset}"),
-            Self::ReservedOpcode { offset, opcode } => write!(f, "Reserved packed opcode {opcode:#04x} at byte {offset}"),
-            Self::InvalidDictionaryKey { offset, key } => write!(f, "Invalid packed dictionary key {key:#04x} at byte {offset}"),
-            Self::UndefinedDictionaryKey { offset, key } => write!(f, "Undefined packed dictionary key {key:#04x} at byte {offset}"),
-            Self::IncompleteAudio { missing_samples } => write!(f, "Incomplete packed audio: {missing_samples} samples missing"),
+            Self::AllocationLimit { requested } => write!(
+                f,
+                "Packed sample count exceeds allocation limit: {requested}"
+            ),
+            Self::ImpossibleExpansion {
+                requested,
+                compressed,
+            } => write!(
+                f,
+                "Packed sample count {requested} exceeds expansion bound for {compressed} \
+                 compressed bytes"
+            ),
+            Self::TruncatedOpcode { offset } => {
+                write!(f, "Incomplete packed opcode at byte {offset}")
+            }
+            Self::ReservedOpcode { offset, opcode } => {
+                write!(f, "Reserved packed opcode {opcode:#04x} at byte {offset}")
+            }
+            Self::InvalidDictionaryKey { offset, key } => write!(
+                f,
+                "Invalid packed dictionary key {key:#04x} at byte {offset}"
+            ),
+            Self::UndefinedDictionaryKey { offset, key } => write!(
+                f,
+                "Undefined packed dictionary key {key:#04x} at byte {offset}"
+            ),
+            Self::IncompleteAudio { missing_samples } => write!(
+                f,
+                "Incomplete packed audio: {missing_samples} samples missing"
+            ),
         }
     }
 }
@@ -296,6 +319,29 @@ mod tests {
             parse_header(&[84, 255, 255, 255, 255, 0, 0]),
             Err(PackedError::AllocationLimit { .. })
         ));
+    }
+
+    #[test]
+    fn original_steps_match_the_table_builder() {
+        // The table builder at RVA 0x3095 of packed32r4.dll.
+        let mut levels = [0_i16; 257];
+        let mut growth = 2.2_f64;
+        let mut factor = 1.0565_f64;
+        for index in 1..128 {
+            let step = if index < 6 {
+                1
+            } else {
+                (growth - 0.52).trunc() as i16
+            };
+            levels[128 + index] = levels[127 + index] + step;
+            growth *= factor;
+            factor -= 0.00022;
+        }
+        for index in 1..=128 {
+            levels[128 - index] = -levels[128 + index];
+        }
+        let built: [i16; 256] = std::array::from_fn(|index| levels[index] * 2);
+        assert_eq!(built, ORIGINAL_DPCM_STEPS);
     }
 
     #[test]

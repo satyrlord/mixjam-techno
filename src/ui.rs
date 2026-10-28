@@ -69,10 +69,10 @@ enum BottomModule {
 impl BottomModule {
     const ALL: [Self; 4] = [Self::Sounds, Self::Mixer, Self::Mastering, Self::Effects];
     /// The panel minimum for a window whose content area is `available` points
-    /// high. Mixer prefers 400 points and Mastering the height of its whole
-    /// board. A short window reduces either, down to 370, so the arrangement
-    /// keeps the transport, its heading and ruler, and an 80-point lane
-    /// viewport; Mixer's gain rail shortens and the board scrolls.
+    /// high. Mixer prefers 400 points, and Mastering and Effects the height of
+    /// their whole boards. A short window reduces each, down to 370, so the
+    /// arrangement keeps the transport, its heading and ruler, and an 80-point
+    /// lane viewport; Mixer's gain rail shortens and the boards scroll.
     fn minimum_height(self, available: f32) -> f32 {
         const ARRANGEMENT_RESERVE: f32 = 68.0 + 103.0 + 80.0;
         match self {
@@ -1496,45 +1496,110 @@ impl MixJamApp {
                 self.resume_save_changes = false;
             }
         }
-        dialog::window("Help").open(&mut self.show_help).default_width(450.0).default_height(420.0)
+        dialog::window("Help")
+            .open(&mut self.show_help)
+            .default_width(450.0)
+            .default_height(420.0)
             .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0)).show(ctx, |ui| {
-                egui::Grid::new("help_gestures").num_columns(2).spacing(Vec2::new(18.0, 8.0)).show(ui, |ui| {
-                    for (action, gesture) in [
-                        ("Place sound", "Drag to a track, or select a sound and click a track. Up to 64 tracks."),
-                        ("Place by key", "Tab to a sound and press Enter. It lands on the recording track at the playhead."),
-                        ("Cancel placing", "An outline shows where a sound lands. Esc or a click on a clip ends click placement."),
-                        ("Preview", "Double-click a sound or clip."),
-                        ("Move / copy", "Drag a clip. Alt-drag copies."),
-                        ("Select group", "Shift-click clips or drag an empty area."),
-                        ("Fine snap", "Hold Ctrl for sixteenth-note positions."),
-                        ("Delete", "Select clips, then press Delete."),
-                        ("Select all", "Ctrl+A"),
-                        ("Duplicate", "Ctrl+D copies the selected clips to the bars that follow."),
-                        ("Clip menu", "Right-click a clip for Preview, Duplicate, Delete, and Resolve manually."),
-                        ("Clips by key", "Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews."),
-                        ("Seek / loop", "Click a bar number to seek. Drag the ruler to loop."),
-                        ("Play / pause", "Space"),
-                        ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y"),
-                        ("Open / save", "Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, MIXJAM, or JSON; save MIXJAM."),
-                        ("New song", "Ctrl+N"),
-                        ("Export", "Stereo WAV"),
-                        ("Help", "F1"),
-                    ] {
-                        ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
-                        ui.add(egui::Label::new(gesture).wrap());
-                        ui.end_row();
-                    }
-                });
+            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .show(ctx, |ui| {
+                egui::Grid::new("help_gestures")
+                    .num_columns(2)
+                    .spacing(Vec2::new(18.0, 8.0))
+                    .show(ui, |ui| {
+                        for (action, gesture) in [
+                            (
+                                "Place sound",
+                                "Drag to a track, or select a sound and click a track. Up to 64 \
+                                 tracks.",
+                            ),
+                            (
+                                "Place by key",
+                                "Tab to a sound and press Enter. It lands on the recording track \
+                                 at the playhead.",
+                            ),
+                            (
+                                "Cancel placing",
+                                "An outline shows where a sound lands. Esc or a click on a clip \
+                                 ends click placement.",
+                            ),
+                            ("Preview", "Double-click a sound or clip."),
+                            ("Move / copy", "Drag a clip. Alt-drag copies."),
+                            ("Select group", "Shift-click clips or drag an empty area."),
+                            ("Fine snap", "Hold Ctrl for sixteenth-note positions."),
+                            ("Delete", "Select clips, then press Delete."),
+                            ("Select all", "Ctrl+A"),
+                            (
+                                "Duplicate",
+                                "Ctrl+D copies the selected clips to the bars that follow.",
+                            ),
+                            (
+                                "Clip menu",
+                                "Right-click a clip for Preview, Duplicate, Delete, and Resolve \
+                                 manually.",
+                            ),
+                            (
+                                "Clips by key",
+                                "Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a \
+                                 bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews.",
+                            ),
+                            (
+                                "Seek / loop",
+                                "Click a bar number to seek. Drag the ruler to loop.",
+                            ),
+                            ("Play / pause", "Space"),
+                            ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y"),
+                            (
+                                "Open / save",
+                                "Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, \
+                                 MIXJAM, or JSON; save MIXJAM.",
+                            ),
+                            ("New song", "Ctrl+N"),
+                            ("Export", "Stereo WAV"),
+                            ("Help", "F1"),
+                        ] {
+                            ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
+                            ui.add(egui::Label::new(gesture).wrap());
+                            ui.end_row();
+                        }
+                    });
                 ui.separator();
-                ui.label("Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.");
-                ui.label("M mutes a track. S solos it: while any track is soloed, only soloed tracks play, and a muted track stays silent. The strip says why a silent track is silent: Muted, No output, or Solo elsewhere.");
-                ui.label("Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB reduces level; it does not invert polarity.");
-                ui.label("Click a gain value for exact dB entry, then Enter. Enter -inf for silence. Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. Master stays visible while tracks scroll.");
-                ui.label("The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.");
-                ui.label("The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.");
-                ui.label("Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.");
-                ui.label("Shortcuts with Ctrl work from any control except a value that is being typed. Space plays when no control has focus, or when a dial, a fader, or the lanes have it.");
+                ui.label(
+                    "Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off \
+                     leaves a track with no output.",
+                );
+                ui.label(
+                    "M mutes a track. S solos it: while any track is soloed, only soloed tracks \
+                     play, and a muted track stays silent. The strip says why a silent track is \
+                     silent: Muted, No output, or Solo elsewhere.",
+                );
+                ui.label(
+                    "Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB \
+                     reduces level; it does not invert polarity.",
+                );
+                ui.label(
+                    "Click a gain value for exact dB entry, then Enter. Enter -inf for silence. \
+                     Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. \
+                     Master stays visible while tracks scroll.",
+                );
+                ui.label(
+                    "The slashed-circle button reverses both channels' polarity without changing \
+                     gain or pan. Its amber state means inverted. Polarity stays set at silence.",
+                );
+                ui.label(
+                    "The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys \
+                     change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End \
+                     sets +12 dB.",
+                );
+                ui.label(
+                    "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and \
+                     R.",
+                );
+                ui.label(
+                    "Shortcuts with Ctrl work from any control except a value that is being \
+                     typed. Space plays when no control has focus, or when a dial, a fader, or \
+                     the lanes have it.",
+                );
                 ui.separator();
                 ui.label(egui::RichText::new("Time Stretcher").strong());
                 stretch_help(ui);
@@ -1611,7 +1676,10 @@ impl MixJamApp {
         let response = dialog::modal(ctx, "Sample conflicts", "Sample conflicts", |ui| {
             ui.set_width((ctx.viewport_rect().width() - 96.0).clamp(280.0, 700.0));
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-            ui.label("Several files match a saved sample. The first match is selected until you choose another.");
+            ui.label(
+                "Several files match a saved sample. The first match is selected until you choose \
+                 another.",
+            );
             ui.label("Each choice updates every instance of that source in this song.");
             ui.add_space(10.0);
             egui::ScrollArea::vertical()
@@ -1709,7 +1777,10 @@ impl MixJamApp {
                     }
                 }
             });
-            ui.small("Esc closes this window without confirming. Reopen from Sample conflicts in the status bar.");
+            ui.small(
+                "Esc closes this window without confirming. Reopen from Sample conflicts in the \
+                 status bar.",
+            );
         });
         if let Some((conflict, candidate)) = choice {
             match self.session.resolve_sample_conflict(conflict, candidate) {
@@ -2266,14 +2337,29 @@ impl MixJamApp {
                 .show(ctx, |ui| {
                     let scan = self.session.wave_scan();
                     if scan.is_none() && self.session.library().wav_root().is_none() {
-                        ui.label("Choose a folder of WAV files to fill the Sounds panel. Subfolders are included. Fallback BPM applies only to sounds whose tempo cannot be recognized.");
+                        ui.label(
+                            "Choose a folder of WAV files to fill the Sounds panel. Subfolders \
+                             are included. Fallback BPM applies only to sounds whose tempo cannot \
+                             be recognized.",
+                        );
                     }
                     ui.horizontal(|ui| {
                         ui.label("Fallback BPM");
                         controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM")
-                            .on_hover_text("Recognized product audio keeps its original tempo. Folders use matching original audio when enough sources agree, then loop lengths, then this fallback. Unresolved half/double matches prefer 88–176 BPM unless the fallback selects the other tempo.");
+                            .on_hover_text(
+                                "Recognized product audio keeps its original tempo. Folders use \
+                                 matching original audio when enough sources agree, then loop \
+                                 lengths, then this fallback. Unresolved half/double matches \
+                                 prefer 88–176 BPM unless the fallback selects the other tempo.",
+                            );
                         if ui
-                            .add_enabled_ui(!self.session.is_recording() && scan.is_none(), |ui| controls::button(ui, "Choose WAV folder", controls::ButtonRole::Secondary))
+                            .add_enabled_ui(!self.session.is_recording() && scan.is_none(), |ui| {
+                                controls::button(
+                                    ui,
+                                    "Choose WAV folder",
+                                    controls::ButtonRole::Secondary,
+                                )
+                            })
                             .inner
                             .on_disabled_hover_text(if scan.is_some() {
                                 "Wait for the current scan to finish or cancel it."
@@ -2297,12 +2383,17 @@ impl MixJamApp {
                             };
                             let width = (ui.available_width() - 80.0).clamp(80.0, 300.0);
                             controls::progress(ui, &text, fraction, width);
-                            if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
+                            if controls::button(ui, "Cancel", controls::ButtonRole::Secondary)
+                                .clicked()
+                            {
                                 self.session.cancel_wave_scan();
                                 self.sync_notice();
                             }
                         });
-                        ui.small(format!("Scanning {}", display_paths(&scan.root.to_string_lossy())));
+                        ui.small(format!(
+                            "Scanning {}",
+                            display_paths(&scan.root.to_string_lossy())
+                        ));
                     } else if let Some(root) = self.session.library().wav_root() {
                         ui.label(display_paths(&root.to_string_lossy()));
                     }
@@ -2310,33 +2401,39 @@ impl MixJamApp {
                     if let Some(root) = library.wav_root()
                         && !library.folder_tempos().is_empty()
                     {
-                        controls::disclosure(format!("Folder tempos ({})", library.folder_tempos().len()))
-                            .default_open(self.capture_view_is("library-tempos"))
-                            .show(ui, |ui| {
-                                for (folder, bpm, count) in library.folder_tempos() {
-                                    let relative = folder.strip_prefix(root).unwrap_or(folder);
-                                    let name = if relative.as_os_str().is_empty() {
-                                        ".".to_string()
-                                    } else {
-                                        display_paths(&relative.to_string_lossy())
-                                    };
-                                    ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
-                                }
-                            });
+                        controls::disclosure(format!(
+                            "Folder tempos ({})",
+                            library.folder_tempos().len()
+                        ))
+                        .default_open(self.capture_view_is("library-tempos"))
+                        .show(ui, |ui| {
+                            for (folder, bpm, count) in library.folder_tempos() {
+                                let relative = folder.strip_prefix(root).unwrap_or(folder);
+                                let name = if relative.as_os_str().is_empty() {
+                                    ".".to_string()
+                                } else {
+                                    display_paths(&relative.to_string_lossy())
+                                };
+                                ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
+                            }
+                        });
                     }
                     if let Some(root) = library.wav_root()
                         && !library.skipped_waves().is_empty()
                     {
-                        controls::disclosure(format!("Skipped WAVs ({})", library.skipped_waves().len()))
-                            .show(ui, |ui| {
-                                for (path, error) in library.skipped_waves() {
-                                    let relative = path.strip_prefix(root).unwrap_or(path);
-                                    ui.small(format!(
-                                        "{}: {error}",
-                                        display_paths(&relative.to_string_lossy())
-                                    ));
-                                }
-                            });
+                        controls::disclosure(format!(
+                            "Skipped WAVs ({})",
+                            library.skipped_waves().len()
+                        ))
+                        .show(ui, |ui| {
+                            for (path, error) in library.skipped_waves() {
+                                let relative = path.strip_prefix(root).unwrap_or(path);
+                                ui.small(format!(
+                                    "{}: {error}",
+                                    display_paths(&relative.to_string_lossy())
+                                ));
+                            }
+                        });
                     }
                     controls::disclosure("Optional product providers")
                         .default_open(self.capture_view_is("library-providers"))
@@ -2355,8 +2452,16 @@ impl MixJamApp {
                                     })
                                     .response;
                                 name_control(products, "Provider product");
-                                if controls::button(ui, "Choose folder", controls::ButtonRole::Secondary).clicked() {
-                                    self.ask_path(FileRequest::ProviderFolder(self.library_product));
+                                if controls::button(
+                                    ui,
+                                    "Choose folder",
+                                    controls::ButtonRole::Secondary,
+                                )
+                                .clicked()
+                                {
+                                    self.ask_path(FileRequest::ProviderFolder(
+                                        self.library_product,
+                                    ));
                                 }
                             });
                             ui.separator();
@@ -2367,7 +2472,13 @@ impl MixJamApp {
                             for binding in bindings {
                                 ui.horizontal(|ui| {
                                     ui.label(binding.product.label());
-                                    if controls::button(ui, "Remove", controls::ButtonRole::Secondary).clicked() {
+                                    if controls::button(
+                                        ui,
+                                        "Remove",
+                                        controls::ButtonRole::Secondary,
+                                    )
+                                    .clicked()
+                                    {
                                         self.remove_library(binding.product);
                                     }
                                 });
@@ -2408,7 +2519,10 @@ impl MixJamApp {
                                         &format!("Resolve manually: {}", missing.name),
                                     );
                                     if action
-                                        .on_hover_text("Choose the WAV file for this sound. Every clip that uses it keeps its position, length, and gain.")
+                                        .on_hover_text(
+                                            "Choose the WAV file for this sound. Every clip that \
+                                             uses it keeps its position, length, and gain.",
+                                        )
                                         .clicked()
                                     {
                                         resolve = Some(missing.id);
@@ -2458,16 +2572,15 @@ impl MixJamApp {
                         controls::disclosure(format!("Saved settings ({})", settings.len()))
                             .id_salt("source_settings")
                             .show(ui, |ui| {
-                                ui.label("The original product saved these values with the song. Select them to copy.");
+                                ui.label(
+                                    "The original product saved these values with the song. \
+                                     Select them to copy.",
+                                );
                                 let rows: Vec<_> = settings
                                     .iter()
                                     .map(|(key, value)| format!("{key}: {value}"))
                                     .collect();
-                                ui.add(
-                                    egui::Label::new(rows.join("\n"))
-                                        .wrap()
-                                        .selectable(true),
-                                );
+                                ui.add(egui::Label::new(rows.join("\n")).wrap().selectable(true));
                             });
                     }
                 });

@@ -147,7 +147,9 @@ pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) 
             let (_, unusable) = booster(product, saved);
             if !unusable.is_empty() {
                 notices.push(format!(
-                    "Saved Booster effects are not applied because their values cannot be read: {}. The mix can sound different from the original. The values remain in Saved settings.",
+                    "Saved Booster effects are not applied because their values cannot be read: \
+                     {}. The mix can sound different from the original. The values remain in \
+                     Saved settings.",
                     unusable.join(", ")
                 ));
             }
@@ -165,14 +167,16 @@ pub(super) fn notices(product: Product, saved: &Saved, has_drum_patterns: bool) 
                 .collect();
             if has_drum_patterns && !drum.is_empty() && !pads.is_empty() {
                 notices.push(format!(
-                    "Saved drum pad effects are not applied: {} on pad {}. Drum patterns play without them. The values remain in Saved settings.",
+                    "Saved drum pad effects are not applied: {} on pad {}. Drum patterns play \
+                     without them. The values remain in Saved settings.",
                     drum.join(", "),
                     pads.join(", ")
                 ));
             }
         }
         Product::H1 if !saved.entries.is_empty() => notices.push(format!(
-            "House saved {} settings with this song. They remain in Saved settings; the application does not read them.",
+            "House saved {} settings with this song. They remain in Saved settings; the \
+             application does not read them.",
             saved.entries.len()
         )),
         _ => {}

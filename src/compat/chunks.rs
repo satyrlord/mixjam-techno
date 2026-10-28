@@ -7,7 +7,7 @@ use crate::{
         TICKS_PER_BAR, TRACK_COUNT, Track, normalize_import,
     },
     library::{Library, decode_1252},
-    products::{IMPORTED_ID_START, Product},
+    products::Product,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -30,9 +30,6 @@ static NEXT_ASSET_TEMP_ID: AtomicU64 = AtomicU64::new(0);
 mod import_tests;
 
 pub fn load(path: &Path, product: Product, library: &Library) -> Result<Project, String> {
-    if product == Product::T2 {
-        return crate::legacy_mix::load(path, library);
-    }
     let bytes = read_song_file(path)?;
     let header = read_header(&bytes, product)?;
     let raw = read_timeline(&bytes, header.after_mixer, product)?;
@@ -184,7 +181,9 @@ fn read_header(bytes: &[u8], product: Product) -> Result<Header, String> {
                 format!("Native track {}: mute={mute}, solo={solo}.", index + 1)
             } else {
                 format!(
-                    "Native track {}: mute={mute}, solo={solo}. A saved value other than 0 or 1 has no Mute or Solo equivalent, so this song's mute and solo settings were applied to the L/R outputs.",
+                    "Native track {}: mute={mute}, solo={solo}. A saved value other than 0 or 1 \
+                     has no Mute or Solo equivalent, so this song's mute and solo settings were \
+                     applied to the L/R outputs.",
                     index + 1
                 )
             });
@@ -455,7 +454,7 @@ fn event_tuple(
 }
 
 // Native RWaveParam faders use signed input and truncate to signed Q16 gain.
-fn native_fader_gain(stored: u16, scale: f64) -> f32 {
+pub(super) fn native_fader_gain(stored: u16, scale: f64) -> f32 {
     let value = f64::from(stored as i16) / 32767.0 * scale;
     let value = if value > 1.0 {
         value * value * value
@@ -1395,7 +1394,7 @@ pub(crate) fn build_project(
                         Ok(wave) => Some(wave),
                         Err(error) if has_embedded => return Err(error),
                         Err(reason) => {
-                            let id = next_import_id(&project)?;
+                            let id = project.next_import_id()?;
                             let named = [
                                 metadata.get("Native label 1"),
                                 metadata.get("Native label 2"),
@@ -1431,7 +1430,13 @@ pub(crate) fn build_project(
                             missing.length_inferred =
                                 declared_ticks.is_none() || inconsistent_spans.contains_key(&key);
                             if inconsistent_spans.contains_key(&key) {
-                                missing.metadata.insert("Length confidence".into(), "Saved trims exceed a saved source span. The minimum compatible whole-bar source length is inferred; valid saved placement spans are retained.".into());
+                                missing.metadata.insert(
+                                    "Length confidence".into(),
+                                    "Saved trims exceed a saved source span. The minimum \
+                                     compatible whole-bar source length is inferred; valid saved \
+                                     placement spans are retained."
+                                        .into(),
+                                );
                                 missing.metadata.extend(conflicting_placement_metadata(
                                     &inconsistent_details[&key],
                                 ));
@@ -1460,7 +1465,7 @@ pub(crate) fn build_project(
                             }) {
                             existing.id
                         } else {
-                            let id = next_import_id(&project)?;
+                            let id = project.next_import_id()?;
                             project.imported_samples.push(ImportedSample {
                                 id,
                                 name: stretched_names
@@ -1508,18 +1513,19 @@ pub(crate) fn build_project(
                     let pcm =
                         drums::prepare_kit(source_kit, library, product, std::iter::once(&pattern))
                             .and_then(|prepared| drums::render(&prepared, &pattern, header.bpm));
+                    let label = format!("{} {}", pattern.group, pattern.variant)
+                        .trim()
+                        .to_string();
+                    let name = if label.is_empty() {
+                        format!("Drum pattern {}", pattern.native_id)
+                    } else {
+                        label
+                    };
                     if let Err(reason) = pcm {
-                        let id = next_import_id(&project)?;
-                        let label = format!("{} {}", pattern.group, pattern.variant)
-                            .trim()
-                            .to_string();
+                        let id = project.next_import_id()?;
                         project.missing_samples.push(MissingSample {
                             id,
-                            name: if label.is_empty() {
-                                format!("Drum pattern {}", pattern.native_id)
-                            } else {
-                                label
-                            },
+                            name,
                             source_bpm: header.bpm,
                             sample_rate: 44100,
                             nominal_ticks: TICKS_PER_BAR,
@@ -1551,15 +1557,7 @@ pub(crate) fn build_project(
                         {
                             existing.id
                         } else {
-                            let id = next_import_id(&project)?;
-                            let name = format!("{} {}", pattern.group, pattern.variant)
-                                .trim()
-                                .to_string();
-                            let name = if name.is_empty() {
-                                format!("Drum pattern {}", pattern.native_id)
-                            } else {
-                                name
-                            };
+                            let id = project.next_import_id()?;
                             project.imported_samples.push(ImportedSample {
                                 id,
                                 name,
@@ -1646,15 +1644,6 @@ pub(crate) fn build_project(
         preserve_wave(&path, &bytes)?;
     }
     Ok(project)
-}
-
-fn next_import_id(project: &Project) -> Result<u32, String> {
-    IMPORTED_ID_START
-        .checked_add(
-            u32::try_from(project.imported_samples.len() + project.missing_samples.len())
-                .map_err(|_| "The imported sample limit was reached.")?,
-        )
-        .ok_or_else(|| "The imported sample limit was reached.".into())
 }
 
 pub(crate) fn restore_missing(
@@ -1848,6 +1837,7 @@ fn verify_existing_asset(path: &Path, bytes: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::products::IMPORTED_ID_START;
 
     fn text_block(bytes: &mut Vec<u8>, value: &[u8]) {
         bytes.extend_from_slice(&(value.len() as u16).to_le_bytes());
@@ -1930,6 +1920,8 @@ mod tests {
             bytes.extend_from_slice(&chunk);
             bytes.extend_from_slice(&SENTINEL);
             fs::write(&path, bytes).unwrap();
+            // Song detection keeps its own copy of each profile's app ID.
+            assert_eq!(crate::project_io::detect_product(&path).unwrap(), product);
             let project = load(&path, product, &library).unwrap();
             assert_eq!(
                 project.clips[0].sample_id,
@@ -2083,7 +2075,9 @@ mod tests {
 
     #[test]
     fn saved_settings_after_the_title_survive_import_and_json() {
-        let title = b"Song\0BoostEQ#\xb0_#0%\xb0_%BoostCompressorLED#\xb0_#1%\xb0_%BoostCompressorDrive#\xb0_#12080%\xb0_%FX_12#\xb0_#1%\xb0_%DrumEcho#\xb0_#1%\xb0_%\0\x01";
+        let title = b"Song\0BoostEQ#\xb0_#0%\xb0_%BoostCompressorLED#\xb0_#1%\
+                      \xb0_%BoostCompressorDrive#\xb0_#12080%\xb0_%FX_12#\xb0_#1%\xb0_%DrumEcho#\
+                      \xb0_#1%\xb0_%\0\x01";
         for product in [Product::D3, Product::D4, Product::T3, Product::H1] {
             let bytes = titled_header_fixture(product, 140, 140, title);
             let header = read_header(&bytes, product).unwrap();

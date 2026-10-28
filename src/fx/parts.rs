@@ -1,6 +1,6 @@
 //! Parts that the delay and the reverb share. Delay lines live on the heap
 //! and are sized when an effect is built, so processing never allocates.
-use crate::master::dsp::{RATE, flush};
+use crate::master::dsp::{RATE, db_to_gain, flush, gain_to_db, pole};
 use std::f64::consts::{PI, TAU};
 
 /// A delay line of one channel, read at fractional positions with cubic
@@ -141,7 +141,7 @@ impl Ducker {
     pub(super) fn new() -> Self {
         Self {
             envelope: 0.0,
-            attack: 1.0 - (-1.0 / (0.007 * RATE)).exp(),
+            attack: 1.0 - pole(0.007),
             release: 0.0,
         }
     }
@@ -149,7 +149,7 @@ impl Ducker {
         self.envelope = 0.0;
     }
     pub(super) fn set_release(&mut self, ms: f64) {
-        self.release = 1.0 - (-1.0 / (ms / 1000.0 * RATE)).exp();
+        self.release = 1.0 - pole(ms / 1000.0);
     }
     /// The wet gain for this input frame at `amount` from 0 to 1.
     #[inline]
@@ -164,10 +164,10 @@ impl Ducker {
         if amount <= 0.0 || self.envelope < 1e-5 {
             return 1.0;
         }
-        let db = 20.0 * self.envelope.log10();
+        let db = gain_to_db(self.envelope);
         let x = ((db + 42.0) / 30.0).clamp(0.0, 1.0);
         let knee = x * x * (3.0 - 2.0 * x);
-        10f64.powf(-24.0 * amount * knee / 20.0)
+        db_to_gain(-24.0 * amount * knee)
     }
 }
 
@@ -214,14 +214,14 @@ impl Glide {
         Self {
             value,
             target: value,
-            step: 1.0 - (-1.0 / (seconds * RATE)).exp(),
+            step: 1.0 - pole(seconds),
         }
     }
     pub(super) fn set(&mut self, target: f64) {
         self.target = target;
     }
     pub(super) fn set_time(&mut self, seconds: f64) {
-        self.step = 1.0 - (-1.0 / (seconds * RATE)).exp();
+        self.step = 1.0 - pole(seconds);
     }
     pub(super) fn settle(&mut self) {
         self.value = self.target;
@@ -307,7 +307,7 @@ impl SafetyLimiter {
             ramp: vec![1.0; lookahead].into_boxed_slice(),
             ramp_at: 0,
             ramp_sum: lookahead as f64,
-            release: (-1.0 / (0.1 * RATE)).exp(),
+            release: pole(0.1),
         }
     }
     pub(super) fn clear(&mut self) {
@@ -386,7 +386,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn review_moving_min_keeps_the_oldest_live_value_when_full() {
+    fn moving_min_keeps_the_oldest_live_value_when_full() {
         let mut minimum = MovingMin::new(4);
         for index in 0usize..20 {
             assert_eq!(minimum.push(index as f64), index.saturating_sub(3) as f64);
@@ -394,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn review_clearing_the_limiter_reuses_its_buffers() {
+    fn clearing_the_limiter_reuses_its_buffers() {
         let mut limiter = SafetyLimiter::new();
         let pointers = (
             limiter.delays[0].buffer.as_ptr(),

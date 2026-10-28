@@ -84,8 +84,8 @@ struct ShellResponse {
     close: bool,
 }
 
-fn constrain(mut g: Geometry, viewport: Rect, collapsed: bool) -> Geometry {
-    g.size = g.size.max(MIN_SIZE).min(viewport.size());
+fn constrain(mut g: Geometry, viewport: Rect, collapsed: bool, min: Vec2) -> Geometry {
+    g.size = g.size.max(min).min(viewport.size());
     let visible = Vec2::new(g.size.x, if collapsed { HEADER } else { g.size.y });
     g.position.x = g.position.x.clamp(
         viewport.left(),
@@ -106,16 +106,25 @@ fn show_shell<R>(
     let id = egui::Id::new(spec.identity);
     let gid = id.with("hardware-geometry");
     let collapsed = is_collapsed(ctx, spec.identity);
+    // A window that follows its content can be shorter than MIN_SIZE: its
+    // floor is the height that its content last needed.
+    let fitted_id = id.with("hardware-fitted");
+    let mut min = MIN_SIZE;
+    if spec.fit
+        && let Some(fitted) = ctx.data(|d| d.get_temp::<f32>(fitted_id))
+    {
+        min.y = fitted.min(MIN_SIZE.y);
+    }
     let mut geometry = ctx
         .data(|d| d.get_temp::<Geometry>(gid))
         .unwrap_or_else(|| {
-            let size = spec.size.max(MIN_SIZE).min(spec.viewport.size());
+            let size = spec.size.max(min).min(spec.viewport.size());
             Geometry {
                 position: spec.viewport.center() - size / 2.0,
                 size,
             }
         });
-    geometry = constrain(geometry, spec.viewport, collapsed);
+    geometry = constrain(geometry, spec.viewport, collapsed, min);
     let blocking = spec.blocking && !collapsed;
     let order = if spec.blocking {
         egui::Order::Foreground
@@ -290,20 +299,40 @@ fn show_shell<R>(
                         .max_rect(body),
                 );
                 content.set_clip_rect(body.intersect(spec.viewport));
+                // Solid bars show whenever the body overflows; floating bars
+                // stay hidden until hovered. The handle takes the cream text
+                // colour, because its default fill is the bay's own face. The
+                // content keeps its own style.
+                let inherited = content.spacing().scroll;
+                content.spacing_mut().scroll = egui::style::ScrollStyle {
+                    foreground_color: true,
+                    ..egui::style::ScrollStyle::solid()
+                };
                 let scrolled = egui::ScrollArea::both()
                     .id_salt("hardware-scroll")
                     .auto_shrink([false, false])
-                    .show(&mut content, contents);
+                    .min_scrolled_height(0.0)
+                    .show(&mut content, |ui| {
+                        ui.spacing_mut().scroll = inherited;
+                        contents(ui)
+                    });
                 let resized_id = id.with("hardware-resized");
                 if spec.fit && !ctx.data(|d| d.get_temp::<bool>(resized_id).unwrap_or(false)) {
                     // A short dialog has no empty bay below its last control.
                     let chrome = bounds.height() - body.height();
-                    geometry.size.y = (scrolled.content_size.y + chrome)
-                        .max(MIN_SIZE.y.min(spec.size.y))
+                    let horizontal_bar = if scrolled.content_size.x > scrolled.inner_rect.width() {
+                        content.spacing().scroll.allocated_width()
+                    } else {
+                        0.0
+                    };
+                    let fitted = (scrolled.content_size.y + chrome + horizontal_bar)
                         .min(spec.viewport.height());
+                    geometry.size.y = fitted;
+                    min.y = fitted.min(MIN_SIZE.y);
+                    ctx.data_mut(|d| d.insert_temp(fitted_id, fitted));
                 }
                 let before = geometry.size;
-                resize_handles(ui, bounds, &mut geometry);
+                resize_handles(ui, bounds, &mut geometry, min);
                 if geometry.size != before {
                     ctx.data_mut(|d| d.insert_temp(resized_id, true));
                 }
@@ -345,13 +374,13 @@ fn show_shell<R>(
         .memory(|m| m.focused())
         .is_some_and(|id| egui::TextEdit::load_state(ctx, id).is_some());
     ctx.data_mut(|d| {
-        d.insert_temp(gid, constrain(geometry, spec.viewport, collapsed));
+        d.insert_temp(gid, constrain(geometry, spec.viewport, collapsed, min));
         d.insert_temp(id.with("hardware-escape-guard"), wants_keyboard);
     });
     ShellResponse { help, close }
 }
 
-fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry) {
+fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry, min: Vec2) {
     let edge = 6.0;
     for (index, h, v) in [
         (0, -1, -1),
@@ -393,10 +422,10 @@ fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry) {
             let delta = ui.input(|i| i.pointer.delta());
             let before = g.size;
             if h != 0 {
-                g.size.x = (before.x + delta.x * h as f32).max(MIN_SIZE.x);
+                g.size.x = (before.x + delta.x * h as f32).max(min.x);
             }
             if v != 0 {
-                g.size.y = (before.y + delta.y * v as f32).max(MIN_SIZE.y);
+                g.size.y = (before.y + delta.y * v as f32).max(min.y);
             }
             if h < 0 {
                 g.position.x += before.x - g.size.x;
@@ -680,13 +709,108 @@ mod tests {
         };
         let viewport = Rect::from_min_size(Pos2::new(8.0, 8.0), Vec2::new(944.0, 704.0));
         for collapsed in [false, true] {
-            let bounded = constrain(original, viewport, collapsed);
+            let bounded = constrain(original, viewport, collapsed, MIN_SIZE);
             let visible = Vec2::new(
                 bounded.size.x,
                 if collapsed { HEADER } else { bounded.size.y },
             );
             assert!(viewport.contains_rect(Rect::from_min_size(bounded.position, visible)));
             assert_eq!(bounded.size, original.size);
+        }
+    }
+
+    #[test]
+    fn short_modal_follows_its_content_below_the_minimum_height() {
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        let frame = || {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                    ..Default::default()
+                },
+                |ctx| {
+                    modal(ctx, "Short fixture", "Short fixture", |ui| {
+                        ui.label("One line of text.");
+                    });
+                },
+            );
+        };
+        let height = || {
+            ctx.data(|d| {
+                d.get_temp::<Geometry>(egui::Id::new("Short fixture").with("hardware-geometry"))
+            })
+            .unwrap()
+            .size
+            .y
+        };
+        for _ in 0..3 {
+            frame();
+        }
+        let fitted = height();
+        assert!(
+            fitted < MIN_SIZE.y,
+            "A short modal keeps an empty bay: {fitted}"
+        );
+        for _ in 0..3 {
+            frame();
+        }
+        assert_eq!(height(), fitted);
+        let painted = ctx
+            .memory(|m| m.area_rect(egui::Id::new("Short fixture")))
+            .unwrap();
+        assert!(
+            (painted.height() - fitted).abs() < 1.0,
+            "{painted:?} / {fitted}"
+        );
+    }
+
+    #[test]
+    fn fitted_modal_keeps_short_wide_content_above_the_horizontal_scrollbar() {
+        for height in [20.0, 40.0, 100.0] {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            let mut content = Rect::NOTHING;
+            let mut clip = Rect::NOTHING;
+            let mut visible_bar = false;
+            for _ in 0..12 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        modal(ctx, "Wide fixture", "Wide fixture", |ui| {
+                            content = ui
+                                .allocate_exact_size(Vec2::new(800.0, height), Sense::hover())
+                                .0;
+                            clip = ui.clip_rect();
+                        });
+                    },
+                );
+                visible_bar = output.shapes.iter().any(|shape| {
+                    matches!(&shape.shape, egui::Shape::Rect(rect)
+                        if rect.fill == controls::CREAM
+                            && rect.rect.width() > 100.0
+                            && rect.rect.height() < 16.0
+                            && rect.rect.top() >= content.bottom()
+                            && shape.clip_rect.contains_rect(rect.rect))
+                });
+            }
+            assert!(
+                content.width() > clip.width(),
+                "The fixture must scroll horizontally."
+            );
+            assert!(
+                content.bottom() <= clip.bottom(),
+                "A fitted dialog must leave room for its horizontal scrollbar: \
+                 {content:?} / {clip:?}"
+            );
+            assert!(
+                visible_bar,
+                "The horizontal scrollbar must stay visible below {height}-point content."
+            );
         }
     }
 }

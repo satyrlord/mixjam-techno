@@ -1031,7 +1031,8 @@ pub fn send(
         if connection.is_none() {
             let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).map_err(|error| {
                 format!(
-                    "Cannot reach MixJam Techno on port {port}: {error}. Start it with `gui --agent`."
+                    "Cannot reach MixJam Techno on port {port}: {error}. Start it with `gui \
+                     --agent`."
                 )
             })?;
             let reader = BufReader::new(stream.try_clone().map_err(|error| error.to_string())?);
@@ -1086,7 +1087,8 @@ pub fn run_client(arguments: &[String]) -> Result<bool, String> {
     let key_file = key_path(&crate::project_io::data_root(), port);
     let key = std::fs::read_to_string(&key_file).map_err(|_| {
         format!(
-            "No session key at {}. Start the application with `gui --agent`, with the same port and the same MIXJAM_TECHNO_DATA_DIR as this command.",
+            "No session key at {}. Start the application with `gui --agent`, with the same port \
+             and the same MIXJAM_TECHNO_DATA_DIR as this command.",
             key_file.display()
         )
     })?;

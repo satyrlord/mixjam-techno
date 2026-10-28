@@ -111,8 +111,9 @@ pub(super) fn name_dialog(ui: &egui::Ui, title: &str) {
 }
 
 impl MixJamApp {
-    /// Load the bundled artwork once. A failure is reported once; the header
-    /// then falls back to text actions and the tool rail stays hidden.
+    /// Load the bundled artwork, again when the display density changes. A
+    /// failure is reported once; the header then falls back to text actions
+    /// and the tool rail stays hidden.
     fn icons(&mut self, ctx: &egui::Context) -> Option<Arc<RailIcons>> {
         if self.rail_icons.as_ref().is_none_or(|loaded| {
             loaded
@@ -300,9 +301,12 @@ impl MixJamApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add(
                         egui::Hyperlink::from_label_and_url(
-                            egui::RichText::new(format!("v{}", mixjam_techno::application::APP_VERSION))
-                                .size(12.0)
-                                .color(ACCENT),
+                            egui::RichText::new(format!(
+                                "v{}",
+                                mixjam_techno::application::APP_VERSION
+                            ))
+                            .size(12.0)
+                            .color(ACCENT),
                             "https://github.com/satyrlord/mixjam-techno",
                         )
                         .open_in_new_tab(true),
@@ -324,8 +328,18 @@ impl MixJamApp {
                             self.show_import_details = true;
                         }
                         if !self.session.missing_samples().is_empty() {
-                            ui.label(egui::RichText::new(format!("{} missing · silent", self.session.missing_samples().len())).size(12.0).color(CORAL))
-                                .on_hover_text("Missing samples play silence. Open Import details to see their saved references.");
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} missing · silent",
+                                    self.session.missing_samples().len()
+                                ))
+                                .size(12.0)
+                                .color(CORAL),
+                            )
+                            .on_hover_text(
+                                "Missing samples play silence. Open Import details to see their \
+                                 saved references.",
+                            );
                         }
                         let color = if self.status_error { CORAL } else { MUTED };
                         // The idle text would contradict a missing-sound notice.
@@ -515,21 +529,35 @@ impl MixJamApp {
                 ui.spacing_mut().button_padding.y = 3.0;
                 // ComboBox width is a minimum. Bound its available space as
                 // well, so a longer module name cannot move adjacent controls.
-                let response = ui.allocate_ui(Vec2::new(BOTTOM_MODULE_WIDTH, 28.0), |ui| {
-                    egui::ComboBox::from_id_salt("bottom_module")
-                        .selected_text(heading(self.bottom_module.label(), 16.0))
-                        .width(BOTTOM_MODULE_WIDTH)
-                        .truncate()
-                        .show_ui(ui, |ui| {
-                            for module in BottomModule::ALL {
-                                if ui.selectable_value(&mut self.bottom_module, module, module.label()).clicked() {
-                                    ui.close();
+                let response = ui
+                    .allocate_ui(Vec2::new(BOTTOM_MODULE_WIDTH, 28.0), |ui| {
+                        egui::ComboBox::from_id_salt("bottom_module")
+                            .selected_text(heading(self.bottom_module.label(), 16.0))
+                            .width(BOTTOM_MODULE_WIDTH)
+                            .truncate()
+                            .show_ui(ui, |ui| {
+                                for module in BottomModule::ALL {
+                                    if ui
+                                        .selectable_value(
+                                            &mut self.bottom_module,
+                                            module,
+                                            module.label(),
+                                        )
+                                        .clicked()
+                                    {
+                                        ui.close();
+                                    }
                                 }
-                            }
-                        }).response
-                }).inner;
-                name_control(response, "Bottom module")
-                    .on_hover_text("Choose the module shown in this section. Sounds selects source audio; Mixer adjusts track levels, pan, sends, polarity and outputs; Mastering processes the whole mix on the master pedalboard; Effects holds the four FX buses that the sends feed.");
+                            })
+                            .response
+                    })
+                    .inner;
+                name_control(response, "Bottom module").on_hover_text(
+                    "Choose the module shown in this section. Sounds selects source audio; Mixer \
+                     adjusts track levels, pan, sends, polarity and outputs; Mastering processes \
+                     the whole mix on the master pedalboard; Effects holds the four FX buses \
+                     that the sends feed.",
+                );
                 ui.spacing_mut().button_padding = button_padding;
                 match self.bottom_module {
                     BottomModule::Sounds => self.palette_filters(ui),
@@ -1070,7 +1098,8 @@ impl MixJamApp {
                     {
                         if let Some(missing) = self.session.missing_sample(clip.sample_id) {
                             response.clone().on_hover_text(format!(
-                                "{}\n{}\nRight-click to resolve. Import details has copyable metadata.",
+                                "{}\n{}\nRight-click to resolve. Import details has copyable \
+                                 metadata.",
                                 missing_sample_details(missing),
                                 missing_clip_details(clip)
                             ));
@@ -1113,10 +1142,7 @@ impl MixJamApp {
                         let x = rect.left() + bar as f32 * bar_width;
                         painter.line_segment(
                             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-                            Stroke::new(
-                                1.0_f32,
-                                if bar % 4 == 0 { LINE } else { BAR_LINE },
-                            ),
+                            Stroke::new(1.0_f32, if bar % 4 == 0 { LINE } else { BAR_LINE }),
                         );
                     }
                     if add_track.is_some() {
@@ -1283,7 +1309,11 @@ impl MixJamApp {
                     }
                     if response.secondary_clicked() {
                         let hit = response.interact_pointer_pos().and_then(|pos| {
-                            self.session.project().clips.iter().rev()
+                            self.session
+                                .project()
+                                .clips
+                                .iter()
+                                .rev()
                                 .find(|clip| self.clip_rect(clip, rect).contains(pos))
                                 .map(|clip| clip.id)
                         });
@@ -1292,12 +1322,17 @@ impl MixJamApp {
                             self.select_clip(id, false);
                             self.place_on_click = false;
                         }
-                        self.context_missing_sample = response.interact_pointer_pos().and_then(|pos| {
-                            self.session.project().clips.iter().rev()
-                                .find(|clip| self.clip_rect(clip, rect).contains(pos))
-                                .and_then(|clip| self.session.missing_sample(clip.sample_id))
-                                .map(|missing| missing.id)
-                        });
+                        self.context_missing_sample =
+                            response.interact_pointer_pos().and_then(|pos| {
+                                self.session
+                                    .project()
+                                    .clips
+                                    .iter()
+                                    .rev()
+                                    .find(|clip| self.clip_rect(clip, rect).contains(pos))
+                                    .and_then(|clip| self.session.missing_sample(clip.sample_id))
+                                    .map(|missing| missing.id)
+                            });
                     }
                     if self.context_clip.is_some() || self.context_missing_sample.is_some() {
                         response.context_menu(|ui| {
@@ -1359,11 +1394,7 @@ impl MixJamApp {
                     if let Some(origin) = self.selection_origin {
                         if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
                             let selection = Rect::from_two_pos(origin, pos).intersect(rect);
-                            painter.rect_filled(
-                                selection,
-                                0.0,
-                                TEXT.gamma_multiply(0.12),
-                            );
+                            painter.rect_filled(selection, 0.0, TEXT.gamma_multiply(0.12));
                             outline(&painter, selection, TEXT, 1.0);
                             self.selected_clips = self.selection_base.clone();
                             let hits: Vec<_> = self
@@ -1395,8 +1426,10 @@ impl MixJamApp {
                     ui.set_clip_rect(labels.intersect(ui.clip_rect()));
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for &index in &visible_tracks {
-                        let (rect, _) =
-                            ui.allocate_exact_size(Vec2::new(label_width, row_height), Sense::hover());
+                        let (rect, _) = ui.allocate_exact_size(
+                            Vec2::new(label_width, row_height),
+                            Sense::hover(),
+                        );
                         if add_track == Some(index) {
                             ui.painter().text(
                                 rect.center(),
@@ -1465,7 +1498,8 @@ impl MixJamApp {
                             )
                         });
                         if self.armed_track == index {
-                            ui.painter().circle_filled(number + Vec2::new(0.0, 9.0), 2.0, CORAL);
+                            ui.painter()
+                                .circle_filled(number + Vec2::new(0.0, 9.0), 2.0, CORAL);
                         }
                         if arm.has_focus() {
                             ui.painter().rect_stroke(
@@ -1481,7 +1515,9 @@ impl MixJamApp {
                         }
                         arm.on_hover_text("Select this track for recording");
                         let track = &self.session.project().tracks[index];
-                        for (switch, x) in TrackSwitch::ALL.into_iter().zip([12.0, 36.0, 60.0, 110.0]) {
+                        for (switch, x) in
+                            TrackSwitch::ALL.into_iter().zip([12.0, 36.0, 60.0, 110.0])
+                        {
                             let button = Rect::from_center_size(
                                 Pos2::new(rect.left() + x, rect.center().y),
                                 Vec2::new(24.0, row_height - 3.0),
@@ -1497,13 +1533,24 @@ impl MixJamApp {
                                 route_change = Some((index, switch, on));
                                 response.mark_changed();
                             }
-                            let label = format!("Arrangement track {} {}", index + 1, switch.name());
+                            let label =
+                                format!("Arrangement track {} {}", index + 1, switch.name());
                             response.widget_info(|| {
-                                egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), on, &label)
+                                egui::WidgetInfo::selected(
+                                    egui::WidgetType::Checkbox,
+                                    ui.is_enabled(),
+                                    on,
+                                    &label,
+                                )
                             });
                             switch_letter(ui.painter(), button, on, switch);
                             if response.has_focus() {
-                                ui.painter().rect_stroke(button.shrink(1.0), 2.0, Stroke::new(1.0_f32, ACCENT), egui::StrokeKind::Inside);
+                                ui.painter().rect_stroke(
+                                    button.shrink(1.0),
+                                    2.0,
+                                    Stroke::new(1.0_f32, ACCENT),
+                                    egui::StrokeKind::Inside,
+                                );
                             }
                             response.on_hover_text(switch_hint(&label, switch, on));
                         }

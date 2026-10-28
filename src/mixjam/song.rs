@@ -3,7 +3,7 @@
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
 //! timestamps, `song`, and lanes that own their placements in visible order.
-//! Versions 8 to 10 differ from version 7 where the editor does:
+//! Versions 8 to 14 differ from version 7 where the editor does:
 //! - Ticks are the editor's 256 per bar, not MixJam's 32.
 //! - `lanes` always has 64 entries with gain, pan, and two channel switches.
 //! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
@@ -777,19 +777,18 @@ mod tests {
     }
 
     /// The same song as an earlier format version saves it: no master
-    /// pedalboard, no FX buses, no sends, and no clip fades or pitch.
+    /// pedalboard, no FX buses, no sends, no clip fades or pitch, and no
+    /// automation.
     fn earlier_document(expected: &mut Project, version: u32) -> serde_json::Value {
         expected.master = MasterChain::default();
         expected.fx = crate::fx::FxBuses::default();
         for track in &mut expected.tracks {
             track.sends = [0.0; crate::fx::BUSES];
+            track.automation = Default::default();
         }
         for clip in &mut expected.clips {
             clip.fades = Fades::default();
             clip.pitch_cents = 0;
-        }
-        for track in &mut expected.tracks {
-            track.automation = Default::default();
         }
         let mut document = serde_json::to_value(Document::new(
             expected,

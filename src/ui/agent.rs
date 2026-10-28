@@ -833,7 +833,8 @@ impl MixJamApp {
             } => {
                 let key = egui::Key::from_name(&key).ok_or_else(|| {
                     format!(
-                        "\"{key}\" is not a key. Use a name such as Enter, Escape, Space, Delete, Tab, ArrowLeft, A, or F5."
+                        "\"{key}\" is not a key. Use a name such as Enter, Escape, Space, Delete, \
+                         Tab, ArrowLeft, A, or F5."
                     )
                 })?;
                 Start::run(settled(key_steps(key, modifiers(&held)).into()))

@@ -133,9 +133,6 @@ impl PcmWave {
     }
 }
 fn header(sample_rate: u32, channels: u16, data_bytes: u32) -> Result<Vec<u8>, WaveError> {
-    if !matches!(channels, 1 | 2) || sample_rate == 0 {
-        return Err(WaveError("Invalid PCM output format".into()));
-    }
     let align = channels * 2;
     let rate = sample_rate
         .checked_mul(u32::from(align))

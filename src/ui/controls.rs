@@ -790,6 +790,78 @@ pub(super) fn well(ui: &egui::Ui, rect: Rect) {
     );
 }
 
+/// A tool footer's status text in `rect`, centered while it fits and scrolled
+/// from its top when it does not. A new message scrolls back to the top. Screen
+/// readers hear each change politely, and an error with an "Error:" prefix.
+pub(super) fn status_text(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    id_salt: &str,
+    text: &str,
+    size: f32,
+    error: bool,
+    hover: &str,
+) {
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    child.set_clip_rect(rect.intersect(ui.clip_rect()));
+    let previous_id = ui.id().with("previous-status");
+    let changed = ui
+        .ctx()
+        .data(|data| data.get_temp::<String>(previous_id).as_deref() != Some(text));
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(previous_id, text.to_owned()));
+    let mut scroll = egui::ScrollArea::vertical()
+        .id_salt(id_salt)
+        .max_height(rect.height())
+        .auto_shrink([false, false]);
+    if changed {
+        scroll = scroll.vertical_scroll_offset(0.0);
+    }
+    scroll.show(&mut child, |ui| {
+        let color = if error { super::view::CORAL } else { CREAM };
+        let mut job = egui::text::LayoutJob::simple(
+            text.into(),
+            FontId::proportional(size),
+            color,
+            ui.available_width(),
+        );
+        job.halign = egui::Align::Center;
+        let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+        let (area, label) = ui.allocate_exact_size(
+            Vec2::new(
+                ui.available_width(),
+                galley.mesh_bounds.height().max(rect.height()),
+            ),
+            Sense::hover(),
+        );
+        let origin = if galley.mesh_bounds.height() <= rect.height() {
+            area.center() - galley.mesh_bounds.center().to_vec2()
+        } else {
+            Pos2::new(
+                area.center().x - galley.mesh_bounds.center().x,
+                area.top() - galley.mesh_bounds.top(),
+            )
+        };
+        ui.painter().galley(origin, galley, color);
+        let spoken = if error {
+            format!("Error: {text}")
+        } else {
+            text.into()
+        };
+        label.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, label.enabled(), &spoken)
+        });
+        ui.ctx().accesskit_node_builder(label.id, |node| {
+            node.set_live(egui::accesskit::Live::Polite)
+        });
+        label.on_hover_text(hover);
+    });
+}
+
 /// Keep status text above the fill so contrast does not change with progress.
 /// No numeric value is reported until the total amount of work is known.
 pub(super) fn progress(ui: &mut egui::Ui, label: &str, fraction: Option<f32>, width: f32) {
@@ -1145,7 +1217,8 @@ pub(super) fn stepped_slider(
         .join(", ");
     response.on_hover_text(match reset {
         Some(reset) => format!(
-            "{name}: {choices}. Drag, click a notch, or use the arrow keys. Double-click to reset to {reset:.0}."
+            "{name}: {choices}. Drag, click a notch, or use the arrow keys. Double-click to reset \
+             to {reset:.0}."
         ),
         None => format!("{name}: {choices}. Drag, click a notch, or use the arrow keys."),
     })
@@ -1661,6 +1734,7 @@ mod tests {
             parts!("granite"),
             parts!("red"),
             parts!("olive"),
+            parts!("indigo"),
         ] {
             for (part, variants) in palette.into_iter().enumerate() {
                 for (density, bytes) in variants.into_iter().enumerate() {

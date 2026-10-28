@@ -359,7 +359,9 @@ mod tests {
     fn observed_factory_footer_and_unread_suffix_round_trip_exactly() {
         let mut mix = Mix::default();
         mix.set_cell(0, 0, 731, 0).unwrap();
-        mix.trailer = b"\x08\x0a\x01\0\x10\0\x52ave \x65Jay 1.01\0\x01\0\0\x08\0\0\0\0\0\0\0\0\0\0\0\0\0\x01\0\x02\0orphan".to_vec();
+        mix.trailer = b"\x08\x0a\x01\0\x10\0\x52ave \x65Jay 1.01\0\x01\0\0\x08\0\0\0\0\0\0\0\0\0\0\
+                        \0\0\0\x01\0\x02\0orphan"
+            .to_vec();
         let footer = MixFooter::parse(&mix).unwrap();
         assert!(footer.imports.is_empty());
         assert_eq!(footer.title.byte_view(), "\x52ave \x65Jay 1.01");

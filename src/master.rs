@@ -335,7 +335,8 @@ impl PedalKind {
         Self::Multiband,
         Self::Limiter,
     ];
-    pub fn is_ejay(self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_ejay(self) -> bool {
         matches!(self, Self::EjayEq | Self::EjayCompressor | Self::EjayWide)
     }
     /// Whether the pedal can change places. The limiter stays last.

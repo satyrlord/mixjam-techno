@@ -524,7 +524,17 @@ fn strip(
                 format!("{name} polarity invert"),
             )
         });
-        if response.on_hover_text(format!("{name} polarity: {}. Invert the sign of both output channels without changing gain or pan. Negative dB values only reduce level.", if *inverted { "inverted" } else { "normal" })).clicked() { *inverted = !*inverted; changed = true; }
+        if response
+            .on_hover_text(format!(
+                "{name} polarity: {}. Invert the sign of both output channels without changing \
+                 gain or pan. Negative dB values only reduce level.",
+                if *inverted { "inverted" } else { "normal" }
+            ))
+            .clicked()
+        {
+            *inverted = !*inverted;
+            changed = true;
+        }
         for (switch, x, on) in [
             (TrackSwitch::Left, 40.0, left),
             (TrackSwitch::Right, 72.0, right),
@@ -558,9 +568,8 @@ fn strip(
 }
 
 /// A small knob for a send amount from 0 to 1: drag, arrow keys (Shift for
-/// fine steps), Home and End, or a double-click back to 0.
-/// A small knob from 0 to 1. An `automated` knob is ringed: an automation
-/// lane sets its amount while the song plays.
+/// fine steps), Home and End, or a double-click back to 0. An `automated`
+/// knob is ringed: an automation lane sets its amount while the song plays.
 fn send_knob(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -672,8 +681,7 @@ fn send_knob(
         "{name}: {:.0}%. Drag or use arrow keys; Shift for fine steps; double-click for 0.{}",
         *value * 100.0,
         if automated {
-            "
-Automated: its automation lane sets the send while the song plays."
+            "\nAutomated: its automation lane sets the send while the song plays."
         } else {
             ""
         }
@@ -884,50 +892,99 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
     ui.painter().rect_filled(rect, 3.0, FACE);
     let before = *gain;
     let db = amplitude_to_db(before);
-    ui.scope_builder(egui::UiBuilder::new().id(("gain-value", name)).max_rect(rect), |ui| {
-        ui.spacing_mut().interact_size = rect.size();
-        ui.spacing_mut().button_padding = Vec2::ZERO;
-        ui.style_mut().override_text_style = Some(egui::TextStyle::Body);
-        ui.style_mut().text_styles.insert(egui::TextStyle::Body, FontId::proportional(12.0 * scale));
-        let widgets = &mut ui.style_mut().visuals.widgets;
-        for widget in [&mut widgets.inactive, &mut widgets.hovered, &mut widgets.active] {
-            widget.bg_fill = Color32::TRANSPARENT; widget.weak_bg_fill = Color32::TRANSPARENT; widget.bg_stroke = Stroke::NONE; widget.fg_stroke.color = CREAM;
-        }
-        // A focused value shows an edge before it is typed in.
-        widgets.active.bg_stroke = Stroke::new(1.0 * scale, CREAM);
-        let id = ui.next_auto_id();
-        let context = ui.ctx().clone();
-        // DragValue needs a finite origin for relative edits. Keep silence's
-        // text and parser independent from that origin, so passive focus and
-        // explicit finite entry retain their exact meaning.
-        let has_focus = context.memory(|memory| memory.has_focus(id));
-        let relative_edit = ui.ctx().is_being_dragged(id) || ui.input(|input| {
-            use egui::accesskit::Action;
-            (input.key_pressed(egui::Key::ArrowUp) || input.key_pressed(egui::Key::ArrowDown))
-                && has_focus
-                || input.num_accesskit_action_requests(id, Action::Increment) > 0
-                || input.num_accesskit_action_requests(id, Action::Decrement) > 0
-        });
-        let response = ui.add(egui::DragValue::from_get_set(|value| {
-            if let Some(value) = value {
-                let value = value as f32;
-                let lowering_silence = before == 0.0 && relative_edit && value <= SILENCE_DB;
-                if !lowering_silence && value != db && (value.is_finite() || value == f32::NEG_INFINITY) {
-                    *gain = db_to_amplitude(value.min(MAX_MIXER_GAIN_DB));
-                }
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .id(("gain-value", name))
+            .max_rect(rect),
+        |ui| {
+            ui.spacing_mut().interact_size = rect.size();
+            ui.spacing_mut().button_padding = Vec2::ZERO;
+            ui.style_mut().override_text_style = Some(egui::TextStyle::Body);
+            ui.style_mut()
+                .text_styles
+                .insert(egui::TextStyle::Body, FontId::proportional(12.0 * scale));
+            let widgets = &mut ui.style_mut().visuals.widgets;
+            for widget in [
+                &mut widgets.inactive,
+                &mut widgets.hovered,
+                &mut widgets.active,
+            ] {
+                widget.bg_fill = Color32::TRANSPARENT;
+                widget.weak_bg_fill = Color32::TRANSPARENT;
+                widget.bg_stroke = Stroke::NONE;
+                widget.fg_stroke.color = CREAM;
             }
-            f64::from(if *gain == 0.0 { SILENCE_DB } else { amplitude_to_db(*gain) })
-        }).range(f64::NEG_INFINITY..=f64::from(amplitude_to_db(4.0))).clamp_existing_to_range(false).speed(0.1).update_while_editing(false)
-        .custom_formatter(move |value, _| {
-            let value = if before == 0.0 && (value as f32 == SILENCE_DB || relative_edit && value as f32 <= SILENCE_DB) { f32::NEG_INFINITY } else { value as f32 };
-            if context.memory(|memory| memory.has_focus(id)) { format!("{value}") } else { db_text(value) }
-        }).custom_parser(parse_db));
-        response.widget_info(|| {
-            let mut info = egui::WidgetInfo::drag_value(ui.is_enabled(), f64::from(db.max(SILENCE_DB)));
-            info.label = Some(format!("{name} gain value")); info.current_text_value = Some(db_text(db)); info
-        });
-        response.on_hover_text(format!("{name} gain: {}. Click to enter dB, then press Enter. Negative dB attenuates. Enter -inf for silence. Polarity stays unchanged.", db_text(db)));
-    });
+            // A focused value shows an edge before it is typed in.
+            widgets.active.bg_stroke = Stroke::new(1.0 * scale, CREAM);
+            let id = ui.next_auto_id();
+            let context = ui.ctx().clone();
+            // DragValue needs a finite origin for relative edits. Keep silence's
+            // text and parser independent from that origin, so passive focus and
+            // explicit finite entry retain their exact meaning.
+            let has_focus = context.memory(|memory| memory.has_focus(id));
+            let relative_edit = ui.ctx().is_being_dragged(id)
+                || ui.input(|input| {
+                    use egui::accesskit::Action;
+                    (input.key_pressed(egui::Key::ArrowUp)
+                        || input.key_pressed(egui::Key::ArrowDown))
+                        && has_focus
+                        || input.num_accesskit_action_requests(id, Action::Increment) > 0
+                        || input.num_accesskit_action_requests(id, Action::Decrement) > 0
+                });
+            let response = ui.add(
+                egui::DragValue::from_get_set(|value| {
+                    if let Some(value) = value {
+                        let value = value as f32;
+                        let lowering_silence =
+                            before == 0.0 && relative_edit && value <= SILENCE_DB;
+                        if !lowering_silence
+                            && value != db
+                            && (value.is_finite() || value == f32::NEG_INFINITY)
+                        {
+                            *gain = db_to_amplitude(value.min(MAX_MIXER_GAIN_DB));
+                        }
+                    }
+                    f64::from(if *gain == 0.0 {
+                        SILENCE_DB
+                    } else {
+                        amplitude_to_db(*gain)
+                    })
+                })
+                .range(f64::NEG_INFINITY..=f64::from(amplitude_to_db(4.0)))
+                .clamp_existing_to_range(false)
+                .speed(0.1)
+                .update_while_editing(false)
+                .custom_formatter(move |value, _| {
+                    let value = if before == 0.0
+                        && (value as f32 == SILENCE_DB
+                            || relative_edit && value as f32 <= SILENCE_DB)
+                    {
+                        f32::NEG_INFINITY
+                    } else {
+                        value as f32
+                    };
+                    if context.memory(|memory| memory.has_focus(id)) {
+                        format!("{value}")
+                    } else {
+                        db_text(value)
+                    }
+                })
+                .custom_parser(parse_db),
+            );
+            response.widget_info(|| {
+                let mut info =
+                    egui::WidgetInfo::drag_value(ui.is_enabled(), f64::from(db.max(SILENCE_DB)));
+                info.label = Some(format!("{name} gain value"));
+                info.current_text_value = Some(db_text(db));
+                info
+            });
+            response.on_hover_text(format!(
+                "{name} gain: {}. Click to enter dB, then press Enter. Negative dB attenuates. \
+                 Enter -inf for silence. Polarity stays unchanged.",
+                db_text(db)
+            ));
+        },
+    );
     before != *gain
 }
 
@@ -1081,6 +1138,11 @@ fn gain_rail(
     if before != *gain {
         response.mark_changed();
     }
-    response.on_hover_text(format!("{name} gain: {}. Drag to adjust; Shift gives fine movement. Arrow keys change 0.5 dB (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB only reduces level.", db_text(db)));
+    response.on_hover_text(format!(
+        "{name} gain: {}. Drag to adjust; Shift gives fine movement. Arrow keys change 0.5 dB \
+         (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB \
+         only reduces level.",
+        db_text(db)
+    ));
     before != *gain
 }

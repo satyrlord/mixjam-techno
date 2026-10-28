@@ -292,34 +292,23 @@ pub(super) fn show(
                 if source.missing { 456.0 } else { 592.0 },
                 52.0,
             );
-            let previous_id = ui.id().with("previous-status");
-            let changed = ctx.data(|data| {
-                data.get_temp::<String>(previous_id).as_deref() != Some(status.as_str())
-            });
-            ctx.data_mut(|data| data.insert_temp(previous_id, status.clone()));
-            let mut scroll = egui::ScrollArea::vertical()
-                .id_salt("stretch-status")
-                .max_height(text_rect.height())
-                .auto_shrink([false, false]);
-            if changed {
-                scroll = scroll.vertical_scroll_offset(0.0);
-            }
-            ui.scope_builder(egui::UiBuilder::new().max_rect(text_rect),|ui|{
-            ui.set_clip_rect(text_rect.intersect(ui.clip_rect()));
-            scroll.show(ui,|ui|{
-                let color=if feedback.error {CORAL} else {controls::CREAM};
-                let mut job=egui::text::LayoutJob::simple(status.clone(),FontId::proportional(13.0),color,ui.available_width());
-                job.halign=egui::Align::Center;
-                let galley=ui.fonts_mut(|fonts|fonts.layout_job(job));
-                let (area,label)=ui.allocate_exact_size(Vec2::new(ui.available_width(),galley.mesh_bounds.height().max(text_rect.height())),Sense::hover());
-                let origin=if galley.mesh_bounds.height()<=text_rect.height() {area.center()-galley.mesh_bounds.center().to_vec2()} else {Pos2::new(area.center().x-galley.mesh_bounds.center().x,area.top()-galley.mesh_bounds.top())};
-                ui.painter().galley(origin,galley,color);
-                let spoken=if feedback.error {format!("Error: {status}")} else {status.clone()};
-                label.widget_info(||egui::WidgetInfo::labeled(egui::WidgetType::Label,true,&spoken));
-                ctx.accesskit_node_builder(label.id,|node|node.set_live(egui::accesskit::Live::Polite));
-                label.on_hover_text(if idle {format!("{status}\nThe result can change in tone or develop audible artifacts. Open Help for details.")} else {status.clone()});
-            });
-        });
+            let hover = if idle {
+                format!(
+                    "{status}\nThe result can change in tone or develop audible \
+                     artifacts. Open Help for details."
+                )
+            } else {
+                status.clone()
+            };
+            controls::status_text(
+                ui,
+                text_rect,
+                "stretch-status",
+                &status,
+                13.0,
+                feedback.error,
+                &hover,
+            );
             if source.missing
                 && controls::button_at(
                     ui,

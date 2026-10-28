@@ -124,7 +124,7 @@ pub fn bundled_wave_metadata(product: Product) -> Result<&'static [WaveMetadata]
     let index = Product::ALL
         .iter()
         .position(|known| *known == product)
-        .ok_or("The product has no bundled sample identities.")?;
+        .expect("Product::ALL lists every product.");
     CATALOGS[index]
         .get_or_init(|| parse_wave_metadata(product))
         .as_deref()
@@ -464,6 +464,8 @@ fn load_index(
         let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
         let mut end = 0;
         for (start, next) in ranges {
+            // D2 kit 6 contains an unregistered record (ID/type 0 in its side
+            // index). The master omits it. Do not invent an ID to fill that gap.
             let unregistered_kit6_record = d2
                 && path
                     .file_name()
@@ -484,8 +486,6 @@ fn load_index(
                 path.display()
             ));
         }
-        // D2 kit 6 contains an unregistered record (ID/type 0 in its side
-        // index). The master omits it. Do not invent an ID to fill that gap.
     }
     Ok(samples)
 }

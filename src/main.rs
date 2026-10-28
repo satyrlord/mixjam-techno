@@ -31,7 +31,7 @@ fn main() -> ExitCode {
 fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(), String> {
     let mut candidate = library.clone();
     if candidate.source_root(binding.product).is_some() {
-        candidate.remove_product(binding.product)?;
+        candidate.remove_product(binding.product);
     }
     candidate.register(
         binding.product,

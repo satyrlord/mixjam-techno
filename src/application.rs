@@ -82,7 +82,7 @@ pub enum EditCommand {
         gain: f32,
         offset_frames: u32,
         length_ticks: u32,
-        fades: crate::engine::Fades,
+        fades: Fades,
         pitch_cents: i32,
     },
     SetSwitch {
@@ -353,7 +353,8 @@ pub struct Session {
     automation_gesture: Option<(usize, crate::automation::Lane)>,
     /// The pause that ends a gesture: `GESTURE_GAP`, except in some tests.
     gesture_gap: std::time::Duration,
-    /// The master pedalboard settings that mix playback reads as it plays.
+    /// The master pedalboard and FX bus settings that mix playback reads as it
+    /// plays, with its Clear Tail requests and meter readings.
     master: Arc<MasterControl>,
 }
 
@@ -949,9 +950,7 @@ impl Session {
                 pitch_cents,
                 ..
             } => {
-                if !(-crate::engine::MAX_PITCH_CENTS..=crate::engine::MAX_PITCH_CENTS)
-                    .contains(pitch_cents)
-                {
+                if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(pitch_cents) {
                     return Err("Clip pitch must be from -24 to 24 semitones.".into());
                 }
                 let clip = self
@@ -1180,7 +1179,8 @@ impl Session {
                     && self.project().missing_sample(clip.sample_id).is_none()
             }) {
                 Some(clip) => Err(format!(
-                    "Cannot restore this edit because sample {} is unavailable. Add its sample library and try again.",
+                    "Cannot restore this edit because sample {} is unavailable. Add its sample \
+                     library and try again.",
                     clip.sample_id
                 )),
                 None => Ok(()),
@@ -1368,7 +1368,7 @@ impl Session {
             ));
         }
         let mut library = (*self.library).clone();
-        library.remove_product(product)?;
+        library.remove_product(product);
         self.commit_library(library)
     }
 
@@ -1410,7 +1410,7 @@ impl Session {
                 {
                     continue;
                 }
-                candidate.remove_product(binding.product)?;
+                candidate.remove_product(binding.product);
             }
             // The current library already holds this provider. Read it from
             // disk again only when its folder is gone, to report that.
@@ -1557,7 +1557,8 @@ impl Session {
         let scan = self.wave_scan.take()?;
         let pending = self.pending_open.take();
         let project_changed = pending.as_ref().is_some_and(|(_, revision, generation)| {
-            // Pedal edits change editor history without invalidating the dry mix.
+            // Pedalboard and FX bus edits change editor history without
+            // invalidating the dry mix.
             *revision != self.revision
                 || *generation != self.editor.generation()
                 || self.needs_save_confirmation()
@@ -1575,7 +1576,8 @@ impl Session {
                 if let Some((path, _, _)) = pending {
                     if project_changed {
                         notice.push_str(&format!(
-                            " {} was not opened because the current mix changed or has an unsaved take.",
+                            " {} was not opened because the current mix changed or has an unsaved \
+                             take.",
                             path.display()
                         ));
                     } else {
@@ -3175,7 +3177,7 @@ mod tests {
         let empty_project = app.editor.project().clone();
         assert!(empty_project.clips.is_empty());
         let mut removed = (*app.library).clone();
-        removed.remove_product(Product::T2).unwrap();
+        removed.remove_product(Product::T2);
         app.library = Arc::new(removed);
         let removed_library = app.library.clone();
         let error = app.history_step(false).unwrap_err();
@@ -3768,7 +3770,6 @@ mod boundary_tests {
     }
     #[test]
     fn a_shorter_clip_shortens_its_fades_and_undo_restores_them() {
-        use crate::engine::{Fade, FadeCurve};
         let dir = fixture_dir();
         let wave = dir.join("source.wav");
         Pcm {
@@ -4272,9 +4273,11 @@ mod boundary_tests {
     }
     #[test]
     fn frontend_source_can_only_reach_the_application_boundary() {
-        for (name, source) in [
+        let frontend = [
             ("ui.rs", include_str!("ui.rs")),
             ("ui/view.rs", include_str!("ui/view.rs")),
+            ("ui/controls.rs", include_str!("ui/controls.rs")),
+            ("ui/master.rs", include_str!("ui/master.rs")),
             ("ui/stretch.rs", include_str!("ui/stretch.rs")),
             ("ui/fx.rs", include_str!("ui/fx.rs")),
             ("ui/effects.rs", include_str!("ui/effects.rs")),
@@ -4283,7 +4286,12 @@ mod boundary_tests {
             ("ui/mixer.rs", include_str!("ui/mixer.rs")),
             ("ui/dialog.rs", include_str!("ui/dialog.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
-        ] {
+            ("ui/capture.rs", include_str!("ui/capture.rs")),
+            ("ui_icons.rs", include_str!("ui_icons.rs")),
+        ];
+        // Screen capture writes its image file itself, so it is exempt from
+        // the I/O patterns but not from the backend path check below.
+        for (name, source) in frontend.iter().filter(|(name, _)| *name != "ui/capture.rs") {
             for forbidden in [
                 ".editor",
                 ".transact(",
@@ -4310,20 +4318,7 @@ mod boundary_tests {
         }
         // The native binary names the backend as `mixjam_techno`. Every such
         // path, in an import or inline, must go through the application API.
-        for (name, source) in [
-            ("ui.rs", include_str!("ui.rs")),
-            ("ui/view.rs", include_str!("ui/view.rs")),
-            ("ui/stretch.rs", include_str!("ui/stretch.rs")),
-            ("ui/fx.rs", include_str!("ui/fx.rs")),
-            ("ui/effects.rs", include_str!("ui/effects.rs")),
-            ("ui/step_synth.rs", include_str!("ui/step_synth.rs")),
-            ("ui/sample_editor.rs", include_str!("ui/sample_editor.rs")),
-            ("ui/mixer.rs", include_str!("ui/mixer.rs")),
-            ("ui/dialog.rs", include_str!("ui/dialog.rs")),
-            ("ui/agent.rs", include_str!("ui/agent.rs")),
-            ("ui/capture.rs", include_str!("ui/capture.rs")),
-            ("ui_icons.rs", include_str!("ui_icons.rs")),
-        ] {
+        for (name, source) in frontend {
             for line in source.lines() {
                 assert_eq!(
                     line.matches("mixjam_techno::").count(),

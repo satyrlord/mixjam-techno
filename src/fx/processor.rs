@@ -252,7 +252,7 @@ mod tests {
     use super::*;
     use crate::fx::{Aetherform, Echoform, TimeMode};
 
-    fn review_plain_delay() -> Echoform {
+    fn plain_delay() -> Echoform {
         Echoform {
             division_l: crate::fx::Division::Quarter,
             division_r: crate::fx::Division::Quarter,
@@ -270,9 +270,9 @@ mod tests {
     }
 
     #[test]
-    fn review_all_synced_repeats_stay_on_the_grid() {
+    fn all_synced_repeats_stay_on_the_grid() {
         let mut processor =
-            ReturnsProcessor::new(&buses(Module::EchoformDelay(review_plain_delay())), 120.0);
+            ReturnsProcessor::new(&buses(Module::EchoformDelay(plain_delay())), 120.0);
         let out = feed(&mut processor, 70_000, |i| if i == 0 { 0.5 } else { 0.0 });
         for repeat in 1..=3 {
             let expected = repeat * 22_050;
@@ -287,11 +287,11 @@ mod tests {
     }
 
     #[test]
-    fn review_a_long_note_delay_does_not_sleep_before_its_first_echo() {
+    fn a_long_note_delay_does_not_sleep_before_its_first_echo() {
         let settings = Echoform {
             division_l: crate::fx::Division::WholeDotted,
             division_r: crate::fx::Division::WholeDotted,
-            ..review_plain_delay()
+            ..plain_delay()
         };
         let mut processor = ReturnsProcessor::new(&buses(Module::EchoformDelay(settings)), 120.0);
         let out = feed(&mut processor, 140_000, |i| if i == 0 { 0.5 } else { 0.0 });
@@ -299,11 +299,11 @@ mod tests {
     }
 
     #[test]
-    fn review_bypass_preserves_the_hidden_tail() {
+    fn bypass_preserves_the_hidden_tail() {
         let control = MasterControl::new(&crate::master::MasterChain::default());
         let settings = Echoform {
             feedback: 99.0,
-            ..review_plain_delay()
+            ..plain_delay()
         };
         control.set_returns(&buses(Module::EchoformDelay(settings)));
         let mut processor = ReturnsProcessor::live(control.clone(), 120.0);

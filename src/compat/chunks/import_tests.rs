@@ -399,6 +399,7 @@ fn d2_external_pxd_catalog_resolution_uses_d1_full_code_identity() {
     }]);
     assert!(d2_source_wave("Z:\\missing\\BO\\AVPO.PXD", &[], &wrong_product).is_err());
 }
+
 #[test]
 fn d2_timeline_marker_inside_embedded_pcm_does_not_hide_the_real_timeline() {
     let payload = wave(f32::from_bits(0x018a7aa9));

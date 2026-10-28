@@ -33,7 +33,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_BYTES: usize = 16 * 1024 * 1024;
 // Guards against a file that is not a song. A valid song stays far below it.
 const MAX_SONG_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_SOURCE_TICKS: u32 = 999 * 32;
@@ -197,9 +196,6 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
             Ok((project, true))
         }
         7 => {
-            if bytes.len() > MAX_BYTES {
-                return Err("The MixJam project exceeds the 16 MiB limit.".into());
-            }
             let document: Document = serde_json::from_slice(&bytes)
                 .map_err(|e| format!("Cannot read the MixJam project: {e}"))?;
             convert(document, path, library).map(|project| (project, false))
@@ -423,15 +419,30 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
         fx,
         ..Project::default()
     };
-    project.source_notices.push("Imported MixJam v7 arrangement. The master bus plays through this application's mastering pedals with its saved order, switches, and settings; they are new designs, so the sound can differ. The return buses and lane sends play through this application's Echoform Delay and Aetherform Reverb, new designs with the same controls; another module type imports as an empty slot. Clip edge fades are not rendered. Saved source controls remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed lane even when it is muted; later lane triggers cut earlier clips.".into());
-    project.source_notices.push(format!("MixJam v7 source controls: {}", serde_json::json!({
-        "appVersion":document.app_version, "createdAt":document.created_at, "modifiedAt":document.modified_at,
-        "masterBus":document.master_bus, "fxBuses":document.fx_buses,
-        "clipEdgeMicroFades":document.song.clip_edge_micro_fades, "generator":document.generator,
-        "lanes":document.lanes.iter().map(|lane| serde_json::json!({"id":lane.id,"name":lane.name,
-            "muted":lane.muted,"solo":lane.solo,"stereoPairId":lane.stereo_pair_id,"sends":lane.sends,
-            "placements":lane.placements})).collect::<Vec<_>>()
-    })));
+    project.source_notices.push(
+        "Imported MixJam v7 arrangement. The master bus plays through this application's \
+         mastering pedals with its saved order, switches, and settings; they are new designs, so \
+         the sound can differ. The return buses and lane sends play through this application's \
+         Echoform Delay and Aetherform Reverb, new designs with the same controls; another module \
+         type imports as an empty slot. Clip edge fades are not rendered. Saved source controls \
+         remain in the next notice. A soloed lane imports unmuted, because MixJam plays a soloed \
+         lane even when it is muted; later lane triggers cut earlier clips."
+            .into(),
+    );
+    project.source_notices.push(format!(
+        "MixJam v7 source controls: {}",
+        serde_json::json!({
+            "appVersion":document.app_version, "createdAt":document.created_at,
+            "modifiedAt":document.modified_at,
+            "masterBus":document.master_bus, "fxBuses":document.fx_buses,
+            "clipEdgeMicroFades":document.song.clip_edge_micro_fades,
+            "generator":document.generator,
+            "lanes":document.lanes.iter().map(|lane| serde_json::json!({
+                "id":lane.id,"name":lane.name,
+                "muted":lane.muted,"solo":lane.solo,"stereoPairId":lane.stereo_pair_id,
+                "sends":lane.sends,"placements":lane.placements})).collect::<Vec<_>>()
+        })
+    ));
     let mut references = ReferenceResolver::new(library);
     let mut imported_paths: HashMap<(String, u32), u32> = HashMap::new();
     for (track, mut lane) in document.lanes.into_iter().enumerate() {
@@ -481,11 +492,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
                 };
                 // A second reference may give the same WAV a different span.
                 // Imported project identities must keep those rates independent.
-                let id = crate::products::IMPORTED_ID_START
-                    .checked_add(
-                        (project.imported_samples.len() + project.missing_samples.len()) as u32,
-                    )
-                    .ok_or("The MixJam imported sample ID limit was reached.")?;
+                let id = project.next_import_id()?;
                 let imported = crate::engine::ImportedSample {
                     id,
                     name: placement.sample_name.trim().to_string(),
@@ -575,6 +582,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
 mod tests {
     use super::*;
     use serde_json::json;
+
     #[test]
     fn unsupported_song_version_lists_all_supported_versions() {
         let path = std::env::temp_dir().join(format!(
@@ -676,6 +684,7 @@ mod tests {
             "fxBuses":(0..4).map(|i| json!({"id":format!("fx-{}",i+1),"index":i,"name":format!("FX{}",i+1),"module":{"type":"empty"},"powered":true,"returnLevel":1,"limiterEnabled":true})).collect::<Vec<_>>(),
             "masterBus":{"order":PROCESSORS,"power":PROCESSORS.iter().map(|id| (id.to_string(),false)).collect::<HashMap<_,_>>(),"params":{"gain.trim":0},"preset":"Bypass All"}})
     }
+
     #[test]
     fn v7_compressor_attack_accepts_exact_decimal_endpoints() {
         for attack in [0.1_f64, 30.0] {
@@ -701,6 +710,7 @@ mod tests {
             );
         }
     }
+
     #[test]
     fn rejects_invalid_settings_and_unsafe_paths_before_audio_resolution() {
         for (pointer, value, expected) in [
@@ -733,6 +743,7 @@ mod tests {
             );
         }
     }
+
     #[test]
     fn wav_only_import_converts_clock_solo_and_monophonic_spans() {
         let root = std::env::temp_dir().join(format!("mixjam-import-{}", std::process::id()));

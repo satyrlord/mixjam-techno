@@ -48,7 +48,7 @@ fn reduction(level: f64, threshold: f64, ratio: f64, knee: f64) -> f64 {
 /// Unity below `knee`. Above it the curve approaches `ceiling` as tanh
 /// does, with the same slope and curvature where it starts to bend. A knee
 /// at the ceiling clips there.
-pub(super) fn soft_clip(sample: f32, knee: f32, ceiling: f32) -> f32 {
+fn soft_clip(sample: f32, knee: f32, ceiling: f32) -> f32 {
     let magnitude = sample.abs();
     if magnitude <= knee {
         return sample;

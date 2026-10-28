@@ -34,8 +34,9 @@ Read [REFERENCE.md](REFERENCE.md) for applicability and stop conditions.
 
 Use the current commands in `README.md` and `ARCHITECTURE.md`:
 
-1. Run `cargo.ps1 -CargoArguments @('fmt','--all','--','--check')`.
-   Completion criterion: The format check has a current result.
+1. Run `cargo.ps1 -CargoArguments @('fmt','--all','--','--check')` and
+   `python tools/check-rust-format.py`.
+   Completion criterion: Both format checks have a current result.
 2. Run Clippy with warnings denied.
    Completion criterion: The documented Clippy check has a current result.
 3. Run workspace tests with default features.

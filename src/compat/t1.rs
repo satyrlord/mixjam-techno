@@ -5,7 +5,7 @@ use crate::{
         normalize_import,
     },
     library::{Library, decode_1252},
-    products::{IMPORTED_ID_START, Product},
+    products::Product,
 };
 use legacy_format::{
     imports::{self, ByteText, MixFooter},
@@ -124,9 +124,7 @@ fn convert(
                     .map_err(|error| format!("Cannot schedule T1 imported WAV: {error}"))?;
                 Ok((path, bars, candidates))
             });
-        let id = IMPORTED_ID_START
-            .checked_add((project.imported_samples.len() + project.missing_samples.len()) as u32)
-            .ok_or("The imported sample ID limit was reached.")?;
+        let id = project.next_import_id()?;
         let name = record
             .labels
             .iter()
@@ -200,7 +198,11 @@ fn convert(
             })
             .map(|(_, region)| region);
         let resolved = if unresolved_kit.is_some() {
-            Err("The saved T1 expansion kit name or ID range cannot be matched to the active catalog.".into())
+            Err(
+                "The saved T1 expansion kit name or ID range cannot be matched to the active \
+                 catalog."
+                    .into(),
+            )
         } else {
             resolve_native(event.sample_id)
         };
@@ -221,11 +223,7 @@ fn convert(
                     },
                 )?;
                 if let Some(kit) = unresolved_kit {
-                    missing.id = IMPORTED_ID_START
-                        .checked_add(
-                            (project.imported_samples.len() + project.missing_samples.len()) as u32,
-                        )
-                        .ok_or("The imported sample ID limit was reached.")?;
+                    missing.id = project.next_import_id()?;
                     let name = decode_1252(&kit.name.0);
                     missing.reference = MissingReference::Generated {
                         product: Product::T1,
@@ -365,6 +363,7 @@ fn read_bounded(path: &Path, limit: usize, kind: &str) -> Result<Vec<u8>, String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::products::IMPORTED_ID_START;
     use legacy_format::imports::{ImportedSample as NativeImport, KitRegion};
     use std::{
         sync::atomic::{AtomicU64, Ordering},

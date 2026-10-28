@@ -18,7 +18,8 @@ pub const MAX_TICKS: u32 = 4096 * TICKS_PER_BAR;
 /// that the 64-track timeline holds.
 pub const MAX_CLIPS: usize = 1_000_000;
 pub const MAX_IMPORTED_SAMPLES: usize = 200_000;
-const MAX_PROJECT_BYTES: usize = 16 * 1024 * 1024;
+// Guards against a file that is not a project, as the song reader's limit does.
+const MAX_PROJECT_BYTES: usize = 1024 * 1024 * 1024;
 pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
 
 /// Convert a nonnegative amplitude multiplier to decibels. Zero is silence.
@@ -589,6 +590,15 @@ impl Project {
         }
         self.sample_conflicts
             .retain(|conflict| !conflict.sample_ids.is_empty());
+    }
+
+    /// The ID for a song import's next imported or missing sample. Song
+    /// imports number both lists together from `IMPORTED_ID_START`.
+    pub(crate) fn next_import_id(&self) -> Result<u32, String> {
+        u32::try_from(self.imported_samples.len() + self.missing_samples.len())
+            .ok()
+            .and_then(|count| crate::products::IMPORTED_ID_START.checked_add(count))
+            .ok_or_else(|| "Imported sample ID limit reached.".into())
     }
 
     pub fn missing_sample(&self, id: u32) -> Option<&MissingSample> {
@@ -1504,7 +1514,16 @@ mod tests {
         value["bpm"] = 140.0.into();
         value["pitch_ratio"] = 4.01.into();
         assert!(Project::parse_json(&serde_json::to_vec(&value).unwrap()).is_err());
-        assert!(Project::parse_json(&vec![b' '; MAX_PROJECT_BYTES + 1]).is_err());
+        let path = std::env::temp_dir().join(format!(
+            "mixjam-oversized-project-{}.json",
+            std::process::id()
+        ));
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_PROJECT_BYTES as u64 + 1).unwrap();
+        drop(file);
+        let result = Project::load(&path);
+        fs::remove_file(&path).unwrap();
+        assert_eq!(result.unwrap_err(), "The project file is too large.");
     }
 
     #[test]

@@ -96,7 +96,7 @@ pub(super) fn show(
                 .on_hover_text(
                     "Preview the selected frames at this pitch. The source stays unchanged.",
                 )
-                .on_disabled_hover_text(reason.unwrap_or("Select a nonempty trim range."))
+                .on_disabled_hover_text(reason.unwrap_or_default())
                 .clicked()
             {
                 action = Action::Listen;
@@ -112,7 +112,7 @@ pub(super) fn show(
                 .on_hover_text(
                     "Save the edit as a new WAV in Wave. The original source stays unchanged.",
                 )
-                .on_disabled_hover_text(reason.unwrap_or("Select a nonempty trim range."))
+                .on_disabled_hover_text(reason.unwrap_or_default())
                 .clicked()
             {
                 action = Action::Save;
@@ -221,10 +221,41 @@ fn frame_value(
     range: std::ops::RangeInclusive<u64>,
 ) {
     controls::well(ui, rect);
-    ui.scope_builder(egui::UiBuilder::new().id(name).max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0),rect.max-Vec2::new(28.0,10.0))).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
-        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let response=ui.add(egui::DragValue::new(value).range(range.clone()).clamp_existing_to_range(false).speed(100).fixed_decimals(0).update_while_editing(false));if response.changed(){*value=(*value).clamp(*range.start(),*range.end());}
-        name_control(response,name).on_hover_text(if name=="Start frame"{"First included source frame (zero-based). Click for exact entry; Enter applies. Use the adjacent buttons for one-frame steps (Shift: 100)."} else {"First excluded source frame. Set this to the source frame count to include the last frame. Click for exact entry; Enter applies. Use the adjacent buttons for one-frame steps (Shift: 100)."});
-    });
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .id(name)
+            .max_rect(Rect::from_min_max(
+                rect.min + Vec2::new(6.0, 10.0),
+                rect.max - Vec2::new(28.0, 10.0),
+            ))
+            .layout(egui::Layout::centered_and_justified(
+                egui::Direction::LeftToRight,
+            )),
+        |ui| {
+            controls::value_style(ui);
+            let size = ui.available_size();
+            ui.spacing_mut().interact_size = size;
+            let response = ui.add(
+                egui::DragValue::new(value)
+                    .range(range.clone())
+                    .clamp_existing_to_range(false)
+                    .speed(100)
+                    .fixed_decimals(0)
+                    .update_while_editing(false),
+            );
+            if response.changed() {
+                *value = (*value).clamp(*range.start(), *range.end());
+            }
+            name_control(response, name).on_hover_text(if name == "Start frame" {
+                "First included source frame (zero-based). Click for exact entry; Enter \
+                 applies. Use the adjacent buttons for one-frame steps (Shift: 100)."
+            } else {
+                "First excluded source frame. Set this to the source frame count to include \
+                 the last frame. Click for exact entry; Enter applies. Use the adjacent \
+                 buttons for one-frame steps (Shift: 100)."
+            });
+        },
+    );
     for (up, y) in [(true, 0.0), (false, 24.0)] {
         let label = format!("{} {name}", if up { "Increase" } else { "Decrease" });
         let button = stepper(
@@ -256,9 +287,45 @@ fn frame_value(
 }
 fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
     controls::well(ui, rect);
-    ui.scope_builder(egui::UiBuilder::new().id("pitch-value").max_rect(Rect::from_min_max(rect.min+Vec2::new(6.0,10.0),rect.max-Vec2::new(28.0,10.0))).layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)),|ui|{
-        controls::value_style(ui);let size=ui.available_size();ui.spacing_mut().interact_size=size;let id=ui.next_auto_id();let context=ui.ctx().clone();let response=ui.add(egui::DragValue::new(pitch).range(-24.0..=24.0).clamp_existing_to_range(false).speed(0.1).custom_formatter(move|value,_|if context.memory(|memory|memory.has_focus(id)){format!("{value}")}else{format!("{value:.1}")}).update_while_editing(false));if response.changed(){*pitch=pitch.clamp(-24.0,24.0);}name_control(response,"Pitch value").on_hover_text("Enter semitones from -24 to +24. Pitch changes playback speed and output duration together. Zero keeps the source pitch.");
-    });
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .id("pitch-value")
+            .max_rect(Rect::from_min_max(
+                rect.min + Vec2::new(6.0, 10.0),
+                rect.max - Vec2::new(28.0, 10.0),
+            ))
+            .layout(egui::Layout::centered_and_justified(
+                egui::Direction::LeftToRight,
+            )),
+        |ui| {
+            controls::value_style(ui);
+            let size = ui.available_size();
+            ui.spacing_mut().interact_size = size;
+            let id = ui.next_auto_id();
+            let context = ui.ctx().clone();
+            let response = ui.add(
+                egui::DragValue::new(pitch)
+                    .range(-24.0..=24.0)
+                    .clamp_existing_to_range(false)
+                    .speed(0.1)
+                    .custom_formatter(move |value, _| {
+                        if context.memory(|memory| memory.has_focus(id)) {
+                            format!("{value}")
+                        } else {
+                            format!("{value:.1}")
+                        }
+                    })
+                    .update_while_editing(false),
+            );
+            if response.changed() {
+                *pitch = pitch.clamp(-24.0, 24.0);
+            }
+            name_control(response, "Pitch value").on_hover_text(
+                "Enter semitones from -24 to +24. Pitch changes playback speed and output \
+                 duration together. Zero keeps the source pitch.",
+            );
+        },
+    );
     for (up, y) in [(true, 0.0), (false, 24.0)] {
         let name = if up {
             "Increase Pitch"
@@ -289,9 +356,18 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
     }
 }
 fn pitch_rail(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
-    ui.scope_builder(egui::UiBuilder::new().id("pitch-rail").max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)),|ui|{
-        ui.spacing_mut().slider_width=rect.width();
-        controls::slider(ui,pitch,-24.0..=24.0,"Pitch (semitones)")
-            .on_hover_text("Pitch changes playback speed and sample length. +12 is one octave up and half the duration; -12 is one octave down and twice the duration. Use the numeric value for exact entry.");
-    });
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .id("pitch-rail")
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        |ui| {
+            ui.spacing_mut().slider_width = rect.width();
+            controls::slider(ui, pitch, -24.0..=24.0, "Pitch (semitones)").on_hover_text(
+                "Pitch changes playback speed and sample length. +12 is one octave up and half \
+                 the duration; -12 is one octave down and twice the duration. Use the numeric \
+                 value for exact entry.",
+            );
+        },
+    );
 }

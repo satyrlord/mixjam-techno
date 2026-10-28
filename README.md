@@ -76,11 +76,12 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
-- Drag the divider above Sounds or Mixer to give that panel more or less room.
-- Select Sounds or Mixer from the fixed module menu at the lower panel's left.
-  The panel retains its resized height; opening Mixer raises a shorter panel
-  to fit its controls. The Mixer tool-rail shortcut opens Mixer
-  and returns to Sounds when Mixer is already selected.
+- Drag the divider above the lower panel to give it more or less room.
+- Select Sounds, Mixer, Mastering, or Effects from the fixed module menu at the
+  lower panel's left. The panel retains its resized height; opening Mixer,
+  Mastering, or Effects raises a shorter panel to fit its controls. The Mixer
+  and Mastering tool-rail shortcuts open their module and return to Sounds when
+  that module is already selected.
 - Use Mixer for track gain, pan, L/R routing, Mute, Solo, and master volume.
   Master stays visible while you scroll through tracks. Each strip shows its
   track number and the sound names on that track.
@@ -233,10 +234,19 @@ The major of the package version must equal `APP_MAJOR_VERSION`.
 .\tools\runtime\cargo.ps1 test --workspace --all-targets --no-default-features --locked
 .\tools\runtime\cargo.ps1 -CargoArguments @('clippy','--workspace','--all-targets','--locked','--','-D','warnings')
 .\tools\runtime\cargo.ps1 -CargoArguments @('fmt','--all','--','--check')
+python tools/check-rust-format.py
 python -m unittest discover -s tools/tests -v
 ~~~
 
-The Python tests check the `.mixjam` projection used by artifact verification.
+The format check passes code that rustfmt does not format. Stable rustfmt
+leaves a statement as written when it cannot fit a line, such as one with a
+long string literal, and it does not visit `src/ui/tests.rs`, which reaches the
+crate through `include!`. `tools/check-rust-format.py` formats each Rust file on
+its own and reports each region that rustfmt skips. Split a long literal with
+`\` line continuations so that every line fits in 100 columns.
+
+The Python tests check Rust literal handling in the format checker and the
+`.mixjam` projection used by artifact verification.
 It reads formats 8 through 14 and preserves the master pedalboard, FX buses,
 sends, automation, and clip fades and pitch when a verification script writes
 a schema-4 JSON project for rendering.
@@ -263,8 +273,11 @@ Collapse keeps a window in place and preserves its expanded size and edits.
 Collapsing a blocking dialog releases the workspace and pauses its pending action.
 See [DESIGN.md](DESIGN.md) for the contract. The main graphite workspace, Mixer,
 and native operating-system file pickers retain their existing presentation.
-Verification of the shared-shell revision is pending; concept approval alone
-does not establish runtime, high-DPI, or accessibility acceptance.
+On 2026-10-27, `tools/verify-ui.ps1` captured the shared shell at all three
+supported sizes. A body that overflows its window shows a scroll bar, and short
+blocking dialogs follow the height of their content. The captures do not verify
+high-DPI scaling, screen readers or other accessibility, physical audio, or
+native file pickers.
 
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
 Prepared density variants support Windows scaling. SVG files and embedded SVG
@@ -339,6 +352,6 @@ window can do, which includes saving files to a path that it supplies.
 
 - Original-format writing and portable project bundles are not implemented.
 - Imported songs do not reproduce every effect or level curve of their source
-  programs. MixJam clip fades are not rendered, and its master bus and return
+  programs. MixJam v7 clip edge fades are not rendered, and its master bus and return
   effects play through this application's own mastering pedals and FX buses;
   the importer shows a notice.

@@ -148,28 +148,20 @@ pub trait Frames: Send + Sync {
     fn tempo(&self) -> Option<f64> {
         None
     }
-    /// Fill `out` with the dry stereo mix, not yet held to full scale, and
-    /// `sends` with the FX buses' feeds, `2 * BUSES` interleaved channels a
-    /// frame. False, with `sends` untouched, when nothing in the block sends.
-    fn read_sends(&self, first_frame: u64, out: &mut [f32], _sends: &mut [f32]) -> bool {
-        self.read(first_frame, out);
-        false
-    }
-    /// Read a block with history private to this playback or export.
+    /// Read a block with history private to this playback or export. With
+    /// `sends`, fill `out` with the dry stereo mix, not yet held to full
+    /// scale, and `sends` with the FX buses' feeds, `2 * BUSES` interleaved
+    /// channels a frame. False, with `sends` untouched, when nothing in the
+    /// block sends.
     fn read_block(
         &self,
         first_frame: u64,
         out: &mut [f32],
-        sends: Option<&mut [f32]>,
+        _sends: Option<&mut [f32]>,
         _state: &mut RenderState,
     ) -> bool {
-        match sends {
-            Some(sends) => self.read_sends(first_frame, out, sends),
-            None => {
-                self.read(first_frame, out);
-                false
-            }
-        }
+        self.read(first_frame, out);
+        false
     }
 }
 
@@ -391,7 +383,7 @@ impl Mix {
     /// `samples` holds each source at each pitch that a clip plays it at.
     fn new(
         project: &Project,
-        samples: &HashMap<(u32, i32), Arc<Pcm>>,
+        samples: &HashMap<SourceKey, Arc<Pcm>>,
         source_tempos: &HashMap<u32, f64>,
     ) -> Result<Self, String> {
         project.validate()?;
@@ -643,7 +635,8 @@ impl Frames for Mix {
     fn frames(&self) -> u64 {
         self.frames
     }
-    /// Runs on the audio thread during playback: no allocation and no locks.
+    /// A read that starts the filters from silence. Playback and export call
+    /// `read_block` with their own `RenderState` instead.
     fn read(&self, first_frame: u64, out: &mut [f32]) {
         self.read_block(first_frame, out, None, &mut RenderState::default());
     }
@@ -671,9 +664,6 @@ impl Frames for Mix {
     }
     fn tempo(&self) -> Option<f64> {
         Some(self.bpm)
-    }
-    fn read_sends(&self, first_frame: u64, out: &mut [f32], sends: &mut [f32]) -> bool {
-        self.read_block(first_frame, out, Some(sends), &mut RenderState::default())
     }
 }
 
@@ -1003,9 +993,7 @@ impl Player {
             || audio.sample_rate() == 0
             || audio.sample_rate() > 384_000
         {
-            return Err(
-                "The audio must contain normalized finite mono or stereo PCM samples.".into(),
-            );
+            return Err("The audio must be mono or stereo with a supported sample rate.".into());
         }
         if total == 0 {
             return Err("There is no audio to play.".into());
@@ -1108,7 +1096,7 @@ mod tests {
     }
 
     #[test]
-    fn review_export_during_playback_does_not_change_filter_history() {
+    fn export_during_playback_does_not_change_filter_history() {
         let mut project = song();
         project.clips[0].start_tick = 0;
         project.clips[0].offset_frames = 0;
@@ -1137,7 +1125,7 @@ mod tests {
     }
 
     #[test]
-    fn review_automation_reaches_breakpoints_inside_a_render_chunk() {
+    fn automation_reaches_breakpoints_inside_a_render_chunk() {
         let mut project = song();
         project.clips[0].start_tick = 0;
         project.clips[0].offset_frames = 0;
@@ -1155,7 +1143,7 @@ mod tests {
         let mix = mix_with_samples(&project, &samples).unwrap();
         let mut out = vec![0.0; 1024 * 2];
         let mut sends = vec![0.0; 1024 * 2 * BUSES];
-        mix.read_sends(0, &mut out, &mut sends);
+        mix.read_block(0, &mut out, Some(&mut sends), &mut RenderState::default());
         assert_eq!(sends[295 * 2 * BUSES], 0.5);
     }
 
@@ -1209,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn review_dry_wav_admission_keeps_the_full_riff_capacity() {
+    fn dry_wav_admission_keeps_the_full_riff_capacity() {
         let mix = Mix {
             frames: (u64::from(u32::MAX) - 36) / 4,
             voices: Vec::new(),
@@ -1224,7 +1212,7 @@ mod tests {
     }
 
     #[test]
-    fn review_playback_and_export_stop_at_the_same_tail_limit() {
+    fn playback_and_export_stop_at_the_same_tail_limit() {
         let mut project = song();
         project.clips[0].start_tick = 0;
         project.clips[0].offset_frames = 0;
@@ -1414,7 +1402,12 @@ mod tests {
             let mix = mix_with_samples(project, &HashMap::from([(5, tone(hz))])).unwrap();
             let mut out = vec![0.0; 2048];
             let mut feeds = vec![0.0; 1024 * 2 * BUSES];
-            let sending = mix.read_sends(from, &mut out, &mut feeds);
+            let sending = mix.read_block(
+                from,
+                &mut out,
+                Some(&mut feeds),
+                &mut RenderState::default(),
+            );
             let rms = |values: Vec<f32>| {
                 (values.iter().map(|x| x * x).sum::<f32>() / values.len() as f32).sqrt()
             };

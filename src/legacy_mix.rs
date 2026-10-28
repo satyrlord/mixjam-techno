@@ -104,7 +104,10 @@ fn load_named_bytes(path: &Path, bytes: &[u8], library: &Library) -> Result<Proj
             arrangement = Some(Timeline { start, events });
         }
     }
-    let timeline = arrangement.ok_or("Cannot decode the original mix arrangement. The file is damaged or uses an unsupported profile.")?;
+    let timeline = arrangement.ok_or(
+        "Cannot decode the original mix arrangement. The file is damaged or uses an unsupported \
+         profile.",
+    )?;
     let header = Header {
         title,
         author,
@@ -209,12 +212,7 @@ fn read_wave_appendix(reader: &mut Reader<'_>) -> Result<(), String> {
         return Err("Invalid embedded WAV count.".into());
     }
     for _ in 0..count {
-        let path = reader.string()?;
-        if path.len() > 260
-            || path.as_bytes().get(1) != Some(&b':')
-            || !path.to_ascii_lowercase().ends_with(".wav")
-            || path.contains('\0')
-        {
+        if !is_saved_wave_path(&reader.string()?) {
             return Err("Invalid embedded WAV path.".into());
         }
         let size = reader.u32()? as usize;
@@ -233,17 +231,22 @@ fn read_wave_appendix(reader: &mut Reader<'_>) -> Result<(), String> {
     Ok(())
 }
 
+/// The form in which the original saves a WAV path: a drive path that ends in
+/// .wav and fits its 260-byte field.
+fn is_saved_wave_path(path: &str) -> bool {
+    path.len() <= 260
+        && path.as_bytes().get(1) == Some(&b':')
+        && path.to_ascii_lowercase().ends_with(".wav")
+        && !path.contains('\0')
+}
+
 fn read_wave_extension(reader: &mut Reader<'_>) -> Result<WaveReference, String> {
     let mut metadata = std::collections::BTreeMap::new();
     // Original writer 0x50A5B5, 0x50A602 and 0x50A650 writes three strings.
     // 0x50A6A0..0x50A741 then writes u16/u32/u16 metadata. The middle
     // value is the nominal bar count: 0x42FDDE..0x42FDE1 multiplies it by 128.
     let path = reader.string()?;
-    if path.len() > 260
-        || path.as_bytes().get(1) != Some(&b':')
-        || !path.to_ascii_lowercase().ends_with(".wav")
-        || path.contains('\0')
-    {
+    if !is_saved_wave_path(&path) {
         return Err("The T2 WAV reference is invalid.".into());
     }
     for index in 0..2 {
@@ -314,6 +317,29 @@ impl<'a> Reader<'a> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
+
+    /// A temporary folder that is removed even when the test fails.
+    struct Folder(PathBuf);
+    impl Folder {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "{prefix}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     fn text(bytes: &mut Vec<u8>, value: &str) {
         bytes.extend_from_slice(&((value.len() + 2) as u16).to_le_bytes());
@@ -390,15 +416,8 @@ mod tests {
 
     #[test]
     fn framed_wave_records_preserve_nominal_span_trim_and_source_identity() {
-        let root = std::env::temp_dir().join(format!(
-            "t2-custom-wave-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
+        let folder = Folder::new("t2-custom-wave");
+        let root = folder.0.as_path();
         let path = root.join("custom-take.wav");
         let mut samples = vec![0; 37_800];
         samples.extend(vec![8192; 37_800]);
@@ -414,7 +433,7 @@ mod tests {
         )
         .unwrap();
         let mut library = Library::empty();
-        library.import_wav_folder(&root, 140.0).unwrap();
+        library.import_wav_folder(root, 140.0).unwrap();
         let records = [
             wave_record(r"C:\old\custom-take.wav", 0, 2),
             wave_record(r"C:\old\custom-take.wav", -129, 3),
@@ -446,8 +465,6 @@ mod tests {
                 .iter()
                 .all(|value| *value == 0.0)
         );
-        fs::remove_file(saved).unwrap();
-        fs::remove_dir(root).unwrap();
     }
 
     fn wave_appendix(waves: &[(&str, &[u8])]) -> Vec<u8> {
@@ -661,15 +678,8 @@ mod tests {
 
     #[test]
     fn t2_native_ids_import_from_a_wav_only_provider() {
-        let root = std::env::temp_dir().join(format!(
-            "t2-wav-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
+        let folder = Folder::new("t2-wav");
+        let root = folder.0.as_path();
         let path = root.join("sample.wav");
         fs::write(
             &path,
@@ -683,11 +693,11 @@ mod tests {
         )
         .unwrap();
         let mut library = Library::empty();
-        library.import_wav_folder(&root, 140.0).unwrap();
+        library.import_wav_folder(root, 140.0).unwrap();
         library
             .register_wav_product(
                 Product::T2,
-                &root,
+                root,
                 &[crate::catalog::WaveMetadata {
                     native_id: 174,
                     code: "sample".into(),
@@ -724,21 +734,12 @@ mod tests {
         assert_eq!(project.clips[0].sample_id, 174);
         assert_eq!(project.clips[0].start_tick, 256);
         assert_eq!(project.clips[0].length_ticks, 512);
-        fs::remove_file(path).unwrap();
-        fs::remove_dir(root).unwrap();
     }
 
     #[test]
     fn trimmed_wav_sources_render_the_same_audio_at_different_sample_rates() {
-        let root = std::env::temp_dir().join(format!(
-            "t2-trim-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
+        let folder = Folder::new("t2-trim");
+        let root = folder.0.as_path();
         let path = root.join("sample.wav");
         for sample_rate in [22_050, 44_100, 48_000] {
             let bar_frames = (f64::from(sample_rate) * 240.0 / 140.0).round() as usize;
@@ -756,12 +757,12 @@ mod tests {
             )
             .unwrap();
             let mut library = Library::empty();
-            library.import_wav_folder(&root, 140.0).unwrap();
+            library.import_wav_folder(root, 140.0).unwrap();
             assert_eq!(
                 library
                     .register_wav_product(
                         Product::T2,
-                        &root,
+                        root,
                         &[crate::catalog::WaveMetadata {
                             native_id: 174,
                             code: "sample".into(),
@@ -820,21 +821,12 @@ mod tests {
                     .all(|sample| (*sample - 0.25).abs() < 0.0001)
             );
         }
-        fs::remove_file(path).unwrap();
-        fs::remove_dir(root).unwrap();
     }
 
     #[test]
     fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
-        let root = std::env::temp_dir().join(format!(
-            "t2-stretch-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
+        let folder = Folder::new("t2-stretch");
+        let root = folder.0.as_path();
         // Two bars at 180 BPM, as a Rave loop.
         let samples = (0..117_600)
             .map(|i| ((i % 100) * 200 - 10_000) as i16)
@@ -851,11 +843,11 @@ mod tests {
         )
         .unwrap();
         let mut library = Library::empty();
-        library.import_wav_folder(&root, 180.0).unwrap();
+        library.import_wav_folder(root, 180.0).unwrap();
         library
             .register_wav_product(
                 Product::T1,
-                &root,
+                root,
                 &[crate::catalog::WaveMetadata {
                     native_id: 1193,
                     code: "bn/r1la037.pxd".into(),
@@ -902,7 +894,6 @@ mod tests {
             let project = load_bytes(&song, &library).unwrap();
             assert_eq!(project.missing_samples.len(), 1, "{file} {folder}");
         }
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

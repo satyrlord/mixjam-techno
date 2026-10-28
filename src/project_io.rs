@@ -85,7 +85,11 @@ pub(crate) fn retain_manual_wave(path: &Path, root: &Path) -> Result<PathBuf, St
                 existing_hash.update(&buffer[..count]);
             }
             if existing_hash.finalize() != digest {
-                return Err("The retained manual sample has changed. Restore that file before you continue.".into());
+                return Err(
+                    "The retained manual sample has changed. Restore that file before you \
+                     continue."
+                        .into(),
+                );
             }
         } else {
             fs::rename(&temporary, &retained).map_err(|error| error.to_string())?;
@@ -279,8 +283,8 @@ pub fn open(path: &Path, library: &Library) -> Result<(Project, Library), String
 }
 
 /// Open a song, a `.mix` or v7 `.mixjam` import, or an earlier JSON project.
-/// The flag says whether Save can replace the file: format version 8, 9, or 10
-/// song. Imports and earlier JSON projects need a new `.mixjam` path.
+/// The flag says whether Save can replace the file: a `.mixjam` song of format
+/// version 8 or later. Imports and earlier JSON projects need a new `.mixjam` path.
 pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bool), String> {
     let candidate = library.clone();
     let (project, song) = if path
@@ -338,10 +342,10 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
             }
             // The partial copy stays when the saved folder cannot replace it.
             let mut provided = candidate.clone();
-            if provided.remove_product(binding.product).is_ok()
-                && provided
-                    .register(binding.product, &root, &reference_samples_root())
-                    .is_ok()
+            provided.remove_product(binding.product);
+            if provided
+                .register(binding.product, &root, &reference_samples_root())
+                .is_ok()
             {
                 candidate = provided;
             }
@@ -411,7 +415,12 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                     missing
                         .metadata
                         .insert("Trim rate policy".into(), "preserve-frames".into());
-                    missing.metadata.insert("Sample rate confidence".into(), "The original frame rate is unknown. The 44100 Hz estimate only sets the displayed duration; resolution preserves the original frame offset.".into());
+                    missing.metadata.insert(
+                        "Sample rate confidence".into(),
+                        "The original frame rate is unknown. The 44100 Hz estimate only sets the \
+                         displayed duration; resolution preserves the original frame offset."
+                            .into(),
+                    );
                 }
                 project.missing_samples.push(missing);
             }
