@@ -483,7 +483,8 @@ The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. A soloed track counts as occupied even without
 clips, in the arrangement and the Mixer, so its Solo can be turned off.
 Original track numbers remain stable. Rows are
-34-48 points high and scroll vertically. The label column is 122 points wide
+36 points high at every window and panel size, so more room shows more rows,
+and they scroll vertically. The label column is 122 points wide
 and holds, from left, M, S, L, the track number, and R. A lane that Mute or
 another track's Solo silences is dimmed, and its track number uses Muted. The
 fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The

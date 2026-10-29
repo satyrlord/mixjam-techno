@@ -48,6 +48,9 @@ pub(super) const DRAG_LABEL: Color32 = Color32::from_rgb(245, 220, 146);
 /// Alternate arrangement rows and the bar lines between four-bar marks.
 const ROW_ALTERNATE: Color32 = Color32::from_rgb(24, 28, 32);
 const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
+/// The height of an arrangement row. It stays the same at any window or panel
+/// size: more room shows more rows.
+const ROW_HEIGHT: f32 = 36.0;
 /// A clip gain at or below this level is silence.
 const CLIP_SILENCE_DB: f32 = -60.0;
 
@@ -1264,8 +1267,7 @@ impl MixJamApp {
         let visible_tracks = self.timeline_tracks.clone();
         let add_track = self.timeline_add_track;
         let row_count = visible_tracks.len();
-        let row_height =
-            ((ui.available_height() - 69.0) / row_count.clamp(1, 16) as f32).clamp(34.0, 48.0);
+        let row_height = ROW_HEIGHT;
         let bar_width = 62.0 * self.zoom;
         self.timeline_row_height = row_height;
         self.timeline_bar_width = bar_width;

@@ -10785,6 +10785,29 @@ mod tests {
     }
 
     #[test]
+    fn arrangement_rows_keep_their_height_and_more_room_shows_more_rows() {
+        let (ctx, mut app) = fixture();
+        for track in 2..20 {
+            app.session.place(1, track, 0).unwrap();
+        }
+        let mut seen = Vec::new();
+        for size in [Vec2::new(1280.0, 720.0), Vec2::new(1280.0, 1440.0)] {
+            for _ in 0..3 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            seen.push((
+                app.timeline_row_height,
+                app.timeline_drop_rect.unwrap().height(),
+            ));
+        }
+        assert_eq!(seen[0].0, seen[1].0, "Rows keep one height: {seen:?}");
+        assert!(
+            seen[1].1 > seen[0].1 + seen[0].0,
+            "A taller window shows more rows: {seen:?}"
+        );
+    }
+
+    #[test]
     fn mastering_knobs_take_the_wheel_once() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
