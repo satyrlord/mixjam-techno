@@ -126,6 +126,13 @@ change smoothly while the song plays, including when you undo or redo them.
   the track's clips before its automation and fader. Each track's EQ starts
   off; an EQ that is off keeps its settings and leaves the track as it was.
   Reset flattens every band.
+- The same window holds the track's ducker, which lowers the track while
+  another track, its key, sounds: a bass that makes room for the kick, for
+  example. Switch it on, pick the key track, and set Thresh (the key's level
+  above which the track ducks), Depth (the most it ducks), Attack, and
+  Release. The track ducks by as much as the key rises over the threshold,
+  after its fader and before its sends. A muted key does not duck. The EQ
+  button lights while the EQ or the ducker is on.
 - Bypass on the Master strip skips the master pedalboard, as Mastering's
   Bypass all does.
 - Export tracks… in the Mixer's toolbar asks for a folder and writes each
@@ -147,7 +154,9 @@ change smoothly while the song plays, including when you undo or redo them.
 
 Use Mastering, the third module of the lower panel, for the master
 pedalboard. The mix enters the Input unit, where Trim sets its level against
-the VU meter, passes each pedal that is on from left to right, and leaves
+the VU meter; after the Trim the mix is held to full scale, so lower the Trim
+when the VU meter shows a mix over full scale. It then passes each pedal that
+is on from left to right, and leaves
 through the Output unit, which shows loudness in LUFS, the true peak, and an
 OVER lamp while the song plays.
 
@@ -158,9 +167,18 @@ EQ, Tape, Stereo imaging, Multiband, and Limiter. Drag a pedal by its name or
 use its arrows to move it; the Limiter always stays last. Click a pedal in the
 strip below the board to scroll to it. Every pedal starts off.
 
+The dynamics pedals (Booster compressor, Bus compressor, Multiband, and
+Limiter) each have a Key dial. At Own the pedal listens to the mix. Set it to
+a track's number and the pedal listens to that track as it sounds after its
+fader: the compressors duck the whole mix while the track sounds, the
+Multiband holds each band under its ceiling while the track's same band is
+loud, and the Limiter holds the louder of the mix and the track under the
+ceiling. A muted key track is silent.
+
 The Preset selector loads a factory board: Subtle, Revive, or Loud, or one of
 seventeen genre boards. A preset sets every pedal and the order and turns the
-Booster pedals off; it keeps your Trim, so a mix you trimmed down stays down.
+Booster pedals off; it keeps your Trim, so a mix you trimmed down stays down,
+and the pedals' keys.
 Undo restores the board before it. Bypass all, beside the selector, skips the
 whole board, Trim included, for playback and export, so you can master the
 exported mix elsewhere. The pedals keep their settings, the board dims, and
@@ -173,7 +191,9 @@ that the Mixer's sends feed. Choose Echoform Delay or Aetherform Reverb for
 a bus, load a preset, and set its controls; the returns join the mix before
 the master pedalboard. Sync sets the delay in note lengths at the song's
 tempo. Input off lets the tail ring out; Clear tail cuts it at once. Export
-lets the tails ring past the song's end.
+lets the tails ring past the song's end. Each effect's ducker lowers its
+repeats or tail while its input plays; set its Key to a track's number and it
+follows that track instead, such as the kick. A preset keeps the Key.
 
 ## Sound tools and recording
 

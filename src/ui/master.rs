@@ -113,10 +113,11 @@ fn grid(kind: PedalKind) -> (usize, usize) {
     match kind {
         PedalKind::BoosterEq => (5, 2),
         PedalKind::BoosterWide | PedalKind::Maximizer => (1, 1),
+        PedalKind::BusCompressor => (3, 2),
         PedalKind::BoosterCompressor
         | PedalKind::TrimEq
-        | PedalKind::BusCompressor
-        | PedalKind::Multiband => (2, 2),
+        | PedalKind::Multiband
+        | PedalKind::Limiter => (2, 2),
         _ => (2, 1),
     }
 }
@@ -191,6 +192,8 @@ pub(super) enum Format {
     Speed,
     /// A frequency: hertz below 1 kHz, kilohertz from there.
     Hertz,
+    /// A dynamics pedal's key: Own at 0, else the track's number.
+    Key,
 }
 impl Format {
     pub(super) const fn db(signed: bool) -> Self {
@@ -216,7 +219,7 @@ impl Format {
     }
     fn unit(self) -> &'static str {
         match self {
-            Self::Plain => "",
+            Self::Plain | Self::Key => "",
             Self::Band(_) => "dB",
             Self::Unit { unit, .. } => unit,
             Self::Speed => "ips",
@@ -233,6 +236,8 @@ impl Format {
             Self::Hertz if value >= 10_000.0 => format!("{:.1} kHz", value / 1000.0),
             Self::Hertz if value >= 1000.0 => format!("{:.2} kHz", value / 1000.0),
             Self::Hertz => format!("{value:.0} Hz"),
+            Self::Key if value < 0.5 => "Own".into(),
+            Self::Key => format!("{value:.0}"),
             Self::Unit {
                 unit,
                 decimals,
@@ -254,6 +259,11 @@ impl Format {
     /// A typed value, with or without its unit.
     fn read(self, text: &str, high: f64) -> Option<f64> {
         let text = text.trim();
+        if let Self::Key = self
+            && text.eq_ignore_ascii_case("own")
+        {
+            return Some(0.0);
+        }
         if let Self::Hertz = self {
             let lower = text.to_lowercase();
             let (number, scale) = match lower.strip_suffix("khz").or(lower.strip_suffix('k')) {
@@ -446,6 +456,33 @@ fn face(knob: Knob) -> (String, String, &'static str, Format) {
             "Limiter ceiling",
             "The highest true peak out, in dBTP.",
             Format::db(false),
+        ),
+        Knob::BoosterKey => (
+            "Key",
+            "Booster compressor key",
+            "The track the compression follows, as it sounds after its fader. Own follows the mix.",
+            Format::Key,
+        ),
+        Knob::CompressorKey => (
+            "Key",
+            "Bus compressor key",
+            "The track the compressor listens to, as it sounds after its fader: the mix ducks \
+             while that track sounds. Own listens to the mix.",
+            Format::Key,
+        ),
+        Knob::MultibandKey => (
+            "Key",
+            "Multiband key",
+            "A track whose bands each band also holds under its ceiling, so the mix gives way \
+             band by band while that track sounds. Own: the mix alone.",
+            Format::Key,
+        ),
+        Knob::LimiterKey => (
+            "Key",
+            "Limiter key",
+            "A track the limiter also holds under the ceiling, so the mix gives way while that \
+             track peaks. Own: the mix alone.",
+            Format::Key,
         ),
     };
     (label.into(), name.into(), hint, format)
@@ -665,9 +702,12 @@ fn pedal_row(
             .id_salt("pedal-row")
             .max_rect(viewport),
     );
+    // Its scrolls to a control land at once, as the controls ask: a move
+    // button that jumps a wide pedal stays in view on the next frame.
     let mut area = egui::ScrollArea::horizontal()
         .id_salt("pedal-row-scroll")
-        .auto_shrink([false, false]);
+        .auto_shrink([false, false])
+        .animated(false);
     if let Some(offset) = jump {
         area = area.horizontal_scroll_offset(offset);
     }

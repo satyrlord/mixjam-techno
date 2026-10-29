@@ -83,6 +83,17 @@ class EnvTests(unittest.TestCase):
 
 
 class SongTests(unittest.TestCase):
+    def test_ducker_rejects_invalid_settings_without_changing_the_lane(self):
+        song = mixjam.Song('ducker')
+        for track, key, settings in ((0, 2, {}), (65, 2, {}), (1, 0, {}), (1, 65, {}),
+                                     (1, 1.5, {}), (1, 1, {}), (1, 2, {'depth': 25}),
+                                     (1, 2, {'attack': float('nan')}), (1, 2, {'release': 9})):
+            before = json.dumps(song.document()['lanes'])
+            with self.subTest(track=track, key=key, settings=settings):
+                with self.assertRaises(ValueError):
+                    song.ducker(track, key, **settings)
+                self.assertEqual(json.dumps(song.document()['lanes']), before)
+
     def test_explicit_pedal_power_overrides_the_named_pedal_default(self):
         for enabled in (False, True):
             board = mixjam.board(limiter={'on': enabled, 'gain': 3.0})
@@ -204,6 +215,90 @@ class HarmonyTests(unittest.TestCase):
 
 
 class MeasureTests(unittest.TestCase):
+    def test_keyed_lane_extracts_parts_without_clipping_the_key_into_its_output(self):
+        song = mixjam.Song('keyed')
+        song.ducker(2, 1)
+        document = song.document()
+        for index in (0, 1):
+            document['lanes'][index]['placements'] = [dict(id=index + 1)]
+        document['lanes'][0]['sends'] = [0.5] * 4
+        document['lanes'][0]['automation'] = {'volume': [{'tick': 0, 'value': -3}],
+                                             'sends': [[{'tick': 0, 'value': 0.5}]] * 4}
+        def native(command, **kwargs):
+            part = json.loads(Path(command[command.index('--mix') + 1]).read_text())
+            if '--stems' in command:
+                folder = Path(command[command.index('--stems') + 1])
+                folder.mkdir(exist_ok=True)
+                self.assertTrue(part['lanes'][0]['placements'])
+                self.assertEqual(part['lanes'][0]['sends'], [0] * 4)
+                self.assertEqual(part['lanes'][0]['automation'], {'volume': [{'tick': 0, 'value': -3}]})
+                title = part['song']['title']
+                mixjam.write_wav(folder / f'{title} - Track 01.wav', 44100, np.ones((8, 2)))
+                mixjam.write_wav(folder / f'{title} - Track 02.wav', 44100, np.full((8, 2), 0.5))
+                mixjam.write_wav(folder / f'{title} - FX 1 return.wav', 44100, np.full((8, 2), 0.125))
+            else:
+                key = -1 if part['lanes'][0]['polarityInverted'] else 1
+                mixjam.write_wav(command[command.index('--output') + 1], 44100,
+                                 np.full((8, 2), 0.5 + key))
+            return mock.Mock(returncode=0)
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.subprocess, 'run', side_effect=native):
+            result = render.render_lanes(document, {'bass': [2]}, Path(directory), jobs=1)
+            _, data = mixjam.read_wav(result['bass'])
+            np.testing.assert_allclose(data, 0.625, atol=1 / 32768)
+
+    def test_gain_fit_renders_keyed_audio_at_the_saved_gain(self):
+        song = mixjam.Song('fit')
+        song.ducker(2, 1)
+        document = song.document()
+        document['lanes'][1]['placements'] = [dict(id=1)]
+        seen = []
+        def lanes(current, groups, out, jobs):
+            gain = current['song']['masterGain']
+            seen.append(gain)
+            path = out / 'lane-02.wav'
+            # A threshold-driven processor does not scale linearly with input gain.
+            mixjam.write_wav(path, 44100, np.full((8, 2), 0.4 * math.sqrt(gain)))
+            return {'track 2': path}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'song.mixjam'
+            source.write_text(json.dumps(document))
+            with mock.patch.object(render, 'render_lanes', side_effect=lanes), \
+                    mock.patch('audible.audibility', return_value=[]), \
+                    mock.patch.object(sys, 'argv', ['render.py', str(source), str(root), '--fit-gain', '-6', '--no-master']), \
+                    mock.patch.object(sys, 'stdout', io.StringIO()):
+                render.main()
+            final_gain = json.loads(source.read_text())['song']['masterGain']
+            _, pcm = mixjam.read_wav(root / 'premaster.wav')
+            self.assertEqual(seen[-1], final_gain)
+            self.assertGreater(len(seen), 1)
+            np.testing.assert_allclose(pcm, 0.4 * math.sqrt(final_gain), atol=1 / 32768)
+
+    def test_fx_key_alone_uses_the_complete_key_context(self):
+        song = mixjam.Song('fx key')
+        document = song.document()
+        document['fxBuses'][0]['module'] = {'type': 'echoform-delay', 'duckKey': 3}
+        self.assertEqual(render.ducker_keys(document, [2]), {3})
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'keyed_parts') as parts, \
+                mock.patch.object(render, 'run') as run:
+            render.render_lanes(document, {'pad': [2]}, Path(directory), jobs=1)
+            parts.assert_called_once()
+            run.assert_not_called()
+
+    def test_silent_keyed_song_uses_the_native_silent_mix(self):
+        song = mixjam.Song('silent')
+        song.ducker(2, 1)
+        def native(command, **kwargs):
+            if '--stems' in command:
+                return mock.Mock(returncode=1, stdout='',
+                                 stderr='No track sounds: add clips, or check Mute, Solo, and L/R.\n')
+            mixjam.write_wav(command[command.index('--output') + 1], 44100, np.zeros((8, 2)))
+            return mock.Mock(returncode=0)
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.subprocess, 'run', side_effect=native):
+            result = render.render_lanes(song.document(), {'bass': [2]}, Path(directory), jobs=1)
+            _, pcm = mixjam.read_wav(result['bass'])
+            np.testing.assert_array_equal(pcm, 0)
+
     def short_song_report(self, frames=18900, sections=()):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

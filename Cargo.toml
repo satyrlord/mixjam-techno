@@ -1,6 +1,6 @@
 [package]
 name = "mixjam-techno"
-version = "1.39.0"
+version = "1.40.0"
 edition = "2024"
 description = "Native 64-track loop sequencer for classic sample libraries and songs"
 
@@ -15,7 +15,7 @@ gui = ["dep:eframe", "dep:rfd", "dep:image", "dep:deunicode"]
 [dependencies]
 legacy-format = { path = "crates/legacy-format" }
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 sha2 = "0.10"
 hound = "3.5.1"
 rodio = { version = "=0.20.1", default-features = false }

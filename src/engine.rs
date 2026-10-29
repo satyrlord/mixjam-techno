@@ -8,6 +8,10 @@ use std::{
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 4;
 pub const TRACK_COUNT: usize = 64;
+/// The most tracks that the duckers, the master pedals, and the FX buses
+/// may use as keys together. Each key is mixed on its own while the song
+/// mixes.
+pub const MAX_KEYS: usize = 8;
 pub const SUPPORTED_BPMS: [f64; 7] = [120.0, 125.0, 130.0, 135.0, 140.0, 160.0, 180.0];
 pub const TICKS_PER_BAR: u32 = 256;
 pub const SOURCE_BPM: f64 = 140.0;
@@ -48,6 +52,8 @@ pub struct Track {
     pub automation: crate::automation::Automation,
     /// The channel EQ, between the clips and the automation.
     pub eq: crate::eq::ChannelEq,
+    /// Lowers the track while its key track sounds, after the level.
+    pub ducker: crate::ducker::Ducker,
 }
 impl Default for Track {
     fn default() -> Self {
@@ -62,6 +68,7 @@ impl Default for Track {
             sends: [0.0; crate::fx::BUSES],
             automation: Default::default(),
             eq: Default::default(),
+            ducker: Default::default(),
         }
     }
 }
@@ -112,6 +119,9 @@ impl<'de> Deserialize<'de> for Track {
             // Projects saved before the channel EQ existed have it off.
             #[serde(default)]
             eq: crate::eq::ChannelEq,
+            // Projects saved before the ducker existed have it off.
+            #[serde(default)]
+            ducker: crate::ducker::Ducker,
         }
         let saved = SavedTrack::deserialize(deserializer)?;
         let mut track = Self {
@@ -125,6 +135,7 @@ impl<'de> Deserialize<'de> for Track {
             sends: saved.sends,
             automation: saved.automation,
             eq: saved.eq,
+            ducker: saved.ducker,
         };
         if saved.polarity_inverted.is_none() {
             if !saved.gain.is_finite() || !(-2.0..=4.0).contains(&saved.gain) {
@@ -684,6 +695,26 @@ impl Project {
     pub fn frames_per_tick(&self, sample_rate: u32) -> f64 {
         sample_rate as f64 * 240.0 / self.bpm / TICKS_PER_BAR as f64
     }
+    /// The tracks, from 0, that the master pedals that run and the FX buses
+    /// with an effect listen to, apart from the lanes' duckers, in that order
+    /// and without repeats.
+    pub fn side_keys(&self) -> Vec<usize> {
+        let buses = self.fx.buses.iter().filter_map(|bus| {
+            let key = match &bus.module {
+                crate::fx::Module::Empty => 0,
+                crate::fx::Module::EchoformDelay(delay) => delay.duck_key,
+                crate::fx::Module::AetherformReverb(reverb) => reverb.duck_key,
+            };
+            usize::from(key).checked_sub(1)
+        });
+        let mut keys: Vec<usize> = Vec::new();
+        for key in self.master.key_tracks().chain(buses) {
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+        keys
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != PROJECT_SCHEMA_VERSION {
             return Err("This project version is not supported.".into());
@@ -749,7 +780,23 @@ impl Project {
                 .automation
                 .validate()
                 .and_then(|()| track.eq.validate())
+                .and_then(|()| track.ducker.validate(index))
                 .map_err(|error| format!("Track {}: {error}", index + 1))?;
+        }
+        let mut keys: Vec<usize> = self
+            .tracks
+            .iter()
+            .filter(|track| track.ducker.on)
+            .map(|track| track.ducker.key_track())
+            .chain(self.side_keys())
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        if keys.len() > MAX_KEYS {
+            return Err(format!(
+                "The duckers, master pedals, and FX buses can use at most {MAX_KEYS} tracks \
+                 as keys."
+            ));
         }
         if self.clips.len() > MAX_CLIPS {
             return Err("The project has too many clips.".into());
@@ -1447,6 +1494,7 @@ mod tests {
                 sends: [0.0; crate::fx::BUSES],
                 automation: Default::default(),
                 eq: Default::default(),
+                ducker: Default::default(),
             };
             project.clips.push(Clip {
                 id: 37,

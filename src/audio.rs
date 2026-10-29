@@ -130,6 +130,13 @@ pub(crate) fn visit_wav_samples(
 /// Stateful processing belongs to a reader, never to the shared audio data.
 pub struct RenderState {
     chains: [ChainState; crate::engine::TRACK_COUNT],
+    /// The key tracks' own filter histories, apart from their mixed ones.
+    keys: [ChainState; crate::engine::MAX_KEYS],
+    /// Each chain's ducker, in the order of the mix's chains.
+    duckers: [crate::ducker::State; crate::engine::TRACK_COUNT],
+    /// The last block's key tracks for the master pedals and the FX buses,
+    /// as `Keys::audio` holds them.
+    key_audio: Vec<f32>,
     next_frame: Option<u64>,
     /// The track levels that the last block ended at.
     levels: [[f32; 2]; crate::engine::TRACK_COUNT],
@@ -189,6 +196,9 @@ impl Default for RenderState {
     fn default() -> Self {
         Self {
             chains: [ChainState::default(); crate::engine::TRACK_COUNT],
+            keys: [ChainState::default(); crate::engine::MAX_KEYS],
+            duckers: [crate::ducker::State::default(); crate::engine::TRACK_COUNT],
+            key_audio: Vec::new(),
             next_frame: None,
             levels: [[0.0; 2]; crate::engine::TRACK_COUNT],
             live: None,
@@ -208,9 +218,10 @@ pub trait Frames: Send + Sync {
     fn tempo(&self) -> Option<f64> {
         None
     }
-    /// Read a block with history private to this playback or export. With
-    /// `sends`, fill `out` with the dry stereo mix, not yet held to full
-    /// scale, and `sends` with the FX buses' feeds, `2 * BUSES` interleaved
+    /// Read a block with history private to this playback or export. A mix
+    /// fills `out` with the dry stereo mix, not yet held to full scale: the
+    /// master processor holds it after the board's trim. With `sends` it
+    /// fills `sends` with the FX buses' feeds, `2 * BUSES` interleaved
     /// channels a frame. False, with `sends` untouched, when nothing in the
     /// block sends.
     fn read_block(
@@ -222,6 +233,12 @@ pub trait Frames: Send + Sync {
     ) -> bool {
         self.read(first_frame, out);
         false
+    }
+    /// The key tracks of the first `frames` frames that the last
+    /// `read_block` with `state` read, for the master pedals and the FX
+    /// buses.
+    fn keys<'a>(&'a self, _state: &'a RenderState, _frames: usize) -> crate::ducker::Keys<'a> {
+        crate::ducker::Keys::NONE
     }
 }
 
@@ -246,6 +263,7 @@ impl Frames for Pcm {
 }
 
 /// One clip, resolved to output frames and its decoded source.
+#[derive(Clone)]
 struct Voice {
     track: usize,
     source: Arc<Pcm>,
@@ -339,8 +357,9 @@ impl SendLevel {
     }
 }
 
-/// A track with its EQ on or with automation. Its voices mix into a short
-/// buffer that its EQ, filter, volume, level, and sends then shape, in that order.
+/// A track with its EQ on, with automation, with its ducker on, or that keys
+/// a ducker. Its voices mix into a short buffer that its EQ, filter, volume,
+/// ducker, level, and sends then shape, in that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
@@ -348,6 +367,8 @@ struct TrackChain {
     volume: Option<Envelope>,
     sends: [SendLevel; BUSES],
     filter: Option<Envelope>,
+    /// The ducker and the slot of its key among the mix's keys.
+    ducker: Option<(crate::ducker::Run, usize)>,
 }
 
 impl TrackChain {
@@ -366,6 +387,7 @@ impl TrackChain {
                     .map_or(SendLevel::Fixed(track.sends[bus]), SendLevel::Moving)
             }),
             filter: Envelope::new(&automation.filter, frames_per_tick),
+            ducker: None,
         }
     }
 
@@ -377,57 +399,79 @@ impl TrackChain {
         }
     }
 
-    /// Add the track to `out` and `sends`. Runs on the audio thread: the
-    /// buffer is on the stack.
-    fn add(
+    /// Fill `buffer`, stereo frames from `at`, with the track as it sounds:
+    /// its voices through its EQ, filter, volume, ducker, and level. `duck`
+    /// holds the key's level at each frame and the ducker's history.
+    fn shape(
         &self,
-        first_frame: u64,
-        out: &mut [f32],
-        mut sends: Option<&mut [f32]>,
+        at: u64,
+        buffer: &mut [f32],
         state: &mut ChainState,
         level: &Ramp,
+        mut duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
-        let frames = out.len() / 2;
+        buffer.fill(0.0);
+        for voice in &self.voices {
+            voice.add(at, buffer, None, &Ramp::UNITY);
+        }
+        if let Some(curve) = &self.eq {
+            state.eq.process(buffer, curve);
+        }
+        for index in 0..buffer.len() / 2 {
+            let frame = at + index as u64;
+            if let Some(envelope) = &self.filter {
+                state.filter.process(
+                    &mut buffer[index * 2..index * 2 + 2],
+                    envelope.at(frame),
+                    Mix::SAMPLE_RATE as f32,
+                );
+            }
+            let mut gain = self.volume.as_ref().map_or(1.0, |envelope| {
+                crate::automation::volume_gain(envelope.at(frame))
+            });
+            if let (Some((run, _)), Some((keys, history))) = (&self.ducker, duck.as_mut()) {
+                gain *= run.gain(keys[index], history);
+            }
+            for channel in 0..2 {
+                buffer[index * 2 + channel] =
+                    buffer[index * 2 + channel] * gain * level.at(frame, channel);
+            }
+        }
+    }
+
+    /// Add `count` frames of the track, from `at`, to `out` and `sends` at
+    /// frame `offset` of the block. Runs on the audio thread: the buffer is
+    /// on the stack.
+    #[allow(clippy::too_many_arguments)]
+    fn add(
+        &self,
+        at: u64,
+        offset: usize,
+        count: usize,
+        out: &mut [f32],
+        sends: Option<&mut [f32]>,
+        state: &mut ChainState,
+        level: &Ramp,
+        duck: Option<(&[f32], &mut crate::ducker::State)>,
+    ) {
         let mut buffer = [0.0_f32; Self::CHUNK * 2];
-        for chunk in (0..frames).step_by(Self::CHUNK) {
-            let count = Self::CHUNK.min(frames - chunk);
-            let at = first_frame + chunk as u64;
-            let buffer = &mut buffer[..count * 2];
-            buffer.fill(0.0);
-            for voice in &self.voices {
-                voice.add(at, buffer, None, &Ramp::UNITY);
-            }
-            if let Some(curve) = &self.eq {
-                state.eq.process(buffer, curve);
-            }
+        let buffer = &mut buffer[..count * 2];
+        self.shape(at, buffer, state, level, duck);
+        for (sum, value) in out[offset * 2..(offset + count) * 2]
+            .iter_mut()
+            .zip(buffer.iter())
+        {
+            *sum += value;
+        }
+        let Some(sends) = sends else {
+            return;
+        };
+        for (bus, send) in self.sends.iter().enumerate() {
             for index in 0..count {
-                let frame = at + index as u64;
-                if let Some(envelope) = &self.filter {
-                    state.filter.process(
-                        &mut buffer[index * 2..index * 2 + 2],
-                        envelope.at(frame),
-                        Mix::SAMPLE_RATE as f32,
-                    );
-                }
-                let gain = self.volume.as_ref().map_or(1.0, |envelope| {
-                    crate::automation::volume_gain(envelope.at(frame))
-                });
+                let level = send.at(at + index as u64);
                 for channel in 0..2 {
-                    let value = buffer[index * 2 + channel] * gain * level.at(frame, channel);
-                    buffer[index * 2 + channel] = value;
-                    out[(chunk + index) * 2 + channel] += value;
-                }
-            }
-            let Some(sends) = sends.as_deref_mut() else {
-                continue;
-            };
-            for (bus, send) in self.sends.iter().enumerate() {
-                for index in 0..count {
-                    let level = send.at(at + index as u64);
-                    for channel in 0..2 {
-                        sends[(chunk + index) * 2 * BUSES + bus * 2 + channel] +=
-                            buffer[index * 2 + channel] * level;
-                    }
+                    sends[(offset + index) * 2 * BUSES + bus * 2 + channel] +=
+                        buffer[index * 2 + channel] * level;
                 }
             }
         }
@@ -440,9 +484,16 @@ impl TrackChain {
 pub struct Mix {
     frames: u64,
     voices: Vec<Voice>,
-    /// The tracks with their EQ on or with automation, which hold their own
-    /// voices.
+    /// The tracks with their EQ on, with automation, or with a ducker on or
+    /// that key one, which hold their own voices.
     chains: Vec<TrackChain>,
+    /// The key tracks of the duckers, the master pedals, and the FX buses,
+    /// in key slot order, each in a chain of its own that only measures it.
+    keys: Vec<TrackChain>,
+    /// The track of each key slot, and whether the master pedals or the FX
+    /// buses listen to any, so that the mix keeps their audio.
+    key_tracks: Vec<usize>,
+    side: bool,
     /// The track levels the mix was prepared with.
     levels: [[f32; 2]; crate::engine::TRACK_COUNT],
     bpm: f64,
@@ -507,6 +558,23 @@ impl Mix {
         let mut chains = Vec::new();
         let mut chain_index = [None; crate::engine::TRACK_COUNT];
         let any_solo = project.any_solo();
+        // A ducker works when its own track sounds; its key may be silent.
+        let ducking = |index: usize| {
+            let track = &project.tracks[index];
+            track.ducker.on
+                && track.audible(any_solo)
+                && (track.left_enabled || track.right_enabled)
+        };
+        let mut keys: Vec<TrackChain> = Vec::new();
+        let side_keys = project.side_keys();
+        let ducker_keys = (0..crate::engine::TRACK_COUNT)
+            .filter(|&index| ducking(index))
+            .map(|index| project.tracks[index].ducker.key_track());
+        for key in ducker_keys.chain(side_keys.iter().copied()) {
+            if !keys.iter().any(|chain| chain.track == key) {
+                keys.push(TrackChain::new(key, &project.tracks[key], frames_per_tick));
+            }
+        }
         for clip in &project.clips {
             if missing.contains(&clip.sample_id) {
                 continue;
@@ -554,14 +622,30 @@ impl Mix {
                 curves: [clip.fades.fade_in.curve, clip.fades.fade_out.curve],
                 sound_end: end.min(start + source_left.ceil() as u64),
             };
-            // A track whose EQ is off and that has no automation mixes its
-            // voices straight into the sum, as before the EQ existed.
-            if track.automation.is_empty() && !track.eq.on {
+            let keyed = keys.iter().position(|chain| chain.track == clip.track);
+            if let Some(slot) = keyed {
+                keys[slot].voices.push(voice.clone());
+            }
+            // A track whose EQ is off, that has no automation, and that
+            // neither ducks nor keys a ducker mixes its voices straight into
+            // the sum, as before the EQ existed.
+            if track.automation.is_empty()
+                && !track.eq.on
+                && !ducking(clip.track)
+                && keyed.is_none()
+            {
                 voices.push(voice);
                 continue;
             }
             let index = *chain_index[clip.track].get_or_insert_with(|| {
-                chains.push(TrackChain::new(clip.track, track, frames_per_tick));
+                let mut chain = TrackChain::new(clip.track, track, frames_per_tick);
+                if ducking(clip.track) {
+                    let key = track.ducker.key_track();
+                    let slot = keys.iter().position(|chain| chain.track == key);
+                    chain.ducker = slot
+                        .map(|slot| (crate::ducker::Run::new(&track.ducker, rate as f32), slot));
+                }
+                chains.push(chain);
                 chains.len() - 1
             });
             chains[index].voices.push(voice);
@@ -574,6 +658,9 @@ impl Mix {
             frames,
             voices,
             chains,
+            key_tracks: keys.iter().map(|chain| chain.track).collect(),
+            side: !side_keys.is_empty(),
+            keys,
             levels: track_levels(project),
             bpm: project.bpm,
             fed,
@@ -648,25 +735,31 @@ impl Mix {
                 return Ok(());
             } as usize;
             let samples = &mut block[..count * 2];
-            if position < self.frames {
+            let keyed = if position < self.frames {
                 match &mut returns {
                     Some(returns) => {
                         let sends = &mut sends[..count * 2 * BUSES];
                         let sending = self.read_block(position, samples, Some(sends), &mut state);
-                        returns.process(samples, sending.then_some(&*sends));
+                        returns.process_keyed(
+                            samples,
+                            sending.then_some(&*sends),
+                            self.key_block(&state, count),
+                        );
                     }
                     None => {
                         self.read_block(position, samples, None, &mut state);
                     }
                 }
+                count
             } else {
                 samples.fill(0.0);
                 if let Some(returns) = returns.as_mut().filter(|_| ringing) {
                     returns.process(samples, None);
                     tail += count as u64;
                 }
-            }
-            master.process(samples);
+                0
+            };
+            master.process_keyed(samples, self.key_block(&state, keyed));
             let skip = latency.saturating_sub(position).min(count as u64) as usize;
             write(&samples[skip * 2..])?;
             position += count as u64;
@@ -863,7 +956,7 @@ impl Mix {
                     write(index, dry)?;
                 }
                 if let Some(returns) = &mut returns {
-                    returns.split(wet, Some(sends));
+                    returns.split(wet, Some(sends), self.key_block(&states[0], count));
                 }
             } else {
                 dry.fill(0.0);
@@ -871,7 +964,7 @@ impl Mix {
                     write(index, dry)?;
                 }
                 if let Some(returns) = &mut returns {
-                    returns.split(wet, None);
+                    returns.split(wet, None, crate::ducker::Keys::NONE);
                     tail += count as u64;
                 }
             }
@@ -884,6 +977,19 @@ impl Mix {
                 write(tracks.len() + offset, part)?;
             }
             position += count as u64;
+        }
+    }
+
+    /// The key tracks that the master pedals and the FX buses listen to, for
+    /// the first `frames` frames of the block that `state` last mixed. None
+    /// when nothing listens.
+    fn key_block<'a>(&'a self, state: &'a RenderState, frames: usize) -> crate::ducker::Keys<'a> {
+        if !self.side || frames == 0 {
+            return crate::ducker::Keys::NONE;
+        }
+        crate::ducker::Keys {
+            tracks: &self.key_tracks,
+            audio: &state.key_audio[..frames * 2 * self.key_tracks.len()],
         }
     }
 
@@ -901,6 +1007,8 @@ impl Mix {
         let continues = state.next_frame == Some(first_frame);
         if !continues {
             state.chains.fill(ChainState::default());
+            state.keys.fill(ChainState::default());
+            state.duckers.fill(crate::ducker::State::default());
         }
         let targets: [[f32; 2]; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| {
             state
@@ -928,15 +1036,56 @@ impl Mix {
         for voice in self.voices.iter().filter(|voice| included(voice.track)) {
             voice.add(first_frame, out, sends.as_deref_mut(), &levels[voice.track]);
         }
-        for (chain, state) in self.chains.iter().zip(&mut state.chains) {
-            if included(chain.track) {
-                chain.add(
-                    first_frame,
-                    out,
-                    sends.as_deref_mut(),
-                    state,
-                    &levels[chain.track],
-                );
+        // Chunk by chunk, so that each ducker reads its key over the same
+        // frames. The keys are measured whether or not `only` mixes them.
+        let frames = out.len() / 2;
+        let stride = 2 * self.keys.len();
+        if self.side && state.key_audio.len() < frames * stride {
+            state.key_audio.resize(frames * stride, 0.0);
+        }
+        for offset in (0..frames).step_by(TrackChain::CHUNK) {
+            let count = TrackChain::CHUNK.min(frames - offset);
+            let at = first_frame + offset as u64;
+            let mut keys = [[0.0_f32; TrackChain::CHUNK]; crate::engine::MAX_KEYS];
+            for (slot, ((chain, history), key)) in self
+                .keys
+                .iter()
+                .zip(&mut state.keys)
+                .zip(&mut keys)
+                .enumerate()
+            {
+                let mut buffer = [0.0_f32; TrackChain::CHUNK * 2];
+                let buffer = &mut buffer[..count * 2];
+                chain.shape(at, buffer, history, &levels[chain.track], None);
+                for (index, (level, &[left, right])) in
+                    key.iter_mut().zip(buffer.as_chunks::<2>().0).enumerate()
+                {
+                    *level = left.abs().max(right.abs());
+                    if self.side {
+                        let at = (offset + index) * stride + 2 * slot;
+                        state.key_audio[at..at + 2].copy_from_slice(&[left, right]);
+                    }
+                }
+            }
+            for ((chain, history), ducker) in self
+                .chains
+                .iter()
+                .zip(&mut state.chains)
+                .zip(&mut state.duckers)
+            {
+                if included(chain.track) {
+                    let duck = chain.ducker.map(|(_, slot)| (&keys[slot][..count], ducker));
+                    chain.add(
+                        at,
+                        offset,
+                        count,
+                        out,
+                        sends.as_deref_mut(),
+                        history,
+                        &levels[chain.track],
+                        duck,
+                    );
+                }
             }
         }
         state.next_frame = Some(first_frame + (out.len() / 2) as u64);
@@ -953,10 +1102,12 @@ impl Frames for Mix {
     fn frames(&self) -> u64 {
         self.frames
     }
-    /// A read that starts the filters from silence. Playback and export call
-    /// `read_block` with their own `RenderState` instead.
+    /// A read that starts the filters from silence and holds the mix to full
+    /// scale, as no board follows it. Playback and export call `read_block`
+    /// with their own `RenderState` instead.
     fn read(&self, first_frame: u64, out: &mut [f32]) {
         self.read_block(first_frame, out, None, &mut RenderState::default());
+        hold_to_full_scale(out);
     }
     fn read_block(
         &self,
@@ -973,16 +1124,22 @@ impl Frames for Mix {
             state,
             None,
         );
-        // Saturation is the reconstruction policy. Original mixer rounding and resampling remain to be measured.
-        if !want_sends {
-            for x in out {
-                *x = x.clamp(-1.0, 1.0);
-            }
-        }
         self.sends && want_sends
+    }
+    fn keys<'a>(&'a self, state: &'a RenderState, frames: usize) -> crate::ducker::Keys<'a> {
+        self.key_block(state, frames)
     }
     fn tempo(&self) -> Option<f64> {
         Some(self.bpm)
+    }
+}
+
+/// Hold every sample to full scale. Saturation is the reconstruction
+/// policy; the original mixer's rounding and resampling remain to be
+/// measured. The master processor does this after the board's trim.
+pub(crate) fn hold_to_full_scale(samples: &mut [f32]) {
+    for sample in samples {
+        *sample = sample.clamp(-1.0, 1.0);
     }
 }
 
@@ -1226,6 +1383,8 @@ struct PlaybackSource {
     /// starts on time, and still to play out after the end.
     lead: usize,
     tail: usize,
+    /// Frames of the block that the key tracks cover: none after the song.
+    keyed: usize,
 }
 impl PlaybackSource {
     /// About 23 ms, so the master meters update more than 30 times a second.
@@ -1254,6 +1413,13 @@ impl PlaybackSource {
         Self {
             state: RenderState {
                 live,
+                // Allocate key scratch before the device reads this source.
+                // A short first block must also leave room for a full block.
+                key_audio: if audio.tempo().is_some() {
+                    vec![0.0; Self::BLOCK_FRAMES * 2 * crate::engine::MAX_KEYS]
+                } else {
+                    Vec::new()
+                },
                 ..RenderState::default()
             },
             returns,
@@ -1270,6 +1436,7 @@ impl PlaybackSource {
             master,
             lead: latency,
             tail: latency,
+            keyed: 0,
             audio,
         }
     }
@@ -1289,6 +1456,7 @@ impl PlaybackSource {
                         Self::BLOCK_FRAMES.min((crate::fx::TAIL_LIMIT - self.ringing) as usize);
                     self.ringing += count as u64;
                     self.filled = count * self.channels;
+                    self.keyed = 0;
                     self.block[..self.filled].fill(0.0);
                     returns.process(&mut self.block[..self.filled], None);
                     if self.process() {
@@ -1299,6 +1467,7 @@ impl PlaybackSource {
                     let count = self.tail.min(Self::BLOCK_FRAMES);
                     self.tail -= count;
                     self.filled = count * self.channels;
+                    self.keyed = 0;
                     self.block[..self.filled].fill(0.0);
                     if self.process() {
                         return true;
@@ -1316,6 +1485,7 @@ impl PlaybackSource {
                 return false;
             }
             self.filled = count * self.channels;
+            self.keyed = count;
             match &mut self.returns {
                 Some(returns) => {
                     let sends = &mut self.sends[..count * 2 * BUSES];
@@ -1325,7 +1495,11 @@ impl PlaybackSource {
                         Some(sends),
                         &mut self.state,
                     );
-                    returns.process(&mut self.block[..self.filled], sending.then_some(&*sends));
+                    returns.process_keyed(
+                        &mut self.block[..self.filled],
+                        sending.then_some(&*sends),
+                        self.audio.keys(&self.state, count),
+                    );
                 }
                 None => {
                     self.audio.read_block(
@@ -1345,8 +1519,12 @@ impl PlaybackSource {
     /// Run the block through the pedals and drop what remains of their
     /// delay. True when the block still has samples to play.
     fn process(&mut self) -> bool {
-        if let Some(master) = &mut self.master {
-            master.process(&mut self.block[..self.filled]);
+        match &mut self.master {
+            Some(master) => master.process_keyed(
+                &mut self.block[..self.filled],
+                self.audio.keys(&self.state, self.keyed),
+            ),
+            None => hold_to_full_scale(&mut self.block[..self.filled]),
         }
         let skip = self.lead.min(self.filled / self.channels);
         self.lead -= skip;
@@ -1487,6 +1665,9 @@ mod tests {
             frames: (u64::from(u32::MAX) - 36) / 4 + 1,
             voices: Vec::new(),
             chains: Vec::new(),
+            keys: Vec::new(),
+            key_tracks: Vec::new(),
+            side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
             bpm: 140.0,
             fed: [false; BUSES],
@@ -1688,6 +1869,9 @@ mod tests {
             frames: (u64::from(u32::MAX) - 36) / 4,
             voices: Vec::new(),
             chains: Vec::new(),
+            keys: Vec::new(),
+            key_tracks: Vec::new(),
+            side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
             bpm: 140.0,
             fed: [false; BUSES],
@@ -2650,6 +2834,105 @@ mod tests {
             frames,
         );
         assert!(cut - open < -20.0, "50 Hz: {:.2} dB", cut - open);
+    }
+
+    #[test]
+    fn a_ducker_lowers_its_track_while_its_key_sounds_and_only_then() {
+        // Track 1 holds a tone from the start; track 2's key enters halfway
+        // through the bar, at frame 37,800, while the tone still sounds.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 128, 128).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0))]);
+        let alone = |project: &Project, track: usize| {
+            let mix = mix_with_samples(project, &samples).unwrap();
+            let mut out = vec![0.0; mix.frames() as usize * 2];
+            mix.mix(0, &mut out, None, &mut RenderState::default(), Some(track));
+            out
+        };
+        let open = alone(&project, 0);
+        let key = alone(&project, 1);
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -40.0,
+            depth: 12.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let ducked = alone(&project, 0);
+        // Before the key: unchanged. With the key 34 dB over the threshold:
+        // the depth, 12 dB down.
+        assert_eq!(ducked[..37_800 * 2], open[..37_800 * 2]);
+        let down = level_db(&ducked, 39_000..44_000) - level_db(&open, 39_000..44_000);
+        assert!((down + 12.0).abs() < 0.2, "{down:.2} dB");
+        // The key sounds as before: a key is measured, not changed.
+        assert_eq!(alone(&project, 1), key);
+        // A muted key does not duck.
+        project.tracks[1].muted = true;
+        assert_eq!(alone(&project, 0), open);
+    }
+
+    #[test]
+    fn playback_key_audio_is_allocated_before_the_first_read() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.master.bus_compressor.on = true;
+        project.master.bus_compressor.key = 2;
+        let samples = HashMap::from([(1, tone(220.0))]);
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let mut playback =
+            PlaybackSource::new(mix, 0, None, Some(MasterControl::new(&project.master)));
+        let capacity = playback.state.key_audio.capacity();
+        let allocation = playback.state.key_audio.as_ptr();
+        assert!(playback.fill());
+        assert_eq!(playback.state.key_audio.capacity(), capacity);
+        assert_eq!(playback.state.key_audio.as_ptr(), allocation);
+    }
+
+    #[test]
+    fn a_keyed_bus_compressor_lowers_the_mix_while_its_key_track_sounds() {
+        // Track 2's key enters halfway through the bar, at frame 37,800.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 128, 128).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0))]);
+        // At a 0 dBFS threshold the mix never reaches the knee.
+        project.master.bus_compressor = crate::master::BusCompressor {
+            on: true,
+            threshold: 0.0,
+            ratio: 10.0,
+            attack: 0.1,
+            release: 50.0,
+            key: 0,
+        };
+        let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+        let open = render(&project);
+        project.master.bus_compressor.threshold = -30.0;
+        project.master.bus_compressor.key = 2;
+        let keyed = render(&project);
+        // Before the key the mix is untouched; with it, the whole mix ducks.
+        assert_eq!(keyed[..37_800 * 2], open[..37_800 * 2]);
+        let down = level_db(&keyed, 39_000..44_000) - level_db(&open, 39_000..44_000);
+        assert!(down < -12.0, "{down:.2} dB");
+        // Playback hears the same key.
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let played: Vec<f32> =
+            PlaybackSource::new(mix, 0, None, Some(MasterControl::new(&project.master))).collect();
+        let played_down = level_db(&played, 39_000..44_000) - level_db(&open, 39_000..44_000);
+        assert!(
+            (played_down - down).abs() < 0.5,
+            "{played_down:.2} against {down:.2} dB"
+        );
+        // A muted key is silent, so nothing ducks.
+        project.tracks[1].muted = true;
+        let muted = render(&project);
+        project.master.bus_compressor.key = 0;
+        project.master.bus_compressor.threshold = 0.0;
+        assert_eq!(muted, render(&project));
     }
 
     #[test]

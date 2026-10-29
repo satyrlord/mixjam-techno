@@ -82,6 +82,7 @@ fn slots(module: &Module) -> Vec<Slot> {
                     ReverbParam::ShimmerAmount,
                     ReverbParam::DuckAmount,
                     ReverbParam::DuckRelease,
+                    ReverbParam::DuckKey,
                     ReverbParam::Output,
                 ]
                 .into_iter()
@@ -182,6 +183,12 @@ fn delay_face(param: DelayParam) -> (&'static str, &'static str, &'static str, F
             "How fast the repeats return.",
             Format::whole("ms"),
         ),
+        DelayParam::DuckKey => (
+            "Key",
+            "duck key",
+            "The track that lowers the repeats, as it sounds after its fader. Own: the input.",
+            Format::Key,
+        ),
         DelayParam::Output => ("Output", "output", "", Format::db(true)),
     }
 }
@@ -268,6 +275,12 @@ fn reverb_face(param: ReverbParam) -> (&'static str, &'static str, &'static str,
             "How fast the tail returns.",
             Format::whole("ms"),
         ),
+        ReverbParam::DuckKey => (
+            "Key",
+            "duck key",
+            "The track that lowers the tail, as it sounds after its fader. Own: the input.",
+            Format::Key,
+        ),
         ReverbParam::Output => ("Output", "output", "", Format::db(true)),
     }
 }
@@ -279,11 +292,23 @@ fn matching_preset(bus: &FxBus) -> Option<&'static str> {
         Module::Empty => None,
         Module::EchoformDelay(delay) => Echoform::PRESETS
             .iter()
-            .find(|(name, mix)| Echoform::preset(name).as_ref() == Some(delay) && *mix == level)
+            .find(|(name, mix)| {
+                Echoform::preset(name).map(|preset| Echoform {
+                    duck_key: delay.duck_key,
+                    ..preset
+                }) == Some(*delay)
+                    && *mix == level
+            })
             .map(|(name, _)| *name),
         Module::AetherformReverb(reverb) => Aetherform::PRESETS
             .iter()
-            .find(|(name, mix)| Aetherform::preset(name).as_ref() == Some(reverb) && *mix == level)
+            .find(|(name, mix)| {
+                Aetherform::preset(name).map(|preset| Aetherform {
+                    duck_key: reverb.duck_key,
+                    ..preset
+                }) == Some(*reverb)
+                    && *mix == level
+            })
             .map(|(name, _)| *name),
     }
 }
@@ -482,13 +507,17 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                 &format!("{bus_name} preset"),
                 &mut chosen,
                 &with_custom,
-                "Load a factory preset: it sets every control and the return level.",
+                "Load a factory preset: it sets every control but the duck key, \
+                 and the return level.",
             );
             if chosen != current {
                 match bus.module {
-                    Module::EchoformDelay(_) => {
+                    Module::EchoformDelay(old) => {
                         if let Some(delay) = Echoform::preset(chosen) {
-                            bus.module = Module::EchoformDelay(delay);
+                            bus.module = Module::EchoformDelay(Echoform {
+                                duck_key: old.duck_key,
+                                ..delay
+                            });
                         }
                         if let Some((_, mix)) =
                             Echoform::PRESETS.iter().find(|(name, _)| *name == chosen)
@@ -496,9 +525,12 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                             bus.return_level = mix / 100.0;
                         }
                     }
-                    Module::AetherformReverb(_) => {
+                    Module::AetherformReverb(old) => {
                         if let Some(reverb) = Aetherform::preset(chosen) {
-                            bus.module = Module::AetherformReverb(reverb);
+                            bus.module = Module::AetherformReverb(Aetherform {
+                                duck_key: old.duck_key,
+                                ..reverb
+                            });
                         }
                         if let Some((_, mix)) =
                             Aetherform::PRESETS.iter().find(|(name, _)| *name == chosen)
@@ -820,7 +852,7 @@ mod tests {
         }
         assert_eq!(
             slots(&Module::AetherformReverb(Aetherform::default())).len(),
-            17
+            18
         );
     }
 

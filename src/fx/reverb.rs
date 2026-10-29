@@ -406,8 +406,19 @@ impl Core {
         0.5 - 0.5 * (PI * progress).cos()
     }
     #[inline]
+    #[cfg(test)]
     pub(super) fn process(&mut self, left: f64, right: f64) -> (f64, f64) {
-        let duck = self.ducker.gain(left, right, self.duck.next());
+        self.process_keyed(left, right, None)
+    }
+    /// With a key, the ducking follows it instead of the input.
+    pub(super) fn process_keyed(
+        &mut self,
+        left: f64,
+        right: f64,
+        key: Option<(f64, f64)>,
+    ) -> (f64, f64) {
+        let (key_left, key_right) = key.unwrap_or((left, right));
+        let duck = self.ducker.gain(key_left, key_right, self.duck.next());
         let amount = self.drive.next();
         let input = [drive(left, amount), drive(right, amount)];
         let fading = self.fade > 0;

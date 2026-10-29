@@ -259,7 +259,7 @@ pub(super) fn show(
                                                     }),
                                                     sends: &mut track.sends,
                                                     any_solo,
-                                                    eq_on: track.eq.on,
+                                                    eq_on: track.eq.on || track.ducker.on,
                                                     open_eq: &mut open_eq,
                                                 }),
                                             );
@@ -347,8 +347,8 @@ struct TrackControls<'a> {
     automated: [bool; BUSES],
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
-    /// Whether the track's channel EQ is on, and whether its EQ button was
-    /// pressed.
+    /// Whether the track's channel EQ or ducker is on, and whether its EQ
+    /// button was pressed.
     eq_on: bool,
     open_eq: &'a mut bool,
 }
@@ -547,7 +547,8 @@ fn strip(
         if response
             .on_hover_text(format!(
                 "{name} EQ: {}. Open the channel EQ window: low and high cuts, shelves, and a \
-                 peak, before the track's automation and fader.",
+                 peak, before the track's automation and fader; and the ducker, which lowers \
+                 the track while another track sounds.",
                 if eq_on { "on" } else { "off" }
             ))
             .clicked()

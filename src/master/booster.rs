@@ -259,8 +259,20 @@ impl Compressor {
             result as i32
         }
     }
+    #[cfg(test)]
     pub(super) fn process(&mut self, left: i32, right: i32) -> (i32, i32) {
-        let mono = (left + right) >> 1;
+        self.process_keyed(left, right, None)
+    }
+    /// With a key, 16-bit samples like the input's, the level follows the
+    /// key instead of the input.
+    pub(super) fn process_keyed(
+        &mut self,
+        left: i32,
+        right: i32,
+        key: Option<(i32, i32)>,
+    ) -> (i32, i32) {
+        let (key_left, key_right) = key.unwrap_or((left, right));
+        let mono = (key_left + key_right) >> 1;
         let drive = i64::from(s16(self.drive >> 16));
         let level = i64::from(s32(
             ((f64::from(mono) - f64::from(self.previous) * 0.5).trunc() as i64).abs() << 8,

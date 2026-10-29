@@ -1,4 +1,4 @@
-"""Write format-16 .mixjam songs from Python.
+"""Write format-17 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -26,7 +26,7 @@ import numpy as np
 
 TICKS_PER_BAR = 256
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 16
+FORMAT_VERSION = 17
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 
@@ -173,7 +173,27 @@ class Song:
         if unknown:
             raise ValueError(f'unknown EQ settings {sorted(unknown)}')
         eq.update({key: bool(value) if key == 'on' else float(value) for key, value in settings.items()})
+        for key, (low, high) in EQ_RANGES.items():
+            if not low <= eq[key] <= high:
+                raise ValueError(f'track {track}: EQ {key} {eq[key]:g} is outside {low:g} to {high:g}')
         self.lanes[track - 1]['eq'] = eq
+
+    def ducker(self, track, key, threshold=-30.0, depth=6.0, attack=2.0, release=120.0):
+        """Switch on a lane's ducker: after its level, the lane drops by as much as lane `key`'s
+        peak rises over `threshold` dBFS, by at most `depth` dB; attack and release in ms. The key
+        is the key lane as it sounds (after its fader), before its own ducker."""
+        for name, value in (('track', track), ('key', key)):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= TRACKS or value != int(value):
+                raise ValueError(f'{name} must be a whole track number from 1 to {TRACKS}')
+        track, key = int(track), int(key)
+        if key == track:
+            raise ValueError(f'track {track}: a ducker needs another track as its key')
+        settings = dict(threshold=float(threshold), depth=float(depth), attack=float(attack),
+                        release=float(release))
+        for name, (low, high) in DUCKER_RANGES.items():
+            if not low <= settings[name] <= high:
+                raise ValueError(f'track {track}: ducker {name} is outside {low:g} to {high:g}')
+        self.lanes[track - 1]['ducker'] = dict(on=True, key=key, **settings)
 
     # Placement.
     def clip(self, track, path, start_tick, length_ticks, offset_frames=0, gain_db=0.0,
@@ -360,6 +380,11 @@ def hold(entries, neutral, placements, label):
 # A new track's channel EQ: the cuts at their ends are off, the bands flat.
 EQ_DEFAULT = dict(on=False, lowCut=20.0, lowHz=100.0, lowDb=0.0, midHz=1000.0, midDb=0.0, midQ=1.0,
                   highHz=8000.0, highDb=0.0, highCut=20000.0)
+# The application's range of each EQ setting (`src/eq.rs`).
+EQ_RANGES = dict(lowCut=(20.0, 2000.0), lowHz=(40.0, 500.0), lowDb=(-18.0, 18.0), midHz=(150.0, 10000.0),
+                 midDb=(-18.0, 18.0), midQ=(0.3, 8.0), highHz=(1500.0, 16000.0), highDb=(-18.0, 18.0),
+                 highCut=(1000.0, 20000.0))
+DUCKER_RANGES = dict(threshold=(-60.0, 0.0), depth=(0.0, 24.0), attack=(0.1, 50.0), release=(10.0, 1000.0))
 
 # The song-file keys of the three booster pedals. Each key is written here only, so that a
 # rename in the song format is one edit.

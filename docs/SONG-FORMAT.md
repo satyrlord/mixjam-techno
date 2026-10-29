@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 16 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 17 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 15 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 16 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 16 keeps its `createdAt`.
+to 17 keeps its `createdAt`.
 
 Ticks are 256 per bar. A song links each WAV file by path; it is not a
 portable audio bundle.
@@ -52,6 +52,13 @@ from 0 to 4; 1 is 0 dB), `polarityInverted`, `pan`, `leftEnabled`,
   16,000 Hz; each gain from -18 to 18 dB, where 0 is off; and `highCut`, a
   12 dB/octave low-pass, from 1000 to 20,000 Hz, where 20,000 is off. A lane
   whose EQ is off at the default settings omits `eq`.
+- `ducker`, which lowers the lane while another lane, its key, sounds:
+  `{"on", "key", "threshold", "depth", "attack", "release"}`, every key
+  required. `key` is a track from 1 to 64, another than the lane's own while
+  the ducker is on; `threshold` runs from -60 to 0 dBFS, `depth` from 0 to
+  24 dB, `attack` from 0.1 to 50 ms, and `release` from 10 to 1000 ms. The
+  duckers that are on use at most 8 key tracks. A lane whose ducker is off at
+  the default settings omits `ducker`.
 
 ## Master pedalboard
 
@@ -61,23 +68,26 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-version 16 are:
+versions 16 and 17 are:
 
 | Key | Settings |
 |---|---|
 | `boosterEq` | ten `bands` from 0 to 100 (50 is flat) |
-| `boosterCompressor` | `drive`, `speed`, and `gain`, each from 0 to 1000 |
+| `boosterCompressor` | `drive`, `speed`, and `gain`, each from 0 to 1000, and `key` |
 | `boosterWide` | `spread` from 0 to 1000 |
 | `softClip` | `amount` from 0 to 6 dB and `ceiling` from -6 to 0 dBFS |
 | `tube` | `drive` from 0 to 10 and `mix` from 0 to 100 percent |
 | `trimEq` | `highPass` from 10 to 40 Hz, and `mud` and `harsh` from -3 to 0 dB |
-| `busCompressor` | `threshold` from -30 to 0 dBFS, `ratio` from 1.5 to 10, `attack` from 0.1 to 100 ms, and `release` from 50 to 1200 ms |
+| `busCompressor` | `threshold` from -30 to 0 dBFS, `ratio` from 1.5 to 10, `attack` from 0.1 to 100 ms, `release` from 50 to 1200 ms, and `key` |
 | `maximizer` | `boost` from 0 to 25 percent |
 | `liftEq` | `low` and `air` from 0 to 2 dB |
 | `tape` | `drive` from 0 to 10 and `speed`, 15 or 30 inches per second |
 | `imaging` | `width` from 60 to 140 percent and `monoBelow` from 60 to 300 Hz |
-| `multiband` | `low`, `mid`, and `high` from 0 to 100 percent |
-| `limiter` | `gain` from 0 to 12 dB and `ceiling` from -3 to 0 dBTP |
+| `multiband` | `low`, `mid`, and `high` from 0 to 100 percent, and `key` |
+| `limiter` | `gain` from 0 to 12 dB, `ceiling` from -3 to 0 dBTP, and `key` |
+
+`key`, from version 17, is the track from 1 to 64 that the dynamics pedal
+listens to, or 0 for its own input. A pedal whose key is 0 omits it.
 
 Versions 11 to 15 name the three Booster pedals with earlier keys, in the
 record and in `order`; `BOOSTER_KEYS` in `src/mixjam/song.rs` lists both key
@@ -92,7 +102,11 @@ a pedal reject.
 `returnLevel` from 0 to 1, and `limiter`. A `module` is `{"type": "empty"}`, or
 `echoform-delay` or `aetherform-reverb` with every setting under the
 version-7 names (`mode`, `divisionL`, `timeMsL`, `feedback`, ...;
-`spaceModel`, `preDelayMs`, `decaySeconds`, ...).
+`spaceModel`, `preDelayMs`, `decaySeconds`, ...). From version 17 either
+effect may hold `duckKey`, the track from 1 to 64 whose sound ducks the
+effect instead of its input; an effect whose ducker follows its input omits
+it. The duckers that are on, the pedals that are on, and the effects use at
+most 8 key tracks together.
 
 ## Placements and samples
 
@@ -112,7 +126,7 @@ song reopens without its original file.
 ## Version history
 
 Each version opens as it sounded when it was saved. Saving an earlier song
-writes version 16, which earlier builds cannot open.
+writes version 17, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -125,6 +139,7 @@ writes version 16, which earlier builds cannot open.
 | 14 | Adds clip `fades` and `pitchCents`, and lane `automation`. | No fades, no pitch change, no automation. |
 | 15 | Adds the lane `eq` and the master `bypass`. | Every channel EQ off and the board in use. |
 | 16 | Renames the Booster pedals' keys in `master` and its `order`. | The same Booster settings under the new keys. |
+| 17 | Adds the lane `ducker`, the pedals' `key`, and the effects' `duckKey`. | Every ducker off; every pedal and effect on its own input. |
 
 A version rejects each key that a later version added.
 

@@ -20,6 +20,10 @@ pub use crate::{
 pub mod eq {
     pub use crate::eq::{ChannelEq, EqParam};
 }
+/// The ducker of each track and its controls.
+pub mod ducker {
+    pub use crate::ducker::{Ducker, DuckerParam};
+}
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
@@ -399,6 +403,8 @@ enum TrackControl {
     Pan,
     Send(usize),
     Eq(crate::eq::EqParam),
+    Ducker(crate::ducker::DuckerParam),
+    DuckerKey,
 }
 #[derive(Clone, Copy, PartialEq)]
 enum FxControl {
@@ -469,6 +475,7 @@ impl Gesture {
                     if old.polarity_inverted != new.polarity_inverted
                         || old.automation != new.automation
                         || old.eq.on != new.eq.on
+                        || old.ducker.on != new.ducker.on
                         || TrackSwitch::ALL
                             .iter()
                             .any(|switch| switch.get(old) != switch.get(new))
@@ -489,6 +496,14 @@ impl Gesture {
                     for param in crate::eq::EqParam::ALL {
                         if param.get(&old.eq) != param.get(&new.eq) {
                             controls.push(Self::Track(index, TrackControl::Eq(param)));
+                        }
+                    }
+                    if old.ducker.key != new.ducker.key {
+                        controls.push(Self::Track(index, TrackControl::DuckerKey));
+                    }
+                    for param in crate::ducker::DuckerParam::ALL {
+                        if param.get(&old.ducker) != param.get(&new.ducker) {
+                            controls.push(Self::Track(index, TrackControl::Ducker(param)));
                         }
                     }
                 }
@@ -1093,6 +1108,9 @@ impl Session {
             command,
             EditCommand::SetMaster(_) | EditCommand::SetEffects(_)
         );
+        // The mix renders the tracks that the pedals and the buses listen
+        // to, so a new key prepares it again.
+        let side_keys = self.project().side_keys();
         let levels_only = match &command {
             EditCommand::SetMixer { tracks, .. } => {
                 tracks.len() == self.project().tracks.len()
@@ -1156,7 +1174,7 @@ impl Session {
         }
         // An accepted command that changes nothing is not an edit.
         if self.editor.generation() != generation {
-            if master_only {
+            if master_only && self.project().side_keys() == side_keys {
                 self.master_changed();
             } else if levels_only {
                 self.levels_changed();
@@ -1231,6 +1249,7 @@ impl Session {
         // mix and playback running.
         let master_only = (before.master != self.project().master
             || before.fx != self.project().fx)
+            && before.side_keys() == self.project().side_keys()
             && Project {
                 master: self.project().master,
                 fx: self.project().fx,
@@ -4033,6 +4052,46 @@ mod boundary_tests {
         let command = eq(&session, &|eq| eq.mid_q = 9.0);
         assert!(session.edit(command).is_err());
     }
+    #[test]
+    fn ducker_dial_drags_keep_one_undo_step_per_control() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let set = |session: &mut Session, change: &dyn Fn(&mut crate::ducker::Ducker)| {
+            let mut tracks = session.project().tracks.clone();
+            change(&mut tracks[2].ducker);
+            session
+                .edit(EditCommand::SetMixer {
+                    tracks,
+                    master_gain: session.project().master_gain,
+                })
+                .unwrap();
+        };
+        set(&mut session, &|ducker| ducker.on = true);
+        for depth in [7.0, 8.0, 9.0] {
+            set(&mut session, &|ducker| ducker.depth = depth);
+        }
+        for key in [4, 5, 6] {
+            set(&mut session, &|ducker| ducker.key = key);
+        }
+        for attack in [3.0, 4.0, 5.0] {
+            set(&mut session, &|ducker| ducker.attack = attack);
+        }
+        set(&mut session, &|ducker| ducker.on = false);
+        assert!(session.history_step(false).unwrap());
+        assert!(session.project().tracks[2].ducker.on);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[2].ducker.attack, 2.0);
+        assert_eq!(session.project().tracks[2].ducker.key, 6);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[2].ducker.key, 1);
+        assert_eq!(session.project().tracks[2].ducker.depth, 9.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[2].ducker.depth, 6.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &Project::default());
+        assert!(!session.history_step(false).unwrap());
+    }
+
     #[test]
     fn bypass_is_one_undo_step_that_keeps_the_mix_prepared() {
         let mut session =

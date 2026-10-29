@@ -61,6 +61,11 @@ impl Default for BoosterEq {
     }
 }
 
+/// Whether a pedal's key is its own input. Such a key is not saved.
+fn is_own(key: &u8) -> bool {
+    *key == 0
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct BoosterCompressor {
@@ -68,6 +73,9 @@ pub struct BoosterCompressor {
     pub drive: u16,
     pub speed: u16,
     pub gain: u16,
+    /// What the level follows: 0 is the pedal's input, 1 to 64 a track.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub key: u8,
 }
 impl Default for BoosterCompressor {
     fn default() -> Self {
@@ -76,6 +84,7 @@ impl Default for BoosterCompressor {
             drive: KNOB_MAX / 2,
             speed: KNOB_MAX / 2,
             gain: KNOB_MAX / 2,
+            key: 0,
         }
     }
 }
@@ -169,6 +178,9 @@ pub struct BusCompressor {
     /// In milliseconds.
     pub attack: f32,
     pub release: f32,
+    /// What the detector follows: 0 is the pedal's input, 1 to 64 a track.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub key: u8,
 }
 impl Default for BusCompressor {
     fn default() -> Self {
@@ -178,6 +190,7 @@ impl Default for BusCompressor {
             ratio: Knob::CompressorRatio.range().default,
             attack: Knob::CompressorAttack.range().default,
             release: Knob::CompressorRelease.range().default,
+            key: 0,
         }
     }
 }
@@ -269,6 +282,10 @@ pub struct Multiband {
     pub low: f32,
     pub mid: f32,
     pub high: f32,
+    /// 0, or a track from 1 to 64 whose same band each band also holds
+    /// under its ceiling, so the band gives way while the key sounds.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub key: u8,
 }
 impl Default for Multiband {
     fn default() -> Self {
@@ -277,6 +294,7 @@ impl Default for Multiband {
             low: Knob::MultibandLow.range().default,
             mid: Knob::MultibandMid.range().default,
             high: Knob::MultibandHigh.range().default,
+            key: 0,
         }
     }
 }
@@ -290,6 +308,10 @@ pub struct Limiter {
     pub gain: f32,
     /// The highest true peak out, in dBTP.
     pub ceiling: f32,
+    /// 0, or a track from 1 to 64 that the limiter also holds under the
+    /// ceiling, so the mix gives way while the key peaks.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub key: u8,
 }
 impl Default for Limiter {
     fn default() -> Self {
@@ -297,6 +319,7 @@ impl Default for Limiter {
             on: false,
             gain: Knob::LimiterGain.range().default,
             ceiling: Knob::LimiterCeiling.range().default,
+            key: 0,
         }
     }
 }
@@ -364,7 +387,7 @@ impl PedalKind {
                 BoosterBand(8),
                 BoosterBand(9),
             ],
-            Self::BoosterCompressor => &[BoosterDrive, BoosterSpeed, BoosterGain],
+            Self::BoosterCompressor => &[BoosterDrive, BoosterSpeed, BoosterGain, BoosterKey],
             Self::BoosterWide => &[BoosterSpread],
             Self::SoftClip => &[SoftClipAmount, SoftClipCeiling],
             Self::Tube => &[TubeDrive, TubeMix],
@@ -374,15 +397,23 @@ impl PedalKind {
                 CompressorRatio,
                 CompressorAttack,
                 CompressorRelease,
+                CompressorKey,
             ],
             Self::Maximizer => &[MaximizerBoost],
             Self::LiftEq => &[LiftLow, LiftAir],
             Self::Tape => &[TapeDrive],
             Self::Imaging => &[ImagingWidth, ImagingMonoBelow],
-            Self::Multiband => &[MultibandLow, MultibandMid, MultibandHigh],
-            Self::Limiter => &[LimiterGain, LimiterCeiling],
+            Self::Multiband => &[MultibandLow, MultibandMid, MultibandHigh, MultibandKey],
+            Self::Limiter => &[LimiterGain, LimiterCeiling, LimiterKey],
         }
     }
+    /// The pedals with a key: the dynamics pedals.
+    pub const KEYED: [Self; 4] = [
+        Self::BoosterCompressor,
+        Self::BusCompressor,
+        Self::Multiband,
+        Self::Limiter,
+    ];
     /// The frames by which the pedal delays the sound while it is on.
     pub fn latency(self) -> usize {
         match self {
@@ -428,6 +459,11 @@ pub enum Knob {
     MultibandHigh,
     LimiterGain,
     LimiterCeiling,
+    /// A dynamics pedal's key: 0 is its own input, 1 to 64 a track.
+    BoosterKey,
+    CompressorKey,
+    MultibandKey,
+    LimiterKey,
 }
 
 /// A knob's range in its unit, its default, and the step it moves in.
@@ -492,7 +528,17 @@ impl Knob {
             Self::MultibandMid => range(0.0, 100.0, 15.0, 1.0),
             Self::LimiterGain => range(0.0, 12.0, 4.0, 0.1),
             Self::LimiterCeiling => range(-3.0, 0.0, -1.0, 0.1),
+            Self::BoosterKey | Self::CompressorKey | Self::MultibandKey | Self::LimiterKey => {
+                range(0.0, crate::engine::TRACK_COUNT as f32, 0.0, 1.0)
+            }
         }
+    }
+    /// Whether the knob picks a dynamics pedal's key.
+    pub fn is_key(self) -> bool {
+        matches!(
+            self,
+            Self::BoosterKey | Self::CompressorKey | Self::MultibandKey | Self::LimiterKey
+        )
     }
     /// The pedal the knob belongs to; the trim belongs to the board.
     pub fn pedal(self) -> Option<PedalKind> {
@@ -530,6 +576,10 @@ impl Knob {
             Self::MultibandHigh => chain.multiband.high,
             Self::LimiterGain => chain.limiter.gain,
             Self::LimiterCeiling => chain.limiter.ceiling,
+            Self::BoosterKey => f32::from(chain.booster_compressor.key),
+            Self::CompressorKey => f32::from(chain.bus_compressor.key),
+            Self::MultibandKey => f32::from(chain.multiband.key),
+            Self::LimiterKey => f32::from(chain.limiter.key),
         }
     }
     /// Set the knob, held to its range. The Booster knobs take whole positions.
@@ -570,6 +620,10 @@ impl Knob {
             Self::MultibandHigh => chain.multiband.high = value,
             Self::LimiterGain => chain.limiter.gain = value,
             Self::LimiterCeiling => chain.limiter.ceiling = value,
+            Self::BoosterKey => chain.booster_compressor.key = whole as u8,
+            Self::CompressorKey => chain.bus_compressor.key = whole as u8,
+            Self::MultibandKey => chain.multiband.key = whole as u8,
+            Self::LimiterKey => chain.limiter.key = whole as u8,
         }
     }
 }
@@ -669,6 +723,23 @@ impl MasterChain {
             PedalKind::Multiband => self.multiband.on = on,
             PedalKind::Limiter => self.limiter.on = on,
         }
+    }
+    /// A pedal's key: 0, its own input, for a pedal without one.
+    pub fn key(&self, kind: PedalKind) -> u8 {
+        match kind {
+            PedalKind::BoosterCompressor => self.booster_compressor.key,
+            PedalKind::BusCompressor => self.bus_compressor.key,
+            PedalKind::Multiband => self.multiband.key,
+            PedalKind::Limiter => self.limiter.key,
+            _ => 0,
+        }
+    }
+    /// The tracks, from 0, that the pedals that run listen to.
+    pub fn key_tracks(&self) -> impl Iterator<Item = usize> + '_ {
+        PedalKind::KEYED
+            .into_iter()
+            .filter(|kind| self.runs(*kind))
+            .filter_map(|kind| usize::from(self.key(kind)).checked_sub(1))
     }
     /// The frames by which the pedals that run delay the sound.
     pub fn latency(&self) -> usize {
@@ -927,8 +998,15 @@ impl MasterProcessor {
         }
         self.board.apply(chain);
     }
-    /// Process interleaved stereo samples in place.
+    /// Process interleaved stereo samples in place: the trim, then the hold
+    /// to full scale, then the pedals. The trim comes first, so a lower trim
+    /// keeps a hot mix from clipping.
     pub fn process(&mut self, block: &mut [f32]) {
+        self.process_keyed(block, crate::ducker::Keys::NONE);
+    }
+    /// `process` with the key tracks of the block, which the keyed pedals
+    /// listen to after the same trim.
+    pub fn process_keyed(&mut self, block: &mut [f32], keys: crate::ducker::Keys) {
         if self.fade == 0
             && let Some((control, seen)) = &mut self.control
             && let Some(chain) = control.poll(seen)
@@ -937,21 +1015,34 @@ impl MasterProcessor {
         }
         let trimmed = !(self.trim.settled() && self.trim.value() == 1.0);
         if !trimmed && !self.board.active && self.fade == 0 && self.meters.is_none() {
+            crate::audio::hold_to_full_scale(block);
             return;
         }
-        for [left, right] in block.as_chunks_mut::<2>().0 {
+        let slots = self.board.key_slots(&keys);
+        let previous_slots = self.previous.key_slots(&keys);
+        for (frame, [left, right]) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
             let (mut l, mut r) = (*left, *right);
+            let mut gain = 1.0;
             if trimmed {
-                let gain = self.trim.next() as f32;
+                gain = self.trim.next() as f32;
                 (l, r) = (l * gain, r * gain);
             }
             if let Some(meters) = &mut self.meters {
                 meters.input(l, r);
             }
+            let key = |slots: [Option<Option<usize>>; 4]| -> KeyFrame {
+                slots.map(|slot| {
+                    slot.map(|slot| {
+                        let (key_left, key_right) = keys.frame(slot, frame);
+                        (key_left * gain, key_right * gain)
+                    })
+                })
+            };
+            (l, r) = (l.clamp(-1.0, 1.0), r.clamp(-1.0, 1.0));
             (l, r) = if self.fade > 0 {
-                self.crossfade(l, r)
+                self.crossfade(l, r, key(slots), key(previous_slots))
             } else if self.board.active || self.board.live {
-                self.board.process(l, r)
+                self.board.process(l, r, key(slots))
             } else {
                 (l, r)
             };
@@ -987,9 +1078,15 @@ impl MasterProcessor {
     /// Both boards on the same input, the old one fading out along a
     /// raised cosine. The two outputs are nearly the same sound, so their
     /// gains sum to one.
-    fn crossfade(&mut self, left: f32, right: f32) -> (f32, f32) {
-        let (new_l, new_r) = self.board.process(left, right);
-        let (old_l, old_r) = self.previous.process(left, right);
+    fn crossfade(
+        &mut self,
+        left: f32,
+        right: f32,
+        keys: KeyFrame,
+        previous_keys: KeyFrame,
+    ) -> (f32, f32) {
+        let (new_l, new_r) = self.board.process(left, right, keys);
+        let (old_l, old_r) = self.previous.process(left, right, previous_keys);
         if self.warmup > 0 {
             self.warmup -= 1;
             return (old_l, old_r);
@@ -1073,13 +1170,22 @@ struct Board {
     imaging: pedals::Imaging,
     multiband: pedals::Multiband,
     limiter: pedals::Limiter,
+    /// Each keyed pedal's key, in `PedalKind::KEYED` order, delayed by the
+    /// pedals that run before it, so that it lines up with the sound.
+    key_delays: [[dsp::Delay<LIVE_LATENCY>; 2]; 4],
+    key_lags: [usize; 4],
 }
+/// A frame of each keyed pedal's key, in `PedalKind::KEYED` order: `None`
+/// for a pedal that listens to its own input.
+type KeyFrame = [Option<(f32, f32)>; 4];
 impl Board {
     fn new() -> Self {
         Self {
             chain: MasterChain::default(),
             live: false,
             padding: [dsp::Delay::ZERO; 2],
+            key_delays: [[dsp::Delay::ZERO; 2]; 4],
+            key_lags: [0; 4],
             active: false,
             equalizer: booster::Equalizer::new(),
             compressor: booster::Compressor::at_load(),
@@ -1137,6 +1243,23 @@ impl Board {
         }
         self.chain = *chain;
         self.active = PedalKind::ALL.into_iter().any(|kind| chain.runs(kind));
+        let mut lag = 0;
+        for kind in chain.order.into_iter().filter(|kind| chain.runs(*kind)) {
+            if let Some(index) = PedalKind::KEYED.iter().position(|keyed| *keyed == kind) {
+                self.key_lags[index] = lag;
+            }
+            lag += kind.latency();
+        }
+    }
+    /// Where each keyed pedal finds its key among `keys`: `None` for its
+    /// own input or a pedal that does not run, `Some(None)` for silence.
+    fn key_slots(&self, keys: &crate::ducker::Keys) -> [Option<Option<usize>>; 4] {
+        PedalKind::KEYED.map(|kind| {
+            self.chain
+                .runs(kind)
+                .then(|| keys.slot(self.chain.key(kind)))
+                .flatten()
+        })
     }
     /// Clear a mastering pedal's state and move it straight to its settings.
     fn clear(&mut self, kind: PedalKind) {
@@ -1170,8 +1293,21 @@ impl Board {
                 .any(|kind| chain.is_on(kind) != self.chain.is_on(kind))
     }
     #[inline]
-    fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
-        let (left, right) = self.run(Frame::Audio(left, right)).audio();
+    fn process(&mut self, left: f32, right: f32, keys: KeyFrame) -> (f32, f32) {
+        let mut delayed = [None; 4];
+        for (index, key) in keys.into_iter().enumerate() {
+            // Keep time while a pedal follows its own input too. Otherwise
+            // selecting a track again replays key audio from before the switch.
+            let (key_left, key_right) = key.unwrap_or((0.0, 0.0));
+            let lag = self.key_lags[index];
+            let [delay_left, delay_right] = &mut self.key_delays[index];
+            let frame = (
+                delay_left.push_delayed(key_left, lag),
+                delay_right.push_delayed(key_right, lag),
+            );
+            delayed[index] = key.map(|_| frame);
+        }
+        let (left, right) = self.run(Frame::Audio(left, right), delayed).audio();
         if self.live {
             let padding = LIVE_LATENCY - self.chain.latency();
             (
@@ -1187,7 +1323,9 @@ impl Board {
     /// Booster pedals on integers; the samples change kind only where two
     /// neighbouring pedals differ. In the original's order the Booster pedals
     /// are the library's stereo path.
-    fn run(&mut self, mut frame: Frame) -> Frame {
+    /// `keys` holds each keyed pedal's key, already lined up with the frame.
+    fn run(&mut self, mut frame: Frame, keys: KeyFrame) -> Frame {
+        let [booster_key, compressor_key, multiband_key, limiter_key] = keys;
         for kind in self.chain.order {
             if !self.chain.runs(kind) {
                 continue;
@@ -1202,7 +1340,13 @@ impl Board {
                 }
                 PedalKind::BoosterCompressor => {
                     let (left, right) = frame.integers();
-                    let (left, right) = self.compressor.process(left, right);
+                    let key = booster_key.map(|(key_left, key_right)| {
+                        (
+                            i32::from(crate::audio::float_to_i16(key_left)),
+                            i32::from(crate::audio::float_to_i16(key_right)),
+                        )
+                    });
+                    let (left, right) = self.compressor.process_keyed(left, right, key);
                     Frame::Integers(left, right)
                 }
                 PedalKind::BoosterWide => {
@@ -1216,13 +1360,18 @@ impl Board {
                         PedalKind::SoftClip => self.soft_clip.process(left, right),
                         PedalKind::Tube => self.tube.process(left, right),
                         PedalKind::TrimEq => self.trim_eq.process(left, right),
-                        PedalKind::BusCompressor => self.bus_compressor.process(left, right),
+                        PedalKind::BusCompressor => {
+                            self.bus_compressor
+                                .process_keyed(left, right, compressor_key)
+                        }
                         PedalKind::Maximizer => self.maximizer.process(left, right),
                         PedalKind::LiftEq => self.lift_eq.process(left, right),
                         PedalKind::Tape => self.tape.process(left, right),
                         PedalKind::Imaging => self.imaging.process(left, right),
-                        PedalKind::Multiband => self.multiband.process(left, right),
-                        _ => self.limiter.process(left, right),
+                        PedalKind::Multiband => {
+                            self.multiband.process_keyed(left, right, multiband_key)
+                        }
+                        _ => self.limiter.process_keyed(left, right, limiter_key),
                     };
                     Frame::Audio(left, right)
                 }
@@ -1242,7 +1391,7 @@ impl Board {
     }
     /// One frame of 16-bit samples through the pedals, then the clamp.
     fn process_integers(&mut self, left: i32, right: i32) -> (i16, i16) {
-        let (left, right) = self.run(Frame::Integers(left, right)).integers();
+        let (left, right) = self.run(Frame::Integers(left, right), [None; 4]).integers();
         (clamp16(left), clamp16(right))
     }
 }
@@ -1368,6 +1517,57 @@ mod tests {
     }
 
     #[test]
+    fn returning_to_a_track_key_does_not_replay_its_old_audio() {
+        let mut chain = MasterChain::default();
+        chain.soft_clip.on = true;
+        chain.soft_clip.amount = 0.0;
+        chain.bus_compressor = BusCompressor {
+            on: true,
+            threshold: -30.0,
+            ratio: 10.0,
+            attack: 0.1,
+            release: 50.0,
+            key: 2,
+        };
+        // Another pedal keeps this track in the prepared mix while the
+        // compressor switches between its own input and the track.
+        chain.limiter.on = true;
+        chain.limiter.key = 2;
+        let mut board = Box::new(Board::new());
+        board.apply(&chain);
+        board.settle();
+        for _ in 0..4000 {
+            board.process(
+                0.001,
+                0.001,
+                [None, Some((0.8, 0.8)), None, Some((0.0, 0.0))],
+            );
+        }
+        chain.bus_compressor.key = 0;
+        board.apply(&chain);
+        for _ in 0..50_000 {
+            board.process(0.001, 0.001, [None, None, None, Some((0.0, 0.0))]);
+        }
+        let mut own = board.clone();
+        chain.bus_compressor.key = 2;
+        board.apply(&chain);
+        let mut difference = 0.0_f32;
+        for _ in 0..2000 {
+            let keyed = board.process(
+                0.001,
+                0.001,
+                [None, Some((0.0, 0.0)), None, Some((0.0, 0.0))],
+            );
+            let expected = own.process(0.001, 0.001, [None, None, None, Some((0.0, 0.0))]);
+            difference = difference.max((keyed.0 - expected.0).abs());
+        }
+        assert!(
+            difference < 1e-7,
+            "The old key changed the output by {difference}"
+        );
+    }
+
+    #[test]
     fn switching_and_moving_pedals_while_playing_does_not_click() {
         // A low tone moves at most 0.007 per frame. Switching the limiter
         // on with 12 dB of gain changes its level and delays it, and moving
@@ -1488,7 +1688,7 @@ mod tests {
         assert_eq!(switched.trim, 24.0);
         assert_eq!(Knob::LiftAir.pedal(), Some(PedalKind::LiftEq));
         assert_eq!(Knob::Trim.pedal(), None);
-        assert_eq!(Knob::all().count(), 37);
+        assert_eq!(Knob::all().count(), 41);
         // Every default sits inside its range, on its step.
         for knob in Knob::all() {
             let range = knob.range();

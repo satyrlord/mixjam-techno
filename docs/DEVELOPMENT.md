@@ -62,9 +62,10 @@ its own and reports each region that rustfmt skips. Split a long literal with
 
 The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, and the `.mixjam` projection used by artifact
-verification. The projection reads formats 8 through 16 and preserves the
+verification. The projection reads formats 8 through 17 and preserves the
 master pedalboard and its bypass, FX buses, sends, automation, channel EQs, and
-clip fades and pitch when a verification script writes a schema-4 JSON project
+clip fades and pitch, lane duckers, and master and FX keys when a verification
+script writes a schema-4 JSON project
 for rendering; it gives the Booster pedals their format-16 keys.
 
 ## UI verification

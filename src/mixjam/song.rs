@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 16.
+//! The application's own `.mixjam` song format, format version 17.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -27,6 +27,10 @@
 //! - Version 16 renames the Booster pedals' keys in `master` and its
 //!   `order` (`BOOSTER_KEYS`). Versions 11 to 15 keep their earlier keys
 //!   and open with the same settings; only version 16 accepts the new keys.
+//! - Version 17 adds the lane ducker, a lane's `ducker`, and the keys of the
+//!   dynamics pedals (`key`) and of the FX duckers (`duckKey`). A lane
+//!   without `ducker` has its ducker off at the default settings, and a
+//!   pedal or effect without its key listens to its own input.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -50,7 +54,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 16;
+pub(super) const FORMAT_VERSION: u32 = 17;
 /// The Booster pedals' keys in a saved board and its `order`: the key of
 /// versions 11 to 15, then the key of version 16 and later. The earlier
 /// keys must match the saved files byte for byte.
@@ -60,20 +64,31 @@ const BOOSTER_KEYS: [(&str, &str); 3] = [
     ("ejayWide", "boosterWide"),
 ];
 
-/// The `master` record. Its shape depends on the format version, so a
-/// record that is not the current board is kept as JSON until the version
-/// is known.
-#[derive(Deserialize, Serialize)]
+/// Delay settings admission until the document version is known. Retain raw
+/// input so explicit zero keys and duplicate fields are not lost. Save typed
+/// settings directly to preserve their f32 precision and normal formatting.
+#[derive(Serialize)]
 #[serde(untagged)]
-enum SavedMaster {
-    Board(MasterChain),
-    Other(serde_json::Value),
+enum Saved<T> {
+    Known(T),
+    Raw(Box<serde_json::value::RawValue>),
 }
-impl SavedMaster {
-    fn json(self) -> serde_json::Value {
+
+impl<'de, T> Deserialize<'de> for Saved<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Box::<serde_json::value::RawValue>::deserialize(deserializer).map(Self::Raw)
+    }
+}
+
+impl<T: Serialize + serde::de::DeserializeOwned> Saved<T> {
+    fn json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or_default()
+    }
+
+    fn settings(self) -> Result<T, serde_json::Error> {
         match self {
-            Self::Board(chain) => serde_json::to_value(chain).unwrap_or_default(),
-            Self::Other(value) => value,
+            Self::Known(settings) => Ok(settings),
+            Self::Raw(raw) => serde_json::from_str(raw.get()),
         }
     }
 }
@@ -161,12 +176,14 @@ struct Document {
     created_at: String,
     modified_at: String,
     song: Song,
+    // Keep the raw settings until the version is checked. Deserializing the
+    // current types first loses the presence of optional keys set to zero.
     // Required from version 11; earlier versions have no master pedalboard.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    master: Option<SavedMaster>,
+    master: Option<Saved<MasterChain>>,
     // Required from version 13; earlier versions have no FX buses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    fx_buses: Option<crate::fx::FxBuses>,
+    fx_buses: Option<Saved<crate::fx::FxBuses>>,
     lanes: Vec<Lane>,
     samples: Vec<Sample>,
     missing_samples: Vec<Missing>,
@@ -219,6 +236,8 @@ struct Lane {
     automation: Option<crate::automation::Automation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     eq: Option<crate::eq::ChannelEq>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ducker: Option<crate::ducker::Ducker>,
     placements: Vec<Placement>,
 }
 #[derive(Deserialize, Serialize)]
@@ -313,6 +332,7 @@ impl Document {
                 sends: Some(track.sends),
                 automation: (!track.automation.is_empty()).then(|| track.automation.clone()),
                 eq: (!track.eq.is_default()).then_some(track.eq),
+                ducker: (!track.ducker.is_default()).then_some(track.ducker),
                 placements: Vec::new(),
             })
             .collect();
@@ -340,8 +360,8 @@ impl Document {
                 master_gain: project.master_gain,
                 loop_region: project.loop_region,
             },
-            master: Some(SavedMaster::Board(project.master)),
-            fx_buses: Some(project.fx),
+            master: Some(Saved::Known(project.master)),
+            fx_buses: Some(Saved::Known(project.fx)),
             lanes,
             samples: project
                 .imported_samples
@@ -428,12 +448,46 @@ impl Document {
         {
             return Err("Legacy master amplitude must be from 0 to 2.".into());
         }
+        if self.format_version < 17 {
+            let master_key = self.master.as_ref().is_some_and(|master| {
+                let master = master.json();
+                [
+                    "ejayCompressor",
+                    "boosterCompressor",
+                    "busCompressor",
+                    "multiband",
+                    "limiter",
+                ]
+                .into_iter()
+                .any(|name| {
+                    master
+                        .get(name)
+                        .is_some_and(|pedal| pedal.get("key").is_some())
+                })
+            });
+            let fx_key = self
+                .fx_buses
+                .as_ref()
+                .map(Saved::json)
+                .as_ref()
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|buses| {
+                    buses.iter().any(|bus| {
+                        bus.get("module")
+                            .is_some_and(|module| module.get("duckKey").is_some())
+                    })
+                });
+            if master_key || fx_key {
+                return Err(format!(
+                    "Version {} songs cannot contain key or duckKey.",
+                    self.format_version
+                ));
+            }
+        }
         let invalid =
             |error: serde_json::Error| format!("The master pedalboard is invalid: {error}");
         let master = match (self.format_version, self.master) {
-            (16.., Some(SavedMaster::Board(master))) => master,
-            // Reading the record again gives the reason it is not a board.
-            (16.., Some(master)) => serde_json::from_value(master.json()).map_err(invalid)?,
+            (16.., Some(master)) => master.settings().map_err(invalid)?,
             (version @ 12.., Some(master)) => {
                 serde_json::from_value(current_booster_keys(master.json(), version)?)
                     .map_err(invalid)?
@@ -458,7 +512,9 @@ impl Document {
             ));
         }
         let fx = match (self.format_version, self.fx_buses) {
-            (13.., Some(buses)) => buses,
+            (13.., Some(buses)) => buses
+                .settings()
+                .map_err(|error| format!("The FX buses are invalid: {error}"))?,
             (version @ 13.., None) => {
                 return Err(format!("Version {version} songs require fxBuses."));
             }
@@ -486,6 +542,12 @@ impl Document {
                     self.format_version
                 ));
             }
+            if self.format_version < 17 && lane.ducker.is_some() {
+                return Err(format!(
+                    "Version {} lanes cannot contain ducker.",
+                    self.format_version
+                ));
+            }
             if self.format_version < 15 && lane.eq.is_some() {
                 return Err(format!(
                     "Version {} lanes cannot contain eq.",
@@ -503,6 +565,7 @@ impl Document {
                 sends,
                 automation: lane.automation.unwrap_or_default(),
                 eq: lane.eq.unwrap_or_default(),
+                ducker: lane.ducker.unwrap_or_default(),
             };
             if self.format_version == 8 {
                 if lane.polarity_inverted.is_some() {
@@ -805,6 +868,12 @@ mod tests {
                 high_db: -7.5,
                 ..Default::default()
             },
+            ducker: crate::ducker::Ducker {
+                on: true,
+                key: 1,
+                depth: 9.5,
+                ..Default::default()
+            },
         };
         project.tracks[6].solo = true;
         // An EQ that is off keeps its settings.
@@ -869,6 +938,7 @@ mod tests {
             track.sends = [0.0; crate::fx::BUSES];
             track.automation = Default::default();
             track.eq = Default::default();
+            track.ducker = Default::default();
         }
         for clip in &mut expected.clips {
             clip.fades = Fades::default();
@@ -939,7 +1009,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_16_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_17_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -947,7 +1017,7 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 16);
+        assert_eq!(document["formatVersion"], 17);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["lanes"][5]["eq"],
@@ -960,6 +1030,13 @@ mod tests {
         assert_eq!(document["lanes"][7]["eq"]["midDb"], 3.0);
         // A lane whose EQ is as a new track has it saves none.
         assert!(document["lanes"][4].get("eq").is_none());
+        assert_eq!(
+            document["lanes"][5]["ducker"],
+            serde_json::json!({
+                "on": true, "key": 1, "threshold": -30.0, "depth": 9.5, "attack": 2.0, "release": 120.0
+            })
+        );
+        assert!(document["lanes"][4].get("ducker").is_none());
         assert_eq!(document["master"]["bypass"], true);
         assert_eq!(
             document["lanes"][63]["placements"][0]["fades"],
@@ -1077,6 +1154,98 @@ mod tests {
         assert_eq!(resaved["createdAt"], "2020-01-02T03:04:05Z");
         assert_ne!(resaved["modifiedAt"], "2020-01-02T03:04:05Z");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn versions_before_17_reject_a_lane_ducker() {
+        let project = project();
+        let mut document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        document["formatVersion"] = 16.into();
+        let reopened: Document = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(
+            reopened.into_project().unwrap_err(),
+            "Version 16 lanes cannot contain ducker."
+        );
+        document["lanes"][5]
+            .as_object_mut()
+            .unwrap()
+            .remove("ducker");
+        let reopened: Document = serde_json::from_value(document.clone()).unwrap();
+        let mut expected = project;
+        expected.tracks[5].ducker = Default::default();
+        assert_eq!(reopened.into_project().unwrap(), expected);
+        // The pedals' keys are new in version 17 too.
+        document["master"]["limiter"]["key"] = 3.into();
+        let reopened: Document = serde_json::from_value(document).unwrap();
+        assert_eq!(
+            reopened.into_project().unwrap_err(),
+            "Version 16 songs cannot contain key or duckKey."
+        );
+    }
+
+    #[test]
+    fn fx_settings_reject_duplicate_fields_before_adoption() {
+        let document = Document::new(&project(), timestamp(0), timestamp(0));
+        let text = serde_json::to_string(&document).unwrap();
+        let duplicate = text.replacen("\"powered\":true", "\"powered\":true,\"powered\":false", 1);
+        assert_ne!(duplicate, text);
+        assert!(
+            parse(duplicate.as_bytes())
+                .unwrap_err()
+                .contains("duplicate field")
+        );
+    }
+
+    #[test]
+    fn earlier_versions_reject_explicit_own_input_keys() {
+        let mut expected = project();
+        for track in &mut expected.tracks {
+            track.ducker = Default::default();
+        }
+        let base =
+            serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
+        for effect in [false, true] {
+            let mut document = base.clone();
+            document["formatVersion"] = 16.into();
+            if effect {
+                let module = crate::fx::Module::EchoformDelay(Default::default());
+                document["fxBuses"][0]["module"] = serde_json::to_value(module).unwrap();
+                document["fxBuses"][0]["module"]["duckKey"] = 0.into();
+            } else {
+                document["master"]["limiter"]["key"] = 0.into();
+            }
+            let reopened: Document = serde_json::from_value(document).unwrap();
+            assert_eq!(
+                reopened.into_project().unwrap_err(),
+                "Version 16 songs cannot contain key or duckKey."
+            );
+        }
+    }
+
+    #[test]
+    fn pedal_and_fx_keys_save_only_when_they_name_a_track() {
+        let mut project = project();
+        let saved = |project: &Project| {
+            serde_json::to_value(Document::new(
+                project,
+                "2020-01-02T03:04:05Z".into(),
+                timestamp(0),
+            ))
+            .unwrap()
+        };
+        let document = saved(&project);
+        assert!(document["master"]["busCompressor"].get("key").is_none());
+        project.master.bus_compressor.key = 2;
+        project.master.bus_compressor.on = true;
+        let document = saved(&project);
+        assert_eq!(document["master"]["busCompressor"]["key"], 2);
+        let reopened: Document = serde_json::from_value(document).unwrap();
+        assert_eq!(reopened.into_project().unwrap().master, project.master);
     }
 
     #[test]
@@ -1422,6 +1591,7 @@ mod tests {
         expected.master.bypass = false;
         for track in &mut expected.tracks {
             track.eq = Default::default();
+            track.ducker = Default::default();
         }
         let mut document =
             serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
@@ -1443,7 +1613,10 @@ mod tests {
 
     #[test]
     fn version_12_to_15_boards_keep_their_earlier_booster_keys() {
-        let expected = project();
+        let mut expected = project();
+        for track in &mut expected.tracks {
+            track.ducker = Default::default();
+        }
         let current =
             serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
         let mut earlier = current.clone();
@@ -1481,7 +1654,8 @@ mod tests {
                 format!("Version {version} songs cannot contain master boosterWide.")
             );
         }
-        // Version 16 accepts only the new keys, and later versions do not open.
+        // Versions 16 and later accept only the new keys; a version after the
+        // current one does not open.
         let mut earlier_key = current.clone();
         let pedal = earlier_key["master"]
             .as_object_mut()
@@ -1496,7 +1670,7 @@ mod tests {
         let error = parse(&serde_json::to_vec(&earlier_order).unwrap()).unwrap_err();
         assert!(error.contains("unknown variant"), "{error}");
         let mut later = current;
-        later["formatVersion"] = 17.into();
+        later["formatVersion"] = (FORMAT_VERSION + 1).into();
         assert_eq!(
             parse(&serde_json::to_vec(&later).unwrap()).unwrap_err(),
             "This MixJam format version is not supported."

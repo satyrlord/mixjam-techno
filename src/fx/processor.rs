@@ -116,8 +116,17 @@ impl Bus {
             self.cut = CUT;
         }
     }
+    /// The ducker's key setting of the bus's effect: 0 is its own input.
+    fn duck_key(&self) -> u8 {
+        match &self.settings.module {
+            Module::Empty => 0,
+            Module::EchoformDelay(delay) => delay.duck_key,
+            Module::AetherformReverb(reverb) => reverb.duck_key,
+        }
+    }
+    /// `key` is the ducker's key at this frame, or `None` for the bus's input.
     #[inline]
-    fn process(&mut self, left: f64, right: f64, bpm: f64) -> (f64, f64) {
+    fn process(&mut self, left: f64, right: f64, key: Option<(f64, f64)>, bpm: f64) -> (f64, f64) {
         let gate = self.input.next();
         let (left, right) = (left * gate, right * gate);
         let fed = left != 0.0 || right != 0.0;
@@ -130,8 +139,8 @@ impl Bus {
         }
         let (wet_l, wet_r) = match self.kind {
             Kind::Empty => (0.0, 0.0),
-            Kind::Delay => self.delay.process(left, right),
-            Kind::Reverb => self.reverb.process(left, right),
+            Kind::Delay => self.delay.process_keyed(left, right, key),
+            Kind::Reverb => self.reverb.process_keyed(left, right, key),
         };
         let mut level = self.level.next();
         if self.cut > 0 {
@@ -198,6 +207,10 @@ impl ReturnsProcessor {
         processor.control = Some((control, seen, clears));
         processor
     }
+    /// Where each bus's ducker finds its key among `keys`.
+    fn key_slots(&self, keys: &crate::ducker::Keys) -> [Option<Option<usize>>; BUSES] {
+        std::array::from_fn(|bus| keys.slot(self.buses[bus].duck_key()))
+    }
     /// Whether any bus still sounds.
     pub fn ringing(&self) -> bool {
         self.buses.iter().any(|bus| bus.awake)
@@ -219,13 +232,25 @@ impl ReturnsProcessor {
             }
         }
     }
-    /// Add the returns to an interleaved stereo block of the dry mix, then
-    /// hold every sample to full scale. `sends` holds the four buses' feeds,
-    /// eight interleaved channels a frame, or is `None` when nothing sends.
+    /// Add the returns to an interleaved stereo block of the dry mix. The
+    /// master processor holds the sum to full scale after the board's trim.
+    /// `sends` holds the four buses' feeds, eight interleaved channels a
+    /// frame, or is `None` when nothing sends.
     pub fn process(&mut self, block: &mut [f32], sends: Option<&[f32]>) {
+        self.process_keyed(block, sends, crate::ducker::Keys::NONE);
+    }
+    /// `process` with the key tracks of the block, which the duckers whose
+    /// key names a track follow.
+    pub fn process_keyed(
+        &mut self,
+        block: &mut [f32],
+        sends: Option<&[f32]>,
+        keys: crate::ducker::Keys,
+    ) {
         self.poll();
         if sends.is_some() || self.ringing() {
             let bpm = self.bpm;
+            let slots = self.key_slots(&keys);
             for (frame, out) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                 let mut sum = (0.0, 0.0);
                 for (index, bus) in self.buses.iter_mut().enumerate() {
@@ -233,7 +258,8 @@ impl ReturnsProcessor {
                         let at = frame * 2 * BUSES + index * 2;
                         (f64::from(sends[at]), f64::from(sends[at + 1]))
                     });
-                    let (l, r) = bus.process(left, right, bpm);
+                    let key = key_at(&keys, slots[index], frame);
+                    let (l, r) = bus.process(left, right, key, bpm);
                     sum.0 += l;
                     sum.1 += r;
                 }
@@ -241,21 +267,19 @@ impl ReturnsProcessor {
                 out[1] += sum.1 as f32;
             }
         }
-        for sample in block {
-            *sample = sample.clamp(-1.0, 1.0);
-        }
     }
     /// Each bus's return alone, for an export in parts: `returns` gets the
     /// four returns, eight interleaved channels a frame as `sends` holds the
     /// feeds, without the dry mix and not held to full scale. The buses run
     /// as `process` runs them.
-    pub fn split(&mut self, returns: &mut [f32], sends: Option<&[f32]>) {
+    pub fn split(&mut self, returns: &mut [f32], sends: Option<&[f32]>, keys: crate::ducker::Keys) {
         self.poll();
         returns.fill(0.0);
         if sends.is_none() && !self.ringing() {
             return;
         }
         let bpm = self.bpm;
+        let slots = self.key_slots(&keys);
         for (frame, out) in returns
             .as_chunks_mut::<{ 2 * BUSES }>()
             .0
@@ -267,12 +291,25 @@ impl ReturnsProcessor {
                     let at = frame * 2 * BUSES + index * 2;
                     (f64::from(sends[at]), f64::from(sends[at + 1]))
                 });
-                let (l, r) = bus.process(left, right, bpm);
+                let key = key_at(&keys, slots[index], frame);
+                let (l, r) = bus.process(left, right, key, bpm);
                 out[index * 2] = l as f32;
                 out[index * 2 + 1] = r as f32;
             }
         }
     }
+}
+
+/// A bus's key at a frame of the block: `None` for its own input.
+fn key_at(
+    keys: &crate::ducker::Keys,
+    slot: Option<Option<usize>>,
+    frame: usize,
+) -> Option<(f64, f64)> {
+    slot.map(|slot| {
+        let (left, right) = keys.frame(slot, frame);
+        (f64::from(left), f64::from(right))
+    })
 }
 
 #[cfg(test)]
@@ -295,6 +332,46 @@ mod tests {
             character: crate::fx::DelayCharacter::Digital,
             ..Echoform::default()
         }
+    }
+
+    #[test]
+    fn a_ducker_whose_key_names_a_track_follows_that_track() {
+        let delay = Echoform {
+            duck_amount: 100.0,
+            duck_key: 3,
+            ..plain_delay()
+        };
+        let frames = 88_200;
+        let mut sends = vec![0.0_f32; frames * 2 * BUSES];
+        for (frame, feed) in sends.chunks_mut(2 * BUSES).enumerate() {
+            // About -50 dBFS: too quiet to duck by itself.
+            let value = 0.003 * (frame as f32 * 0.05).sin();
+            feed[..2].copy_from_slice(&[value, value]);
+        }
+        let run = |delay: Echoform, key: f32| {
+            let mut processor = ReturnsProcessor::new(&buses(Module::EchoformDelay(delay)), 120.0);
+            let audio = vec![key; frames * 2];
+            let keys = crate::ducker::Keys {
+                tracks: &[2],
+                audio: &audio,
+            };
+            let mut block = vec![0.0; frames * 2];
+            processor.process_keyed(&mut block, Some(&sends), keys);
+            block[frames..]
+                .iter()
+                .map(|v| f64::from(*v).powi(2))
+                .sum::<f64>()
+        };
+        let quiet = run(delay, 0.0);
+        assert!(quiet > 0.0);
+        // A key at -6 dBFS ducks the repeats by the full 24 dB.
+        assert!(run(delay, 0.5) < quiet * 0.01);
+        // The bus's own input ignores the key tracks.
+        let own = Echoform {
+            duck_key: 0,
+            ..delay
+        };
+        assert_eq!(run(own, 0.5), run(own, 0.0));
     }
 
     #[test]

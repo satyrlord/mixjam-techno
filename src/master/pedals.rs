@@ -288,10 +288,21 @@ impl BusCompressor {
     pub(super) fn take_reduction(&mut self) -> f32 {
         std::mem::take(&mut self.most) as f32
     }
+    #[cfg(test)]
     pub(super) fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        self.process_keyed(left, right, None)
+    }
+    /// With a key, the detector follows the key instead of the input.
+    pub(super) fn process_keyed(
+        &mut self,
+        left: f32,
+        right: f32,
+        key: Option<(f32, f32)>,
+    ) -> (f32, f32) {
         let (threshold, ratio) = (self.threshold.next(), self.ratio.next());
         let (l, r) = (f64::from(left), f64::from(right));
-        let power = 0.5 * (l * l + r * r);
+        let (kl, kr) = key.map_or((l, r), |(kl, kr)| (f64::from(kl), f64::from(kr)));
+        let power = 0.5 * (kl * kl + kr * kr);
         self.power = flush(power + (self.power - power) * self.detector);
         let level = 10.0 * self.power.max(1e-12).log10();
         let target = reduction(level, threshold, ratio, KNEE_DB);
@@ -669,9 +680,10 @@ impl PeakLimiter {
         *self = Self::new((0, 1.0));
         (self.span, self.release) = (span, release);
     }
-    /// The frame `BAND_LOOKAHEAD` ago and the gain it gets.
-    fn process(&mut self, left: f64, right: f64, threshold: f64) -> ([f64; 2], f64) {
-        let level = left.abs().max(right.abs());
+    /// The frame `BAND_LOOKAHEAD` ago and the gain it gets. The gain holds
+    /// the louder of the frame and `key`, a level, under the threshold.
+    fn process(&mut self, left: f64, right: f64, threshold: f64, key: f64) -> ([f64; 2], f64) {
+        let level = left.abs().max(right.abs()).max(key);
         let need = if level > threshold {
             threshold / level
         } else {
@@ -736,10 +748,11 @@ impl Band {
             self.wet = WET * (10.0 * amount).min(1.0);
         }
     }
-    fn process(&mut self, left: f64, right: f64, fall: f64) -> [f64; 2] {
+    /// `key` is the key's level in the same band, or 0.
+    fn process(&mut self, left: f64, right: f64, fall: f64, key: f64) -> [f64; 2] {
         self.peak = flush(left.abs().max(right.abs()).max(self.peak * fall));
         let threshold = self.peak * self.room / self.drive;
-        let ([left, right], gain) = self.limiter.process(left, right, threshold);
+        let ([left, right], gain) = self.limiter.process(left, right, threshold, key);
         let total = 1.0 + self.wet * (gain * self.drive - 1.0);
         [left * total, right * total]
     }
@@ -757,6 +770,9 @@ pub(super) struct Multiband {
     /// high-pass at the high crossover, two sections each.
     splits: [[Biquad; 2]; 4],
     all_pass: Biquad,
+    /// The same crossovers for the key.
+    key_splits: [[Biquad; 2]; 4],
+    key_all_pass: Biquad,
     bands: [Band; 3],
     amounts: [Smoothed; 3],
     output: PeakLimiter,
@@ -772,14 +788,18 @@ impl Multiband {
     pub(super) fn new() -> Self {
         let q = FRAC_1_SQRT_2;
         let [low, high] = CROSSOVERS;
+        let splits = [
+            [Biquad::new(Coefficients::low_pass(low, q)); 2],
+            [Biquad::new(Coefficients::high_pass(low, q)); 2],
+            [Biquad::new(Coefficients::low_pass(high, q)); 2],
+            [Biquad::new(Coefficients::high_pass(high, q)); 2],
+        ];
+        let all_pass = Biquad::new(Coefficients::all_pass(high, q));
         Self {
-            splits: [
-                [Biquad::new(Coefficients::low_pass(low, q)); 2],
-                [Biquad::new(Coefficients::high_pass(low, q)); 2],
-                [Biquad::new(Coefficients::low_pass(high, q)); 2],
-                [Biquad::new(Coefficients::high_pass(high, q)); 2],
-            ],
-            all_pass: Biquad::new(Coefficients::all_pass(high, q)),
+            splits,
+            all_pass,
+            key_splits: splits,
+            key_all_pass: all_pass,
             bands: BAND_TIMES.map(Band::new),
             amounts: [Smoothed::new(0.0); 3],
             output: PeakLimiter::new(OUTPUT_TIMES),
@@ -798,36 +818,73 @@ impl Multiband {
         }
     }
     pub(super) fn clear(&mut self) {
-        for split in self.splits.iter_mut().flatten() {
+        for split in self.splits.iter_mut().chain(&mut self.key_splits).flatten() {
             split.clear();
         }
         self.all_pass.clear();
+        self.key_all_pass.clear();
         self.bands.iter_mut().for_each(Band::clear);
         self.amounts.iter_mut().for_each(Smoothed::settle);
         self.output.clear();
         self.peak = 0.0;
         self.planned = Delay::ZERO;
     }
-    pub(super) fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+    /// The low, mid, and high bands of a stereo frame, each `[left, right]`.
+    fn split(
+        splits: &mut [[Biquad; 2]; 4],
+        all_pass: &mut Biquad,
+        left: f32,
+        right: f32,
+    ) -> [[f64; 2]; 3] {
         let mut bands = [[0.0; 2]; 3];
         for (channel, sample) in [f64::from(left), f64::from(right)].into_iter().enumerate() {
-            let [low_pass, high_pass, mid_pass, top_pass] = &mut self.splits;
+            let [low_pass, high_pass, mid_pass, top_pass] = &mut *splits;
             let section = |[first, second]: &mut [Biquad; 2], x| {
                 let x = first.process(channel, x);
                 second.process(channel, x)
             };
             let low = section(low_pass, sample);
             let rest = section(high_pass, sample);
-            bands[0][channel] = self.all_pass.process(channel, low);
+            bands[0][channel] = all_pass.process(channel, low);
             bands[1][channel] = section(mid_pass, rest);
             bands[2][channel] = section(top_pass, rest);
         }
+        bands
+    }
+    #[cfg(test)]
+    pub(super) fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        self.process_keyed(left, right, None)
+    }
+    /// With a key, each band's limiter also holds the key's same band
+    /// under the band's ceiling, so the band gives way while the key sounds.
+    pub(super) fn process_keyed(
+        &mut self,
+        left: f32,
+        right: f32,
+        key: Option<(f32, f32)>,
+    ) -> (f32, f32) {
+        let bands = Self::split(&mut self.splits, &mut self.all_pass, left, right);
+        // Drain the key's crossovers while following the pedal's own input.
+        // Switching back to a track must not resume an old filter tail.
+        let (kl, kr) = key.unwrap_or((0.0, 0.0));
+        let key_bands = Self::split(&mut self.key_splits, &mut self.key_all_pass, kl, kr);
+        let keys = if key.is_some() {
+            key_bands.map(|[l, r]| l.abs().max(r.abs()))
+        } else {
+            [0.0; 3]
+        };
         let mut sum = [0.0; 2];
         let mut on = false;
-        for ((band, amount), [l, r]) in self.bands.iter_mut().zip(&mut self.amounts).zip(bands) {
+        for (((band, amount), [l, r]), key) in self
+            .bands
+            .iter_mut()
+            .zip(&mut self.amounts)
+            .zip(bands)
+            .zip(keys)
+        {
             band.set_amount(amount.next());
             on |= band.amount > 0.0;
-            let [l, r] = band.process(l, r, self.fall);
+            let [l, r] = band.process(l, r, self.fall, key);
             sum[0] += l;
             sum[1] += r;
         }
@@ -837,7 +894,7 @@ impl Multiband {
         // With every amount at zero the bands sum to the all-pass, whose
         // peaks may differ from the input's, so the output stage stands by.
         let threshold = if on { planned } else { f64::INFINITY };
-        let ([l, r], gain) = self.output.process(sum[0], sum[1], threshold);
+        let ([l, r], gain) = self.output.process(sum[0], sum[1], threshold, 0.0);
         ((l * gain) as f32, (r * gain) as f32)
     }
 }
@@ -868,6 +925,8 @@ pub(super) struct Limiter {
     /// The ceiling as it was when the samples now leaving came in.
     planned: Delay<LIMITER_LATENCY>,
     detectors: [TruePeak; 2],
+    /// The key's true peak, which the limiter also holds under the ceiling.
+    key_detectors: [TruePeak; 2],
     delays: [Delay<LIMITER_LATENCY>; 2],
     needs: [f32; WINDOW],
     need_at: usize,
@@ -888,6 +947,7 @@ impl Limiter {
             ceiling: Smoothed::new(1.0),
             planned: Delay::filled(1.0),
             detectors: [TruePeak::ZERO; 2],
+            key_detectors: [TruePeak::ZERO; 2],
             delays: [Delay::ZERO; 2],
             needs: [1.0; WINDOW],
             need_at: 0,
@@ -915,13 +975,33 @@ impl Limiter {
     pub(super) fn take_reduction(&mut self) -> f32 {
         std::mem::take(&mut self.most)
     }
+    #[cfg(test)]
     pub(super) fn process(&mut self, left: f32, right: f32) -> (f32, f32) {
+        self.process_keyed(left, right, None)
+    }
+    /// With a key, the gain holds the louder of the sound and the key,
+    /// both after the limiter's gain, under the ceiling: the sound gives
+    /// way while the key peaks, and never passes the ceiling itself.
+    pub(super) fn process_keyed(
+        &mut self,
+        left: f32,
+        right: f32,
+        key: Option<(f32, f32)>,
+    ) -> (f32, f32) {
         let gain = self.gain.next() as f32;
         let ceiling = self.ceiling.next() as f32;
         let (left, right) = (left * gain, right * gain);
-        let peak = self.detectors[0]
+        let mut peak = self.detectors[0]
             .push(left)
             .max(self.detectors[1].push(right));
+        // Keep the detector's time moving even without an external key.
+        let (key_left, key_right) = key.unwrap_or((0.0, 0.0));
+        let key_peak = self.key_detectors[0]
+            .push(key_left * gain)
+            .max(self.key_detectors[1].push(key_right * gain));
+        if key.is_some() {
+            peak = peak.max(key_peak);
+        }
         self.needs[self.need_at] = if peak > ceiling { ceiling / peak } else { 1.0 };
         self.need_at = (self.need_at + 1) % WINDOW;
         let lowest = self.needs.iter().copied().fold(1.0, f32::min);
@@ -969,6 +1049,65 @@ mod tests {
         mut pedal: impl FnMut(f32, f32) -> (f32, f32),
     ) -> Vec<(f32, f32)> {
         frames.iter().map(|(l, r)| pedal(*l, *r)).collect()
+    }
+
+    #[test]
+    fn multiband_key_filters_do_not_resume_old_audio() {
+        let mut pedal = Multiband::new();
+        pedal.set(&settings::Multiband {
+            on: true,
+            low: 100.0,
+            mid: 100.0,
+            high: 100.0,
+            key: 2,
+        });
+        pedal.clear();
+        for _ in 0..4000 {
+            pedal.process_keyed(0.001, 0.001, Some((2.0, 2.0)));
+        }
+        for _ in 0..50_000 {
+            pedal.process(0.001, 0.001);
+        }
+        let mut own = pedal;
+        let mut difference = 0.0_f32;
+        for _ in 0..2000 {
+            let output = pedal.process_keyed(0.001, 0.001, Some((0.0, 0.0)));
+            let expected = own.process(0.001, 0.001);
+            difference = difference.max((output.0 - expected.0).abs());
+        }
+        assert!(
+            difference < 1e-7,
+            "The old key changed the output by {difference}"
+        );
+    }
+
+    #[test]
+    fn limiter_key_detector_does_not_resume_old_audio() {
+        let mut pedal = Limiter::new();
+        pedal.set(&settings::Limiter {
+            on: true,
+            gain: 0.0,
+            ceiling: -1.0,
+            key: 2,
+        });
+        pedal.clear();
+        for _ in 0..4000 {
+            pedal.process_keyed(0.001, 0.001, Some((2.0, 2.0)));
+        }
+        for _ in 0..50_000 {
+            pedal.process(0.001, 0.001);
+        }
+        let mut own = pedal;
+        let mut difference = 0.0_f32;
+        for _ in 0..2000 {
+            let output = pedal.process_keyed(0.001, 0.001, Some((0.0, 0.0)));
+            let expected = own.process(0.001, 0.001);
+            difference = difference.max((output.0 - expected.0).abs());
+        }
+        assert!(
+            difference < 1e-7,
+            "The old key changed the output by {difference}"
+        );
     }
 
     fn rms_db(frames: &[(f32, f32)]) -> f64 {
@@ -1063,6 +1202,7 @@ mod tests {
             ratio: 1.5,
             attack: 10.0,
             release: 300.0,
+            key: 0,
         });
         compressor.clear();
         assert_eq!(run(&quiet, |l, r| compressor.process(l, r)), quiet);
@@ -1077,6 +1217,7 @@ mod tests {
             low: 0.0,
             mid: 0.0,
             high: 0.0,
+            key: 0,
         });
         multiband.clear();
         let q = FRAC_1_SQRT_2;
@@ -1107,6 +1248,7 @@ mod tests {
             low: 100.0,
             mid: 100.0,
             high: 100.0,
+            key: 0,
         });
         multiband.clear();
         let output = run(&input, |l, r| multiband.process(l, r));
@@ -1130,6 +1272,7 @@ mod tests {
             low: 60.0,
             mid: 60.0,
             high: 60.0,
+            key: 0,
         });
         multiband.clear();
         let output = run(&input, |l, r| multiband.process(l, r));
@@ -1231,6 +1374,7 @@ mod tests {
             ratio: 4.0,
             attack: 1.0,
             release: 100.0,
+            key: 0,
         });
         compressor.clear();
         // A steady sine 10 dB over the threshold settles 7.5 dB lower.
@@ -1290,6 +1434,7 @@ mod tests {
                     on: true,
                     gain: 12.0,
                     ceiling,
+                    key: 0,
                 });
                 limiter.clear();
                 let output = run(signal, |l, r| limiter.process(l, r));
@@ -1321,6 +1466,7 @@ mod tests {
             on: true,
             gain: 0.0,
             ceiling: -1.0,
+            key: 0,
         });
         limiter.clear();
         let output = run(&input, |l, r| limiter.process(l, r));
@@ -1348,6 +1494,7 @@ mod tests {
             on: true,
             gain: 6.0,
             ceiling: 0.0,
+            key: 0,
         };
         limiter.set(&settings);
         limiter.clear();

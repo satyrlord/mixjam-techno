@@ -5,6 +5,7 @@ pub mod audio;
 pub mod automation;
 pub mod catalog;
 pub mod compat;
+pub mod ducker;
 pub mod effects;
 pub mod engine;
 pub mod eq;

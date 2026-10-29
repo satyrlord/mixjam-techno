@@ -9792,6 +9792,126 @@ mod tests {
     }
 
     #[test]
+    fn ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            let (ctx, mut app) = fixture();
+            app.eq_track = Some(1);
+            for _ in 0..4 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let point = text_rect(&output, "Mid peak").center();
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: Vec2::new(0.0, -20_000.0),
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+                size,
+            );
+            for _ in 0..60 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let q = text_rect(&output, "Q");
+            let ducker = text_rect(&output, "Ducker");
+            let separator = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect)
+                        if (400.0..450.0).contains(&rect.rect.width())
+                            && rect.rect.height() <= 2.0
+                            && rect.rect.top() > q.top()
+                            && rect.rect.bottom() < ducker.top() =>
+                    {
+                        Some(rect.rect.top())
+                    }
+                    _ => None,
+                })
+                .min_by(f32::total_cmp)
+                .expect("The ducker section needs its separator.");
+            assert!(
+                separator >= q.bottom() + 2.0,
+                "The ducker separator crosses the EQ Q label at {size:?}: {q:?}, {separator}"
+            );
+            for label in ["Key", "Thresh", "Depth", "Attack", "Release"] {
+                assert!(
+                    output.shapes.iter().any(|shape| {
+                        matches!(&shape.shape, egui::Shape::Text(text)
+                            if text.galley.job.text == label
+                            && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
+                    }),
+                    "{label} is clipped at {size:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opening_eq_preserves_an_off_ducker_with_its_own_track_as_key() {
+        let (context, mut app, port) = agent_fixture();
+        let mut project = Project::default();
+        project.tracks[1].ducker.key = 2;
+        app.session = Session::headless(Arc::new(Library::empty()), project.clone()).unwrap();
+        app.eq_track = Some(1);
+        agent(&context, &mut app, &port, &["ui", "all=true"]);
+        assert_eq!(app.session.project(), &project);
+        assert!(!app.session.unsaved());
+        assert!(!app.session.has_history_step(false));
+    }
+
+    #[test]
+    fn the_eq_window_holds_the_ducker_whose_key_steps_over_its_own_track() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        app.bottom_module = BottomModule::Mixer;
+        send(&mut app, &["click", "target=Track 1 EQ"]);
+        // The ducker's dials wait for its switch.
+        let reply = send(&mut app, &["ui", "all=true", "window=Track 1 EQ"]);
+        let nodes = reply["nodes"].as_array().unwrap();
+        for control in ["key", "threshold", "depth", "attack", "release"] {
+            let label = format!("Track 1 ducker {control}");
+            let node = nodes
+                .iter()
+                .find(|node| node["label"] == label.as_str())
+                .unwrap_or_else(|| panic!("Missing {label}: {reply}"));
+            assert_eq!(node["enabled"], false, "{label}");
+        }
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 ducker power", "value=true"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        // On, it keys from another track than its own.
+        let ducker = app.session.project().tracks[0].ducker;
+        assert!(ducker.on);
+        assert_eq!(ducker.key, 2);
+        send(&mut app, &["set", "target=Track 1 ducker depth", "value=9"]);
+        assert_eq!(app.session.project().tracks[0].ducker.depth, 9.0);
+        send(&mut app, &["set", "target=Track 1 ducker key", "value=1"]);
+        assert_eq!(app.session.project().tracks[0].ducker.key, 2);
+        send(&mut app, &["set", "target=Track 1 ducker key", "value=5"]);
+        assert_eq!(app.session.project().tracks[0].ducker.key, 5);
+        // The strip's EQ button lights for the ducker as for the EQ.
+        assert!(!app.session.project().tracks[0].eq.on);
+        let reply = send(&mut app, &["ui", "contains=Track 1 EQ"]);
+        assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].ducker.key, 2);
+    }
+
+    #[test]
     fn bypass_all_and_master_bypass_are_one_switch_and_track_export_asks_for_a_folder() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
@@ -11410,7 +11530,7 @@ mod tests {
 
     #[test]
     fn mixer_sends_and_the_effects_module_edit_the_fx_buses() {
-        use mixjam_techno::application::fx::{Aetherform, Module};
+        use mixjam_techno::application::fx::{Aetherform, Echoform, Module};
         let set = |ctx: &egui::Context,
                    app: &mut MixJamApp,
                    output: &egui::FullOutput,
@@ -11454,6 +11574,7 @@ mod tests {
         assert_eq!(app.bottom_module, BottomModule::Effects);
 
         let mut buses = app.session.project().fx;
+        buses.buses[0].module = Module::EchoformDelay(Echoform::default());
         buses.buses[1].module = Module::AetherformReverb(Aetherform::default());
         app.session.edit(EditCommand::SetEffects(buses)).unwrap();
         for _ in 0..3 {
@@ -11462,7 +11583,9 @@ mod tests {
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         for name in [
             "FX 1 effect",
+            "FX 1 duck key",
             "FX 2 preset",
+            "FX 2 duck key",
             "FX 2 space",
             "FX 2 shimmer",
             "Clear FX 2 tail",
@@ -11492,6 +11615,12 @@ mod tests {
             panic!("FX 2 holds the reverb")
         };
         assert_eq!(reverb.decay_seconds, 2.8, "Undo restores the decay.");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        set(&ctx, &mut app, &output, "FX 2 duck key", 4.0);
+        let Module::AetherformReverb(reverb) = app.session.project().fx.buses[1].module else {
+            panic!("FX 2 holds the reverb")
+        };
+        assert_eq!(reverb.duck_key, 4);
     }
 
     #[test]

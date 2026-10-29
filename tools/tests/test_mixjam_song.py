@@ -142,7 +142,25 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(17))
+            self.project(self.document(18))
+
+    def test_version_17_preserves_duckers_and_master_and_fx_keys(self):
+        document = self.document(17)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['master']['busCompressor'].update(on=True, key=2)
+        document['fxBuses'] = earlier['fx']
+        document['fxBuses'][0]['module'] = {'type': 'echoform-delay', 'duckKey': 3}
+        ducker = dict(on=True, key=2, threshold=-30.0, depth=6.0, attack=2.0, release=120.0)
+        document['lanes'][0]['ducker'] = ducker
+        document['lanes'].append(copy.deepcopy(document['lanes'][0]))
+        del document['lanes'][1]['ducker']
+        projected = self.project(document)
+        self.assertEqual(projected['tracks'][0]['ducker'], ducker)
+        self.assertEqual(projected['tracks'][1]['ducker'], dict(ducker, on=False, key=1))
+        self.assertEqual(projected['master'], document['master'])
+        self.assertEqual(projected['fx'], document['fxBuses'])
+        self.assertEqual(earlier['tracks'][0]['ducker'], dict(ducker, on=False, key=1))
 
     def test_default_fades_are_independent_between_clips_and_reads(self):
         document = self.document(10)

@@ -4,7 +4,7 @@
 //! Booster pedals are off, since a preset does not carry a song's Booster
 //! settings. The trim stays as it was: it matches the board to the mix, and
 //! a mix that needed -9 dB would otherwise come out 9 dB louder. The bypass
-//! stays as it was too. Every preset
+//! and the dynamics pedals' keys, which route tracks, stay as they were too. Every preset
 //! keeps the true peak at -1 dBTP or below through the Limiter and stays
 //! moderate, so that it suits a finished mix rather than reshaping it.
 //! Loudness comes from the Maximizer, which rounds off the drops' peaks, and
@@ -14,8 +14,8 @@
 //! drops. A board is "in" a preset while its pedals equal the preset's; the
 //! song saves the board, not the name.
 use super::{
-    BusCompressor, Imaging, LiftEq, Limiter, MasterChain, Maximizer, Multiband, SoftClip, Tape,
-    TrimEq, Tube,
+    BusCompressor, Imaging, Knob, LiftEq, Limiter, MasterChain, Maximizer, Multiband, SoftClip,
+    Tape, TrimEq, Tube,
 };
 use std::sync::LazyLock;
 
@@ -25,13 +25,18 @@ pub struct Preset {
     pub chain: MasterChain,
 }
 impl Preset {
-    /// The preset's pedals with the trim and the bypass of `board`.
+    /// The preset's pedals with the trim, the bypass, and the pedals' keys
+    /// of `board`.
     pub fn applied_to(&self, board: &MasterChain) -> MasterChain {
-        MasterChain {
+        let mut chain = MasterChain {
             bypass: board.bypass,
             trim: board.trim,
             ..self.chain
+        };
+        for knob in Knob::all().filter(|knob| knob.is_key()) {
+            knob.set(&mut chain, knob.get(board));
         }
+        chain
     }
 }
 
@@ -267,6 +272,7 @@ fn compressor(threshold: f32, ratio: f32, attack: f32, release: f32) -> BusCompr
         ratio,
         attack,
         release,
+        key: 0,
     }
 }
 fn maximizer(boost: f32) -> Maximizer {
@@ -279,6 +285,7 @@ fn multiband(amount: f32) -> Multiband {
         low: amount,
         mid: amount,
         high: amount,
+        key: 0,
     }
 }
 fn lift(low: f32, air: f32) -> LiftEq {
@@ -304,6 +311,7 @@ fn limiter(gain: f32) -> Limiter {
         on: true,
         gain,
         ceiling: -1.0,
+        key: 0,
     }
 }
 

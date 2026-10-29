@@ -72,14 +72,33 @@ applies its clip's fades per frame. `prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that
-pitch. A track whose channel EQ is on, or that has automation, is a
-`TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
-(`src/eq.rs`), then its filter, volume, and send lanes (`src/automation.rs`)
-shape before the sum. The outputs are already in each voice; the track's
+pitch. A track whose channel EQ is on, that has automation, whose ducker is
+on, or that keys a ducker is a `TrackChain`: it mixes its voices into a
+128-frame stack buffer, which its EQ (`src/eq.rs`), then its filter and
+volume lanes (`src/automation.rs`), its ducker (`src/ducker.rs`), its level,
+and its send lanes shape before the sum. The mix runs the chains chunk by
+chunk: each key track first renders alone in a chain of its own, with its own
+filter histories, and leaves its peak level per frame in a stack array (at
+most `MAX_KEYS`); then each chain adds its chunk, and a ducked chain
+reads its key's levels for the same frames. A key is the key track as it
+sounds after its fader, before its own ducker, so duckers never chain; a
+muted key is silent. A track without a ducker computes exactly as before.
+The same key chains serve the master pedals' and the FX buses' keys
+(`Project::side_keys`): while any listens, the mix keeps each key's stereo
+audio for the block in its `RenderState`, and `Frames::keys` hands it, as
+`ducker::Keys`, to `ReturnsProcessor::process_keyed` and
+`MasterProcessor::process_keyed`. The board gives the keys its trim and
+delays each pedal's key by the pedals that run before it, so the key lines
+up with the sound. Key delay lines advance through silence while a pedal uses
+its own input, so switching back cannot replay old key audio. `PlaybackSource`
+allocates key scratch for a full block before it is sent to the audio device.
+A master or FX edit that changes the required set of keys prepares the mix
+again; other master and FX edits reach playback live. The outputs are already in each voice; the track's
 level (fader, polarity, pan, and master gain) comes in at mix time, in the
 voice for a plain track and after the volume lane for a chain. Every stage is
-linear and per channel, so this order sounds as the signal order clips, EQ,
-automation, fader and pan, sends. A track with neither mixes
+linear and per channel up to the ducker, whose gain follows the separate key,
+so this order sounds as the signal order clips, EQ, automation, fader and pan,
+ducker, sends. A track with neither mixes
 its voices straight into the sum, so an EQ that is off leaves the render bit
 for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
 `EqParam`, each control with its range; a mix designs a chain's EQ curve once
@@ -124,7 +143,11 @@ pedals glide to new settings over about 20 ms. During playback, switching or
 moving a pedal copies the board and crossfades from the old copy to the new one
 over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills
 the new path before the fade starts, so switching pedals preserves their
-timeline alignment and the song's ending. `MasterChain::bypass` skips the trim
+timeline alignment and the song's ending. `MasterProcessor` applies the trim,
+then holds the mix to full scale, then runs the pedals, so a lower trim keeps
+a hot mix from clipping; the mix and the FX returns reach it unclamped, and a
+playback without a board, or `Frames::read`, holds them instead.
+`MasterChain::bypass` skips the trim
 and every pedal: `MasterChain::runs` is false for every pedal, the trim glides
 to unity, and the board's latency is zero, so export carries no pedal delay.
 During playback the bypassed board still pads to the fixed delay and meters,
@@ -138,8 +161,9 @@ Export and `Mix::to_pcm` take the project's chain
 explicitly. Mix playback reads a `MasterControl` that the
 `Session` keeps equal to the project; the audio thread takes new settings at
 its next block with `try_lock`, so it never waits. An edit or history step that
-changes only the pedalboard or the FX buses is not a render change: the prepared mix stays
-valid and playback continues. The same `MasterControl` carries the FX buses'
+changes only the pedalboard or the FX buses keeps the prepared mix and playback
+when the set of required key tracks stays the same. A changed set of keys
+prepares the mix again. The same `MasterControl` carries the FX buses'
 settings and Clear Tail requests, which the `ReturnsProcessor` polls the same way. Tool previews play without the pedalboard. Each
 playback and export starts the pedalboard in the same settled state. A live
 processor also measures: after each block it publishes a `MeterReading` through
@@ -301,8 +325,8 @@ Each strip is 108 logical points wide. Master remains outside the horizontally
 scrolling occupied-track bank. Each track strip's EQ button starts the row of
 Mute and Solo, above polarity, and the Master strip's Bypass sits under its
 output labels; both mirror project state. `src/ui/eq.rs` owns the channel EQ
-window: the frontend keeps which track it shows, and the window edits a copy
-of that track's `ChannelEq`, sent as `EditCommand::SetMixer`. It reuses the
+window: the frontend keeps which track it shows, and the window edits copies
+of that track's `ChannelEq` and `Ducker`, sent as `EditCommand::SetMixer`. It reuses the
 Mastering dials and paints its response curve. The Mixer's toolbar holds
 Export tracks, which asks for a folder through `ask_path`. Native controls
 paint live labels, dB values,
@@ -370,8 +394,8 @@ It edits a copy of the project's `MasterChain`; `src/ui/view.rs` sends a changed
 copy as `EditCommand::SetMaster` and passes the session's meter reading. The
 preset selector offers the factory boards of `src/master/presets.rs`, which
 the frontend reaches through `application::presets`; a chosen preset is one
-`SetMaster` edit that keeps the board's trim and bypass (`Preset::applied_to`), and the
-selector names the preset whose pedals the board's equal, whatever the trim. Dial
+`SetMaster` edit that keeps the board's trim, bypass, and keys (`Preset::applied_to`), and the
+selector names the preset whose pedals the board's equal, whatever the trim or keys. Dial
 values read in their units, the Booster EQ in decibels and the other Booster knobs in
 the original's 0 to 1000 steps. Dials move on their knob's grid, and a fine
 step still moves one; a typed value takes the nearest step. Displaying or

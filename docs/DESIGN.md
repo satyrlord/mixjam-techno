@@ -351,7 +351,10 @@ The Output unit shows loudness and true-peak readouts in dark wells, a
 loudness bar with a Mastering Green band at -14 LUFS, a true-peak bar with a
 Mastering Red line at -1 dBTP, and a Mastering Red OVER lamp in the place of
 a pedal's lamp. Gain-reduction lamps on the Bus compressor and Limiter are
-Mastering Amber. These four tokens are local to the board. The strip below
+Mastering Amber. These four tokens are local to the board. Each dynamics
+pedal ends its dials with Key, which reads Own or a track number; the Bus
+compressor's five dials take three columns, and the Limiter's three take two
+rows. The FX windows' duckers end with the same Key dial. The strip below
 the board, one 30-point row of chips in a dark well, repeats each pedal's
 enamel in signal order, with a cream outline around the pedals in view.
 Choosing a chip, or focusing any control above the strip, returns a scrolled
@@ -725,7 +728,11 @@ on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB steps,
 follows; five columns below name the bands, Low cut, Low shelf, Mid peak, High
 shelf, and High cut, with their Mastering dials stacked. The curve uses the
 palette's print color while the EQ is on and faint cream while it is off;
-the dials are disabled while it is off.
+the dials are disabled while it is off. Below the EQ, the ducker's power
+switch starts a row of five dials, Key (a track number), Thresh, Depth,
+Attack, and Release, disabled while the ducker is off. The Key dial steps
+over the window's own track. The strip's EQ button lights while the EQ or
+the ducker is on.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at

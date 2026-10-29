@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 16) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 17) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -76,6 +76,10 @@ def _fx_buses(document):
 _FLAT_EQ = {'on': False, 'lowCut': 20.0, 'lowHz': 100.0, 'lowDb': 0.0, 'midHz': 1000.0,
             'midDb': 0.0, 'midQ': 1.0, 'highHz': 8000.0, 'highDb': 0.0, 'highCut': 20000.0}
 
+# Match Ducker::default: disabled, with track 1 as its retained key.
+_NO_DUCKER = {'on': False, 'key': 1, 'threshold': -30.0, 'depth': 6.0,
+              'attack': 2.0, 'release': 120.0}
+
 # Match Fades::default: no fade at either edge.
 _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve': 'linear'}}
 
@@ -83,8 +87,8 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in range(8, 17):
-        raise RuntimeError(f'{path} is not a format version 8 through 16 .mixjam song.')
+    if version not in range(8, 18):
+        raise RuntimeError(f'{path} is not a format version 8 through 17 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
@@ -119,7 +123,8 @@ def read_song(path):
                     'solo': lane.get('solo', False),
                     'sends': lane.get('sends', [0.0] * 4),
                     'automation': lane.get('automation', {}),
-                    'eq': deepcopy(lane.get('eq', _FLAT_EQ))} for lane in document['lanes']],
+                    'eq': deepcopy(lane.get('eq', _FLAT_EQ)),
+                    'ducker': deepcopy(lane.get('ducker', _NO_DUCKER))} for lane in document['lanes']],
         'clips': sorted(clips, key=lambda clip: clip['id']),
         'loop_region': song['loopRegion'],
         'imported_samples': imported,

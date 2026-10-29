@@ -147,6 +147,10 @@ pub struct Echoform {
     /// fast they come back, in milliseconds.
     pub duck_amount: f32,
     pub duck_release: f32,
+    /// What the ducking follows: 0 is the bus's own input, 1 to 64 a
+    /// track as it sounds after its fader.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub duck_key: u8,
     /// The level of the repeats, in dB.
     pub output_db: f32,
     /// Silence the output while the loop keeps running.
@@ -167,6 +171,7 @@ pub enum DelayParam {
     Drive,
     DuckAmount,
     DuckRelease,
+    DuckKey,
     Output,
 }
 
@@ -198,6 +203,12 @@ const fn log_range(low: f32, high: f32, default: f32, step: f32) -> Range {
         log: true,
     }
 }
+/// A ducker's key: 0, the bus's own input, or a track from 1 to 64.
+const KEY_RANGE: Range = range(0.0, crate::engine::TRACK_COUNT as f32, 0.0, 1.0);
+/// Whether a ducker's key is the bus's own input. Such a key is not saved.
+fn is_own(key: &u8) -> bool {
+    *key == 0
+}
 fn held(value: f32, range: Range) -> f32 {
     if value.is_nan() {
         range.default
@@ -207,7 +218,7 @@ fn held(value: f32, range: Range) -> f32 {
 }
 
 impl DelayParam {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::TimeL,
         Self::TimeR,
         Self::Feedback,
@@ -219,6 +230,7 @@ impl DelayParam {
         Self::Drive,
         Self::DuckAmount,
         Self::DuckRelease,
+        Self::DuckKey,
         Self::Output,
     ];
     pub fn range(self) -> Range {
@@ -235,6 +247,7 @@ impl DelayParam {
             Self::Drive => range(0.0, 100.0, defaults.drive, 1.0),
             Self::DuckAmount => range(0.0, 100.0, defaults.duck_amount, 1.0),
             Self::DuckRelease => log_range(50.0, 2500.0, defaults.duck_release, 1.0),
+            Self::DuckKey => KEY_RANGE,
             Self::Output => range(-24.0, 12.0, defaults.output_db, 0.1),
         }
     }
@@ -251,12 +264,17 @@ impl DelayParam {
             Self::Drive => delay.drive,
             Self::DuckAmount => delay.duck_amount,
             Self::DuckRelease => delay.duck_release,
+            Self::DuckKey => f32::from(delay.duck_key),
             Self::Output => delay.output_db,
         }
     }
     /// Set the control, held to its range.
     pub fn set(self, delay: &mut Echoform, value: f32) {
         let value = held(value, self.range());
+        if self == Self::DuckKey {
+            delay.duck_key = value.round() as u8;
+            return;
+        }
         *match self {
             Self::TimeL => &mut delay.time_ms_l,
             Self::TimeR => &mut delay.time_ms_r,
@@ -269,6 +287,7 @@ impl DelayParam {
             Self::Drive => &mut delay.drive,
             Self::DuckAmount => &mut delay.duck_amount,
             Self::DuckRelease => &mut delay.duck_release,
+            Self::DuckKey => unreachable!(),
             Self::Output => &mut delay.output_db,
         } = value;
     }
@@ -294,6 +313,7 @@ impl Default for Echoform {
             drive: 0.0,
             duck_amount: 34.0,
             duck_release: 620.0,
+            duck_key: 0,
             output_db: -1.5,
             bypass: false,
         }
@@ -504,6 +524,10 @@ pub struct Aetherform {
     pub shimmer_interval_semitones: u8,
     pub duck_amount_percent: f32,
     pub duck_release_ms: f32,
+    /// What the ducking follows: 0 is the bus's own input, 1 to 64 a
+    /// track as it sounds after its fader.
+    #[serde(default, skip_serializing_if = "is_own")]
+    pub duck_key: u8,
     pub output_db: f32,
     pub bypass: bool,
 }
@@ -526,10 +550,11 @@ pub enum ReverbParam {
     ShimmerAmount,
     DuckAmount,
     DuckRelease,
+    DuckKey,
     Output,
 }
 impl ReverbParam {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::PreDelay,
         Self::Decay,
         Self::Size,
@@ -545,6 +570,7 @@ impl ReverbParam {
         Self::ShimmerAmount,
         Self::DuckAmount,
         Self::DuckRelease,
+        Self::DuckKey,
         Self::Output,
     ];
     pub fn range(self) -> Range {
@@ -565,6 +591,7 @@ impl ReverbParam {
             Self::ShimmerAmount => range(0.0, 100.0, d.shimmer_amount_percent, 1.0),
             Self::DuckAmount => range(0.0, 100.0, d.duck_amount_percent, 1.0),
             Self::DuckRelease => log_range(50.0, 2500.0, d.duck_release_ms, 1.0),
+            Self::DuckKey => KEY_RANGE,
             Self::Output => range(-24.0, 12.0, d.output_db, 0.1),
         }
     }
@@ -585,12 +612,17 @@ impl ReverbParam {
             Self::ShimmerAmount => reverb.shimmer_amount_percent,
             Self::DuckAmount => reverb.duck_amount_percent,
             Self::DuckRelease => reverb.duck_release_ms,
+            Self::DuckKey => f32::from(reverb.duck_key),
             Self::Output => reverb.output_db,
         }
     }
     /// Set the control, held to its range.
     pub fn set(self, reverb: &mut Aetherform, value: f32) {
         let value = held(value, self.range());
+        if self == Self::DuckKey {
+            reverb.duck_key = value.round() as u8;
+            return;
+        }
         *match self {
             Self::PreDelay => &mut reverb.pre_delay_ms,
             Self::Decay => &mut reverb.decay_seconds,
@@ -607,6 +639,7 @@ impl ReverbParam {
             Self::ShimmerAmount => &mut reverb.shimmer_amount_percent,
             Self::DuckAmount => &mut reverb.duck_amount_percent,
             Self::DuckRelease => &mut reverb.duck_release_ms,
+            Self::DuckKey => unreachable!(),
             Self::Output => &mut reverb.output_db,
         } = value;
     }
@@ -636,6 +669,7 @@ impl Default for Aetherform {
             shimmer_interval_semitones: 12,
             duck_amount_percent: 28.0,
             duck_release_ms: 720.0,
+            duck_key: 0,
             output_db: -1.5,
             bypass: false,
         }
