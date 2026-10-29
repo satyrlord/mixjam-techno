@@ -27,9 +27,9 @@ A tool that needs a missing key stops and names the key.
 | Tool | Usage | What it does |
 |---|---|---|
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-16 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ, and the master board, plus `.meta.json` (lane roles, sections, key). |
-| `render.py` | `render.py SONG.mixjam OUT [--no-stems] [--fit-gain DBFS]` | Renders the master, the premaster (board off), and one stem per role; `--fit-gain` sets the master gain from a probe. |
+| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master]` | Renders each lane alone, several at a time, and the master once. The premaster, one stem per role, and `audible.txt` are sums of the lane renders, not renders of their own; `--fit-gain` sets the master gain from the premaster's peak. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
-| `audible.py` | `audible.py SONG.mixjam OUT_DIR` | Renders each lane alone and marks lanes that the rest of the mix drowns. |
+| `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--fit DB]` | Renders a board over a premaster and compares it with the reference profile. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`; a board copied from a format-15 song has the earlier keys and fails to render until you rename them. |
 | `master.py --album` | `master.py --album [DIR] [--track NAME ...] [--out PROFILE.json]` | Measures a reference album and writes the reference profile. |
 | `stereo.py` | `stereo.py [--bpm N] WAV...` | Low-end share, width above 120 Hz, and side level of sounds. |
@@ -65,5 +65,5 @@ references. Without a profile, the tools measure and print no targets.
 ## Tests
 
 `python -m unittest discover -s tools/tests -v` runs the tests of `env.py`,
-`harmony.py`, and the pure functions of `mixjam.py`, `fit.py`, `master.py`, and
-`audible.py`.
+`harmony.py`, and the pure functions of `mixjam.py`, `fit.py`, `master.py`,
+`render.py`, and `audible.py`.

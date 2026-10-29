@@ -47,6 +47,16 @@ def gain(decibels):
     return 10 ** (decibels / 20)
 
 
+def write_wav(path, rate, data):
+    """Write float samples (frames, channels) as a 16-bit PCM WAV, held to full scale."""
+    ints = np.clip(np.round(np.asarray(data) * 32768), -32768, 32767).astype('<i2')
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(ints.shape[1])
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(ints.tobytes())
+
+
 def read_wav(path):
     """Rate and float samples (frames, channels) of a 16/24/32-bit PCM WAV."""
     with wave.open(str(path), 'rb') as w:
@@ -233,8 +243,9 @@ class Song:
         first, last = placements[0], placements[-1]
         role = self.roles.get(track, '')
         if fade_out_beats is None:
-            # A melodic run that stops loud, or is cut short, dies away over half a beat.
-            fade_out_beats = 0.5 if role in MELODIC and (sound.ends_loud or cut) else 0.0
+            # A melodic run that stops loud, or is cut short, cuts cleanly: one tick, against a click.
+            # A fade is a clean cut or a long fade; ask for a long one with fade_out_beats.
+            fade_out_beats = 1 / TICKS_PER_BEAT if role in MELODIC and (sound.ends_loud or cut) else 0.0
         set_fade(first, 'in', fade_in_beats * TICKS_PER_BEAT, 'linear')
         set_fade(last, 'out', fade_out_beats * TICKS_PER_BEAT, 'exponential')
 

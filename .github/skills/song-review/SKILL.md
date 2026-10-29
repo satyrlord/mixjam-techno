@@ -52,17 +52,18 @@ long. Use headless renders for all measurement.
 
 ## 3. Pass the mechanical gate
 
-1. Render the pass: `render.py SONG OUT --fit-gain -0.5`.
-   Completion criterion: `master.wav`, `premaster.wav`, and one stem per role exist.
+1. Render the pass: `render.py SONG OUT --fit-gain -0.5`. It renders each
+   lane and the master, and sums the lanes into the premaster, the stems, and
+   the audibility table. Render nothing else for a pass.
+   Completion criterion: `master.wav`, `premaster.wav`, one stem per role, and
+   `audible.txt` exist.
 2. Measure it: `measure.py SONG OUT > report.md`.
    Completion criterion: The report shows 0 mechanical problems and the
    premaster does not reach full scale.
-3. Make the audibility table: `audible.py SONG OUT/audible > audible.txt`.
-   Completion criterion: `audible.txt` exists for this pass.
-4. If substep 2 fails, fix the song and go back to substep 1.
+3. If substep 2 fails, fix the song and go back to substep 1.
    Completion criterion: Substeps 1 and 2 pass on the same pass.
 
-A drowned lane in `audible.txt` does not fail the gate. Every placed sound must
+A drowned lane in `OUT/audible.txt` does not fail the gate. Every placed sound must
 be audible, but the meter reads narrow high sounds and parts that a delay
 carries as quieter than they sound. Give the table to the critics: a drowned
 lane is a finding for the mix critic, and the owner's ear decides it.

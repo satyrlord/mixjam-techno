@@ -16,9 +16,9 @@ Give each role the same evidence for a pass, as paths:
 |---|---|
 | The song | `SONG.mixjam` |
 | Lane names and roles, sections, tempo, key | `SONG.meta.json`, written by `tools/song/mixjam.py` |
-| Renders | `OUT/master.wav`, `OUT/premaster.wav`, `OUT/stem-ROLE.wav` from `render.py` |
+| Renders | `OUT/master.wav`, `OUT/lane-NN.wav`, and their sums `OUT/premaster.wav` and `OUT/stem-ROLE.wav`, from `render.py` |
 | Measurement report | `report.md` from `measure.py` |
-| Audibility table | `audible.txt` from `audible.py` |
+| Audibility table | `OUT/audible.txt` from `render.py` |
 | Composer script, if one built the song | the script; leave it out of the rater's package if it quotes critiques or scores |
 | Artist profile | the file at `ARTIST_PROFILE` |
 | Reference studies | the files that the artist profile names |
@@ -39,9 +39,9 @@ They render with the release build, headless; they play no sound.
 | Task | Tool |
 |---|---|
 | Build or change a song from a script | `mixjam.py` (library) |
-| Render master, premaster, stems; fit the master gain | `render.py` |
+| Render the lanes and the master; sum the premaster, stems, and audibility table; fit the master gain | `render.py` |
 | Gate and measure | `measure.py` |
-| Find drowned lanes | `audible.py` |
+| Find drowned lanes in a song that `render.py` did not render | `audible.py` |
 | Render a board over a premaster and compare it with the reference | `master.py` |
 | Stereo width and mono safety of a sound | `stereo.py` |
 | Brightness of a sound (harsh hats) | `bright.py` |

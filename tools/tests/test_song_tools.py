@@ -263,13 +263,31 @@ class MeasureTests(unittest.TestCase):
             song = root / 'song.mixjam'
             original = json.dumps(mixjam.Song('quiet').document())
             song.write_text(original, encoding='utf-8')
-            def fake_render(source, output):
-                Path(output).touch()
-            with mock.patch.object(render, 'run', side_effect=fake_render), \
-                    mock.patch.object(render, 'read_wav', return_value=(44100, np.full((8, 2), 0.01))):
-                with self.assertRaisesRegex(SystemExit, 'gain'):
-                    render.fit_gain(song, root, -0.5)
+            with self.assertRaisesRegex(SystemExit, 'gain'):
+                render.fit_gain(song, 0.01, -0.5)
             self.assertEqual(song.read_text(encoding='utf-8'), original)
+            # A premaster peaking at -6 dBFS doubles the gain, short of -0.5 dBFS.
+            self.assertAlmostEqual(render.fit_gain(song, 10 ** (-6 / 20), -0.5), 10 ** (5.5 / 20), places=5)
+
+    def test_lanes_cover_every_used_track_and_sum_to_the_premaster_and_stems(self):
+        document = mixjam.Song('lanes').document()
+        clip = dict(id=1, sampleId=1, startTick=0, durationTicks=256, offsetFrames=0, gain=1)
+        for track in (1, 2, 5):
+            document['lanes'][track - 1]['placements'] = [dict(clip)]
+        meta = {'lanes': {'1': {'name': 'Pad', 'role': 'pad'}, '2': {'name': 'Pad (twin)', 'role': 'pad'}}}
+        groups = render.lane_groups(document, meta)
+        self.assertEqual(groups, {'Pad': [1, 2], 'track 5': [5]})
+        self.assertEqual(render.lane_roles(groups, meta), {'Pad': 'pad'})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mixjam.write_wav(root / 'pad.wav', 44100, np.full((4, 2), 0.25))
+            mixjam.write_wav(root / 'other.wav', 44100, np.full((6, 2), 0.5))
+            rate, premaster, stems = render.mix_down({'Pad': root / 'pad.wav', 'track 5': root / 'other.wav'},
+                                                     {'Pad': 'pad'})
+        self.assertEqual(rate, 44100)
+        self.assertEqual(premaster.shape, (6, 2))
+        np.testing.assert_allclose(premaster[:, 0], [0.75] * 4 + [0.5] * 2, atol=1e-4)
+        np.testing.assert_allclose(stems['pad'][:, 1], [0.25] * 4, atol=1e-4)
 
     def test_catalog_and_missing_samples_have_arrangement_labels(self):
         song = mixjam.Song('catalog').document()
