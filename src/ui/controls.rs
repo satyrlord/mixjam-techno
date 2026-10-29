@@ -1078,15 +1078,7 @@ pub(super) fn stepped_slider(
                 index = (fraction * last as f32).round() as usize;
             }
         }
-        let mut direction = 0_i32;
-        if response.hovered() {
-            direction += ui.input_mut(|input| {
-                let delta = input.raw_scroll_delta.y;
-                input.raw_scroll_delta = Vec2::ZERO;
-                input.smooth_scroll_delta = Vec2::ZERO;
-                delta.signum() as i32 * i32::from(delta.abs() > 0.0)
-            });
-        }
+        let mut direction = wheel(ui, &response) as i32;
         if response.has_focus() {
             ui.input_mut(|input| {
                 let modifiers = input.modifiers;
@@ -1302,6 +1294,25 @@ impl RotarySpec<'_> {
     }
 }
 
+/// The wheel's direction over a hovered control: 1 up, -1 down, 0 for none.
+/// The control takes the wheel, so a scroll area behind it stays put. Shift
+/// turns the wheel sideways, so both axes count.
+pub(super) fn wheel(ui: &egui::Ui, response: &Response) -> f32 {
+    if !response.hovered() {
+        return 0.0;
+    }
+    ui.input_mut(|input| {
+        let delta = input.raw_scroll_delta.y + input.raw_scroll_delta.x;
+        input.raw_scroll_delta = Vec2::ZERO;
+        input.smooth_scroll_delta = Vec2::ZERO;
+        if delta.abs() > 0.0 {
+            delta.signum()
+        } else {
+            0.0
+        }
+    })
+}
+
 pub(super) fn rotary(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -1350,19 +1361,7 @@ pub(super) fn rotary(
             let precision = 10.0_f64.powi(spec.decimals as i32);
             *value = spec.bounded((spec.value(draft) * precision).round() / precision);
         }
-        let mut direction = 0.0_f64;
-        if response.hovered() {
-            direction = ui.input_mut(|input| {
-                let delta = input.raw_scroll_delta.y;
-                input.raw_scroll_delta = Vec2::ZERO;
-                input.smooth_scroll_delta = Vec2::ZERO;
-                if delta.abs() > 0.0 {
-                    f64::from(delta.signum())
-                } else {
-                    0.0
-                }
-            });
-        }
+        let mut direction = f64::from(wheel(ui, &response));
         if response.has_focus() {
             ui.input_mut(|input| {
                 let modifiers = input.modifiers;

@@ -72,11 +72,13 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Filter sounds by library, category, or name. Double-click a sound to preview it.
 - Drag a sound onto a track. Hold Ctrl for sixteenth-note positions. The
   arrangement and mixer omit unused tracks.
-- Hold Shift to select clips. Drag an empty area to select a group. Hold Alt
-  while dragging to copy. Use Delete, Undo, and Redo for edits.
+- Hold Shift to select clips. Drag an empty area to select a group. Hold Shift
+  or Alt while dragging a clip to copy it. A ghost shows where the clips land.
+  Use Delete, Undo, and Redo for edits.
 - Drag a clip's side edges to trim it. Drag its top corner handles to set fades,
-  or its top edge between the handles to set gain. Each completed drag is one
-  undo step. Right-click a clip, or select it and press Shift+F10, for exact gain,
+  or the small handle in its middle up or down to set gain in 1 dB steps (0.1 dB
+  with Ctrl). Each completed drag is one undo step. Right-click a clip, or
+  select it and press Shift+F10, for exact gain,
   trim start, length, fades in beats with their curves (Linear, Equal power, or
   Exponential), and pitch in semitones and cents. The fade out ends
   where the clip's sound ends, which can be before the clip's end, so a phrase
@@ -103,7 +105,9 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 
 Use Mixer for track gain, pan, L/R routing, Mute, Solo, and master volume.
 Master stays visible while you scroll through tracks. Each strip shows its
-track number and the sound names on that track.
+track number and the sound names on that track. The mouse wheel moves the
+fader, knob, or pan under the pointer (Shift for fine steps). Gain and pan
+change smoothly while the song plays, including when you undo or redo them.
 
 - Gain runs from -inf dB (silence) to +12 dB; 0 dB is unity. Negative dB
   attenuates the signal. The rail gives more space to useful mixing levels.

@@ -131,6 +131,51 @@ pub(crate) fn visit_wav_samples(
 pub struct RenderState {
     chains: [ChainState; crate::engine::TRACK_COUNT],
     next_frame: Option<u64>,
+    /// The track levels that the last block ended at.
+    levels: [[f32; 2]; crate::engine::TRACK_COUNT],
+    /// Playback's live levels. Without them the mix plays the levels it was
+    /// prepared with.
+    live: Option<Arc<MasterControl>>,
+}
+
+/// Each track's left and right level: fader, polarity, pan, and the master gain.
+pub(crate) fn track_levels(project: &Project) -> [[f32; 2]; crate::engine::TRACK_COUNT] {
+    std::array::from_fn(|index| {
+        let track = &project.tracks[index];
+        let gain = track.effective_gain() * project.master_gain;
+        [
+            gain * (1.0 - track.pan.max(0.0)),
+            gain * (1.0 + track.pan.min(0.0)),
+        ]
+    })
+}
+
+/// A track's level over one block: a straight glide from the level the last
+/// block ended at, so a moved fader does not click.
+#[derive(Clone, Copy)]
+struct Ramp {
+    first_frame: u64,
+    frames: f32,
+    from: [f32; 2],
+    to: [f32; 2],
+}
+
+impl Ramp {
+    const UNITY: Self = Self {
+        first_frame: 0,
+        frames: 1.0,
+        from: [1.0; 2],
+        to: [1.0; 2],
+    };
+
+    fn at(&self, frame: u64, channel: usize) -> f32 {
+        let (from, to) = (self.from[channel], self.to[channel]);
+        if from == to {
+            return to;
+        }
+        let along = ((frame - self.first_frame) as f32 + 1.0) / self.frames;
+        from + (to - from) * along.min(1.0)
+    }
 }
 
 /// The filter histories of one track's chain: its EQ and its automation filter.
@@ -145,6 +190,8 @@ impl Default for RenderState {
         Self {
             chains: [ChainState::default(); crate::engine::TRACK_COUNT],
             next_frame: None,
+            levels: [[0.0; 2]; crate::engine::TRACK_COUNT],
+            live: None,
         }
     }
 }
@@ -206,9 +253,10 @@ struct Voice {
     end: u64,
     offset_frames: u32,
     step: f64,
-    /// Left and right gains; `None` for a disabled output.
+    /// The clip gain for the left and right outputs; `None` for a disabled
+    /// output. The track's level comes in at mix time.
     channel_gains: [Option<f32>; 2],
-    /// The track's sends, applied after its gains.
+    /// The track's sends, applied after its level.
     sends: [f32; BUSES],
     /// Fade lengths in frames. The fade out ends at `sound_end`, the clip's
     /// end or the earlier end of its source audio.
@@ -219,9 +267,9 @@ struct Voice {
 }
 
 impl Voice {
-    /// Add the voice to `out`, stereo frames from `first_frame`, and to
-    /// `sends` when given.
-    fn add(&self, first_frame: u64, out: &mut [f32], mut sends: Option<&mut [f32]>) {
+    /// Add the voice at `level` to `out`, stereo frames from `first_frame`,
+    /// and to `sends` when given.
+    fn add(&self, first_frame: u64, out: &mut [f32], mut sends: Option<&mut [f32]>, level: &Ramp) {
         let block_end = first_frame + (out.len() / 2) as u64;
         let from = self.start.max(first_frame);
         let to = self.end.min(block_end);
@@ -249,7 +297,8 @@ impl Voice {
                 let ch = if source_channels == 1 { 0 } else { channel };
                 let a = source.samples[index * source_channels + ch];
                 let b = source.samples[next * source_channels + ch];
-                let value = (a + (b - a) * fraction) * channel_gain * fade;
+                let value =
+                    (a + (b - a) * fraction) * channel_gain * fade * level.at(frame, channel);
                 out[at * 2 + channel] += value;
                 if sending && let Some(sends) = sends.as_deref_mut() {
                     for (bus, send) in self.sends.iter().enumerate() {
@@ -291,7 +340,7 @@ impl SendLevel {
 }
 
 /// A track with its EQ on or with automation. Its voices mix into a short
-/// buffer that its EQ, filter, volume, and sends then shape, in that order.
+/// buffer that its EQ, filter, volume, level, and sends then shape, in that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
@@ -336,6 +385,7 @@ impl TrackChain {
         out: &mut [f32],
         mut sends: Option<&mut [f32]>,
         state: &mut ChainState,
+        level: &Ramp,
     ) {
         let frames = out.len() / 2;
         let mut buffer = [0.0_f32; Self::CHUNK * 2];
@@ -345,7 +395,7 @@ impl TrackChain {
             let buffer = &mut buffer[..count * 2];
             buffer.fill(0.0);
             for voice in &self.voices {
-                voice.add(at, buffer, None);
+                voice.add(at, buffer, None, &Ramp::UNITY);
             }
             if let Some(curve) = &self.eq {
                 state.eq.process(buffer, curve);
@@ -363,7 +413,7 @@ impl TrackChain {
                     crate::automation::volume_gain(envelope.at(frame))
                 });
                 for channel in 0..2 {
-                    let value = buffer[index * 2 + channel] * gain;
+                    let value = buffer[index * 2 + channel] * gain * level.at(frame, channel);
                     buffer[index * 2 + channel] = value;
                     out[(chunk + index) * 2 + channel] += value;
                 }
@@ -393,6 +443,8 @@ pub struct Mix {
     /// The tracks with their EQ on or with automation, which hold their own
     /// voices.
     chains: Vec<TrackChain>,
+    /// The track levels the mix was prepared with.
+    levels: [[f32; 2]; crate::engine::TRACK_COUNT],
     bpm: f64,
     /// Whether any voice sends to each FX bus, and to any.
     fed: [bool; BUSES],
@@ -481,11 +533,10 @@ impl Mix {
             if !step.is_finite() || step <= 0.0 {
                 return Err("The source tempo cannot be represented for sample playback.".into());
             }
-            let gain = clip.gain * track.effective_gain() * project.master_gain;
             let frames_of = |ticks: u32| (f64::from(ticks) * frames_per_tick).round() as u64;
             let source_left =
                 (source.frames() as f64 - f64::from(clip.offset_frames)).max(0.0) / step;
-            // Pan and channel enables depend only on the track: resolve them once per clip.
+            // Channel enables depend only on the track: resolve them once per clip.
             let voice = Voice {
                 track: clip.track,
                 source: Arc::clone(source),
@@ -494,12 +545,8 @@ impl Mix {
                 offset_frames: clip.offset_frames,
                 step,
                 channel_gains: [
-                    track
-                        .left_enabled
-                        .then(|| gain * (1.0 - track.pan.max(0.0))),
-                    track
-                        .right_enabled
-                        .then(|| gain * (1.0 + track.pan.min(0.0))),
+                    track.left_enabled.then_some(clip.gain),
+                    track.right_enabled.then_some(clip.gain),
                 ],
                 sends: track.sends,
                 fade_in: frames_of(clip.fades.fade_in.ticks),
@@ -527,6 +574,7 @@ impl Mix {
             frames,
             voices,
             chains,
+            levels: track_levels(project),
             bpm: project.bpm,
             fed,
             sends: fed.contains(&true),
@@ -535,6 +583,12 @@ impl Mix {
 
     pub fn frames(&self) -> u64 {
         self.frames
+    }
+
+    /// Whether the mix was prepared with the project's track levels.
+    /// Playback reads them live; an export needs them in the mix.
+    pub fn has_levels(&self, project: &Project) -> bool {
+        self.levels == track_levels(project)
     }
 
     /// The whole mix in memory, through the FX buses and the master
@@ -844,20 +898,45 @@ impl Mix {
         state: &mut RenderState,
         only: Option<usize>,
     ) {
-        if state.next_frame != Some(first_frame) {
+        let continues = state.next_frame == Some(first_frame);
+        if !continues {
             state.chains.fill(ChainState::default());
         }
+        let targets: [[f32; 2]; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| {
+            state
+                .live
+                .as_ref()
+                .and_then(|live| live.level(track))
+                .unwrap_or(self.levels[track])
+        });
+        let levels: [Ramp; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| Ramp {
+            first_frame,
+            frames: (out.len() / 2).max(1) as f32,
+            from: if continues {
+                state.levels[track]
+            } else {
+                targets[track]
+            },
+            to: targets[track],
+        });
+        state.levels = targets;
         out.fill(0.0);
         if let Some(sends) = sends.as_deref_mut() {
             sends.fill(0.0);
         }
         let included = |track: usize| only.is_none_or(|only| only == track);
         for voice in self.voices.iter().filter(|voice| included(voice.track)) {
-            voice.add(first_frame, out, sends.as_deref_mut());
+            voice.add(first_frame, out, sends.as_deref_mut(), &levels[voice.track]);
         }
         for (chain, state) in self.chains.iter().zip(&mut state.chains) {
             if included(chain.track) {
-                chain.add(first_frame, out, sends.as_deref_mut(), state);
+                chain.add(
+                    first_frame,
+                    out,
+                    sends.as_deref_mut(),
+                    state,
+                    &levels[chain.track],
+                );
             }
         }
         state.next_frame = Some(first_frame + (out.len() / 2) as u64);
@@ -1160,6 +1239,7 @@ impl PlaybackSource {
     ) -> Self {
         let channels = audio.channels() as usize;
         let master = master.filter(|_| channels == 2);
+        let live = master.clone();
         let returns = master
             .as_ref()
             .zip(audio.tempo())
@@ -1172,7 +1252,10 @@ impl PlaybackSource {
             Vec::new()
         };
         Self {
-            state: RenderState::default(),
+            state: RenderState {
+                live,
+                ..RenderState::default()
+            },
             returns,
             sends,
             ringing: 0,
@@ -1404,6 +1487,7 @@ mod tests {
             frames: (u64::from(u32::MAX) - 36) / 4 + 1,
             voices: Vec::new(),
             chains: Vec::new(),
+            levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,
@@ -1431,6 +1515,69 @@ mod tests {
                 pitch_cents: 0,
             }],
             ..Project::default()
+        }
+    }
+
+    #[test]
+    fn playback_glides_to_live_track_levels_and_export_keeps_the_prepared_ones() {
+        for chained in [false, true] {
+            let mut project = song();
+            project.clips[0].start_tick = 0;
+            project.clips[0].offset_frames = 0;
+            // A track with automation mixes through its chain.
+            if chained {
+                project.tracks[0].automation.volume = vec![crate::automation::Point {
+                    tick: 0,
+                    value: 0.0,
+                }];
+            }
+            let source = Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.8; 75_600],
+            };
+            let mix = mix_with_samples(&project, &HashMap::from([(5, source)])).unwrap();
+            let live = MasterControl::new(&project.master);
+            live.set_levels(&project);
+            let mut state = RenderState {
+                live: Some(Arc::clone(&live)),
+                ..RenderState::default()
+            };
+            let mut block = vec![0.0; 2048];
+            mix.read_block(0, &mut block, None, &mut state);
+            assert!(
+                (block[2046] - 0.4).abs() < 1e-3,
+                "chained {chained}: {}",
+                block[2046]
+            );
+            project.tracks[0].gain = 0.25;
+            live.set_levels(&project);
+            mix.read_block(1024, &mut block, None, &mut state);
+            let left: Vec<f32> = block.iter().step_by(2).copied().collect();
+            let jump = left
+                .windows(2)
+                .map(|pair| (pair[1] - pair[0]).abs())
+                .fold(0.0, f32::max);
+            assert!(
+                jump < 1e-3,
+                "chained {chained}: the level must glide, not step: {jump}"
+            );
+            assert!(
+                (left[0] - 0.4).abs() < 2e-3,
+                "chained {chained}: {}",
+                left[0]
+            );
+            assert!(
+                (left[1023] - 0.1).abs() < 1e-3,
+                "chained {chained}: {}",
+                left[1023]
+            );
+            mix.read_block(2048, &mut block, None, &mut state);
+            assert!((block[0] - 0.1).abs() < 1e-3);
+            // Export reads the levels the mix was prepared with.
+            assert!(!mix.has_levels(&project));
+            mix.read_block(2048, &mut block, None, &mut RenderState::default());
+            assert!((block[0] - 0.4).abs() < 1e-3);
         }
     }
 
@@ -1541,6 +1688,7 @@ mod tests {
             frames: (u64::from(u32::MAX) - 36) / 4,
             voices: Vec::new(),
             chains: Vec::new(),
+            levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,

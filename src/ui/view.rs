@@ -1056,7 +1056,7 @@ impl MixJamApp {
     }
 
     /// The clip and handle under `pos`. A clip whose sound is missing has none.
-    fn clip_handle_at(&self, pos: Pos2, rect: Rect) -> Option<(u64, ClipHandle)> {
+    pub(super) fn clip_handle_at(&self, pos: Pos2, rect: Rect) -> Option<(u64, ClipHandle)> {
         let clip = self
             .session
             .project()
@@ -1068,6 +1068,7 @@ impl MixJamApp {
         let handle = handle_at(
             pos,
             self.clip_rect(clip, rect),
+            self.timeline_drop_rect.unwrap_or(rect),
             clip,
             sample,
             self.timeline_bar_width,
@@ -1080,7 +1081,7 @@ impl MixJamApp {
     fn handle_drag_step(&mut self, ui: &egui::Ui, response: &Response, rect: Rect) {
         if self.handle_drag.is_none()
             && response.drag_started_by(egui::PointerButton::Primary)
-            && !ui.input(|i| i.modifiers.alt)
+            && !ui.input(|i| i.modifiers.alt || i.modifiers.shift)
             && let Some(pos) = ui.input(|i| i.pointer.press_origin())
             && let Some((id, handle)) = self.clip_handle_at(pos, rect)
             && let Some(clip) = self
@@ -1212,16 +1213,14 @@ impl MixJamApp {
                     .min(clip.length_ticks - clip.fades.fade_in.ticks);
             }
             ClipHandle::Gain => {
-                // The gain line moves as far as the pointer does.
-                let clip_rect = self.clip_rect(clip, rect);
-                let delta = pos.y - drag.origin.y;
-                if delta != 0.0 {
-                    // The painted line has an inset at silence. Start from
-                    // the saved amplitude so that inset cannot raise the gain.
-                    let amplitude = (clip.gain - delta / clip_rect.height() * 2.0).clamp(0.0, 2.0);
-                    let step = if fine { 0.1 } else { 0.5 };
-                    shaped.gain =
-                        clip_gain_from_db((clip_gain_db(amplitude) / step).round() * step);
+                // Each `GAIN_PIXELS` of travel up or down is one dB, or a
+                // tenth with Ctrl, from the saved gain.
+                let steps = ((drag.origin.y - pos.y) / GAIN_PIXELS).trunc();
+                if steps != 0.0 {
+                    let step = if fine { 0.1 } else { 1.0 };
+                    shaped.gain = clip_gain_from_db(
+                        (clip_gain_db(clip.gain) + steps * step).clamp(CLIP_SILENCE_DB, 6.0),
+                    );
                 }
             }
         }
@@ -1466,6 +1465,7 @@ impl MixJamApp {
                             }
                             if handles && let Some(sample) = sample {
                                 draw_fade_handles(&painter, clip_rect, clip, sample, bar_width);
+                                draw_gain_handle(&painter, clip_rect, visible, clip.gain);
                             }
                         }
                     }
@@ -1689,7 +1689,11 @@ impl MixJamApp {
                             self.drag = Some(DragItem::Clip {
                                 id: clip.id,
                                 offset,
-                                copy: ui.input(|i| i.modifiers.alt || i.pointer.secondary_down()),
+                                copy: ui.input(|i| {
+                                    i.modifiers.alt
+                                        || i.modifiers.shift
+                                        || i.pointer.secondary_down()
+                                }),
                             });
                         } else {
                             self.selection_origin = Some(pos);
@@ -2320,7 +2324,17 @@ fn embedded_effect_dial(
 }
 
 pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Response {
-    let response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
+    let mut response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
+    let turn = controls::wheel(ui, &response);
+    if turn != 0.0 {
+        let step = if ui.input(|i| i.modifiers.shift) {
+            1.0
+        } else {
+            5.0
+        };
+        *pan = ((*pan * 100.0 + turn * step).round() / 100.0).clamp(-1.0, 1.0);
+        response.mark_changed();
+    }
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(
             ui.is_enabled(),
@@ -2331,7 +2345,8 @@ pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Res
         info
     });
     response.on_hover_text(format!(
-        "Track {} pan: {}. Pan does not enable a disabled L/R output.",
+        "Track {} pan: {}. Drag or use the wheel (Shift for fine steps). Pan does not enable \
+         a disabled L/R output.",
         index + 1,
         pan_description(*pan)
     ))
@@ -3164,12 +3179,30 @@ fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32) -> [Po
 /// The side of a fade handle's square.
 const FADE_HANDLE: f32 = 9.0;
 
+/// The vertical travel of one gain step: one dB, or a tenth with Ctrl.
+const GAIN_PIXELS: f32 = 4.0;
+/// The size of the gain handle.
+const GAIN_HANDLE: Vec2 = Vec2::new(16.0, 8.0);
+
+/// The center of a clip's gain handle: on the gain line, in the middle of
+/// the part of the clip in view.
+pub(super) fn gain_handle(rect: Rect, visible: Rect, gain: f32) -> Pos2 {
+    let shown = rect.intersect(visible);
+    let x = if shown.width() > 0.0 {
+        shown.center().x
+    } else {
+        rect.center().x
+    };
+    Pos2::new(x, gain_y(rect, gain))
+}
+
 /// The handle under `pos` in a clip's rectangle. The fade handles sit on the
-/// top edge, the trims take the side edges, and the rest of the top edge sets
-/// the gain. The middle stays free to move the clip.
+/// top edge, the trims take the side edges, and the gain handle sits on the
+/// gain line in the middle of the part in `visible`. The rest moves the clip.
 fn handle_at(
     pos: Pos2,
     rect: Rect,
+    visible: Rect,
     clip: &Clip,
     sample: &Sample,
     bar_width: f32,
@@ -3177,6 +3210,16 @@ fn handle_at(
     // A narrow clip is only for moving.
     if rect.width() < 16.0 {
         return None;
+    }
+    // The gain handle is painted last. It must receive input where it
+    // covers a fade handle or a trim edge.
+    if Rect::from_center_size(
+        gain_handle(rect, visible, clip.gain),
+        GAIN_HANDLE + Vec2::splat(2.0),
+    )
+    .contains(pos)
+    {
+        return Some(ClipHandle::Gain);
     }
     if pos.y <= rect.top() + 12.0 {
         let [fade_in, fade_out] = fade_handles(rect, clip, sample, bar_width);
@@ -3193,11 +3236,24 @@ fn handle_at(
         Some(ClipHandle::Start)
     } else if pos.x >= rect.right() - 5.0 {
         Some(ClipHandle::End)
-    } else if pos.y <= rect.top() + 5.0 {
-        Some(ClipHandle::Gain)
     } else {
         None
     }
+}
+
+/// The gain handle of a hovered clip, which drags the gain line.
+fn draw_gain_handle(painter: &egui::Painter, rect: Rect, visible: Rect, gain: f32) {
+    if rect.width() < 16.0 {
+        return;
+    }
+    let handle = Rect::from_center_size(gain_handle(rect, visible, gain), GAIN_HANDLE);
+    painter.rect_filled(handle, 2.0, CANVAS);
+    painter.rect_stroke(
+        handle,
+        2.0,
+        Stroke::new(1.0_f32, TEXT),
+        egui::StrokeKind::Inside,
+    );
 }
 
 fn draw_fade_handles(
@@ -3385,7 +3441,7 @@ pub(super) fn draw_clip(
     }
 }
 
-/// The gain line of a selected or hovered clip. The top edge drags it.
+/// The gain line of a selected or hovered clip. Its handle drags it.
 fn draw_gain_line(painter: &egui::Painter, rect: Rect, gain: f32) {
     let y = gain_y(rect, gain);
     painter

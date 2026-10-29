@@ -747,7 +747,8 @@ impl MasterChain {
 /// The link between the window and playback: settings that playback reads
 /// while it runs, and the meters it measures. An edit stores new settings;
 /// the audio thread takes them at its next block without waiting. The FX
-/// buses (see `fx`) take their settings and Clear Tail requests here too.
+/// buses (see `fx`) take their settings and Clear Tail requests here too,
+/// and so do the track levels: each fader, pan, and polarity.
 pub struct MasterControl {
     generation: AtomicU64,
     chain: Mutex<MasterChain>,
@@ -755,6 +756,9 @@ pub struct MasterControl {
     returns_generation: AtomicU64,
     returns: Mutex<crate::fx::FxBuses>,
     tail_clears: [AtomicU64; crate::fx::BUSES],
+    /// Each track's two f32 levels packed into one atomic value, so a
+    /// reader cannot combine channels from different edits. NaN until set.
+    levels: [AtomicU64; crate::engine::TRACK_COUNT],
 }
 impl MasterControl {
     pub fn new(chain: &MasterChain) -> Arc<Self> {
@@ -765,7 +769,25 @@ impl MasterControl {
             returns_generation: AtomicU64::new(0),
             returns: Mutex::new(crate::fx::FxBuses::default()),
             tail_clears: std::array::from_fn(|_| AtomicU64::new(0)),
+            levels: std::array::from_fn(|_| {
+                let unset = u64::from(f32::NAN.to_bits());
+                AtomicU64::new(unset | (unset << 32))
+            }),
         })
+    }
+    /// Store the project's track levels. Playback glides to them over its
+    /// next block, so a fader moves without a click and without a new mix.
+    pub fn set_levels(&self, project: &crate::engine::Project) {
+        for (stored, level) in self.levels.iter().zip(crate::audio::track_levels(project)) {
+            let [left, right] = level.map(|value| u64::from(value.to_bits()));
+            stored.store(left | (right << 32), Ordering::Release);
+        }
+    }
+    /// A track's left and right level, if set.
+    pub(crate) fn level(&self, track: usize) -> Option<[f32; 2]> {
+        let packed = self.levels[track].load(Ordering::Acquire);
+        let level = [packed as u32, (packed >> 32) as u32].map(f32::from_bits);
+        (!level[0].is_nan()).then_some(level)
     }
     pub fn set_returns(&self, buses: &crate::fx::FxBuses) {
         let mut stored = self.returns.lock().unwrap_or_else(|e| e.into_inner());
@@ -1228,6 +1250,31 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_stereo_levels_are_published_together() {
+        let mut project = crate::engine::Project::default();
+        let control = MasterControl::new(&project.master);
+        assert_eq!(control.level(0), None);
+        control.set_levels(&project);
+        let done = std::sync::atomic::AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                for _ in 0..100_000 {
+                    project.tracks[0].polarity_inverted = !project.tracks[0].polarity_inverted;
+                    control.set_levels(&project);
+                }
+                done.store(true, std::sync::atomic::Ordering::Release);
+            });
+            while !done.load(std::sync::atomic::Ordering::Acquire) {
+                let [left, right] = control.level(0).unwrap();
+                assert_eq!(
+                    left, right,
+                    "A level update must keep stereo polarity coherent."
+                );
+            }
+        });
+    }
 
     #[test]
     fn playback_meter_ignores_the_delay_removed_from_the_audible_output() {

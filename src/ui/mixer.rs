@@ -641,8 +641,8 @@ fn strip(
     changed
 }
 
-/// A small knob for a send amount from 0 to 1: drag, arrow keys (Shift for
-/// fine steps), Home and End, or a double-click back to 0. An `automated`
+/// A small knob for a send amount from 0 to 1: drag, the wheel or arrow keys
+/// (Shift for fine steps), Home and End, or a double-click back to 0. An `automated`
 /// knob is ringed: an automation lane sets its amount while the song plays.
 fn send_knob(
     ui: &mut egui::Ui,
@@ -662,6 +662,7 @@ fn send_knob(
     if response.double_clicked() {
         *value = 0.0;
     }
+    *value += controls::wheel(ui, &response) * if fine { 0.01 } else { 0.05 };
     if response.has_focus() {
         ui.memory_mut(|memory| {
             memory.set_focus_lock_filter(
@@ -752,7 +753,8 @@ fn send_knob(
         builder.add_action(Action::Decrement);
     });
     response.on_hover_text(format!(
-        "{name}: {:.0}%. Drag or use arrow keys; Shift for fine steps; double-click for 0.{}",
+        "{name}: {:.0}%. Drag, or use the wheel or arrow keys; Shift for fine steps; \
+         double-click for 0.{}",
         *value * 100.0,
         if automated {
             "\nAutomated: its automation lane sets the send while the song plays."
@@ -1102,7 +1104,7 @@ fn gain_rail(
         };
         *gain = fraction_gain(fraction);
     }
-    let mut step = 0.0_f32;
+    let mut step = controls::wheel(ui, &response);
     if response.has_focus() {
         controls::keep_transport_key(ui.ctx(), response.id);
         ui.memory_mut(|memory| {
@@ -1213,7 +1215,8 @@ fn gain_rail(
         response.mark_changed();
     }
     response.on_hover_text(format!(
-        "{name} gain: {}. Drag to adjust; Shift gives fine movement. Arrow keys change 0.5 dB \
+        "{name} gain: {}. Drag to adjust; Shift gives fine movement. \
+         The wheel and arrow keys change 0.5 dB \
          (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB \
          only reduces level.",
         db_text(db)

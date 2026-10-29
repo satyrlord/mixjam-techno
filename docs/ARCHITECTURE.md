@@ -75,16 +75,25 @@ the processor's cores. The render worker keeps each copy until no clip uses that
 pitch. A track whose channel EQ is on, or that has automation, is a
 `TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
 (`src/eq.rs`), then its filter, volume, and send lanes (`src/automation.rs`)
-shape before the sum. The fader, pan, and outputs are already in each voice;
-every stage is linear and per channel, so this order sounds as the signal
-order clips, EQ, automation, fader and pan, sends. A track with neither mixes
+shape before the sum. The outputs are already in each voice; the track's
+level (fader, polarity, pan, and master gain) comes in at mix time, in the
+voice for a plain track and after the volume lane for a chain. Every stage is
+linear and per channel, so this order sounds as the signal order clips, EQ,
+automation, fader and pan, sends. A track with neither mixes
 its voices straight into the sum, so an EQ that is off leaves the render bit
 for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
 `EqParam`, each control with its range; a mix designs a chain's EQ curve once
 from the master board's shared RBJ biquads (`master::dsp`). An EQ edit is a
-track edit, so it prepares a new mix and playback resumes on it, as a gain
-edit does. Automation values are evaluated at each output frame,
-so short moves do not depend on the reader's block size.
+track edit, so it prepares a new mix and playback resumes on it. A mix keeps
+the track levels it was prepared with, which export uses. Playback reads them
+live from the `MasterControl` instead, and glides from the last block's level
+to the new one over each block, so an edit of faders, pans, polarity, or the
+master gain alone is not a render change, including undo and redo. Each
+track publishes its left and right levels as one atomic pair, so playback
+cannot mix channels from different edits. Playback continues without a
+click, and an export prepares a new mix only when the levels differ.
+Automation values are evaluated at each output frame, so short moves do not
+depend on the reader's block size.
 The shared mix is immutable. Each playback or export owns a `RenderState` with
 the EQ and filter histories of each chain and the next-frame cursor, passed to
 `Frames::read_block`. A read that does not continue the previous one, after a

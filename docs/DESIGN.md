@@ -665,12 +665,14 @@ when available. Nominal bars and audio duration remain separate facts.
 Arrangement clips use flat category fills and names. They do not display a
 waveform. A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
-a Text-colored name that begins with Missing. While a sound or clip is dragged,
-a 150 by 30-point Drag Label follows the pointer with the sound name, Move
-sound, or Copy sound in Canvas text. A dragged sound, or a palette sound armed
-for click placement, shows a tinted outline at the bar and track where it will
-land. Choosing a clip or pressing Esc ends click placement, so a click on an
-empty lane then only clears the selection. Enter on a focused sound tile places
+a Text-colored name that begins with Missing. While a sound or clip is dragged
+over the lanes, clip ghosts at 60% opacity show the destination bar and track.
+Group destinations on tracks without a visible row have no ghost. Off the
+lanes, a dragged sound shows a 150 by 30-point Drag
+Label with its name in Canvas text. A palette sound armed for click placement
+shows a tinted outline where it will land. Choosing a clip or pressing Esc
+ends click placement, so a click on an empty lane then only clears the
+selection. Enter on a focused sound tile places
 it on the recording track at the playhead. Lane M/S/L/R letters gain a short
 bar when their switch is on. The lanes are one Tab stop with an Accent outline:
 arrow keys choose a clip, Alt+arrows move the selection by a bar or a track,
@@ -684,11 +686,14 @@ A clip is edited on the clip itself, as in other DAWs. Its side edges trim it:
 the right edge sets its length, and the left edge moves its start and trim
 together, so the sound stays where it plays. Edges snap to bars, or to
 sixteenths with Ctrl. Small dark squares on the top edge set the fade in and
-fade out; they snap to sixteenths, or to ticks with Ctrl. The rest of the top
-edge sets the gain: the gain line moves as far as the pointer, in 0.5 dB steps
-or 0.1 dB with Ctrl. A label at the pointer shows the value, and the release
-makes one undo step. The middle of the clip still moves it. The right-click
-menu also holds the exact values: gain in dB like the Mixer, trim start in
+fade out; they snap to sixteenths, or to ticks with Ctrl. A small handle on
+the gain line, in the middle of the clip's visible part, sets the gain: each
+4 points up or down is 1 dB, or 0.1 dB with Ctrl, from +6 dB to silence. A
+label at the pointer shows the value, and the release makes one undo step.
+Where the gain handle covers another handle, the visible gain handle receives
+the input. The rest of the clip still moves it; Shift, Alt, or the right button
+copies it. The right-click menu also holds the exact values: gain in dB like
+the Mixer, trim start in
 frames, length, fades with their curves, and pitch in semitones and cents.
 The arrangement has no clip strip under the lanes. Clips with available audio
 show their name without a hover tooltip. Missing clips keep their metadata and

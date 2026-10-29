@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use crate::{
-        engine::{Editor, ImportNotice, Track},
+        engine::{Editor, ImportNotice, Track, amplitude_to_db},
         library::Library,
     };
 
@@ -2143,6 +2143,11 @@ mod tests {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         for label in ["Original BPM knob", "Target BPM"] {
+            let modifiers = if label == "Target BPM" {
+                egui::Modifiers::SHIFT
+            } else {
+                egui::Modifiers::NONE
+            };
             let bounds = accessible_node(&output, label).1.bounds().unwrap();
             let position = Pos2::new(
                 (bounds.x0 + bounds.x1) as f32 / 2.0,
@@ -2168,9 +2173,9 @@ mod tests {
                 vec![egui::Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
                     delta: Vec2::new(0.0, 20.0),
-                    modifiers: egui::Modifiers::NONE,
+                    modifiers,
                 }],
-                egui::Modifiers::NONE,
+                modifiers,
             );
             let expected = if label == "Original BPM knob" {
                 (141.0, 140.0)
@@ -7592,10 +7597,12 @@ mod tests {
         let canvas = app.timeline_rect.unwrap();
         let first = app
             .clip_rect(&app.session.project().clips[0], canvas)
-            .center();
+            .center()
+            + GRIP;
         let second = app
             .clip_rect(&app.session.project().clips[1], canvas)
-            .center();
+            .center()
+            + GRIP;
         click(&ctx, &mut app, first, egui::Modifiers::NONE);
         click(&ctx, &mut app, second, egui::Modifiers::SHIFT);
         assert_eq!(app.selected_clips.len(), 2, "Shift must add a second clip.");
@@ -7637,10 +7644,12 @@ mod tests {
         let bar = app.timeline_bar_width;
         let first = app
             .clip_rect(&app.session.project().clips[0], canvas)
-            .center();
+            .center()
+            + GRIP;
         let second = app
             .clip_rect(&app.session.project().clips[1], canvas)
-            .center();
+            .center()
+            + GRIP;
         let starts = |app: &MixJamApp| {
             app.session
                 .project()
@@ -7654,7 +7663,8 @@ mod tests {
         for (distance, bars) in [(-0.3, 0), (0.3, 0), (0.7, 1), (-0.7, -1)] {
             let from = app
                 .clip_rect(&app.session.project().clips[1], canvas)
-                .center();
+                .center()
+                + GRIP;
             let target = from + Vec2::new(bar * distance, 0.0);
             pointer(&ctx, &mut app, from, true, egui::Modifiers::NONE);
             frame(
@@ -8236,10 +8246,12 @@ mod tests {
         let canvas = app.timeline_rect.unwrap();
         let first = app
             .clip_rect(&app.session.project().clips[0], canvas)
-            .center();
+            .center()
+            + GRIP;
         let second = app
             .clip_rect(&app.session.project().clips[1], canvas)
-            .center();
+            .center()
+            + GRIP;
         assert!((second.y - first.y - app.timeline_row_height).abs() < 0.1);
         let target = Pos2::new(first.x + 3.0 * app.timeline_bar_width, second.y);
         click(&ctx, &mut app, first, egui::Modifiers::NONE);
@@ -8265,10 +8277,12 @@ mod tests {
         let canvas = app.timeline_rect.unwrap();
         let first = app
             .clip_rect(&app.session.project().clips[0], canvas)
-            .center();
+            .center()
+            + GRIP;
         let second = app
             .clip_rect(&app.session.project().clips[1], canvas)
-            .center();
+            .center()
+            + GRIP;
         let target = Pos2::new(first.x + 3.0 * app.timeline_bar_width, second.y);
         click(&ctx, &mut app, first, egui::Modifiers::NONE);
         pointer(&ctx, &mut app, first, true, egui::Modifiers::ALT);
@@ -8483,7 +8497,8 @@ mod tests {
         let canvas = app.timeline_rect.unwrap();
         let first = app
             .clip_rect(&app.session.project().clips[0], canvas)
-            .center();
+            .center()
+            + GRIP;
         let below = Pos2::new(first.x, canvas.bottom() + 15.0);
         pointer(&ctx, &mut app, first, true, egui::Modifiers::NONE);
         frame(
@@ -9572,7 +9587,7 @@ mod tests {
             .iter()
             .map(|value| value.as_f64().unwrap() as f32)
             .collect();
-        let (x, y) = (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
+        let (x, y) = (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0 + GRIP.y);
         let reply = send(
             &mut app,
             &[
@@ -10723,6 +10738,104 @@ mod tests {
     }
 
     #[test]
+    fn mixer_wheel_moves_the_fader_send_and_pan_under_the_pointer_once() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let wheel = |ctx: &egui::Context, app: &mut MixJamApp, at: Pos2, up: bool| {
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::PointerMoved(at)],
+                egui::Modifiers::NONE,
+            );
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: Vec2::new(0.0, if up { 1.0 } else { -1.0 }),
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                egui::Modifiers::NONE,
+            );
+            for _ in 0..10 {
+                frame(ctx, app, vec![], egui::Modifiers::NONE);
+            }
+        };
+        let rail = effects_control_rect(&output, "Track 1 gain");
+        wheel(&ctx, &mut app, rail.center(), true);
+        let db = amplitude_to_db(app.session.project().tracks[0].gain);
+        assert!((db - 0.5).abs() < 0.001, "One notch is 0.5 dB, once: {db}");
+        let send = effects_control_rect(&output, "Track 1 send FX 1");
+        wheel(&ctx, &mut app, send.center(), true);
+        assert!((app.session.project().tracks[0].sends[0] - 0.05).abs() < 0.0001);
+        let pan = effects_control_rect(&output, "Track 1 pan");
+        wheel(&ctx, &mut app, pan.center(), false);
+        assert!((app.session.project().tracks[0].pan + 0.05).abs() < 0.0001);
+        let master = effects_control_rect(&output, "Master gain");
+        let before = app.session.project().master_gain;
+        wheel(&ctx, &mut app, master.center(), false);
+        assert!(
+            app.session.project().master_gain < before,
+            "The master fader takes the wheel."
+        );
+    }
+
+    #[test]
+    fn mastering_knobs_take_the_wheel_once() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.bottom_module = BottomModule::Mastering;
+        // A pedal's knobs work while it is on.
+        let mut chain = app.session.project().master;
+        chain.booster_eq.on = true;
+        app.session.edit(EditCommand::SetMaster(chain)).unwrap();
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for _ in 0..3 {
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        for (name, modifiers) in [
+            ("Trim", egui::Modifiers::NONE),
+            ("Booster EQ 60 Hz", egui::Modifiers::NONE),
+            ("Trim", egui::Modifiers::SHIFT),
+            ("Booster EQ 60 Hz", egui::Modifiers::SHIFT),
+        ] {
+            let knob = effects_control_rect(&output, name).center();
+            let before = app.session.project().master;
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(knob)],
+                modifiers,
+            );
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: Vec2::new(0.0, 1.0),
+                    modifiers,
+                }],
+                modifiers,
+            );
+            let after = app.session.project().master;
+            assert_ne!(after, before, "{name} takes the wheel with {modifiers:?}.");
+            for _ in 0..10 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            assert_eq!(
+                app.session.project().master,
+                after,
+                "{name}: one notch applies once."
+            );
+        }
+    }
+
+    #[test]
     fn mixer_preserves_unedited_send_and_return_precision() {
         let (ctx, mut app) = fixture();
         let mut project = app.session.project().clone();
@@ -10866,6 +10979,9 @@ mod tests {
         }
     }
 
+    /// From a clip's center to a point that moves it: below its gain handle.
+    const GRIP: Vec2 = Vec2::new(0.0, 8.0);
+
     /// Press at `from`, move to `to` over a few frames, and release.
     fn drag(
         ctx: &egui::Context,
@@ -10943,19 +11059,20 @@ mod tests {
             (TICKS_PER_BAR * 3 / 2, TICKS_PER_BAR / 2, 37800)
         );
 
-        // The top edge between the fade handles moves the gain line as far
-        // as the pointer, in half-dB steps. Unity is at half height.
+        // The handle on the gain line, in the middle of the clip, moves the
+        // gain in whole dB steps: here three steps down from unity.
         let first = rect(&app, 0);
-        let top = Pos2::new(first.left() + bar * 1.5, first.top() + 2.0);
+        let handle = gain_handle(first, app.timeline_drop_rect.unwrap(), 1.0);
+        assert_eq!(handle.y, first.center().y, "Unity is at half height.");
         drag(
             &ctx,
             &mut app,
-            top,
-            top + Vec2::new(0.0, first.height() / 4.0),
+            handle,
+            handle + Vec2::new(0.0, 3.0 * 4.0 + 1.0),
             egui::Modifiers::NONE,
         );
         let gain = app.session.project().clips[0].gain;
-        assert!((gain - 0.501).abs() < 0.001, "{gain}");
+        assert!((amplitude_to_db(gain) + 3.0).abs() < 0.001, "{gain}");
 
         for _ in 0..4 {
             app.history_step(false);
@@ -11107,16 +11224,131 @@ mod tests {
                 })
                 .unwrap();
             let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
-            let top = Pos2::new(rect.center().x, rect.top() + 2.0);
+            let handle = gain_handle(rect, app.timeline_drop_rect.unwrap(), gain);
             drag(
                 &ctx,
                 &mut app,
-                top,
-                top + Vec2::new(10.0, 0.0),
+                handle,
+                handle + Vec2::new(10.0, 3.0),
                 egui::Modifiers::NONE,
             );
             assert_eq!(app.session.project().clips[0].gain, gain);
         }
+    }
+
+    #[test]
+    fn clip_gain_handle_raises_whole_db_steps_and_ctrl_tenths() {
+        for (modifiers, expected) in [
+            (egui::Modifiers::NONE, 2.0_f32),
+            (egui::Modifiers::CTRL, 0.2),
+        ] {
+            let (ctx, mut app) = fixture();
+            let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+            let handle = gain_handle(rect, app.timeline_drop_rect.unwrap(), 1.0);
+            assert_eq!(
+                app.clip_handle_at(handle, app.timeline_rect.unwrap())
+                    .map(|h| h.1),
+                Some(ClipHandle::Gain)
+            );
+            drag(
+                &ctx,
+                &mut app,
+                handle,
+                handle - Vec2::new(0.0, 9.0),
+                modifiers,
+            );
+            let db = amplitude_to_db(app.session.project().clips[0].gain);
+            assert!((db - expected).abs() < 0.001, "{db} dB with {modifiers:?}");
+        }
+    }
+
+    #[test]
+    fn clip_gain_handle_takes_priority_where_it_covers_a_fade_handle() {
+        let (ctx, mut app) = fixture();
+        let clip = app.session.project().clips[0].clone();
+        let mut fades = clip.fades;
+        fades.fade_in.ticks = clip.length_ticks / 2;
+        app.session
+            .edit(EditCommand::SetClip {
+                id: clip.id,
+                start_tick: clip.start_tick,
+                gain: 2.0,
+                offset_frames: clip.offset_frames,
+                length_ticks: clip.length_ticks,
+                fades,
+                pitch_cents: clip.pitch_cents,
+            })
+            .unwrap();
+        let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+        let handle = gain_handle(rect, app.timeline_drop_rect.unwrap(), 2.0);
+        assert_eq!(
+            app.clip_handle_at(handle, app.timeline_rect.unwrap())
+                .map(|h| h.1),
+            Some(ClipHandle::Gain),
+            "The visible gain handle must receive the drag."
+        );
+        drag(
+            &ctx,
+            &mut app,
+            handle,
+            handle + Vec2::new(0.0, 9.0),
+            egui::Modifiers::NONE,
+        );
+        let changed = &app.session.project().clips[0];
+        assert!((amplitude_to_db(changed.gain) - (amplitude_to_db(2.0) - 2.0)).abs() < 0.001);
+        assert_eq!(changed.fades, fades);
+    }
+
+    #[test]
+    fn shift_drag_copies_clips_and_a_ghost_shows_where_they_land() {
+        let (ctx, mut app) = fixture();
+        let lanes = app.timeline_rect.unwrap();
+        let source = app.session.project().clips[0].clone();
+        let count = app.session.project().clips.len();
+        let rect = app.clip_rect(&source, lanes);
+        let from = Pos2::new(rect.left() + rect.width() / 4.0, rect.bottom() - 4.0);
+        let to = from + Vec2::new(4.0 * app.timeline_bar_width, 0.0);
+        let shift = egui::Modifiers::SHIFT;
+        pointer(&ctx, &mut app, from, true, shift);
+        for step in 1..=4 {
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(
+                    from + (to - from) * step as f32 / 4.0,
+                )],
+                shift,
+            );
+        }
+        let Some(drag) = &app.drag else {
+            panic!("Shift must start a clip drag.");
+        };
+        assert!(matches!(drag, DragItem::Clip { copy: true, .. }));
+        let ghosts = app.drop_ghosts(drag, to, false);
+        assert_eq!(ghosts.len(), app.selected_clips.len());
+        assert_eq!(
+            ghosts[0].0.left(),
+            app.lane_rect(
+                source.track,
+                source.start_tick + 4 * TICKS_PER_BAR,
+                1,
+                lanes
+            )
+            .left(),
+            "The ghost starts where the drop puts the clip."
+        );
+        assert!(
+            app.drop_ghosts(drag, Pos2::new(-50.0, -50.0), false)
+                .is_empty()
+        );
+        pointer(&ctx, &mut app, to, false, shift);
+        let clips = &app.session.project().clips;
+        assert_eq!(clips.len(), count + 1, "Shift-drag copies.");
+        assert!(clips.contains(&source), "The source stays.");
+        assert!(clips.iter().any(
+            |clip| clip.start_tick == source.start_tick + 4 * TICKS_PER_BAR
+                && clip.sample_id == source.sample_id
+        ));
     }
 
     #[test]

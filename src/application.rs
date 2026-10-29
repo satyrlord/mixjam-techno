@@ -940,11 +940,20 @@ impl Session {
         self.revision = self.revision.wrapping_add(1);
         self.master.set(&self.editor.project().master);
         self.master.set_returns(&self.editor.project().fx);
+        self.master.set_levels(self.editor.project());
         if self.wants_playback {
             self.start_playback();
         } else {
             self.prepare_ahead();
         }
+    }
+    /// A change of track faders, pans, polarity, or the master gain only.
+    /// Playback reads the levels as it plays, so the prepared mix stays
+    /// valid for it and glides to them. Export checks the mix's own levels.
+    fn levels_changed(&mut self) {
+        self.gesture = None;
+        self.unsaved = true;
+        self.master.set_levels(self.editor.project());
     }
     /// A change of the master pedalboard or the FX buses only. The prepared
     /// mix stays valid, and playback continues with the new settings.
@@ -1084,6 +1093,19 @@ impl Session {
             command,
             EditCommand::SetMaster(_) | EditCommand::SetEffects(_)
         );
+        let levels_only = match &command {
+            EditCommand::SetMixer { tracks, .. } => {
+                tracks.len() == self.project().tracks.len()
+                    && self.project().tracks.iter().zip(tracks).all(|(old, new)| {
+                        let mut same = new.clone();
+                        same.gain = old.gain;
+                        same.pan = old.pan;
+                        same.polarity_inverted = old.polarity_inverted;
+                        same == *old
+                    })
+            }
+            _ => false,
+        };
         let apply = |project: &mut Project| match command {
             EditCommand::SetTempo(bpm) => project.bpm = bpm,
             EditCommand::SetLoop(region) => project.loop_region = region,
@@ -1136,6 +1158,8 @@ impl Session {
         if self.editor.generation() != generation {
             if master_only {
                 self.master_changed();
+            } else if levels_only {
+                self.levels_changed();
             } else {
                 self.changed();
             }
@@ -1210,10 +1234,23 @@ impl Session {
             && Project {
                 master: self.project().master,
                 fx: self.project().fx,
-                ..before
+                ..before.clone()
             } == *self.project();
         if master_only {
             self.master_changed();
+            return Ok(true);
+        }
+        // Level history uses the same live path as the original edit. A
+        // render replacement would reset filters, FX tails, and meters.
+        let mut without_level_change = self.project().clone();
+        without_level_change.master_gain = before.master_gain;
+        for (track, old) in without_level_change.tracks.iter_mut().zip(&before.tracks) {
+            track.gain = old.gain;
+            track.pan = old.pan;
+            track.polarity_inverted = old.polarity_inverted;
+        }
+        if without_level_change == before {
+            self.levels_changed();
             return Ok(true);
         }
         // Most steps leave the imported sources as they are. Rebuild the
@@ -1311,7 +1348,9 @@ impl Session {
     /// is current, or a new one.
     fn current_mix(&self) -> Result<Arc<audio::Mix>, String> {
         match &self.render {
-            Some(mix) if !self.render_dirty => Ok(Arc::clone(mix)),
+            Some(mix) if !self.render_dirty && mix.has_levels(self.project()) => {
+                Ok(Arc::clone(mix))
+            }
             _ => audio::prepare_project(self.project(), &self.library).map(Arc::new),
         }
     }
@@ -1370,7 +1409,10 @@ impl Session {
         if self.export.is_some() {
             return Err("Wait for the current export to finish.".into());
         }
-        let rendered = self.render.clone().filter(|_| !self.render_dirty);
+        let rendered = self
+            .render
+            .clone()
+            .filter(|mix| !self.render_dirty && mix.has_levels(self.project()));
         let project = self.project().clone();
         let library = self.library.clone();
         let (sender, receiver) = mpsc::channel();
@@ -1979,6 +2021,7 @@ impl Session {
             .map(|[a, b]| [self.tick_to_frame(a, rate), self.tick_to_frame(b, rate)]);
         self.master.set(&self.editor.project().master);
         self.master.set_returns(&self.editor.project().fx);
+        self.master.set_levels(self.editor.project());
         let master = Some(self.master.clone());
         match self
             .player
@@ -3745,6 +3788,44 @@ mod boundary_tests {
         assert!(session.history_step(false).unwrap());
         assert_eq!(session.project(), &initial);
         assert!(!session.has_history_step(false));
+    }
+
+    #[test]
+    fn live_level_history_keeps_the_prepared_mix_and_updates_playback() {
+        let changes: [fn(&mut Project); 4] = [
+            |project| project.tracks[0].gain = 0.25,
+            |project| project.tracks[0].pan = -0.5,
+            |project| project.tracks[0].polarity_inverted = true,
+            |project| project.master_gain = 0.5,
+        ];
+        for change in changes {
+            let mut session =
+                Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+            let before = session.project().clone();
+            let mix = Arc::new(audio::prepare_project(&before, &session.library).unwrap());
+            session.render = Some(Arc::clone(&mix));
+            session.render_dirty = false;
+            let revision = session.revision;
+            let mut after = before.clone();
+            change(&mut after);
+            session
+                .edit_discrete(EditCommand::SetMixer {
+                    tracks: after.tracks.clone(),
+                    master_gain: after.master_gain,
+                })
+                .unwrap();
+            for (redo, expected) in [(false, &before), (true, &after)] {
+                assert!(session.history_step(redo).unwrap());
+                assert_eq!(session.project(), expected);
+                assert_eq!(session.revision, revision);
+                assert!(!session.render_dirty);
+                assert!(Arc::ptr_eq(session.render.as_ref().unwrap(), &mix));
+                assert_eq!(
+                    session.master.level(0),
+                    Some(audio::track_levels(expected)[0])
+                );
+            }
+        }
     }
 
     #[test]
