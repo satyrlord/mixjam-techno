@@ -412,9 +412,9 @@ _DELAYS = {
     'Dotted Motion': (dict(divisionL='1/8.', divisionR='1/4T', timeMsL=430.0, timeMsR=350.0, feedback=54.0,
                            width=168.0, lowCut=240.0, highCut=9600.0, modRate=0.74, modDepth=2.8,
                            character='analog', duckAmount=46.0, duckRelease=480.0, outputDb=-1.8), 0.78),
-    'Dub Feedback': (dict(divisionL='1/4.', divisionR='1/2T', timeMsL=680.0, timeMsR=870.0, feedback=94.0,
-                          width=136.0, lowCut=310.0, highCut=4400.0, modRate=0.24, modDepth=7.6,
-                          character='tape', drive=32.0, duckAmount=18.0, duckRelease=980.0, outputDb=-4.1), 0.90),
+    'Dub Feedback': (dict(divisionL='1/4.', divisionR='1/2T', timeMsL=680.0, timeMsR=870.0, feedback=90.0,
+                          width=136.0, lowCut=180.0, highCut=6000.0, modRate=0.24, modDepth=7.6,
+                          character='tape', drive=32.0, duckAmount=4.0, duckRelease=980.0, outputDb=0.0), 1.0),
 }
 _REVERB = dict(type='aetherform-reverb', spaceModel='chamber', preDelayMs=24.0, decaySeconds=2.8,
                sizePercent=68.0, character='vintage', drivePercent=0.0, widthPercent=148.0,

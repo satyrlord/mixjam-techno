@@ -306,7 +306,7 @@ impl Echoform {
         ("Wide Tape Echo", 82.0),
         ("Clean Slap", 72.0),
         ("Dotted Motion", 78.0),
-        ("Dub Feedback", 90.0),
+        ("Dub Feedback", 100.0),
         ("Ducked Eighths", 86.0),
         ("Endless Wash", 96.0),
     ];
@@ -358,17 +358,20 @@ impl Echoform {
                 division_r: HalfTriplet,
                 time_ms_l: 680.0,
                 time_ms_r: 870.0,
-                feedback: 94.0,
+                // Loud, long repeats like a hardware tape echo: the first ones
+                // answer a few dB under the dry sound and the tail rings for
+                // about 10 s; the drive keeps the feedback bounded.
+                feedback: 90.0,
                 width: 136.0,
-                low_cut: 310.0,
-                high_cut: 4400.0,
+                low_cut: 180.0,
+                high_cut: 6000.0,
                 mod_rate: 0.24,
                 mod_depth: 7.6,
                 character: Tape,
                 drive: 32.0,
-                duck_amount: 18.0,
+                duck_amount: 4.0,
                 duck_release: 980.0,
-                output_db: -4.1,
+                output_db: 0.0,
                 ..base
             },
             "Ducked Eighths" => Self {

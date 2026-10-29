@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "mixjam-techno"
-version = "1.34.0"
+version = "1.36.0"
 dependencies = [
  "cpal",
  "deunicode",
