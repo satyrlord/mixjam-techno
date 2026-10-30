@@ -32,7 +32,7 @@ use dsp::{Smoothed, db_to_gain};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
 /// Knob positions of the Booster pedals run from 0 to this value, as the
@@ -819,7 +819,10 @@ impl MasterChain {
 /// while it runs, and the meters it measures. An edit stores new settings;
 /// the audio thread takes them at its next block without waiting. The FX
 /// buses (see `fx`) take their settings and Clear Tail requests here too,
-/// and so do the track levels: each fader, pan, and polarity.
+/// and so do the track levels: each fader, pan, and polarity. Playback
+/// keeps its lane compressors' histories here, so a playback started again
+/// where the last one was, after a pause or for a mix prepared again,
+/// carries on from them.
 pub struct MasterControl {
     generation: AtomicU64,
     chain: Mutex<MasterChain>,
@@ -830,6 +833,24 @@ pub struct MasterControl {
     /// Each track's two f32 levels packed into one atomic value, so a
     /// reader cannot combine channels from different edits. NaN until set.
     levels: [AtomicU64; crate::engine::TRACK_COUNT],
+    /// Serializes publishers and remembers which lane compressors are on.
+    level_writer: Mutex<u64>,
+    /// Odd while levels and master gain are being published. Audio makes
+    /// one bounded snapshot attempt and keeps its last snapshot on overlap.
+    level_sequence: AtomicU64,
+    /// The master gain inside those levels, as f32 bits. NaN until set.
+    /// It is not part of any level pair: a lane ducker's key reads it to
+    /// leave the master gain out of its level.
+    master_gain: AtomicU32,
+    /// Each track's compressor history as playback's last block left it
+    /// (`compressor::State::pack`), the frame that block ended at, and its
+    /// source epoch, so
+    /// that a new playback start just behind that frame carries on from
+    /// it. NaN until a playback stores one. Only the audio thread uses them.
+    compressors: [[AtomicU64; 3]; crate::engine::TRACK_COUNT],
+    compressor_epoch: AtomicU64,
+    compressor_reset: AtomicU64,
+    compressor_track_reset: [AtomicU64; crate::engine::TRACK_COUNT],
 }
 impl MasterControl {
     pub fn new(chain: &MasterChain) -> Arc<Self> {
@@ -844,21 +865,104 @@ impl MasterControl {
                 let unset = u64::from(f32::NAN.to_bits());
                 AtomicU64::new(unset | (unset << 32))
             }),
+            master_gain: AtomicU32::new(f32::NAN.to_bits()),
+            level_writer: Mutex::new(0),
+            level_sequence: AtomicU64::new(0),
+            compressors: std::array::from_fn(|_| {
+                let unset = u64::from(f32::NAN.to_bits());
+                [
+                    AtomicU64::new(unset | (unset << 32)),
+                    AtomicU64::new(0),
+                    AtomicU64::new(0),
+                ]
+            }),
+            compressor_epoch: AtomicU64::new(0),
+            compressor_reset: AtomicU64::new(0),
+            compressor_track_reset: std::array::from_fn(|_| AtomicU64::new(0)),
         })
     }
     /// Store the project's track levels. Playback glides to them over its
     /// next block, so a fader moves without a click and without a new mix.
     pub fn set_levels(&self, project: &crate::engine::Project) {
+        let mut switched = self.level_writer.lock().unwrap_or_else(|e| e.into_inner());
+        let enabled = project
+            .tracks
+            .iter()
+            .enumerate()
+            .fold(0_u64, |mask, (index, track)| {
+                mask | (u64::from(track.compressor.on) << index)
+            });
+        if *switched != enabled {
+            let epoch = self.compressor_epoch.fetch_add(1, Ordering::AcqRel) + 1;
+            for (track, reset) in self.compressor_track_reset.iter().enumerate() {
+                if (*switched ^ enabled) & (1_u64 << track) != 0 {
+                    reset.store(epoch, Ordering::Release);
+                }
+            }
+            *switched = enabled;
+        }
+        self.level_sequence.fetch_add(1, Ordering::SeqCst);
         for (stored, level) in self.levels.iter().zip(crate::audio::track_levels(project)) {
             let [left, right] = level.map(|value| u64::from(value.to_bits()));
-            stored.store(left | (right << 32), Ordering::Release);
+            stored.store(left | (right << 32), Ordering::SeqCst);
         }
+        self.master_gain
+            .store(project.master_gain.to_bits(), Ordering::SeqCst);
+        self.level_sequence.fetch_add(1, Ordering::SeqCst);
     }
-    /// A track's left and right level, if set.
-    pub(crate) fn level(&self, track: usize) -> Option<[f32; 2]> {
-        let packed = self.levels[track].load(Ordering::Acquire);
-        let level = [packed as u32, (packed >> 32) as u32].map(f32::from_bits);
-        (!level[0].is_nan()).then_some(level)
+    /// All track levels and their master gain from the same publication.
+    /// Returns None if unset or a writer overlaps this single attempt.
+    pub(crate) fn levels(&self) -> Option<([[f32; 2]; crate::engine::TRACK_COUNT], f32)> {
+        let before = self.level_sequence.load(Ordering::SeqCst);
+        if before & 1 != 0 {
+            return None;
+        }
+        let levels = std::array::from_fn(|track| {
+            let packed = self.levels[track].load(Ordering::SeqCst);
+            [packed as u32, (packed >> 32) as u32].map(f32::from_bits)
+        });
+        let gain = f32::from_bits(self.master_gain.load(Ordering::SeqCst));
+        (before == self.level_sequence.load(Ordering::SeqCst) && gain.is_finite())
+            .then_some((levels, gain))
+    }
+    pub(crate) fn compressor_epoch(&self) -> u64 {
+        self.compressor_epoch.load(Ordering::Acquire)
+    }
+    /// Explicit transport discontinuities discard every track's old
+    /// reduction. Switch changes use per-track floors in `set_levels`.
+    /// Old playback sources cannot publish into the new epoch.
+    pub(crate) fn reset_compressors(&self) {
+        let epoch = self.compressor_epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        self.compressor_reset.store(epoch, Ordering::Release);
+    }
+    fn compressor_valid(&self, track: usize, epoch: u64) -> bool {
+        epoch >= self.compressor_reset.load(Ordering::Acquire)
+            && epoch >= self.compressor_track_reset[track].load(Ordering::Acquire)
+    }
+    /// Keep a track's compressor history at the end of a playback block,
+    /// and the frame after that block. Called by the audio thread.
+    pub(crate) fn keep_compressor(
+        &self,
+        track: usize,
+        state: crate::compressor::State,
+        at: u64,
+        epoch: u64,
+    ) {
+        if !self.compressor_valid(track, epoch) {
+            return;
+        }
+        let [kept, frame, saved_epoch] = &self.compressors[track];
+        frame.store(at, Ordering::Relaxed);
+        saved_epoch.store(epoch, Ordering::Relaxed);
+        kept.store(state.pack(), Ordering::Release);
+    }
+    /// The compressor history that playback last kept for a track, if any,
+    /// with the frame after the block that left it.
+    pub(crate) fn kept_compressor(&self, track: usize) -> Option<(crate::compressor::State, u64)> {
+        let [kept, frame, saved_epoch] = &self.compressors[track];
+        crate::compressor::State::unpack(kept.load(Ordering::Acquire))
+            .filter(|_| self.compressor_valid(track, saved_epoch.load(Ordering::Relaxed)))
+            .map(|state| (state, frame.load(Ordering::Relaxed)))
     }
     pub fn set_returns(&self, buses: &crate::fx::FxBuses) {
         let mut stored = self.returns.lock().unwrap_or_else(|e| e.into_inner());
@@ -1401,25 +1505,77 @@ mod tests {
     use super::*;
 
     #[test]
+    fn compressor_switches_invalidate_only_their_track_and_old_sources_cannot_restore_it() {
+        let mut project = crate::engine::Project::default();
+        project.tracks[0].compressor.on = true;
+        project.tracks[1].compressor.on = true;
+        let control = MasterControl::new(&project.master);
+        control.set_levels(&project);
+        let epoch = control.compressor_epoch();
+        for track in 0..2 {
+            control.keep_compressor(track, Default::default(), 10_000, epoch);
+        }
+        project.tracks[0].compressor.on = false;
+        control.set_levels(&project);
+        assert!(control.kept_compressor(0).is_none());
+        assert!(control.kept_compressor(1).is_some());
+        control.keep_compressor(0, Default::default(), 11_000, epoch);
+        assert!(control.kept_compressor(0).is_none());
+        control.reset_compressors();
+        control.keep_compressor(1, Default::default(), 11_000, epoch);
+        assert!(control.kept_compressor(1).is_none());
+    }
+
+    #[test]
+    fn live_levels_reject_an_incomplete_publication() {
+        let project = crate::engine::Project::default();
+        let control = MasterControl::new(&project.master);
+        control.set_levels(&project);
+        control.level_sequence.fetch_add(1, Ordering::SeqCst);
+        control
+            .master_gain
+            .store(0.5_f32.to_bits(), Ordering::SeqCst);
+        // The former independent reads accepted this torn publication.
+        let packed = control.levels[0].load(Ordering::SeqCst);
+        let old_left = f32::from_bits(packed as u32);
+        let new_gain = f32::from_bits(control.master_gain.load(Ordering::SeqCst));
+        assert_ne!(old_left.abs(), new_gain);
+        assert!(control.levels().is_none());
+    }
+
+    #[test]
     fn live_stereo_levels_are_published_together() {
         let mut project = crate::engine::Project::default();
         let control = MasterControl::new(&project.master);
-        assert_eq!(control.level(0), None);
+        assert_eq!(control.levels(), None);
         control.set_levels(&project);
         let done = std::sync::atomic::AtomicBool::new(false);
         std::thread::scope(|scope| {
             scope.spawn(|| {
                 for _ in 0..100_000 {
                     project.tracks[0].polarity_inverted = !project.tracks[0].polarity_inverted;
+                    project.master_gain = if project.tracks[0].polarity_inverted {
+                        0.25
+                    } else {
+                        1.0
+                    };
                     control.set_levels(&project);
                 }
                 done.store(true, std::sync::atomic::Ordering::Release);
             });
             while !done.load(std::sync::atomic::Ordering::Acquire) {
-                let [left, right] = control.level(0).unwrap();
+                let Some((levels, master_gain)) = control.levels() else {
+                    continue;
+                };
+                let [left, right] = levels[0];
                 assert_eq!(
                     left, right,
                     "A level update must keep stereo polarity coherent."
+                );
+                assert_eq!(
+                    left.abs(),
+                    master_gain,
+                    "Master gain must match the track snapshot."
                 );
             }
         });

@@ -4,7 +4,9 @@
 use super::view::switch_hint;
 use super::*;
 use mixjam_techno::application::fx::{BUSES, FxBus, FxBuses};
-use mixjam_techno::application::{MAX_MIXER_GAIN_DB, Track, amplitude_to_db, db_to_amplitude};
+use mixjam_techno::application::{
+    MAX_MIXER_GAIN_DB, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude,
+};
 
 /// What the mixer changed: the tracks and master level, the FX buses, the
 /// master pedalboard's bypass, the bus whose return strip asked to open it
@@ -259,7 +261,10 @@ pub(super) fn show(
                                                     }),
                                                     sends: &mut track.sends,
                                                     any_solo,
-                                                    eq_on: track.eq.on || track.ducker.on,
+                                                    eq_on: track.eq.on
+                                                        || track.compressor.on
+                                                        || track.width != TRACK_WIDTH.default
+                                                        || track.ducker.on,
                                                     open_eq: &mut open_eq,
                                                 }),
                                             );
@@ -347,8 +352,8 @@ struct TrackControls<'a> {
     automated: [bool; BUSES],
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
-    /// Whether the track's channel EQ or ducker is on, and whether its EQ
-    /// button was pressed.
+    /// Whether the track's channel EQ, compressor, or ducker is on or its
+    /// width is not 100%, and whether its EQ button was pressed.
     eq_on: bool,
     open_eq: &'a mut bool,
 }
@@ -546,9 +551,9 @@ fn strip(
         });
         if response
             .on_hover_text(format!(
-                "{name} EQ: {}. Open the channel EQ window: low and high cuts, shelves, and a \
-                 peak, before the track's automation and fader; and the ducker, which lowers \
-                 the track while another track sounds.",
+                "{name} EQ: {}. Open the channel EQ window: low and high cuts, shelves, and two \
+                 peaks; the compressor and the stereo width, before the track's automation and \
+                 fader; and the ducker, which lowers the track while another track sounds.",
                 if eq_on { "on" } else { "off" }
             ))
             .clicked()

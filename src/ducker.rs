@@ -1,8 +1,10 @@
 //! The lane ducker: it lowers its track while another track, its key,
 //! sounds, such as a bass that makes room for the kick.
 //!
-//! The key is the key track's own signal after its EQ, automation, fader,
-//! and pan, before its own ducker, so duckers never chain. A muted key, or
+//! The key is the key track's own signal after its EQ, compressor, width,
+//! automation, fader, and pan, before its own ducker, so duckers never
+//! chain, and without the master gain, so the master gain does not change
+//! how far a track ducks. A muted key, or
 //! one that Solo leaves out, does not duck. The ducker follows the key's
 //! peak and lowers its track by as much as the key rises over the
 //! threshold, never by more than the depth; the attack and release smooth

@@ -121,24 +121,42 @@ change smoothly while the song plays, including when you undo or redo them.
   track stays silent. The lane and mixer M/S/L/R controls mirror each other.
   Changing these controls does not change pan.
 - EQ, beside M, opens the track's channel EQ window and lights while the EQ is
-  on. The EQ has a low cut and a high cut at 12 dB per octave, a low shelf, a
-  peak with its Q, and a high shelf, and draws its response curve. It acts on
+  on. The EQ has a low cut and a high cut at 12 dB per octave, a low shelf,
+  two peaks with their Q, and a high shelf, and draws its response curve. Mid
+  peak runs from 150 Hz to 10 kHz; Peak 2, from 40 Hz to 16 kHz, takes a
+  narrow cut, such as one ringing drum line, while Mid peak does another
+  job. It acts on
   the track's clips before its automation and fader. Each track's EQ starts
   off; an EQ that is off keeps its settings and leaves the track as it was.
   Reset flattens every band.
 - The same window holds the track's ducker, which lowers the track while
   another track, its key, sounds: a bass that makes room for the kick, for
   example. Switch it on, pick the key track, and set Thresh (the key's level
-  above which the track ducks), Depth (the most it ducks), Attack, and
+  above which the track ducks, after the key's fader and before the master
+  gain, so the master gain does not change the ducking), Depth (the most it
+  ducks), Attack, and
   Release. The track ducks by as much as the key rises over the threshold,
   after its fader and before its sends. A muted key does not duck. The EQ
-  button lights while the EQ or the ducker is on.
+  button lights while the EQ, the compressor, or the ducker is on, or while
+  the width is not 100%.
+- Between the EQ and the ducker, the window holds the track's compressor,
+  which evens out the track's level after its EQ, such as the hits of a drum
+  loop. Switch it on and set Thresh (the level above which it compresses),
+  Ratio, Attack, Release, and Makeup. It works before the track's width,
+  automation, and fader, so moving the fader does not change how hard it
+  compresses. Width, under Stereo at the end of the row, sets the track's
+  stereo width before its pan: 0% folds the track to mono, 100% leaves it as
+  it is, and 200% doubles the difference between its sides. Width keeps the
+  track's mono sum: below 100% the track's stereo sound comes closer to that
+  sum, and above 100% it moves further from it. Width works while both
+  outputs are on.
 - Bypass on the Master strip skips the master pedalboard, as Mastering's
   Bypass all does.
 - Export tracks… in the Mixer's toolbar asks for a folder and writes each
   track that plays, and the return of each FX bus that it feeds, to its own
   WAV file, for mixing in another application. A track's file is the track
-  alone after its EQ, automation, fader, pan, and outputs, without its sends;
+  alone after its EQ, compressor, width, automation, fader, pan, outputs, and ducker,
+  without its sends;
   the FX returns hold every track's sends. The files leave the master
   pedalboard out and are as long as the mix export. They sum to the mix with
   the board bypassed when the summed mix does not clip. Export stops if an

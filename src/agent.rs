@@ -373,6 +373,10 @@ pub struct TrackView {
     pub automation: crate::automation::Automation,
     /// Whether the track's channel EQ is on.
     pub eq_on: bool,
+    /// Whether the track's compressor is on.
+    pub compressor_on: bool,
+    /// The track's stereo width in percent.
+    pub width: f32,
     pub clips: usize,
 }
 
@@ -636,6 +640,8 @@ pub fn song_view(session: &Session) -> SongView {
             sends: track.sends,
             automation: track.automation.clone(),
             eq_on: track.eq.on,
+            compressor_on: track.compressor.on,
+            width: track.width,
             clips,
         })
         .collect();

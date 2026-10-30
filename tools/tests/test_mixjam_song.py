@@ -142,10 +142,34 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(18))
+            self.project(self.document(19))
+
+    def test_version_18_keeps_the_second_peak_compressor_and_width(self):
+        document = self.document(18)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        document['lanes'][0]['sends'] = [0.0] * 4
+        eq = dict(earlier['tracks'][0]['eq'], on=True, peak2Hz=191.0, peak2Db=-9.0)
+        compressor = dict(on=True, threshold=-24.0, ratio=6.0, attack=0.5, release=100.0, makeup=3.0)
+        document['lanes'][0].update(eq=eq, compressor=compressor, width=40.0)
+        document['lanes'].append(copy.deepcopy(document['lanes'][0]))
+        for key in ('eq', 'compressor', 'width'):
+            del document['lanes'][1][key]
+        projected = self.project(document)
+        self.assertEqual(projected['tracks'][0]['eq'], eq)
+        self.assertEqual(projected['tracks'][0]['compressor'], compressor)
+        self.assertEqual(projected['tracks'][0]['width'], 40.0)
+        self.assertEqual(projected['tracks'][1]['compressor'], dict(compressor, on=False, threshold=-20.0,
+                                                                     ratio=4.0, attack=10.0, makeup=0.0))
+        self.assertEqual(projected['tracks'][1]['width'], 100.0)
+        self.assertEqual(earlier['tracks'][0]['width'], 100.0)
+        self.assertFalse(earlier['tracks'][0]['compressor']['on'])
 
     def test_version_17_preserves_duckers_and_master_and_fx_keys(self):
         document = self.document(17)
+        # At a master gain of 1 the ducker threshold does not move.
+        document['song']['masterGain'] = 1.0
         earlier = self.project(self.document())
         document['master'] = earlier['master']
         document['master']['busCompressor'].update(on=True, key=2)
@@ -161,6 +185,36 @@ class SongProjectionTests(unittest.TestCase):
         self.assertEqual(projected['master'], document['master'])
         self.assertEqual(projected['fx'], document['fxBuses'])
         self.assertEqual(earlier['tracks'][0]['ducker'], dict(ducker, on=False, key=1))
+
+    def test_version_17_ducker_thresholds_move_by_the_master_gain(self):
+        # A version 17 key held the master gain; version 18 leaves it out, so a
+        # version 17 threshold rises 6.02 dB at a master gain of 0.5.
+        def opened(version, master_gain, threshold, on=True):
+            document = self.document(version)
+            document['song']['masterGain'] = master_gain
+            earlier = self.project(self.document())
+            document['master'] = earlier['master']
+            document['fxBuses'] = earlier['fx']
+            document['lanes'][0]['sends'] = [0.0] * 4
+            document['lanes'][0]['ducker'] = dict(on=on, key=2, threshold=threshold, depth=6.0,
+                                                  attack=2.0, release=120.0)
+            document['lanes'].append(copy.deepcopy(document['lanes'][0]))
+            del document['lanes'][1]['ducker']
+            tracks = self.project(document)['tracks']
+            self.assertEqual(tracks[1]['ducker']['threshold'], -30.0)
+            return tracks[0]['ducker']
+        ducker = opened(17, 0.5, -18.0)
+        self.assertAlmostEqual(ducker['threshold'], -18.0 + 6.0206, places=3)
+        self.assertEqual(ducker, dict(on=True, key=2, threshold=ducker['threshold'], depth=6.0,
+                                      attack=2.0, release=120.0))
+        self.assertEqual(opened(18, 0.5, -18.0)['threshold'], -18.0)
+        for master_gain, threshold, moved in ((0.5, -3.0, 0.0), (2.0, -58.0, -60.0),
+                                              (0.0, -18.0, -18.0)):
+            self.assertAlmostEqual(opened(17, master_gain, threshold, on=False)['threshold'],
+                                   moved, places=3)
+        # A threshold outside its range stays, so the application still rejects it.
+        for master_gain, threshold in ((1.0, 5.0), (0.5, -61.0), (2.0, 3.0)):
+            self.assertEqual(opened(17, master_gain, threshold)['threshold'], threshold)
 
     def test_default_fades_are_independent_between_clips_and_reads(self):
         document = self.document(10)

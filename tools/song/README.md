@@ -26,7 +26,7 @@ A tool that needs a missing key stops and names the key.
 
 | Tool | Usage | What it does |
 |---|---|---|
-| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-17 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ, duckers, and the master board, plus `.meta.json` (lane roles, sections, key). |
+| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-18 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master]` | Renders each lane alone, several at a time, and the master once. The premaster, one stem per role, and `audible.txt` are sums of the lane renders, not renders of their own; `--fit-gain` sets the master gain from the premaster's peak. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |

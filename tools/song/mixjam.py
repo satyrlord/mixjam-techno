@@ -1,4 +1,4 @@
-"""Write format-17 .mixjam songs from Python.
+"""Write format-18 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -26,7 +26,7 @@ import numpy as np
 
 TICKS_PER_BAR = 256
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 17
+FORMAT_VERSION = 18
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 
@@ -166,9 +166,10 @@ class Song:
 
     def eq(self, track, **settings):
         """Switch on a lane's channel EQ. Settings use the song's keys: lowCut, lowHz, lowDb,
-        midHz, midDb, midQ, highHz, highDb, highCut; on=False disables it.
-        The rest keep a new track's values."""
-        eq = dict(EQ_DEFAULT, on=True)
+        midHz, midDb, midQ, the second peak's peak2Hz, peak2Db, peak2Q, highHz, highDb,
+        highCut; on=False disables it. The rest keep a new track's values; the second peak's
+        keys are written only when they differ from a new track's, as the app saves them."""
+        eq = dict(EQ_DEFAULT, **PEAK2_DEFAULT, on=True)
         unknown = set(settings) - set(eq)
         if unknown:
             raise ValueError(f'unknown EQ settings {sorted(unknown)}')
@@ -176,16 +177,43 @@ class Song:
         for key, (low, high) in EQ_RANGES.items():
             if not low <= eq[key] <= high:
                 raise ValueError(f'track {track}: EQ {key} {eq[key]:g} is outside {low:g} to {high:g}')
+        for key, default in PEAK2_DEFAULT.items():
+            if eq[key] == default:
+                del eq[key]
         self.lanes[track - 1]['eq'] = eq
+
+    def compressor(self, track, threshold=-20.0, ratio=4.0, attack=10.0, release=100.0, makeup=0.0,
+                   on=True):
+        """Switch on a lane's compressor, after its EQ and before its width, automation and
+        fader: above `threshold` dBFS (the mean power of both channels) the level comes down
+        by `ratio`, with a 6 dB soft knee; attack and release in ms, `makeup` in dB after it."""
+        _whole_track(track)
+        settings = dict(threshold=threshold, ratio=ratio, attack=attack, release=release, makeup=makeup)
+        settings = {name: float(value) for name, value in settings.items()}
+        for name, (low, high) in COMPRESSOR_RANGES.items():
+            if not low <= settings[name] <= high:
+                raise ValueError(f'track {track}: compressor {name} is outside {low:g} to {high:g}')
+        self.lanes[int(track) - 1]['compressor'] = dict(on=bool(on), **settings)
+
+    def width(self, track, percent):
+        """Set a lane's stereo width before its pan: 0 is mono, 100 leaves the lane as it is,
+        200 doubles its side. It needs both outputs on. 100 removes the setting."""
+        _whole_track(track)
+        percent = float(percent)
+        low, high = WIDTH_RANGE
+        if not low <= percent <= high:
+            raise ValueError(f'track {track}: width {percent:g} is outside {low:g} to {high:g}%')
+        lane = self.lanes[int(track) - 1]
+        if percent == 100.0:
+            lane.pop('width', None)
+        else:
+            lane['width'] = percent
 
     def ducker(self, track, key, threshold=-30.0, depth=6.0, attack=2.0, release=120.0):
         """Switch on a lane's ducker: after its level, the lane drops by as much as lane `key`'s
         peak rises over `threshold` dBFS, by at most `depth` dB; attack and release in ms. The key
-        is the key lane as it sounds (after its fader), before its own ducker."""
-        for name, value in (('track', track), ('key', key)):
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= TRACKS or value != int(value):
-                raise ValueError(f'{name} must be a whole track number from 1 to {TRACKS}')
-        track, key = int(track), int(key)
+        is the key lane as it sounds (after its fader), before its own ducker and the master gain."""
+        track, key = _whole_track(track), _whole_track(key, 'key')
         if key == track:
             raise ValueError(f'track {track}: a ducker needs another track as its key')
         settings = dict(threshold=float(threshold), depth=float(depth), attack=float(attack),
@@ -291,8 +319,14 @@ class Song:
         entries.sort(key=lambda entry: entry['tick'])
 
     def bus(self, index, module, return_level=None, powered=True, limiter=True):
-        """index 1-4; module from delay()/reverb(); return_level 0-1 (default: the preset's)."""
+        """index 1-4; module from delay()/reverb(); return_level 0-1 (default: the preset's).
+        A module's `duckKey` (a track from 1 to 64) ducks the effect while that track sounds,
+        instead of its own input; 0 is its own input and is not written."""
         module = dict(module)
+        if 'duckKey' in module:
+            module['duckKey'] = _key(module['duckKey'], f'FX {index} duckKey')
+            if not module['duckKey']:
+                del module['duckKey']
         level = module.pop('_return', 1.0) if return_level is None else return_level
         module.pop('_return', None)
         self.fx[index - 1] = dict(module=module, powered=powered, returnLevel=level, limiter=limiter)
@@ -311,8 +345,23 @@ class Song:
             held[key] = out if key == 'sends' else out[0]
         return held
 
+    def key_tracks(self, master=True):
+        """The tracks that active duckers, active master pedals, and FX effects listen to.
+        A bypassed board, or master=False for the premaster, uses no master keys.
+        The app allows at most MAX_KEYS together."""
+        keys = {lane['ducker']['key'] for lane in self.lanes if lane.get('ducker', {}).get('on')}
+        if master and not self.master.get('bypass', False):
+            keys |= {settings['key'] for name, settings in self.master.items()
+                     if name in KEYED_PEDALS and settings.get('on') and settings.get('key')}
+        keys |= {bus['module']['duckKey'] for bus in self.fx if bus['module'].get('duckKey')}
+        return keys
+
     # Output.
     def document(self, master=True):
+        keys = self.key_tracks(master=master)
+        if len(keys) > MAX_KEYS:
+            raise ValueError(f'the duckers, pedals and FX use {len(keys)} key tracks; '
+                             f'the app allows {MAX_KEYS}')
         lanes = []
         for index, lane in enumerate(self.lanes):
             lane = dict(lane)
@@ -344,6 +393,22 @@ class Song:
                     sections=self.sections, bpm=self.bpm, key=self.key)
         path.with_suffix('.meta.json').write_text(json.dumps(meta, indent=1), encoding='utf-8')
         return path
+
+
+def _whole_track(value, name='track'):
+    """A track number from 1 to 64, as an int."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= TRACKS \
+            or value != int(value):
+        raise ValueError(f'{name} must be a whole track number from 1 to {TRACKS}')
+    return int(value)
+
+
+def _key(value, name):
+    """A pedal's or an effect's key: 0 for its own input, else a track from 1 to 64."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= TRACKS \
+            or value != int(value):
+        raise ValueError(f'{name} must be 0 (its own input) or a whole track number from 1 to {TRACKS}')
+    return int(value)
 
 
 def set_fade(placement, edge, ticks, curve):
@@ -380,11 +445,20 @@ def hold(entries, neutral, placements, label):
 # A new track's channel EQ: the cuts at their ends are off, the bands flat.
 EQ_DEFAULT = dict(on=False, lowCut=20.0, lowHz=100.0, lowDb=0.0, midHz=1000.0, midDb=0.0, midQ=1.0,
                   highHz=8000.0, highDb=0.0, highCut=20000.0)
+# The second peak of a new track's EQ: flat. The song saves its keys only when they differ.
+PEAK2_DEFAULT = dict(peak2Hz=250.0, peak2Db=0.0, peak2Q=1.0)
 # The application's range of each EQ setting (`src/eq.rs`).
 EQ_RANGES = dict(lowCut=(20.0, 2000.0), lowHz=(40.0, 500.0), lowDb=(-18.0, 18.0), midHz=(150.0, 10000.0),
-                 midDb=(-18.0, 18.0), midQ=(0.3, 8.0), highHz=(1500.0, 16000.0), highDb=(-18.0, 18.0),
+                 midDb=(-18.0, 18.0), midQ=(0.3, 8.0), peak2Hz=(40.0, 16000.0), peak2Db=(-18.0, 18.0),
+                 peak2Q=(0.3, 8.0), highHz=(1500.0, 16000.0), highDb=(-18.0, 18.0),
                  highCut=(1000.0, 20000.0))
 DUCKER_RANGES = dict(threshold=(-60.0, 0.0), depth=(0.0, 24.0), attack=(0.1, 50.0), release=(10.0, 1000.0))
+# The lane compressor's ranges (`src/compressor.rs`) and the lane width's (`TRACK_WIDTH`).
+COMPRESSOR_RANGES = dict(threshold=(-60.0, 0.0), ratio=(1.0, 20.0), attack=(0.1, 100.0),
+                         release=(10.0, 1000.0), makeup=(0.0, 24.0))
+WIDTH_RANGE = (0.0, 200.0)
+# The most tracks that the duckers, pedals and FX may listen to together (`MAX_KEYS`).
+MAX_KEYS = 8
 
 # The song-file keys of the three booster pedals. Each key is written here only, so that a
 # rename in the song format is one edit.
@@ -392,6 +466,9 @@ DUCKER_RANGES = dict(threshold=(-60.0, 0.0), depth=(0.0, 24.0), attack=(0.1, 50.
 BOOSTER_EQ = 'boosterEq'
 BOOSTER_COMPRESSOR = 'boosterCompressor'
 BOOSTER_WIDE = 'boosterWide'
+
+# The pedals that may listen to a track instead of their own input (`key`).
+KEYED_PEDALS = {BOOSTER_COMPRESSOR, 'busCompressor', 'multiband', 'limiter'}
 
 # The master board of a new song: every pedal off at its default settings, the limiter last.
 BOARD_ORDER = [BOOSTER_EQ, BOOSTER_COMPRESSOR, BOOSTER_WIDE, 'softClip', 'tube', 'trimEq', 'busCompressor',
@@ -410,7 +487,9 @@ PEDAL_DEFAULTS = {
 def board(trim=0.0, **pedals):
     """A master board. Each keyword names a pedal and gives the settings to change; naming a
     pedal switches it on unless the settings say on=False. Example:
-    board(trim=-3, imaging=dict(width=100, monoBelow=120), limiter=dict(gain=4.5))."""
+    board(trim=-3, imaging=dict(width=100, monoBelow=120), limiter=dict(gain=4.5)).
+    A dynamics pedal (KEYED_PEDALS) may take `key`, a track from 1 to 64 that it listens to
+    instead of its own input; see `pedal_key`."""
     unknown = set(pedals) - set(PEDAL_DEFAULTS)
     if unknown:
         raise ValueError(f'unknown pedals {sorted(unknown)}')
@@ -418,8 +497,26 @@ def board(trim=0.0, **pedals):
     for name, defaults in PEDAL_DEFAULTS.items():
         out[name] = dict(on=False, **json.loads(json.dumps(defaults)))
         if name in pedals:
-            out[name].update({'on': True, **pedals[name]})
+            settings = dict(pedals[name])
+            key = settings.pop('key', None)
+            out[name].update({'on': True, **settings})
+            if key is not None:
+                pedal_key(out, name, key)
     return out
+
+
+def pedal_key(master, pedal, key):
+    """Let a dynamics pedal of a board listen to track `key` (1 to 64) as it sounds after its
+    fader, instead of its own input; 0 returns it to its own input. Only the app's render of
+    the song hears the key: master.py masters the premaster file on track 1 (see its help)."""
+    if pedal not in KEYED_PEDALS:
+        raise ValueError(f'{pedal} has no key; the keyed pedals are {sorted(KEYED_PEDALS)}')
+    key = _key(key, f'{pedal} key')
+    if key:
+        master[pedal]['key'] = key
+    else:
+        master[pedal].pop('key', None)
+    return master
 
 
 def board_off(master):

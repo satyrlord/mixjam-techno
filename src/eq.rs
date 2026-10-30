@@ -1,9 +1,11 @@
 //! The channel EQ: an equaliser on every track, between its clips and its
 //! automation.
 //!
-//! Five bands run in order: a low cut (a 12 dB/octave Butterworth
-//! high-pass), a low shelf, a peak, a high shelf, and a high cut (a 12
-//! dB/octave Butterworth low-pass). The low cut at 20 Hz and the high cut at
+//! Six bands run in order: a low cut (a 12 dB/octave Butterworth
+//! high-pass), a low shelf, two peaks, a high shelf, and a high cut (a 12
+//! dB/octave Butterworth low-pass). The second peak reaches further than
+//! the first, from 40 Hz to 16 kHz, for a narrow cut while the first peak
+//! does another job. The low cut at 20 Hz and the high cut at
 //! 20 kHz are off, not filters at those frequencies, and a band at 0 dB is
 //! off too. A track's EQ is off until the user switches it on, and a track
 //! whose EQ is off mixes exactly as it did before the EQ existed.
@@ -27,6 +29,14 @@ pub struct ChannelEq {
     pub mid_hz: f32,
     pub mid_db: f32,
     pub mid_q: f32,
+    /// The second peak. Songs and projects saved before it existed have it
+    /// off; it saves only what differs from a new track's.
+    #[serde(default = "peak2_hz", skip_serializing_if = "is_peak2_hz")]
+    pub peak2_hz: f32,
+    #[serde(default, skip_serializing_if = "is_flat")]
+    pub peak2_db: f32,
+    #[serde(default = "peak2_q", skip_serializing_if = "is_peak2_q")]
+    pub peak2_q: f32,
     pub high_hz: f32,
     pub high_db: f32,
     /// The high cut's frequency in Hz. At its highest it is off.
@@ -43,6 +53,9 @@ impl Default for ChannelEq {
             mid_hz: 0.0,
             mid_db: 0.0,
             mid_q: 0.0,
+            peak2_hz: 0.0,
+            peak2_db: 0.0,
+            peak2_q: 0.0,
             high_hz: 0.0,
             high_db: 0.0,
             high_cut: 0.0,
@@ -54,6 +67,22 @@ impl Default for ChannelEq {
     }
 }
 
+fn peak2_hz() -> f32 {
+    EqParam::Peak2Hz.range().default
+}
+fn is_peak2_hz(hz: &f32) -> bool {
+    *hz == peak2_hz()
+}
+fn is_flat(db: &f32) -> bool {
+    *db == 0.0
+}
+fn peak2_q() -> f32 {
+    EqParam::Peak2Q.range().default
+}
+fn is_peak2_q(q: &f32) -> bool {
+    *q == peak2_q()
+}
+
 /// A continuous control of the channel EQ.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EqParam {
@@ -63,6 +92,9 @@ pub enum EqParam {
     MidHz,
     MidDb,
     MidQ,
+    Peak2Hz,
+    Peak2Db,
+    Peak2Q,
     HighHz,
     HighDb,
     HighCut,
@@ -76,13 +108,16 @@ const SHELF_SLOPE: f64 = 1.0;
 
 impl EqParam {
     /// In signal order, each band's frequency before its gain.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::LowCut,
         Self::LowHz,
         Self::LowDb,
         Self::MidHz,
         Self::MidDb,
         Self::MidQ,
+        Self::Peak2Hz,
+        Self::Peak2Db,
+        Self::Peak2Q,
         Self::HighHz,
         Self::HighDb,
         Self::HighCut,
@@ -93,10 +128,13 @@ impl EqParam {
             Self::LowCut => ratio_range(LOW_CUT_OFF, 2000.0, LOW_CUT_OFF, 1.0),
             Self::LowHz => ratio_range(40.0, 500.0, 100.0, 1.0),
             Self::MidHz => ratio_range(150.0, 10_000.0, 1000.0, 1.0),
+            Self::Peak2Hz => ratio_range(40.0, 16_000.0, 250.0, 1.0),
             Self::HighHz => ratio_range(1500.0, 16_000.0, 8000.0, 10.0),
             Self::HighCut => ratio_range(1000.0, HIGH_CUT_OFF, HIGH_CUT_OFF, 10.0),
-            Self::LowDb | Self::MidDb | Self::HighDb => range(-18.0, 18.0, 0.0, 0.1),
-            Self::MidQ => ratio_range(0.3, 8.0, 1.0, 0.1),
+            Self::LowDb | Self::MidDb | Self::Peak2Db | Self::HighDb => {
+                range(-18.0, 18.0, 0.0, 0.1)
+            }
+            Self::MidQ | Self::Peak2Q => ratio_range(0.3, 8.0, 1.0, 0.1),
         }
     }
 
@@ -109,6 +147,9 @@ impl EqParam {
             Self::MidHz => "mid frequency",
             Self::MidDb => "mid gain",
             Self::MidQ => "mid Q",
+            Self::Peak2Hz => "peak 2 frequency",
+            Self::Peak2Db => "peak 2 gain",
+            Self::Peak2Q => "peak 2 Q",
             Self::HighHz => "high frequency",
             Self::HighDb => "high gain",
             Self::HighCut => "high cut",
@@ -123,6 +164,9 @@ impl EqParam {
             Self::MidHz => eq.mid_hz,
             Self::MidDb => eq.mid_db,
             Self::MidQ => eq.mid_q,
+            Self::Peak2Hz => eq.peak2_hz,
+            Self::Peak2Db => eq.peak2_db,
+            Self::Peak2Q => eq.peak2_q,
             Self::HighHz => eq.high_hz,
             Self::HighDb => eq.high_db,
             Self::HighCut => eq.high_cut,
@@ -144,6 +188,9 @@ impl EqParam {
             Self::MidHz => eq.mid_hz = value,
             Self::MidDb => eq.mid_db = value,
             Self::MidQ => eq.mid_q = value,
+            Self::Peak2Hz => eq.peak2_hz = value,
+            Self::Peak2Db => eq.peak2_db = value,
+            Self::Peak2Q => eq.peak2_q = value,
             Self::HighHz => eq.high_hz = value,
             Self::HighDb => eq.high_db = value,
             Self::HighCut => eq.high_cut = value,
@@ -177,6 +224,9 @@ impl ChannelEq {
                 .then(|| Coefficients::low_shelf(hz(self.low_hz), SHELF_SLOPE, hz(self.low_db))),
             (self.mid_db != 0.0)
                 .then(|| Coefficients::peaking(hz(self.mid_hz), hz(self.mid_q), hz(self.mid_db))),
+            (self.peak2_db != 0.0).then(|| {
+                Coefficients::peaking(hz(self.peak2_hz), hz(self.peak2_q), hz(self.peak2_db))
+            }),
             (self.high_db != 0.0)
                 .then(|| Coefficients::high_shelf(hz(self.high_hz), SHELF_SLOPE, hz(self.high_db))),
             (self.high_cut < HIGH_CUT_OFF)
@@ -197,7 +247,7 @@ impl ChannelEq {
 /// The filters of an EQ that is on, designed once when a mix is prepared.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Curve {
-    bands: [Coefficients; 5],
+    bands: [Coefficients; 6],
     count: usize,
 }
 
@@ -209,7 +259,7 @@ impl Curve {
             return None;
         }
         let mut curve = Self {
-            bands: [Coefficients::FLAT; 5],
+            bands: [Coefficients::FLAT; 6],
             count: 0,
         };
         for band in eq.bands() {
@@ -222,11 +272,11 @@ impl Curve {
 
 /// The history of one track's EQ filters. Each render reader owns its own.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Filters([Biquad; 5]);
+pub(crate) struct Filters([Biquad; 6]);
 
 impl Default for Filters {
     fn default() -> Self {
-        Self([Biquad::FLAT; 5])
+        Self([Biquad::FLAT; 6])
     }
 }
 
@@ -279,7 +329,10 @@ mod tests {
         assert!(!eq.on && eq.is_default());
         assert_eq!((eq.low_cut, eq.high_cut), (20.0, 20_000.0));
         assert_eq!((eq.low_hz, eq.mid_hz, eq.high_hz), (100.0, 1000.0, 8000.0));
-        assert_eq!(eq.mid_q, 1.0);
+        assert_eq!(
+            (eq.mid_q, eq.peak2_hz, eq.peak2_db, eq.peak2_q),
+            (1.0, 250.0, 0.0, 1.0)
+        );
         assert!(Curve::of(&eq).is_none());
         let on = ChannelEq { on: true, ..eq };
         assert_eq!(Curve::of(&on).unwrap().count, 0);
@@ -296,6 +349,9 @@ mod tests {
                     EqParam::MidHz => changed.mid_hz = bad,
                     EqParam::MidDb => changed.mid_db = bad,
                     EqParam::MidQ => changed.mid_q = bad,
+                    EqParam::Peak2Hz => changed.peak2_hz = bad,
+                    EqParam::Peak2Db => changed.peak2_db = bad,
+                    EqParam::Peak2Q => changed.peak2_q = bad,
                     EqParam::HighHz => changed.high_hz = bad,
                     EqParam::HighDb => changed.high_db = bad,
                     EqParam::HighCut => changed.high_cut = bad,
@@ -353,5 +409,57 @@ mod tests {
         assert!((gain_db(&eq, 30.0) - 6.0).abs() < 0.5);
         assert!((gain_db(&eq, 3000.0) + 9.0).abs() < 0.5);
         assert!(gain_db(&eq, 800.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn the_second_peak_cuts_a_narrow_line_while_the_first_does_another_job() {
+        let eq = ChannelEq {
+            on: true,
+            mid_db: 4.0,
+            mid_hz: 3000.0,
+            peak2_db: -12.0,
+            peak2_hz: 191.0,
+            peak2_q: 8.0,
+            ..ChannelEq::default()
+        };
+        assert!((gain_db(&eq, 191.0) + 12.0).abs() < 0.5);
+        assert!((gain_db(&eq, 3000.0) - 4.0).abs() < 0.5);
+        // A Q of 8 leaves the octave around the line nearly untouched.
+        assert!(gain_db(&eq, 95.0).abs() < 0.5 && gain_db(&eq, 382.0).abs() < 0.5);
+        assert!((eq.response_db(191.0) + 12.0).abs() < 0.1);
+        // Below the first peak's lowest frequency, the second still reaches.
+        let low = ChannelEq {
+            on: true,
+            peak2_db: 6.0,
+            peak2_hz: 40.0,
+            ..ChannelEq::default()
+        };
+        assert!((low.response_db(40.0) - 6.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn the_second_peak_saves_only_what_differs_and_older_records_open_without_it() {
+        let eq = ChannelEq {
+            on: true,
+            mid_db: 3.0,
+            ..ChannelEq::default()
+        };
+        let saved = serde_json::to_value(eq).unwrap();
+        for key in ["peak2Hz", "peak2Db", "peak2Q"] {
+            assert!(saved.get(key).is_none(), "{key}: {saved}");
+        }
+        assert_eq!(serde_json::from_value::<ChannelEq>(saved).unwrap(), eq);
+        let cut = ChannelEq {
+            peak2_db: -6.0,
+            peak2_q: 4.0,
+            ..eq
+        };
+        let saved = serde_json::to_value(cut).unwrap();
+        assert_eq!(
+            (saved["peak2Db"].as_f64(), saved["peak2Q"].as_f64()),
+            (Some(-6.0), Some(4.0))
+        );
+        assert!(saved.get("peak2Hz").is_none());
+        assert_eq!(serde_json::from_value::<ChannelEq>(saved).unwrap(), cut);
     }
 }

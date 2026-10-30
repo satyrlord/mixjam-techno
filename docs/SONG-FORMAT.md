@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 17 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 18 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 16 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 17 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 17 keeps its `createdAt`.
+to 18 keeps its `createdAt`.
 
 Ticks are 256 per bar. A song links each WAV file by path; it is not a
 portable audio bundle.
@@ -45,17 +45,29 @@ from 0 to 4; 1 is 0 dB), `polarityInverted`, `pan`, `leftEnabled`,
   the timeline. Volume is from -60 to 6 dB, a send from 0 to 1, and the filter
   from -1 to 1.
 - `eq`, the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
-  "midQ", "highHz", "highDb", "highCut"}`, every key required. `lowCut`, a
-  12 dB/octave high-pass, runs from 20 to 2000 Hz, where 20 is off; the low
-  shelf's `lowHz` from 40 to 500 Hz; the peak's `midHz` from 150 to 10,000 Hz
-  and its `midQ` from 0.3 to 8; the high shelf's `highHz` from 1500 to
-  16,000 Hz; each gain from -18 to 18 dB, where 0 is off; and `highCut`, a
-  12 dB/octave low-pass, from 1000 to 20,000 Hz, where 20,000 is off. A lane
-  whose EQ is off at the default settings omits `eq`.
+  "midQ", "highHz", "highDb", "highCut"}`, every key required, and the second
+  peak's `peak2Hz`, `peak2Db`, and `peak2Q`, each saved only when it differs
+  from its default (250 Hz, 0 dB, and 1). `lowCut`, a 12 dB/octave high-pass,
+  runs from 20 to 2000 Hz, where 20 is off; the low shelf's `lowHz` from 40 to
+  500 Hz; the first peak's `midHz` from 150 to 10,000 Hz and its `midQ` from
+  0.3 to 8; the second peak's `peak2Hz` from 40 to 16,000 Hz and its `peak2Q`
+  from 0.3 to 8; the high shelf's `highHz` from 1500 to 16,000 Hz; each gain
+  from -18 to 18 dB, where 0 is off; and `highCut`, a 12 dB/octave low-pass,
+  from 1000 to 20,000 Hz, where 20,000 is off. The bands run in that order. A
+  lane whose EQ is off at the default settings omits `eq`.
+- `compressor`, the lane compressor after the EQ: `{"on", "threshold",
+  "ratio", "attack", "release", "makeup"}`, every key required. `threshold`
+  runs from -60 to 0 dBFS, `ratio` from 1 to 20, `attack` from 0.1 to
+  100 ms, `release` from 10 to 1000 ms, and `makeup` from 0 to 24 dB. A lane
+  whose compressor is off at the default settings (-20 dBFS, 4:1, 10 ms,
+  100 ms, 0 dB) omits `compressor`.
+- `width`, the lane's stereo width in percent before its pan, from 0 (mono)
+  to 200. A lane at 100% omits it.
 - `ducker`, which lowers the lane while another lane, its key, sounds:
   `{"on", "key", "threshold", "depth", "attack", "release"}`, every key
   required. `key` is a track from 1 to 64, another than the lane's own while
-  the ducker is on; `threshold` runs from -60 to 0 dBFS, `depth` from 0 to
+  the ducker is on; `threshold` runs from -60 to 0 dBFS, measured on the key
+  lane after its fader and pan and before the master gain; `depth` from 0 to
   24 dB, `attack` from 0.1 to 50 ms, and `release` from 10 to 1000 ms. The
   duckers that are on use at most 8 key tracks. A lane whose ducker is off at
   the default settings omits `ducker`.
@@ -68,7 +80,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 and 17 are:
+versions 16 to 18 are:
 
 | Key | Settings |
 |---|---|
@@ -126,7 +138,7 @@ song reopens without its original file.
 ## Version history
 
 Each version opens as it sounded when it was saved. Saving an earlier song
-writes version 17, which earlier builds cannot open.
+writes version 18, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -140,6 +152,7 @@ writes version 17, which earlier builds cannot open.
 | 15 | Adds the lane `eq` and the master `bypass`. | Every channel EQ off and the board in use. |
 | 16 | Renames the Booster pedals' keys in `master` and its `order`. | The same Booster settings under the new keys. |
 | 17 | Adds the lane `ducker`, the pedals' `key`, and the effects' `duckKey`. | Every ducker off; every pedal and effect on its own input. |
+| 18 | Adds the EQ's second peak (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. A lane ducker's `threshold` is measured before the master gain; version 17 measured it after. | The second peak flat, every compressor off, every lane at 100% width. Each saved lane `ducker`, on or off, opens with its `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0, so it ducks as it did wherever that range allows; a `masterGain` of 0 leaves it, as the key is silent either way. |
 
 A version rejects each key that a later version added.
 

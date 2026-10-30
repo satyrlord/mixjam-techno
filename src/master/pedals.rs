@@ -4,8 +4,8 @@
 //! and so delay the signal by `Oversampler::LATENCY`; the limiter delays it
 //! by its lookahead.
 use super::dsp::{
-    Biquad, Coefficients, DcBlocker, Delay, Oversampler, Smoothed, TruePeak, db_to_gain, flush,
-    gain_to_db, pole,
+    Biquad, Coefficients, DETECTOR, DcBlocker, Delay, KNEE_DB, Oversampler, Smoothed, TruePeak,
+    db_to_gain, flush, gain_to_db, pole, reduction,
 };
 use crate::master as settings;
 use std::f64::consts::FRAC_1_SQRT_2;
@@ -29,19 +29,6 @@ impl Refresh {
             return true;
         }
         false
-    }
-}
-
-/// Gain reduction in dB of a soft-knee compressor for a level in dB.
-fn reduction(level: f64, threshold: f64, ratio: f64, knee: f64) -> f64 {
-    let over = level - threshold;
-    let slope = 1.0 - 1.0 / ratio;
-    if 2.0 * over <= -knee {
-        0.0
-    } else if 2.0 * over < knee {
-        slope * (over + knee / 2.0).powi(2) / (2.0 * knee)
-    } else {
-        slope * over
     }
 }
 
@@ -240,10 +227,6 @@ impl TrimEq {
 }
 
 // Bus compressor ----------------------------------------------------------------------
-
-/// The time constant of the compressors' power detectors.
-const DETECTOR: f64 = 0.003;
-const KNEE_DB: f64 = 6.0;
 
 /// A feed-forward compressor on the stereo mix. One detector follows the
 /// mean power of both channels, so both get the same gain; a soft knee

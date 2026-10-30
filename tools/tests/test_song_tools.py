@@ -162,6 +162,83 @@ class SongTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mixjam.board(reverb={})
 
+    def test_second_peak_keys_are_written_only_when_they_differ(self):
+        song = mixjam.Song('peak 2')
+        song.eq(1, midDb=-3)
+        self.assertFalse({'peak2Hz', 'peak2Db', 'peak2Q'} & set(song.lanes[0]['eq']))
+        song.eq(2, peak2Hz=191, peak2Db=-9, peak2Q=8)
+        eq = song.lanes[1]['eq']
+        self.assertEqual((eq['peak2Hz'], eq['peak2Db'], eq['peak2Q']), (191.0, -9.0, 8.0))
+        song.eq(3, peak2Db=-6)
+        self.assertNotIn('peak2Hz', song.lanes[2]['eq'])
+        for settings in ({'peak2Hz': 39}, {'peak2Hz': 16001}, {'peak2Q': 0.2}, {'peak2Db': 19}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                song.eq(4, **settings)
+        self.assertNotIn('eq', song.lanes[3])
+        self.assertEqual(song.document()['formatVersion'], 18)
+
+    def test_compressor_and_width_check_their_ranges(self):
+        song = mixjam.Song('dynamics')
+        song.compressor(1, threshold=-24, ratio=6, attack=0.5, makeup=3)
+        self.assertEqual(song.lanes[0]['compressor'], dict(on=True, threshold=-24.0, ratio=6.0, attack=0.5,
+                                                           release=100.0, makeup=3.0))
+        for settings in ({'threshold': -61}, {'ratio': 0.9}, {'ratio': 21}, {'attack': 0.05},
+                         {'release': 1001}, {'makeup': 25}, {'makeup': float('nan')}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                song.compressor(2, **settings)
+        self.assertNotIn('compressor', song.lanes[1])
+        song.width(3, 40)
+        self.assertEqual(song.lanes[2]['width'], 40.0)
+        song.width(3, 100)
+        self.assertNotIn('width', song.lanes[2])
+        for track, percent in ((3, -1), (3, 201), (0, 50), (65, 50)):
+            with self.subTest(track=track, percent=percent), self.assertRaises(ValueError):
+                song.width(track, percent)
+
+    def test_pedal_and_fx_keys_name_a_track_or_their_own_input(self):
+        board = mixjam.board(limiter=dict(gain=4.0, key=3), busCompressor=dict(key=0))
+        self.assertEqual(board['limiter']['key'], 3)
+        self.assertNotIn('key', board['busCompressor'])
+        mixjam.pedal_key(board, 'limiter', 0)
+        self.assertNotIn('key', board['limiter'])
+        for pedal, key in (('tube', 2), ('limiter', 65), ('limiter', -1), ('limiter', 1.5), ('limiter', True)):
+            with self.subTest(pedal=pedal, key=key), self.assertRaises(ValueError):
+                mixjam.pedal_key(board, pedal, key)
+        song = mixjam.Song('keys')
+        song.bus(1, mixjam.delay(duckKey=2))
+        self.assertEqual(song.fx[0]['module']['duckKey'], 2)
+        song.bus(2, mixjam.reverb(duckKey=0))
+        self.assertNotIn('duckKey', song.fx[1]['module'])
+        with self.assertRaises(ValueError):
+            song.bus(3, mixjam.reverb(duckKey=65))
+        song.master = mixjam.board(limiter=dict(key=4))
+        song.ducker(5, 6)
+        self.assertEqual(song.key_tracks(), {2, 4, 6})
+        for track in range(7, 13):
+            song.ducker(track, track + 20)
+        with self.assertRaisesRegex(ValueError, 'key tracks'):
+            song.document()
+
+    def test_key_limit_uses_the_board_that_will_be_written(self):
+        song = mixjam.Song('keys with bypassed board')
+        for track in range(1, 9):
+            song.ducker(track, track + 20)
+        song.master = mixjam.board(limiter=dict(key=40))
+        with self.assertRaisesRegex(ValueError, 'key tracks'):
+            song.document()
+        premaster = song.document(master=False)
+        self.assertFalse(premaster['master']['limiter']['on'])
+        self.assertTrue(song.master['limiter']['on'])
+        song.master['bypass'] = True
+        self.assertEqual(song.key_tracks(), set(range(21, 29)))
+        self.assertTrue(song.document()['master']['bypass'])
+        # Bypassing the board does not exempt active lane keys from the limit.
+        song.ducker(9, 29)
+        with self.assertRaisesRegex(ValueError, 'key tracks'):
+            song.document()
+        with self.assertRaisesRegex(ValueError, 'key tracks'):
+            song.document(master=False)
+
     def test_bus_keeps_the_module_unchanged(self):
         song = mixjam.Song('test')
         module = mixjam.reverb('Dark Hall')

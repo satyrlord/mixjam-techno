@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 17.
+//! The application's own `.mixjam` song format, format version 18.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -31,6 +31,13 @@
 //!   dynamics pedals (`key`) and of the FX duckers (`duckKey`). A lane
 //!   without `ducker` has its ducker off at the default settings, and a
 //!   pedal or effect without its key listens to its own input.
+//! - Version 18 adds the channel EQ's second peak (`peak2Hz`, `peak2Db`,
+//!   `peak2Q` in a lane's `eq`), the lane compressor, a lane's
+//!   `compressor`, and the lane's stereo `width`. Without them the second
+//!   peak is flat, the compressor is off at the default settings, and the
+//!   lane is at 100% width. A lane ducker's key leaves out the master gain
+//!   from version 18, so a version 17 lane ducker's threshold opens moved
+//!   by `-20 * log10(masterGain)` dB, held to its range, and ducks as it did.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -41,7 +48,7 @@ use super::{Header, MAX_SONG_BYTES, text};
 use crate::{
     engine::{
         Clip, Fades, ImportNotice, ImportedSample, MissingReference, MissingSample,
-        PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, Track,
+        PROJECT_SCHEMA_VERSION, Project, SampleConflict, TRACK_COUNT, TRACK_WIDTH, Track,
     },
     master::{BoosterCompressor, BoosterEq, BoosterWide, MasterChain, PedalKind},
     products::{LibraryBinding, Product},
@@ -54,7 +61,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 17;
+pub(super) const FORMAT_VERSION: u32 = 18;
+/// The channel EQ's keys that version 18 added.
+const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
 /// versions 11 to 15, then the key of version 16 and later. The earlier
 /// keys must match the saved files byte for byte.
@@ -63,6 +72,24 @@ const BOOSTER_KEYS: [(&str, &str); 3] = [
     ("ejayCompressor", "boosterCompressor"),
     ("ejayWide", "boosterWide"),
 ];
+
+/// A lane ducker's threshold for a key without the master gain, from a
+/// version 17 song, whose key held the master gain. The key now reads
+/// `-20 * log10(masterGain)` dB hotter, so the threshold moves by as much
+/// and the lane ducks as it did, as far as the threshold's range allows. A
+/// master gain of 0 or less left the key silent, as it still is: the
+/// threshold stays. So does a threshold outside its range, which validation
+/// then rejects, as it did before.
+fn threshold_without_master_gain(threshold: f32, master_gain: f32) -> f32 {
+    let range = crate::ducker::DuckerParam::Threshold.range();
+    if !(master_gain.is_finite() && master_gain > 0.0)
+        || !(range.low..=range.high).contains(&threshold)
+    {
+        return threshold;
+    }
+    let moved = f64::from(threshold) - 20.0 * f64::from(master_gain).log10();
+    (moved as f32).clamp(range.low, range.high)
+}
 
 /// Delay settings admission until the document version is known. Retain raw
 /// input so explicit zero keys and duplicate fields are not lost. Save typed
@@ -234,8 +261,14 @@ struct Lane {
     sends: Option<[f32; crate::fx::BUSES]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation: Option<crate::automation::Automation>,
+    // Raw until the version is checked, as the second peak's keys are
+    // optional in the EQ record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    eq: Option<crate::eq::ChannelEq>,
+    eq: Option<Saved<crate::eq::ChannelEq>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    compressor: Option<crate::compressor::Compressor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    width: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ducker: Option<crate::ducker::Ducker>,
     placements: Vec<Placement>,
@@ -331,7 +364,9 @@ impl Document {
                 solo: Some(track.solo),
                 sends: Some(track.sends),
                 automation: (!track.automation.is_empty()).then(|| track.automation.clone()),
-                eq: (!track.eq.is_default()).then_some(track.eq),
+                eq: (!track.eq.is_default()).then_some(Saved::Known(track.eq)),
+                compressor: (!track.compressor.is_default()).then_some(track.compressor),
+                width: (track.width != TRACK_WIDTH.default).then_some(track.width),
                 ducker: (!track.ducker.is_default()).then_some(track.ducker),
                 placements: Vec::new(),
             })
@@ -548,12 +583,36 @@ impl Document {
                     self.format_version
                 ));
             }
+            if self.format_version < 18 && (lane.compressor.is_some() || lane.width.is_some()) {
+                return Err(format!(
+                    "Version {} lanes cannot contain compressor or width.",
+                    self.format_version
+                ));
+            }
             if self.format_version < 15 && lane.eq.is_some() {
                 return Err(format!(
                     "Version {} lanes cannot contain eq.",
                     self.format_version
                 ));
             }
+            let eq = match lane.eq {
+                Some(eq) => {
+                    if self.format_version < 18
+                        && eq
+                            .json()
+                            .as_object()
+                            .is_some_and(|eq| PEAK2_KEYS.iter().any(|key| eq.contains_key(*key)))
+                    {
+                        return Err(format!(
+                            "Version {} lanes cannot contain eq peak2Hz, peak2Db, or peak2Q.",
+                            self.format_version
+                        ));
+                    }
+                    eq.settings()
+                        .map_err(|error| format!("The channel EQ is invalid: {error}"))?
+                }
+                None => Default::default(),
+            };
             let mut settings = Track {
                 gain: lane.gain,
                 polarity_inverted: lane.polarity_inverted.unwrap_or(false),
@@ -564,9 +623,15 @@ impl Document {
                 solo: lane.solo.unwrap_or(false),
                 sends,
                 automation: lane.automation.unwrap_or_default(),
-                eq: lane.eq.unwrap_or_default(),
+                eq,
+                compressor: lane.compressor.unwrap_or_default(),
+                width: lane.width.unwrap_or(TRACK_WIDTH.default),
                 ducker: lane.ducker.unwrap_or_default(),
             };
+            if self.format_version < 18 && lane.ducker.is_some() {
+                settings.ducker.threshold =
+                    threshold_without_master_gain(settings.ducker.threshold, self.song.master_gain);
+            }
             if self.format_version == 8 {
                 if lane.polarity_inverted.is_some() {
                     return Err("Version 8 lanes cannot contain polarityInverted.".into());
@@ -868,6 +933,13 @@ mod tests {
                 high_db: -7.5,
                 ..Default::default()
             },
+            compressor: crate::compressor::Compressor {
+                on: true,
+                threshold: -24.0,
+                makeup: 3.0,
+                ..Default::default()
+            },
+            width: 150.0,
             ducker: crate::ducker::Ducker {
                 on: true,
                 key: 1,
@@ -878,6 +950,8 @@ mod tests {
         project.tracks[6].solo = true;
         // An EQ that is off keeps its settings.
         project.tracks[7].eq.mid_db = 3.0;
+        project.tracks[7].eq.peak2_db = -4.5;
+        project.tracks[9].width = 0.0;
         project.clips[0].fades = Fades {
             fade_in: crate::engine::Fade {
                 ticks: 64,
@@ -928,6 +1002,17 @@ mod tests {
         project
     }
 
+    /// A track as a version 17 song saves it: no second EQ peak, no
+    /// compressor, and 100% width.
+    fn before_version_18(track: &mut Track) {
+        use crate::eq::EqParam;
+        for param in [EqParam::Peak2Hz, EqParam::Peak2Db, EqParam::Peak2Q] {
+            param.set(&mut track.eq, param.range().default);
+        }
+        track.compressor = Default::default();
+        track.width = TRACK_WIDTH.default;
+    }
+
     /// The same song as an earlier format version saves it: no master
     /// pedalboard, no FX buses, no sends, no clip fades or pitch, no
     /// automation, and no channel EQ.
@@ -939,6 +1024,7 @@ mod tests {
             track.automation = Default::default();
             track.eq = Default::default();
             track.ducker = Default::default();
+            before_version_18(track);
         }
         for clip in &mut expected.clips {
             clip.fades = Fades::default();
@@ -1009,7 +1095,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_17_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_18_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
@@ -1017,7 +1103,7 @@ mod tests {
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 17);
+        assert_eq!(document["formatVersion"], 18);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["lanes"][5]["eq"],
@@ -1028,6 +1114,20 @@ mod tests {
         );
         assert_eq!(document["lanes"][7]["eq"]["on"], false);
         assert_eq!(document["lanes"][7]["eq"]["midDb"], 3.0);
+        // The second peak saves only what differs from a new track's.
+        assert_eq!(document["lanes"][7]["eq"]["peak2Db"], -4.5);
+        assert!(document["lanes"][7]["eq"].get("peak2Hz").is_none());
+        assert_eq!(
+            document["lanes"][5]["compressor"],
+            serde_json::json!({
+                "on": true, "threshold": -24.0, "ratio": 4.0, "attack": 10.0, "release": 100.0,
+                "makeup": 3.0
+            })
+        );
+        assert_eq!(document["lanes"][5]["width"], 150.0);
+        assert_eq!(document["lanes"][9]["width"], 0.0);
+        assert!(document["lanes"][4].get("compressor").is_none());
+        assert!(document["lanes"][4].get("width").is_none());
         // A lane whose EQ is as a new track has it saves none.
         assert!(document["lanes"][4].get("eq").is_none());
         assert_eq!(
@@ -1158,7 +1258,8 @@ mod tests {
 
     #[test]
     fn versions_before_17_reject_a_lane_ducker() {
-        let project = project();
+        let mut project = project();
+        project.tracks.iter_mut().for_each(before_version_18);
         let mut document = serde_json::to_value(Document::new(
             &project,
             "2020-01-02T03:04:05Z".into(),
@@ -1189,6 +1290,163 @@ mod tests {
     }
 
     #[test]
+    fn version_17_ducker_thresholds_move_by_the_master_gain() {
+        // A version 17 key held the master gain. From version 18 it leaves
+        // it out, 6.02 dB hotter at a master gain of 0.5, so the threshold
+        // rises as much and the lane ducks as it did.
+        let mut project = project();
+        project.tracks.iter_mut().for_each(before_version_18);
+        assert_eq!(project.master_gain, 0.5);
+        let mut document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        let open =
+            |document: &serde_json::Value| parse(&serde_json::to_vec(document).unwrap()).unwrap();
+        // Version 18 keeps the saved threshold.
+        assert_eq!(open(&document), project);
+        document["formatVersion"] = 17.into();
+        let opened = open(&document);
+        let raised = opened.tracks[5].ducker.threshold - project.tracks[5].ducker.threshold;
+        assert!((raised - 6.0206).abs() < 1e-3, "{raised} dB");
+        // Nothing else changes, and lanes without a ducker keep the default.
+        let mut expected = project.clone();
+        expected.tracks[5].ducker.threshold = opened.tracks[5].ducker.threshold;
+        assert_eq!(opened, expected);
+        // A ducker that is off moves too. The range holds the threshold, and
+        // a master gain of 0, which left the key silent, leaves it.
+        document["lanes"][5]["ducker"]["on"] = false.into();
+        for (master_gain, threshold, moved) in [
+            (0.5, -3.0, 0.0),
+            (2.0, -58.0, -60.0),
+            (2.0, -18.0, -24.0206),
+            (1.0, -18.0, -18.0),
+            (0.0, -18.0, -18.0),
+        ] {
+            document["song"]["masterGain"] = master_gain.into();
+            document["lanes"][5]["ducker"]["threshold"] = threshold.into();
+            let ducker = open(&document).tracks[5].ducker;
+            assert!(!ducker.on);
+            assert!(
+                (ducker.threshold - moved).abs() < 1e-3,
+                "{master_gain} {threshold}: {}",
+                ducker.threshold
+            );
+        }
+        // A threshold outside its range stays, so the song is rejected, as
+        // before the move existed, even where the move would bring it back.
+        for (master_gain, threshold) in [(1.0, 5.0), (0.5, -61.0), (2.0, 3.0)] {
+            document["song"]["masterGain"] = master_gain.into();
+            document["lanes"][5]["ducker"]["threshold"] = threshold.into();
+            let found = parse(&serde_json::to_vec(&document).unwrap()).unwrap_err();
+            assert!(
+                found.contains("ducker setting is out of range"),
+                "{master_gain} {threshold}: {found}"
+            );
+        }
+    }
+
+    #[test]
+    fn versions_before_18_reject_a_compressor_a_width_and_a_second_peak() {
+        let project = project();
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        let mut expected = project.clone();
+        expected.tracks.iter_mut().for_each(before_version_18);
+        let mut earlier = serde_json::to_value(Document::new(
+            &expected,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        earlier["formatVersion"] = 17.into();
+        // Lane 5's ducker threshold moves by the master gain, as
+        // `version_17_ducker_thresholds_move_by_the_master_gain` checks.
+        let mut opened = expected.clone();
+        opened.tracks[5].ducker.threshold =
+            threshold_without_master_gain(opened.tracks[5].ducker.threshold, opened.master_gain);
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap()).unwrap(),
+            opened
+        );
+        for (lane, key, value, error) in [
+            (
+                5,
+                "compressor",
+                document["lanes"][5]["compressor"].clone(),
+                "compressor or width",
+            ),
+            (5, "width", 150.into(), "compressor or width"),
+            (4, "width", 100.into(), "compressor or width"),
+            (
+                7,
+                "eq",
+                document["lanes"][7]["eq"].clone(),
+                "eq peak2Hz, peak2Db, or peak2Q",
+            ),
+        ] {
+            let mut changed = earlier.clone();
+            changed["lanes"][lane][key] = value;
+            let found = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
+            assert_eq!(
+                found,
+                format!("Version 17 lanes cannot contain {error}."),
+                "{key}"
+            );
+        }
+        // An explicit flat second peak is new in version 18 too.
+        let mut flat = earlier;
+        flat["lanes"][5]["eq"]["peak2Db"] = 0.into();
+        assert_eq!(
+            parse(&serde_json::to_vec(&flat).unwrap()).unwrap_err(),
+            "Version 17 lanes cannot contain eq peak2Hz, peak2Db, or peak2Q."
+        );
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(reopened, project);
+        for (pointer, value, error) in [
+            ("/lanes/5/width", serde_json::json!(201), "width"),
+            ("/lanes/5/width", serde_json::json!(-1), "width"),
+            (
+                "/lanes/5/compressor/ratio",
+                serde_json::json!(0.5),
+                "compressor setting",
+            ),
+            (
+                "/lanes/5/compressor/knee",
+                serde_json::json!(6),
+                "unknown field",
+            ),
+            (
+                "/lanes/5/eq/peak2Q",
+                serde_json::json!(9),
+                "channel EQ setting",
+            ),
+            (
+                "/lanes/5/eq/peak2Hz",
+                serde_json::json!(30),
+                "channel EQ setting",
+            ),
+        ] {
+            let mut changed = document.clone();
+            match changed.pointer_mut(pointer) {
+                Some(target) => *target = value,
+                None => {
+                    let (parent, key) = pointer.rsplit_once('/').unwrap();
+                    changed.pointer_mut(parent).unwrap()[key] = value;
+                }
+            }
+            let found = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{pointer}: {found}");
+        }
+    }
+
+    #[test]
     fn fx_settings_reject_duplicate_fields_before_adoption() {
         let document = Document::new(&project(), timestamp(0), timestamp(0));
         let text = serde_json::to_string(&document).unwrap();
@@ -1206,6 +1464,7 @@ mod tests {
         let mut expected = project();
         for track in &mut expected.tracks {
             track.ducker = Default::default();
+            before_version_18(track);
         }
         let base =
             serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
@@ -1592,6 +1851,7 @@ mod tests {
         for track in &mut expected.tracks {
             track.eq = Default::default();
             track.ducker = Default::default();
+            before_version_18(track);
         }
         let mut document =
             serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();
@@ -1616,6 +1876,7 @@ mod tests {
         let mut expected = project();
         for track in &mut expected.tracks {
             track.ducker = Default::default();
+            before_version_18(track);
         }
         let current =
             serde_json::to_value(Document::new(&expected, timestamp(0), timestamp(0))).unwrap();

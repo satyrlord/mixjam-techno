@@ -725,14 +725,21 @@ bypassed. A bypassed Mastering board draws at 45% opacity and stays usable.
 The channel EQ window uses the neutral Utility palette. A power switch and
 Reset share its top row; the response curve, from 20 Hz to 20 kHz and ±24 dB
 on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB steps,
-follows; five columns below name the bands, Low cut, Low shelf, Mid peak, High
-shelf, and High cut, with their Mastering dials stacked. The curve uses the
+follows; six columns below name the bands, Low cut, Low shelf, Mid peak, Peak
+2, High shelf, and High cut, with their Mastering dials stacked. The curve uses the
 palette's print color while the EQ is on and faint cream while it is off;
-the dials are disabled while it is off. Below the EQ, the ducker's power
-switch starts a row of five dials, Key (a track number), Thresh, Depth,
-Attack, and Release, disabled while the ducker is off. The Key dial steps
-over the window's own track. The strip's EQ button lights while the EQ or
-the ducker is on.
+the dials are disabled while it is off. Below the EQ, the compressor's power
+switch starts a row of five dials in the band columns, Thresh, Ratio, Attack,
+Release, and Makeup, disabled while the compressor is off; the sixth column,
+headed Stereo, holds the Width dial, which has no switch. Below them, the
+ducker's power switch starts a row of five dials in the same columns, Key (a
+track number), Thresh, Depth, Attack, and Release, disabled while the ducker
+is off. Each section starts under a divider. The Key dial steps over the
+window's own track. The window's content is 520 points wide. Its default outer
+width reserves the vertical scrollbar, so a short viewport scrolls the content
+vertically without adding horizontal overflow. The strip's EQ button lights
+while the EQ, the compressor, or the ducker is on, or while the width is not
+100%.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at

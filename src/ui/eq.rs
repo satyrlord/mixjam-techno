@@ -1,40 +1,56 @@
 //! The channel EQ window of one track: its power switch, Reset, the
 //! response curve of its settings, and a dial for each control, in signal
-//! order from the low cut to the high cut; below them the track's ducker,
-//! with its switch, its key track, and its dials. The window edits copies
-//! of the track's EQ and ducker; the caller turns changed copies into a
-//! mixer edit.
+//! order from the low cut to the high cut; below them the track's
+//! compressor, with its switch and dials, and the track's width; at the
+//! foot the track's ducker, with its switch, its key track, and its dials.
+//! The window edits copies of the track's settings; the caller turns
+//! changed copies into a mixer edit.
 use super::controls::CREAM;
 use super::master::{Dial, Format, decimal, dial};
 use super::*;
 use mixjam_techno::application::{
-    KnobRange,
+    KnobRange, TRACK_WIDTH,
+    compressor::{Compressor, CompressorParam},
     ducker::{Ducker, DuckerParam},
     eq::{ChannelEq, EqParam},
 };
 
+/// The track settings that the window edits.
+#[derive(Clone, Copy, PartialEq)]
+struct Channel {
+    eq: ChannelEq,
+    compressor: Compressor,
+    width: f32,
+    ducker: Ducker,
+}
+
 /// What the window changed. Turns of one dial continue one undo step; the
-/// power switch and Reset are steps of their own.
+/// power switches and Reset are steps of their own.
 enum Action {
     None,
-    Turn(ChannelEq, Ducker),
-    Switch(ChannelEq, Ducker),
+    Turn(Channel),
+    Switch(Channel),
 }
 
 /// The content's width, the response curve's height, and the pitch of the
 /// dial columns and rows.
-const WIDTH: f32 = 440.0;
+const WIDTH: f32 = 520.0;
 const CURVE_HEIGHT: f32 = 132.0;
 const COLUMN: f32 = 86.0;
 const ROW: f32 = 92.0;
 /// Where the first row of dials starts below the curve.
 const DIALS_TOP: f32 = 36.0 + CURVE_HEIGHT + 10.0;
-/// Where the ducker's section starts: below the EQ's three rows of dials,
-/// with room between the Q label and the section divider.
-const DUCKER_TOP: f32 = DIALS_TOP + 48.0 + 2.0 * ROW + 80.0;
+/// Where the compressor's section starts: below the EQ's three rows of
+/// dials, with room between the Q label and the section divider.
+const COMPRESSOR_TOP: f32 = DIALS_TOP + 48.0 + 2.0 * ROW + 80.0;
+/// A section's switch and row of dials, and the gap to the next divider.
+const SECTION: f32 = 48.0 + 70.0;
+const SECTION_GAP: f32 = 14.0;
+/// Where the ducker's section starts, below the compressor's.
+const DUCKER_TOP: f32 = COMPRESSOR_TOP + SECTION + SECTION_GAP;
 /// The content's height: the controls row, the curve, the column headings,
-/// three rows of dials, and the ducker's switch and row of dials.
-const HEIGHT: f32 = DUCKER_TOP + 48.0 + 70.0;
+/// three rows of dials, and the compressor's and the ducker's sections.
+const HEIGHT: f32 = DUCKER_TOP + SECTION;
 /// The key dial: a track from 1 to 64.
 const KEY_RANGE: KnobRange = KnobRange {
     low: 1.0,
@@ -47,13 +63,23 @@ const KEY_RANGE: KnobRange = KnobRange {
 const CURVE_DB: f64 = 24.0;
 
 /// Each band's heading and its controls from top to bottom.
-const COLUMNS: [(&str, &[EqParam]); 5] = [
+const COLUMNS: [(&str, &[EqParam]); 6] = [
     ("Low cut", &[EqParam::LowCut]),
     ("Low shelf", &[EqParam::LowHz, EqParam::LowDb]),
     ("Mid peak", &[EqParam::MidHz, EqParam::MidDb, EqParam::MidQ]),
+    (
+        "Peak 2",
+        &[EqParam::Peak2Hz, EqParam::Peak2Db, EqParam::Peak2Q],
+    ),
     ("High shelf", &[EqParam::HighHz, EqParam::HighDb]),
     ("High cut", &[EqParam::HighCut]),
 ];
+
+/// The centre of a dial column, from 0, in the grid that the EQ's columns
+/// and the sections below share.
+fn column_x(bounds: Rect, column: usize) -> f32 {
+    bounds.left() + (WIDTH - COLUMNS.len() as f32 * COLUMN) / 2.0 + (column as f32 + 0.5) * COLUMN
+}
 
 /// The printed label, description, and value format of a control.
 fn face(param: EqParam) -> (&'static str, &'static str, Format) {
@@ -80,6 +106,22 @@ fn face(param: EqParam) -> (&'static str, &'static str, Format) {
             "The width of the peak: a higher Q is narrower.",
             Format::tenths(""),
         ),
+        EqParam::Peak2Hz => (
+            "Freq",
+            "The centre of the second peak, from 40 Hz to 16 kHz.",
+            Format::Hertz,
+        ),
+        EqParam::Peak2Db => (
+            "Gain",
+            "Raises or lowers the band around the second peak's frequency. A narrow cut tames \
+             one ringing line while the first peak does another job.",
+            Format::db(true),
+        ),
+        EqParam::Peak2Q => (
+            "Q",
+            "The width of the second peak: a higher Q is narrower.",
+            Format::tenths(""),
+        ),
         EqParam::HighHz => ("Freq", "Where the high shelf turns.", Format::Hertz),
         EqParam::HighDb => (
             "Gain",
@@ -91,6 +133,37 @@ fn face(param: EqParam) -> (&'static str, &'static str, Format) {
             "Cut",
             "A 12 dB per octave low-pass that darkens the top. At 20 kHz it is off.",
             Format::Hertz,
+        ),
+    }
+}
+
+/// The printed label, description, and value format of a compressor control.
+fn compressor_face(param: CompressorParam) -> (&'static str, &'static str, Format) {
+    match param {
+        CompressorParam::Threshold => (
+            "Thresh",
+            "Compression starts above this level of the track after its EQ.",
+            Format::db(false),
+        ),
+        CompressorParam::Ratio => (
+            "Ratio",
+            "How strongly the level above the threshold comes down.",
+            Format::tenths(":1"),
+        ),
+        CompressorParam::Attack => (
+            "Attack",
+            "How fast compression starts. A short attack catches drum hits.",
+            Format::tenths("ms"),
+        ),
+        CompressorParam::Release => (
+            "Release",
+            "How fast compression lets go.",
+            Format::whole("ms"),
+        ),
+        CompressorParam::Makeup => (
+            "Makeup",
+            "Raises the track after the compression.",
+            Format::db(true),
         ),
     }
 }
@@ -126,35 +199,45 @@ impl MixJamApp {
             return;
         };
         let title = format!("Track {} EQ", track + 1);
-        let eq = self.session.project().tracks[track].eq;
-        let ducker = self.session.project().tracks[track].ducker;
+        let settings = &self.session.project().tracks[track];
+        let channel = Channel {
+            eq: settings.eq,
+            compressor: settings.compressor,
+            width: settings.width,
+            ducker: settings.ducker,
+        };
         // A replaced project starts new dial gestures.
         let generation = self.master_view_generation;
         let mut open = true;
         let mut action = Action::None;
         // The shell's margins and bay take 36 by 12 points of the size.
+        // Reserve the solid vertical scrollbar too, so a short viewport
+        // does not also force the fixed-width controls to scroll sideways.
+        let scrollbar = egui::style::ScrollStyle::solid().allocated_width();
         dialog::window(&title)
             .open(&mut open)
-            .default_width(WIDTH + 40.0)
+            .default_width(WIDTH + 40.0 + scrollbar)
             .default_height(HEIGHT + 16.0)
             .max_height((ctx.viewport_rect().height() - 40.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
             .show(ctx, |ui| {
                 action = ui
-                    .push_id(generation, |ui| show(ui, &title, track, &eq, &ducker))
+                    .push_id(generation, |ui| show(ui, &title, track, &channel))
                     .inner;
             });
         if !open {
             self.eq_track = None;
         }
-        let ((changed, ducked), discrete) = match action {
+        let (changed, discrete) = match action {
             Action::None => return,
-            Action::Turn(eq, ducker) => ((eq, ducker), false),
-            Action::Switch(eq, ducker) => ((eq, ducker), true),
+            Action::Turn(channel) => (channel, false),
+            Action::Switch(channel) => (channel, true),
         };
         let mut tracks = self.session.project().tracks.clone();
-        tracks[track].eq = changed;
-        tracks[track].ducker = ducked;
+        tracks[track].eq = changed.eq;
+        tracks[track].compressor = changed.compressor;
+        tracks[track].width = changed.width;
+        tracks[track].ducker = changed.ducker;
         let command = EditCommand::SetMixer {
             tracks,
             master_gain: self.session.project().master_gain,
@@ -171,8 +254,8 @@ impl MixJamApp {
 
 /// The window's content for the EQ named `name`, such as "Track 1 EQ", of
 /// `track`, from 0.
-fn show(ui: &mut egui::Ui, name: &str, track: usize, eq: &ChannelEq, ducker: &Ducker) -> Action {
-    let mut draft = *eq;
+fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Action {
+    let mut draft = channel.eq;
     let (bounds, _) = ui.allocate_exact_size(Vec2::new(WIDTH, HEIGHT), Sense::hover());
     // The controls are placed in the allocated bounds; their own scopes must
     // not lengthen the window's content.
@@ -223,9 +306,8 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, eq: &ChannelEq, ducker: &Du
     response_curve(ui, curve, &draft, name);
 
     let top = bounds.top() + DIALS_TOP;
-    let first = bounds.left() + (WIDTH - COLUMNS.len() as f32 * COLUMN) / 2.0;
     for (column, (heading, params)) in COLUMNS.iter().enumerate() {
-        let x = first + (column as f32 + 0.5) * COLUMN;
+        let x = column_x(bounds, column);
         ui.painter().text(
             Pos2::new(x, top + 8.0),
             Align2::CENTER_CENTER,
@@ -240,11 +322,7 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, eq: &ChannelEq, ducker: &Du
             let mut value = before;
             dial(
                 ui,
-                [
-                    Pos2::new(x, y),
-                    Pos2::new(x, y + 38.0),
-                    Pos2::new(x, y + 60.0),
-                ],
+                dial_points(x, y),
                 &mut value,
                 Dial {
                     name: &format!("{name} {}", param.name()),
@@ -261,14 +339,120 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, eq: &ChannelEq, ducker: &Du
             }
         }
     }
-    let (ducked, ducker_switched) = ducker_section(ui, bounds, track, ducker);
-    if draft == *eq && ducked == *ducker {
+    let (compressor, width, compressor_switched) =
+        compressor_section(ui, bounds, track, &channel.compressor, channel.width);
+    let (ducker, ducker_switched) = ducker_section(ui, bounds, track, &channel.ducker);
+    let changed = Channel {
+        eq: draft,
+        compressor,
+        width,
+        ducker,
+    };
+    if changed == *channel {
         Action::None
-    } else if switched || ducker_switched {
-        Action::Switch(draft, ducked)
+    } else if switched || compressor_switched || ducker_switched {
+        Action::Switch(changed)
     } else {
-        Action::Turn(draft, ducked)
+        Action::Turn(changed)
     }
+}
+
+/// Three points of a dial at `x`: the knob's centre at `y`, its label,
+/// and its value.
+fn dial_points(x: f32, y: f32) -> [Pos2; 3] {
+    [
+        Pos2::new(x, y),
+        Pos2::new(x, y + 38.0),
+        Pos2::new(x, y + 60.0),
+    ]
+}
+
+/// The compressor's switch and dials below the EQ, and the track's width
+/// at the end of their row; whether the switch changed. The width has no
+/// switch: at 100% it leaves the track as it is.
+fn compressor_section(
+    ui: &mut egui::Ui,
+    bounds: Rect,
+    track: usize,
+    compressor: &Compressor,
+    width: f32,
+) -> (Compressor, f32, bool) {
+    let mut draft = *compressor;
+    let label = format!("Track {}", track + 1);
+    let top = bounds.top() + COMPRESSOR_TOP;
+    controls::inset(
+        ui,
+        Rect::from_min_size(Pos2::new(bounds.left(), top - 8.0), Vec2::new(WIDTH, 1.0)),
+    );
+    let power_name = format!("{label} compressor power");
+    let response = controls::toggle_at(
+        ui,
+        Rect::from_min_size(Pos2::new(bounds.left(), top), Vec2::new(120.0, 28.0)),
+        &power_name,
+        "Compressor",
+        &mut draft.on,
+    );
+    let switched = response.clicked();
+    name_control(response, &power_name).on_hover_text(format!(
+        "{power_name}: {}. The compressor evens out this track's level after its EQ, such as \
+         the hits of a drum loop, before its width, automation, and fader.",
+        if draft.on { "on" } else { "off" }
+    ));
+    let y = top + 48.0;
+    for (column, param) in CompressorParam::ALL.into_iter().enumerate() {
+        let (label_text, hint, format) = compressor_face(param);
+        let before = decimal(param.get(&draft));
+        let mut value = before;
+        dial(
+            ui,
+            dial_points(column_x(bounds, column), y),
+            &mut value,
+            Dial {
+                name: &format!("{label} {}", param.name()),
+                label: label_text,
+                hint,
+                range: param.range(),
+                format,
+                choices: &[],
+            },
+            draft.on,
+        );
+        if value != before {
+            param.set(&mut draft, value as f32);
+        }
+    }
+    let x = column_x(bounds, COLUMNS.len() - 1);
+    ui.painter().text(
+        Pos2::new(x, top + 14.0),
+        Align2::CENTER_CENTER,
+        "Stereo",
+        FontId::proportional(12.0),
+        CREAM,
+    );
+    let before = decimal(width);
+    let mut value = before;
+    dial(
+        ui,
+        dial_points(x, y),
+        &mut value,
+        Dial {
+            name: &format!("{label} width"),
+            label: "Width",
+            hint: "The track's stereo width, before its pan: 0% is mono, 100% leaves it as it \
+                   is, and 200% doubles the difference between its sides. It needs both \
+                   outputs on.",
+            range: TRACK_WIDTH,
+            format: Format::whole("%"),
+            choices: &[],
+        },
+        true,
+    );
+    let width = if value == before {
+        width
+    } else {
+        (value as f32).clamp(TRACK_WIDTH.low, TRACK_WIDTH.high)
+    };
+    (draft, width, switched)
 }
 
 /// The ducker's switch and dials at the foot of the window, and whether
@@ -306,17 +490,12 @@ fn ducker_section(
         draft.key = if track == 0 { 2 } else { 1 };
     }
     let y = top + 48.0;
-    let first = bounds.left() + (WIDTH - 5.0 * COLUMN) / 2.0;
-    let at = |column: usize| first + (column as f32 + 0.5) * COLUMN;
+    let at = |column: usize| column_x(bounds, column);
     let before = f64::from(draft.key);
     let mut key = before;
     dial(
         ui,
-        [
-            Pos2::new(at(0), y),
-            Pos2::new(at(0), y + 38.0),
-            Pos2::new(at(0), y + 60.0),
-        ],
+        dial_points(at(0), y),
         &mut key,
         Dial {
             name: &format!("{label} ducker key"),
@@ -343,11 +522,7 @@ fn ducker_section(
         let mut value = before;
         dial(
             ui,
-            [
-                Pos2::new(x, y),
-                Pos2::new(x, y + 38.0),
-                Pos2::new(x, y + 60.0),
-            ],
+            dial_points(x, y),
             &mut value,
             Dial {
                 name: &format!("{label} {}", param.name()),

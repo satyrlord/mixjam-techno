@@ -1,6 +1,7 @@
 //! Parts that the mastering pedals and meters share: smoothing, biquad
-//! filters, four-times oversampling, short delays, and true-peak
-//! interpolation. They work at the mix rate on fixed-size state, so
+//! filters, four-times oversampling, short delays, true-peak
+//! interpolation, and the compressor curve that the lane compressor uses
+//! too. They work at the mix rate on fixed-size state, so
 //! processing never allocates.
 use std::{f64::consts::PI, sync::LazyLock};
 
@@ -25,6 +26,24 @@ pub(crate) fn flush(value: f64) -> f64 {
 /// The feedback coefficient of a one-pole filter with this time constant.
 pub(crate) fn pole(seconds: f64) -> f64 {
     (-1.0 / (seconds * RATE)).exp()
+}
+
+/// The time constant of the compressors' power detectors.
+pub(crate) const DETECTOR: f64 = 0.003;
+/// The width of the compressors' soft knee, in dB.
+pub(crate) const KNEE_DB: f64 = 6.0;
+
+/// Gain reduction in dB of a soft-knee compressor for a level in dB.
+pub(crate) fn reduction(level: f64, threshold: f64, ratio: f64, knee: f64) -> f64 {
+    let over = level - threshold;
+    let slope = 1.0 - 1.0 / ratio;
+    if 2.0 * over <= -knee {
+        0.0
+    } else if 2.0 * over < knee {
+        slope * (over + knee / 2.0).powi(2) / (2.0 * knee)
+    } else {
+        slope * over
+    }
 }
 
 fn sinc(x: f64) -> f64 {

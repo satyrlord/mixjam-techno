@@ -24,6 +24,9 @@ pub const MAX_CLIPS: usize = 1_000_000;
 // Guards against a file that is not a project, as the song reader's limit does.
 const MAX_PROJECT_BYTES: usize = 1024 * 1024 * 1024;
 pub const MAX_MIXER_GAIN_DB: f32 = 12.0;
+/// A track's stereo width in percent: 0 is mono, 100 leaves the track as
+/// it is, and 200 doubles its side.
+pub const TRACK_WIDTH: crate::master::KnobRange = crate::master::range(0.0, 200.0, 100.0, 1.0);
 
 /// Convert a nonnegative amplitude multiplier to decibels. Zero is silence.
 pub fn amplitude_to_db(amplitude: f32) -> f32 {
@@ -52,6 +55,11 @@ pub struct Track {
     pub automation: crate::automation::Automation,
     /// The channel EQ, between the clips and the automation.
     pub eq: crate::eq::ChannelEq,
+    /// Evens out the track's level, after the EQ.
+    pub compressor: crate::compressor::Compressor,
+    /// The stereo width in percent (`TRACK_WIDTH`), after the compressor
+    /// and before the automation, fader, and pan.
+    pub width: f32,
     /// Lowers the track while its key track sounds, after the level.
     pub ducker: crate::ducker::Ducker,
 }
@@ -68,6 +76,8 @@ impl Default for Track {
             sends: [0.0; crate::fx::BUSES],
             automation: Default::default(),
             eq: Default::default(),
+            compressor: Default::default(),
+            width: TRACK_WIDTH.default,
             ducker: Default::default(),
         }
     }
@@ -93,6 +103,16 @@ impl Track {
         self.gain = signed.abs();
         self.polarity_inverted = signed.is_sign_negative();
     }
+
+    /// Whether the width changes the track: both outputs on and a width
+    /// other than 100%. A track that plays on one output has no side.
+    pub fn widens(&self) -> bool {
+        self.width != TRACK_WIDTH.default && self.left_enabled && self.right_enabled
+    }
+}
+
+fn default_width() -> f32 {
+    TRACK_WIDTH.default
 }
 
 impl<'de> Deserialize<'de> for Track {
@@ -119,6 +139,12 @@ impl<'de> Deserialize<'de> for Track {
             // Projects saved before the channel EQ existed have it off.
             #[serde(default)]
             eq: crate::eq::ChannelEq,
+            // Projects saved before the compressor and width existed have
+            // the compressor off and the track as wide as its clips.
+            #[serde(default)]
+            compressor: crate::compressor::Compressor,
+            #[serde(default = "default_width")]
+            width: f32,
             // Projects saved before the ducker existed have it off.
             #[serde(default)]
             ducker: crate::ducker::Ducker,
@@ -135,6 +161,8 @@ impl<'de> Deserialize<'de> for Track {
             sends: saved.sends,
             automation: saved.automation,
             eq: saved.eq,
+            compressor: saved.compressor,
+            width: saved.width,
             ducker: saved.ducker,
         };
         if saved.polarity_inverted.is_none() {
@@ -775,11 +803,17 @@ impl Project {
         }) {
             return Err("Track sends must be from 0 to 1.".into());
         }
+        if self.tracks.iter().any(|track| {
+            !track.width.is_finite() || !(TRACK_WIDTH.low..=TRACK_WIDTH.high).contains(&track.width)
+        }) {
+            return Err("Track width must be from 0 to 200%.".into());
+        }
         for (index, track) in self.tracks.iter().enumerate() {
             track
                 .automation
                 .validate()
                 .and_then(|()| track.eq.validate())
+                .and_then(|()| track.compressor.validate())
                 .and_then(|()| track.ducker.validate(index))
                 .map_err(|error| format!("Track {}: {error}", index + 1))?;
         }
@@ -1494,6 +1528,8 @@ mod tests {
                 sends: [0.0; crate::fx::BUSES],
                 automation: Default::default(),
                 eq: Default::default(),
+                compressor: Default::default(),
+                width: TRACK_WIDTH.default,
                 ducker: Default::default(),
             };
             project.clips.push(Clip {

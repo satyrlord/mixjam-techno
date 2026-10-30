@@ -72,17 +72,23 @@ applies its clip's fades per frame. `prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that
-pitch. A track whose channel EQ is on, that has automation, whose ducker is
-on, or that keys a ducker is a `TrackChain`: it mixes its voices into a
-128-frame stack buffer, which its EQ (`src/eq.rs`), then its filter and
-volume lanes (`src/automation.rs`), its ducker (`src/ducker.rs`), its level,
-and its send lanes shape before the sum. The mix runs the chains chunk by
+pitch. A track whose channel EQ or compressor is on, whose width is not 100%,
+that has automation, whose ducker is on, or that keys a ducker is a
+`TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
+(`src/eq.rs`), its compressor (`src/compressor.rs`), its width, then its
+filter and volume lanes (`src/automation.rs`), its ducker (`src/ducker.rs`),
+its level, and its send lanes shape before the sum. The mix runs the chains chunk by
 chunk: each key track first renders alone in a chain of its own, with its own
 filter histories, and leaves its peak level per frame in a stack array (at
 most `MAX_KEYS`); then each chain adds its chunk, and a ducked chain
 reads its key's levels for the same frames. A key is the key track as it
 sounds after its fader, before its own ducker, so duckers never chain; a
-muted key is silent. A track without a ducker computes exactly as before.
+muted key is silent. A lane ducker reads its key's level without the master
+gain, so the master gain does not change how far it ducks: the mix divides
+the key's peak by the master gain, gliding as the levels glide, and a master
+gain of 0 leaves the key silent. The key audio for the master pedals and the
+FX buses keeps the master gain, as their input does. A track without a
+ducker computes exactly as before.
 The same key chains serve the master pedals' and the FX buses' keys
 (`Project::side_keys`): while any listens, the mix keeps each key's stereo
 audio for the block in its `RenderState`, and `Frames::keys` hands it, as
@@ -95,12 +101,17 @@ allocates key scratch for a full block before it is sent to the audio device.
 A master or FX edit that changes the required set of keys prepares the mix
 again; other master and FX edits reach playback live. The outputs are already in each voice; the track's
 level (fader, polarity, pan, and master gain) comes in at mix time, in the
-voice for a plain track and after the volume lane for a chain. Every stage is
-linear and per channel up to the ducker, whose gain follows the separate key,
-so this order sounds as the signal order clips, EQ, automation, fader and pan,
-ducker, sends. A track with neither mixes
-its voices straight into the sum, so an EQ that is off leaves the render bit
-for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
+voice for a plain track and after the volume lane for a chain. The
+compressor and the width act on the track's own sound before its level: the
+compressor follows the mean power of both channels with the master Bus
+compressor's curve (`master::dsp::reduction`), so the fader does not change
+how hard it works, and the width scales the side of each frame, on a track
+whose outputs are both on. After them every stage is linear and per channel
+up to the ducker, whose gain follows the separate key, so this order sounds
+as the signal order clips, EQ, compressor, width, automation, fader and pan,
+ducker, sends. A track with none of these mixes its voices straight into the
+sum, so an EQ or compressor that is off, or a width of 100%, leaves the
+render bit for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
 `EqParam`, each control with its range; a mix designs a chain's EQ curve once
 from the master board's shared RBJ biquads (`master::dsp`). An EQ edit is a
 track edit, so it prepares a new mix and playback resumes on it. A mix keeps
@@ -109,14 +120,53 @@ live from the `MasterControl` instead, and glides from the last block's level
 to the new one over each block, so an edit of faders, pans, polarity, or the
 master gain alone is not a render change, including undo and redo. Each
 track publishes its left and right levels as one atomic pair, so playback
-cannot mix channels from different edits. Playback continues without a
+cannot mix channels from different edits. `MasterControl` also stores the
+master gain inside those levels for the lane duckers' keys. A sequence
+counter covers publication of all pairs and the master gain. Playback makes
+one snapshot attempt per block. If a writer overlaps it, playback retains
+its last complete snapshot, or the prepared mix's levels for its first block.
+The audio thread neither waits for a lock nor retries. Master gain glides
+over each block with the levels. Key normalization divides by that gain
+directly, so very small positive gains cannot overflow a reciprocal and
+leave a ducker's detector at infinity. Playback continues without a
 click, and an export prepares a new mix only when the levels differ.
 Automation values are evaluated at each output frame, so short moves do not
 depend on the reader's block size.
 The shared mix is immutable. Each playback or export owns a `RenderState` with
-the EQ and filter histories of each chain and the next-frame cursor, passed to
-`Frames::read_block`. A read that does not continue the previous one, after a
-seek or a loop, starts the histories from silence. `src/fx.rs` owns the buses:
+the EQ, compressor, and filter histories of each chain and the next-frame
+cursor, passed to `Frames::read_block`. A read that does not continue the
+previous one, after a seek or a loop, starts the histories from silence, with
+one exception: where playback continues, its compressors carry on. A
+compressor that started without reduction would play its track up to its
+full reduction louder until the attack caught up. Two cases carry on:
+
+- A loop pass keeps each compressor's detector power and reduction from the
+  loop's end in the `RenderState`, which knows the loop region.
+- A new playback continues the last one: after a pause, or on a mix prepared
+  again during playback, such as for each step of a compressor dial. After
+  each block, playback keeps each compressed track's power and reduction in
+  its `MasterControl`, with the frame after that block. A new playback that
+  starts at most `CARRY_FRAMES` (4 blocks) before that frame starts the
+  track's compressor from them. That covers the frames playback renders
+  ahead of what has played, the master pedals' delay, a block more while the
+  old playback stops, and the cursor's tick and update lag.
+
+The kept history follows the track, not the chain's place in the mix. A key
+chain takes its track's history too, so a lane ducker, a master pedal, or an
+FX bus hears its compressed key as the track sounds. Every other start, such
+as a seek, a Play from another bar, another song, or a compressor switched
+back on later, begins from silence, as does a start at the song's start,
+which follows silence as in export. Loop wraps retain history even when the
+loop starts at frame zero. Explicit seeks, stops, and project replacement
+invalidate kept histories. Compressor power changes invalidate that track's
+history, including undo and redo, without resetting other tracks. Each audio
+source retains its start generation; an older source cannot restore an
+invalidated history. A history from another passage would
+leave the track quieter than export, and a lane it keys louder, for up to the
+release time. Export reads straight through from the song's start with no
+`MasterControl`, so it never uses a kept history and stays deterministic.
+
+`src/fx.rs` owns the buses:
 `FxBuses` is the saved settings, `DelayParam` and `ReverbParam` name each
 continuous control with its range, and `ReturnsProcessor` runs the buses on
 the feeds and adds their returns to the dry sum, before the master pedalboard.
@@ -326,7 +376,8 @@ scrolling occupied-track bank. Each track strip's EQ button starts the row of
 Mute and Solo, above polarity, and the Master strip's Bypass sits under its
 output labels; both mirror project state. `src/ui/eq.rs` owns the channel EQ
 window: the frontend keeps which track it shows, and the window edits copies
-of that track's `ChannelEq` and `Ducker`, sent as `EditCommand::SetMixer`. It reuses the
+of that track's `ChannelEq`, `Compressor`, width, and `Ducker`, sent as
+`EditCommand::SetMixer`. It reuses the
 Mastering dials and paints its response curve. The Mixer's toolbar holds
 Export tracks, which asks for a folder through `ask_path`. Native controls
 paint live labels, dB values,

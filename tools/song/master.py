@@ -6,7 +6,11 @@ python -I tools/song/master.py --album [DIR] [--track NAME ...] [--out PROFILE.j
 
 The premaster is the mix with the board and trim off (render.py writes it). The board
 is the `master` object of a .mixjam (the shape of `board()` in mixjam.py, trim
-included). The tool writes OUT_DIR/board.mixjam, which holds the premaster as one clip
+included). A dynamics pedal whose `key` names a track does not hear that track here:
+the board masters the premaster as one clip on track 1, so key 1 hears the whole
+premaster and any other key hears silence. A keyed compressor then does not compress,
+and a keyed multiband or limiter follows its own input alone. Measure a keyed board
+from the app's own render of the song. The tool writes OUT_DIR/board.mixjam, which holds the premaster as one clip
 with the board on it, renders it to OUT_DIR/master.wav, measures the render, prints the
 measurements and saves them to OUT_DIR/measure.json.
 

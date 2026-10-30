@@ -9740,6 +9740,9 @@ mod tests {
             "mid frequency",
             "mid gain",
             "mid Q",
+            "peak 2 frequency",
+            "peak 2 gain",
+            "peak 2 Q",
             "high frequency",
             "high gain",
             "high cut",
@@ -9792,7 +9795,46 @@ mod tests {
     }
 
     #[test]
-    fn ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
+    fn the_eq_window_default_width_fits_beside_its_vertical_scrollbar() {
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| style.animation_time = 0.0);
+            app.eq_track = Some(1);
+            for _ in 0..12 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let bounds = accessible_node(&output, "Track 2 EQ response curve")
+                .1
+                .bounds()
+                .unwrap();
+            let curve = Rect::from_min_max(
+                Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+            );
+            let horizontal_bar = output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Rect(rect)
+                    if rect.fill == controls::CREAM
+                        && rect.rect.width() > 100.0
+                        && rect.rect.height() < 16.0
+                        && rect.rect.top() > curve.bottom()
+                        && rect.rect.left() >= curve.left()
+                        && rect.rect.right() <= curve.right())
+            });
+            assert!(
+                !horizontal_bar,
+                "The EQ content must fit beside its vertical scrollbar at {size:?}."
+            );
+        }
+    }
+
+    #[test]
+    fn compressor_and_ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
         for size in [
             Vec2::new(960.0, 720.0),
             Vec2::new(1024.0, 768.0),
@@ -9830,7 +9872,7 @@ mod tests {
                 .iter()
                 .filter_map(|shape| match &shape.shape {
                     egui::Shape::Rect(rect)
-                        if (400.0..450.0).contains(&rect.rect.width())
+                        if (500.0..540.0).contains(&rect.rect.width())
                             && rect.rect.height() <= 2.0
                             && rect.rect.top() > q.top()
                             && rect.rect.bottom() < ducker.top() =>
@@ -9840,12 +9882,23 @@ mod tests {
                     _ => None,
                 })
                 .min_by(f32::total_cmp)
-                .expect("The ducker section needs its separator.");
+                .expect("The compressor section needs its separator.");
             assert!(
                 separator >= q.bottom() + 2.0,
-                "The ducker separator crosses the EQ Q label at {size:?}: {q:?}, {separator}"
+                "The compressor separator crosses the EQ Q label at {size:?}: {q:?}, {separator}"
             );
-            for label in ["Key", "Thresh", "Depth", "Attack", "Release"] {
+            for label in [
+                "Compressor",
+                "Ratio",
+                "Makeup",
+                "Stereo",
+                "Width",
+                "Key",
+                "Thresh",
+                "Depth",
+                "Attack",
+                "Release",
+            ] {
                 assert!(
                     output.shapes.iter().any(|shape| {
                         matches!(&shape.shape, egui::Shape::Text(text)
@@ -9909,6 +9962,57 @@ mod tests {
         assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
         app.history_step(false);
         assert_eq!(app.session.project().tracks[0].ducker.key, 2);
+    }
+
+    #[test]
+    fn the_eq_window_holds_the_compressor_and_the_width() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        app.bottom_module = BottomModule::Mixer;
+        send(&mut app, &["click", "target=Track 1 EQ"]);
+        // The compressor's dials wait for its switch; the width has none.
+        let reply = send(&mut app, &["ui", "all=true", "window=Track 1 EQ"]);
+        let nodes = reply["nodes"].as_array().unwrap();
+        let named = |label: &str| {
+            nodes
+                .iter()
+                .find(|node| node["label"] == label)
+                .unwrap_or_else(|| panic!("Missing {label}: {reply}"))
+        };
+        for control in ["threshold", "ratio", "attack", "release", "makeup"] {
+            let label = format!("Track 1 compressor {control}");
+            assert_eq!(named(&label)["enabled"], false, "{label}");
+        }
+        assert_eq!(named("Track 1 width")["enabled"], true);
+        named("Track 1 compressor power");
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 compressor power", "value=true"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().tracks[0].compressor.on);
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 compressor ratio", "value=8"],
+        );
+        assert_eq!(reply["control"]["number"], 8.0, "{reply}");
+        assert_eq!(app.session.project().tracks[0].compressor.ratio, 8.0);
+        send(&mut app, &["set", "target=Track 1 width", "value=40"]);
+        assert_eq!(app.session.project().tracks[0].width, 40.0);
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["tracks"][0]["compressor_on"], true, "{state}");
+        assert_eq!(state["song"]["tracks"][0]["width"], 40.0, "{state}");
+        // The strip's EQ button lights for the compressor and the width.
+        assert!(!app.session.project().tracks[0].eq.on);
+        let reply = send(&mut app, &["ui", "contains=Track 1 EQ"]);
+        assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
+        // Each control is an undo step of its own.
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].width, 100.0);
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].compressor.ratio, 4.0);
+        app.history_step(false);
+        assert!(!app.session.project().tracks[0].compressor.on);
     }
 
     #[test]

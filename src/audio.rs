@@ -140,10 +140,25 @@ pub struct RenderState {
     next_frame: Option<u64>,
     /// The track levels that the last block ended at.
     levels: [[f32; 2]; crate::engine::TRACK_COUNT],
+    /// The master gain inside those levels.
+    master_gain: f32,
     /// Playback's live levels. Without them the mix plays the levels it was
     /// prepared with.
     live: Option<Arc<MasterControl>>,
+    /// The loop that playback wraps through: a read from its start right
+    /// after its end is a loop pass.
+    loop_region: Option<[u64; 2]>,
+    compressor_epoch: Option<u64>,
 }
+
+/// How far behind the frame where playback kept a compressor's history a
+/// new playback start may begin and still carry on from it. Playback renders
+/// ahead of what it has played by up to a block and the master pedals'
+/// delay, and the old playback may render one block more while it stops.
+/// The cursor that a new start begins at is at most one tick (345 frames at
+/// 120 BPM) and, after a pause, one window update (about 30 ms) behind what
+/// has played. Together that is about 3300 frames.
+const CARRY_FRAMES: u64 = 4 * PlaybackSource::BLOCK_FRAMES as u64;
 
 /// Each track's left and right level: fader, polarity, pan, and the master gain.
 pub(crate) fn track_levels(project: &Project) -> [[f32; 2]; crate::engine::TRACK_COUNT] {
@@ -185,10 +200,12 @@ impl Ramp {
     }
 }
 
-/// The filter histories of one track's chain: its EQ and its automation filter.
+/// The histories of one track's chain: its EQ, its compressor, and its
+/// automation filter.
 #[derive(Clone, Copy, Default)]
 struct ChainState {
     eq: Filters,
+    compressor: crate::compressor::State,
     filter: Filter,
 }
 
@@ -201,7 +218,10 @@ impl Default for RenderState {
             key_audio: Vec::new(),
             next_frame: None,
             levels: [[0.0; 2]; crate::engine::TRACK_COUNT],
+            master_gain: 0.0,
             live: None,
+            loop_region: None,
+            compressor_epoch: None,
         }
     }
 }
@@ -357,13 +377,17 @@ impl SendLevel {
     }
 }
 
-/// A track with its EQ on, with automation, with its ducker on, or that keys
-/// a ducker. Its voices mix into a short buffer that its EQ, filter, volume,
+/// A track with its EQ or compressor on, a width other than 100%, with
+/// automation, with its ducker on, or that keys a ducker. Its voices mix
+/// into a short buffer that its EQ, compressor, width, filter, volume,
 /// ducker, level, and sends then shape, in that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
     eq: Option<Curve>,
+    compressor: Option<crate::compressor::Run>,
+    /// The side's gain: the width as a fraction of 100%.
+    width: Option<f32>,
     volume: Option<Envelope>,
     sends: [SendLevel; BUSES],
     filter: Option<Envelope>,
@@ -381,6 +405,11 @@ impl TrackChain {
             track: index,
             voices: Vec::new(),
             eq: Curve::of(&track.eq),
+            compressor: track
+                .compressor
+                .on
+                .then(|| crate::compressor::Run::new(&track.compressor)),
+            width: track.widens().then_some(track.width / 100.0),
             volume: Envelope::new(&automation.volume, frames_per_tick),
             sends: std::array::from_fn(|bus| {
                 Envelope::new(&automation.sends[bus], frames_per_tick)
@@ -400,8 +429,9 @@ impl TrackChain {
     }
 
     /// Fill `buffer`, stereo frames from `at`, with the track as it sounds:
-    /// its voices through its EQ, filter, volume, ducker, and level. `duck`
-    /// holds the key's level at each frame and the ducker's history.
+    /// its voices through its EQ, compressor, width, filter, volume, ducker,
+    /// and level. `duck` holds the key's level at each frame and the
+    /// ducker's history.
     fn shape(
         &self,
         at: u64,
@@ -416,6 +446,12 @@ impl TrackChain {
         }
         if let Some(curve) = &self.eq {
             state.eq.process(buffer, curve);
+        }
+        if let Some(compressor) = &self.compressor {
+            compressor.process(buffer, &mut state.compressor);
+        }
+        if let Some(width) = self.width {
+            widen(buffer, width);
         }
         for index in 0..buffer.len() / 2 {
             let frame = at + index as u64;
@@ -478,14 +514,25 @@ impl TrackChain {
     }
 }
 
+/// Scale the side of interleaved stereo frames by `width`, 1 for no change,
+/// and keep the mid: 0 folds the frames to mono.
+fn widen(frames: &mut [f32], width: f32) {
+    for frame in frames.as_chunks_mut::<2>().0 {
+        let mid = 0.5 * (frame[0] + frame[1]);
+        let side = 0.5 * (frame[0] - frame[1]) * width;
+        *frame = [mid + side, mid - side];
+    }
+}
+
 /// A project prepared for rendering. It holds the decoded sources and mixes
 /// any range of the song on demand, so playback and export need no buffer of
 /// the whole song and a song can be as long as the timeline.
 pub struct Mix {
     frames: u64,
     voices: Vec<Voice>,
-    /// The tracks with their EQ on, with automation, or with a ducker on or
-    /// that key one, which hold their own voices.
+    /// The tracks with their EQ or compressor on, a width other than 100%,
+    /// with automation, or with a ducker on or that key one, which hold
+    /// their own voices.
     chains: Vec<TrackChain>,
     /// The key tracks of the duckers, the master pedals, and the FX buses,
     /// in key slot order, each in a chain of its own that only measures it.
@@ -496,6 +543,9 @@ pub struct Mix {
     side: bool,
     /// The track levels the mix was prepared with.
     levels: [[f32; 2]; crate::engine::TRACK_COUNT],
+    /// The master gain inside those levels. A track ducker hears its key
+    /// without it, so the master gain does not change how far it ducks.
+    master_gain: f32,
     bpm: f64,
     /// Whether any voice sends to each FX bus, and to any.
     fed: [bool; BUSES],
@@ -626,11 +676,14 @@ impl Mix {
             if let Some(slot) = keyed {
                 keys[slot].voices.push(voice.clone());
             }
-            // A track whose EQ is off, that has no automation, and that
-            // neither ducks nor keys a ducker mixes its voices straight into
-            // the sum, as before the EQ existed.
+            // A track whose EQ and compressor are off, at 100% width, that
+            // has no automation, and that neither ducks nor keys a ducker
+            // mixes its voices straight into the sum, as before the EQ
+            // existed.
             if track.automation.is_empty()
                 && !track.eq.on
+                && !track.compressor.on
+                && !track.widens()
                 && !ducking(clip.track)
                 && keyed.is_none()
             {
@@ -662,6 +715,7 @@ impl Mix {
             side: !side_keys.is_empty(),
             keys,
             levels: track_levels(project),
+            master_gain: project.master_gain,
             bpm: project.bpm,
             fed,
             sends: fed.contains(&true),
@@ -822,7 +876,8 @@ impl Mix {
     }
 
     /// Write the premaster in parts to stereo PCM16 files in `folder`: each
-    /// sounding track alone, after its EQ, automation, fader, pan, and
+    /// sounding track alone, after its EQ, compressor, width, automation,
+    /// fader, pan, ducker, and
     /// outputs but without its sends, and the return of each bus in
     /// `returning_buses`. Every file runs from the song's start until the
     /// buses' tails die, as the mix export does. If the summed mix does not
@@ -1004,19 +1059,63 @@ impl Mix {
         state: &mut RenderState,
         only: Option<usize>,
     ) {
+        if state.compressor_epoch.is_none() {
+            state.compressor_epoch = state.live.as_ref().map(|live| live.compressor_epoch());
+        }
         let continues = state.next_frame == Some(first_frame);
         if !continues {
-            state.chains.fill(ChainState::default());
-            state.keys.fill(ChainState::default());
+            // Playback's compressors carry on where playback continues: a
+            // loop pass keeps the history from the loop's end, and a new
+            // playback just behind where the last one kept its history,
+            // after a pause or for a mix prepared again such as for each
+            // step of a compressor dial, starts from that history. Starting
+            // without reduction would play the track up to its full
+            // reduction louder until the attack caught up. Any other start,
+            // and the song's start, which follows silence as in export,
+            // begins from silence like the other histories. A key chain
+            // carries its track's history, so the key matches the track.
+            let carries = first_frame > 0;
+            let wraps = state
+                .loop_region
+                .is_some_and(|[start, end]| first_frame == start && state.next_frame == Some(end));
+            for history in state.chains.iter_mut().chain(&mut state.keys) {
+                *history = ChainState {
+                    compressor: if wraps {
+                        history.compressor
+                    } else {
+                        Default::default()
+                    },
+                    ..ChainState::default()
+                };
+            }
             state.duckers.fill(crate::ducker::State::default());
+            if carries
+                && !wraps
+                && let Some(live) = &state.live
+            {
+                for (chain, history) in (self.chains.iter().zip(&mut state.chains))
+                    .chain(self.keys.iter().zip(&mut state.keys))
+                {
+                    if chain.compressor.is_some()
+                        && let Some((kept, at)) = live.kept_compressor(chain.track)
+                        && (first_frame..=first_frame + CARRY_FRAMES).contains(&at)
+                    {
+                        history.compressor = kept;
+                    }
+                }
+            }
         }
-        let targets: [[f32; 2]; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| {
-            state
-                .live
-                .as_ref()
-                .and_then(|live| live.level(track))
-                .unwrap_or(self.levels[track])
-        });
+        let (targets, master_gain) = state
+            .live
+            .as_ref()
+            .and_then(|live| live.levels())
+            .unwrap_or_else(|| {
+                if state.next_frame.is_some() {
+                    (state.levels, state.master_gain)
+                } else {
+                    (self.levels, self.master_gain)
+                }
+            });
         let levels: [Ramp; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| Ramp {
             first_frame,
             frames: (out.len() / 2).max(1) as f32,
@@ -1038,6 +1137,21 @@ impl Mix {
         }
         // Chunk by chunk, so that each ducker reads its key over the same
         // frames. The keys are measured whether or not `only` mixes them.
+        // A ducker's key level leaves out the master gain; the key audio for
+        // the master pedals and the FX buses keeps it, as their input does.
+        // The master gain glides over the block as the track levels do, so
+        // the key stays free of it while a live master gain moves.
+        let mastered = Ramp {
+            first_frame,
+            frames: (out.len() / 2).max(1) as f32,
+            from: [if continues {
+                state.master_gain
+            } else {
+                master_gain
+            }; 2],
+            to: [master_gain; 2],
+        };
+        state.master_gain = master_gain;
         let frames = out.len() / 2;
         let stride = 2 * self.keys.len();
         if self.side && state.key_audio.len() < frames * stride {
@@ -1060,7 +1174,12 @@ impl Mix {
                 for (index, (level, &[left, right])) in
                     key.iter_mut().zip(buffer.as_chunks::<2>().0).enumerate()
                 {
-                    *level = left.abs().max(right.abs());
+                    let master_gain = mastered.at(at + index as u64, 0);
+                    *level = if master_gain > 0.0 {
+                        left.abs().max(right.abs()) / master_gain
+                    } else {
+                        0.0
+                    };
                     if self.side {
                         let at = (offset + index) * stride + 2 * slot;
                         state.key_audio[at..at + 2].copy_from_slice(&[left, right]);
@@ -1088,7 +1207,20 @@ impl Mix {
                 }
             }
         }
-        state.next_frame = Some(first_frame + (out.len() / 2) as u64);
+        let next_frame = first_frame + frames as u64;
+        if let Some(live) = &state.live {
+            for (chain, history) in self.chains.iter().zip(&state.chains) {
+                if chain.compressor.is_some() && included(chain.track) {
+                    live.keep_compressor(
+                        chain.track,
+                        history.compressor,
+                        next_frame,
+                        state.compressor_epoch.unwrap(),
+                    );
+                }
+            }
+        }
+        state.next_frame = Some(next_frame);
     }
 }
 
@@ -1412,7 +1544,9 @@ impl PlaybackSource {
         };
         Self {
             state: RenderState {
+                compressor_epoch: live.as_ref().map(|live| live.compressor_epoch()),
                 live,
+                loop_region,
                 // Allocate key scratch before the device reads this source.
                 // A short first block must also leave room for a full block.
                 key_audio: if audio.tempo().is_some() {
@@ -1669,6 +1803,7 @@ mod tests {
             key_tracks: Vec::new(),
             side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
+            master_gain: 1.0,
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,
@@ -1873,6 +2008,7 @@ mod tests {
             key_tracks: Vec::new(),
             side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
+            master_gain: 1.0,
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,
@@ -2837,6 +2973,125 @@ mod tests {
     }
 
     #[test]
+    fn a_lane_compressor_works_before_the_fader_and_off_changes_nothing() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, tone(220.0))]);
+        let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+        let frames = 11_025..44_100;
+        let before = render(&project);
+        let open = level_db(&before, frames.clone());
+        // Settings that the compressor keeps while it is off change nothing.
+        project.tracks[0].compressor = crate::compressor::Compressor {
+            threshold: -30.0,
+            ratio: 4.0,
+            attack: 1.0,
+            ..Default::default()
+        };
+        assert!(render(&project) == before);
+        // The tone's mean power is 9 dB under full scale: 21 dB over the
+        // threshold at 4:1 comes down by about 15.75 dB.
+        project.tracks[0].compressor.on = true;
+        let compressed = level_db(&render(&project), frames.clone());
+        let change = compressed - open;
+        assert!((change + 15.75).abs() < 1.0, "{change:.2} dB");
+        // The fader follows the compressor, so it does not change how hard
+        // the compressor works: 12 dB down on the fader is 12 dB down.
+        project.tracks[0].gain = crate::engine::db_to_amplitude(-12.0);
+        let lower = level_db(&render(&project), frames.clone()) - compressed;
+        assert!((lower + 12.0).abs() < 0.05, "{lower:.3} dB");
+        // The makeup gain raises the result.
+        project.tracks[0].compressor.makeup = 6.0;
+        let made_up = level_db(&render(&project), frames) - compressed;
+        assert!((made_up + 6.0).abs() < 0.05, "{made_up:.3} dB");
+    }
+
+    /// One second of a stereo source: `left` and `right` of the frame.
+    fn stereo(left: impl Fn(usize) -> f32, right: impl Fn(usize) -> f32) -> Pcm {
+        Pcm {
+            sample_rate: 44_100,
+            channels: 2,
+            samples: (0..44_100).flat_map(|i| [left(i), right(i)]).collect(),
+        }
+    }
+
+    #[test]
+    fn the_width_folds_or_spreads_a_track_before_its_pan() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let wave = |i: usize| 0.25 * (std::f32::consts::TAU * 330.0 * i as f32 / 44_100.0).sin();
+        // An anti-phase source: all side, no mid.
+        let samples = HashMap::from([(1, stereo(wave, |i| -wave(i)))]);
+        let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+        let before = render(&project);
+        project.tracks[0].width = 100.0;
+        assert!(render(&project) == before, "100% leaves the track as it is");
+        let peak = |samples: &[f32]| samples.iter().fold(0.0_f32, |peak, x| peak.max(x.abs()));
+        project.tracks[0].width = 0.0;
+        assert!(peak(&render(&project)) < 1e-6, "0% folds the side away");
+        project.tracks[0].width = 200.0;
+        let wide = render(&project);
+        assert!(
+            wide.iter()
+                .zip(&before)
+                .all(|(wide, open)| (wide - 2.0 * open).abs() < 1e-6),
+            "200% doubles the side"
+        );
+        // A track on one output has no side: the width leaves it alone.
+        project.tracks[0].right_enabled = false;
+        project.tracks[0].width = 100.0;
+        let one = render(&project);
+        project.tracks[0].width = 0.0;
+        assert!(render(&project) == one);
+        // The width works before the pan: a left-only source folded to mono
+        // and panned hard left keeps half its level on the left, through
+        // the master gain, and none on the right.
+        let samples = HashMap::from([(1, stereo(wave, |_| 0.0))]);
+        let mut project = editor.project().clone();
+        project.tracks[0].width = 0.0;
+        project.tracks[0].pan = -1.0;
+        let panned = render_with_samples(&project, &samples).unwrap().samples;
+        let (left, right): (Vec<f32>, Vec<f32>) = panned
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[left, right]| (left, right))
+            .unzip();
+        assert!(peak(&right) < 1e-6);
+        let half = 0.125 * project.master_gain;
+        assert!((peak(&left) - half).abs() < 1e-3, "{}", peak(&left));
+    }
+
+    #[test]
+    fn the_second_peak_cuts_its_line_in_the_mix() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, tone(191.0))]);
+        let frames = 11_025..44_100;
+        let level = |project: &Project| {
+            level_db(
+                &render_with_samples(project, &samples).unwrap().samples,
+                frames.clone(),
+            )
+        };
+        let open = level(&project);
+        project.tracks[0].eq = crate::eq::ChannelEq {
+            on: true,
+            mid_db: 6.0,
+            mid_hz: 2000.0,
+            peak2_hz: 191.0,
+            peak2_db: -12.0,
+            peak2_q: 8.0,
+            ..Default::default()
+        };
+        let cut = level(&project) - open;
+        assert!((cut + 12.0).abs() < 0.5, "{cut:.2} dB");
+    }
+
+    #[test]
     fn a_ducker_lowers_its_track_while_its_key_sounds_and_only_then() {
         // Track 1 holds a tone from the start; track 2's key enters halfway
         // through the bar, at frame 37,800, while the tone still sounds.
@@ -2872,6 +3127,326 @@ mod tests {
         // A muted key does not duck.
         project.tracks[1].muted = true;
         assert_eq!(alone(&project, 0), open);
+    }
+
+    #[test]
+    fn the_master_gain_does_not_change_how_far_a_ducker_ducks() {
+        // The key sits a few dB over the threshold, inside the depth, where
+        // any change in its level would change the ducking.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 128, 128).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -12.0,
+            depth: 24.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0))]);
+        let ducked = |project: &Project| {
+            let mix = mix_with_samples(project, &samples).unwrap();
+            let mut out = vec![0.0; mix.frames() as usize * 2];
+            mix.mix(0, &mut out, None, &mut RenderState::default(), Some(0));
+            level_db(&out, 39_000..44_000)
+        };
+        project.master_gain = 1.0;
+        let full = ducked(&project);
+        project.master_gain = 0.5;
+        let half = ducked(&project);
+        // Half the gain is 6.02 dB down, and nothing more.
+        assert!((half - full + 6.0206).abs() < 0.01, "{:.3} dB", half - full);
+    }
+
+    #[test]
+    fn a_tiny_master_gain_does_not_poison_the_ducker_after_the_key_stops() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.master_gain = 1e-39;
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -12.0,
+            depth: 24.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let live = MasterControl::new(&project.master);
+        live.set_levels(&project);
+        let mut state = RenderState {
+            live: Some(live.clone()),
+            ..Default::default()
+        };
+        let mut block = vec![0.0; 2048];
+        mix.mix(0, &mut block, None, &mut state, Some(0));
+        project.master_gain = 1.0;
+        project.tracks[1].gain = 0.0;
+        live.set_levels(&project);
+        let mut after = vec![0.0; 32_768 * 2];
+        for (index, part) in after.chunks_mut(2048).enumerate() {
+            mix.mix(1024 * (index + 1) as u64, part, None, &mut state, Some(0));
+        }
+        project.tracks[0].ducker.on = false;
+        let mut expected = vec![0.0; after.len()];
+        mix_with_samples(&project, &samples).unwrap().mix(
+            1024,
+            &mut expected,
+            None,
+            &mut RenderState::default(),
+            Some(0),
+        );
+        let difference = level_db(&after, 28_672..32_768) - level_db(&expected, 28_672..32_768);
+        assert!(
+            difference.abs() < 0.1,
+            "Ducker stayed reduced: {difference} dB"
+        );
+    }
+
+    #[test]
+    fn playback_hands_a_live_master_gain_to_a_ducker_key_without_a_step() {
+        // A master-gain edit during playback stores new levels without a
+        // new mix: the key must take the live gain, glided as the levels
+        // glide, and duck as an export at the new gain does.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -12.0,
+            depth: 24.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0))]);
+        project.master_gain = 1.0;
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let live = MasterControl::new(&project.master);
+        live.set_levels(&project);
+        let mut state = RenderState {
+            live: Some(Arc::clone(&live)),
+            ..RenderState::default()
+        };
+        let mut played = vec![0.0; 3 * 2048];
+        mix.read_block(0, &mut played[..2048], None, &mut state);
+        project.master_gain = 0.5;
+        live.set_levels(&project);
+        mix.read_block(1024, &mut played[2048..4096], None, &mut state);
+        mix.read_block(2048, &mut played[4096..], None, &mut state);
+        let mut expected = vec![0.0; played.len()];
+        mix_with_samples(&project, &samples).unwrap().read_block(
+            0,
+            &mut expected,
+            None,
+            &mut RenderState::default(),
+        );
+        // Playback is the export at 0.5 times the gain it plays at over the
+        // export's: 2, then a glide to 1 over the second block, then 1.
+        for frame in 0..3072 {
+            let along = (frame as f32 - 1023.0).clamp(0.0, 1024.0) / 1024.0;
+            let scale = 2.0 - along;
+            for channel in 0..2 {
+                let at = 2 * frame + channel;
+                assert!(
+                    (played[at] - scale * expected[at]).abs() < 1e-4,
+                    "frame {frame}: played {}, expected {}",
+                    played[at],
+                    scale * expected[at]
+                );
+            }
+        }
+    }
+
+    /// The first frame of bar 3, 11 264 frames in: far from bar 1, and late
+    /// enough in the bar for the export's compressor to have settled.
+    fn inside_bar_3(project: &Project) -> usize {
+        (512.0 * project.frames_per_tick(Mix::SAMPLE_RATE)).round() as usize + 11_264
+    }
+
+    #[test]
+    fn review_a_loop_at_zero_keeps_compression_and_off_on_discards_it() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[0].compressor.on = true;
+        project.tracks[0].compressor.threshold = -30.0;
+        let samples = HashMap::from([(1, tone(220.0))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let live = MasterControl::new(&project.master);
+        live.set_levels(&project);
+        let mut state = RenderState {
+            live: Some(live.clone()),
+            loop_region: Some([0, 22_528]),
+            ..Default::default()
+        };
+        let mut warm = vec![0.0; 22_528 * 2];
+        mix.read_block(0, &mut warm, None, &mut state);
+        let mut looped = vec![0.0; 1024 * 2];
+        mix.read_block(0, &mut looped, None, &mut state);
+        let difference = level_db(&looped, 0..256) - level_db(&warm, 0..256);
+        assert!(difference < -6.0, "Loop attack restarted: {difference} dB");
+        assert!(live.kept_compressor(0).is_some());
+        project.tracks[0].compressor.on = false;
+        live.set_levels(&project);
+        project.tracks[0].compressor.on = true;
+        live.set_levels(&project);
+        assert!(
+            live.kept_compressor(0).is_none(),
+            "Off/on retained old reduction"
+        );
+    }
+
+    #[test]
+    fn playback_compressors_carry_on_only_where_playback_continues() {
+        // Bar 1 holds a tone that the compressor holds about 15.75 dB down,
+        // with the default 10 ms attack. Bar 3 holds it 40 dB lower, under
+        // the threshold and its knee.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(1, 0, 512, 256).unwrap();
+        let mut project = editor.project().clone();
+        let quiet_clip = project.clips.iter_mut().find(|clip| clip.start_tick == 512);
+        quiet_clip.unwrap().gain = 0.01;
+        project.tracks[0].compressor = crate::compressor::Compressor {
+            on: true,
+            threshold: -30.0,
+            ratio: 4.0,
+            ..Default::default()
+        };
+        let samples = HashMap::from([(1, tone(220.0))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let quiet = inside_bar_3(&project);
+        let mut export = vec![0.0; (quiet + 2048) * 2];
+        mix.read_block(0, &mut export, None, &mut RenderState::default());
+        let live = MasterControl::new(&project.master);
+        live.set_levels(&project);
+        let playback = |loop_region: Option<[u64; 2]>| RenderState {
+            live: Some(Arc::clone(&live)),
+            loop_region,
+            ..RenderState::default()
+        };
+        // The first 6 ms of a block against the export's same frames.
+        let onset = |first: usize, block: &[f32]| {
+            level_db(block, 0..256) - level_db(&export[first * 2..], 0..256)
+        };
+        let mut state = playback(Some([11_264, 22_528]));
+        let mut block = vec![0.0; 2048];
+        for first in (0..22_528).step_by(1024) {
+            mix.read_block(first as u64, &mut block, None, &mut state);
+        }
+        // A mix prepared again, such as for a compressor dial's step, plays
+        // through a new source with a new state from the playhead, which is
+        // behind the frames that playback has rendered.
+        mix.read_block(21_000, &mut block, None, &mut playback(None));
+        let resumed = onset(21_000, &block);
+        assert!(resumed.abs() < 0.5, "new mix: {resumed:.2} dB");
+        // A loop pass, from the loop's end back to its start.
+        mix.read_block(11_264, &mut block, None, &mut state);
+        let looped = onset(11_264, &block);
+        assert!(looped.abs() < 0.5, "loop pass: {looped:.2} dB");
+        // A start far from where playback kept the history, here in the
+        // quiet bar, begins from silence, as export has it there. The loud
+        // bar's history would hold the track about 15 dB too low.
+        mix.read_block(quiet as u64, &mut block, None, &mut playback(None));
+        let far = onset(quiet, &block);
+        assert!(far.abs() < 0.5, "far start: {far:.2} dB");
+        // In the loud bar a far start begins without reduction, louder
+        // until the attack catches up, as before playback kept histories.
+        mix.read_block(5_000, &mut block, None, &mut playback(None));
+        let fresh = onset(5_000, &block);
+        assert!(fresh > 3.0, "fresh start: {fresh:.2} dB");
+        // Playback from the song's start begins from silence, as export does.
+        let mut from_start = vec![0.0; 2048];
+        mix.read_block(0, &mut from_start, None, &mut playback(None));
+        assert!(from_start[..] == export[..2048]);
+    }
+
+    #[test]
+    fn a_compressed_key_carries_its_tracks_history_and_starts_fresh_elsewhere() {
+        // Track 3 keys track 1's ducker and is compressed: about 15.75 dB
+        // down in bar 1, and untouched in bar 3, where it plays 30 dB lower.
+        // The ducker works inside its depth in both bars, so any change in
+        // the key's level changes how far track 1 ducks.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        for start in [0, 512] {
+            editor.place(1, 0, start, 256).unwrap();
+            editor.place(2, 2, start, 256).unwrap();
+        }
+        let mut project = editor.project().clone();
+        let quiet_key = project
+            .clips
+            .iter_mut()
+            .find(|clip| clip.track == 2 && clip.start_tick == 512);
+        quiet_key.unwrap().gain = 0.03;
+        project.tracks[2].compressor = crate::compressor::Compressor {
+            on: true,
+            threshold: -30.0,
+            ratio: 4.0,
+            ..Default::default()
+        };
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 3,
+            threshold: -42.0,
+            depth: 24.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(1000.0))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        // The mix prepared again has its chains in another order, so the
+        // kept history must follow the track, not the chain's place.
+        let mut reordered = project.clone();
+        reordered
+            .clips
+            .sort_by_key(|clip| std::cmp::Reverse(clip.track));
+        let again = mix_with_samples(&reordered, &samples).unwrap();
+        let order = |mix: &Mix| {
+            mix.chains
+                .iter()
+                .map(|chain| chain.track)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!((order(&mix), order(&again)), (vec![0, 2], vec![2, 0]));
+        // Track 1 alone, as export plays it.
+        let quiet = inside_bar_3(&project);
+        let mut export = vec![0.0; (quiet + 2048) * 2];
+        again.mix(0, &mut export, None, &mut RenderState::default(), Some(0));
+        // 12 ms of a block after its first 128 frames, against the export's
+        // same frames. The ducker's own history starts from silence, so its
+        // attack takes those first frames whatever the key does.
+        let onset = |first: usize, block: &[f32]| {
+            level_db(block, 128..640) - level_db(&export[first * 2..], 128..640)
+        };
+        let live = MasterControl::new(&project.master);
+        live.set_levels(&project);
+        let playback = || RenderState {
+            live: Some(Arc::clone(&live)),
+            ..RenderState::default()
+        };
+        let mut state = playback();
+        let mut block = vec![0.0; 2048];
+        for first in (0..22_528).step_by(1024) {
+            mix.read_block(first as u64, &mut block, None, &mut state);
+        }
+        // From the playhead, the key chain carries the key track's history,
+        // so track 1 ducks as in export rather than deeper.
+        again.mix(21_000, &mut block, None, &mut playback(), Some(0));
+        let resumed = onset(21_000, &block);
+        assert!(resumed.abs() < 0.5, "new mix: {resumed:.2} dB");
+        // A start in the quiet bar begins fresh. A key carried from the loud
+        // bar would sit about 15 dB low, and track 1 would duck that much
+        // less: louder than export.
+        again.mix(quiet as u64, &mut block, None, &mut playback(), Some(0));
+        let far = onset(quiet, &block);
+        assert!(far.abs() < 0.5, "far start: {far:.2} dB");
     }
 
     #[test]

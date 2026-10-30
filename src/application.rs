@@ -6,7 +6,7 @@ pub use crate::{
     engine::{
         Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_TICKS,
         MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR,
-        TRACK_COUNT, Track, amplitude_to_db, db_to_amplitude,
+        TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
@@ -19,6 +19,10 @@ pub use crate::{
 /// The channel EQ of each track and its controls.
 pub mod eq {
     pub use crate::eq::{ChannelEq, EqParam};
+}
+/// The compressor of each track and its controls.
+pub mod compressor {
+    pub use crate::compressor::{Compressor, CompressorParam};
 }
 /// The ducker of each track and its controls.
 pub mod ducker {
@@ -403,6 +407,8 @@ enum TrackControl {
     Pan,
     Send(usize),
     Eq(crate::eq::EqParam),
+    Compressor(crate::compressor::CompressorParam),
+    Width,
     Ducker(crate::ducker::DuckerParam),
     DuckerKey,
 }
@@ -475,6 +481,7 @@ impl Gesture {
                     if old.polarity_inverted != new.polarity_inverted
                         || old.automation != new.automation
                         || old.eq.on != new.eq.on
+                        || old.compressor.on != new.compressor.on
                         || old.ducker.on != new.ducker.on
                         || TrackSwitch::ALL
                             .iter()
@@ -497,6 +504,14 @@ impl Gesture {
                         if param.get(&old.eq) != param.get(&new.eq) {
                             controls.push(Self::Track(index, TrackControl::Eq(param)));
                         }
+                    }
+                    for param in crate::compressor::CompressorParam::ALL {
+                        if param.get(&old.compressor) != param.get(&new.compressor) {
+                            controls.push(Self::Track(index, TrackControl::Compressor(param)));
+                        }
+                    }
+                    if old.width != new.width {
+                        controls.push(Self::Track(index, TrackControl::Width));
                     }
                     if old.ducker.key != new.ducker.key {
                         controls.push(Self::Track(index, TrackControl::DuckerKey));
@@ -890,6 +905,7 @@ impl Session {
         Ok(())
     }
     fn set_library(&mut self, library: Library) {
+        self.master.reset_compressors();
         self.cancel_stretch();
         self.library = Arc::new(library);
         self.catalog_revision += 1;
@@ -2103,6 +2119,7 @@ impl Session {
     }
 
     pub fn seek(&mut self, tick: u32) {
+        self.master.reset_compressors();
         let was_playing = self.wants_playback;
         self.cursor_tick = tick;
         self.seek_pending = true;
@@ -2156,6 +2173,7 @@ impl Session {
         }
     }
     pub fn stop(&mut self) {
+        self.master.reset_compressors();
         self.cancel_playback_request();
         if let Some(player) = &mut self.player {
             player.stop();
@@ -3840,11 +3858,57 @@ mod boundary_tests {
                 assert!(!session.render_dirty);
                 assert!(Arc::ptr_eq(session.render.as_ref().unwrap(), &mix));
                 assert_eq!(
-                    session.master.level(0),
+                    session.master.levels().map(|(levels, _)| levels[0]),
                     Some(audio::track_levels(expected)[0])
                 );
             }
         }
+    }
+
+    #[test]
+    fn compressor_histories_follow_explicit_transport_and_switch_lifetimes() {
+        let mut project = Project::default();
+        project.tracks[0].compressor.on = true;
+        let mut session = Session::headless(Arc::new(Library::empty()), project).unwrap();
+        session.master.set_levels(session.project());
+        let seed = |session: &Session| {
+            session.master.keep_compressor(
+                0,
+                Default::default(),
+                10_000,
+                session.master.compressor_epoch(),
+            );
+            assert!(session.master.kept_compressor(0).is_some());
+        };
+        seed(&session);
+        session.pause();
+        assert!(session.master.kept_compressor(0).is_some());
+        session.seek(1);
+        assert!(session.master.kept_compressor(0).is_none());
+        seed(&session);
+        session.stop();
+        assert!(session.master.kept_compressor(0).is_none());
+        seed(&session);
+        session.set_library(Library::empty());
+        assert!(session.master.kept_compressor(0).is_none());
+        seed(&session);
+        let mut tracks = session.project().tracks.clone();
+        tracks[0].compressor.on = false;
+        session
+            .edit_discrete(EditCommand::SetMixer {
+                tracks,
+                master_gain: 1.0,
+            })
+            .unwrap();
+        assert!(session.master.kept_compressor(0).is_none());
+        session.history_step(false).unwrap();
+        seed(&session);
+        session.history_step(true).unwrap();
+        assert!(session.master.kept_compressor(0).is_none());
+        session.history_step(false).unwrap();
+        seed(&session);
+        session.new_mix().unwrap();
+        assert!(session.master.kept_compressor(0).is_none());
     }
 
     #[test]
