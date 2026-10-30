@@ -517,13 +517,19 @@ fn read_wave_extension(
                 .is_ok_and(|label| (3..=262).contains(&label.len()) && label.ends_with(&[0, 1]))
         }) && peek.take(8).is_ok()
     };
+    // T3 saves this layout for every imported WAV, as D3 does: the album
+    // songs "Infinitrip" and "Storm" save `0c 00 09 00 00 00 00 00` and
+    // `0c 00 20 00 00 00 00 00` after the labels. Read as an optional text
+    // token, a bar count of 9 (a tab) or 32 to 126 (printable) consumed six
+    // bytes of the next event, whose sample ID's high byte (39 or 41) then
+    // read as an unsupported source.
     let labelled = match product {
-        Product::D2 | Product::D3 => true,
+        Product::D2 | Product::D3 | Product::T3 => true,
         Product::H1 => framed_labels_follow(),
         _ => false,
     };
     if labelled && raw.ends_with(&[0, 1]) {
-        // D2 and D3 save two labels followed by eight bytes of source metadata.
+        // D2, D3, and T3 save two labels followed by eight bytes of source metadata.
         // A metadata value can look like a text length, including an empty label.
         for index in 0..2 {
             let label = reader.block()?;
@@ -2364,6 +2370,65 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Set MIXJAM_TECHNO_SONG_FIXTURES to a folder that holds saved T3 songs."]
+    fn saved_t3_songs_read_every_imported_audio_record() {
+        let Some(root) = std::env::var_os("MIXJAM_TECHNO_SONG_FIXTURES") else {
+            println!("MIXJAM_TECHNO_SONG_FIXTURES is not set; no saved songs were read.");
+            return;
+        };
+        let app_id = profile(Product::T3).unwrap().0.to_le_bytes();
+        let (mut songs, mut records) = (0, 0);
+        let mut folders = vec![PathBuf::from(root)];
+        while let Some(folder) = folders.pop() {
+            for entry in fs::read_dir(folder).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    folders.push(path);
+                    continue;
+                }
+                let mut start = [0; 4];
+                if !path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("mix"))
+                    || fs::File::open(&path)
+                        .and_then(|mut file| file.read_exact(&mut start))
+                        .is_err()
+                    || start != app_id
+                {
+                    continue;
+                }
+                let bytes = read_song_file(&path).unwrap();
+                let header = read_header(&bytes, Product::T3).unwrap();
+                let timeline = read_timeline(&bytes, header.after_mixer, Product::T3)
+                    .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+                let embedded = embedded_wave_records(&bytes).unwrap();
+                let (mut imported, mut found) = (0, 0);
+                for event in &timeline.events {
+                    let Reference::Wave(wave) = &event.reference else {
+                        continue;
+                    };
+                    // Every saved record holds its two labels and bar count.
+                    assert!(wave.declared_ticks.is_some(), "{}", path.display());
+                    assert!(wave.metadata.contains_key("Native label 2"));
+                    imported += 1;
+                    found += usize::from(embedded.iter().any(|source| {
+                        normalize_saved_path(&source.path) == normalize_saved_path(&wave.path)
+                    }));
+                }
+                println!(
+                    "{}: {} events, {imported} imported-audio events, {found} with embedded audio",
+                    path.display(),
+                    timeline.events.len()
+                );
+                songs += 1;
+                records += imported;
+            }
+        }
+        assert!(songs > 0, "The folder holds no T3 songs.");
+        println!("{songs} T3 songs, {records} imported-audio events");
+    }
+
+    #[test]
     fn header_rejects_truncation_foreign_identity_and_accepts_forty_eight_tracks() {
         let bytes = header_fixture(Product::T3, 140, 140);
         for end in [0, 3, 13, 16, bytes.len() - 1] {
@@ -2539,34 +2604,88 @@ mod tests {
 
     #[test]
     fn wave_binary_metadata_is_not_an_optional_text_token() {
-        for (category, value) in [
-            (1u16, 9u32),
-            (2, 256),
-            (3, 1),
-            (4, 1),
-            (5, 1),
-            (6, 1),
-            (9, 3),
-            (10, 1),
-            (12, 9),
-            (12, 45),
-        ] {
+        for product in [Product::D3, Product::T3] {
+            for (category, value) in [
+                (1u16, 9u32),
+                (2, 256),
+                (3, 1),
+                (4, 1),
+                (5, 1),
+                (6, 1),
+                (9, 3),
+                (10, 1),
+                (12, 9),
+                (12, 32),
+                (12, 45),
+            ] {
+                let mut chunk = Vec::new();
+                lane(&mut chunk, 1, &[(1, -1, 0)]);
+                chunk[1..5].copy_from_slice(&2u32.to_le_bytes());
+                text_block(&mut chunk, b"C:\\old\\MIXWAVES\\take.wav\0\x01");
+                text_block(&mut chunk, b"sample\0\x01");
+                text_block(&mut chunk, b"effect\0\x01");
+                chunk.extend_from_slice(&category.to_le_bytes());
+                chunk.extend_from_slice(&value.to_le_bytes());
+                chunk.extend_from_slice(&0u16.to_le_bytes());
+                chunk.push(3);
+                chunk.extend_from_slice(&(-129i32).to_le_bytes());
+                chunk.extend_from_slice(&174u16.to_le_bytes());
+                let events = read_chunk(&chunk, product).unwrap();
+                assert_eq!(events.len(), 2);
+                assert_eq!(events[1].reference, Reference::Native(174));
+                assert_eq!(events[1].position, 256);
+            }
+        }
+    }
+
+    #[test]
+    fn t3_wave_records_keep_bar_counts_that_read_as_text() {
+        // As saved in the album songs "Infinitrip" (9 bars, a tab) and "Storm"
+        // (32 bars, a space). Read as a third text label, the eight bytes took
+        // six of the next event, so its sample ID's high byte (39 or 41) was
+        // taken for an unsupported source.
+        for (bars, next_sample) in [(9u32, 0x27fe_u16), (32, 0x27e1), (9, 0x29ec), (126, 0x2900)] {
             let mut chunk = Vec::new();
-            lane(&mut chunk, 1, &[(1, -1, 0)]);
-            chunk[1..5].copy_from_slice(&2u32.to_le_bytes());
-            text_block(&mut chunk, b"C:\\old\\MIXWAVES\\take.wav\0\x01");
-            text_block(&mut chunk, b"sample\0\x01");
-            text_block(&mut chunk, b"effect\0\x01");
-            chunk.extend_from_slice(&category.to_le_bytes());
-            chunk.extend_from_slice(&value.to_le_bytes());
-            chunk.extend_from_slice(&0u16.to_le_bytes());
+            lane(&mut chunk, 5, &[(1, -1, 10237)]);
+            chunk[1..5].copy_from_slice(&3u32.to_le_bytes());
+            for (sample, name, bars) in [(None, "PAD001", bars), (Some(next_sample), "PAD003", 4)] {
+                if let Some(sample) = sample {
+                    chunk.push(1);
+                    chunk.extend_from_slice(&(-1153i32).to_le_bytes());
+                    chunk.extend_from_slice(&sample.to_le_bytes());
+                }
+                let file = format!("{name}.WAV");
+                text_block(
+                    &mut chunk,
+                    format!("D:\\Legacy\\T3\\MIXWAVES\\{file}\0\x01").as_bytes(),
+                );
+                text_block(&mut chunk, format!("{file}\0\x01").as_bytes());
+                text_block(&mut chunk, b"E:\\samples\\Keys\\\0\x01");
+                chunk.extend_from_slice(&12u16.to_le_bytes());
+                chunk.extend_from_slice(&bars.to_le_bytes());
+                chunk.extend_from_slice(&0u16.to_le_bytes());
+            }
             chunk.push(3);
-            chunk.extend_from_slice(&(-129i32).to_le_bytes());
+            chunk.extend_from_slice(&(-2049i32).to_le_bytes());
             chunk.extend_from_slice(&174u16.to_le_bytes());
-            let events = read_chunk(&chunk, Product::D3).unwrap();
-            assert_eq!(events.len(), 2);
-            assert_eq!(events[1].reference, Reference::Native(174));
-            assert_eq!(events[1].position, 256);
+            let events = read_chunk(&chunk, Product::T3).unwrap();
+            assert_eq!(events.len(), 3);
+            let Reference::Wave(first) = &events[0].reference else {
+                panic!("the first event is not imported audio");
+            };
+            assert_eq!(first.path, r"D:\Legacy\T3\MIXWAVES\PAD001.WAV");
+            assert_eq!(first.declared_ticks, Some(bars * TICKS_PER_BAR));
+            assert_eq!(first.metadata["Native label 1"], "PAD001.WAV");
+            assert_eq!(first.metadata["Native label 2"], r"E:\samples\Keys\");
+            assert_eq!(first.metadata["Native metadata word 1"], "12");
+            let Reference::Wave(second) = &events[1].reference else {
+                panic!("the second event is not imported audio");
+            };
+            assert_eq!(events[1].position, 9 * TICKS_PER_BAR);
+            assert_eq!(second.declared_ticks, Some(4 * TICKS_PER_BAR));
+            assert_eq!(second.metadata["Saved sample ID"], next_sample.to_string());
+            assert_eq!(events[2].reference, Reference::Native(174));
+            assert_eq!(events[2].position, 16 * TICKS_PER_BAR);
         }
     }
 
