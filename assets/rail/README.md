@@ -45,6 +45,7 @@ license status. This adaptation does not assign a new license to donor work.
 | `record` | New microphone path in the donor family |
 | `help` | New ringed question mark in the donor family, drawn with Pillow at eight times the size and reduced once |
 | `master` | New level gauge for Mastering in the donor family, drawn with Pillow at eight times the size and reduced once |
+| `album-review` | New record half out of its sleeve for Album Review, drawn with Pillow at eight times the size and reduced once |
 
 ## Update and check
 

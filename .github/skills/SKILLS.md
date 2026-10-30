@@ -8,6 +8,7 @@ behavior. Historical donor instructions do not apply to this workspace.
 
 | Skill | Primary action |
 | --- | --- |
+| [album-analysis](album-analysis/SKILL.md) | Write or finish an Album Review and save it through the agent channel. |
 | [create-skill](create-skill/SKILL.md) | Create or revise a repository skill. |
 | [dead-code-audit](dead-code-audit/SKILL.md) | Prove reachability and remove proven dead items. |
 | [deslop](deslop/SKILL.md) | Remove evidence-backed problems in code, tests, data, or prose. |

@@ -1081,6 +1081,17 @@ impl MixJamApp {
                 self.try_scan_library_folders(folders, fallback_bpm.unwrap_or(self.fallback_bpm))?;
                 Start::run(vec![Step::Idle])
             }
+            // The reviews do not depend on the window, its modal, or the song.
+            request @ (Request::Reviews { .. }
+            | Request::Review { .. }
+            | Request::ReviewTracks { .. }
+            | Request::AddReview { .. }
+            | Request::UpdateReview { .. }) => {
+                match wire::album_reply(self.album_review.shelf(), &request) {
+                    Some(reply) => Start::Reply(reply?),
+                    None => return Err("That is not an Album Review request.".into()),
+                }
+            }
             Request::Quit => {
                 self.request_action(PendingAction::Close, ctx);
                 // Unsaved work opens a modal instead. The loop replies at
@@ -1171,6 +1182,7 @@ impl MixJamApp {
             (self.show_step_synth, "Step synth"),
             (self.show_sample_edit, "Sample editor"),
             (self.show_stretch, "Time Stretcher"),
+            (self.show_album_review, album_review::TITLE),
             (
                 self.session.has_recorded_take() && !self.session.is_recording(),
                 "Recorded take",

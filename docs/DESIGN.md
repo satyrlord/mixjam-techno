@@ -621,7 +621,7 @@ faces. Orange marks active controls and focus. Icons stay centered in 48 by
 30-point targets. Recessed horizontal separators divide file commands (New,
 Open, Save, Save as, Import, Export), utilities (Libraries, Erase, Delete),
 and musical tools (Mixer, Mastering, Effect Studio, Step synth, Sample editor,
-Time Stretcher). The microphone icon and visible recording-track selector come last,
+Time Stretcher, Album Review). The microphone icon and visible recording-track selector come last,
 after a final separator. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 
@@ -671,10 +671,12 @@ waveform. A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
 a Text-colored name that begins with Missing. While a sound or clip is dragged
 over the lanes, clip ghosts at 60% opacity show the destination bar and track.
-Group destinations on tracks without a visible row have no ghost. Off the
-lanes, a dragged sound shows a 150 by 30-point Drag
-Label with its name in Canvas text. A palette sound armed for click placement
-shows a tinted outline where it will land. Choosing a clip or pressing Esc
+A drop puts every clip on a row or does nothing. A group that would put a clip
+on a track without a row, or outside the timeline, shows no ghosts; a Drag
+Label names that track or reads Outside the timeline, and the drop is canceled
+with a status message. Off the lanes, a dragged sound shows a 150 by 30-point
+Drag Label with its name in Canvas text. A palette sound armed for click
+placement shows a tinted outline where it will land. Choosing a clip or pressing Esc
 ends click placement, so a click on an empty lane then only clears the
 selection. Enter on a focused sound tile places
 it on the recording track at the playhead. Lane M/S/L/R letters gain a short
@@ -939,10 +941,27 @@ Session trim, resampling, preview, WAV saving, registration in Wave, and source-
 behavior remain application-owned and synchronous. Saving leaves the source
 unchanged. Collapse preserves edits and performs no processing.
 
+### Album Review
+
+Album Review is a Utility window. The grid view leads with the search field,
+the sort combo, and the "visible / total albums" count. Artist and genre
+filters are Secondary buttons that turn Primary while active; a genre that
+would leave no album is disabled and says why. The genre row shows the six
+most-used tags and "+N more". Active filters repeat as chips with × before
+Clear filters. Cards are 150 by 214 points: the cover or a painted record
+placeholder, the artist in muted capitals, the title in cream, and the year
+and track count. The album page puts the cover column (220 points) beside the
+title, the metadata grid, and the links, then the overview, a timeline chart
+with one row per track whose sections share a color by name, and each track
+with its energy written out beside a colored label, so color is never the
+only cue. Empty states are explicit: No reviews folder, No albums available,
+and No results with Clear filters. Covers are review content and are exempt
+from the raster asset rules; the rail icon is not.
+
 ### Utility windows and blocking dialogs
 
 Help, Time Stretcher help, Effect Studio help, Mastering help, Step synth help,
-Sample editor help, Sample libraries,
+Sample editor help, Sample libraries, Album Review,
 Import details, Recorded take, Save your changes?, Sample conflicts, Choose path,
 and Import sound use the same shell and controls as musical tools. Preserve their
 stable identities and exact accessible names independently of uppercase titles.

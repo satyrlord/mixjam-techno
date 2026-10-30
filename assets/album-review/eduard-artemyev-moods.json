@@ -1,0 +1,516 @@
+{
+  "id": "eduard-artemyev-moods",
+  "kind": "reference",
+  "artist": "Eduard Artemyev",
+  "title": "Moods",
+  "year": 1984,
+  "label": "Melodiya",
+  "producer": "Yuri Bogdanov",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Space",
+    "Progressive",
+    "Ambient"
+  ],
+  "runtime": "44:05",
+  "isSoundtrack": true,
+  "youtubeUrl": "https://youtu.be/wOlLC2ej__s",
+  "overview": "Moods (Russian title Картины-настроения, 'Mood Pictures' — a title that Artemyev proposed) is a 1984 Melodiya LP that collects his music for eight films, from recordings made between 1976 and 1983. The core instrument is the EMS Synthi 100, credited to Yuri Bogdanov, who also supervised the recordings and led Boomerang, the ensemble that supplies the rock rhythm section. The USSR Cinematography Symphony Orchestra under Yuri Serebryakov plays on Training Ground, City, Crusade, and Hot Summer, and the Moscow Chamber Choir under Vladimir Minin sings on Reminiscences. The film sources are Siberiade (1979), Moon Rainbow (1983), Hot Summer in Kabul (1983), Fox Hunting (1980), Inspector Gull (1979), Where the Whales Go, Night of Birth, and the documentary Mysteries of the Peruvian Indians.\n\nThe thirteen cues run between 2:10 and 4:37, so the record works as a sequence of contrasting tableaux, not as a continuous suite — the four Siberiade pieces (Fire, Native Shores, Reminiscences, and Crusade) act as anchors between slow space-ambient cues and jazz- and rock-inflected ensemble pieces. The sleeve notes are by the rock critic Artemy Troitsky, who ties Artemyev's electronic palette to impressionism; later reviews describe the album as a fusion of progressive rock, jazz, ambient, and electro-disco. The Crusade theme found a second, wider audience in 2001, when the Russian trance duo PPK reworked it as 'ResuRection' — the first single by a Russian act to enter the UK top 10, with a peak at UK No. 3 in December 2001.\n\nTimestamps are proportionally estimated to ±10 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Fire",
+      "duration": "2:53",
+      "energy": "high",
+      "tags": [
+        "Siberiade Cue",
+        "Synthi 100",
+        "Rock Rhythm Section",
+        "Opening Statement"
+      ],
+      "role": "Album role: The opening statement — the first of four Siberiade cues that anchor the LP, and the track that sets the collection's fusion of Synthi 100 and rock rhythm section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Low Synthi 100 drone with filtered noise swells, a texture that stands for the fire image of the title.",
+          "detail": "Siberiade (1979, Andrei Konchalovsky) closes with an oil-gusher fire on the Siberian taiga. The cue takes its title from that imagery."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Beat Entry",
+          "description": "Drums and bass guitar of the Boomerang ensemble enter under a pulsing sequenced bass line."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Theme",
+          "description": "Monophonic Synthi 100 lead states the main melody over sustained synthesizer chords and a straight rock beat."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Outro",
+          "description": "The rhythm section drops out and the drone returns, fading under filtered noise."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Constellation of Past Times",
+      "duration": "3:16",
+      "energy": "low",
+      "tags": [
+        "Space Ambient",
+        "Synthi 100",
+        "Sustained Pad",
+        "Film Cue"
+      ],
+      "role": "Album role: The first drop in density — a slow cosmic interlude from the music for Where the Whales Go that sets the space-ambient side of the collection against the rock opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Slow-attack synthesizer pad fades in, with no percussion and a wide stereo reverb."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Melody",
+          "description": "A high sine-like lead enters with long portamento between notes, over the static pad."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Development",
+          "description": "A second voice answers the lead a third lower, and tape echo extends each phrase into the reverb tail."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Outro",
+          "description": "The lead stops and the pad decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Training Ground",
+      "duration": "4:22",
+      "energy": "mid",
+      "tags": [
+        "Moon Rainbow Cue",
+        "Cinematography Orchestra",
+        "Jazz Percussion",
+        "Sci-Fi Score"
+      ],
+      "role": "Album role: The first ensemble piece — the USSR Cinematography Symphony Orchestra joins the synthesizer for the first time, in a cue from the science-fiction film Moon Rainbow (1983).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Swirling Synthi 100 arpeggio with a slow filter sweep, the science-fiction colour of the cue.",
+          "detail": "The Russian title, Полигон, means a test site. In Moon Rainbow, the site is a space-training base for cosmonauts."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Percussion Entry",
+          "description": "Jazz drum kit enters with a ride-cymbal swing pattern under the arpeggio."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Theme",
+          "description": "Synthesizer lead states the melody, doubled by orchestral strings."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Orchestral Tutti",
+          "description": "Full orchestra under Yuri Serebryakov takes the theme, with brass on the upper line."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Breakdown",
+          "description": "Orchestra drops out; the arpeggio and the cymbal pattern continue alone."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Outro",
+          "description": "The filter closes on the arpeggio and the drums stop on a cymbal choke."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Native Shores",
+      "duration": "2:56",
+      "energy": "low",
+      "tags": [
+        "Siberiade Cue",
+        "Space Ambient",
+        "Synthi 100",
+        "Pastoral Theme"
+      ],
+      "role": "Album role: The second Siberiade cue — a pastoral homeland theme that returns the album to slow electronic washes after the orchestral Training Ground.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Shimmering synthesizer wash with slow vibrato on the upper partials."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Theme",
+          "description": "A broad diatonic melody enters on a soft synthesizer lead, in long, folk-like phrases."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Restatement",
+          "description": "The theme repeats an octave higher with a countermelody in the middle register."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Outro",
+          "description": "The melody stops on a sustained chord and the wash fades."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Lullaby",
+      "duration": "3:21",
+      "energy": "low",
+      "tags": [
+        "Night of Birth Cue",
+        "Lullaby Form",
+        "Synthi 100",
+        "Shimmering Wash"
+      ],
+      "role": "Album role: The quietest point of the first half — a cradle-song cue from Night of Birth, placed between two Siberiade pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Soft repeated two-note figure on a bell-like synthesizer tone, over a low pad."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Theme",
+          "description": "Lullaby melody enters in a slow triple metre, with a rocking accompaniment."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Second Verse",
+          "description": "The melody repeats with a high shimmering layer above it and a fuller pad below."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Outro",
+          "description": "The two-note figure returns alone and slows into silence."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Reminiscences",
+      "duration": "3:38",
+      "energy": "mid",
+      "tags": [
+        "Siberiade Cue",
+        "Moscow Chamber Choir",
+        "Wordless Choir",
+        "Synthi 100"
+      ],
+      "role": "Album role: The only choral piece — the Moscow Chamber Choir under Vladimir Minin gives the third Siberiade cue a vocal dimension that no other track has.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Low synthesizer pad on a minor chord, with slow filter movement."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Choir Entry",
+          "description": "Wordless choir enters in close harmony above the pad."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Swell",
+          "description": "Choir and synthesizer move to a higher register and the dynamics rise."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Climax",
+          "description": "The full choir holds the widest chord of the piece, with the synthesizer doubling the bass line."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Outro",
+          "description": "The voices drop out one section at a time and the pad fades."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "City",
+      "duration": "2:13",
+      "energy": "mid",
+      "tags": [
+        "Moon Rainbow Cue",
+        "Cinematography Orchestra",
+        "Ostinato",
+        "Short Cue"
+      ],
+      "role": "Album role: The second Moon Rainbow cue — a short ostinato piece for orchestra and synthesizer that links the ambient centre of the album to Crusade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Ostinato",
+          "description": "Sequenced synthesizer ostinato in straight eighth notes, with pizzicato strings on the off-beats."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Theme",
+          "description": "Orchestral strings and the synthesizer lead state a short angular theme above the ostinato."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Outro",
+          "description": "The theme breaks off and the ostinato stops on an unresolved chord."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Crusade",
+      "duration": "4:37",
+      "energy": "peak",
+      "tags": [
+        "Siberiade Cue",
+        "Cinematography Orchestra",
+        "March Rhythm",
+        "Album Summit"
+      ],
+      "role": "Album role: The album's summit — the fourth and last Siberiade cue unites the Cinematography Orchestra, the rock rhythm section, and the Synthi 100 in the longest track of the record.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Snare-drum march pattern alone, with a low synthesizer drone under it."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Bass Entry",
+          "description": "Bass guitar and sequenced synthesizer bass lock to the march rhythm."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Theme",
+          "description": "Synthi 100 lead states the heroic main theme over the march.",
+          "detail": "This is the melody that PPK took as the lead of their trance single 'ResuRection' (2001). The single made the Siberiade theme known in clubs across Eastern Europe and the UK, two decades after the film."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Orchestra Entry",
+          "description": "Strings and brass of the Cinematography Orchestra take the theme in unison with the synthesizer."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Development",
+          "description": "The theme modulates up a step and the full kit replaces the snare pattern."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Climax",
+          "description": "Orchestral tutti, rock rhythm section, and synthesizer lead at maximum density — the highest point of the album."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Outro",
+          "description": "The ensemble stops on a held chord; the synthesizer drone continues and fades."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Dream",
+      "duration": "4:20",
+      "energy": "low",
+      "tags": [
+        "Inspector Gull Cue",
+        "Suspended Harmony",
+        "Synthi 100",
+        "Dream Sequence"
+      ],
+      "role": "Album role: The comedown after Crusade — a slow, suspended cue from Inspector Gull (1979), the film adaptation of J. B. Priestley's play An Inspector Calls.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Unpitched synthesizer texture with slow random modulation and long reverb."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Pad Entry",
+          "description": "A suspended chord enters and moves in parallel motion, with no clear tonal centre."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Melody",
+          "description": "A fragmentary lead line in the middle register, with wide intervals and long gaps."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Thinning",
+          "description": "The pad drops out and the random texture returns under the last melodic fragments."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Outro",
+          "description": "Reverb tails decay to silence."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Hot Summer",
+      "duration": "2:58",
+      "energy": "mid",
+      "tags": [
+        "Hot Summer in Kabul Cue",
+        "Cinematography Orchestra",
+        "Modal Melody",
+        "Hand Percussion"
+      ],
+      "role": "Album role: The first of two cues from Hot Summer in Kabul (1983) and the last orchestral piece of the album — a modal melody that gives the film's Afghan setting a regional colour.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Hand percussion pattern with a synthesizer drone on the tonic."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Theme",
+          "description": "Modal melody on synthesizer lead, with ornamented turns in the style of a regional wind instrument."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Orchestral Restatement",
+          "description": "Orchestral strings take the melody over the percussion and drone."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Outro",
+          "description": "The percussion stops and the drone holds to the end."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Meditation",
+      "duration": "3:23",
+      "energy": "low",
+      "tags": [
+        "Hot Summer in Kabul Cue",
+        "Drone",
+        "Synthi 100",
+        "Modal Melody"
+      ],
+      "role": "Album role: The second Hot Summer in Kabul cue — a drone-based contemplative pair to Hot Summer, with the orchestra and the percussion removed.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Drone",
+          "description": "Sustained synthesizer drone on a single pitch, with slow timbral change in the filter."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Melody",
+          "description": "Slow modal melody above the drone, in free rhythm."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Development",
+          "description": "A fifth enters above the drone and the melody extends into a higher register."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Outro",
+          "description": "The melody stops and the drone fades."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Hunting",
+      "duration": "3:58",
+      "energy": "high",
+      "tags": [
+        "Fox Hunting Cue",
+        "Electronic Rock",
+        "Sequenced Bass",
+        "Boomerang Ensemble"
+      ],
+      "role": "Album role: The late energy return — a driving electronic-rock cue from Fox Hunting (1980, Vadim Abdrashitov) that gives the second half its last rhythmic peak before the closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Sequenced synthesizer bass in fast sixteenth notes, alone."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat Entry",
+          "description": "Rock drum kit and electric guitar of the Boomerang ensemble enter on a driving four-four pulse."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Theme",
+          "description": "Synthi 100 lead states a short, repeated theme over the sequence."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Breakdown",
+          "description": "Drums drop out; the sequence continues with an open filter sweep."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Final Section",
+          "description": "Full band returns and the theme repeats at higher density."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Outro",
+          "description": "The band stops together and the sequence cuts off."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Top of the World",
+      "duration": "2:10",
+      "energy": "low",
+      "tags": [
+        "Documentary Cue",
+        "Space Ambient",
+        "Synthi 100",
+        "Closing Statement"
+      ],
+      "role": "Album role: The closer — a short high-altitude ambient piece from the documentary Mysteries of the Peruvian Indians that ends the collection in suspension, not on a final cadence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Shimmering synthesizer wash with slow vibrato, in a high register."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Theme",
+          "description": "A sustained melody enters in long notes above the wash."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Outro",
+          "description": "The melody stops on an open fifth and the wash fades out."
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,11 @@ use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        mpsc::SyncSender,
+    },
     time::Duration,
 };
 
@@ -138,10 +142,10 @@ pub struct RenderState {
     /// as `Keys::audio` holds them.
     key_audio: Vec<f32>,
     next_frame: Option<u64>,
-    /// The track levels that the last block ended at.
-    levels: [[f32; 2]; crate::engine::TRACK_COUNT],
-    /// The master gain inside those levels.
-    master_gain: f32,
+    /// Each track's glide to its level, as the last block left it.
+    levels: [Ramp; crate::engine::TRACK_COUNT],
+    /// The glide of the master gain inside those levels, in both channels.
+    master_gain: Ramp,
     /// Playback's live levels. Without them the mix plays the levels it was
     /// prepared with.
     live: Option<Arc<MasterControl>>,
@@ -154,11 +158,14 @@ pub struct RenderState {
 /// How far behind the frame where playback kept a compressor's history a
 /// new playback start may begin and still carry on from it. Playback renders
 /// ahead of what it has played by up to a block and the master pedals'
-/// delay, and the old playback may render one block more while it stops.
-/// The cursor that a new start begins at is at most one tick (345 frames at
-/// 120 BPM) and, after a pause, one window update (about 30 ms) behind what
-/// has played. Together that is about 3300 frames.
-const CARRY_FRAMES: u64 = 4 * PlaybackSource::BLOCK_FRAMES as u64;
+/// delay. The cursor that a new start begins at is at most one tick (345
+/// frames at 120 BPM) and, after a pause, one window update (about 30 ms)
+/// behind what has played. Together that is less than 3300 frames.
+const CARRY_FRAMES: u64 = 4096;
+
+/// The frames over which a track's level glides to a moved fader, pan, or
+/// master gain during playback: about 23 ms, so the move does not click.
+const GLIDE_FRAMES: u64 = 1024;
 
 /// Each track's left and right level: fader, polarity, pan, and the master gain.
 pub(crate) fn track_levels(project: &Project) -> [[f32; 2]; crate::engine::TRACK_COUNT] {
@@ -172,10 +179,12 @@ pub(crate) fn track_levels(project: &Project) -> [[f32; 2]; crate::engine::TRACK
     })
 }
 
-/// A track's level over one block: a straight glide from the level the last
-/// block ended at, so a moved fader does not click.
+/// A track's left and right level: a straight glide over `GLIDE_FRAMES`
+/// from the level it had reached when its target last changed, so a moved
+/// fader does not click. The glide runs on across playback's blocks.
 #[derive(Clone, Copy)]
 struct Ramp {
+    /// The first frame of the glide, which already moves one step.
     first_frame: u64,
     frames: f32,
     from: [f32; 2],
@@ -183,12 +192,16 @@ struct Ramp {
 }
 
 impl Ramp {
-    const UNITY: Self = Self {
-        first_frame: 0,
-        frames: 1.0,
-        from: [1.0; 2],
-        to: [1.0; 2],
-    };
+    const UNITY: Self = Self::still([1.0; 2]);
+
+    const fn still(level: [f32; 2]) -> Self {
+        Self {
+            first_frame: 0,
+            frames: 1.0,
+            from: level,
+            to: level,
+        }
+    }
 
     fn at(&self, frame: u64, channel: usize) -> f32 {
         let (from, to) = (self.from[channel], self.to[channel]);
@@ -196,7 +209,34 @@ impl Ramp {
             return to;
         }
         let along = ((frame - self.first_frame) as f32 + 1.0) / self.frames;
-        from + (to - from) * along.min(1.0)
+        if along >= 1.0 {
+            return to;
+        }
+        from + (to - from) * along
+    }
+
+    /// Carry the glide into a block from `first_frame`. A new target starts
+    /// a new glide from the level reached before that frame; a playback that
+    /// does not continue from the last block starts at the target.
+    fn advance(&mut self, first_frame: u64, continues: bool, target: [f32; 2]) {
+        if !continues {
+            *self = Self::still(target);
+        } else if target != self.to {
+            let reached = if first_frame > self.first_frame {
+                [0, 1].map(|channel| self.at(first_frame - 1, channel))
+            } else {
+                self.from
+            };
+            *self = Self {
+                first_frame,
+                frames: GLIDE_FRAMES as f32,
+                from: reached,
+                to: target,
+            };
+        } else if first_frame.saturating_sub(self.first_frame) as f32 >= self.frames {
+            // The glide is over: hold the target.
+            self.from = self.to;
+        }
     }
 }
 
@@ -217,8 +257,8 @@ impl Default for RenderState {
             duckers: [crate::ducker::State::default(); crate::engine::TRACK_COUNT],
             key_audio: Vec::new(),
             next_frame: None,
-            levels: [[0.0; 2]; crate::engine::TRACK_COUNT],
-            master_gain: 0.0,
+            levels: [Ramp::still([0.0; 2]); crate::engine::TRACK_COUNT],
+            master_gain: Ramp::still([0.0; 2]),
             live: None,
             loop_region: None,
             compressor_epoch: None,
@@ -584,9 +624,10 @@ impl Mix {
     const MAX_PCM_FRAMES: u64 = 32_000_000;
     /// The block that export mixes at a time during the song.
     const EXPORT_BLOCK: u64 = 65_536;
-    /// Tails go in playback's short blocks, so an export ends soon after
-    /// they die, at the same frame as playback's.
-    const TAIL_BLOCK: u64 = PlaybackSource::BLOCK_FRAMES as u64;
+    /// Tails go in short blocks, so an export ends soon after they die.
+    /// Playback asks whether the buses still ring once a tail block too, so
+    /// it ends at the same frame.
+    const TAIL_BLOCK: u64 = 1024;
 
     /// `samples` holds each source at each pitch that a clip plays it at, as
     /// `load_sources` checked it.
@@ -1111,22 +1152,15 @@ impl Mix {
             .and_then(|live| live.levels())
             .unwrap_or_else(|| {
                 if state.next_frame.is_some() {
-                    (state.levels, state.master_gain)
+                    (state.levels.map(|ramp| ramp.to), state.master_gain.to[0])
                 } else {
                     (self.levels, self.master_gain)
                 }
             });
-        let levels: [Ramp; crate::engine::TRACK_COUNT] = std::array::from_fn(|track| Ramp {
-            first_frame,
-            frames: (out.len() / 2).max(1) as f32,
-            from: if continues {
-                state.levels[track]
-            } else {
-                targets[track]
-            },
-            to: targets[track],
-        });
-        state.levels = targets;
+        for (ramp, target) in state.levels.iter_mut().zip(targets) {
+            ramp.advance(first_frame, continues, target);
+        }
+        let levels = state.levels;
         out.fill(0.0);
         if let Some(sends) = sends.as_deref_mut() {
             sends.fill(0.0);
@@ -1139,19 +1173,12 @@ impl Mix {
         // frames. The keys are measured whether or not `only` mixes them.
         // A ducker's key level leaves out the master gain; the key audio for
         // the master pedals and the FX buses keeps it, as their input does.
-        // The master gain glides over the block as the track levels do, so
-        // the key stays free of it while a live master gain moves.
-        let mastered = Ramp {
-            first_frame,
-            frames: (out.len() / 2).max(1) as f32,
-            from: [if continues {
-                state.master_gain
-            } else {
-                master_gain
-            }; 2],
-            to: [master_gain; 2],
-        };
-        state.master_gain = master_gain;
+        // The master gain glides as the track levels do, so the key stays
+        // free of it while a live master gain moves.
+        state
+            .master_gain
+            .advance(first_frame, continues, [master_gain; 2]);
+        let mastered = state.master_gain;
         let frames = out.len() / 2;
         let stride = 2 * self.keys.len();
         if self.side && state.key_audio.len() < frames * stride {
@@ -1480,7 +1507,7 @@ pub(crate) fn render_with_samples(
 pub struct Player {
     _stream: OutputStream,
     handle: OutputStreamHandle,
-    sink: Option<Sink>,
+    current: Option<Current>,
     start_frame: u64,
     total_frames: u64,
     sample_rate: u32,
@@ -1500,6 +1527,8 @@ struct PlaybackSource {
     /// The frame where a loop resumes.
     loop_start: Option<u64>,
     block: Vec<f32>,
+    /// The frames of a whole block: `BLOCK_FRAMES` but in tests.
+    block_frames: usize,
     /// The next sample in `block`, and the count of valid samples in it.
     cursor: usize,
     filled: usize,
@@ -1509,24 +1538,44 @@ struct PlaybackSource {
     /// tails ring on after the song, as in export.
     returns: Option<ReturnsProcessor>,
     sends: Vec<f32>,
-    /// Frames of the buses' tail played after the end.
+    /// Frames of the buses' tail played after the end, and of them those
+    /// left of the current `Mix::TAIL_BLOCK`.
     ringing: u64,
+    ringing_block: u64,
     /// Frames of the pedals' delay still to drop at the start, so the song
     /// starts on time, and still to play out after the end.
     lead: usize,
     tail: usize,
     /// Frames of the block that the key tracks cover: none after the song.
     keyed: usize,
+    /// Whether the thread that reads this source has been asked to run at
+    /// an audio thread's priority.
+    raised: bool,
 }
 impl PlaybackSource {
-    /// About 23 ms, so the master meters update more than 30 times a second.
-    const BLOCK_FRAMES: usize = 1024;
+    /// About 5.8 ms. The device's callback, every 10 ms or so, renders the
+    /// blocks it needs inside its own period, so a block's work must be a
+    /// small part of the period: a callback then renders one or two blocks.
+    /// The level glides, the meters, and the tails keep their own timing
+    /// (`GLIDE_FRAMES`, `MasterProcessor`, `Mix::TAIL_BLOCK`).
+    const BLOCK_FRAMES: usize = 256;
 
     fn new(
         audio: Arc<dyn Frames>,
         start: u64,
         loop_region: Option<[u64; 2]>,
         master: Option<Arc<MasterControl>>,
+    ) -> Self {
+        Self::with_block(audio, start, loop_region, master, Self::BLOCK_FRAMES)
+    }
+
+    /// A source that renders blocks of `block_frames` frames.
+    fn with_block(
+        audio: Arc<dyn Frames>,
+        start: u64,
+        loop_region: Option<[u64; 2]>,
+        master: Option<Arc<MasterControl>>,
+        block_frames: usize,
     ) -> Self {
         let channels = audio.channels() as usize;
         let master = master.filter(|_| channels == 2);
@@ -1538,7 +1587,7 @@ impl PlaybackSource {
         let master = master.map(MasterProcessor::live);
         let latency = master.as_ref().map_or(0, MasterProcessor::latency);
         let sends = if returns.is_some() {
-            vec![0.0; Self::BLOCK_FRAMES * 2 * BUSES]
+            vec![0.0; block_frames * 2 * BUSES]
         } else {
             Vec::new()
         };
@@ -1550,7 +1599,7 @@ impl PlaybackSource {
                 // Allocate key scratch before the device reads this source.
                 // A short first block must also leave room for a full block.
                 key_audio: if audio.tempo().is_some() {
-                    vec![0.0; Self::BLOCK_FRAMES * 2 * crate::engine::MAX_KEYS]
+                    vec![0.0; block_frames * 2 * crate::engine::MAX_KEYS]
                 } else {
                     Vec::new()
                 },
@@ -1559,18 +1608,21 @@ impl PlaybackSource {
             returns,
             sends,
             ringing: 0,
+            ringing_block: 0,
             channels,
             start,
             frame: start,
             end: loop_region.map_or(audio.frames(), |[_, b]| b),
             loop_start: loop_region.map(|[a, _]| a),
-            block: vec![0.0; Self::BLOCK_FRAMES * channels],
+            block: vec![0.0; block_frames * channels],
+            block_frames,
             cursor: 0,
             filled: 0,
             master,
             lead: latency,
             tail: latency,
             keyed: 0,
+            raised: false,
             audio,
         }
     }
@@ -1581,14 +1633,19 @@ impl PlaybackSource {
             if self.frame >= self.end {
                 if let Some(start) = self.loop_start {
                     self.frame = start;
-                } else if let Some(returns) = self
-                    .returns
-                    .as_mut()
-                    .filter(|returns| returns.ringing() && self.ringing < crate::fx::TAIL_LIMIT)
-                {
-                    let count =
-                        Self::BLOCK_FRAMES.min((crate::fx::TAIL_LIMIT - self.ringing) as usize);
+                } else if let Some(returns) = self.returns.as_mut().filter(|returns| {
+                    // As in export, whether the buses still ring is asked
+                    // once a tail block, so playback ends at its frame.
+                    self.ringing_block > 0
+                        || returns.ringing() && self.ringing < crate::fx::TAIL_LIMIT
+                }) {
+                    if self.ringing_block == 0 {
+                        self.ringing_block =
+                            Mix::TAIL_BLOCK.min(crate::fx::TAIL_LIMIT - self.ringing);
+                    }
+                    let count = self.block_frames.min(self.ringing_block as usize);
                     self.ringing += count as u64;
+                    self.ringing_block -= count as u64;
                     self.filled = count * self.channels;
                     self.keyed = 0;
                     self.block[..self.filled].fill(0.0);
@@ -1598,7 +1655,7 @@ impl PlaybackSource {
                     }
                     continue;
                 } else if self.tail > 0 {
-                    let count = self.tail.min(Self::BLOCK_FRAMES);
+                    let count = self.tail.min(self.block_frames);
                     self.tail -= count;
                     self.filled = count * self.channels;
                     self.keyed = 0;
@@ -1614,7 +1671,7 @@ impl PlaybackSource {
                     return false;
                 }
             }
-            let count = ((self.end - self.frame) as usize).min(Self::BLOCK_FRAMES);
+            let count = ((self.end - self.frame) as usize).min(self.block_frames);
             if count == 0 {
                 return false;
             }
@@ -1669,8 +1726,14 @@ impl PlaybackSource {
 impl Iterator for PlaybackSource {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
-        if self.cursor == self.filled && !self.fill() {
-            return None;
+        if self.cursor == self.filled {
+            if !self.raised {
+                self.raised = true;
+                raise_priority_once();
+            }
+            if !self.fill() {
+                return None;
+            }
         }
         let value = self.block[self.cursor];
         self.cursor += 1;
@@ -1698,6 +1761,191 @@ impl Source for PlaybackSource {
         }
     }
 }
+
+/// What a sink plays: a playback source that ends before its next block
+/// once `stop` is set, so a replaced playback renders nothing beside the
+/// one that replaces it. When the sink lets go of it, on the audio thread,
+/// the source goes to the retired playback thread to be freed: a replaced
+/// mix can hold hundreds of megabytes of samples, and its pedals and buses
+/// megabytes more.
+struct Playing {
+    /// `None` only while it is dropped.
+    source: Option<Box<PlaybackSource>>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Playing {
+    /// Made on the window's thread, which also starts the retired playback
+    /// thread here if it has not started yet.
+    fn new(source: PlaybackSource) -> Self {
+        retired_playback();
+        Self {
+            source: Some(Box::new(source)),
+            stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl Iterator for Playing {
+    type Item = f32;
+    fn next(&mut self) -> Option<f32> {
+        let source = self.source.as_mut()?;
+        if source.cursor == source.filled && self.stop.load(Ordering::Relaxed) {
+            return None;
+        }
+        source.next()
+    }
+}
+
+impl Source for Playing {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+    fn channels(&self) -> u16 {
+        self.source.as_ref().map_or(2, |source| source.channels())
+    }
+    fn sample_rate(&self) -> u32 {
+        self.source
+            .as_ref()
+            .map_or(Mix::SAMPLE_RATE, |source| source.sample_rate())
+    }
+    fn total_duration(&self) -> Option<Duration> {
+        self.source
+            .as_ref()
+            .and_then(|source| source.total_duration())
+    }
+}
+
+impl Drop for Playing {
+    fn drop(&mut self) {
+        if let Some(source) = self.source.take() {
+            retire(source);
+        }
+    }
+}
+
+/// A playback on the device: its sink, and the switch that ends its source.
+struct Current {
+    sink: Sink,
+    stop: Arc<AtomicBool>,
+}
+
+impl Current {
+    /// Play `source` on `sink` in place of `old`. The old source ends
+    /// before the new one can start, so no device callback renders both.
+    fn start(sink: Sink, source: PlaybackSource, old: Option<Current>) -> Self {
+        let playing = Playing::new(source);
+        let stop = Arc::clone(&playing.stop);
+        if let Some(old) = old {
+            old.end();
+        }
+        sink.append(playing);
+        Self { sink, stop }
+    }
+
+    fn end(self) {
+        self.stop.store(true, Ordering::Relaxed);
+        self.sink.stop();
+    }
+}
+
+/// Retired playback that waits to be freed: a few replacements at most.
+const RETIRED_QUEUE: usize = 16;
+static RETIRED: OnceLock<SyncSender<Box<dyn Send>>> = OnceLock::new();
+
+/// The queue to the thread that frees retired playback, started on first use.
+fn retired_playback() -> &'static SyncSender<Box<dyn Send>> {
+    RETIRED.get_or_init(|| {
+        let (queue, retired) = std::sync::mpsc::sync_channel::<Box<dyn Send>>(RETIRED_QUEUE);
+        // If the thread cannot start, the queue is closed and `retire` frees
+        // in place, as before.
+        let _ = std::thread::Builder::new()
+            .name("retired playback".into())
+            .spawn(move || retired.into_iter().for_each(drop));
+        queue
+    })
+}
+
+/// Hand `retired` to the retired playback thread. It never waits: the
+/// bounded queue holds it without allocating, and only a full or closed
+/// queue frees it here.
+fn retire(retired: Box<dyn Send>) {
+    if let Some(queue) = RETIRED.get() {
+        let _ = queue.try_send(retired);
+    }
+}
+
+/// The error of the last failed request for an audio thread's priority, or 0.
+static PRIORITY_ERROR: AtomicU32 = AtomicU32::new(0);
+
+#[cfg(test)]
+thread_local! {
+    /// Test threads count their priority requests and send them to the
+    /// system only when a test asks, so tests do not run at an audio
+    /// thread's priority.
+    static PRIORITY_REQUESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SYSTEM_PRIORITY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Ask the system to run the calling thread, the device's, as an audio
+/// thread, once per thread. cpal 0.15.3 asks too, but passes a thread id
+/// where its request needs a handle, so the system refuses it.
+fn raise_priority_once() {
+    thread_local! {
+        static RAISED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if RAISED.with(|raised| raised.replace(true)) {
+        return;
+    }
+    #[cfg(test)]
+    {
+        PRIORITY_REQUESTS.with(|count| count.set(count.get() + 1));
+        if !SYSTEM_PRIORITY.with(std::cell::Cell::get) {
+            return;
+        }
+    }
+    if let Err(error) = raise_thread_priority() {
+        PRIORITY_ERROR.store(error.max(1), Ordering::Relaxed);
+    }
+}
+
+/// The multimedia class scheduler's "Pro Audio" task, or else the highest
+/// priority of the process's class. The thread keeps it until it ends.
+#[cfg(windows)]
+fn raise_thread_priority() -> Result<(), u32> {
+    use windows::Win32::System::Threading::{
+        AvSetMmThreadCharacteristicsW, GetCurrentThread, SetThreadPriority,
+        THREAD_PRIORITY_TIME_CRITICAL,
+    };
+    let mut task = 0;
+    // SAFETY: the task name is a static wide string, and the pseudo handle
+    // names the calling thread.
+    unsafe {
+        if AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut task).is_ok() {
+            return Ok(());
+        }
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)
+            .map_err(|error| error.code().0 as u32)
+    }
+}
+
+#[cfg(not(windows))]
+fn raise_thread_priority() -> Result<(), u32> {
+    Ok(())
+}
+
+/// Why playback runs at a normal thread priority, if the system refused it
+/// an audio thread's. Playback goes on either way.
+pub fn priority_failure() -> Option<String> {
+    let error = PRIORITY_ERROR.load(Ordering::Relaxed);
+    (error != 0).then(|| {
+        format!(
+            "Playback could not raise its thread's priority (error 0x{error:08X}). \
+             Audio may break up while the computer is busy."
+        )
+    })
+}
+
 impl Player {
     pub fn new() -> Result<Self, String> {
         let (stream, handle) = OutputStream::try_default()
@@ -1705,7 +1953,7 @@ impl Player {
         Ok(Self {
             _stream: stream,
             handle,
-            sink: None,
+            current: None,
             start_frame: 0,
             total_frames: 0,
             sample_rate: 44100,
@@ -1743,36 +1991,33 @@ impl Player {
         };
         let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
         let sample_rate = audio.sample_rate();
-        sink.append(PlaybackSource::new(audio, start, loop_region, master));
-        if let Some(old) = self.sink.take() {
-            old.stop();
-        }
+        let source = PlaybackSource::new(audio, start, loop_region, master);
+        self.current = Some(Current::start(sink, source, self.current.take()));
         self.start_frame = start;
         self.total_frames = total;
         self.sample_rate = sample_rate;
         self.loop_region = loop_region;
-        self.sink = Some(sink);
         Ok(())
     }
     pub fn pause(&self) {
-        if let Some(sink) = &self.sink {
-            sink.pause();
+        if let Some(current) = &self.current {
+            current.sink.pause();
         }
     }
     pub fn stop(&mut self) {
-        if let Some(sink) = self.sink.take() {
-            sink.stop();
+        if let Some(current) = self.current.take() {
+            current.end();
         }
         self.start_frame = 0;
         self.loop_region = None;
     }
     pub fn is_playing(&self) -> bool {
-        self.sink
+        self.current
             .as_ref()
-            .is_some_and(|s| !s.empty() && !s.is_paused())
+            .is_some_and(|current| !current.sink.empty() && !current.sink.is_paused())
     }
     pub fn position_frames(&self) -> u64 {
-        let elapsed = self.sink.as_ref().map_or(0, |s| {
+        let elapsed = self.current.as_ref().map_or(0, |Current { sink: s, .. }| {
             (s.get_pos().as_secs_f64() * self.sample_rate as f64) as u64
         });
         let pos = self.start_frame.saturating_add(elapsed);
@@ -1787,6 +2032,9 @@ impl Player {
         }
     }
 }
+
+#[cfg(test)]
+mod realtime_bench;
 
 #[cfg(test)]
 mod tests {
@@ -3761,5 +4009,228 @@ mod tests {
         // Track 5 plays on the left only.
         let track5 = &parts[4];
         assert!(track5.samples.iter().skip(1).step_by(2).all(|s| *s == 0.0));
+    }
+
+    /// A song that runs every part of playback: a lane with its EQ,
+    /// compressor, and a ducker keyed by another lane, a narrowed lane with
+    /// filter automation, a lane with volume automation, sends to a delay
+    /// whose tail dies and to a reverb, and master pedals, one of them keyed.
+    fn busy_song() -> (Project, HashMap<u32, Pcm>) {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 64, 192).unwrap();
+        editor.place(3, 2, 128, 128).unwrap();
+        let mut project = editor.project().clone();
+        let points = |points: &[(u32, f32)]| -> Vec<crate::automation::Point> {
+            points
+                .iter()
+                .map(|&(tick, value)| crate::automation::Point { tick, value })
+                .collect()
+        };
+        project.master_gain = 0.6;
+        let lane = &mut project.tracks[0];
+        lane.eq = crate::eq::ChannelEq {
+            on: true,
+            high_db: -6.0,
+            ..Default::default()
+        };
+        lane.compressor = crate::compressor::Compressor {
+            on: true,
+            threshold: -24.0,
+            ratio: 4.0,
+            ..Default::default()
+        };
+        lane.ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -24.0,
+            depth: 12.0,
+            attack: 1.0,
+            release: 50.0,
+        };
+        lane.sends[0] = 0.4;
+        project.tracks[1].width = 50.0;
+        project.tracks[1].automation.filter = points(&[(0, -0.5), (256, 0.3)]);
+        project.tracks[1].sends[1] = 0.5;
+        project.tracks[2].automation.volume = points(&[(128, -12.0), (256, 0.0)]);
+        project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform {
+            mode: crate::fx::TimeMode::Free,
+            time_ms_l: 120.0,
+            time_ms_r: 180.0,
+            feedback: 40.0,
+            ..crate::fx::Echoform::default()
+        });
+        project.fx.buses[1].module = crate::fx::Module::AetherformReverb(crate::fx::Aetherform {
+            decay_seconds: 0.5,
+            ..crate::fx::Aetherform::default()
+        });
+        project.master.bus_compressor = crate::master::BusCompressor {
+            on: true,
+            threshold: -20.0,
+            ratio: 4.0,
+            attack: 5.0,
+            release: 100.0,
+            key: 3,
+        };
+        project.master.multiband.on = true;
+        project.master.limiter.on = true;
+        let samples = HashMap::from([(1, tone(220.0)), (2, tone(60.0)), (3, tone(880.0))]);
+        (project, samples)
+    }
+
+    /// Play `project` from its start in blocks of `block` frames. With
+    /// `edit`, the live controls take the edited project once the source
+    /// has rendered `at` frames, a multiple of `block`.
+    fn play_in_blocks(
+        mix: &Arc<Mix>,
+        project: &Project,
+        block: usize,
+        edit: Option<(usize, &Project)>,
+    ) -> Vec<f32> {
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        control.set_levels(project);
+        let audio: Arc<dyn Frames> = mix.clone();
+        let mut source = PlaybackSource::with_block(audio, 0, None, Some(control.clone()), block);
+        let mut played = Vec::new();
+        if let Some((at, edited)) = edit {
+            let lead = source.lead;
+            played.extend(source.by_ref().take((at - lead) * 2));
+            assert_eq!((source.frame, source.cursor), (at as u64, source.filled));
+            control.set(&edited.master);
+            control.set_returns(&edited.fx);
+            control.set_levels(edited);
+        }
+        played.extend(source);
+        played
+    }
+
+    #[test]
+    fn playback_does_not_depend_on_its_block_size() {
+        let (project, samples) = busy_song();
+        let mix = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let exported = mix.to_pcm(&project.master, &project.fx).unwrap().samples;
+        // The buses ring on for several tail blocks after the song.
+        let tail = exported.len() / 2 - mix.frames() as usize;
+        assert!(tail > 8 * Mix::TAIL_BLOCK as usize, "{tail}");
+        for block in [PlaybackSource::BLOCK_FRAMES, 100] {
+            let played = play_in_blocks(&mix, &project, block, None);
+            assert_eq!(played.len(), exported.len(), "{block}-frame blocks");
+            assert!(
+                played == exported,
+                "{block}-frame blocks differ from export"
+            );
+        }
+        // Live edits take effect at the same frame whatever the block size,
+        // a moved fader glides over the same frames, and a switched pedal
+        // crossfades over them.
+        let mut edited = project.clone();
+        edited.tracks[0].gain = 0.3;
+        edited.tracks[1].pan = -0.5;
+        edited.master_gain = 0.8;
+        edited.master.tape.on = true;
+        edited.fx.buses[0].return_level = 0.5;
+        let at = 25_600;
+        let whole = play_in_blocks(&mix, &project, 1024, Some((at, &edited)));
+        assert!(whole != exported);
+        let short = play_in_blocks(&mix, &project, 100, Some((at, &edited)));
+        assert!(short == whole, "100-frame blocks differ after an edit");
+    }
+
+    /// Audio that counts its reads and says on which thread it is freed.
+    struct Probe {
+        reads: Arc<std::sync::atomic::AtomicUsize>,
+        freed: std::sync::mpsc::Sender<std::thread::ThreadId>,
+    }
+
+    impl Frames for Probe {
+        fn channels(&self) -> u16 {
+            2
+        }
+        fn sample_rate(&self) -> u32 {
+            44_100
+        }
+        fn frames(&self) -> u64 {
+            1_000_000
+        }
+        fn read(&self, _first_frame: u64, out: &mut [f32]) {
+            self.reads.fetch_add(1, Ordering::Relaxed);
+            out.fill(0.25);
+        }
+    }
+
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            let _ = self.freed.send(std::thread::current().id());
+        }
+    }
+
+    fn probe() -> (
+        Playing,
+        Arc<std::sync::atomic::AtomicUsize>,
+        std::sync::mpsc::Receiver<std::thread::ThreadId>,
+    ) {
+        let reads = Arc::default();
+        let (freed, freeing) = std::sync::mpsc::channel();
+        let audio = Arc::new(Probe {
+            reads: Arc::clone(&reads),
+            freed,
+        });
+        let playing = Playing::new(PlaybackSource::new(audio, 0, None, None));
+        (playing, reads, freeing)
+    }
+
+    #[test]
+    fn a_stopped_playback_plays_out_its_block_and_renders_no_other() {
+        let (mut playing, reads, _freeing) = probe();
+        let block = PlaybackSource::BLOCK_FRAMES * 2;
+        assert_eq!(playing.by_ref().take(block + 10).count(), block + 10);
+        assert_eq!(reads.load(Ordering::Relaxed), 2);
+        playing.stop.store(true, Ordering::Relaxed);
+        assert_eq!(playing.by_ref().count(), block - 10);
+        assert_eq!(reads.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn retired_playback_is_freed_on_another_thread() {
+        let (mut playing, _reads, freeing) = probe();
+        assert!(playing.next().is_some());
+        drop(playing);
+        let thread = freeing
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the audio is freed");
+        assert_ne!(thread, std::thread::current().id());
+    }
+
+    #[test]
+    fn playback_asks_for_an_audio_threads_priority_once_per_thread() {
+        std::thread::spawn(|| {
+            SYSTEM_PRIORITY.with(|system| system.set(true));
+            let requests = || PRIORITY_REQUESTS.with(std::cell::Cell::get);
+            let audio: Arc<dyn Frames> = Arc::new(Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: vec![0.0; 4096],
+            });
+            let first = PlaybackSource::new(Arc::clone(&audio), 0, None, None);
+            let second = PlaybackSource::new(audio, 0, None, None);
+            assert_eq!(requests(), 0, "made before the device reads");
+            #[cfg(windows)]
+            // SAFETY: the pseudo handle names the calling thread.
+            let priority = || unsafe {
+                windows::Win32::System::Threading::GetThreadPriority(
+                    windows::Win32::System::Threading::GetCurrentThread(),
+                )
+            };
+            #[cfg(windows)]
+            let normal = priority();
+            assert_eq!(first.count() + second.count(), 2 * 4096);
+            assert_eq!(requests(), 1);
+            assert_eq!(priority_failure(), None);
+            #[cfg(windows)]
+            assert!(priority() > normal, "{} after {normal}", priority());
+        })
+        .join()
+        .unwrap();
     }
 }

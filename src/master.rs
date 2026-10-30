@@ -1029,6 +1029,11 @@ impl MasterControl {
 
 /// The crossfade after a pedal is switched or moved during playback: 30 ms.
 const FADE: usize = 1323;
+/// The meters publish a reading once this many frames, about 23 ms, however
+/// short playback's blocks are: more than 30 times a second. A reading holds
+/// the true peak of its frames and counts one over if it passes the limit,
+/// so its length sets what the window shows and counts.
+const PUBLISH_FRAMES: usize = 1024;
 /// Playback keeps this delay even as pedals switch, so the timeline and
 /// both sides of a crossfade stay aligned. Export uses only active delays.
 const LIVE_LATENCY: usize =
@@ -1049,6 +1054,8 @@ pub struct MasterProcessor {
     meters: Option<Box<meters::Meters>>,
     /// Do not measure the padding that playback removes before its first frame.
     meter_lead: usize,
+    /// Frames measured since the meters last published.
+    unpublished: usize,
 }
 impl MasterProcessor {
     /// Playback and export start with the Booster compressor's smoothed
@@ -1069,6 +1076,7 @@ impl MasterProcessor {
             warmup: 0,
             meters: None,
             meter_lead: 0,
+            unpublished: 0,
         }
     }
     /// A processor that takes its settings from `control` as they change
@@ -1156,7 +1164,15 @@ impl MasterProcessor {
                 meters.output(l, r);
             }
             (*left, *right) = (l, r);
+            self.unpublished += 1;
+            if self.unpublished == PUBLISH_FRAMES {
+                self.publish();
+            }
         }
+    }
+    /// Publish the meters' reading of the frames since the last one.
+    fn publish(&mut self) {
+        self.unpublished = 0;
         if let (Some(meters), Some((control, _))) = (&mut self.meters, &self.control) {
             let board = &mut self.board;
             let compressor = if board.chain.runs(PedalKind::BusCompressor) {
@@ -1175,6 +1191,9 @@ impl MasterProcessor {
     /// Complete delayed peak measurement after the last audible frame.
     /// This does not run the board or add samples to the loudness windows.
     pub(crate) fn finish(&mut self) {
+        if self.unpublished > 0 {
+            self.publish();
+        }
         if let (Some(meters), Some((control, _))) = (&mut self.meters, &self.control) {
             meters.finish(&control.meters);
         }
@@ -1595,6 +1614,8 @@ mod tests {
         for chunk in block.chunks_mut(514) {
             processor.process(chunk);
         }
+        // The end of playback publishes the frames since the last reading.
+        processor.finish();
         let mut reference = meters::Loudness::new();
         for &[left, right] in block[latency * 2..].as_chunks::<2>().0 {
             reference.push(left, right);
@@ -1606,6 +1627,32 @@ mod tests {
             control.meters().integrated,
             reference.integrated
         );
+    }
+
+    #[test]
+    fn meter_readings_do_not_depend_on_playbacks_block_size() {
+        let read = |block_frames: usize| {
+            let control = MasterControl::new(&MasterChain::default());
+            let mut processor = MasterProcessor::live(control.clone());
+            // Half a second over the meters' limit, then half a second under it.
+            let mut audio: Vec<f32> = (0..44_100)
+                .flat_map(|frame| {
+                    let level = if frame < 22_050 { 0.99 } else { 0.1 };
+                    let value = level * (frame as f32 * 0.07).sin();
+                    [value, value]
+                })
+                .collect();
+            for block in audio.chunks_mut(block_frames * 2) {
+                processor.process(block);
+            }
+            processor.finish();
+            control.meters()
+        };
+        let whole = read(1024);
+        assert!(whole.overs > 10, "{whole:?}");
+        for block_frames in [256, 128, 100, 1536, 4096] {
+            assert_eq!(read(block_frames), whole, "{block_frames}-frame blocks");
+        }
     }
 
     fn interleaved(frames: &[(f32, f32)]) -> Vec<f32> {

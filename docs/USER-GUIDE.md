@@ -9,6 +9,7 @@
 - [Mastering](#mastering)
 - [Effects](#effects)
 - [Sound tools and recording](#sound-tools-and-recording)
+- [Album Review](#album-review)
 - [Save and export](#save-and-export)
 - [Open songs from other programs](#open-songs-from-other-programs)
 - [Known limits](#known-limits)
@@ -50,8 +51,10 @@ still load. The status line names the folder and the reason, and the Libraries
 window shows it under the folder. The folder stays in the list, but its sounds
 are not in Sounds until a later scan can read it. Songs that use those sounds
 show them as missing. When no folder can be read, the scan fails and the sounds
-do not change. When several folders contain original product samples, each
-product's samples come from the first folder in the list that has them.
+do not change. When several folders contain original product samples, the
+first folder in the list that has a product's samples provides it, and later
+folders add the samples that it lacks. A later folder's exact copy of a sample
+that an earlier folder already provides is not listed again.
 
 The application identifies extracted product samples by their audio, regardless
 of filename. These samples keep their original tempo and length. A folder also
@@ -74,6 +77,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   arrangement and mixer omit unused tracks.
 - Hold Shift to select clips. Drag an empty area to select a group. Hold Shift
   or Alt while dragging a clip to copy it. A ghost shows where the clips land.
+  Every clip of a group must land on a shown track or the Add row. If one would
+  land on an unused track, a label names that track and the drop does nothing.
   Use Delete, Undo, and Redo for edits.
 - Drag a clip's side edges to trim it. Drag its top corner handles to set fades,
   or the small handle in its middle up or down to set gain in 1 dB steps (0.1 dB
@@ -226,9 +231,47 @@ follows that track instead, such as the kick. A preset keeps the Key.
 - Select a recording track and press Record. Recording starts after an eight-beat
   count-in. Stop and save the take as a WAV file.
 
+## Album Review
+
+Album Review is a library of deep-listening analyses of albums: for each
+album the metadata, an overview, and for each track its energy, tags, part in
+the album, and a timeline of timestamped events. Reviews of your own albums
+and songs use the same form, so you can compare your work with the reference
+albums. Select the record icon in the tool rail to open it.
+
+- The grid shows one card for each album. Search finds titles, artists, and
+  genre tags and ignores accents: "oxygene" finds "Oxygène". Artist filters
+  show the albums of any selected artist; genre filters show the albums that
+  have every selected tag, and a tag that would leave no album is disabled.
+  The genre row shows the six most-used tags; "+N more" shows the others.
+  Active filters show as chips; Clear filters removes them and the search.
+  Sort by year, artist, title, or track count. The count reads "visible /
+  total albums".
+- Select a card for its page: the metadata, the overview, the listening
+  links, a timeline chart with one row for each track, and each track's
+  events. Select a timeline row to go to its track.
+  Opening an album or returning to the grid starts at the top of that view.
+- Review files contain links to cover art. **Display cover art** downloads the
+  album's cover from its source and keeps it in the cover cache of the data
+  folder, up to 256 MB; the least recently viewed covers go first. A cover
+  that cannot be downloaded leaves the placeholder and shows the reason.
+  **Clear cover cache** removes the downloaded covers after cover loading
+  finishes. **Reload reviews** reads the folder again after its files change
+  and finds a missing folder after you restore it. **Credits and rights** names the
+  sources.
+- The reviews are JSON files in `assets/album-review/` beside the application.
+  Without that folder the window shows **No reviews folder**. Agents add and
+  change reviews through [agent control](AGENT-CONTROL.md); the
+  [writing guide](ALBUM-REVIEW-WRITING.md) gives the content rules, and the
+  [research shortlist](ALBUM-REVIEW-RESEARCH.md) lists albums to review next.
+
 ## Save and export
 
 Save songs as `.mixjam` files. Export writes stereo PCM16 WAV at 44.1 kHz.
+If the used native samples of one product are on different volumes, saving
+keeps copies of those WAV files together in the application's data folder.
+The song retains its native sample identities. These copies are source audio
+for the saved song; repeated saves reuse unchanged copies.
 
 A `.mixjam` song is JSON, format version 16; [SONG-FORMAT.md](SONG-FORMAT.md)
 describes it and how earlier versions open. A song links to WAV files; it is

@@ -17,6 +17,7 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/master.rs
              + src/ui/fx.rs
              + src/ui/agent.rs
+             + src/ui/album_review.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -65,6 +66,28 @@ frames, with their decoded sources. It mixes any range of the song on demand.
 The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
 song and song length is bounded only by the timeline. The mix itself is dry.
+
+`Player` plays through rodio on cpal's WASAPI shared-mode output. rodio pulls
+`PlaybackSource` one sample at a time inside the device's callback, about every
+10 ms, and the callback that reaches the end of a block renders the next one
+within its own period. Playback therefore renders short blocks,
+`PlaybackSource::BLOCK_FRAMES` (256 frames, 5.8 ms), so a callback renders one
+or two and no callback carries much more than its share; export keeps its own
+65,536-frame blocks. Nothing audible depends on playback's block size: the
+level glides, the FX tails, and the meters keep their own 1024-frame timing,
+so playback in blocks of any size gives export's samples. On its first read
+on a thread, a playback source asks the system once per thread to run that
+thread as the multimedia class scheduler's "Pro Audio" task, or else at the
+highest priority of the process's class. cpal 0.15.3 asks too, but passes a
+thread id where the call needs a handle, so the system refuses it. If the
+request fails, playback goes on and the window reports it once. Each source
+plays inside a `Playing` wrapper. When a new playback replaces it, its stop
+switch is set before the new source is appended, and the old source ends
+before its next block, so no callback renders both. When the sink lets go of
+it on the audio thread, the wrapper hands the source through a bounded queue
+to the retired playback thread, which frees it: a replaced mix can hold
+hundreds of megabytes of samples, and freeing 309 MB takes about 26 ms.
+
 `Frames::read_block` with a sends buffer gives the dry sum together with the
 feeds of the four FX buses, eight interleaved channels a frame: each voice adds
 its sample, after the track's gains and pan, times the track's send. A voice
@@ -116,8 +139,9 @@ render bit for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, 
 from the master board's shared RBJ biquads (`master::dsp`). An EQ edit is a
 track edit, so it prepares a new mix and playback resumes on it. A mix keeps
 the track levels it was prepared with, which export uses. Playback reads them
-live from the `MasterControl` instead, and glides from the last block's level
-to the new one over each block, so an edit of faders, pans, polarity, or the
+live from the `MasterControl` instead, and glides from the level it has
+reached to a new one over `GLIDE_FRAMES` (1024 frames, about 23 ms), across
+playback's blocks, so an edit of faders, pans, polarity, or the
 master gain alone is not a render change, including undo and redo. Each
 track publishes its left and right levels as one atomic pair, so playback
 cannot mix channels from different edits. `MasterControl` also stores the
@@ -126,7 +150,7 @@ counter covers publication of all pairs and the master gain. Playback makes
 one snapshot attempt per block. If a writer overlaps it, playback retains
 its last complete snapshot, or the prepared mix's levels for its first block.
 The audio thread neither waits for a lock nor retries. Master gain glides
-over each block with the levels. Key normalization divides by that gain
+with the levels. Key normalization divides by that gain
 directly, so very small positive gains cannot overflow a reciprocal and
 leave a ducker's detector at infinity. Playback continues without a
 click, and an export prepares a new mix only when the levels differ.
@@ -146,10 +170,10 @@ full reduction louder until the attack caught up. Two cases carry on:
   again during playback, such as for each step of a compressor dial. After
   each block, playback keeps each compressed track's power and reduction in
   its `MasterControl`, with the frame after that block. A new playback that
-  starts at most `CARRY_FRAMES` (4 blocks) before that frame starts the
+  starts at most `CARRY_FRAMES` (4096 frames) before that frame starts the
   track's compressor from them. That covers the frames playback renders
-  ahead of what has played, the master pedals' delay, a block more while the
-  old playback stops, and the cursor's tick and update lag.
+  ahead of what has played, the master pedals' delay, and the cursor's tick
+  and update lag.
 
 The kept history follows the track, not the chain's place in the mix. A key
 chain takes its track's history too, so a lane ducker, a master pedal, or an
@@ -177,8 +201,10 @@ for a pending long echo. Bypass does not hide internal tail activity from this
 check. The safety limiter's fixed 220-frame lookahead comes off the delay's
 output tap, while feedback keeps the full selected time, so every repeat stays
 on the beat. Reverb compensates its pre-delay where possible. Export runs the stage on silence after the song
-while any bus rings, for at most `TAIL_LIMIT`, in playback's block size, so
-export and playback give the same samples.
+while any bus rings, for at most `TAIL_LIMIT`, in 1024-frame blocks
+(`Mix::TAIL_BLOCK`). Playback also asks whether a bus still rings once a tail
+block, however short its own blocks are, so export and playback give the same
+samples.
 `src/master.rs` owns the master pedalboard: `MasterChain` is the saved
 settings, `Knob` names each continuous setting with its range, and
 `MasterProcessor` runs the board over the summed stereo mix in blocks, with
@@ -216,15 +242,17 @@ when the set of required key tracks stays the same. A changed set of keys
 prepares the mix again. The same `MasterControl` carries the FX buses'
 settings and Clear Tail requests, which the `ReturnsProcessor` polls the same way. Tool previews play without the pedalboard. Each
 playback and export starts the pedalboard in the same settled state. A live
-processor also measures: after each block it publishes a `MeterReading` through
+processor also measures: every 1024 frames it publishes a `MeterReading` through
 atomics in the `MasterControl`, which `Session::master_meters` reads without
 waiting. Each playback numbers its readings, and only the start of a playback
 changes that number. A stopped playback that is still finishing its last block
 can show its levels for one block, but it cannot keep the next playback's readings
 from reaching the window. The cumulative OVER count carries its playback number
 in the same atomic value. A stale count cannot become the new playback's lamp
-baseline. The playback block is 1024 frames, so readings change more than 30
-times a second. At the end, playback finishes the peak detector without adding
+baseline. Readings change more than 30 times a second, and each covers the
+same frames whatever playback's block size, so the block size changes neither
+the true peak shown nor the OVER count. At the end, playback publishes the
+frames since the last reading and finishes the peak detector without adding
 audio frames or loudness time. Output metering excludes the initial 593 frames
 that playback removes, so loudness windows follow the audible program.
 Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
@@ -250,6 +278,14 @@ do the same for the parts. One export of either kind runs at a time.
 replaced; the frontend keeps its filtered palette until then. Folder adoption
 takes providers that are already loaded from the current library and reads a
 provider from disk only when its folder is gone.
+When a saved provider replaces a partial product during song opening, it
+keeps already loaded sample identities that the saved provider does not have.
+If the used native WAVs of one product cannot fit under one saved folder,
+`project_io::save_with_library` retains their exact file bytes together under
+`native-providers/<product>/<content hash>` in the data folder. It verifies
+the native IDs, decoded audio and timing before saving that binding. Repeated
+saves reuse verified content. A retention failure leaves the existing song
+unchanged. This keeps native identities without changing the song format.
 
 A song queued behind a folder scan records both the render revision and the
 editor generation. Any intervening project edit cancels that deferred open,
@@ -511,6 +547,43 @@ original audio before the duration-based fallback is used. A pack's `BPM.INF`
 and tempo tokens in file names are stated tempos. They override the duration
 reading but not matching original audio. Optional supplemental tempo identities
 are embedded at build time, like the native identity catalogs.
+
+## Runtime data folders and Album Review
+
+Some data ships beside the executable and is read at run time, not compiled
+in. `src/runtime_data.rs` finds such a folder, `assets/<name>`, in the
+executable's folder or up to four folders above it: the repository root for a
+build in `target/release` or `target/debug/deps`, or the installation folder.
+The lookup is generic, so the sample catalogs can use it later.
+
+`src/album_review.rs` owns the Album Review: `Shelf` reads
+`assets/album-review/<id>.json`, sorted by id, and lists each file that does
+not load with its reason; a missing folder is an explicit state.
+`album_review/review.rs` defines the saved form (`Review`, `Track`, `Event`,
+`Energy`, `Kind`) and every rule a review obeys; `Shelf::add` and
+`Shelf::update` check the rules before `atomic_file` writes the file, so the
+application writes only valid reviews. New reviews use exclusive publication
+and cannot replace an existing file, even when that file did not load.
+`Query` and `Shelf::tracks` answer the agent
+filters (artist, tag, energy, kind). `album_review/collection.rs` owns the
+grid's rules: accent-insensitive search with `deunicode`, artist union, genre
+intersection with spelling variants joined, the genre counts, and the five
+sorts with their tie-breaks. `album_review/covers.rs` owns the cover cache in
+the data folder (`album-review/covers/<id>.<ext>`, at most 256 MB, least
+recently viewed first, with the view time kept as the file's modification
+time) and, in the GUI build, the download: `ureq` with rustls, http and https
+only, a 20-second timeout, at most 20 MB, and only a JPEG, PNG, or WebP image,
+with the user agent `MixJamTechno/<version>`. `CoverLoader` runs reads,
+downloads, and decoding on a background thread and the window polls it.
+Downloaded images must decode before they enter the cache; an explicit
+download can replace a corrupt cached image. Cache clearing waits until all
+pending cover results have been consumed. Cover download is the
+application's only network access.
+
+`src/ui/album_review.rs` is the window. It keeps the filter, the sort, the
+page, and the cover textures, and reaches the reviews only through
+`application::album_review`. `agent::album_reply` answers the review requests
+from a `Shelf`, so they work headless and without the window.
 
 ## Agent control
 

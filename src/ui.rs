@@ -6,6 +6,8 @@ mod view;
 use view::*;
 #[path = "ui/agent.rs"]
 mod agent;
+#[path = "ui/album_review.rs"]
+mod album_review;
 #[path = "ui/controls.rs"]
 mod controls;
 #[path = "ui/dialog.rs"]
@@ -388,6 +390,9 @@ pub struct MixJamApp {
     show_step_synth: bool,
     show_sample_edit: bool,
     show_stretch: bool,
+    show_album_review: bool,
+    /// The Album Review window's view, its reviews, and its loaded covers.
+    album_review: album_review::AlbumReviewState,
     effects: EffectsState,
     effects_feedback: EffectsFeedback,
     step_synth: StepSynthState,
@@ -658,6 +663,8 @@ impl MixJamApp {
             ),
             show_sample_edit: matches!(capture_view.as_str(), "edit" | "missing-edit"),
             show_stretch: matches!(capture_view.as_str(), "stretch" | "missing-stretch"),
+            show_album_review: capture_view.starts_with("album-review"),
+            album_review: album_review::capture_state(&capture_view),
             effects: if capture_view == "effects-expanded" {
                 EffectsState {
                     filter: Some(Default::default()),
@@ -1498,6 +1505,31 @@ impl MixJamApp {
         Some((track as i32 - anchor.track as i32, tick_delta))
     }
 
+    /// Why a clip drag that moves the selection by `tracks` cannot drop: the
+    /// first destination without a row. The lanes show only occupied tracks
+    /// and the Add row, so a drop puts every clip on one of them or none.
+    fn unshown_destination(&self, tracks: i32) -> Option<String> {
+        let track = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .filter(|clip| self.selected_clips.contains(&clip.id))
+            .map(|clip| clip.track as i64 + i64::from(tracks))
+            .filter(|&track| {
+                usize::try_from(track)
+                    .ok()
+                    .and_then(|track| self.timeline_row_by_track.get(track).copied().flatten())
+                    .is_none()
+            })
+            .min()?;
+        Some(if (0..TRACK_COUNT as i64).contains(&track) {
+            format!("Track {} has no row", track + 1)
+        } else {
+            "Outside the timeline".into()
+        })
+    }
+
     /// Where a drag at `pos` would land: the rectangle and sound of each
     /// clip it places or moves. Empty off the lanes.
     fn drop_ghosts(&self, item: &DragItem, pos: Pos2, fine: bool) -> Vec<(Rect, u32)> {
@@ -1525,6 +1557,11 @@ impl MixJamApp {
                 let Some((tracks, ticks)) = self.clip_drag_delta(pos, fine, id, offset) else {
                     return Vec::new();
                 };
+                // A drop that would fill a track without a row is canceled, so
+                // no clip shows a ghost.
+                if self.unshown_destination(tracks).is_some() {
+                    return Vec::new();
+                }
                 self.session
                     .project()
                     .clips
@@ -1538,7 +1575,6 @@ impl MixJamApp {
                             clip.sample_id,
                         ))
                     })
-                    .filter(|(ghost, _)| ghost.is_positive())
                     .collect()
             }
         }
@@ -1576,6 +1612,12 @@ impl MixJamApp {
                     .map(|s| s.name.clone())
                     .unwrap_or_default();
                 drag_label(ctx, pos, &name);
+            } else if let DragItem::Clip { id, offset, .. } = *drag
+                && let Some((tracks, _)) = self.clip_drag_delta(pos, fine, id, offset)
+                && let Some(reason) = self.unshown_destination(tracks)
+            {
+                // A group that would fill a track without a row names it.
+                drag_label(ctx, pos, &reason);
             }
         }
         if !ctx.input(|i| i.pointer.any_released()) {
@@ -1600,14 +1642,21 @@ impl MixJamApp {
                 DragItem::Clip { id, offset, copy } => {
                     // Shift or Alt held at the drop copies too, as in the original.
                     let copy = copy || ctx.input(|i| i.modifiers.shift || i.modifiers.alt);
-                    if let Some((track_delta, tick_delta)) =
+                    let Some((track_delta, tick_delta)) =
                         self.clip_drag_delta(pos, fine, id, offset)
-                    {
-                        let ids: Vec<_> = self.selected_clips.iter().copied().collect();
-                        if let Err(error) = self.try_move_clips(&ids, track_delta, tick_delta, copy)
-                        {
-                            self.error(error);
-                        }
+                    else {
+                        return;
+                    };
+                    if let Some(reason) = self.unshown_destination(track_delta) {
+                        let action = if copy { "Copy" } else { "Move" };
+                        self.message(format!(
+                            "{action} canceled. {reason}. Every clip must land on a row."
+                        ));
+                        return;
+                    }
+                    let ids: Vec<_> = self.selected_clips.iter().copied().collect();
+                    if let Err(error) = self.try_move_clips(&ids, track_delta, tick_delta, copy) {
+                        self.error(error);
                     }
                 }
             }
@@ -2562,6 +2611,7 @@ impl MixJamApp {
 
     fn tool_windows(&mut self, ctx: &egui::Context) {
         self.eq_window(ctx);
+        album_review::show(ctx, &mut self.show_album_review, &mut self.album_review);
         if self.show_libraries {
             let mut open = true;
             dialog::window("Sample libraries")

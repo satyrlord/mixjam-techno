@@ -461,7 +461,7 @@ pub(super) fn rail_panel(ui: &egui::Ui, rect: Rect) {
 }
 
 pub(super) fn rail_separator(ui: &mut egui::Ui) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(48.0, 14.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(48.0, 8.0), Sense::hover());
     let left = rect.left_center() + Vec2::new(3.0, 0.0);
     let right = rect.right_center() - Vec2::new(3.0, 0.0);
     ui.painter()

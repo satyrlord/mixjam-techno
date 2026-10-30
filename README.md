@@ -4,6 +4,8 @@ A native Rust loop sequencer for Windows. Arrange WAV samples on up to 64 tracks
 at 120, 125, 130, 135, 140, 160, or 180 BPM, mix them with channel EQ and four
 FX buses, master them on a pedalboard, and export stereo WAV. The editor also
 opens MixJam v7 `.mixjam` projects and several legacy `.mix` song formats.
+Album Review keeps deep-listening analyses of reference albums and of your own
+songs, for you and for song-building agents.
 
 ## Requirements
 
@@ -41,6 +43,9 @@ cache, and generated audio use `%LOCALAPPDATA%\MixJam Techno`; set
 - [Song format](docs/SONG-FORMAT.md): the `.mixjam` format and its versions.
 - [Command line](docs/COMMAND-LINE.md): headless inspection, conversion, and
   rendering.
+- [Album Review writing guide](docs/ALBUM-REVIEW-WRITING.md) and
+  [research shortlist](docs/ALBUM-REVIEW-RESEARCH.md): the content rules of
+  the reviews and the albums to review next.
 - [Agent control](docs/AGENT-CONTROL.md): operate the window from a script or
   an AI agent.
 - [Development](docs/DEVELOPMENT.md): the toolchain, the version number, the

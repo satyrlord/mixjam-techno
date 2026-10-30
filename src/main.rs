@@ -228,6 +228,7 @@ fn run() -> Result<(), String> {
                     "folder_tempos":library.folder_tempos().iter().map(|(folder,bpm,count)| serde_json::json!({"folder":folder,"bpm":bpm,"wavs":count})).collect::<Vec<_>>(),
                     "wavs_with_different_audio":library.unverified_waves().map(|(id,path)| serde_json::json!({"id":id,"path":path})).collect::<Vec<_>>(),
                     "skipped_wavs":library.skipped_waves().iter().map(|(path,error)| serde_json::json!({"path":path,"error":error})).collect::<Vec<_>>(),
+                    "duplicate_copies":library.duplicate_copies().len(),"duplicate_copy_examples":library.duplicate_copies().iter().take(5).collect::<Vec<_>>(),
                     "tracks":mixjam_techno::engine::TRACK_COUNT,"supported_bpms":mixjam_techno::engine::SUPPORTED_BPMS,
                     "libraries":library.bindings().iter().map(|binding| serde_json::json!({"product":binding.product.slug(),
                         "samples":library.samples.iter().filter(|sample| Product::sample_key(sample.id).is_some_and(|(product,_)|product==binding.product)).count()})).collect::<Vec<_>>()})

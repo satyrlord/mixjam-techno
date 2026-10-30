@@ -1,6 +1,7 @@
 //! Agent control channel: the wire protocol, a loopback server, and the
 //! command-line client. It carries typed requests to a frontend and typed
 //! replies back. The frontend decides what each request does.
+use crate::album_review;
 use crate::application::{Product, Sample, Session, TICKS_PER_BAR};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -78,6 +79,26 @@ Libraries
                          1 to 9 folders and scan them, as the Sample libraries
                          window does. The sounds change when the scan ends;
                          `wait idle=true` waits for it.
+
+Album Review (reviews of albums and of your own songs; no window needed)
+  reviews [search= artist= tag= energy= kind= sort= offset= limit=]
+                         The reviews, each with its genre tags and track
+                         count. search= looks in titles, artists, and genre
+                         tags; artist= is part of a name; tag= is a genre or
+                         track tag; energy= is low, mid, high, or peak; kind=
+                         is reference or own. A track filter keeps a review
+                         with one such track. sort= is year, year_desc,
+                         artist, title, or tracks.
+  review id=             One review in full: metadata, overview, links, and
+                         each track with its energy, tags, role, and events.
+  review_tracks [id= artist= tag= energy= kind= offset= limit=]
+                         The tracks that match, with their album and their
+                         timestamped events, such as the arc of every peak
+                         track tagged Acid.
+  add_review review={...} | file=REVIEW.json   Save a new review. It must
+                         obey every rule; the error names each broken rule.
+  update_review review={...} | file=REVIEW.json   Replace the review with
+                         that id, under the same rules.
 
 Other
   quit                   Close the window. Unsaved work opens the save modal.
@@ -298,6 +319,55 @@ pub enum Request {
         #[serde(deserialize_with = "paths")]
         folders: Vec<PathBuf>,
         fallback_bpm: Option<f64>,
+    },
+    /// List the album reviews that match.
+    Reviews {
+        #[serde(default, deserialize_with = "optional_text")]
+        search: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        artist: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        tag: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        energy: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        kind: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        sort: Option<String>,
+        #[serde(default)]
+        offset: usize,
+        limit: Option<usize>,
+    },
+    /// One album review in full.
+    Review {
+        #[serde(deserialize_with = "text")]
+        id: String,
+    },
+    /// The tracks of the album reviews that match.
+    ReviewTracks {
+        #[serde(default, deserialize_with = "optional_text")]
+        id: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        artist: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        tag: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        energy: Option<String>,
+        #[serde(default, deserialize_with = "optional_text")]
+        kind: Option<String>,
+        #[serde(default)]
+        offset: usize,
+        limit: Option<usize>,
+    },
+    /// Save a new album review, given inline or as a JSON file.
+    AddReview {
+        review: Option<serde_json::Value>,
+        file: Option<PathBuf>,
+    },
+    /// Replace an album review, given inline or as a JSON file.
+    UpdateReview {
+        review: Option<serde_json::Value>,
+        file: Option<PathBuf>,
     },
     Quit,
 }
@@ -563,7 +633,35 @@ pub enum Body {
         fallback_bpm: f64,
         scan: Option<ScanView>,
     },
+    Reviews {
+        /// The reviews folder, or none when the application has none.
+        folder: Option<PathBuf>,
+        total: usize,
+        reviews: Vec<album_review::Summary>,
+        /// Files of the folder that did not load, with the reason.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        problems: Vec<ReviewProblem>,
+    },
+    Review {
+        review: Box<album_review::Review>,
+    },
+    ReviewTracks {
+        total: usize,
+        tracks: Vec<album_review::TrackMatch>,
+    },
+    ReviewSaved {
+        id: String,
+        path: PathBuf,
+        added: bool,
+    },
     Done(Box<Outcome>),
+}
+
+/// A review file that did not load.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ReviewProblem {
+    pub file: String,
+    pub error: String,
 }
 
 fn bar_of(tick: u32) -> f64 {
@@ -1199,12 +1297,269 @@ pub fn run_client(arguments: &[String]) -> Result<bool, String> {
     send(port, key, [request_line(rest)], &mut output)
 }
 
+/// Answer an Album Review request from the reviews of `shelf`, which
+/// `add_review` and `update_review` change. Any other request gives `None`.
+pub fn album_reply(
+    shelf: &mut album_review::Shelf,
+    request: &Request,
+) -> Option<Result<Body, String>> {
+    use album_review::{Energy, Kind, Query, collection};
+    fn parse<T>(
+        text: &Option<String>,
+        f: fn(&str) -> Result<T, String>,
+    ) -> Result<Option<T>, String> {
+        text.as_deref().map(f).transpose()
+    }
+    let query = |id: &Option<String>,
+                 artist: &Option<String>,
+                 tag: &Option<String>,
+                 energy: &Option<String>,
+                 kind: &Option<String>,
+                 search: &Option<String>|
+     -> Result<Query, String> {
+        Ok(Query {
+            id: id.clone(),
+            artist: artist.clone(),
+            tag: tag.clone(),
+            energy: parse(energy, Energy::parse)?,
+            kind: parse(kind, Kind::parse)?,
+            search: search.clone(),
+        })
+    };
+    let saved = |shelf: &mut album_review::Shelf,
+                 review: &Option<serde_json::Value>,
+                 file: &Option<PathBuf>,
+                 added: bool|
+     -> Result<Body, String> {
+        let review = match (review, file) {
+            (Some(value), None) => album_review::from_value(value.clone())?,
+            (None, Some(path)) => album_review::read_file(path)?,
+            _ => return Err("Give the review as review={...} or as file=PATH, not both.".into()),
+        };
+        let id = review.id.clone();
+        if added {
+            shelf.add(review)?;
+        } else {
+            shelf.update(review)?;
+        }
+        let path = shelf
+            .folder()
+            .map(|folder| folder.join(format!("{id}.json")))
+            .unwrap_or_default();
+        Ok(Body::ReviewSaved { id, path, added })
+    };
+    Some(match request {
+        Request::Reviews {
+            search,
+            artist,
+            tag,
+            energy,
+            kind,
+            sort,
+            offset,
+            limit,
+        } => query(&None, artist, tag, energy, kind, search).and_then(|query| {
+            let sort = parse(sort, collection::Sort::parse)?.unwrap_or_default();
+            let mut found = shelf.find(&query);
+            found.sort_by(|a, b| sort.compare(a, b));
+            Ok(Body::Reviews {
+                folder: shelf.folder().map(Path::to_path_buf),
+                total: found.len(),
+                reviews: found
+                    .into_iter()
+                    .skip(*offset)
+                    .take(limit.unwrap_or(50))
+                    .map(album_review::Summary::from)
+                    .collect(),
+                problems: shelf
+                    .problems()
+                    .iter()
+                    .map(|(file, error)| ReviewProblem {
+                        file: file.clone(),
+                        error: error.clone(),
+                    })
+                    .collect(),
+            })
+        }),
+        Request::Review { id } => shelf
+            .review(id)
+            .map(|review| Body::Review {
+                review: Box::new(review.clone()),
+            })
+            .ok_or_else(|| {
+                if shelf.folder().is_none() {
+                    "There is no reviews folder.".to_string()
+                } else {
+                    format!("No review has the id \"{id}\". Use `reviews` to list them.")
+                }
+            }),
+        Request::ReviewTracks {
+            id,
+            artist,
+            tag,
+            energy,
+            kind,
+            offset,
+            limit,
+        } => query(id, artist, tag, energy, kind, &None).map(|query| {
+            let found = shelf.tracks(&query);
+            Body::ReviewTracks {
+                total: found.len(),
+                tracks: found
+                    .into_iter()
+                    .skip(*offset)
+                    .take(limit.unwrap_or(50))
+                    .collect(),
+            }
+        }),
+        Request::AddReview { review, file } => saved(shelf, review, file, true),
+        Request::UpdateReview { review, file } => saved(shelf, review, file, false),
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn strings(words: &[&str]) -> Vec<String> {
         words.iter().map(|word| (*word).to_string()).collect()
+    }
+
+    fn sample_review(id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "kind": "reference",
+            "artist": "Artist",
+            "title": "Album",
+            "year": 1990,
+            "label": "Label",
+            "producer": "Producer",
+            "genre": "Techno",
+            "genreTags": ["Techno"],
+            "runtime": "6:00",
+            "overview": "An overview.",
+            "tracks": [{
+                "num": 1,
+                "title": "Drive",
+                "duration": "6:00",
+                "energy": "peak",
+                "tags": ["Acid", "Four-on-the-floor"],
+                "role": "Album role: The opener.",
+                "events": [
+                    {"timestamp": "0:00", "section": "Intro", "description": "Kick alone."},
+                    {"timestamp": "1:30", "section": "Drop", "description": "The acid line."}
+                ]
+            }]
+        })
+    }
+
+    #[test]
+    fn album_review_requests_list_read_query_add_and_update_reviews() {
+        let folder = key_folder("reviews");
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut shelf = album_review::Shelf::open(Some(folder.clone()));
+        let request = |words: &[&str]| {
+            serde_json::from_str::<Request>(&request_line(&strings(words)).unwrap()).unwrap()
+        };
+        let mut review = sample_review("artist-album");
+        let line = format!(r#"{{"command":"add_review","review":{review}}}"#);
+        let add = serde_json::from_str::<Request>(&request_line(&[line]).unwrap()).unwrap();
+        match album_reply(&mut shelf, &add).unwrap().unwrap() {
+            Body::ReviewSaved { id, path, added } => {
+                assert_eq!(id, "artist-album");
+                assert!(added);
+                assert_eq!(path, folder.join("artist-album.json"));
+                assert!(path.is_file());
+            }
+            other => panic!("Unexpected reply {other:?}"),
+        }
+        // Adding the same id again fails, and so does a review that breaks a rule.
+        assert!(album_reply(&mut shelf, &add).unwrap().is_err());
+        review["id"] = "other-album".into();
+        review["tracks"][0]["role"] = "No prefix".into();
+        let broken = Request::AddReview {
+            review: Some(review.clone()),
+            file: None,
+        };
+        let error = album_reply(&mut shelf, &broken).unwrap().unwrap_err();
+        assert!(error.contains("Album role"), "{error}");
+        assert!(!folder.join("other-album.json").exists());
+        // Update from a file.
+        let file = folder.join("draft.txt");
+        let mut changed = sample_review("artist-album");
+        changed["title"] = "Album (Remastered)".into();
+        std::fs::write(&file, changed.to_string()).unwrap();
+        let update = request(&["update_review", &format!("file={}", file.display())]);
+        assert!(matches!(
+            album_reply(&mut shelf, &update).unwrap().unwrap(),
+            Body::ReviewSaved { added: false, .. }
+        ));
+        match album_reply(&mut shelf, &request(&["review", "id=artist-album"])) {
+            Some(Ok(Body::Review { review })) => assert_eq!(review.title, "Album (Remastered)"),
+            other => panic!("Unexpected reply {other:?}"),
+        }
+        assert!(
+            album_reply(&mut shelf, &request(&["review", "id=nope"]))
+                .unwrap()
+                .is_err()
+        );
+        match album_reply(
+            &mut shelf,
+            &request(&["reviews", "tag=acid", "energy=PEAK"]),
+        ) {
+            Some(Ok(Body::Reviews {
+                total,
+                reviews,
+                folder: listed,
+                problems,
+            })) => {
+                assert_eq!(total, 1);
+                assert_eq!(reviews[0].id, "artist-album");
+                assert_eq!(reviews[0].tracks, 1);
+                assert_eq!(listed, Some(folder.clone()));
+                assert!(problems.is_empty());
+            }
+            other => panic!("Unexpected reply {other:?}"),
+        }
+        match album_reply(
+            &mut shelf,
+            &request(&["review_tracks", "energy=peak", "artist=art"]),
+        ) {
+            Some(Ok(Body::ReviewTracks { total, tracks })) => {
+                assert_eq!(total, 1);
+                assert_eq!(tracks[0].track.events[1].section, "Drop");
+            }
+            other => panic!("Unexpected reply {other:?}"),
+        }
+        let none = request(&["review_tracks", "energy=low"]);
+        assert!(matches!(
+            album_reply(&mut shelf, &none),
+            Some(Ok(Body::ReviewTracks { total: 0, .. }))
+        ));
+        for bad in [
+            &["reviews", "energy=loud"][..],
+            &["reviews", "kind=theirs"],
+            &["reviews", "sort=random"],
+        ] {
+            assert!(
+                album_reply(&mut shelf, &request(bad)).unwrap().is_err(),
+                "{bad:?}"
+            );
+        }
+        let both = Request::AddReview {
+            review: Some(sample_review("x-y")),
+            file: Some(file.clone()),
+        };
+        assert!(album_reply(&mut shelf, &both).unwrap().is_err());
+        assert!(album_reply(&mut shelf, &Request::State).is_none());
+        // The reply serializes as the wire expects.
+        let reply = encode(&album_reply(&mut shelf, &request(&["reviews"])).unwrap());
+        assert!(reply.contains(r#""genre_tags":["Techno"]"#), "{reply}");
+        assert!(reply.contains(r#""kind":"reference""#), "{reply}");
+        assert!(!reply.contains("problems"), "{reply}");
+        std::fs::remove_dir_all(folder).unwrap();
     }
 
     fn key_folder(tag: &str) -> PathBuf {

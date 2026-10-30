@@ -61,7 +61,8 @@ its own and reports each region that rustfmt skips. Split a long literal with
 `\` line continuations so that every line fits in 100 columns.
 
 The Python tests check Rust literal handling in the format checker, the song
-tools in `tools/song/`, and the `.mixjam` projection used by artifact
+tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`
+(offline), and the `.mixjam` projection used by artifact
 verification. The projection reads formats 8 through 18 and preserves the
 master pedalboard and its bypass, FX buses, sends, automation, channel EQs, and
 clip fades and pitch, lane duckers, compressors, and widths, and master and FX
@@ -76,7 +77,8 @@ supported window sizes with isolated synthetic fixtures and settings.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.
 The capture set also covers Help, Sample libraries, Import sound, Import details,
-Save your changes?, Sample conflicts, and the four tool windows, with expanded
+Save your changes?, Sample conflicts, Album Review (the grid, a filtered grid,
+an album page, and a missing reviews folder), and the four tool windows, with expanded
 effects and provider settings and missing-source processing states. It has no
 case for the tool Help windows or Choose path. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.

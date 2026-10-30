@@ -1,7 +1,8 @@
 //! Replace a file only after its complete new content is on disk.
 //!
-//! Every writer stages a uniquely named sibling file and renames it over the
-//! destination. A single-file replacement is atomic. A batch keeps backups
+//! Every writer stages a uniquely named sibling file. Replacements rename it
+//! over the destination; new files publish it only if the path is free.
+//! A single-file publication is atomic. A batch keeps backups
 //! until every replacement succeeds and attempts rollback on an error. A
 //! process interruption can leave batch backups for manual recovery.
 use std::{
@@ -15,6 +16,32 @@ pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     write_with(path, |file| {
         file.write_all(bytes).map_err(|error| error.to_string())
     })
+}
+
+/// Publish a complete new file without replacing an existing destination.
+pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    check_destinations(&[path.to_path_buf()])?;
+    let (stage, mut file) = sibling(path, "tmp")?;
+    let result = file.write_all(bytes).and_then(|()| file.sync_all());
+    drop(file);
+    let result = result
+        .map_err(|error| error.to_string())
+        .and_then(|()| publish_new(&stage, path));
+    let _ = fs::remove_file(stage);
+    result
+}
+
+#[cfg(windows)]
+fn publish_new(stage: &Path, path: &Path) -> Result<(), String> {
+    use windows::{Win32::Storage::FileSystem::MoveFileW, core::HSTRING};
+    // MoveFileW fails if the destination exists, including one created after staging.
+    unsafe { MoveFileW(&HSTRING::from(stage), &HSTRING::from(path)) }
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(windows))]
+fn publish_new(stage: &Path, path: &Path) -> Result<(), String> {
+    fs::hard_link(stage, path).map_err(|error| error.to_string())
 }
 
 /// Stage the file through `fill`, then replace `path` with it.
@@ -239,6 +266,36 @@ mod tests {
         write(&path, b"new").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new");
         assert_eq!(fs::read(&stale).unwrap(), b"left by a killed process");
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn concurrent_new_writes_publish_one_complete_file_without_replacement() {
+        let folder = folder("new-race");
+        let path = folder.join("review.json");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let writes: Vec<_> = [b"first".as_slice(), b"second".as_slice()]
+            .into_iter()
+            .map(|bytes| {
+                let path = path.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    (write_new(&path, bytes), bytes)
+                })
+            })
+            .collect();
+        let results: Vec<_> = writes
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect();
+        assert_eq!(
+            results.iter().filter(|(result, _)| result.is_ok()).count(),
+            1
+        );
+        let winner = results.iter().find(|(result, _)| result.is_ok()).unwrap().1;
+        assert_eq!(fs::read(&path).unwrap(), winner);
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
         fs::remove_dir_all(folder).unwrap();
     }
 

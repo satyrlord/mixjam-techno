@@ -1,0 +1,456 @@
+{
+  "id": "one-arc-degree-the-ocean-palace",
+  "kind": "reference",
+  "artist": "One Arc Degree",
+  "title": "The Ocean Palace",
+  "year": 2016,
+  "label": "Blue Tunes Chillout",
+  "producer": "Vasilis Kesalidis · Ioannis Konstantios",
+  "genre": "Psybient / Downtempo",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Psybient",
+    "Downtempo",
+    "Chillout",
+    "Space",
+    "Breakbeat"
+  ],
+  "runtime": "56:52",
+  "coverUrl": "https://f4.bcbits.com/img/a3570196282_10.jpg",
+  "youtubeUrl": "https://www.youtube.com/playlist?list=PLuqMBs9jp7XLOBxmzRDzNYQtNZKX5Ulj4",
+  "overview": "The Ocean Palace is the debut full-length album of One Arc Degree, the Greek electronica duo of Vasilis Kesalidis (also known as Spinnet) and Ioannis Konstantios, formed in 2011. The duo works remotely between Athens and Thessaloniki, exchanging project material through cloud services instead of sharing a studio. After three years of singles and EPs from 2013 — among them the 2014 single \"A Cup of Tea on Titan\" — the album came out as a digital release on 31 March 2016 on Blue Tunes Chillout (BTCDR023), the psychill label from Schwerin, Germany. The track titles chart a journey across Titan, the largest moon of Saturn: its orange methane haze (\"Through This Haze\"), the ringed planet in its sky (\"Saturn Rising\"), the hydrocarbon sea Kraken Mare, methane rainfall (\"Methane Tears\"), and the equatorial dune region Belet (\"Crossing Belet\"), before \"Memories of Earth\" turns the view back home.\n\nNine tracks of five to eight minutes form two arcs. The first arc runs from the broken-beat opener through the two-part title suite to the sub-bass weight of \"Saturn Rising\"; the second drops into the texture-led \"Kraken Mare\" and rebuilds through midtempo psy and progressive psytrance to the distorted-guitar climax of \"Hydrogen Times Pi\", with \"Memories of Earth\" as the downtempo coda. Ambient Music Guide called it \"a blinding album\" — a fusion of lush chillout with epic breakbeat, progressive rock, and progressive psytrance, built on \"a vivid three-dimensional soundstage\". The blog Xisuma's Musical Journey rated it 5/10, citing the similar build trajectory of each track, but named \"Saturn Rising\" the defining song and heard Carbon Based Lifeforms in \"Hydrogen Times Pi\".\n\nTimestamps are proportionally estimated to ±15 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Through This Haze",
+      "duration": "7:50",
+      "energy": "high",
+      "tags": [
+        "Opener",
+        "Breakbeat",
+        "Humming Bassline",
+        "Titan Atmosphere Ref."
+      ],
+      "role": "Album role: The opener and the statement of method — a slow ambient ascent that locks into a heavy broken-beat groove, setting the chillout-to-breakbeat range of the whole album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Beatless filtered pads fade in as a diffuse wash — the haze of the title, before any rhythm or bass.",
+          "detail": "Titan has a dense nitrogen atmosphere with an orange photochemical haze of methane-derived hydrocarbons. The haze hides the surface at visible wavelengths, which the album cover shows as a rust-coloured cloud deck."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Bassline entry",
+          "description": "A humming bassline enters under the pads and starts the slow upward glide of the introduction.",
+          "detail": "Ambient Music Guide describes the opener as gliding \"slowly up to the heavens on a humming bassline\"."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Build",
+          "description": "Filtered percussion and a rising filter sweep add pressure while the pads open into a wider stereo field."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Groove lock",
+          "description": "The broken-beat groove drops in at full weight — saturated kick and snare against the sustained pads.",
+          "detail": "Ambient Music Guide singles out this lock-down into \"a broken groove that packs an incredible gnarly punch\" as the moment that defines the opener."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Breakdown",
+          "description": "Drums fall away and leave the bassline and pad layers alone in the open soundstage."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Second groove",
+          "description": "The broken beat returns with extra percussion layers for the densest passage of the track."
+        },
+        {
+          "timestamp": "6:50",
+          "section": "Outro",
+          "description": "The beat thins out and the pads decay back into haze, clearing the floor for the title suite."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Ocean Palace - Part I",
+      "duration": "5:30",
+      "energy": "mid",
+      "tags": [
+        "Title Suite",
+        "Two-Part Suite",
+        "Midtempo Psy",
+        "Main Theme"
+      ],
+      "role": "Album role: The first half of the two-part title suite — it states the main theme over a midtempo psychill groove after the breakbeat weight of the opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Spacious pad chords and delayed melodic fragments establish the harmonic ground of the suite."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Beat entry",
+          "description": "A midtempo kick and rolling bass pulse set a steadier, lighter groove than the opener."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Theme",
+          "description": "The main melodic theme of the suite enters above the groove, doubled by a shimmering pad layer."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Breakdown",
+          "description": "Kick and bass withdraw; the theme continues alone over sustained chords."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Theme return",
+          "description": "The groove returns under the full theme, now with added counter-melody and percussion detail."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Outro",
+          "description": "Rhythm layers drop out one by one and the pads hold the final chord into Part II."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "The Ocean Palace - Part II",
+      "duration": "5:22",
+      "energy": "mid",
+      "tags": [
+        "Title Suite",
+        "Two-Part Suite",
+        "Thematic Variation",
+        "Deep Space Tech"
+      ],
+      "role": "Album role: The second half of the title suite — it develops the Part I material in a deeper, more spacious register and closes the first arc before the weight of \"Saturn Rising\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Low drones and reverberant textures continue from the end of Part I in a darker register."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Beat entry",
+          "description": "A slow, shimmering tech pulse enters — tighter and more minimal than the groove of Part I.",
+          "detail": "Ambient Music Guide lists \"slow, shimmering deep space tech\" among the styles of the album."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Theme variation",
+          "description": "Fragments of the Part I theme return in a new voicing over the deeper pulse."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Breakdown",
+          "description": "The pulse drops out and leaves a suspended pad field with sparse melodic echoes."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Final build",
+          "description": "Percussion and bass return for the most layered statement of the suite."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Outro",
+          "description": "The suite resolves into a fading pad chord as the rhythm dissolves."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Saturn Rising",
+      "duration": "6:28",
+      "energy": "high",
+      "tags": [
+        "Sub-Bass Kick",
+        "Click Percussion",
+        "First-Arc Climax",
+        "Defining Track"
+      ],
+      "role": "Album role: The climax of the first arc — a slamming sub-bass kick and rapid click percussion press against the ambient bed. Xisuma's Musical Journey named it the defining song of the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Wide ambient pads and a slow swell open the track — the planet still below the horizon."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Kick entry",
+          "description": "A heavy sub-bass kick drum lands under the pads and immediately sets the weight of the track.",
+          "detail": "Xisuma's Musical Journey hears the ambience \"pressured by a slamming sub bass drum and rapid clicky noises\"."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Click layer",
+          "description": "Rapid, dry click percussion enters at a faster subdivision and contrasts with the slow pad harmony."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Lead entry",
+          "description": "A melodic lead rises over the rhythm section and gives the track its main hook."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Breakdown",
+          "description": "The kick drops out; the clicks and pads continue in a suspended passage."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Drop",
+          "description": "The sub-bass kick returns with the full layer stack for the peak of the first arc."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Outro",
+          "description": "Percussion thins out to the pad bed, which fades toward the textural turn of \"Kraken Mare\"."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Kraken Mare",
+      "duration": "6:53",
+      "energy": "mid",
+      "tags": [
+        "Textural Pivot",
+        "Mechanical Rotations",
+        "Dense Ambience",
+        "Titan Sea Ref."
+      ],
+      "role": "Album role: The midpoint pivot — after \"Saturn Rising\", the album turns from groove to texture, with dense airy layers and mechanical detail that rotate in and out of focus.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dense, airy ambient bed opens the second arc — wider and less rhythmic than the first four tracks.",
+          "detail": "Kraken Mare is the largest known body of liquid on the surface of Titan, a sea of liquid methane and ethane in the north polar region, mapped by the Cassini–Huygens mission."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Mechanical detail",
+          "description": "Small quirk sounds and rumbling mechanical rotations move in and out of focus across the stereo field.",
+          "detail": "Xisuma's Musical Journey describes \"quirk sounds and details rumbling in and out of focus on mechanical rotations\" that create \"a sense of alien activity, not understood but observed\"."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Melody entry",
+          "description": "An elusive melodic line surfaces over the texture without settling into a fixed hook."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Pulse",
+          "description": "A restrained downtempo pulse gives the texture a slow forward motion."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Texture peak",
+          "description": "The ambient layers reach their maximum density, with melody and mechanical detail interlocked."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Outro",
+          "description": "The pulse stops and the texture recedes to a thin airy layer."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Methane Tears",
+      "duration": "6:02",
+      "energy": "mid",
+      "tags": [
+        "Midtempo Psy",
+        "Melodic Lead",
+        "Titan Rain Ref.",
+        "Second-Arc Rebuild"
+      ],
+      "role": "Album role: The start of the rebuild — a midtempo psychill groove brings the beat back after \"Kraken Mare\" and begins the climb of the second arc.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Soft pad chords and falling melodic droplets set the mood of the title.",
+          "detail": "Titan is the only body in the Solar System other than Earth with stable liquid on its surface, fed by a methane cycle of clouds, rain, rivers, and seas."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Beat entry",
+          "description": "A midtempo psy groove enters with a rolling bassline under the pads."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Lead entry",
+          "description": "A melancholic lead melody takes the foreground over the steady groove."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Breakdown",
+          "description": "The groove drops away and the lead continues over sustained, sparkling pad textures."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Groove return",
+          "description": "Bass and kick return with extra percussion for the fullest passage of the track."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Outro",
+          "description": "Rhythm layers fade and the pads close on the opening droplet figure."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Crossing Belet",
+      "duration": "6:40",
+      "energy": "high",
+      "tags": [
+        "Progressive Psytrance",
+        "Rolling Bassline",
+        "Titan Dune Field Ref.",
+        "Journey Track"
+      ],
+      "role": "Album role: The traverse — a thumping progressive-psy groove that builds momentum through the second arc toward the climax of \"Hydrogen Times Pi\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Sweeping noise and low pads suggest wind across an open plain.",
+          "detail": "Belet is a large dark region on the equator of Titan, covered by long linear dunes of hydrocarbon sand."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Kick entry",
+          "description": "A four-on-the-floor kick and an off-beat rolling bassline start the progressive-psy drive."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Layering",
+          "description": "Hi-hats, filtered sequences, and percussion loops stack up in steps to build forward motion."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Lead entry",
+          "description": "A melodic lead enters over the groove and gives the traverse a direction."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Breakdown",
+          "description": "The kick drops out for a short pad-and-sequence interlude."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Drop",
+          "description": "The full groove returns with the lead and all percussion layers at maximum drive."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Outro",
+          "description": "Layers drop away to the kick and bass, which then fade under the closing wind texture."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Hydrogen Times Pi",
+      "duration": "6:36",
+      "energy": "peak",
+      "tags": [
+        "Album Climax",
+        "Ambient Rock",
+        "Distorted Guitar",
+        "Thundering Drums"
+      ],
+      "role": "Album role: The summit of the album — an ambient rock rave-up in which a sad, simple melody swirls over distorted guitars and thundering drums, the loudest and most rock-oriented track of the set.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sad, simple melody states the theme over sustained pads before any drums enter.",
+          "detail": "Xisuma's Musical Journey hears in the lead melodies \"the echos of pioneers Carbon Based Lifeforms\", the Swedish psybient duo."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Drum entry",
+          "description": "Heavy, live-style drums enter and push the melody forward."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Guitar entry",
+          "description": "Distorted guitar layers rise under the melody and turn the track from psychill to ambient rock."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Breakdown",
+          "description": "Drums and guitars drop away; the melody repeats alone over the pads."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Build",
+          "description": "Drum fills and swelling guitar feedback build tension back toward full volume."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Climax",
+          "description": "The full maelstrom of distorted guitars and thundering drums under the melody — the loudest passage of the album.",
+          "detail": "Ambient Music Guide describes the track as \"an ambient rock rave-up with its sad, simple melody swirling over a maelstrom of distorted guitar sounds and thundering drums\"."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Outro",
+          "description": "Guitars ring out into feedback and the drums stop, leaving the melody to fade."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Memories Of Earth",
+      "duration": "5:31",
+      "energy": "low",
+      "tags": [
+        "Closer",
+        "Downtempo Coda",
+        "Homeward Theme",
+        "Earth Reference"
+      ],
+      "role": "Album role: The coda — the only title that names Earth, it turns the view back home and releases the climax of \"Hydrogen Times Pi\" into a slow, low-energy close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Warm pad chords enter after the noise of the previous track — the first consonant, settled harmony of the second arc."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Melody entry",
+          "description": "A slow, nostalgic melody states the homeward theme over the pads."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Soft pulse",
+          "description": "A light downtempo pulse gives the melody a gentle forward motion without returning to the weight of the earlier tracks."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Fullest passage",
+          "description": "Melody, pulse, and counter-lines combine in the last full statement of the album."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Outro",
+          "description": "The pulse stops and the pads fade slowly to silence, closing the album."
+        }
+      ]
+    }
+  ]
+}

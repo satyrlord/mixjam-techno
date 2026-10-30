@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod album_review;
 pub mod application;
 mod atomic_file;
 pub mod audio;
@@ -19,6 +20,7 @@ pub mod packed;
 pub mod products;
 pub mod project_io;
 pub mod recording;
+pub mod runtime_data;
 pub mod sample_edit;
 mod source_tempo;
 pub mod synth;
@@ -34,6 +36,8 @@ mod ui_icons;
 mod ui_test_harness {
     include!("ui.rs");
     include!("ui/tests.rs");
+    #[path = "../ui/album_review_tests.rs"]
+    mod album_review_tests;
     #[path = "../ui/window_lifecycle_tests.rs"]
     mod window_lifecycle_tests;
 }

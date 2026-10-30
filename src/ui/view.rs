@@ -225,7 +225,7 @@ impl MixJamApp {
             .show(ctx, |ui| {
                 controls::apply_palette(ui, controls::Palette::Utility);
                 controls::rail_panel(ui, ui.max_rect().expand(4.0));
-                ui.spacing_mut().item_spacing.y = 4.0;
+                ui.spacing_mut().item_spacing.y = 3.0;
                 ui.add_space(4.0);
                 ui.vertical_centered(|ui| {
                     if rail_button(ui, &icons, RailIcon::New, false).clicked() {
@@ -290,6 +290,11 @@ impl MixJamApp {
                         } else {
                             self.close_stretch_request();
                         }
+                    }
+                    if rail_button(ui, &icons, RailIcon::AlbumReview, self.show_album_review)
+                        .clicked()
+                    {
+                        self.show_album_review = !self.show_album_review;
                     }
                     controls::rail_separator(ui);
                     rail_heading(ui, &icons, RailIcon::Record);

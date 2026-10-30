@@ -39,6 +39,15 @@ port.
   given as text: `folders=D:\drums`. The sounds change when the scan ends; send
   `wait idle=true` before you use them. `state` also has the folders under
   `song.library`.
+- `reviews`, `review`, and `review_tracks` read the Album Review folder;
+  `add_review` and `update_review` write it. They do not need the Album Review
+  window. `reviews tag=Acid energy=peak` lists the albums that have such a
+  track, and `review_tracks` gives each matching track with its role and its
+  timestamped events, so a song-building agent can use the reviews as
+  reference. A review is checked against every rule before it is saved; the
+  error names each broken rule. Give a long review as `file=PATH`. The
+  [album-analysis skill](../.github/skills/album-analysis/SKILL.md) has the
+  format and the procedure.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
   window in place of the native dialog. Set its **Path** field and select
   **Confirm path**. A person can type the path too.

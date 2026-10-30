@@ -62,10 +62,11 @@ pub(crate) enum RailIcon {
     Undo,
     Redo,
     Help,
+    AlbumReview,
 }
 
 impl RailIcon {
-    pub(crate) const ALL: [Self; 19] = [
+    pub(crate) const ALL: [Self; 20] = [
         Self::Open,
         Self::Save,
         Self::SaveAs,
@@ -85,6 +86,7 @@ impl RailIcon {
         Self::Undo,
         Self::Redo,
         Self::Help,
+        Self::AlbumReview,
     ];
 
     pub(crate) fn label(self) -> &'static str {
@@ -108,6 +110,7 @@ impl RailIcon {
             Self::Undo => "Undo",
             Self::Redo => "Redo",
             Self::Help => "Help",
+            Self::AlbumReview => "Album Review",
         }
     }
 
@@ -133,6 +136,7 @@ impl RailIcon {
             Self::Undo => "Undo (Ctrl+Z)",
             Self::Redo => "Redo (Ctrl+Shift+Z or Ctrl+Y)",
             Self::Help => "Help (F1)",
+            Self::AlbumReview => "Album Review: show or close the album analyses",
             other => other.label(),
         }
     }
@@ -148,6 +152,7 @@ impl RailIcon {
                 | Self::StepSynth
                 | Self::Edit
                 | Self::Stretch
+                | Self::AlbumReview
         )
     }
 
@@ -172,6 +177,7 @@ impl RailIcon {
             Self::Undo => rail_pngs!("undo")[density],
             Self::Redo => rail_pngs!("redo")[density],
             Self::Help => rail_pngs!("help")[density],
+            Self::AlbumReview => rail_pngs!("album-review")[density],
         }
     }
 }

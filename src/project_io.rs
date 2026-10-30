@@ -401,6 +401,9 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                 .register(binding.product, &root, &reference_samples_root())
                 .is_ok()
             {
+                // The saved provider may itself be partial. Keep identities
+                // supplied by the selected folders that it cannot replace.
+                provided.supplement_loaded(binding.product, &candidate);
                 candidate = provided;
             }
         }
@@ -791,6 +794,19 @@ fn has_song_extension(path: &Path) -> bool {
 /// [`save`] with each product provider recorded as the folder that holds the
 /// song's files in this library. See [`Library::song_binding`].
 pub fn save_with_library(project: &Project, library: &Library, path: &Path) -> Result<(), String> {
+    save_with_library_in(project, library, path, &data_root())
+}
+
+fn save_with_library_in(
+    project: &Project,
+    library: &Library,
+    path: &Path,
+    storage: &Path,
+) -> Result<(), String> {
+    project.validate()?;
+    if !has_song_extension(path) {
+        return Err("Save the song with the .mixjam extension.".into());
+    }
     let used: HashSet<_> = project.clips.iter().map(|clip| clip.sample_id).collect();
     let mut saved = project.clone();
     saved.libraries = saved
@@ -798,7 +814,179 @@ pub fn save_with_library(project: &Project, library: &Library, path: &Path) -> R
         .iter()
         .map(|binding| library.song_binding(binding, &used))
         .collect();
+    for binding in &mut saved.libraries {
+        let files: Vec<_> = used
+            .iter()
+            .filter(|id| {
+                Product::sample_key(**id).is_some_and(|(product, _)| product == binding.product)
+                    && project.missing_sample(**id).is_none()
+            })
+            .filter_map(|id| {
+                let sample = library.sample_by_id(*id)?;
+                Some((*id, sample.wav_path.as_deref()?))
+            })
+            .collect();
+        if files
+            .iter()
+            .any(|(_, file)| !file.starts_with(&binding.root))
+        {
+            binding.root = retain_native_provider(binding.product, files, storage)?;
+        }
+    }
     save(&saved, path)
+}
+
+/// A product split across volumes has no single folder that a format-18
+/// binding can name. Retain its used WAV bytes together, and verify their
+/// native identities before the song can refer to that folder.
+fn retain_native_provider(
+    product: Product,
+    mut files: Vec<(u32, &Path)>,
+    storage: &Path,
+) -> Result<PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_STAGE: AtomicU64 = AtomicU64::new(0);
+    struct KeptWave {
+        id: u32,
+        relative: PathBuf,
+        hash: [u8; 32],
+        pcm: [u8; 32],
+        bpm: f64,
+        spec: hound::WavSpec,
+        frames: u32,
+    }
+
+    let parent = storage.join("native-providers").join(product.slug());
+    fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let stage = parent.join(format!(
+        ".stage-{}-{stamp}-{}",
+        std::process::id(),
+        NEXT_STAGE.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir(&stage).map_err(|error| error.to_string())?;
+    let result = (|| {
+        files.sort_by_key(|(id, _)| *id);
+        let metadata = crate::catalog::bundled_wave_metadata(product)?;
+        let mut digest = Sha256::new();
+        digest.update(product.slug().as_bytes());
+        let mut expected = Vec::with_capacity(files.len());
+        for (id, source) in files {
+            let (_, native_id) = Product::sample_key(id).ok_or("Invalid native sample ID.")?;
+            let entry = metadata
+                .iter()
+                .find(|entry| entry.native_id == native_id)
+                .ok_or("The native sample has no catalog identity.")?;
+            let code = entry.code.replace('\\', "/");
+            let name = Path::new(&code)
+                .file_stem()
+                .filter(|name| !name.is_empty())
+                .ok_or("The native sample has no catalog file name.")?;
+            let relative = PathBuf::from(id.to_string())
+                .join(name)
+                .with_extension("wav");
+            let destination = stage.join(&relative);
+            fs::create_dir_all(destination.parent().unwrap()).map_err(|error| error.to_string())?;
+            let bytes = bounded_provider_wave(source)?;
+            let hash: [u8; 32] = Sha256::digest(&bytes).into();
+            crate::atomic_file::write_new(&destination, &bytes)?;
+            let (spec, frames, pcm) = provider_wave_audio(&destination)?;
+            digest.update(id.to_le_bytes());
+            let name = relative.to_string_lossy();
+            digest.update((name.len() as u64).to_le_bytes());
+            digest.update(name.as_bytes());
+            digest.update(hash);
+            expected.push(KeptWave {
+                id,
+                relative,
+                hash,
+                pcm,
+                bpm: entry.source_bpm,
+                spec,
+                frames,
+            });
+        }
+        let check = |root: &Path| -> Result<(), String> {
+            let mut retained = Library::empty();
+            retained.register(product, root, &reference_samples_root())?;
+            for wave in &expected {
+                let id = wave.id;
+                let exact: [u8; 32] =
+                    Sha256::digest(bounded_provider_wave(&root.join(&wave.relative))?).into();
+                if exact != wave.hash {
+                    return Err(format!("The retained bytes for sample {id} do not match."));
+                }
+                let sample = retained
+                    .sample_by_id(id)
+                    .ok_or_else(|| format!("The retained provider cannot resolve sample {id}."))?;
+                if sample.source_bpm != wave.bpm
+                    || sample.sample_rate != wave.spec.sample_rate
+                    || sample.channels != wave.spec.channels
+                    || sample.frame_count != wave.frames
+                {
+                    return Err(format!(
+                        "The retained timing for sample {id} does not match."
+                    ));
+                }
+                let file = sample
+                    .wav_path
+                    .as_deref()
+                    .ok_or("The retained WAV has no path.")?;
+                // Catalog aliases can choose another byte container with
+                // identical PCM. Preserve each copy, but judge the mapping
+                // by the audio it plays and the timing checked above.
+                if provider_wave_audio(file)?.2 != wave.pcm {
+                    return Err(format!(
+                        "The retained audio for sample {id} does not match."
+                    ));
+                }
+            }
+            Ok(())
+        };
+        check(&stage)?;
+        let target = parent.join(format!("{:x}", digest.finalize()));
+        if !target.exists()
+            && let Err(error) = fs::rename(&stage, &target)
+            && !target.is_dir()
+        {
+            return Err(error.to_string());
+        }
+        // A prior save or another writer can already have this content. Do
+        // not replace it; verify it before reusing its stable path.
+        check(&target)?;
+        fs::canonicalize(target).map_err(|error| error.to_string())
+    })();
+    if stage.exists() {
+        let _ = fs::remove_dir_all(stage);
+    }
+    result
+}
+
+fn bounded_provider_wave(path: &Path) -> Result<Vec<u8>, String> {
+    const MAX_BYTES: u64 = 128 * 1024 * 1024;
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .map_err(|error| error.to_string())?
+        .take(MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("The provider WAV exceeds the 128 MiB limit.".into());
+    }
+    Ok(bytes)
+}
+
+fn provider_wave_audio(path: &Path) -> Result<(hound::WavSpec, u32, [u8; 32]), String> {
+    use sha2::{Digest, Sha256};
+    let mut digest = Sha256::new();
+    let (spec, frames) = crate::audio::visit_wav_samples(path, |_, sample| {
+        digest.update(sample.to_bits().to_le_bytes());
+    })?;
+    Ok((spec, frames, digest.finalize().into()))
 }
 
 /// A saved song references its used audio, not every sound in the browser palette.
@@ -834,6 +1022,108 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_audio_identity_ignores_riff_metadata() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-provider-wave-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let first = root.join("first.wav");
+        let second = root.join("second.wav");
+        crate::audio::Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 300],
+        }
+        .write_wav(&first)
+        .unwrap();
+        let bytes = fs::read(&first).unwrap();
+        let mut tagged = bytes.clone();
+        tagged.extend_from_slice(b"JUNK\x04\x00\x00\x00test");
+        let riff_size = (tagged.len() as u32 - 8).to_le_bytes();
+        tagged[4..8].copy_from_slice(&riff_size);
+        fs::write(&second, &tagged).unwrap();
+        assert_ne!(bytes, tagged);
+        assert_eq!(
+            provider_wave_audio(&first).unwrap(),
+            provider_wave_audio(&second).unwrap()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn retained_native_provider_preserves_ids_audio_and_existing_song_on_failure() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-retained-provider-{}", std::process::id()));
+        let metadata = crate::catalog::bundled_wave_metadata(Product::D1).unwrap();
+        let mut sources = Vec::new();
+        let mut editor = crate::engine::Editor::new(Project::default());
+        for (index, entry) in metadata.iter().take(2).enumerate() {
+            let folder = root.join(format!("volume-{index}"));
+            fs::create_dir_all(&folder).unwrap();
+            let code = entry.code.replace('\\', "/");
+            let path = folder
+                .join(Path::new(&code).file_stem().unwrap())
+                .with_extension("wav");
+            crate::audio::Pcm {
+                sample_rate: 22_050,
+                channels: 2,
+                samples: vec![0.25 * (index + 1) as f32; entry.frame_count as usize],
+            }
+            .write_wav(&path)
+            .unwrap();
+            let id = Product::D1.global_sample_id(entry.native_id).unwrap();
+            editor.place(id, index, 0, 256).unwrap();
+            sources.push((id, path));
+        }
+        let folders = [root.join("volume-0"), root.join("volume-1")];
+        let library = Library::open_wav_folders_with(&folders, 140.0, None, None).unwrap();
+        let mut project = editor.project().clone();
+        // Inject a binding which cannot cover the loaded files, the same
+        // condition that different Windows volume roots produce.
+        project.libraries = vec![LibraryBinding {
+            product: Product::D1,
+            root: root.join("old-provider"),
+        }];
+        project.clips[0].offset_frames = 3;
+        project.clips[0].gain = 0.7;
+        let original = project.clone();
+        let song = root.join("saved.mixjam");
+        let storage = root.join("data");
+        save_with_library_in(&project, &library, &song, &storage).unwrap();
+        let (opened, ready) = open(&song, &Library::empty()).unwrap();
+        assert!(opened.missing_samples.is_empty());
+        assert_eq!(opened.clips, original.clips);
+        assert_eq!(project, original);
+        for (id, path) in &sources {
+            let expected = crate::audio::read_wav(path).unwrap();
+            let actual = ready.read_pcm(*id).unwrap();
+            assert_eq!(actual.samples, expected.samples);
+            assert_eq!(actual.sample_rate, expected.sample_rate);
+            assert_eq!(actual.channels, expected.channels);
+        }
+        let retained = opened.libraries[0].root.clone();
+        assert!(retained.starts_with(fs::canonicalize(&storage).unwrap()));
+        save_with_library_in(&project, &library, &song, &storage).unwrap();
+        let (again, _) = open(&song, &Library::empty()).unwrap();
+        assert_eq!(again.libraries[0].root, retained);
+        assert_eq!(fs::read_dir(retained.parent().unwrap()).unwrap().count(), 1);
+        let previous_song = fs::read(&song).unwrap();
+        let cached = ready
+            .sample_by_id(sources[0].0)
+            .unwrap()
+            .wav_path
+            .as_ref()
+            .unwrap();
+        let mut corrupt = crate::audio::read_wav(cached).unwrap();
+        corrupt.samples.fill(0.0);
+        corrupt.write_wav(cached).unwrap();
+        assert!(save_with_library_in(&project, &library, &song, &storage).is_err());
+        assert_eq!(fs::read(&song).unwrap(), previous_song);
+        assert_eq!(fs::read_dir(retained.parent().unwrap()).unwrap().count(), 1);
+        assert_eq!(project, original);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn a_headless_open_reuses_and_extends_the_scan_cache() {

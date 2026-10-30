@@ -8520,6 +8520,103 @@ mod tests {
     }
 
     #[test]
+    fn a_group_drag_onto_a_track_without_a_row_names_it_and_cancels() {
+        let (ctx, mut app) = fixture();
+        // Tracks 1 and 2 hold the clips and track 3 is the Add row; track 4
+        // has no row.
+        assert_eq!(app.timeline_tracks, vec![0, 1, 2]);
+        app.selected_clips = [1, 2].into_iter().collect();
+        app.selected_clip = Some(1);
+        let before = app.session.project().clone();
+        let was_unsaved = app.session.unsaved();
+        let canvas = app.timeline_rect.unwrap();
+        let row = Vec2::new(0.0, app.timeline_row_height);
+        let grip = |app: &MixJamApp, index: usize| {
+            app.clip_rect(&app.session.project().clips[index], canvas)
+                .center()
+                + GRIP
+        };
+        let hover = |ctx: &egui::Context, app: &mut MixJamApp, to: Pos2| {
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::PointerMoved(to)],
+                egui::Modifiers::NONE,
+            );
+            frame(ctx, app, vec![], egui::Modifiers::NONE)
+        };
+        let shows = |output: &egui::FullOutput, label: &str| {
+            output.shapes.iter().any(|shape| match &shape.shape {
+                egui::Shape::Text(text) => text.galley.job.text == label,
+                _ => false,
+            })
+        };
+        let first = grip(&app, 0);
+        pointer(&ctx, &mut app, first, true, egui::Modifiers::NONE);
+        // One row down, the second clip lands on the Add row: both have ghosts.
+        let output = hover(&ctx, &mut app, first + row);
+        let item = app
+            .drag
+            .as_ref()
+            .expect("The press must start a clip drag.");
+        assert_eq!(app.drop_ghosts(item, first + row, false).len(), 2);
+        assert!(!shows(&output, "Track 4 has no row"));
+        // Two rows down, the second clip would land on track 4.
+        let output = hover(&ctx, &mut app, first + row * 2.0);
+        let item = app.drag.as_ref().unwrap();
+        assert!(
+            app.drop_ghosts(item, first + row * 2.0, false).is_empty(),
+            "A drop that does nothing must not show ghosts."
+        );
+        assert!(
+            shows(&output, "Track 4 has no row"),
+            "The drag label must name the track without a row."
+        );
+        pointer(
+            &ctx,
+            &mut app,
+            first + row * 2.0,
+            false,
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(
+            app.session.project(),
+            &before,
+            "No clip may land on a track the arrangement does not show."
+        );
+        assert_eq!(app.session.unsaved(), was_unsaved);
+        assert_eq!(app.selected_clips, [1, 2].into_iter().collect());
+        assert!(
+            app.status.contains("Move canceled. Track 4 has no row."),
+            "{}",
+            app.status
+        );
+        // One row up from track 2, the first clip would leave the timeline.
+        let second = grip(&app, 1);
+        pointer(&ctx, &mut app, second, true, egui::Modifiers::NONE);
+        let output = hover(&ctx, &mut app, second - row);
+        let item = app.drag.as_ref().unwrap();
+        assert!(app.drop_ghosts(item, second - row, false).is_empty());
+        assert!(shows(&output, "Outside the timeline"));
+        pointer(&ctx, &mut app, second - row, false, egui::Modifiers::NONE);
+        assert_eq!(app.session.project(), &before);
+        assert!(
+            !app.session.history_step(false).unwrap(),
+            "Canceled movement must not add an edit-history entry."
+        );
+        // A group may still fill the Add row.
+        drag(&ctx, &mut app, first, first + row, egui::Modifiers::NONE);
+        let tracks: Vec<_> = app
+            .session
+            .project()
+            .clips
+            .iter()
+            .map(|clip| clip.track)
+            .collect();
+        assert_eq!(tracks, vec![1, 2]);
+    }
+
+    #[test]
     fn rail_groups_remain_ordered_separated_and_visible_at_supported_densities() {
         for density in [1.0, 1.5, 2.0] {
             let (ctx, mut app) = fixture();
@@ -8547,6 +8644,7 @@ mod tests {
                 RailIcon::StepSynth,
                 RailIcon::Edit,
                 RailIcon::Stretch,
+                RailIcon::AlbumReview,
             ];
             let bounds: Vec<_> = actions
                 .iter()
@@ -8713,6 +8811,7 @@ mod tests {
             (RailIcon::StepSynth, "Step synth"),
             (RailIcon::Edit, "Sample editor"),
             (RailIcon::Stretch, "Time Stretcher"),
+            (RailIcon::AlbumReview, "Album Review"),
         ] {
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let node = accessible_node(&output, icon.label()).1;

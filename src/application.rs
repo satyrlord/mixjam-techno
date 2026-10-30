@@ -1,6 +1,6 @@
 //! Headless application boundary. UI clients read immutable views and submit typed commands.
 pub use crate::{
-    APP_VERSION, agent,
+    APP_VERSION, agent, album_review,
     audio::Pcm,
     effects::EffectsState,
     engine::{
@@ -362,6 +362,9 @@ pub struct Session {
     /// A revision whose preparation failed, which waits for Play to try again.
     failed_revision: Option<u64>,
     wants_playback: bool,
+    /// Whether the window has shown that playback runs without an audio
+    /// thread's priority. It says so once.
+    priority_reported: bool,
     playback_frames_per_tick: f64,
     seek_pending: bool,
     previewing: bool,
@@ -609,6 +612,7 @@ impl Session {
             prepares_ahead: false,
             failed_revision: None,
             wants_playback: false,
+            priority_reported: false,
             playback_frames_per_tick: 1.0,
             seek_pending: false,
             previewing: false,
@@ -2214,6 +2218,13 @@ impl Session {
                 (player.position_frames() as f64 / self.playback_frames_per_tick) as u32;
         }
         self.poll_recording();
+        if self.player.is_some()
+            && !self.priority_reported
+            && let Some(failure) = audio::priority_failure()
+        {
+            self.priority_reported = true;
+            self.error(failure);
+        }
         let delay = if self.render_worker.in_flight || self.is_stretching() {
             Some(20)
         } else if self.playing_mix() || self.is_previewing() {
@@ -4877,6 +4888,7 @@ mod boundary_tests {
             ("ui/mixer.rs", include_str!("ui/mixer.rs")),
             ("ui/dialog.rs", include_str!("ui/dialog.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
+            ("ui/album_review.rs", include_str!("ui/album_review.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
         ];

@@ -273,6 +273,10 @@ pub struct Library {
     folder_tempos: Vec<(PathBuf, f64, usize)>,
     /// WAVs in the scanned folder that could not be read, with the reason.
     skipped_waves: Vec<(PathBuf, String)>,
+    /// WAVs in a later library folder whose audio is identical to a native
+    /// identity that an earlier folder already serves. They are not listed as
+    /// separate sounds.
+    duplicate_copies: Vec<PathBuf>,
     reserved_import_id: u32,
 }
 
@@ -316,8 +320,15 @@ impl Library {
             unverified: HashMap::new(),
             folder_tempos: Vec::new(),
             skipped_waves: Vec::new(),
+            duplicate_copies: Vec::new(),
             reserved_import_id: IMPORTED_ID_START - 1,
         }
+    }
+
+    /// WAVs left out of the sounds because their audio is identical to a
+    /// native identity that an earlier library folder already serves.
+    pub fn duplicate_copies(&self) -> &[PathBuf] {
+        &self.duplicate_copies
     }
 
     /// Native identities whose WAV audio matched the catalog digest.
@@ -527,13 +538,35 @@ impl Library {
     /// progress total covers every folder. A folder that cannot be read, or
     /// that has no readable WAV, is left out and listed in
     /// [`Self::unloaded_roots`]; the other folders load. The scan fails only
-    /// when no folder loads, or when it is cancelled. A product's original
-    /// samples come from the first folder, in list order, that identifies any.
+    /// when no folder loads, or when it is cancelled. A product's provider is
+    /// the first folder, in list order, that identifies any of its samples;
+    /// later folders fill only the identities that earlier folders lack. A
+    /// later folder's WAV whose audio is identical to an identity that an
+    /// earlier folder serves is counted in [`Self::duplicate_copies`], not
+    /// listed as a separate sound.
     pub fn open_wav_folders_with(
         roots: &[PathBuf],
         source_bpm: f64,
         progress: Option<&ScanProgress>,
+        cache: Option<&mut ScanCache>,
+    ) -> Result<Self, String> {
+        Self::open_wav_folders_identified(
+            roots,
+            source_bpm,
+            progress,
+            cache,
+            crate::catalog::bundled_wave_metadata,
+        )
+    }
+
+    /// [`Self::open_wav_folders_with`] with the identity catalogs that
+    /// `metadata` returns for each product.
+    fn open_wav_folders_identified<'m>(
+        roots: &[PathBuf],
+        source_bpm: f64,
+        progress: Option<&ScanProgress>,
         mut cache: Option<&mut ScanCache>,
+        metadata: impl Fn(Product) -> Result<&'m [crate::catalog::WaveMetadata], String>,
     ) -> Result<Self, String> {
         check_library_folders(roots)?;
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
@@ -604,13 +637,7 @@ impl Library {
             .cloned()
             .collect();
         for product in Product::ALL {
-            let metadata = crate::catalog::bundled_wave_metadata(product)?;
-            for root in &loaded {
-                if library.source_root(product).is_some() {
-                    break;
-                }
-                library.register_wav_product(product, root, metadata)?;
-            }
+            library.register_wav_folders(product, &loaded, metadata(product)?)?;
         }
         // A folder later in the list can serve an identity that an earlier
         // folder only had a different recording of.
@@ -651,13 +678,18 @@ impl Library {
             .filter(|sample| sample.id < IMPORTED_ID_START)
             .filter_map(|sample| sample.wav_path.clone())
             .collect();
+        // A copy that serves another identity is not a duplicate.
+        let mut duplicates = std::mem::take(&mut library.duplicate_copies);
+        duplicates.retain(|path| !native_paths.contains(path));
+        duplicates.sort();
+        duplicates.dedup();
         library.samples.retain(|sample| {
             sample.id < IMPORTED_ID_START
-                || sample
-                    .wav_path
-                    .as_ref()
-                    .is_none_or(|path| !native_paths.contains(path))
+                || sample.wav_path.as_ref().is_none_or(|path| {
+                    !native_paths.contains(path) && duplicates.binary_search(path).is_err()
+                })
         });
+        library.duplicate_copies = duplicates;
         library.reindex();
         library
             .sources
@@ -677,14 +709,58 @@ impl Library {
         root: &Path,
         metadata: &[crate::catalog::WaveMetadata],
     ) -> Result<usize, String> {
-        const DIGEST_SCORE: u8 = 3;
-        let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
         if self.source_root(product).is_some() {
             return Err(format!(
                 "{} already has a sample provider.",
                 product.label()
             ));
         }
+        self.identify_wav_product(product, root, metadata, false)
+    }
+
+    /// Fill the identities that this product's provider lacks from another
+    /// library folder's WAVs. The provider and its folder stay the same, and
+    /// identities the library already has keep their files.
+    pub fn supplement_wav_product(
+        &mut self,
+        product: Product,
+        root: &Path,
+        metadata: &[crate::catalog::WaveMetadata],
+    ) -> Result<usize, String> {
+        if self.source_root(product).is_none() {
+            return Err(format!("{} has no sample provider.", product.label()));
+        }
+        self.identify_wav_product(product, root, metadata, true)
+    }
+
+    /// Identify one product in library folders, in list order: the first
+    /// folder that identifies any of its samples becomes its provider, and
+    /// each later folder fills only the identities still missing.
+    pub fn register_wav_folders(
+        &mut self,
+        product: Product,
+        roots: &[PathBuf],
+        metadata: &[crate::catalog::WaveMetadata],
+    ) -> Result<(), String> {
+        for root in roots {
+            if self.source_root(product).is_some() {
+                self.supplement_wav_product(product, root, metadata)?;
+            } else {
+                self.register_wav_product(product, root, metadata)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn identify_wav_product(
+        &mut self,
+        product: Product,
+        root: &Path,
+        metadata: &[crate::catalog::WaveMetadata],
+        supplement: bool,
+    ) -> Result<usize, String> {
+        const DIGEST_SCORE: u8 = 3;
+        let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
         let mut by_name: HashMap<String, Vec<&Sample>> = HashMap::new();
         let mut by_digest: HashMap<([u8; 16], u32), Vec<&Sample>> = HashMap::new();
         // Old scan caches can contain digests for other rates or tiny files.
@@ -722,6 +798,7 @@ impl Library {
             files.sort_by_cached_key(|sample| (foreign(sample), sample.wav_path.clone()));
         }
         let mut seen_ids = HashSet::new();
+        let mut duplicates = Vec::new();
         let mut entries = Vec::with_capacity(metadata.len());
         for entry in metadata {
             let id = product.global_sample_id(entry.native_id)?;
@@ -734,6 +811,17 @@ impl Library {
                 return Err(
                     "The bundled sample identity has invalid or duplicate metadata.".into(),
                 );
+            }
+            // An earlier library folder already serves this identity. A copy
+            // of its verified audio here is an exact duplicate.
+            if supplement && self.by_id.contains_key(&id) {
+                if self.verified.contains(&id)
+                    && let Some(digest) = entry.pcm_identity().filter(|_| entry.frame_count > 2)
+                    && let Some(files) = by_digest.get(&(digest, entry.frame_count))
+                {
+                    duplicates.extend(files.iter().filter_map(|file| file.wav_path.clone()));
+                }
+                continue;
             }
             entries.push((
                 entry,
@@ -869,8 +957,12 @@ impl Library {
             self.samples.push(sample);
         }
         self.verified.extend(verified);
-        self.unverified.extend(unverified);
-        if count > 0 {
+        self.duplicate_copies.extend(duplicates);
+        // The first folder that had a different recording is the one reported.
+        for (id, path) in unverified {
+            self.unverified.entry(id).or_insert(path);
+        }
+        if count > 0 && !supplement {
             self.bindings.push(LibraryBinding { product, root });
         }
         Ok(count)
@@ -1064,6 +1156,27 @@ impl Library {
         }
         self.add_provider(provider)?;
         Ok(true)
+    }
+
+    /// Keep any loaded identities that a replacement provider does not have.
+    /// Its own identities and binding retain precedence.
+    pub(crate) fn supplement_loaded(&mut self, product: Product, loaded: &Self) {
+        for sample in &loaded.samples {
+            if Product::sample_key(sample.id).is_none_or(|(owner, _)| owner != product)
+                || self.by_id.contains_key(&sample.id)
+            {
+                continue;
+            }
+            self.by_id.insert(sample.id, self.samples.len());
+            self.samples.push(sample.clone());
+            if let Some(source) = loaded.sources.get(&sample.id) {
+                self.sources.insert(sample.id, source.clone());
+            }
+            if loaded.verified.contains(&sample.id) {
+                self.verified.insert(sample.id);
+            }
+            self.unverified.remove(&sample.id);
+        }
     }
 
     fn from_catalog(product: Product, root: &Path) -> Result<Self, String> {
@@ -1704,10 +1817,13 @@ impl Library {
         }
         let mut best_score = 0;
         let mut matches = HashSet::new();
-        for sample in &self.samples {
-            let Some(path) = &sample.wav_path else {
-                continue;
-            };
+        // A song can name a file that is now an uncounted duplicate copy.
+        let paths = self
+            .samples
+            .iter()
+            .filter_map(|sample| sample.wav_path.as_ref())
+            .chain(&self.duplicate_copies);
+        for path in paths {
             // Most samples have another file name: skip them without allocating.
             if !path
                 .file_name()
@@ -2940,6 +3056,239 @@ mod tests {
         let restored: ScanCache = serde_json::from_str(&text).unwrap();
         assert_eq!(restored.len(), cache.len());
         assert!(serde_json::from_str::<ScanCache>("{\"entries\":1}").is_err());
+    }
+
+    #[test]
+    fn resolving_a_song_keeps_supplemental_native_samples() {
+        let folder = Folder::new();
+        let metadata = crate::catalog::bundled_wave_metadata(Product::D1).unwrap();
+        let write = |root: &str, entry: &crate::catalog::WaveMetadata| {
+            let code = entry.code.replace('\\', "/");
+            let name = Path::new(&code).file_stem().unwrap().to_string_lossy();
+            folder.wave(
+                &format!("{root}/{name}.wav"),
+                22_050,
+                entry.frame_count as usize / 2,
+            );
+            Product::D1.global_sample_id(entry.native_id).unwrap()
+        };
+        let mut ids = vec![write("First", &metadata[0]), write("Second", &metadata[1])];
+        let roots = [folder.0.join("First"), folder.0.join("Second")];
+        let library = Library::open_wav_folders_with(&roots, 140.0, None, None).unwrap();
+        assert!(library.is_sparse_wav_product(Product::D1));
+        for id in &ids {
+            assert!(library.sample_by_id(*id).is_some());
+        }
+        // The saved provider can recover a sample added since the scan,
+        // while retaining the sample already loaded from the other folder.
+        ids.push(write("First", &metadata[2]));
+        assert!(library.sample_by_id(ids[2]).is_none());
+        let mut editor = crate::engine::Editor::new(crate::engine::Project::default());
+        for (track, id) in ids.iter().enumerate() {
+            editor.place(*id, track, 0, 256).unwrap();
+        }
+        let mut project = editor.project().clone();
+        project.libraries = library.bindings().to_vec();
+        let (resolved, _) = crate::project_io::resolve(project, &library).unwrap();
+        assert!(
+            resolved.missing_samples.is_empty(),
+            "{:?}",
+            resolved.missing_samples
+        );
+    }
+
+    #[test]
+    fn one_product_takes_identities_from_every_library_folder_in_list_order() {
+        let folder = Folder::new();
+        let (base_audio, kit_audio, shared_audio) =
+            (waveform(1, 300), waveform(2, 300), waveform(3, 300));
+        let base = folder.mono("Base/loop/base.wav", &base_audio);
+        let kit = folder.mono("Kits/rap/kit.wav", &kit_audio);
+        let base_shared = folder.mono("Base/loop/shared.wav", &shared_audio);
+        let kit_shared = folder.mono("Kits/rap/shared copy.wav", &shared_audio);
+        let metadata = [
+            identity(731, "base", "loop", &base_audio),
+            identity(3400, "kit", "rap", &kit_audio),
+            identity(3401, "shared", "rap", &shared_audio),
+        ];
+        let roots = [
+            fs::canonicalize(folder.0.join("Base")).unwrap(),
+            fs::canonicalize(folder.0.join("Kits")).unwrap(),
+        ];
+        let path = |library: &Library, native_id: u32| {
+            library
+                .sample_by_id(Product::D1.global_sample_id(native_id).unwrap())
+                .and_then(|sample| sample.wav_path.clone())
+        };
+        for (order, provider, shared) in [
+            ([0, 1], &roots[0], &base_shared),
+            ([1, 0], &roots[1], &kit_shared),
+        ] {
+            let ordered = [roots[order[0]].clone(), roots[order[1]].clone()];
+            let mut library = Library::open_wav_folders_with(&ordered, 140.0, None, None).unwrap();
+            library.remove_product(Product::D1);
+            library
+                .register_wav_folders(Product::D1, &ordered, &metadata)
+                .unwrap();
+            // The second folder's identities resolve too.
+            assert_eq!(path(&library, 731).as_ref(), Some(&base));
+            assert_eq!(path(&library, 3400).as_ref(), Some(&kit));
+            // The first folder in the list keeps priority for shared audio.
+            assert_eq!(path(&library, 3401).as_ref(), Some(shared));
+            // One provider, recorded at the first folder that identified any.
+            let bindings: Vec<_> = library
+                .bindings()
+                .iter()
+                .filter(|binding| binding.product == Product::D1)
+                .collect();
+            assert_eq!(bindings.len(), 1);
+            assert_eq!(&bindings[0].root, provider);
+            assert_eq!(library.source_root(Product::D1), Some(provider.as_path()));
+        }
+    }
+
+    #[test]
+    fn later_folder_copies_of_served_identities_are_counted_not_listed() {
+        const PADS: u32 = 481;
+        let folder = Folder::new();
+        // Each pad's first step makes its audio unique.
+        let pad = |index: u32| {
+            let mut audio = waveform(1, 300);
+            audio[1] = index as i16 * 3;
+            audio
+        };
+        let mut house_pads = Vec::new();
+        let mut dance_pads = Vec::new();
+        for index in 0..PADS {
+            let audio = pad(index);
+            house_pads.push(folder.mono(&format!("House/Drum/pad-{index:03}.wav"), &audio));
+            dance_pads.push(folder.mono(&format!("Dance4/Recovered/Kick/P{index:03}.wav"), &audio));
+        }
+        let (house_audio, dance_audio) = (waveform(2, 300), waveform(3, 300));
+        let house_only = folder.mono("House/Bass/house.wav", &house_audio);
+        let dance_only = folder.mono("Dance4/Loop/dance.wav", &dance_audio);
+        // A different recording under a pad's name, and the owner's own
+        // identical WAVs that no catalog knows, stay ordinary sounds.
+        let renamed = folder.mono("Dance4/Recovered/Kick/pad-000.wav", &waveform(4, 300));
+        let own_first = folder.mono("House/Own/mine.wav", &waveform(5, 300));
+        let own_second = folder.mono("Dance4/Own/mine.wav", &waveform(5, 300));
+        let pads = |prefix: &str| -> Vec<crate::catalog::WaveMetadata> {
+            (0..PADS)
+                .map(|index| identity(index + 1, &format!("{prefix} {index}"), "Kick", &pad(index)))
+                .collect()
+        };
+        let mut h1 = pads("pad");
+        h1.push(identity(500, "house", "Bass", &house_audio));
+        let mut d4 = pads("kick");
+        d4.push(identity(600, "dance", "Loop", &dance_audio));
+        let catalogs = |product| {
+            Ok::<_, String>(match product {
+                Product::H1 => h1.as_slice(),
+                Product::D4 => d4.as_slice(),
+                _ => &[],
+            })
+        };
+        let house = fs::canonicalize(folder.0.join("House")).unwrap();
+        let dance = fs::canonicalize(folder.0.join("Dance4")).unwrap();
+        for (roots, copies, served) in [
+            ([house.clone(), dance.clone()], &dance_pads, &house_pads),
+            ([dance.clone(), house.clone()], &house_pads, &dance_pads),
+        ] {
+            let library =
+                Library::open_wav_folders_identified(&roots, 140.0, None, None, catalogs).unwrap();
+            let path = |product: Product, native_id: u32| {
+                library
+                    .sample_by_id(product.global_sample_id(native_id).unwrap())
+                    .and_then(|sample| sample.wav_path.clone())
+            };
+            // Every identity resolves, the first folder serving shared audio.
+            for index in 0..PADS {
+                for product in [Product::H1, Product::D4] {
+                    assert_eq!(
+                        path(product, index + 1).as_ref(),
+                        Some(&served[index as usize])
+                    );
+                }
+            }
+            assert_eq!(path(Product::H1, 500), Some(house_only.clone()));
+            assert_eq!(path(Product::D4, 600), Some(dance_only.clone()));
+            for product in [Product::H1, Product::D4] {
+                assert_eq!(library.source_root(product), Some(roots[0].as_path()));
+            }
+            // The later folder's copies are counted, not listed.
+            let mut expected = copies.clone();
+            expected.sort();
+            assert_eq!(library.duplicate_copies(), expected.as_slice());
+            // A song that names a copy still finds it.
+            assert_eq!(
+                library
+                    .resolve_wav_reference(&copies[0].to_string_lossy())
+                    .unwrap(),
+                copies[0]
+            );
+            let mut ordinary: Vec<_> = library
+                .samples
+                .iter()
+                .filter(|sample| sample.id >= IMPORTED_ID_START)
+                .filter_map(|sample| sample.wav_path.clone())
+                .collect();
+            ordinary.sort();
+            let mut kept = vec![renamed.clone(), own_first.clone(), own_second.clone()];
+            kept.sort();
+            assert_eq!(ordinary, kept);
+        }
+    }
+
+    #[test]
+    fn a_supplementing_folder_keeps_the_provider_and_its_identities() {
+        let folder = Folder::new();
+        let (first_audio, second_audio) = (waveform(1, 300), waveform(2, 300));
+        let first = folder.mono("First/first.wav", &first_audio);
+        // A different recording of the first identity, named by its code.
+        folder.mono("Second/CODE731.wav", &waveform(4, 300));
+        let second = folder.mono("Second/second.wav", &second_audio);
+        let metadata = [
+            identity(731, "first", "Wave", &first_audio),
+            identity(732, "second", "Wave", &second_audio),
+        ];
+        let roots = [
+            fs::canonicalize(folder.0.join("First")).unwrap(),
+            fs::canonicalize(folder.0.join("Second")).unwrap(),
+        ];
+        let mut library = Library::open_wav_folders_with(&roots, 140.0, None, None).unwrap();
+        library.remove_product(Product::D1);
+        let error = library
+            .supplement_wav_product(Product::D1, &roots[1], &metadata)
+            .unwrap_err();
+        assert!(error.contains("no sample provider"), "{error}");
+        assert_eq!(
+            library
+                .register_wav_product(Product::D1, &roots[0], &metadata[..1])
+                .unwrap(),
+            1
+        );
+        let before = library.bindings().to_vec();
+        assert_eq!(
+            library
+                .supplement_wav_product(Product::D1, &roots[1], &metadata)
+                .unwrap(),
+            1
+        );
+        assert_eq!(library.bindings(), before);
+        let id = |native_id| Product::D1.global_sample_id(native_id).unwrap();
+        assert_eq!(
+            library.sample_by_id(id(731)).unwrap().wav_path.as_ref(),
+            Some(&first)
+        );
+        assert_eq!(
+            library.sample_by_id(id(732)).unwrap().wav_path.as_ref(),
+            Some(&second)
+        );
+        // An explicit second registration of the product is still refused.
+        let error = library
+            .register_wav_product(Product::D1, &roots[1], &metadata)
+            .unwrap_err();
+        assert!(error.contains("already has a sample provider"), "{error}");
     }
 
     #[test]

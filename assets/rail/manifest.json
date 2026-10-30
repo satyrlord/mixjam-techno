@@ -721,6 +721,39 @@
           "png_sha256": "8546a7a46717eaf4d7694004277fd70fd87c9dd7f524fee9e8bdfea454bf57b8"
         }
       ]
+    },
+    {
+      "name": "album-review",
+      "png_sha256": "e57a6e5d0abe42b3959f39efaf22dc2b5706ee435e0a439d635207d397908dc8",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 3154,
+      "opaque_pixels": 1020,
+      "transparent_pixels": 6062,
+      "antialiased_pixels": 2134,
+      "alpha_bounds": [
+        5,
+        17,
+        92,
+        79
+      ],
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "d3946b894b8f8a7bffe1038003052174524a1e9bb187991a765175437c78b74f"
+        },
+        {
+          "size": 30,
+          "png_sha256": "f01d101a68c63bd29bb56e34dbeb59c38a89fe4e213229991d34782d658e2bc1"
+        },
+        {
+          "size": 40,
+          "png_sha256": "9f7c1165e41dffc302ddf18580f3f9601accd924912173eeff95fe5e89eeac28"
+        }
+      ]
     }
   ]
 }
