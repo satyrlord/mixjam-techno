@@ -1,0 +1,1014 @@
+{
+  "id": "eklipse-nostalgia",
+  "kind": "own",
+  "artist": "eklipse",
+  "title": "Nostalgia",
+  "year": 2022,
+  "label": "Self-released",
+  "producer": "eklipse",
+  "genre": "Techno / Trance",
+  "genreTags": [
+    "Electronic",
+    "Techno",
+    "Trance",
+    "Ambient Techno",
+    "Rave"
+  ],
+  "runtime": "3:54:07",
+  "coverUrl": "https://f4.bcbits.com/img/a1938918534_10.jpg",
+  "coverSource": "https://eklipse-music.bandcamp.com/album/nostalgia-remastered-edition",
+  "bandcampUrl": "https://eklipse-music.bandcamp.com/album/nostalgia-remastered-edition",
+  "overview": "Begun around 1999, when eklipse was in high school, and finished as a self-released definitive edition in 2022 — a home project built over two decades from the authentic sounds of 90s dance sample kits, arranged loop by loop into songs, then joined into long suites and remastered for contemporary playback, with cover art by Geo Dibu. The album is instrumental, with no vocals, and most of its long tracks are suites rather than single songs: Hell, Descent, Waterworld and Infinitrip join two to four finished songs with long overlaps and no gaps, while Kronology and Ion Storm each join two masters of different ages. Every master shares one remaster chain — tape-style saturation, multiband balance, a final limiter at -1.01 dBFS — and several tracks narrow the stereo image after the intro and open it again over the last bars. The sound is a full-level wall of kick and bass, with 75% of the energy below 120 Hz, over pads that play in almost every bar; the variety comes from constant turnover on top of long, repeating beds, not from key changes. Ambience on this album is a matter of sound selection, not of level: Kronology and Waterworld are the two most ambient tracks, and Kronology is also the loudest master.\n\nThe story is tracks 1–14, a journey from the hard 140 BPM start of Hell to the arrival of Tales from the Old Town and the open-ended Infinitrip. The tempo falls from 140 BPM to the slowest point, Kronology at 125 BPM, then climbs back in steps (130.6, 135, 140) and holds near 140 to the end; every story track sits within a whole tone of A minor. Tracks 15–17 — Resurrection, Meditations and Paradise — are bonus tracks at 168–180 BPM in C minor and B-flat minor, outside the story and not on the Bandcamp edition.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Hell",
+      "duration": "25:28",
+      "energy": "peak",
+      "tags": [
+        "Six-Song Suite",
+        "Medley",
+        "Siren and Rain Samples",
+        "Explosion Blocks"
+      ],
+      "role": "Album role: The fast, hard opening of the story and its longest track — a medley of Cold War, Dark Club, Hatred and You Make Me Feel, followed by Raver's Hell and Secret, with the densest run of explosions on the album.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "Sirens and rain over drumless pads in A minor, the only added field samples on the album.",
+          "detail": "The remaster rides each siren and rain sample on its own volume curve, and narrows the stereo image from full width to 60% by about 0:50."
+        },
+        {
+          "timestamp": "00:48",
+          "section": "Beat Entry",
+          "description": "Kick and bass enter together at full level, opening the first explosion block at 140 BPM."
+        },
+        {
+          "timestamp": "03:32",
+          "section": "First Break",
+          "description": "A 10-bar drumless break after the beat thins out from 2:44."
+        },
+        {
+          "timestamp": "06:58",
+          "section": "Dark Club",
+          "description": "The second song of the medley enters over a pad lane that already runs from about 5:00 and continues for 288 bars."
+        },
+        {
+          "timestamp": "10:20",
+          "section": "Crash Seam",
+          "description": "A crash lands on the downbeat as three drum lanes enter — the richest seam on the album, with a +6.4 dB step."
+        },
+        {
+          "timestamp": "11:58",
+          "section": "Peak Block",
+          "description": "Three consecutive explosion sections run to 15:19, up to 2.7 dB over the track's median beat level.",
+          "detail": "The progression cycle heard at 5:12 returns at 13:08 under the loudest bars of the track."
+        },
+        {
+          "timestamp": "15:19",
+          "section": "Hard Cut",
+          "description": "Every drum and pad lane stops on the downbeat, an 11.7 dB drop into You Make Me Feel."
+        },
+        {
+          "timestamp": "16:41",
+          "section": "Deepest Break",
+          "description": "A crash on the downbeat as the drums stop, then 19 bars of pads alone, about 16 dB under the loudest bars."
+        },
+        {
+          "timestamp": "17:14",
+          "section": "Raver's Hell",
+          "description": "The beat returns in Raver's Hell, which overlaps the medley by 33 bars with no fades."
+        },
+        {
+          "timestamp": "21:08",
+          "section": "Secret Crossfade",
+          "description": "A pad-led drumless break, then a 9-bar crossfade into Secret at 21:14."
+        },
+        {
+          "timestamp": "22:14",
+          "section": "Closing Climb",
+          "description": "Explosion sections at 22:14 and 24:19 lift the ending instead of fading it, with the main progression returning at 23:37."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Descent",
+      "duration": "22:17",
+      "energy": "high",
+      "tags": [
+        "Two-Part Suite",
+        "Medley",
+        "Deepest Break",
+        "Crossfade Join"
+      ],
+      "role": "Album role: The drive continues at full speed and begins to go down — a medley of Descent, Perspective, Impulse and an earlier Exile, crossfaded into The Calling, holding the deepest drumless break of the album.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Beat Intro",
+          "description": "The beat and bass start at once, without a drumless intro, and run to 3:17.",
+          "detail": "The remaster narrows the stereo image to 62% by 0:21."
+        },
+        {
+          "timestamp": "01:42",
+          "section": "Filter Pair",
+          "description": "A filter sweep up with a crash, then a sweep down with a crash at 1:49."
+        },
+        {
+          "timestamp": "03:39",
+          "section": "Breakdown",
+          "description": "A drumless break after a lead-led thin section from 3:17."
+        },
+        {
+          "timestamp": "05:01",
+          "section": "Explosion",
+          "description": "Drums return with one-shots on the downbeat, opening an 81-bar explosion block to 7:20."
+        },
+        {
+          "timestamp": "08:06",
+          "section": "Perspective",
+          "description": "Drums return with a crash on the downbeat, and the medley turns to Perspective eight bars later."
+        },
+        {
+          "timestamp": "11:07",
+          "section": "Impulse",
+          "description": "Impulse enters the medley inside a 48-bar beat part, its drum part bringing mostly new sounds."
+        },
+        {
+          "timestamp": "13:30",
+          "section": "Deepest Break",
+          "description": "26 bars of drumless pads at about 17 dB under the loudest bars — the deepest break on the album."
+        },
+        {
+          "timestamp": "14:30",
+          "section": "Beat Return",
+          "description": "The beat returns over a pad sound that holds for 216 bars, with a numbered walk of related sounds from 16:34."
+        },
+        {
+          "timestamp": "18:10",
+          "section": "The Calling",
+          "description": "A 12-bar crossfade from the medley into The Calling."
+        },
+        {
+          "timestamp": "18:30",
+          "section": "Crash Entries",
+          "description": "Crash and drums land together on the downbeat, a pattern repeated at 19:39 and 20:47."
+        },
+        {
+          "timestamp": "21:44",
+          "section": "Outro",
+          "description": "20 bars of quiet drumless pads close the track, as the stereo image opens to full width."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Kronology",
+      "duration": "9:54",
+      "energy": "high",
+      "tags": [
+        "Loud Ambient",
+        "Two-Master Join",
+        "Evolving Pads",
+        "Sub-Bass Weight"
+      ],
+      "role": "Album role: The slowest point of the story at 125 BPM in G minor, and one of its two most ambient tracks — ambience carried by long evolving pads and basses at the loudest level on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat Intro",
+          "description": "The beat starts under a heavy sustained sub, with 83–93% of the energy below 120 Hz.",
+          "detail": "One progression cycle in G minor, coloured by E-flat and F-sharp, covers 64% of the bars."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Loud Sub",
+          "description": "Four explosion sections to 2:54 — the loudest bars on the album, at a slow 125 BPM."
+        },
+        {
+          "timestamp": "3:23",
+          "section": "Pad Middle",
+          "description": "The pads take the lead while the beat holds under them; from 4:05 the beat thins and the pads carry 30% of the energy.",
+          "detail": "From 3:04 the old master and the new one sound together in a 72-second overlap."
+        },
+        {
+          "timestamp": "4:48",
+          "section": "New Master",
+          "description": "The second master's beat enters 7.2 dB up, and the opening progression returns."
+        },
+        {
+          "timestamp": "7:37",
+          "section": "Riser",
+          "description": "A riser, one of the track's only two kinds of effect, leads into the closing loud sections."
+        },
+        {
+          "timestamp": "8:10",
+          "section": "Final Swell",
+          "description": "Two explosion sections hold full level to 9:30."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Outro",
+          "description": "A reduced beat ends the track without a drumless break — the ambience never needs the beat to stop."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Ion Storm",
+      "duration": "7:56",
+      "energy": "high",
+      "tags": [
+        "Two-Master Join",
+        "Arpeggiated Leads",
+        "Stepped Exit"
+      ],
+      "role": "Album role: The first step of the climb after Kronology — faster at 130.6 BPM and a semitone higher in G-sharp minor, built from two earlier versions of Kronology.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Lead Section",
+          "description": "Beat, bass and arpeggiated leads in one 122-bar section, with an audible change every 1.4 bars."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Hidden Join",
+          "description": "The second master enters in a 35-second overlap that hides inside one section."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Explosion",
+          "description": "A layer swap on the bar opens a 73-bar explosion block over a 111-bar harmonic bed — the longest on the album."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Step Down",
+          "description": "The kick stops and the bass leaves, starting a stepped exit of reduced beats at 9–10 dB under the loudest bars."
+        },
+        {
+          "timestamp": "6:42",
+          "section": "Breakdown",
+          "description": "A hard cut into a drumless break, with partial beats returning between pad sections."
+        },
+        {
+          "timestamp": "7:28",
+          "section": "Outro",
+          "description": "Quiet drumless pads, more than half of their energy in the side channel."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Antithesis",
+      "duration": "12:04",
+      "energy": "mid",
+      "tags": [
+        "Hard Cuts",
+        "Hypnotic Repetition",
+        "Long Pad Outro"
+      ],
+      "role": "Album role: The second step of the climb at 135 BPM, pitched between G-sharp and A minor — the most repetitive track and the most abrupt, with every seam a hard cut or level step.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "16 bars of drumless pads."
+        },
+        {
+          "timestamp": "00:28",
+          "section": "Beat Entry",
+          "description": "The beat enters with a crash on the downbeat."
+        },
+        {
+          "timestamp": "02:36",
+          "section": "Pad Section",
+          "description": "The bass drops out and the pads lead over the beat for 24 bars."
+        },
+        {
+          "timestamp": "03:19",
+          "section": "Beat Return",
+          "description": "A crash on the downbeat brings back the bass."
+        },
+        {
+          "timestamp": "04:37",
+          "section": "Main Groove",
+          "description": "A crash opens an 80-bar beat part on the main progression, which covers two thirds of the track."
+        },
+        {
+          "timestamp": "06:59",
+          "section": "Lead Cut",
+          "description": "An 8-bar lead-led cut 9.5 dB down, with the beat reduced to a partial pattern."
+        },
+        {
+          "timestamp": "07:13",
+          "section": "Long Groove",
+          "description": "An 11 dB cut-in opens the longest part, 120 bars."
+        },
+        {
+          "timestamp": "07:42",
+          "section": "Locked Loop",
+          "description": "A 4-bar cycle repeats unchanged 16 times — 104 bars without a measured change, the longest such run on the album."
+        },
+        {
+          "timestamp": "10:47",
+          "section": "Outro",
+          "description": "43 bars of drumless pads close the track at about 14 dB under the loudest bars."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Waterworld",
+      "duration": "17:51",
+      "energy": "high",
+      "tags": [
+        "Two-Song Suite",
+        "Ambient Middle",
+        "Pad Progression",
+        "Fastest Turnover"
+      ],
+      "role": "Album role: The return to 140 BPM and the second of the two most ambient tracks — a two-song suite with the album's longest drumless middle and its fastest-changing texture.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Beat Intro",
+          "description": "Beat and bass from the first bar, over bass lanes that walk through a numbered set of related sounds."
+        },
+        {
+          "timestamp": "01:36",
+          "section": "Explosion",
+          "description": "An explosion after an 8-bar dip at 1:22."
+        },
+        {
+          "timestamp": "03:39",
+          "section": "Crossfade",
+          "description": "A 24-bar crossfade into the second song, Waterworld, while the first thins out at 3:41."
+        },
+        {
+          "timestamp": "04:06",
+          "section": "Second Song",
+          "description": "The second song's beat runs 112 bars over a single drum loop and pads in nearly every bar."
+        },
+        {
+          "timestamp": "07:18",
+          "section": "First Break",
+          "description": "A drumless break followed by a thin partial beat to 8:48."
+        },
+        {
+          "timestamp": "08:48",
+          "section": "Beat Return",
+          "description": "The drums cut back in at about +9 dB."
+        },
+        {
+          "timestamp": "10:10",
+          "section": "Ambient Middle",
+          "description": "109 bars without a kick, with pads carrying 37–48% of the energy at 8–12 dB under the loudest bars.",
+          "detail": "The chords move from pad to pad — A minor, F, C, G and E minor — in 4- to 16-bar sections cut on the bar, never faded."
+        },
+        {
+          "timestamp": "13:17",
+          "section": "Beat Return",
+          "description": "The drums return with an 11 dB cut-in."
+        },
+        {
+          "timestamp": "14:39",
+          "section": "Breakdown",
+          "description": "A 15-bar pad-led drumless break."
+        },
+        {
+          "timestamp": "16:00",
+          "section": "Water One-Shot",
+          "description": "A water one-shot, a riser and a crash land together on the downbeat for the last beat part."
+        },
+        {
+          "timestamp": "17:08",
+          "section": "Outro",
+          "description": "A lead-led drumless ending, cut at 17:51 where the suite's third song, later Vortex, would begin."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Vortex",
+      "duration": "4:15",
+      "energy": "high",
+      "tags": [
+        "Short Turn",
+        "Lead Melody",
+        "Crash Seams"
+      ],
+      "role": "Album role: The shortest track, a turn between two long ones — originally Hyperflight, the third part of the Waterworld suite, slowed to 135.5 BPM.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Four bars of low end only."
+        },
+        {
+          "timestamp": "0:06",
+          "section": "Beat Entry",
+          "description": "Beat, bass and leads at full level, over a melodic loop family shared with Hell."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Reverse Crash",
+          "description": "A reversed sound runs into a crash on the downbeat, and the pads take the lead."
+        },
+        {
+          "timestamp": "2:49",
+          "section": "Crash Seam",
+          "description": "A crash on the downbeat with a 10.5 dB high-frequency lift opens the last loud section."
+        },
+        {
+          "timestamp": "3:34",
+          "section": "Outro",
+          "description": "A 24-bar fade into a thin pad-led beat — the only quiet part of a track that is 81% at full level."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Polarity",
+      "duration": "16:49",
+      "energy": "high",
+      "tags": [
+        "Continuous Evolution",
+        "Lead Rotation",
+        "Swell Seams",
+        "Long Middle Track"
+      ],
+      "role": "Album role: The long middle track of the story and the one that changes most continuously — fourteen lead lanes rotating over a single drum bed, with only 41% of its bars at full beat level.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "16 bars of drumless pads, then a partial beat with bass from 0:28."
+        },
+        {
+          "timestamp": "01:17",
+          "section": "First Explosion",
+          "description": "A 68-bar explosion section after a swell into the bar."
+        },
+        {
+          "timestamp": "03:44",
+          "section": "Second Explosion",
+          "description": "A reversed swell into the downbeat opens the second explosion, 1.8 dB over the median beat."
+        },
+        {
+          "timestamp": "05:22",
+          "section": "Lead Section",
+          "description": "A lead-led beat part in A major colour, before a reduced pad section at 6:20."
+        },
+        {
+          "timestamp": "06:25",
+          "section": "Main Melody",
+          "description": "The main melodic family, a phased guitar-like lead, enters and becomes the track's recurring theme."
+        },
+        {
+          "timestamp": "08:41",
+          "section": "Ambient Break",
+          "description": "A drumless lead-led break at about 15 dB under the loudest bars."
+        },
+        {
+          "timestamp": "10:30",
+          "section": "Swell Break",
+          "description": "A swell into a short pad break, then 48 bars of reduced pad-led beat."
+        },
+        {
+          "timestamp": "13:08",
+          "section": "Harmonic Turn",
+          "description": "A swell into a short break on D, then a partial beat moving through G to B-flat minor before the home key returns."
+        },
+        {
+          "timestamp": "14:15",
+          "section": "Final Groove",
+          "description": "The last 68-bar beat part back in A minor."
+        },
+        {
+          "timestamp": "16:14",
+          "section": "Outro",
+          "description": "Drumless pads end inside the original song's own drumless bars."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Exile",
+      "duration": "13:01",
+      "energy": "high",
+      "tags": [
+        "Wide Stereo Image",
+        "Clap Bed",
+        "Explosion Blocks",
+        "Fill Habit"
+      ],
+      "role": "Album role: The start of the full-speed stretch at 140 BPM, with the album's largest explosions and its widest stereo image, carried by a rhythmic bed of claps instead of pads.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "15 bars of very wide drumless pads, with the channels partly out of phase."
+        },
+        {
+          "timestamp": "00:24",
+          "section": "Beat Entry",
+          "description": "A beat without bass, its seams marked by short fills in the last bar at 0:55, 1:09 and 1:22 — the album's one fill habit."
+        },
+        {
+          "timestamp": "01:36",
+          "section": "First Explosion",
+          "description": "Bass enters with the first explosion, followed by a longer block from 1:55."
+        },
+        {
+          "timestamp": "03:19",
+          "section": "Shallow Break",
+          "description": "The kick leaves while the claps stay, so the break sits only a few dB down."
+        },
+        {
+          "timestamp": "03:45",
+          "section": "Explosion Block",
+          "description": "Explosion sections from 3:45 to 6:17, up to 3.3 dB over the median beat with extra brightness above 1 kHz."
+        },
+        {
+          "timestamp": "06:17",
+          "section": "Pad Break",
+          "description": "A pad-led drumless break, then a partial beat with pads."
+        },
+        {
+          "timestamp": "07:17",
+          "section": "Last Explosion",
+          "description": "A 17-bar explosion section."
+        },
+        {
+          "timestamp": "08:12",
+          "section": "Lead Section",
+          "description": "81 bars of beat and leads without bass, with lead families returning across eight lanes."
+        },
+        {
+          "timestamp": "10:31",
+          "section": "Breakdown",
+          "description": "A 30-bar pad-led drumless break in E minor colour."
+        },
+        {
+          "timestamp": "11:22",
+          "section": "Final Beat",
+          "description": "Beat without bass to the end, closing on five bars of quiet pads at 12:53."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Fusion",
+      "duration": "13:22",
+      "energy": "high",
+      "tags": [
+        "Late Climax",
+        "Crash Seams",
+        "Drum-Led Mix"
+      ],
+      "role": "Album role: Full speed with the clearest late climax on the album, its loud sections the most drum-led of the story.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "16 bars of drumless pads, with the stereo image narrowing to half width by 0:41."
+        },
+        {
+          "timestamp": "00:27",
+          "section": "Beat Entry",
+          "description": "The beat enters over a 208-bar pad lane and a percussion loop that holds 124 bars."
+        },
+        {
+          "timestamp": "02:03",
+          "section": "Crash Seams",
+          "description": "A crash on the downbeat marks each new section through 6:45 — the clearest crash pattern on the album."
+        },
+        {
+          "timestamp": "05:03",
+          "section": "Breakdown",
+          "description": "A 19-bar drumless break at about 11 dB down."
+        },
+        {
+          "timestamp": "05:36",
+          "section": "Beat Return",
+          "description": "The beat returns, with the main melodic theme recurring across five statements."
+        },
+        {
+          "timestamp": "08:34",
+          "section": "Reduced Section",
+          "description": "A reduced 32-bar part and a short pad dip at 9:29 hold the energy back before the climax."
+        },
+        {
+          "timestamp": "10:10",
+          "section": "Climax",
+          "description": "The first of three explosion sections, 2.0 dB over the median beat with 3–3.6 dB more brightness."
+        },
+        {
+          "timestamp": "11:46",
+          "section": "Climax Break",
+          "description": "An 8-bar pad break inside the climax."
+        },
+        {
+          "timestamp": "12:00",
+          "section": "Final Explosion",
+          "description": "A crash on the downbeat as the kick returns, with an 18.6 dB lift of the high band."
+        },
+        {
+          "timestamp": "12:41",
+          "section": "Outro",
+          "description": "Drumless pads, a final crash, and the stereo image widening back to full."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Synthesis",
+      "duration": "10:30",
+      "energy": "high",
+      "tags": [
+        "Steady Drive",
+        "Pedal-Point Intro",
+        "Fast Turnover"
+      ],
+      "role": "Album role: Full speed held flat — no explosion and the smallest dynamic spread of the story, one progression covering 70% of the bars.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "16 bars of pads over an A pedal."
+        },
+        {
+          "timestamp": "00:26",
+          "section": "Partial Beat",
+          "description": "A partial beat with bass under the pads."
+        },
+        {
+          "timestamp": "00:54",
+          "section": "Main Groove",
+          "description": "The full beat runs 80 bars on the main progression, with a change every 1.3 bars and no run longer than 8."
+        },
+        {
+          "timestamp": "03:11",
+          "section": "Lead Section",
+          "description": "Short lead-led parts move briefly into B-flat colour at 3:54."
+        },
+        {
+          "timestamp": "04:20",
+          "section": "Long Groove",
+          "description": "A 97-bar beat part, the longest of the track."
+        },
+        {
+          "timestamp": "07:05",
+          "section": "Pad Cut",
+          "description": "A 7-bar pad cut without bass, then the beat at 7:18."
+        },
+        {
+          "timestamp": "08:13",
+          "section": "Pad Section",
+          "description": "32 bars of pad-led beat without bass, the pads carrying over a third of the energy."
+        },
+        {
+          "timestamp": "09:08",
+          "section": "Outro",
+          "description": "A partial beat with bass runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Oasis",
+      "duration": "6:02",
+      "energy": "mid",
+      "tags": [
+        "Short Turn",
+        "Full-Reduced Alternation",
+        "Single Harmonic Area"
+      ],
+      "role": "Album role: A short, steady turn before the arrival — one harmonic area, no break and no explosion.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A reduced partial beat in E minor colour."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Full Section",
+          "description": "Beat and bass at full level for 48 bars."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Reduced Section",
+          "description": "A level step down that keeps the kick, as the harmony settles on A minor."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Full Section",
+          "description": "The full beat returns with the main chord cycle."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Reduced Section",
+          "description": "An 8-bar step down."
+        },
+        {
+          "timestamp": "3:51",
+          "section": "Full Section",
+          "description": "The last 40 bars at full level."
+        },
+        {
+          "timestamp": "5:02",
+          "section": "Outro",
+          "description": "A reduced partial beat runs to the end, still without a drumless bar."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Tales from the Old Town",
+      "duration": "13:22",
+      "energy": "high",
+      "tags": [
+        "Suite in One Song",
+        "Paired Pad Layers",
+        "Crash Seams",
+        "Arrival"
+      ],
+      "role": "Album role: The arrival of the story's journey in the old town — a long, beat-led suite inside one song, arriving without an explosion.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "Drumless pads at reduced volume and half stereo width, opening out over the first 32 bars."
+        },
+        {
+          "timestamp": "00:53",
+          "section": "First Drum Part",
+          "description": "Beat and bass enter with a crash on the downbeat, over eight paired pad lanes."
+        },
+        {
+          "timestamp": "03:05",
+          "section": "Second Drum Part",
+          "description": "A new drum part enters with a crash and a 27 dB high-band lift on the downbeat."
+        },
+        {
+          "timestamp": "04:00",
+          "section": "Keys Motif",
+          "description": "A keys motif enters, the first of three statements, as a numbered walk of related sounds starts at 4:14."
+        },
+        {
+          "timestamp": "06:10",
+          "section": "Crash Seam",
+          "description": "A crash on the downbeat opens the third drum section."
+        },
+        {
+          "timestamp": "07:06",
+          "section": "Breakdown",
+          "description": "A 7-bar drumless pad break."
+        },
+        {
+          "timestamp": "07:18",
+          "section": "Third Drum Part",
+          "description": "The beat returns with a third drum part, most of its sounds new."
+        },
+        {
+          "timestamp": "09:48",
+          "section": "Final Drum Part",
+          "description": "The fourth drum part begins the longest section, 97 bars, with crashes on its downbeats to 10:17."
+        },
+        {
+          "timestamp": "12:07",
+          "section": "One-Shot Seams",
+          "description": "A set of one-shots marks the last seams before the beat ends."
+        },
+        {
+          "timestamp": "12:34",
+          "section": "Outro",
+          "description": "28 bars of wide drumless pads, two thirds of their energy in the side channel."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Infinitrip",
+      "duration": "24:24",
+      "energy": "high",
+      "tags": [
+        "Four-Song Suite",
+        "Closing Statement",
+        "Harmonic Thread",
+        "Near-Mono Middle"
+      ],
+      "role": "Album role: The close of the story — the physical journey is over and the mental one goes on; a four-song suite of Infinitrip, Zero Destination, Filth & Agony and Conclusion held together by one returning progression.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "8 bars of very wide pads, then the full beat at 0:13."
+        },
+        {
+          "timestamp": "02:10",
+          "section": "First Break",
+          "description": "A pad-led drumless break, the first of eight in the track."
+        },
+        {
+          "timestamp": "03:12",
+          "section": "Main Progression",
+          "description": "The suite's progression returns under a 98-bar beat part; it covers 61% of the track and returns in all four songs."
+        },
+        {
+          "timestamp": "07:18",
+          "section": "Mono Section",
+          "description": "The image collapses to near mono for the end of the first song."
+        },
+        {
+          "timestamp": "08:20",
+          "section": "Ambient Break",
+          "description": "A drumless break at about 15 dB down as Zero Destination overlaps the first song."
+        },
+        {
+          "timestamp": "08:49",
+          "section": "Zero Destination",
+          "description": "Zero Destination's beat runs 107 bars, with crashes on its downbeats from 9:36."
+        },
+        {
+          "timestamp": "11:53",
+          "section": "Drumless Tail",
+          "description": "A crash on the drums' stop; the song's long drumless ending runs under the start of Filth & Agony."
+        },
+        {
+          "timestamp": "13:27",
+          "section": "Filth & Agony",
+          "description": "Filth & Agony's beat begins on the returning progression."
+        },
+        {
+          "timestamp": "15:30",
+          "section": "Explosion",
+          "description": "The track's one explosion — two crashes with bass, two pads and three more layers entering, a brightness lift more than a level lift."
+        },
+        {
+          "timestamp": "17:42",
+          "section": "Conclusion",
+          "description": "Conclusion's first beat part, after an overlap carried by the songs' own tails and intros."
+        },
+        {
+          "timestamp": "21:15",
+          "section": "Final Groove",
+          "description": "After a 26-bar drumless break, a 14.5 dB cut-in — the largest on the album — opens the last 104-bar beat part."
+        },
+        {
+          "timestamp": "24:13",
+          "section": "Outro",
+          "description": "Six bars of quiet drumless pads end the story."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Resurrection",
+      "duration": "6:09",
+      "energy": "high",
+      "tags": [
+        "Bonus Track",
+        "Hard Dance",
+        "180 BPM",
+        "Pad Bed"
+      ],
+      "role": "Album role: The first bonus track, outside the story and not on the Bandcamp edition — 180 BPM in C minor, at full level for almost its whole length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat Intro",
+          "description": "A 154-bar beat section from the first bar, over a bed of seven pad lanes with its level ridden through the opening."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Pad Dip",
+          "description": "A 10-bar pad-led dip without bass, the only lowered section."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Explosion",
+          "description": "A 49-bar explosion over a 93-bar harmonic bed in C minor."
+        },
+        {
+          "timestamp": "4:54",
+          "section": "Final Groove",
+          "description": "A 56-bar beat runs to the end, after two short partial-beat fills."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Meditations",
+      "duration": "7:44",
+      "energy": "high",
+      "tags": [
+        "Bonus Track",
+        "Two-Song Join",
+        "168 BPM",
+        "Flat Dynamics"
+      ],
+      "role": "Album role: The second bonus track, outside the story and not on the Bandcamp edition — a join of On Hatred and On Revenge at 168 BPM, the flattest dynamics on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat Intro",
+          "description": "The beat starts at once in F minor colour."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Explosion",
+          "description": "A 64-bar explosion in C minor."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Pad Section",
+          "description": "Pad-led beat parts to 3:54, the pads moving through E-flat and G."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Reduced Bridge",
+          "description": "A short reduced partial beat at the end of On Hatred."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "On Revenge",
+          "description": "The second song enters with a 14.9 dB kick cut-in and runs 140 bars to the end in B-flat minor."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Paradise",
+      "duration": "22:59",
+      "energy": "high",
+      "tags": [
+        "Bonus Track",
+        "Six-Song Suite",
+        "Rave",
+        "180 BPM"
+      ],
+      "role": "Album role: The third bonus track and the album's last, outside the story and not on the Bandcamp edition — a 180 BPM suite of six lean rave songs: Raver's Paradise, Vision, Platinum, Particle, Mercury and Raver Nation.",
+      "events": [
+        {
+          "timestamp": "00:00",
+          "section": "Intro",
+          "description": "Eight bars of drumless pads in F minor colour, then the beat at 0:10."
+        },
+        {
+          "timestamp": "01:14",
+          "section": "First Explosion",
+          "description": "The first of five explosions, followed by another at 2:21."
+        },
+        {
+          "timestamp": "03:04",
+          "section": "Vision",
+          "description": "A 20-bar crossfade from Raver's Paradise into Vision, through a short drumless break."
+        },
+        {
+          "timestamp": "06:34",
+          "section": "Pad Bridge",
+          "description": "Vision fades out over 16 bars while one pad, walked as a progression in two-bar steps, bridges into Platinum."
+        },
+        {
+          "timestamp": "07:18",
+          "section": "Platinum",
+          "description": "Platinum's beat opens with an explosion."
+        },
+        {
+          "timestamp": "10:16",
+          "section": "Particle",
+          "description": "Particle enters through a short lead-led drumless break."
+        },
+        {
+          "timestamp": "13:31",
+          "section": "Mercury",
+          "description": "Mercury begins under lead-led reduced beat parts."
+        },
+        {
+          "timestamp": "14:54",
+          "section": "Long Break",
+          "description": "65 bars without drums, the longest break of the track, led by leads over F minor and C."
+        },
+        {
+          "timestamp": "16:21",
+          "section": "Beat Return",
+          "description": "A lead-led beat part returns in C-sharp."
+        },
+        {
+          "timestamp": "18:18",
+          "section": "Raver Nation",
+          "description": "Raver Nation enters, with explosions at 18:35 and 20:26 — the loudest bars of the suite."
+        },
+        {
+          "timestamp": "22:13",
+          "section": "Last Break",
+          "description": "A short pad-led break, then a final 24-bar beat that cuts off at the end."
+        }
+      ]
+    }
+  ]
+}
