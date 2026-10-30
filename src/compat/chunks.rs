@@ -522,14 +522,15 @@ fn read_wave_extension(
     // `0c 00 20 00 00 00 00 00` after the labels. Read as an optional text
     // token, a bar count of 9 (a tab) or 32 to 126 (printable) consumed six
     // bytes of the next event, whose sample ID's high byte (39 or 41) then
-    // read as an unsupported source.
+    // read as an unsupported source. D4 saves it too: all 282 records in
+    // seven saved songs.
     let labelled = match product {
-        Product::D2 | Product::D3 | Product::T3 => true,
+        Product::D2 | Product::D3 | Product::D4 | Product::T3 => true,
         Product::H1 => framed_labels_follow(),
         _ => false,
     };
     if labelled && raw.ends_with(&[0, 1]) {
-        // D2, D3, and T3 save two labels followed by eight bytes of source metadata.
+        // D2, D3, D4, and T3 save two labels followed by eight bytes of source metadata.
         // A metadata value can look like a text length, including an empty label.
         for index in 0..2 {
             let label = reader.block()?;
@@ -2370,14 +2371,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Set MIXJAM_TECHNO_SONG_FIXTURES to a folder that holds saved T3 songs."]
-    fn saved_t3_songs_read_every_imported_audio_record() {
+    #[ignore = "Set MIXJAM_TECHNO_SONG_FIXTURES to a folder that holds saved T3 and D4 songs."]
+    fn saved_t3_and_d4_songs_read_every_imported_audio_record() {
         let Some(root) = std::env::var_os("MIXJAM_TECHNO_SONG_FIXTURES") else {
             println!("MIXJAM_TECHNO_SONG_FIXTURES is not set; no saved songs were read.");
             return;
         };
-        let app_id = profile(Product::T3).unwrap().0.to_le_bytes();
-        let (mut songs, mut records) = (0, 0);
+        let products = [Product::T3, Product::D4];
+        let (mut songs, mut records) = ([0; 2], [0; 2]);
         let mut folders = vec![PathBuf::from(root)];
         while let Some(folder) = folders.pop() {
             for entry in fs::read_dir(folder).unwrap() {
@@ -2393,13 +2394,19 @@ mod tests {
                     || fs::File::open(&path)
                         .and_then(|mut file| file.read_exact(&mut start))
                         .is_err()
-                    || start != app_id
                 {
                     continue;
                 }
+                let Some(index) = products
+                    .iter()
+                    .position(|product| profile(*product).unwrap().0.to_le_bytes() == start)
+                else {
+                    continue;
+                };
+                let product = products[index];
                 let bytes = read_song_file(&path).unwrap();
-                let header = read_header(&bytes, Product::T3).unwrap();
-                let timeline = read_timeline(&bytes, header.after_mixer, Product::T3)
+                let header = read_header(&bytes, product).unwrap();
+                let timeline = read_timeline(&bytes, header.after_mixer, product)
                     .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
                 let embedded = embedded_wave_records(&bytes).unwrap();
                 let (mut imported, mut found) = (0, 0);
@@ -2420,12 +2427,22 @@ mod tests {
                     path.display(),
                     timeline.events.len()
                 );
-                songs += 1;
-                records += imported;
+                songs[index] += 1;
+                records[index] += imported;
             }
         }
-        assert!(songs > 0, "The folder holds no T3 songs.");
-        println!("{songs} T3 songs, {records} imported-audio events");
+        assert!(
+            songs.iter().sum::<usize>() > 0,
+            "The folder holds no T3 or D4 songs."
+        );
+        for (index, product) in products.iter().enumerate() {
+            println!(
+                "{} {} songs, {} imported-audio events",
+                songs[index],
+                product.label(),
+                records[index]
+            );
+        }
     }
 
     #[test]
@@ -2639,12 +2656,20 @@ mod tests {
     }
 
     #[test]
-    fn t3_wave_records_keep_bar_counts_that_read_as_text() {
+    fn t3_and_d4_wave_records_keep_bar_counts_that_read_as_text() {
         // As saved in the album songs "Infinitrip" (9 bars, a tab) and "Storm"
         // (32 bars, a space). Read as a third text label, the eight bytes took
         // six of the next event, so its sample ID's high byte (39 or 41) was
-        // taken for an unsupported source.
-        for (bars, next_sample) in [(9u32, 0x27fe_u16), (32, 0x27e1), (9, 0x29ec), (126, 0x2900)] {
+        // taken for an unsupported source. D4 saves the same record.
+        for (product, bars, next_sample) in [
+            (Product::T3, 9u32, 0x27fe_u16),
+            (Product::T3, 32, 0x27e1),
+            (Product::T3, 9, 0x29ec),
+            (Product::T3, 126, 0x2900),
+            (Product::D4, 9, 0x27fe),
+            (Product::D4, 32, 0x27e1),
+            (Product::D4, 126, 0x2900),
+        ] {
             let mut chunk = Vec::new();
             lane(&mut chunk, 5, &[(1, -1, 10237)]);
             chunk[1..5].copy_from_slice(&3u32.to_le_bytes());
@@ -2668,7 +2693,7 @@ mod tests {
             chunk.push(3);
             chunk.extend_from_slice(&(-2049i32).to_le_bytes());
             chunk.extend_from_slice(&174u16.to_le_bytes());
-            let events = read_chunk(&chunk, Product::T3).unwrap();
+            let events = read_chunk(&chunk, product).unwrap();
             assert_eq!(events.len(), 3);
             let Reference::Wave(first) = &events[0].reference else {
                 panic!("the first event is not imported audio");
