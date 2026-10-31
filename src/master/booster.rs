@@ -1,7 +1,7 @@
 //! The Booster pedals: the master effects of the D3, D4, and T3 products,
-//! from their effects library. They follow the reference models in
-//! `tools/runtime/fx-reference.py` and match the library's renders sample
-//! for sample. They work on 16-bit samples, as the original does.
+//! from their effects library. They follow private reference models in the
+//! ignored `tools/runtime/fx-reference.py` and match the library's renders
+//! sample for sample. They work on 16-bit samples, as the original does.
 use super::EQ_FREQUENCIES;
 use std::sync::LazyLock;
 

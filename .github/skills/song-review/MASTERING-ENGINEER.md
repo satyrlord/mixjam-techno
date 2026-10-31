@@ -6,18 +6,21 @@ profile, and say which choices need ears.
 
 ## Evidence
 
-- The premaster (`OUT/premaster.wav`: board and trim off) and the song with its
-  `.meta.json`.
+- The premaster (`OUT/premaster.wav`: board and trim off), the song, and its
+  `.meta.json` when present.
 - The current board (the `master` object of the song) and the artist profile's
   board rules.
 - The reference profile that `master.py` reads (`REFERENCE_PROFILE`, or
-  `reference.json` beside the artist profile). Without one, use the generic
-  targets in [REFERENCE.md](REFERENCE.md#generic-targets) and say so.
-- The app's factory presets, in `src/master/presets.rs`. A preset sets every
-  pedal and keeps the trim.
+  `reference.json` beside the artist profile). Use an artist target first,
+  then a reference target for a measure the artist profile does not specify.
+  If neither profile supplies a target and there is no artist profile, use
+  [generic targets](REFERENCE.md#generic-targets). Otherwise report a missing
+  target. Name the target sources.
+- The app's factory presets, in `src/master/presets.rs`. A preset sets the
+  pedal settings and order. It keeps the trim, bypass, and dynamics keys.
 
-Do not read critiques or ratings. You may read the round log for earlier board
-decisions.
+Do not read critiques, ratings, or the round log. If earlier board decisions
+are needed, the caller supplies a separate extract with only those decisions.
 
 ## Method
 
@@ -25,6 +28,10 @@ Run `master.py PREMASTER BOARD.json OUT_DIR --song SONG` for each board. It
 renders the board over the premaster, measures the loud blocks, the sections,
 the 1/3-octave balance against the references, and the drums (how far the board
 pushes the hits down, and the kick and hat attack against the premaster).
+The tool puts the premaster on one track. Its key signals cannot reproduce the
+song's external master keys. Measure a keyed board from the application's song
+render, and report the limits of the premaster measurements. Without a metadata
+file, the master report has no section table. State that limit.
 
 1. Measure the premaster and the current board.
    Completion criterion: You know where the mix stands against each target.

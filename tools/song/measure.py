@@ -2,18 +2,24 @@
 
 python -I tools/song/measure.py SONG.mixjam RENDER_DIR [--key "A minor"] > report.md
 
-Reads the song, its `.meta.json` (lane roles, sections, key), and RENDER_DIR's
-master.wav, premaster.wav and stem-*.wav from render.py. Writes a Markdown report:
-mechanical checks first, then per-section level, tone, stereo and harmony,
-arrangement figures, stem balance, and the targets.
+The tool reads the song and its `.meta.json`, if present. The metadata gives lane
+roles, sections, and key. The tool reads master.wav, premaster.wav, and any
+stem-*.wav files in RENDER_DIR. It writes a Markdown report with mechanical
+checks, section levels, tone, stereo, harmony, arrangement, stems, and targets.
 
-The key comes from --key, else from the meta file; without one the report has no
-out-of-key column. The targets come from the reference profile (REFERENCE_PROFILE,
-see .env.example); without it the report says so and prints no targets.
+The key comes from --key, or from the metadata when --key is absent. Without a
+key, the report has no out-of-key values. Targets come from REFERENCE_PROFILE
+or reference.json beside ARTIST_PROFILE. Without a profile, the report gives no
+targets. Without metadata, each used track has a generic role and the report
+uses 32-bar sections.
 
-The mechanical checks are the gate: a missing file, a sound that plays as silence,
-overlapping clips on a lane, a clip longer than its sound (a silent gap), or a
-melodic phrase that stops dead. A song with any of them is not ready for critics.
+The gate reports missing files, missing sounds that play as silence, overlapping
+clips, clips longer than their sounds, and some abrupt melodic endings. The
+ending check needs a lane role of pad, lead, keys, arp, fx, vocal, or atmos in
+the metadata. It does not run for a generic track role. Catalog-only sources
+also produce a gate problem because this tool cannot check their duration or
+silence. The improvement gate requires every reported problem to be resolved.
+Follow the artist profile's review rules when you report a failed gate.
 """
 import json
 import math
@@ -109,11 +115,11 @@ def mechanical(document, lanes):
     # Catalog audio resolves through the application and its provider libraries.
     # This file-only check cannot establish its source duration or end level.
     for sample_id in sorted(set(names) - set(samples) - set(missing_ids)):
-        problems.append(f'{names[sample_id]}: source duration and silence checks are unavailable; '
-                        'the source is not linked in samples')
+        problems.append(f'The source duration and silence checks are unavailable for {names[sample_id]}. '
+                        'The source is not linked in samples.')
     for sample in samples.values():
         if not Path(sample['path']).exists():
-            problems.append(f"missing file: {sample['path']}")
+            problems.append(f"The file {sample['path']} is missing.")
         else:
             sounds[sample['id']] = Sound(sample['path'], sample['sourceBpm'], document['song']['bpm'])
     # A sound the song lists as missing plays as silence.
@@ -122,7 +128,7 @@ def mechanical(document, lanes):
     total = sum(len(lane['placements']) for lane in document['lanes'])
     if silent:
         problems.append(f"{len(silent)} missing sounds play as silence in {sum(silent.values())} of {total} "
-                        f"placements: " + ', '.join(missing_ids[i] for i, _ in silent.most_common(8)))
+                        f"placements: " + ', '.join(missing_ids[i] for i, _ in silent.most_common(8)) + '.')
     name_of = lambda i: twin_base((lanes.get(str(i + 1)) or {}).get('name', ''))
     for index, lane in enumerate(document['lanes']):
         info = lanes.get(str(index + 1))
@@ -132,8 +138,8 @@ def mechanical(document, lanes):
                   if (group and name_of(i) == group) or i == index for p in other['placements']}
         for a, b in zip(placements, placements[1:]):
             if b['startTick'] < a['startTick'] + a['durationTicks']:
-                problems.append(f"track {index + 1} bar {b['startTick'] / TICKS_PER_BAR + 1:.2f}: "
-                                f"{names[b['sampleId']]} overlaps {names[a['sampleId']]}")
+                problems.append(f"On track {index + 1} at bar {b['startTick'] / TICKS_PER_BAR + 1:.2f}, "
+                                f"{names[b['sampleId']]} overlaps {names[a['sampleId']]}.")
         for p in placements:
             sound = sounds.get(p['sampleId'])
             if sound is None:
@@ -142,15 +148,16 @@ def mechanical(document, lanes):
             name = samples[p['sampleId']]['name']
             plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.play_bpm)
             if p['durationTicks'] > plays + 4:
-                problems.append(f"track {index + 1} bar {bar:.2f}: {name} clip outlasts its sound by "
-                                f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars (silent gap)")
+                problems.append(f"The {name} clip on track {index + 1} at bar {bar:.2f} outlasts its sound by "
+                                f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars. This leaves a silent gap.")
             end = p['startTick'] + p['durationTicks']
             fade_out = p.get('fades', {}).get('out', {}).get('ticks', 0)
             cut = p['durationTicks'] < plays - 4
             continued = any(t in starts for t in range(end - 16, end + 1))
             if info and info['role'] in MELODIC and not continued and not fade_out and (cut or sound.ends_loud):
-                problems.append(f"track {index + 1} ({info['name']}) bar {bar:.2f}: {name} stops dead at bar "
-                                f"{end / TICKS_PER_BAR + 1:.2f} ({'cut short' if cut else 'ends loud'}, no fade out)")
+                reason = 'The clip is cut short.' if cut else 'The sound is still loud at its end.'
+                problems.append(f"The {name} clip on track {index + 1} ({info['name']}) starts at bar {bar:.2f} "
+                                f"and stops at bar {end / TICKS_PER_BAR + 1:.2f} without a fade out. {reason}")
     return problems
 
 

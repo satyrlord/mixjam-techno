@@ -30,7 +30,7 @@ A tool that needs a missing key stops and names the key.
 | Tool | Usage | What it does |
 |---|---|---|
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-18 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
-| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master]` | Renders each lane alone, several at a time, and the master once. The premaster, one stem per role, and `audible.txt` are sums of the lane renders, not renders of their own; `--fit-gain` sets the master gain from the premaster's peak. |
+| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--fit DB]` | Renders a board over a premaster and compares it with the reference profile. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`; a board copied from a format-15 song has the earlier keys and fails to render until you rename them. |
@@ -48,6 +48,15 @@ A tool that needs a missing key stops and names the key.
 | `barnotes.py` | `barnotes.py [--song-bpm N] WAV BPM CENTS ...` | Notes per bar heard at the song tempo, including tempo octave selection, varispeed, and clip pitch. |
 
 `env.py` reads `.env.local`; `harmony.py` holds keys, scales, and chords.
+
+The song tools expect format 18. `render.py` does not pass sample folders to
+the application, and `measure.py` checks linked paths from its working
+directory. For an earlier song or a library-relative WAV, use the native
+`convert` command to make a format-18 working copy with the required
+`--samples` folders and an isolated `MIXJAM_TECHNO_DATA_DIR`. Copy any
+`.meta.json` beside the new song with the matching name. Check for missing
+sources and unconfirmed conflicts before using its renders. Do not replace the
+original. Retain any files that the converted copy needs in the data folder.
 
 After indexing changed WAVs, run `sampletags.py tag` before `verdicts.py build`.
 A verdict does not use a measurement from an older file. After this update, run
@@ -78,10 +87,18 @@ can differ from the full song's shared FX when an effect is nonlinear.
 Limiter fitting keeps the board and measurements from the same render and
 reports when five attempts do not reach the requested loudness.
 
-The mechanical report checks source duration and phrase endings for WAVs
-linked in `samples`. Catalog-only sources require the application's library
-resolver; the report marks those checks as unavailable and does not pass the
-gate. Missing and catalog sources still appear in the arrangement report.
+For `master.py`, `--bpm` overrides the tempo. Without that option, a supplied
+song gives its tempo. With no song, the tool uses the metadata tempo, or 140 BPM
+when none is available. A missing section list leaves out the section table.
+
+The mechanical report checks source duration for WAVs linked in `samples`.
+It checks phrase endings only on lanes with a melodic role in the song's
+`.meta.json`: `pad`, `lead`, `keys`, `arp`, `fx`, `vocal`, or `atmos`. Without
+that file, it assigns generic `trackN` roles and does not check phrase endings.
+`render.py` also needs the metadata to make role stems. Catalog-only sources
+require the application's library resolver. The report marks those source
+checks as unavailable and does not pass the gate. Missing and catalog sources
+still appear in the arrangement report.
 
 ## Reference profile
 

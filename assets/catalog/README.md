@@ -73,5 +73,7 @@ files that match the same native identity by name leave that identity
 unresolved.
 
 Original catalog bar counts and tempos apply to identified native samples.
-Generic WAVs use the source tempo selected by the user. A song that needs a
-missing or unresolved native identity cannot use a different sound in its place.
+For other WAVs, the application uses authenticated folder evidence, stated pack
+or filename tempos, or loop-length estimates. It uses the selected fallback when
+those sources do not give a tempo. A song that needs a missing or unresolved
+native identity cannot use a different sound in its place.

@@ -5,17 +5,19 @@ python -I tools/song/sampletags.py find [WORD ...] --tag TAG [--tag TAG ...] [--
                                         [--kind KIND] [--library TEXT] [--limit N]
 python -I tools/song/sampletags.py summary
 
-`tag` reads the audio of each WAV that `samples.py index` listed, measures it, and writes one row per
-file to SAMPLE_TAGS (default: tags.tsv beside the index). It reads at most the first 20 seconds of a
-file. A later run measures files whose size or modification time changed and rows made by an older
-measurement version. It saves its work every 10,000 files, so a stopped run resumes where it stopped.
+`tag` reads the audio of each WAV that `samples.py index` listed. It writes one
+row per file to SAMPLE_TAGS (default: tags.tsv beside the index). The main audio
+scan reads at most the first 20 seconds. The edge scan also reads the end of the
+file. A later run measures files whose size or modification time changed and
+rows made by an older measurement version. It saves its work every 10,000 files
+so a stopped run can resume.
 
 Measured, per file:
-- level: RMS and peak (dBFS), and the delay before the sound starts (ms);
+- level: RMS and peak (dBFS), and the delay before the sound starts (ms)
 - tone: the share of energy under 120 Hz and over 5 kHz, the spectral centroid (Hz) and flatness
-  (0 is a pure tone, 1 is white noise);
-- attack: the time from 10% to 90% of the first second's peak (ms);
-- stereo: the side level against the mid (dB);
+  (0 is a pure tone, 1 is white noise)
+- attack: the time from 10% to 90% of the first second's peak (ms)
+- stereo: the side level against the mid (dB)
 - pitch: a 12-bin chroma, the best-fitting key and how well it fits (0-1), and the tuning offset of
   the strong spectral peaks from equal temperament (cents).
 
@@ -93,7 +95,7 @@ def read_audio(path, seconds=SECONDS, tail=False):
     with open(path, 'rb') as f:
         head = f.read(12)
         if head[:4] != b'RIFF' or head[8:12] != b'WAVE':
-            raise ValueError('not a RIFF WAVE file')
+            raise ValueError('The file is not a RIFF WAVE file.')
         size = os.fstat(f.fileno()).st_size
         position, fmt = 12, None
         while position + 8 <= size:
@@ -107,7 +109,7 @@ def read_audio(path, seconds=SECONDS, tail=False):
                 fmt = (tag, channels, rate, align, bits)
             elif name == b'data':
                 if fmt is None:
-                    raise ValueError('data before fmt')
+                    raise ValueError('The WAVE data occurs before the format chunk.')
                 tag, channels, rate, align, bits = fmt
                 available = min(length, size - position - 8)
                 frames = min(available // align, int(rate * seconds))
@@ -116,7 +118,7 @@ def read_audio(path, seconds=SECONDS, tail=False):
                 raw = f.read(frames * align)
                 return rate, decode(raw, tag, channels, bits)
             position += 8 + length + (length & 1)
-    raise ValueError('no data chunk')
+    raise ValueError('The WAVE file has no data chunk.')
 
 
 def decode(raw, tag, channels, bits):
@@ -135,7 +137,7 @@ def decode(raw, tag, channels, bits):
     elif tag == 3 and bits == 64:
         x = np.frombuffer(raw, '<f8').astype(np.float32)
     else:
-        raise ValueError(f'unsupported format {tag}/{bits}-bit')
+        raise ValueError(f'The WAVE format {tag}/{bits}-bit is not supported.')
     return x[: len(x) // channels * channels].reshape(-1, channels)
 
 
@@ -145,7 +147,7 @@ def measure(rate, x):
     mono = channels.mean(axis=1)
     peak = float(np.abs(x).max()) if x.size else 0.0
     if peak < 1e-6 or len(mono) < rate // 20:
-        raise ValueError('silent or shorter than 50 ms')
+        raise ValueError('The audio is silent or shorter than 50 ms.')
     rms = float(np.sqrt(np.mean(channels ** 2)))
     # A stereo fold-down can cancel an audible signal. In that case use the
     # strongest channel for onset, spectrum and pitch analysis.
@@ -209,7 +211,7 @@ def edges(path):
     rate, head = read_audio(path, EDGE_SECONDS)
     _, tail = read_audio(path, EDGE_SECONDS, tail=True)
     if len(tail) < 16 or len(head) < 2:
-        raise ValueError('shorter than its edges')
+        raise ValueError('The audio is too short for the edge measurements.')
     channels = tail[:-4].astype(np.float64)
     end_rms = float(np.sqrt(np.mean(channels ** 2)))
     # Compare each channel with its own tail level. A stereo signal can be
@@ -244,7 +246,7 @@ def row_for(item):
         m = measure(*read_audio(Path(root) / path))
         if (not all(np.isfinite(v) for k, v in m.items() if k not in ('key', 'chroma'))
                 or not np.isfinite(m['chroma']).all()):
-            raise ValueError('a measurement is not a number')
+            raise ValueError('A measurement is not a finite number.')
         values = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in m.items() if k != 'chroma'}
         values['chroma'] = ','.join(str(int(round(v * 1000))) for v in m['chroma'])
         values['tags'] = ' '.join(tags_of(m))
@@ -277,7 +279,8 @@ def tags_path():
 def load(path=None):
     path = Path(path or tags_path())
     if not path.exists():
-        raise SystemExit(f'{path} does not exist. Build it with: python -I tools/song/sampletags.py tag')
+        raise SystemExit(f'The file {path} does not exist. Build it with this command:\n'
+                         'python -I tools/song/sampletags.py tag')
     with open(path, encoding='utf-8', newline='') as f:
         return list(csv.DictReader(f, delimiter='\t'))
 
@@ -336,7 +339,7 @@ def tag(jobs, limit=None):
                     print(f'{work.__name__}: {i}/{len(items)}', file=sys.stderr, flush=True)
     save(done.values(), target)
     errors = sum(1 for r in done.values() if r.get('error'))
-    print(f'{target}: {len(done)} files ({errors} without tags)')
+    print(f'{target}: {len(done)} files ({errors} with errors)')
 
 
 def find(args):
@@ -362,7 +365,7 @@ def find(args):
               f"{float(row['tuning']):+4.0f}c {row['tags']:<28} {Path(row['root']) / row['path']}")
         shown += 1
         if shown >= args.limit:
-            print(f'(first {args.limit}; raise --limit for more)', file=sys.stderr)
+            print(f'Showing {args.limit} results. Increase --limit to show more, if available.', file=sys.stderr)
             return
 
 
@@ -372,7 +375,7 @@ def summary():
         mine = [r for r in rows if r['root'] == root]
         counts = Counter(t for r in mine for t in r['tags'].split())
         errors = sum(1 for r in mine if r['error'])
-        print(f'{root}: {len(mine)} measured, {errors} without tags; ' + ', '.join(f'{t} {n}' for t, n in counts.most_common()))
+        print(f'{root}: {len(mine)} measured, {errors} with errors; ' + ', '.join(f'{t} {n}' for t, n in counts.most_common()))
 
 
 def main():

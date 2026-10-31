@@ -22,8 +22,9 @@ const START_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_REQUEST_BYTES: u64 = 1 << 20;
 
 pub const HELP: &str = "\
-MixJam Techno agent control. Start the app with `gui --agent`, then send one
-request per call: `mixjam-techno agent COMMAND [name=value ...]`. A value is
+MixJam Techno agent control. Start the app with `gui --agent` or
+`gui --agent-port PORT`. Send one request per call:
+`mixjam-techno agent COMMAND [name=value ...]`. A value is
 JSON when it parses as JSON, otherwise text. `agent -` reads requests from
 standard input, one per line, and stops at the first failure. A line can also
 be a JSON object: {\"command\":\"place\",\"sample\":12,\"track\":1,\"bar\":1}.
@@ -95,8 +96,8 @@ Album Review (reviews of albums and of your own songs; no window needed)
                          The tracks that match, with their album and their
                          timestamped events, such as the arc of every peak
                          track tagged Acid.
-  add_review review={...} | file=REVIEW.json   Save a new review. It must
-                         obey every rule; the error names each broken rule.
+  add_review review={...} | file=REVIEW.json   Save a new review. The error
+                         lists the validation problems the application finds.
   update_review review={...} | file=REVIEW.json   Replace the review with
                          that id, under the same rules.
 
@@ -968,8 +969,7 @@ impl Drop for Server {
 
 impl Server {
     /// Listen on `port` and write the session key to `folder`. A client must
-    /// send the key first, so only a program that can read the user's data
-    /// folder can operate the application.
+    /// send the key first. The file uses default file system permissions.
     pub fn start(port: u16, folder: &Path) -> Result<Self, String> {
         Self::start_with(port, folder, START_TIMEOUT)
     }

@@ -61,11 +61,16 @@ of filename. These samples keep their original tempo and length. A folder also
 uses original source tempo evidence when at least three WAVs, covering at least
 75% of the folder, match original audio and all known tempos agree. This resolves
 the octave ambiguity of the original 180 BPM and 90 BPM packs without using folder
-names. For other folders, the application uses loop lengths to find a tempo. If it
-cannot find a tempo, it uses the fallback BPM from Libraries (140 by default). A loop
-length can fit half or double its actual tempo. The application then prefers
-88 to 176 BPM unless the fallback names the other tempo. Set the fallback to
-180 before you scan a 180 BPM pack.
+names. For other folders, the application uses loop lengths to find a tempo.
+A pack's `BPM.INF` can correct that estimate. A tempo and key in a file name,
+such as `HARDCORE_BASS001_180_C_SL3.WAV`, can set the tempo for that file.
+An authenticated folder tempo takes precedence over these estimates and names.
+An identified product sample keeps its catalog tempo.
+If the application cannot find a tempo, it uses the fallback BPM from Libraries
+(140 by default). A loop length can fit half or double its actual tempo. The
+application then prefers 88 to 176 BPM unless the fallback names the other
+tempo. Set the fallback to 180 before you scan a 180 BPM pack when neither a
+stated tempo nor enough agreeing authenticated audio establishes its tempo.
 
 A song plays each sound in the octave of its tempo nearest the song tempo, so no
 sound is sped up or slowed down by more than half an octave. A 90 BPM loop in a
@@ -192,8 +197,8 @@ through the Output unit, which shows loudness in LUFS, the true peak, and an
 OVER lamp while the song plays.
 
 The board holds the three Booster pedals (Booster EQ, Booster compressor, and
-Booster wide), which reproduce the master effects of the original products, and
-ten mastering pedals: Soft clip, Tube, Trim EQ, Bus compressor, Maximizer, Lift
+Booster wide), which use the master effects of three original products,
+and ten mastering pedals: Soft clip, Tube, Trim EQ, Bus compressor, Maximizer, Lift
 EQ, Tape, Stereo imaging, Multiband, and Limiter. Drag a pedal by its name or
 use its arrows to move it; the Limiter always stays last. Click a pedal in the
 strip below the board to scroll to it. Every pedal starts off.
@@ -281,8 +286,8 @@ keeps copies of those WAV files together in the application's data folder.
 The song retains its native sample identities. These copies are source audio
 for the saved song; repeated saves reuse unchanged copies.
 
-A `.mixjam` song is JSON, format version 16; [SONG-FORMAT.md](SONG-FORMAT.md)
-describes it and how earlier versions open. A song links to WAV files; it is
+A `.mixjam` song is JSON, format version 18. [SONG-FORMAT.md](SONG-FORMAT.md)
+describes it and how earlier versions open. A song links to WAV files. It is
 not a portable audio bundle. A song finds a WAV that moved within a library
 folder, or to another library folder, by the end of its path: the file name and
 the folders just above it. After moving a library folder, add its new location
@@ -344,7 +349,7 @@ Digest comparisons require mono audio at the original 44.1 kHz rate, matching
 frame counts, and more than two frames. If a comparison is unavailable, the
 reader can infer identity from an unambiguous native code or name key, category,
 and duration. It rejects a WAV when its available digest differs, even if its
-name and length match. The import error names that WAV.
+name and length match. The missing-source reason names that WAV.
 
 Catalogs of several releases of one product can be present together. They
 merge when the audio, tempo, and bar count agree for every native ID that they

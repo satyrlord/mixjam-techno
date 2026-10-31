@@ -3,15 +3,15 @@
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
 
-Placement rules that the writer enforces, so two classic mistakes cannot happen:
-- `loop` tiles a sound at its own length. A 1-bar loop over 8 bars is eight
-  1-bar clips, never 2-bar clips that leave every second bar silent.
-- `loop` and `phrase` end a melodic run with a fade out when the sound is
-  still loud at its end, so it dies away instead of stopping dead.
+Placement rules:
+- By default, `loop` tiles a sound at its own length. A 1-bar loop over 8 bars
+  is eight 1-bar clips. Use `size` to set a different tile length.
+- By default, `loop` and `phrase` add a one-tick fade when a melodic run is
+  cut short or the sound is still loud at its end. You can set another fade.
 
-Automation rules: a lane rests at its neutral value until its first point, and
-saving refuses a lane that ends away from neutral while later clips still play
-(the engine holds a lane's last value to the end of the song).
+Automation rules: a lane rests at its neutral value until its first point.
+Saving rejects a lane that ends away from neutral when a later clip starts on
+that track. The engine holds a lane's last value to the end of the song.
 
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
 sections and the key. render.py, measure.py, audible.py and master.py read it.
@@ -71,7 +71,7 @@ def read_wav(path):
     elif width == 4:
         data = np.frombuffer(raw, '<i4').astype(np.float32) / (1 << 31)
     else:
-        raise ValueError(f'{path}: unsupported sample width {width}')
+        raise ValueError(f'The sample width {width} in {path} is not supported.')
     return rate, data.reshape(-1, channels)
 
 
@@ -157,7 +157,7 @@ class Song:
         roots = palettes.roots()
         for sound in self.sounds:
             if not palettes.allowed(chosen, sound, roots):
-                raise ValueError(f'{sound} is outside the palette {path}')
+                raise ValueError(f'{sound} is outside the palette {path}.')
         self.palette_path = Path(path)
         self.palette = chosen
         self.palette_roots = roots
@@ -175,7 +175,7 @@ class Song:
         if self.palette is not None:
             import palette as palettes  # tools/song/palette.py; only songs that keep a palette need it
             if not palettes.allowed(self.palette, path, self.palette_roots):
-                raise ValueError(f'{path} is outside the palette {self.palette_path}')
+                raise ValueError(f'{path} is outside the palette {self.palette_path}.')
         if path not in self.sounds:
             self.sounds[path] = Sound(path, source_bpm, self.bpm)
             sample_id = IMPORTED_ID_START + len(self.samples)
@@ -203,11 +203,12 @@ class Song:
         eq = dict(EQ_DEFAULT, **PEAK2_DEFAULT, on=True)
         unknown = set(settings) - set(eq)
         if unknown:
-            raise ValueError(f'unknown EQ settings {sorted(unknown)}')
+            raise ValueError(f'These EQ settings are not recognized: {sorted(unknown)}.')
         eq.update({key: bool(value) if key == 'on' else float(value) for key, value in settings.items()})
         for key, (low, high) in EQ_RANGES.items():
             if not low <= eq[key] <= high:
-                raise ValueError(f'track {track}: EQ {key} {eq[key]:g} is outside {low:g} to {high:g}')
+                raise ValueError(f'The EQ setting {key} on track {track} is {eq[key]:g}. '
+                                 f'It must be from {low:g} to {high:g}.')
         for key, default in PEAK2_DEFAULT.items():
             if eq[key] == default:
                 del eq[key]
@@ -223,7 +224,8 @@ class Song:
         settings = {name: float(value) for name, value in settings.items()}
         for name, (low, high) in COMPRESSOR_RANGES.items():
             if not low <= settings[name] <= high:
-                raise ValueError(f'track {track}: compressor {name} is outside {low:g} to {high:g}')
+                raise ValueError(f'The compressor setting {name} on track {track} is {settings[name]:g}. '
+                                 f'It must be from {low:g} to {high:g}.')
         self.lanes[int(track) - 1]['compressor'] = dict(on=bool(on), **settings)
 
     def width(self, track, percent):
@@ -233,7 +235,7 @@ class Song:
         percent = float(percent)
         low, high = WIDTH_RANGE
         if not low <= percent <= high:
-            raise ValueError(f'track {track}: width {percent:g} is outside {low:g} to {high:g}%')
+            raise ValueError(f'The width {percent:g}% of track {track} must be from {low:g} to {high:g}%.')
         lane = self.lanes[int(track) - 1]
         if percent == 100.0:
             lane.pop('width', None)
@@ -246,12 +248,13 @@ class Song:
         is the key lane as it sounds (after its fader), before its own ducker and the master gain."""
         track, key = _whole_track(track), _whole_track(key, 'key')
         if key == track:
-            raise ValueError(f'track {track}: a ducker needs another track as its key')
+            raise ValueError(f'The ducker on track {track} needs another track as its key.')
         settings = dict(threshold=float(threshold), depth=float(depth), attack=float(attack),
                         release=float(release))
         for name, (low, high) in DUCKER_RANGES.items():
             if not low <= settings[name] <= high:
-                raise ValueError(f'track {track}: ducker {name} is outside {low:g} to {high:g}')
+                raise ValueError(f'The ducker setting {name} on track {track} is {settings[name]:g}. '
+                                 f'It must be from {low:g} to {high:g}.')
         self.lanes[track - 1]['ducker'] = dict(on=True, key=key, **settings)
 
     # Placement.
@@ -286,9 +289,9 @@ class Song:
         sound = self.sound(path)
         size = size or sound.loop_bars
         if size is None:
-            raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars, not a loop; use phrase() or size=')
+            raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars, not a loop. Use phrase() or set size.')
         if size > sound.bars + 0.03:
-            raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars, shorter than size {size}')
+            raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars and is shorter than size {size}.')
         start, end = tick(first_bar), tick(last_bar + 1)
         placements = []
         at = start
@@ -344,7 +347,7 @@ class Song:
         ticks = {entry['tick'] for entry in entries}
         for bar, value in points:
             if tick(bar) in ticks:
-                raise ValueError(f'track {track} {lane}: a second point at bar {bar}')
+                raise ValueError(f'Track {track} {lane} has more than one point at bar {bar}.')
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
@@ -391,8 +394,8 @@ class Song:
     def document(self, master=True):
         keys = self.key_tracks(master=master)
         if len(keys) > MAX_KEYS:
-            raise ValueError(f'the duckers, pedals and FX use {len(keys)} key tracks; '
-                             f'the app allows {MAX_KEYS}')
+            raise ValueError(f'The duckers, pedals and FX use {len(keys)} key tracks. '
+                             f'The app allows {MAX_KEYS}.')
         lanes = []
         for index, lane in enumerate(self.lanes):
             lane = dict(lane)
@@ -430,7 +433,7 @@ def _whole_track(value, name='track'):
     """A track number from 1 to 64, as an int."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= TRACKS \
             or value != int(value):
-        raise ValueError(f'{name} must be a whole track number from 1 to {TRACKS}')
+        raise ValueError(f'The {name} must be a whole track number from 1 to {TRACKS}.')
     return int(value)
 
 
@@ -438,7 +441,7 @@ def _key(value, name):
     """A pedal's or an effect's key: 0 for its own input, else a track from 1 to 64."""
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= TRACKS \
             or value != int(value):
-        raise ValueError(f'{name} must be 0 (its own input) or a whole track number from 1 to {TRACKS}')
+        raise ValueError(f'The {name} must be 0 (its own input) or a whole track number from 1 to {TRACKS}.')
     return int(value)
 
 
@@ -468,8 +471,8 @@ def hold(entries, neutral, placements, label):
         later = [p for p in placements if p['startTick'] >= entries[-1]['tick']]
         if later:
             bar = min(p['startTick'] for p in later) / TICKS_PER_BAR + 1
-            raise ValueError(f'{label}: holds {entries[-1]["value"]} over a clip at bar {bar:g}; '
-                             f'end the lane at its neutral value')
+            raise ValueError(f'The automation for {label} holds {entries[-1]["value"]} over a clip at bar {bar:g}. '
+                             'End the lane at its neutral value.')
     return entries
 
 
@@ -523,7 +526,7 @@ def board(trim=0.0, **pedals):
     instead of its own input; see `pedal_key`."""
     unknown = set(pedals) - set(PEDAL_DEFAULTS)
     if unknown:
-        raise ValueError(f'unknown pedals {sorted(unknown)}')
+        raise ValueError(f'These pedals are not recognized: {sorted(unknown)}.')
     out = {'trim': float(trim), 'order': list(BOARD_ORDER)}
     for name, defaults in PEDAL_DEFAULTS.items():
         out[name] = dict(on=False, **json.loads(json.dumps(defaults)))
@@ -541,7 +544,7 @@ def pedal_key(master, pedal, key):
     fader, instead of its own input; 0 returns it to its own input. Only the app's render of
     the song hears the key: master.py masters the premaster file on track 1 (see its help)."""
     if pedal not in KEYED_PEDALS:
-        raise ValueError(f'{pedal} has no key; the keyed pedals are {sorted(KEYED_PEDALS)}')
+        raise ValueError(f'{pedal} has no key. The keyed pedals are {sorted(KEYED_PEDALS)}.')
     key = _key(key, f'{pedal} key')
     if key:
         master[pedal]['key'] = key

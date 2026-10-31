@@ -10,12 +10,14 @@ description: >
 
 Each run makes one **review**: one `assets/album-review/<id>.json` file that
 the application accepted through `add_review` or `update_review`. The
-application checks every rule before it writes the file, so a saved review is
-a valid review.
+application checks the format and its validation rules before it writes the
+file. Check the factual claims and the writing guide yourself.
 
-If the request has more than one album, use one sub-agent for each album and
-give it this skill and one album. Then compare and correct their results
-before you save the reviews.
+If the request has more than one album, prepare one draft per album. When
+sub-agents are available, give each this skill and one album. Ask for a draft
+and its evidence only. A sub-agent must not send `add_review` or
+`update_review`. Compare and correct the drafts, then save and check each
+review yourself. If sub-agents are unavailable, prepare the drafts in sequence.
 
 Read [REFERENCE.md](REFERENCE.md) for the fields, the id format, the rules,
 and the commands. Read `docs/ALBUM-REVIEW-WRITING.md` for the prose, the
@@ -30,26 +32,36 @@ data folder. A saved review is a repository file, so commit it only when the
 user asks.
 
 1. Send `reviews search="TITLE"` and `reviews artist="ARTIST"`.
-   Completion criterion: You know whether the review exists. If it exists, use
+   Check `total` and read all result pages. Check `problems` for unreadable files.
+   Completion criterion: You know whether the review exists, or report an
+   unreadable folder or file as a blocker. If the review exists, use
    `review id=ID` and plan an update, not an add.
 
 ## Step 2: Gather the metadata
 
-1. Run `python -I tools/album-review/lookup.py release "ARTIST" "TITLE" --year YEAR`.
-   Choose the official release that matches the album.
-2. Run `python -I tools/album-review/lookup.py tracks MBID` for the track
-   list, the durations, and the runtime.
-3. Read the album's Wikipedia article for the year, the label, the producers,
-   the genre, and the recording and production context.
+1. For a released album, run
+   `python -I tools/album-review/lookup.py release "ARTIST" "TITLE" --year YEAR`.
+   Omit `--year YEAR` when the year is unknown.
+   Completion criterion: You select the official release that matches the album.
+2. For that release, run `python -I tools/album-review/lookup.py tracks MBID`.
+   Completion criterion: You have the track list, durations, and runtime, or
+   have identified the values that need another source.
+3. Read sources for the year, label, producers, genre, and production context.
+   Use the album's Wikipedia article when it exists, and other reliable sources
+   when it does not supply the facts.
+   Completion criterion: Each factual value has a named source.
 4. Write the metadata fields in the formats of the "Metadata Fields" section
    of the writing guide.
+   Completion criterion: Each required field follows the format and has a
+   supported value, or uses `"Unknown"` where the format permits it.
 
 **Completion criterion:** every metadata field has a value from a source that
 you can name. `label` and `producer` are `"Unknown"` only when no source
 gives the value.
 
-For own work, the local masters and the song files are the source. Measure
-the durations from the masters. Do not invent a release that does not exist.
+For unpublished own work, use the local masters, song files, and owner-provided
+facts. Measure the durations from the masters. Skip the release lookup when no
+release exists. Do not invent missing facts.
 
 ## Step 3: Find the listening links
 
@@ -62,8 +74,9 @@ Listening links are optional. Add only links to official releases:
 - Own work only: `localAudio` (a WAV master) and `songFile` (a `.mixjam` or
   `.mix` song), for the album or song and for each track.
 
-You can read the text of these pages (titles, track lists, durations), not
-the audio. For own work, analyse the local masters.
+Read the text of these pages for titles, track lists, and durations. If audio
+is not available to you, do not claim that you listened to it. For own work,
+analyse the local masters when the tools can read them.
 
 **Completion criterion:** your report names each link field that stays empty.
 
@@ -71,9 +84,15 @@ the audio. For own work, analyse the local masters.
 
 1. Run `python -I tools/album-review/lookup.py cover "ARTIST" "TITLE"`.
    If the search picks the wrong article, add `--page "ARTICLE TITLE"`.
-2. Open the image address and the article, and make sure that they show this
-   album's front cover.
-3. Put the image address in `coverUrl` and the article in `coverSource`.
+   Completion criterion: You have a candidate cover and source, or the lookup
+   found no candidate.
+2. If the lookup found a candidate, open the image address and the article.
+   Completion criterion: The source identifies the album and its cover, or
+   you reject the candidate.
+3. For a verified candidate, put the image address in `coverUrl` and the article
+   in `coverSource`.
+   Completion criterion: Both fields identify the verified source, or neither
+   field is added.
 
 The tool finds the link but does not download the image. The application
 downloads a cover only when a person selects **Display cover art**. Do not
@@ -87,6 +106,9 @@ has no `coverUrl`.
 
 Write the `overview` and, for each track, the `energy`, `tags`, `role`, and
 `events`. Obey every rule in `docs/ALBUM-REVIEW-WRITING.md`.
+Use source or measurement evidence for each musical claim. If the available
+evidence cannot support the requested detail, stop and report the missing evidence.
+Do not invent instruments, events, or timestamps.
 
 **Completion criterion:** all of these are true:
 
@@ -100,10 +122,15 @@ Write the `overview` and, for each track, the `energy`, `tags`, `role`, and
 ## Step 6: Save
 
 1. Write the review to a JSON file in `tmp/`.
+   Completion criterion: The file contains the full review.
 2. Send `add_review file=PATH` for a new review, or `update_review file=PATH`
    for an existing one.
-3. If the reply is an error, it names each broken rule. Correct the review and
-   send it again.
+   Completion criterion: You have a reply for the intended review.
+3. If the reply is an error, correct the reported problem when it is in scope.
+   Completion criterion: The problem is corrected, or you report the blocker.
+4. After a correction, send the review again.
+   Completion criterion: The application accepts the review, or you report the
+   error that blocks it.
 
 **Completion criterion:** the reply has `"ok":true` and the `path` of the
 saved file.
@@ -112,7 +139,9 @@ saved file.
 
 1. Click **Album Review** in the tool rail, or send
    `click target="Album Review"`.
+   Completion criterion: The review window opens.
 2. Open the review's card and read the page.
+   Completion criterion: The card opens the intended review.
 
 **Completion criterion:** the grid shows the album's card, and its page shows
 the metadata, the overview, the listening links, and every track with its

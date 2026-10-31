@@ -297,17 +297,17 @@ dragged; it has no other use.
 Folded Metal palettes share dark inset bays and controls, cream lettering,
 polished silver knob caps, and pale metal primary buttons. Tool chassis colors
 remain distinct: Marine for Time Stretcher, Granite for Sample Editor, Red for
-Effect Studio, Olive for Step synth, and Indigo for Mastering. Utility is
-neutral and permits an orange-yellow accent. Use explicit names and states
+Effect Studio, Olive for Step synth, Indigo for Mastering, and Marine for the
+Effects board. Utility is neutral and permits an orange-yellow accent. Use explicit names and states
 alongside color; Coral continues to identify errors and destructive actions.
 Palette changes must not change control geometry or behavior. Keep these
-colors local to floating windows and the Mastering board; the arrangement,
+colors local to floating windows and the Mastering and Effects boards; the arrangement,
 browser, and Mixer retain their palettes.
 
 | Palette | Window | Chassis | Active accent |
 | --- | --- | --- | --- |
 | Utility | Utility windows and dialogs | `#3c4140` | `#e79331` |
-| Marine | Time Stretcher | `#20535b` | `#55aeb7` |
+| Marine | Time Stretcher and Effects board | `#20535b` | `#55aeb7` |
 | Granite | Sample Editor | `#34393c` | `#adbabd` |
 | Red | Effect Studio | `#9a2d27` | `#eb7468` |
 | Olive | Step synth | `#3c4428` | `#9db25e` |
@@ -354,7 +354,7 @@ a pedal's lamp. Gain-reduction lamps on the Bus compressor and Limiter are
 Mastering Amber. These four tokens are local to the board. Each dynamics
 pedal ends its dials with Key, which reads Own or a track number; the Bus
 compressor's five dials take three columns, and the Limiter's three take two
-rows. The FX windows' duckers end with the same Key dial. The strip below
+rows. The Effects board's duckers end with the same Key dial. The strip below
 the board, one 30-point row of chips in a dark well, repeats each pedal's
 enamel in signal order, with a cream outline around the pedals in view.
 Choosing a chip, or focusing any control above the strip, returns a scrolled
@@ -449,7 +449,9 @@ top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
 In a short window Mixer yields down to 370 points so the lane viewport keeps
-80 points; its gain rail then shortens from 112 points to as little as 84.
+80 points. A 400-point Mixer panel gives the physical gain rail 96 points.
+The short panel can reduce it to 68 points. The draggable area extends 16
+points past each end of the rail to include the fader cap.
 When space permits, the maximum panel height leaves 220 points for the
 arrangement plus 68 points for transport. At the minimum client height,
 Mixer's minimum can reduce that arrangement reserve. Status
@@ -514,8 +516,7 @@ horizontal track scroller, whose scrollbar remains visible. Track numbers,
 sound summaries, dB gain values, pan descriptions, and output state stay
 grouped within each strip. A track with
 several distinct sounds shows their count and lists their names on hover.
-Gain rails retain at least 112 logical points of travel at the minimum window
-size. Narrow strips preserve visible tracks without enlarging every control.
+Narrow strips preserve visible tracks without enlarging every control.
 
 Sample libraries constrains its floating window to the viewport and scrolls
 vertically. A large expanded Folder tempos list must leave the provider
@@ -560,10 +561,10 @@ grain, and sparse hairline scratches. Use no decorative screws or fasteners.
 The folded lip, texture, and light wear provide the hardware character. Do not
 add heavy damage, oversized bevels, or ornamental hardware. Mixer retains its existing prepared material and faders.
 
-Mastering's pedals are the one lifted layer in the lower panel. Each stands
-off the Indigo board on a soft drop shadow cast down and right, with a
-6-point bevel and 4-point side walls, all lit from the upper left (see
-Colors). Floating windows share one window shadow. Nothing else casts one.
+Mastering's pedals stand off the Indigo board on a soft drop shadow cast down
+and right, with a 6-point bevel and 4-point side walls, all lit from the upper
+left (see Colors). The Effects units use the same raised enclosures on their
+Marine board. Floating windows share one window shadow.
 
 Shared control rendering supplies hover, keyboard focus, pressed, selected, and
 disabled states. Keep state changes immediate and visible; color alone does not
@@ -711,7 +712,8 @@ Mixer uses compact ivory strips against a graphite material surround. Track
 identity and gain lead the hierarchy. L/R routing uses small named toggle
 buttons with live enabled indicators. Mute and Solo sit in their own row
 above polarity and L/R, after a 26 by 24-point EQ button above polarity that
-fills amber while the track's EQ is on. The status line under pan names why a track is
+fills amber while the EQ, compressor, or ducker is on, or the width differs
+from 100%. The status line under pan names why a track is
 silent: Muted, then No output (both L and R off), then Solo elsewhere.
 Gain runs from
 negative infinity (silence) to +12 dB with 0 dB at unity. Negative dB attenuates
@@ -742,6 +744,10 @@ width reserves the vertical scrollbar, so a short viewport scrolls the content
 vertically without adding horizontal overflow. The strip's EQ button lights
 while the EQ, the compressor, or the ducker is on, or while the width is not
 100%.
+
+Four send knobs sit below each track's gain rail. After the tracks, four return
+strips hold the FX bus return levels, input switches, limiter switches, and
+Edit buttons. Edit opens the selected bus in the Effects module.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
@@ -786,6 +792,15 @@ The empty mixer has one instruction for adding a sound to the arrangement.
 All tool windows and utility dialogs use the same Folded Metal shell. The
 frontend submits edits to the application layer; visual changes preserve those
 commands.
+
+### Effects board
+
+The Effects module shows four bus units side by side on a Marine board. The
+row scrolls in both directions when necessary. Each raised unit identifies its
+bus and effect, and provides the effect and preset selectors, settings, return
+level, input and limiter switches, and Clear tail. Empty units ask the user to
+choose an effect. Echoform Delay uses blue enamel and Aetherform Reverb uses
+violet enamel. An inactive or empty unit dims its enclosure and lamp.
 
 ### Shared shell and controls
 

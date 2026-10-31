@@ -4,19 +4,21 @@ python -I tools/album-review/lookup.py release "ARTIST" "TITLE" [--year YEAR]
 python -I tools/album-review/lookup.py tracks MBID
 python -I tools/album-review/lookup.py cover "ARTIST" "TITLE" [--page "ARTICLE"]
 
-`release` searches MusicBrainz for the release and prints the candidates as JSON, an official
-release first. `tracks` prints the track list of one release (every medium, numbered from 1),
-with each duration as M:SS, the runtime, and the release date. A missing duration or incomplete
-runtime reads ?:??. `cover` searches Wikipedia for the
-album's article and prints the cover image URL and the article URL, for the review's `coverUrl`
-and `coverSource`. It accepts only an article whose summary names the artist and calls the work an
-album, a soundtrack, or a score, and prints empty strings when none has an image; `--page` reads
-one article that you name. Check the image before you use it: a search can still pick the wrong
+`release` searches MusicBrainz for the release and prints the candidates as JSON. Official
+releases come first. `tracks` prints the track list of one release. It numbers the tracks from 1
+across all media. It gives each duration as M:SS, the runtime, and the release date. A missing
+duration or incomplete runtime reads ?:??.
+
+`cover` searches Wikipedia for an article and prints the cover image URL and article URL for the
+review's `coverUrl` and `coverSource`. The search accepts an article when its summary names the
+artist and contains album, soundtrack, score, record, or suite. It prints empty strings when it
+finds no matching article with an image. `--page` reads the article that you name without those
+search checks. Check the image before you use it. The search or named page can give the wrong
 record.
 
 The tools read metadata only. They never download a cover: the application does that when the
 user asks for it. MusicBrainz allows one request a second, so `release` and `tracks` wait between
-requests. Both services require a descriptive user agent; this tool sends one.
+requests. The tool sends a descriptive user agent to both services.
 """
 import argparse
 import json
@@ -242,7 +244,7 @@ def main(argv):
         else:
             result = cover(arguments.artist, arguments.title, arguments.page)
     except (urllib.error.URLError, TimeoutError, ValueError) as error:
-        print(f"Lookup failed: {error}", file=sys.stderr)
+        print(f"Cannot look up the metadata: {error}", file=sys.stderr)
         return 1
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
     print()

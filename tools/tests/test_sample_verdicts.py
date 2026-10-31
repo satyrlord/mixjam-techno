@@ -177,12 +177,14 @@ class EdgeTests(unittest.TestCase):
         with mock.patch.object(sampletags, 'tags_path', return_value=target), \
              mock.patch.object(sampletags.samples, 'load', return_value=[row]), \
              mock.patch.object(sampletags, 'ProcessPoolExecutor', InlinePool):
-            with mock.patch.object(sampletags, 'edges', side_effect=OSError('temporary error')):
+            with mock.patch.object(sampletags, 'edges', side_effect=OSError('temporary error')), \
+                    mock.patch('sys.stdout', new_callable=io.StringIO) as output:
                 sampletags.tag(1)
             stored = sampletags.load(target)[0]
             self.assertTrue(stored['error'].startswith('edges:'))
             self.assertTrue(stored['rms_db'])
             self.assertTrue(stored['tags'])
+            self.assertIn('1 with errors', output.getvalue())
             with mock.patch.object(sampletags, 'measure', side_effect=AssertionError('must not remeasure')):
                 sampletags.tag(1)
             self.assertEqual(sampletags.load(target)[0]['error'], '')
@@ -404,7 +406,7 @@ class PaletteTests(unittest.TestCase):
                             mock.patch.object(palette, 'roots', return_value=[]), mock.patch('sys.stderr', errors):
                         placed = palette.placed_samples(song)
                     self.assertEqual(placed[0]['name'], 'pad7')
-                    self.assertIn('catalog names were not loaded', errors.getvalue())
+                    self.assertIn('Cannot load catalog names', errors.getvalue())
 
     def test_make_and_check_round_trip_a_pathless_native_sound(self):
         with tempfile.TemporaryDirectory() as folder:

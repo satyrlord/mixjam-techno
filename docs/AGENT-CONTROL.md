@@ -44,8 +44,10 @@ port.
   window. `reviews tag=Acid energy=peak` lists the albums that have such a
   track, and `review_tracks` gives each matching track with its role and its
   timestamped events, so a song-building agent can use the reviews as
-  reference. A review is checked against every rule before it is saved; the
-  error names each broken rule. Give a long review as `file=PATH`. The
+  reference. Before saving, the application checks the review's structure and
+  its implemented validation rules. It reports the validation issues it finds.
+  It does not verify factual or listening claims. Give a long review as
+  `file=PATH`. The
   [album-analysis skill](../.github/skills/album-analysis/SKILL.md) has the
   format and the procedure.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
@@ -60,6 +62,7 @@ The port accepts connections from this computer only, and each connection must
 start with a session key. The application writes a new key to
 `agent-PORT.key` in its data folder at each start and removes it on exit. The
 `agent` command reads it there, so it needs the same `MIXJAM_TECHNO_DATA_DIR` as
-the application. Another user of the computer, or a web page, cannot send
-requests. A program that runs as you can read the key. It can then do what the
-window can do, which includes saving files to a path that it supplies.
+the application. The key file uses the file system's default permissions; the
+application does not set a more restrictive access control list. Any user or
+program that can read the key can control the window, including saving
+files to a supplied path. A request without the key cannot authenticate.

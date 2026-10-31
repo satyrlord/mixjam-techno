@@ -452,6 +452,12 @@ at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
 to one physical pixel, with no texture resizing. The empty bank gives one
 instruction and leaves Master available.
 
+`src/ui/fx.rs` owns the Effects board. It places the four buses in raised
+units on a Marine surface, with the effect and preset choices, dials, return
+level, switches, and Clear tail. `src/ui/view.rs` sends a changed bus set as
+an edit and sends Clear tail to the session. The Mixer's return-strip Edit
+button selects the module and brings that bus into view.
+
 The frontend's `BottomModule` enum selects Sounds, Mixer, Mastering, or Effects. `src/ui/view.rs`
 owns their shared 28-point header and fixed left-side `Bottom module` combo.
 Its width, `BOTTOM_MODULE_WIDTH`, is 168 points, which shows every module name
@@ -611,9 +617,9 @@ retains unresolved sources as placeholders.
 `assets/album-review/<id>.json`, sorted by id, and lists each file that does
 not load with its reason; a missing folder is an explicit state.
 `album_review/review.rs` defines the saved form (`Review`, `Track`, `Event`,
-`Energy`, `Kind`) and every rule a review obeys; `Shelf::add` and
-`Shelf::update` check the rules before `atomic_file` writes the file, so the
-application writes only valid reviews. New reviews use exclusive publication
+`Energy`, `Kind`) and the implemented validation rules. `Shelf::add` and
+`Shelf::update` check those rules before `atomic_file` writes the file. They do
+not check the accuracy of factual or listening claims. New reviews use exclusive publication
 and cannot replace an existing file, even when that file did not load.
 `Query` and `Shelf::tracks` answer the agent
 filters (artist, tag, energy, kind). `album_review/collection.rs` owns the
@@ -645,11 +651,13 @@ on the two sides of the application boundary.
 requests and replies, encodes them as JSON lines, serves them on the loopback
 interface, and contains the `agent` command-line client. It queues each request
 for the frontend and wakes it. It does not interpret a request. Each session
-has a new key in `agent-PORT.key` in the data folder, which only the user can
-read. A connection that does not start with the key, or that sends a malformed
-line, is closed. A request from another user, or one that another program was
-tricked into sending, such as an HTTP form post, never reaches the queue. A request that the
-window does not take within 30 seconds fails and can no longer run.
+has a new key in `agent-PORT.key` in the data folder. The key file uses the
+file system's default permissions; the application sets no restrictive access
+control list. Any user or program that can read the key can send
+requests. A connection that does not start with the key, or that sends a
+malformed line, is closed. An HTTP form post without the key does not reach the
+queue. A request that the window does not take within 30 seconds fails and can
+no longer run.
 Dropping the server removes the session key, closes active connections, and
 clears its window wake callback. It also wakes the listener and waits for it to
 release the port. If the server cannot connect to wake the listener, it does not

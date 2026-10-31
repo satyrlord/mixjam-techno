@@ -6,7 +6,8 @@ judgement needs ears.
 
 ## Brief
 
-Judge these points against the artist profile:
+Judge these points against the artist profile, or the generic targets when no
+profile exists:
 
 - Form and section contrast. Each section does its job: the intro sets the
   song's world, a build-up builds, a chorus lifts, a breakdown breathes, a riser

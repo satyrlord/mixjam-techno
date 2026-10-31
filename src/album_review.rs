@@ -254,7 +254,7 @@ impl Shelf {
             .collect()
     }
 
-    /// Save a new review. It must obey every rule and have a new id.
+    /// Save a new review. It must pass validation and have a new id.
     pub fn add(&mut self, review: Review) -> Result<(), String> {
         if self.review(&review.id).is_some() {
             return Err(format!(
@@ -265,7 +265,7 @@ impl Shelf {
         self.save(review, true)
     }
 
-    /// Replace a review that exists. The new one must obey every rule.
+    /// Replace a review that exists. The new one must pass validation.
     pub fn update(&mut self, review: Review) -> Result<(), String> {
         if self.review(&review.id).is_none() {
             return Err(format!(

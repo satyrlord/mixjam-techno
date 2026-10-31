@@ -15,20 +15,38 @@ Give each role the same evidence for a pass, as paths:
 | Item | Source |
 |---|---|
 | The song | `SONG.mixjam` |
-| Lane names and roles, sections, tempo, key | `SONG.meta.json`, written by `tools/song/mixjam.py` |
-| Renders | `OUT/master.wav`, `OUT/lane-NN.wav`, and their sums `OUT/premaster.wav` and `OUT/stem-ROLE.wav`, from `render.py` |
+| Lane names and roles, sections, tempo, key | `SONG.meta.json`, when present, written by `tools/song/mixjam.py` |
+| Renders | `OUT/master.wav`, `OUT/lane-NN.wav`, `OUT/premaster.wav`, and `OUT/stem-ROLE.wav` when role metadata exists, from `render.py` |
 | Measurement report | `report.md` from `measure.py` |
 | Audibility table | `OUT/audible.txt` from `render.py` |
 | Composer script, if one built the song | the script; leave it out of the rater's package if it quotes critiques or scores |
-| Artist profile | the file at `ARTIST_PROFILE` |
-| Reference studies | the files that the artist profile names |
+| Artist profile | the file at `ARTIST_PROFILE`, when available; give the rater a screened extract |
+| Reference studies | the files that the artist profile names, when available; give the rater screened extracts |
+| Reference profile | `REFERENCE_PROFILE` or `reference.json` beside the artist profile, when available; screen the rater's copy; required for mastering measurements against a reference |
 | Review folder and output path | where the role writes its output |
 
 Only the critics and the main agent read the round log. The rater never reads
-the round log, a critique, or an earlier rating.
+the round log, a critique, or an earlier rating. The mastering engineer does
+not read the round log. Give it a decisions-only extract when earlier board
+decisions are needed.
 
-A song without a `.meta.json` file still works: `measure.py` treats each used
-track as its own role and measures 32-bar sections.
+For the rater, screen every text item in the evidence package. Make extracts
+that retain the artist's style rules and objective measurements. Remove
+critiques, earlier ratings, and rating targets. Check each item before you send
+it. If an item cannot be screened, leave it out and report the limit. Do not
+use earlier song ratings as rater calibration.
+
+A song without a `.meta.json` file still works: the tools treat each used track
+as its own lane, and `measure.py` measures 32-bar sections. `render.py` does not
+write role stems without role metadata. The mechanical report checks abrupt
+melodic endings only for lanes with a recognized melodic role. Without role
+metadata, a report of zero problems does not cover that check. State the limit.
+
+The song tools expect a format-18 document. `render.py` does not pass sample
+folders to the application, and `measure.py` checks linked paths from its
+working directory. Convert earlier formats or resolve library-relative WAVs
+with the native application as described in the setup step. Do not substitute
+another sound when a source cannot be resolved.
 
 ## Tools
 
@@ -105,8 +123,9 @@ Name the role outputs `roundN-composition.md`, `roundN-mix.md`,
 
 ## Generic targets
 
-Use these only when there is no artist profile, and say so in every brief and
-report.
+Use these when there is no artist profile, except where a configured reference
+profile supplies the applicable target. Name the source of each target in
+every brief and report. State when there is no artist profile.
 
 - Gate: 0 mechanical problems; the premaster peaks under -0.3 dBFS. A drowned
   lane in `audible.txt` is a critic finding, not a gate failure.

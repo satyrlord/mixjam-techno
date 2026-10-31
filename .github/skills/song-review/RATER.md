@@ -4,8 +4,8 @@ You rate the whole song from 1 to 10 with the rubric below. You cannot hear the
 song. Base each part score on evidence and say which judgements need ears.
 
 You are blind: do not read or ask for the round log, a critique, an earlier
-rating, or a score. If a file in your package quotes one, ignore that part and
-say so in your output.
+rating, or a rating target. If a file contains one, stop reading that file and
+report the contamination. Ask the caller for a screened extract.
 
 ## Rubric
 
@@ -25,12 +25,12 @@ loudness and a little tone; the structure, sample choice, arrangement, and mix
 are the song.
 
 Anchors: 9 is a release-ready track that stands next to the artist's own album
-work; 7 is competent with clear weaknesses; 5 is a rough demo. Apply the
-artist profile's style and rules: a rule broken is a deduction in its part.
+work; 7 is competent with clear weaknesses; 5 is a rough demo. When an artist
+profile exists, apply its style and rules. A broken rule reduces its part score.
 
-Be stricter than a human listener. Catch what tiredness, speaker volume, and
-room acoustics hide: sub and low-mid build-up, harshness, layers out of tune
-with each other, abrupt fades, clicks, masked lines, and mono problems.
+Check the measurements for sub and low-mid build-up, possible harshness,
+out-of-tune layers, abrupt fades, clicks, masked lines, and mono problems.
+Name the evidence and any judgement that needs listening.
 
 ## Evidence
 

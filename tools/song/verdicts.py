@@ -5,29 +5,31 @@ python -I tools/song/verdicts.py show [WORD ...] [--verdict V] [--reason R] [--k
 python -I tools/song/verdicts.py summary
 python -I tools/song/verdicts.py family WORD [WORD ...]
 
-`build` joins the index (`samples.py index`) and the measurements (`sampletags.py tag`) and writes
-SAMPLE_VERDICTS (default: verdicts.tsv beside the index), one row per WAV. Nobody can listen to a
-quarter of a million sounds, so the verdicts are automatic; a person judges only the sounds a song
-will use, and their verdicts override these.
+`build` joins the index (`samples.py index`) and the measurements
+(`sampletags.py tag`). It writes one row per WAV to SAMPLE_VERDICTS (default:
+verdicts.tsv beside the index). The verdicts are automatic. A person's verdict
+for a sound overrides the automatic verdict.
 
 Automatic verdicts, from the measurements alone:
-- reject: no audio (unreadable or silent), or a measurement that belongs to an older file; every member
-  of a family whose numbered chord files do not
-  play their chords (family-chord-mismatch: their chroma fits other triads much better than the ones
-  the pack names, by the median of the family). Only pads, chords, strings, basses, leads, arps and
-  brass are tested; a lead line passes through other notes, so it has a lower bar.
-- caution: one chord file that does not play its chord (chord-mismatch); a family 15 cents or more
-  out of tune (family-off-tune; the tune column gives the cents to add from 5 cents up, from the
-  family's tonal members' median offset); a sound that starts late; a stray frame at the very end (end-spike); a loop whose wrap
-  clicks (seam-click); a one-shot cut off while still sounding (cut-end); a very quiet file; a melodic
-  loop whose measured key note lies outside its name's key (key-differs).
-- ok: none of these.
+- reject: no audio, an unreadable or silent file, a measurement from an older
+  file, or family-chord-mismatch. That family verdict uses the median chord fit
+  of at least three numbered chord files. Chord fit compares each file's chroma
+  with its named chord and its best matching triad. The test applies to pads,
+  chords, strings, basses, leads, arps, and brass. Lead lines use a lower
+  threshold because they pass through other notes.
+- caution: chord-mismatch for one file, family-off-tune at 15 cents or more,
+  a late start, end-spike, seam-click, cut-end, a very quiet file, or key-differs
+  for a melodic loop whose measured key note lies outside its named key. The
+  tune column gives the cents to add from 5 cents up, based on the median
+  offset of the family's tonal members.
+- ok: none of these
 A file with the same size, level and chroma as an earlier one names it in same_as.
 
 The owner's verdicts are in SAMPLE_OWNER_VERDICTS (default: owner-verdicts.tsv beside the index): a
 tab-separated file with the columns pattern, verdict (approved, rejected, out-of-tune or cheesy),
-note and date. A pattern is a full path (root/path, with / or \\) where * matches any text; case does
-not count. The owner's verdict replaces the automatic one, and the automatic reasons stay beside it.
+note and date. A pattern is a full path (root/path, with / or \\) where * matches any text.
+Case does not count. The owner's verdict replaces the automatic one, and the
+automatic reasons stay beside it.
 
 A family is the sounds of one folder whose names differ only in a trailing number, chord name, tempo
 and key tag, or left/right mark: Pad 1 to Pad 8, or BASS001_140_A to BASS035_140_A. `family` prints
@@ -158,7 +160,8 @@ def load_owner():
         rules = list(csv.DictReader(f, delimiter='\t'))
     for rule in rules:
         if rule['verdict'] not in OWNER_VERDICTS:
-            raise SystemExit(f'{path}: verdict {rule["verdict"]!r} is not one of {", ".join(OWNER_VERDICTS)}')
+            raise SystemExit(f'The verdict {rule["verdict"]!r} in {path} is not valid. '
+                             f'Use one of {", ".join(OWNER_VERDICTS)}.')
         rule['match'] = rule['pattern'].replace('\\', '/').lower()
     return rules
 
@@ -186,7 +189,8 @@ def has_audio_measures(measured):
 def load(path=None):
     path = Path(path or verdicts_path())
     if not path.exists():
-        raise SystemExit(f'{path} does not exist. Build it with: python -I tools/song/verdicts.py build')
+        raise SystemExit(f'The file {path} does not exist. Build it with this command:\n'
+                         'python -I tools/song/verdicts.py build')
     with open(path, encoding='utf-8', newline='') as f:
         return list(csv.DictReader(f, delimiter='\t'))
 
@@ -291,7 +295,7 @@ def show(args):
         print(f'{row["verdict"]:<11} {row["reasons"]:<36} {extra:<26} {row["root"]}/{row["path"]}')
         shown += 1
         if shown >= args.limit:
-            print(f'(first {args.limit}; raise --limit for more)', file=sys.stderr)
+            print(f'Showing {args.limit} results. Increase --limit to show more, if available.', file=sys.stderr)
             return
 
 

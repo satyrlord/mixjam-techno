@@ -35,10 +35,11 @@ portable audio bundle.
 `masterGain`, and `loopRegion`. Save names a new song after its file, and Save
 As renames a song whose title is its earlier file name; an imported title stays.
 
-`lanes` has exactly 64 entries in track order. A lane holds `gain` (amplitude
-from 0 to 4; 1 is 0 dB), `polarityInverted`, `pan`, `leftEnabled`,
-`rightEnabled`, `muted`, `solo`, `sends` (four amounts from 0 to 1), and
-`placements`. A lane may also hold:
+`lanes` has exactly 64 entries in track order. In version 18, a lane holds
+`gain` (amplitude from 0 to 4; 1 is 0 dB), `polarityInverted`, `pan`,
+`leftEnabled`, `rightEnabled`, `muted`, `solo`, `sends` (four amounts from 0
+to 1), and `placements`. Earlier versions use the fields listed in the version
+history below. A version-18 lane may also hold:
 
 - `automation`, with any of `volume`, `sends` (four lists), and `filter`:
   lists of `{"tick", "value"}` points in strictly increasing tick order within
@@ -142,8 +143,8 @@ before replacing the destination.
 
 ## Version history
 
-Each version opens as it sounded when it was saved. Saving an earlier song
-writes version 18, which earlier builds cannot open.
+Migration preserves the earlier settings within the limits below. Saving an
+earlier song writes version 18, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -159,7 +160,9 @@ writes version 18, which earlier builds cannot open.
 | 17 | Adds the lane `ducker`, the pedals' `key`, and the effects' `duckKey`. | Every ducker off; every pedal and effect on its own input. |
 | 18 | Adds the EQ's second peak (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. A lane ducker's `threshold` is measured before the master gain; version 17 measured it after. | The second peak flat, every compressor off, every lane at 100% width. Each saved lane `ducker`, on or off, opens with its `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0, so it ducks as it did wherever that range allows; a `masterGain` of 0 leaves it, as the key is silent either way. |
 
-A version rejects each key that a later version added.
+The readers reject later-version settings in earlier songs. Some optional fields
+encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept
+an explicit `"bypass": false` in `master`.
 
 Earlier plain JSON projects have a separate compatibility reader. It accepts
 both generations of Booster names without weakening these versioned song rules.

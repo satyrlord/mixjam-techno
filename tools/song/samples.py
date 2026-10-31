@@ -10,15 +10,17 @@ one row per WAV and MIDI file to SAMPLE_INDEX (default local-data/samples/index.
 headers only, never the audio. Later runs read headers again when the file's size or modification
 time changes, or when its pack metadata changes.
 
-Per file: length, rate, channels and bits; tempo and key from the name, the parent folders, a
-pack's BPM.INF (its tempo and its chord table for numbered files) or the WAV's loop chunk; the
-root note of a one-shot; whole bars at that tempo; and a kind (kick, pad, lead, ...) from the path.
-Each value says where it came from, since a name can be wrong; check a sound by ear or measure it
-before you rely on it.
+For each file, the index gives length, rate, channels, and bits. It gives tempo
+and key from the name, the parent folders, the pack's BPM.INF, or the WAV's
+loop chunk. BPM.INF contains a tempo and a chord table for numbered files. The
+index also gives the root note of a one-shot, whole bars at that tempo, and a
+kind such as kick, pad, or lead from the path. Each value identifies its source.
+Names can be wrong. Listen to or measure a sound before you rely on it.
 
 `find` prints the matching files, one per line: seconds, tempo, key or chord, kind, full path.
-Every WORD must appear in the path (case ignored). --bpm N matches within 0.5 BPM; --any-octave
-also matches half and double tempo. --key accepts Am, A min, A minor, F#m, Gb and similar.
+Every WORD must appear in the path. Case does not count. --bpm N matches within
+0.5 BPM. --any-octave also matches half and double tempo. --key accepts Am,
+A min, A minor, F#m, Gb, and similar keys.
 """
 import argparse
 import csv
@@ -311,7 +313,8 @@ def index_path():
 def load(path=None):
     path = Path(path or index_path())
     if not path.exists():
-        raise SystemExit(f'{path} does not exist. Build it with: python -I tools/song/samples.py index')
+        raise SystemExit(f'The file {path} does not exist. Build it with this command:\n'
+                         'python -I tools/song/samples.py index')
     with open(path, encoding='utf-8', newline='') as f:
         return list(csv.DictReader(f, delimiter='\t'))
 
@@ -324,7 +327,7 @@ def walk(root):
         try:
             entries = list(os.scandir(folder))
         except OSError as error:
-            print(f'skipped {folder}: {error}', file=sys.stderr)
+            print(f'Cannot scan {folder}: {error}', file=sys.stderr)
             continue
         for entry in entries:
             if entry.is_dir(follow_symlinks=False):
@@ -343,7 +346,7 @@ def build(jobs):
     rows, reused = [], 0
     for root in libraries():
         if not root.is_dir():
-            print(f'skipped {root}: not a folder', file=sys.stderr)
+            print(f'Cannot scan {root}. It is not a folder.', file=sys.stderr)
             continue
         packs = Packs(root)
         todo = []
@@ -400,7 +403,7 @@ def matches(row, args, key):
 def find(args):
     key = parse_key(args.key) if args.key else None
     if args.key and key is None:
-        raise SystemExit(f'Cannot read the key {args.key!r}; write it like Am, A min or F#.')
+        raise SystemExit(f'Cannot read the key {args.key!r}. Write it like Am, A min or F#.')
     shown = 0
     for row in load():
         if matches(row, args, key):
@@ -410,7 +413,7 @@ def find(args):
             print(f"{seconds} {bpm:>6} {harmony:<4} {row['kind'] or '-':<8} {Path(row['root']) / row['path']}")
             shown += 1
             if shown >= args.limit:
-                print(f'(first {args.limit}; raise --limit for more)', file=sys.stderr)
+                print(f'Showing {args.limit} results. Increase --limit to show more, if available.', file=sys.stderr)
                 return
 
 

@@ -2,10 +2,12 @@
 
 python -I tools/song/bright.py PATTERN...
 
-A pattern is a path or a glob (`**` allowed). A relative pattern that matches nothing from the
-current folder is tried under each sample library, SAMPLES_FOLDER_1 to _9 (see .env.example). Per file, darkest first: RMS in
-dB, the share of energy above 5 kHz and above 8 kHz, and the level of the 6-12 kHz band against
-the whole, so that harsh hi-hats can be found before they are placed.
+A pattern is a path or a glob. You can use `**`. If a relative pattern matches
+nothing in the current folder, the tool tries each sample library from
+SAMPLES_FOLDER_1 to SAMPLES_FOLDER_9. See .env.example. The tool lists the
+darkest files first. For each file, it gives RMS in dB, the shares of energy
+above 5 kHz and 8 kHz, and the level of the 6-12 kHz band against the whole.
+Use the results to find harsh hi-hats before you place them.
 """
 import glob
 import sys

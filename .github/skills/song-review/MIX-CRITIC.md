@@ -6,16 +6,18 @@ where (bars and tracks), and say when a judgement needs ears.
 
 ## Brief
 
-Judge these points against the targets of the artist profile:
+Judge these points against the artist profile targets, or the generic targets
+when no profile exists:
 
 - Balance between roles per section (stem levels).
 - Low end: the share below 120 Hz, below 45 Hz, kick against bass, mono below
   120 Hz.
 - Masking in 120-500 Hz and between lines that share a band.
 - Audibility: lanes that `audible.py` marks drowned or nearly drowned. Report
-  each one as a finding; the gate does not stop them. The meter reads narrow
-  high sounds and delay-carried parts as quieter than they sound, so say when
-  a lane needs the owner's ear.
+  each affected lane. If necessary, group lanes to keep the output within the
+  finding limit. The gate does not stop them. The meter reads narrow high sounds
+  and delay-carried parts as quieter than they sound. Say when a lane needs the
+  owner's ear.
 - Stereo width and correlation per section; the mono fold-down of wide sounds.
 - Reverb and delay: sends, return levels, whether they wash or clarify.
 - Automation moves, and lanes that hold a value they should not.

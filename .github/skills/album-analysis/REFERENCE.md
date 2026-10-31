@@ -87,16 +87,18 @@ and do not commit a review with a private path unless the owner asks.
 ## Commands
 
 Send each request with `mixjam-techno agent COMMAND ...` to a session that
-started with `--agent`. `agent help` gives the full list.
+started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
 
 | Request | Reply |
 | --- | --- |
-| `reviews [search= artist= tag= energy= kind= sort= offset= limit=]` | The folder, the total, and up to 50 summaries: id, kind, artist, title, year, genre tags, runtime, track count. |
+| `reviews [search= artist= tag= energy= kind= sort= offset= limit=]` | The folder, the total, and review summaries: id, kind, artist, title, year, genre tags, runtime, track count. |
 | `review id=ID` | One review in full. |
-| `review_tracks [id= artist= tag= energy= kind= offset= limit=]` | The total and up to 50 tracks, each with its review id, artist, album, year, kind, and the whole track with its events. |
+| `review_tracks [id= artist= tag= energy= kind= offset= limit=]` | The total and tracks, each with its review id, artist, album, year, kind, and the whole track with its events. |
 | `add_review review={...}` or `add_review file=PATH` | Saves a new review. Fails when the id exists. |
 | `update_review review={...}` or `update_review file=PATH` | Replaces the review with that id. Fails when the id does not exist. |
 
+- Both lists return up to 50 results by default. Set `limit=` to change the
+  page size and `offset=` to read another page. Compare the results with `total`.
 - `search=` looks in the title, the artist, and the genre tags, without
   regard to case or accents.
 - `artist=` matches part of the artist's name.

@@ -12,13 +12,15 @@ Follow the song-review skill (`.github/skills/song-review/SKILL.md`) in the role
 folder, and do only that role.
 
 The caller passes:
-- the premaster WAV (board and trim off), the song (`.mixjam`) and its `.meta.json`;
-- the current board, as a JSON file or as the song's `master` object;
-- the artist profile path (`ARTIST_PROFILE` in `.env.local`), or "no artist profile";
-- the loudness target, if the caller sets one;
-- the review folder and the output path.
 
-Do not change the song or the premaster; write boards and test renders in the
+- the premaster WAV (board and trim off), the song (`.mixjam`), and its `.meta.json`, if present
+- the current board, as a JSON file or as the song's `master` object
+- the artist profile path (`ARTIST_PROFILE`), or "no artist profile"
+- the reference profile path (`REFERENCE_PROFILE` or `reference.json` beside the artist profile), if present
+- the loudness target, if the caller sets one
+- the review folder and the output path
+
+Do not change the song or the premaster. Write boards and test renders in the
 review folder only. Do not open the application window or play sound.
 
 Return the recommended board as JSON, a more restrained and a bolder

@@ -1,8 +1,9 @@
 """Read the private settings of the song tools from `.env.local` at the repository root.
 
-`.env.local` holds one `KEY="value"` per line (quotes optional; `#` starts a comment
-line). An environment variable of the same name overrides the file. A relative path
-value is read from the repository root. `.env.example` lists every key.
+`.env.local` holds one `KEY="value"` per line. Quotes are optional, and `#` starts
+a comment line. An environment variable of the same name overrides the file.
+Relative paths start at the repository root. `.env.example` shows common keys.
+`tools/song/README.md` lists the song-tool keys.
 """
 import os
 import sys

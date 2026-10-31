@@ -23,27 +23,71 @@ round log format, and the generic targets.
    [COMPOSITION-CRITIC.md](COMPOSITION-CRITIC.md), [MIX-CRITIC.md](MIX-CRITIC.md),
    [RATER.md](RATER.md), or [MASTERING-ENGINEER.md](MASTERING-ENGINEER.md).
    Completion criterion: Your output follows the format in your role file.
-2. If the user asks for one role only, such as one rating, do steps 2 and 3,
-   then launch that role (step 4, 6, or 8).
-   Completion criterion: The role's output is in the review folder.
-3. Otherwise, run the full loop: steps 2 to 10.
+2. If the user asks only for feedback or a rating, select the evaluation branch.
+   Completion criterion: The requested feedback or rating is reported with its limits.
+3. If the user asks only for a mastering recommendation, select the single-role branch.
+   Completion criterion: The mastering recommendation is in the review folder.
+4. If the user asks to master the song without mix or arrangement improvements,
+   select the mastering branch.
+   Completion criterion: The requested master is prepared and its limits are reported.
+5. If the user asks to improve the mix or arrangement, run the improvement
+   loop: steps 2 to 7. This includes a request for both improvement and mastering.
    Completion criterion: A stop rule in step 7 applies.
+
+For evaluation, do steps 2 and 3. Launch each requested critic and, if the user
+asks for a rating, the blind rater as fresh agents. For a general review, use
+both critics. Give each role the available
+[evidence package](REFERENCE.md#evidence-package) and any mechanical problems.
+Screen the rater's artist and reference extracts as the evidence package requires.
+The rater must not receive critiques, earlier ratings, or rating targets. A failed gate is a
+finding, not permission to alter the song. If there is no usable render, report
+the blocker and do not invent a rating. Do not change the song, apply a board,
+or copy a result outside the review folder for an evaluation-only request.
+If an applicable artist rule requires a passed gate before review, report the
+mechanical findings and the blocked feedback instead of sending a failed pass.
+
+For a single mastering recommendation, do steps 2 and 3. After the gate passes,
+launch the mastering engineer as a fresh agent. Check its output against its
+role file. Do not apply the board. If the gate is blocked, report the blocker.
+
+For mastering, do steps 2 and 3. If the user also asks for feedback, run the
+requested evaluation roles. After the gate passes, do steps 8 to 10. Do not
+change the arrangement unless the user also asks for improvements.
+
+After an improvement loop, do step 8 only if the user also asks for a master.
+Otherwise use the last gated master render for delivery. Then do steps 9 and 10.
 
 ## 2. Set up
 
 1. Read `AGENTS.md`, `.env.example`, and `tools/song/README.md`.
    Completion criterion: You know the tools and the keys they need.
-2. Read the artist profile at the path in the `.env.local` key `ARTIST_PROFILE`.
+2. Read the artist profile at the path set by `ARTIST_PROFILE`. The environment
+   takes precedence over `.env.local`.
    Completion criterion: You know the style, the rules, the targets, the
    target score, and the maximum number of rounds.
-3. If the key or the file is missing, use the generic targets in REFERENCE.md.
-   Completion criterion: Your report and every brief say "generic targets, no
-   artist profile".
+3. If the artist profile is missing, use the generic targets in REFERENCE.md
+   unless a configured reference profile supplies the applicable target.
+   Completion criterion: Your report and every brief name the source of each
+   target and state when there is no artist profile.
 4. Select a private review folder under `tmp/` for the song.
    Completion criterion: The folder holds the round log, or you created it.
+5. Copy the song and its `.meta.json`, if present, into the review folder.
+   Run the gate on a working copy. `--fit-gain` changes the song it receives.
+   Completion criterion: The original song and its metadata are unchanged.
+6. For an earlier song format or a song whose linked WAVs need library roots,
+   convert the copy to format 18 with the native release executable. Set
+   `MIXJAM_TECHNO_DATA_DIR` to a private folder in the review folder and use
+   `convert --mix INPUT --output OUTPUT.mixjam`, with `--samples FOLDER` for
+   each required WAV folder. Copy any metadata beside the converted song with
+   the matching `.meta.json` name.
+   Completion criterion: The converted copy has the expected clips and sources.
+   No missing source or unconfirmed sample conflict is mistaken for a resolved
+   sound. Report an unresolved source or conflict as a blocker. Keep the data
+   folder while the converted song needs files retained there.
 
-The artist profile is the authority on style and targets. It outranks a critic
-finding and the generic targets. Do not copy its private details into a
+Follow the artist profile's applicable creative, review, and delivery rules.
+It outranks a critic finding and the generic targets. The user's current
+instructions take precedence. Do not copy private profile details into a
 public-facing file.
 
 Before you open a visible application window or play sound on the owner's
@@ -52,28 +96,38 @@ long. Use headless renders for all measurement.
 
 ## 3. Pass the mechanical gate
 
-1. Render the pass: `render.py SONG OUT --fit-gain -0.5`. It renders each
-   lane and the master, and sums the lanes into the premaster, the stems, and
-   the audibility table. Render nothing else for a pass.
-   Completion criterion: `master.wav`, `premaster.wav`, one stem per role, and
-   `audible.txt` exist.
+1. Render the working copy with `render.py SONG OUT`. If the user asked you
+   to improve the song, you can add `--fit-gain -0.5` to fit its gain.
+   The tool renders each lane and the master, then sums the lanes into the
+   premaster, the stems, and the audibility table.
+   Completion criterion: `master.wav`, `premaster.wav`, `audible.txt`, and a
+   stem for each role of a used lane named in the metadata exist. Without
+   metadata, there are no role stems. The resolved sources match the song.
 2. Measure it: `measure.py SONG OUT > report.md`.
-   Completion criterion: The report shows 0 mechanical problems and the
-   premaster does not reach full scale.
-3. If substep 2 fails, fix the song and go back to substep 1.
-   Completion criterion: Substeps 1 and 2 pass on the same pass.
+   Completion criterion: The report shows 0 mechanical problems and no
+   premaster peak warning. The peak also meets the applicable target. Report
+   the melodic-ending check as unavailable if role metadata is missing.
+3. If substep 2 fails, repair the working copy only when the user requested
+   improvements that cover the repair. Run substeps 1 and 2 again on that copy.
+   Completion criterion: Both substeps pass on the same copy, or the report
+   names the blocker. A catalog source that the checker cannot measure is an
+   unavailable check; do not change its identity to force a pass.
 
-A drowned lane in `OUT/audible.txt` does not fail the gate. Every placed sound must
+A drowned lane in `OUT/audible.txt` does not fail the generic gate. If the
+artist profile sets a stricter limit, apply that limit. Every placed sound must
 be audible, but the meter reads narrow high sounds and parts that a delay
-carries as quieter than they sound. Give the table to the critics: a drowned
-lane is a finding for the mix critic, and the owner's ear decides it.
+carries as quieter than they sound. Give the table to the critics. The owner's
+ear decides what is audible.
 
-Do not give a pass that fails the gate to a critic or to the rater.
+For an improvement loop or mastering recommendation, do not give a pass that
+fails the gate to a critic or rater. For evaluation only, disclose each failed
+or unavailable check to any roles permitted to receive the pass, and in the report.
 
 ## 4. Get two critiques
 
 1. Write each critic's brief: the role, the evidence package, the review
-   folder, the output path, and, from round 2, the round log.
+   folder, the output path, and, from round 2, the round log. Include the
+   artist profile and its named reference studies when available.
    Completion criterion: Each brief names every path that REFERENCE.md requires.
 2. Launch the composition critic and the mix critic at the same time, each as a
    fresh agent: `song-composition-critic` and `song-mix-critic`.
@@ -103,7 +157,8 @@ this skill in the named role.
 ## 6. Get a blind rating
 
 1. Launch the rater as a fresh agent: `song-rater`. Give it the evidence
-   package only.
+   package only, including screened artist and reference extracts when
+   available. Keep critiques, earlier ratings, and rating targets out.
    Completion criterion: The brief has no round log, critique, earlier rating,
    or score.
 2. Record the score and the three reasons in the round log.
@@ -122,34 +177,63 @@ next round has started. The defaults without a profile are in REFERENCE.md.
 
 ## 8. Master the song
 
-Do this when the mix is settled, or when the owner asks for a board.
+Apply a board when the user asks to master the song. For a recommendation-only
+request, use the single-role branch.
 
 1. Launch the mastering engineer as a fresh agent: `song-mastering-engineer`.
-   Give it the premaster, the song, the current board, and the artist profile.
+   Give it the premaster, the song, the current board, the artist profile and
+   named reference studies, and the reference profile when available. Give it
+   a decisions-only extract if earlier board decisions are needed.
    Completion criterion: It returns a board JSON, a more restrained and a bolder
    alternative, and a list of mix problems that the board cannot fix.
 2. Accept or reject the board and each mix problem in the round log.
    Completion criterion: Each decision has a reason.
-3. Put the accepted board in the song and fit its limiter gain with
-   `master.py --fit`.
-   Completion criterion: The loud blocks meet the loudness target.
+3. Fit the accepted board with
+   `master.py PREMASTER BOARD.json OUT_DIR --song SONG --fit DB`.
+   Completion criterion: The fitted `OUT_DIR/board.json` exists. The loud blocks
+   meet the target on the premaster render, or the report states the difference.
+4. Put the fitted board in the working song.
+   Completion criterion: The song contains the settings in `OUT_DIR/board.json`.
+5. Set `MIXJAM_TECHNO_DATA_DIR` to a private folder for this render. Render the
+   working song to an existing `FINAL_DIR` with
+   `.\target\release\mixjam-techno.exe render --mix SONG --output FINAL_DIR/master.wav`.
+   Completion criterion: The final WAV comes from the fitted song.
+6. Measure that render with
+   `master.py PREMASTER OUT_DIR/board.json FINAL_DIR --song SONG --no-render`.
+   Completion criterion: The result and any difference from the premaster test
+   are recorded.
+
+`master.py` renders the premaster as one track. Its key signals do not reproduce
+the song's external master keys. The sum of lane renders can also differ from
+the full mix when shared effects are nonlinear. Use the application render to
+verify the finished song. Without metadata, the master report has no section
+table. State that limit.
 
 ## 9. Get the owner's ear
 
-1. Copy the rated pass and its master render to `SONG_FOLDER` for the owner.
-   Completion criterion: The owner has the song file and the WAV.
-2. Record the owner's notes in the round log before the next round.
-   Completion criterion: Each note is a rule for the next critics' briefs, or
-   it is in the artist profile.
+1. Copy the completed pass and its final application render
+   to `SONG_FOLDER` for the owner. If metadata exists, copy it beside the song
+   with the matching `.meta.json` name.
+   Completion criterion: The owner has the song, WAV, available metadata, and
+   any other output required by the applicable artist profile.
+   Check its sample and library paths for review-data dependencies. Reopen it
+   with a separate data folder and confirm its sources. If it depends on files
+   in the review folder, keep them and report the dependency.
+2. If the owner gives notes, record them in the round log before the next round.
+   Completion criterion: Each received note is a rule for the next critics'
+   briefs, or it is in the artist profile. Otherwise report that listening is pending.
 
 ## 10. Report
 
-1. Report each pass, its gate result, its score, the stop rule, and the open
+1. Report each pass, its gate result, any score, any stop rule, and the open
    questions that need ears.
    Completion criterion: The owner can decide the next step without the logs.
+   Identify a score recorded before the final board change as a score for that
+   earlier pass.
 
 ## Completion criterion
 
 The loop is complete when a stop rule applies, the round log records every
 decision with a reason, and the report says which judgements need listening.
-A single-role run is complete when the role's output is in the review folder.
+An evaluation reports the requested findings and their evidence limits. A
+single-role run is complete when the role's output is in the review folder.

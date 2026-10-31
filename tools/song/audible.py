@@ -2,15 +2,18 @@
 
 python -I tools/song/audible.py SONG.mixjam OUT_DIR
 
-Renders every lane alone (with its twin, "Name (twin)", and its FX returns; the board off), N at a
-time, and takes their sum as the whole premaster. Then, for each lane over the bars where it plays,
-it prints:
-- its level against the rest of the mix (dB);
-- the share of 1/3-octave cells (100 Hz to 12 kHz, 186 ms frames) where it is within 6 dB of the
-  rest of the mix or louder, so not masked: under 10% marks a lane that is probably drowned.
-A sound that cannot be heard is a wasted lane. Lane names come from the song's `.meta.json`;
-without it each used track is its own lane. render.py writes the same table as audible.txt from
-the lane renders it makes anyway; run this tool alone only for a song that render.py did not render.
+The tool renders each lane with its twin, "Name (twin)", and its FX returns.
+The board is off. It renders N lanes at a time and sums them into the premaster.
+For each lane, it prints two measurements for the bars where the lane plays:
+
+- Its level against the rest of the mix, in dB.
+- The share of 1/3-octave cells where it is within 6 dB of the rest of the mix
+  or louder. The cells span 100 Hz to 12 kHz in 186 ms frames. A share below
+  10% marks a lane that is probably drowned.
+
+Lane names come from the song's `.meta.json`. Without it, each used track is
+its own lane. render.py writes the same table as audible.txt from its lane
+renders. Run this tool alone only for a song that render.py did not render.
 """
 import json
 import sys

@@ -1,7 +1,7 @@
 """Pitch classes, keys, scales and chords for the song tools.
 
-Pitch classes count from C = 0. A key is written 'A minor', 'A natural minor', 'Am',
-'C major' or 'C'; a chord 'Am', 'F', 'E', 'Bdim', 'G7', 'Dsus4'.
+Pitch classes count from C = 0. Write a key as 'A minor', 'A natural minor',
+'Am', 'C major' or 'C'. Write a chord as 'Am', 'F', 'E', 'Bdim', 'G7' or 'Dsus4'.
 """
 import re
 
@@ -16,7 +16,7 @@ def pitch_class(name):
     """The pitch class of a note name such as 'A', 'C#', 'Bb' or 'Db'."""
     match = re.fullmatch(r'([A-Ga-g])([#b]?)', name.strip())
     if not match:
-        raise ValueError(f'not a note name: {name!r}')
+        raise ValueError(f'The note name {name!r} is not valid.')
     shift = {'#': 1, 'b': -1, '': 0}[match.group(2)]
     return (ROOTS[match.group(1).upper()] + shift) % 12
 
@@ -25,7 +25,7 @@ def parse_key(text):
     """(tonic pitch class, 'major' or 'minor') of a key name."""
     match = re.fullmatch(r'\s*([A-Ga-g][#b]?)\s*[- ]?\s*(m|min|minor|natural minor|maj|major)?\s*', text)
     if not match:
-        raise ValueError(f'not a key: {text!r} (write it as "A minor" or "C major")')
+        raise ValueError(f'The key {text!r} is not valid. Write it as "A minor" or "C major".')
     mode = 'minor' if (match.group(2) or '') in ('m', 'min', 'minor', 'natural minor') else 'major'
     return pitch_class(match.group(1)), mode
 
@@ -40,7 +40,7 @@ def parse_chord(text):
     """(root pitch class, chord tone pitch classes) of a chord name."""
     match = re.fullmatch(r'\s*([A-G][#b]?)(maj7|m7|dim|aug|sus2|sus4|m|7)?\s*', text)
     if not match:
-        raise ValueError(f'not a chord: {text!r}')
+        raise ValueError(f'The chord {text!r} is not valid.')
     root = pitch_class(match.group(1))
     return root, {(root + step) % 12 for step in QUALITIES[match.group(2) or '']}
 

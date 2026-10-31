@@ -8,8 +8,8 @@ description: >
 
 # Operate MixJam Techno
 
-The application accepts requests only when it starts with `--agent`. The
-`agent` command of the same executable sends them. `agent help` is the
+Start the application with `--agent` or `--agent-port PORT` to accept requests.
+The `agent` command of the same executable sends them. `agent help` is the
 authoritative request list. Read `docs/AGENT-CONTROL.md` for the model.
 
 ## 1. Start an isolated session
@@ -40,7 +40,9 @@ Do not start a session on the owner's settings unless the owner requests it.
 ## 3. Act
 
 1. Use `click` and `set` with a control name for every control that `ui` lists.
-   Completion criterion: The reply has `"ok":true`, and its `control` shows the new value.
+   Completion criterion: The reply has `"ok":true` and no error status. A
+   retained value control shows the new value, or the status, modal, windows,
+   or `state` confirms the action when the control is no longer present.
 2. If a name matches several controls, add `window=`, `role=`, or `index=`. The
    error message lists the matches.
    Completion criterion: The request selects one control.
@@ -49,8 +51,8 @@ Do not start a session on the owner's settings unless the owner requests it.
    to replace a track's volume, send, or filter automation lane. Use `clip`
    to set one clip's gain, trim, length, fades, and pitch; a field you leave
    out keeps its value.
-   Completion criterion: The reply lists the affected clip ids, or `state`
-   shows the track's automation.
+   Completion criterion: The reply and `state` confirm the requested clips,
+   selection, transport position, loop, or automation, as applicable.
 4. Use `select sample=` before you open Effect Studio, Step synth, Sample
    editor, or Time Stretcher. The selected sound is the source of these tools.
    Completion criterion: `state` shows the sound in `selection.sample`.
@@ -84,8 +86,9 @@ needs sound. Playback uses the audio device.
 1. Send `quit`. If the reply has `"modal":"Save your changes?"`, select
    `Save changes` or `Discard changes`.
    Completion criterion: The reply has `"closing":true`, or the process has ended.
-2. Remove the temporary data folder and files that the task does not need.
-   Completion criterion: Only requested output remains in `tmp/`.
+2. Remove unneeded temporary files created by this session. Keep requested
+   output and evidence needed to verify the task.
+   Completion criterion: Unrelated files and required evidence remain intact.
 
 ## Completion criterion
 

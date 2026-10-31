@@ -2,12 +2,14 @@
 
 python -I tools/song/midichords.py [--to "A minor"] FOLDER...
 
-One line per MIDI file in each FOLDER. The file's key comes from the end of its name ("... Abm",
-"... E"); a name without a key takes it from the WAV in the folder's parent that has the same loop
-number. Minor files move to the minor key of --to (default A minor), major files to its relative
-major. Per bar: the bass note (lowest, held longest) for a folder whose name contains "Bass", else
-the triad that best covers the held pitch classes. Loops that share a number in a pack often share
-a progression; this shows which.
+The tool prints one line per MIDI file in each FOLDER. It reads the file's key
+from the end of its name, for example "... Abm" or "... E". If the name has no
+key, it uses the WAV with the same loop number in the folder's parent. It moves
+minor files to the minor key of --to (default A minor) and major files to the
+relative major. For each bar in a folder whose name contains "Bass", it picks
+from the lowest octave and prints the note held longest. For other folders, it
+prints the triad that best covers the held pitch classes. Use the results to
+compare progressions in the pack.
 """
 import re
 import sys

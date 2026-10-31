@@ -2,9 +2,10 @@
 
 python -I tools/song/midinotes.py SEMITONES FILE.mid [FILE.mid ...]
 
-Transposes by SEMITONES (for example +1 to move A-flat minor to A minor) and prints, per bar, the
-lowest note and the pitch classes with their total held beats. Bars are 4/4 at the file's PPQ.
-Many sample packs ship a MIDI file beside each melodic loop; this reads what the loop plays.
+The tool transposes by SEMITONES. For example, +1 moves A-flat minor to A minor.
+For each bar, it prints the lowest note and the pitch classes with their total
+held beats. Bars are 4/4 at the file's PPQ. Use it to read the MIDI file that a
+sample pack supplies beside a melodic loop.
 """
 import struct
 import sys
@@ -29,7 +30,7 @@ def notes(path):
     """([(start tick, stop tick, MIDI note)], PPQ) of every note in a Standard MIDI file."""
     data = Path(path).read_bytes()
     if data[:4] != b'MThd':
-        raise ValueError(f'{path}: not a MIDI file')
+        raise ValueError(f'The file {path} is not a MIDI file.')
     _, _, tracks, ppq = struct.unpack('>IHHH', data[4:14])
     i, found = 14, []
     for _ in range(tracks):

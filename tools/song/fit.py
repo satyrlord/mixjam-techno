@@ -2,13 +2,15 @@
 
 python -I tools/song/fit.py --key "A minor" --progression "Am F Am G" --progression "Am Dm F E" FOLDER...
 
-Reads every MIDI loop in each FOLDER (moved to --key, default A minor, as midichords.py moves it;
-minor files to the key, major files to its relative major), and scores it against each
-progression (one chord per bar, any length) at every start bar that is a multiple of the
-progression's length inside the loop. The cost per bar is the share of held note time on clashing
-pitch classes (see harmony.clash_cost: outside the scale and the chord, or a semitone above a
-chord tone). A loop fits when its worst bar is at most 40% (a passing note or an anticipation)
-and its mean at most 15%; the line lists each fit as PROGRESSION@START:MEAN%.
+The tool reads every MIDI loop in each FOLDER. It moves minor files to the minor
+key of --key (default A minor) and major files to the relative major, as
+midichords.py does.
+It scores each loop against each progression, with one chord per bar. It uses
+each start bar that is a multiple of the progression length inside the loop.
+The cost per bar is the share of held note time on clashing pitch classes. See
+harmony.clash_cost for the scale, chord, and semitone rules. A loop fits when its
+worst bar is at most 40% and its mean is at most 15%. Each result has the form
+PROGRESSION@START:MEAN%.
 """
 import sys
 from pathlib import Path

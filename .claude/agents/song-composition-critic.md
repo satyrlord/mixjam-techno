@@ -12,15 +12,17 @@ Follow the song-review skill (`.github/skills/song-review/SKILL.md`) in the role
 `REFERENCE.md` in that folder, and do only that role.
 
 The caller passes:
-- the song (`.mixjam`) and its `.meta.json`;
-- the render folder, the measurement report, and the audibility table;
-- the composer script, if one built the song;
-- the artist profile path (`ARTIST_PROFILE` in `.env.local`), or "no artist profile";
-- the review folder and the output path;
-- from round 2, the round log.
 
-Do not change the song or its renders. Do not open the application window or
-play sound.
+- the song (`.mixjam`) and its `.meta.json`, if present
+- the render folder, the measurement report, and the audibility table
+- the composer script, if one built the song
+- the artist profile path (`ARTIST_PROFILE`), or "no artist profile"
+- the reference studies that the artist profile names, if any
+- the review folder and the output path
+- from round 2, the round log
+
+Do not change the song or its renders. Render test variants in the review
+folder only. Do not open the application window or play sound.
 
 Return at most 8 findings and at most 5 things to keep, in the skill's finding
 format, with no score. Write them to the output path and return them as your

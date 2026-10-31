@@ -4,37 +4,42 @@ python -I tools/song/master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG.mix
                                [--fit DB] [--no-render] [--quiet]
 python -I tools/song/master.py --album [DIR] [--track NAME ...] [--out PROFILE.json]
 
-The premaster is the mix with the board and trim off (render.py writes it). The board
-is the `master` object of a .mixjam (the shape of `board()` in mixjam.py, trim
-included). A dynamics pedal whose `key` names a track does not hear that track here:
-the board masters the premaster as one clip on track 1, so key 1 hears the whole
-premaster and any other key hears silence. A keyed compressor then does not compress,
-and a keyed multiband or limiter follows its own input alone. Measure a keyed board
-from the app's own render of the song. The tool writes OUT_DIR/board.mixjam, which holds the premaster as one clip
-with the board on it, renders it to OUT_DIR/master.wav, measures the render, prints the
-measurements and saves them to OUT_DIR/measure.json.
+The premaster is the mix with the board and trim off. render.py writes it. The
+board is the `master` object of a .mixjam, with the shape of `board()` in
+mixjam.py and with trim included. The tool puts the premaster in one clip on
+track 1. A dynamics pedal with key 1 receives the whole premaster. A pedal with
+any other key receives silence. A keyed compressor then does not compress. A
+keyed multiband or limiter follows its own input alone. Measure a keyed board
+from the app's own render of the song. The tool writes OUT_DIR/board.mixjam,
+renders it to OUT_DIR/master.wav, prints the measurements, and saves them to
+OUT_DIR/measure.json.
 
-Sections and tempo come from the `.meta.json` beside the song: `--song SONG.mixjam`
-names it; otherwise the first `*.meta.json` in the premaster folder's parent is used, and
-without one there is no section table and the tempo is --bpm (default 140). Levels are
-mono-sum RMS in dB. "Loud" means within 3 dB of the loudest 8-bar block. The drum line
-compares the master with the premaster in the loud blocks: how far the board pushes the
-hits under the body, and the attack of the kick (below 120 Hz) and the hats (6-12 kHz); a
-hat attack above the premaster's means the board sharpened the hats.
+Sections come from the `.meta.json` beside --song SONG.mixjam. Without --song,
+the tool uses the first `*.meta.json` in the premaster folder's parent. Without
+section metadata, the report has no section table. Tempo comes from --bpm first,
+then from the supplied song. Without a song, the tool uses the metadata tempo,
+or 140 BPM when that value is not available. A supplied song must have a valid
+tempo, even when --bpm overrides it.
+Levels are mono-sum RMS in dB. "Loud" means within 3 dB of the loudest 8-bar
+block. The drum line compares the master with the premaster in the loud blocks.
+It reports how far the board pushes hits under the body, and the attack of the
+kick below 120 Hz and the hats at 6-12 kHz. A hat attack above the premaster's
+means the board sharpened the hats.
 
-The comparison columns come from the reference profile (REFERENCE_PROFILE, or
-reference.json beside ARTIST_PROFILE; see .env.example): its `targets` (ranges that flag
-a miss with "!") and its `references` (measured songs or album medians). Without a
-profile the tool measures and prints without those columns, and says so.
+The comparison columns come from the reference profile: REFERENCE_PROFILE, or
+reference.json beside ARTIST_PROFILE. See .env.example. The profile has
+`targets` with ranges that flag a miss with "!", and `references` with measured
+songs or album medians. Without a profile, the tool measures and prints without
+those columns, and says so.
 
 --fit DB      move the limiter gain until the loud blocks read DB, and save the fitted
-              board as OUT_DIR/board.json; use it after the mix changes.
+              board as OUT_DIR/board.json. Use it after the mix changes.
 --no-render   measure OUT_DIR/master.wav as it is.
 --quiet       print the summary line only.
 --album [DIR] measure every WAV in DIR (default: REFERENCE_ALBUM_FOLDER) the same way and
               write the reference profile: the album median, plus one entry per --track NAME
-              (a part of a file name). An existing profile keeps its targets and song targets;
-              a new one gets the album's 10th-90th percentile ranges as targets.
+              (a part of a file name). An existing profile keeps its targets and song targets.
+              A new one gets the album's 10th-90th percentile ranges as targets.
 """
 import json
 import math
@@ -51,6 +56,8 @@ from mixjam import Song, read_wav  # noqa: E402
 
 BLOCK_BARS = 8
 DEFAULT_BPM = 140.0
+# Keep this list in step with SUPPORTED_BPMS in src/engine.rs.
+SUPPORTED_SONG_BPMS = (120, 125, 130, 135, 140, 160, 180)
 THIRDS = [31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
           2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000]
 KEYS = ['loud_rms', 'loudest', 'peak', 'crest', 'low', 'sub45', 'mid', 'hats', 'box', 'corr', 'spread',
@@ -82,7 +89,7 @@ def run_render(song_path, wav_path):
     result = subprocess.run([str(env.exe()), 'render', '--mix', str(song_path), '--output', str(wav_path)],
                             capture_output=True, text=True, env=environment)
     if result.returncode != 0:
-        raise SystemExit(f'render failed for {song_path}: {result.stdout}{result.stderr}')
+        raise SystemExit(f'Cannot render {song_path}: {result.stdout}{result.stderr}')
 
 
 def render_board(premaster, board, out, bpm):
@@ -228,6 +235,38 @@ def find_meta(premaster, song):
     return None, None
 
 
+def tempo(value, source):
+    """Read a positive, finite BPM from the selected source."""
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        bpm = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise SystemExit(f'{source} must give a positive, finite BPM.') from None
+    if not math.isfinite(bpm) or bpm <= 0:
+        raise SystemExit(f'{source} must give a positive, finite BPM.')
+    return bpm
+
+
+def song_tempo(path):
+    """Read song.bpm from a supplied song, or report why it cannot be used."""
+    try:
+        document = json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, ValueError) as error:
+        raise SystemExit(f'Cannot read the song {path}: {error}') from None
+    if not isinstance(document, dict) or not isinstance(document.get('song'), dict):
+        raise SystemExit(f'The song {path} must contain song.bpm.')
+    value = document['song'].get('bpm')
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SystemExit(f'The song {path} must contain a numeric song.bpm.')
+    bpm = tempo(value, f'The song {path}')
+    if bpm not in SUPPORTED_SONG_BPMS:
+        raise SystemExit(f'The song {path} has an unsupported tempo. '
+                         'Tempo must be 120, 125, 130, 135, 140, 160, or 180 BPM. '
+                         'Convert an imported song before you measure it.')
+    return bpm
+
+
 def in_range(value, bounds):
     return bounds[0] <= value <= bounds[1]
 
@@ -286,6 +325,10 @@ def report(pre, post, sections_from, board, profile):
             say(f"| {b['name']} | {b['first_bar']}-{b['first_bar'] + b['bars'] - 1} | {a['rms']:.1f} | {b['rms']:.1f} | "
                 f"{b['rms'] - a['rms']:+.1f} | {b['peak']:.2f} | {b['crest']:.1f} | {b['low']:.0%} | {b['mid']:.2%} | "
                 f"{b['hats']:.2%} | {b['corr']:.2f} |")
+    else:
+        say('')
+        say('No section metadata is available.' if sections_from == 'no meta file'
+            else 'The metadata has no measurable sections.')
 
 
 def misses(post, targets):
@@ -313,7 +356,7 @@ def album_profile(results, tracks, old=None):
     for track in tracks:
         name = next((name for name in results if track.lower() in name.lower()), None)
         if name is None:
-            raise SystemExit(f'no album file name contains {track!r}')
+            raise SystemExit(f'No album file name contains {track!r}.')
         references[track] = {k: float(results[name][k]) for k in KEYS} | {'thirds_db': results[name]['thirds_db']}
     if old:
         return dict(old, references=references)
@@ -331,7 +374,8 @@ def album(args):
     tracks = [args[i + 1] for i, a in enumerate(args) if a == '--track']
     out = Path(args[args.index('--out') + 1]) if '--out' in args else env.reference_profile()
     if out is None:
-        raise SystemExit('set REFERENCE_PROFILE or ARTIST_PROFILE in .env.local (see .env.example), or pass --out')
+        raise SystemExit('Set REFERENCE_PROFILE or ARTIST_PROFILE in .env.local, or pass --out. '
+                         'See .env.example.')
     bpm = float(args[args.index('--bpm') + 1]) if '--bpm' in args else DEFAULT_BPM
     results = {}
     for path in sorted(folder.glob('*.wav')):
@@ -339,7 +383,7 @@ def album(args):
         results[path.stem] = measure(audio, rate, bpm)
         print(f'{path.stem}: {summary(results[path.stem])}', file=sys.stderr)
     if not results:
-        raise SystemExit(f'no WAV files in {folder}')
+        raise SystemExit(f'No WAV files are in {folder}.')
     old = json.loads(out.read_text(encoding='utf-8')) if out.exists() else None
     profile = album_profile(results, tracks, old)
     profile['block_bars'], profile['bpm'] = BLOCK_BARS, bpm
@@ -365,8 +409,8 @@ def fit(premaster, board, out, target, bpm, sections):
         if abs(miss) <= 0.15:
             break
         if len(tried) == 5:
-            print(f'the limiter fit stopped after five renders at {post["loud_rms"]:.2f} dB; '
-                  f'target {target} dB was not reached', file=sys.stderr)
+            print(f'The limiter fit stopped after five renders at {post["loud_rms"]:.2f} dB. '
+                  f'It did not reach the target of {target} dB.', file=sys.stderr)
             break
         if len(tried) >= 2 and tried[-1][0] != tried[-2][0]:
             slope = (tried[-1][1] - tried[-2][1]) / (tried[-1][0] - tried[-2][0])
@@ -374,7 +418,8 @@ def fit(premaster, board, out, target, bpm, sections):
             slope = 0.7
         new = round(min(12.0, max(0.0, gain + miss / max(slope, 0.2))), 1)
         if new == gain:
-            print(f'the limiter gain cannot reach {target} dB (stuck at {gain}); move the trim', file=sys.stderr)
+            print(f'The limiter gain cannot reach {target} dB. It is at {gain} dB. Adjust the trim.',
+                  file=sys.stderr)
             break
         board['limiter']['gain'] = new
     return board, post
@@ -390,10 +435,17 @@ def main():
     premaster, board_path, out = Path(args[0]), Path(args[1]), Path(args[2])
     song = args[args.index('--song') + 1] if '--song' in args else None
     board = json.loads(board_path.read_text(encoding='utf-8'))
-    out.mkdir(parents=True, exist_ok=True)
+    from_song = song_tempo(song) if song else None
     meta, meta_path = find_meta(premaster, song)
-    sections = meta['sections'] if meta else None
-    bpm = float(args[args.index('--bpm') + 1]) if '--bpm' in args else float((meta or {}).get('bpm') or DEFAULT_BPM)
+    sections = meta.get('sections') if meta else None
+    if '--bpm' in args:
+        bpm = tempo(args[args.index('--bpm') + 1], '--bpm')
+    elif song:
+        bpm = from_song
+    else:
+        value = (meta or {}).get('bpm')
+        bpm = tempo(value, 'The metadata') if value is not None else DEFAULT_BPM
+    out.mkdir(parents=True, exist_ok=True)
     profile, _ = load_profile()
     targets = (profile or {}).get('targets', {})
     rate, pre_audio = read_wav(premaster)
@@ -405,7 +457,7 @@ def main():
     else:
         master = out / 'master.wav' if '--no-render' in args else render_board(premaster, board, out, bpm)
         if not master.exists():
-            raise SystemExit(f'{master} does not exist; run without --no-render first')
+            raise SystemExit(f'{master} does not exist. Run without --no-render first.')
         rate, post_audio = read_wav(master)
         post = measure(post_audio, rate, bpm, sections)
     rate, post_audio = read_wav(out / 'master.wav')

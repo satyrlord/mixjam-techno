@@ -10,10 +10,10 @@ python -I tools/song/palette.py remove PALETTE.json FAMILY [FAMILY ...]
 python -I tools/song/palette.py show PALETTE.json
 python -I tools/song/palette.py check SONG.mixjam PALETTE.json
 
-A song draws its sounds from a palette of about 25 to 40 families (the owner's rule: careful sound
-selection, less is more); each family brings its numbered variations, so a palette holds roughly
-100 to 200 files. A family is the files of one folder that differ only in a number, chord name, tempo
-and key tag, or left/right mark (see `verdicts.py`).
+The owner's rule uses about 25 to 40 sound families for a song. Each family
+brings its numbered variations, so a palette holds roughly 100 to 200 files.
+A family is the files of one folder that differ only in a number, chord name,
+tempo and key tag, or left/right mark. See `verdicts.py`.
 
 - `census` counts the families and files that songs place: by default the owner's converted songs
   in local-data/songs/review/album-mix and the latest Reality pass. Sounds imported from the original
@@ -22,14 +22,15 @@ and key tag, or left/right mark (see `verdicts.py`).
 - `suggest` lists families from the verdicts (`verdicts.py build`), the owner's approved ones first,
   then by their share of ok files. Families that the owner rejected, that sound out of tune or cheesy,
   or that the automatic verdicts reject stay out unless --all. --key matches the family's most common
-  measured key; --tag keeps families whose files mostly carry that tag; --bpm matches within 0.5 BPM.
-  The FAMILY column is what `add` takes.
-- `make` writes a palette, from a song's families with --from or empty; a family of more than 12 files is a
-  bank of different sounds, so only the song's own files from it go in. Pathless native sounds are kept
-  by their product and sample ID. `add` and `remove` change the families.
+  measured key. --tag keeps families whose files mostly carry that tag. --bpm
+  matches within 0.5 BPM. The FAMILY column is what `add` takes.
+- `make` writes an empty palette or uses a song's families with --from. A family
+  of more than 12 files is a bank of different sounds. The palette keeps only
+  the song's own files from that bank. It keeps pathless native sounds by their
+  product and sample ID. `add` and `remove` change the families.
   `show` lists it with its families' verdicts and tuning corrections.
-- `check` lists every placed file outside the palette, and the palette's unused families; it exits
-  with 1 when a file is outside. A composer script can also hold itself to a palette with
+- `check` lists every placed file outside the palette and the palette's unused
+  families. It exits with 1 when a file is outside. A composer script can also hold itself to a palette with
   `song.use_palette(PATH)` (mixjam.py): a sound outside it stops the script. A file the owner rejected,
   or judged out of tune or cheesy, is outside every palette.
 """
@@ -106,7 +107,7 @@ def catalog_object(pairs):
     result = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError(f'duplicate field {key}')
+            raise ValueError(f'The field {key} occurs more than once.')
         result[key] = value
     return result
 
@@ -122,39 +123,39 @@ def read_release(path):
     """Read one format-3 catalog with the same identity checks as the application."""
     file = json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=catalog_object)
     if not isinstance(file, dict) or set(file) != {'schema', 'product', 'release', 'fingerprint', 'sources', 'samples'}:
-        raise ValueError('not a format-3 sample catalog')
+        raise ValueError('This is not a format-3 sample catalog.')
     product = product_slug(file['product'])
     if type(file['schema']) is not int or file['schema'] != 3 or product not in PRODUCT_SLOTS:
-        raise ValueError('unsupported format or product')
+        raise ValueError('The catalog format or product is not supported.')
     if not isinstance(file['release'], str):
-        raise ValueError('invalid release name')
+        raise ValueError('The release name is not valid.')
     release = file['release'].strip()
     if not release or len(release) > 64 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in release):
-        raise ValueError('invalid release name')
+        raise ValueError('The release name is not valid.')
     if not isinstance(file['sources'], list) or not file['sources']:
-        raise ValueError('no source files')
+        raise ValueError('The catalog has no source files.')
     sources = []
     for source in file['sources']:
         if (not isinstance(source, dict) or set(source) != {'bytes', 'sha256'}
                 or not isinstance(source['sha256'], str)
                 or type(source['bytes']) is not int or not 0 <= source['bytes'] < 2 ** 64):
-            raise ValueError('invalid source file')
+            raise ValueError('A source file entry is not valid.')
         sha = source['sha256']
         if len(sha) != 64 or any(c not in '0123456789abcdefABCDEF' for c in sha):
-            raise ValueError('invalid source SHA-256')
+            raise ValueError('A source SHA-256 is not valid.')
         sources.append((sha.lower(), source['bytes']))
     digest = hashlib.sha256()
     for sha, size in sorted(sources):
         digest.update(sha.encode('utf-8') + struct.pack('<Q', size) + b'\n')
     if not isinstance(file['fingerprint'], str) or digest.hexdigest() != file['fingerprint'].lower():
-        raise ValueError('source fingerprint differs')
+        raise ValueError('The source fingerprint does not match.')
     if not isinstance(file['samples'], list) or not file['samples']:
-        raise ValueError('no sample identities')
+        raise ValueError('The catalog has no sample identities.')
     seen = set()
     required = {'native_id', 'code', 'label_key', 'group_name', 'bars', 'source_bpm', 'frame_count'}
     for entry in file['samples']:
         if not isinstance(entry, dict) or not required <= set(entry) <= required | {'pcm_digest'}:
-            raise ValueError('invalid sample identity')
+            raise ValueError('A sample identity is not valid.')
         ident, bars, frames, bpm = (entry[k] for k in ('native_id', 'bars', 'frame_count', 'source_bpm'))
         pcm = entry.get('pcm_digest')
         if (type(ident) is not int or not 0 <= ident < PRODUCT_STRIDE or ident in seen
@@ -167,7 +168,7 @@ def read_release(path):
                 or not isinstance(entry['group_name'], str)
                 or (pcm is not None and (not isinstance(pcm, str) or len(pcm) != 32
                                          or any(c not in '0123456789abcdefABCDEF' for c in pcm)))):
-            raise ValueError(f'invalid identity {ident}')
+            raise ValueError(f'The sample identity {ident} is not valid.')
         seen.add(ident)
     return product, release, file['fingerprint'].lower(), file['samples']
 
@@ -192,25 +193,25 @@ def catalog_names():
             if (not isinstance(file, dict) or set(file) != {'product', 'release', 'names'}
                     or not isinstance(file['product'], str) or not isinstance(file['release'], str)
                     or not isinstance(file['names'], list)):
-                raise ValueError('invalid catalog name file')
+                raise ValueError('The catalog name file is not valid.')
             product = product_slug(file['product'])
             release = file['release'].strip()
             if (product not in PRODUCT_SLOTS or not release or len(release) > 64
                     or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in release)):
-                raise ValueError('invalid product or release')
+                raise ValueError('The product or release is not valid.')
             pending = {}
             for entry in file['names']:
                 if not isinstance(entry, list) or len(entry) != 2:
-                    raise ValueError('invalid sample name entry')
+                    raise ValueError('A sample name entry is not valid.')
                 native_id, name = entry
                 if (type(native_id) is not int or not 0 <= native_id < PRODUCT_STRIDE
                         or native_id in pending or not isinstance(name, str) or not name.strip()):
-                    raise ValueError('invalid or duplicate sample name')
+                    raise ValueError('A sample name is not valid or occurs more than once.')
                 pending[native_id] = name
             for native_id, name in pending.items():
                 names.setdefault((product, release, native_id), name)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError) as error:
-            print(f'{path}: catalog names were not loaded: {error}', file=sys.stderr)
+            print(f'Cannot load catalog names from {path}. {error}', file=sys.stderr)
     return names
 
 
@@ -236,11 +237,11 @@ def product_catalog():
             try:
                 product, release, fingerprint, entries = read_release(path)
                 if (product, fingerprint) in releases:
-                    raise ValueError('duplicate release')
+                    raise ValueError('The release occurs more than once.')
                 slot = PRODUCT_SLOTS[product]
                 if any((known := identities.get(slot * PRODUCT_STRIDE + entry['native_id'])) is not None
                        and not same_catalog_sound(known, entry) for entry in entries):
-                    raise ValueError('a shared native ID conflicts with a loaded release')
+                    raise ValueError('A shared native ID conflicts with a loaded release.')
                 for entry in entries:
                     sample_id = slot * PRODUCT_STRIDE + entry['native_id']
                     if sample_id not in identities:
@@ -251,7 +252,7 @@ def product_catalog():
                         identities[sample_id] = dict(identities[sample_id], pcm_digest=entry['pcm_digest'])
                 releases.add((product, fingerprint))
             except (OSError, UnicodeError, ValueError, TypeError, KeyError, OverflowError) as error:
-                print(f'{path}: catalog was not loaded: {error}', file=sys.stderr)
+                print(f'Cannot load the catalog {path}. {error}', file=sys.stderr)
     return _catalog
 
 
@@ -382,7 +383,7 @@ def suggest(args):
                                      s['tune'] and f'tune {s["tune"]}c') if x)
         print(f'{s["files"]:3d} {s["kind"]:<7} {extra:<24} {counts:<28} {family}')
     if len(found) > args.limit:
-        print(f'({len(found)} families; first {args.limit})', file=sys.stderr)
+        print(f'Found {len(found)} families. Showing the first {args.limit}.', file=sys.stderr)
 
 
 def load_palette(path):
@@ -422,13 +423,13 @@ def change(path, names, add):
     table = family_table() if add else {}
     for name in names:
         if add and name not in table:
-            raise SystemExit(f'{name}: not a family in the verdicts (copy the FAMILY column of `suggest`)')
+            raise SystemExit(f'{name} is not a family in the verdicts. Copy the FAMILY column of `suggest`.')
         if add:
             palette['families'].append(name)
         elif name in palette['families']:
             palette['families'].remove(name)
         else:
-            raise SystemExit(f'{name}: not in {path}')
+            raise SystemExit(f'{name} is not in {path}.')
     save_palette(path, palette)
 
 

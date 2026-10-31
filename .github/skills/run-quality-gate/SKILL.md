@@ -28,6 +28,11 @@ explicit approval.
 3. Take a worktree baseline and mark each documented check as applicable,
    blocked, or not available.
    Completion criterion: Every requirement has one current status.
+4. Compare the package version with the version that `cargo.ps1` would write
+   from the current commit count. In verify mode, if they differ, use an
+   isolated checkout containing the same changes for wrapper-based checks.
+   If that is not available, report those checks as blocked.
+   Completion criterion: Verify mode does not rewrite the user's manifests.
 
 Read [REFERENCE.md](REFERENCE.md) for applicability and stop conditions.
 
@@ -44,26 +49,28 @@ Use the current commands in `docs/DEVELOPMENT.md` and `docs/ARCHITECTURE.md`:
    Completion criterion: The default test suite has a current result.
 4. Run workspace tests with `--no-default-features`.
    Completion criterion: The headless test suite has a current result.
-5. Run `cargo.ps1 build --release --locked` when the built executable matters.
+5. Run `python -m unittest discover -s tools/tests -v` for the Python tools.
+   Completion criterion: The Python test suite has a current result.
+6. Run `cargo.ps1 build --release --locked` when the built executable matters.
    Completion criterion: The release build has a current result or is not applicable.
-6. Run `python tools/assets/prepare-fonts.py --check` for native font assets.
+7. Run `python tools/assets/prepare-fonts.py --check` for native font assets.
    Completion criterion: The font check has a current result.
-7. Run `python tools/assets/check-raster-assets.py`,
+8. Run `python tools/assets/check-raster-assets.py`,
    `python tools/assets/render-rail-icons.py --check`, and
    `python tools/assets/render-app-icon.py --check` for visual assets. If the
    private masters are in `local-data/artwork/`, also run
    `python tools/assets/render-folded-metal.py --check` and
    `python tools/assets/render-mixer.py --check`.
    Completion criterion: Tracked/non-ignored files contain no SVG assets and PNG variants match.
-8. For UI changes, run `tools/verify-ui.ps1` against the release build.
+9. For UI changes, run `tools/verify-ui.ps1` against the release build.
    Completion criterion: The native capture procedure has a current result.
-9. For UI changes, inspect the captures at the documented sizes.
+10. For UI changes, inspect the captures at the documented sizes.
    Completion criterion: Each capture has a recorded visual result.
-10. For import, project, render, or audio changes, run applicable focused tests.
+11. For import, project, render, or audio changes, run applicable focused tests.
     Completion criterion: Each focused test has a current result.
-11. For those changes, run built-artifact scenarios with representative files.
+12. For those changes, run built-artifact scenarios with representative files.
     Completion criterion: Each scenario has a current result.
-12. Record device behavior, listening, and clean-machine checks separately.
+13. Record device behavior, listening, and clean-machine checks separately.
     Completion criterion: None of these checks inherit a result from another check.
 
 In verify mode, after a failure, run independent safe checks.

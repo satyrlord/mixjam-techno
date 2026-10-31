@@ -451,6 +451,100 @@ class MeasureTests(unittest.TestCase):
         self.assertIn('Section measurements unavailable', report)
         self.assertIn('## Arrangement', report)
 
+    def test_master_tempo_precedence_and_missing_sections(self):
+        rate = 8000
+        wave_data = 0.2 * np.sin(np.arange(rate * 26) * 2 * math.pi * 440 / rate)
+        audio = np.repeat(wave_data[:, None], 2, axis=1)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            song = root / 'song.mixjam'
+            song.write_text(json.dumps(mixjam.Song('tempo', bpm=160).document()), encoding='utf-8')
+            metadata = song.with_suffix('.meta.json')
+            board = root / 'board.json'
+            board.write_text(json.dumps(mixjam.board()), encoding='utf-8')
+            premaster = root / 'renders' / 'premaster.wav'
+            sections = [dict(name='intro', first_bar=1, bars=2)]
+            cases = [
+                ('song-no-meta', ['--song', str(song)], None, 160),
+                ('song-over-meta', ['--song', str(song)], {'bpm': 130, 'sections': sections}, 160),
+                ('song-partial-meta', ['--song', str(song)], {'bpm': 130}, 160),
+                ('explicit-over-song', ['--song', str(song), '--bpm', '125'],
+                 {'bpm': 130, 'sections': sections}, 125),
+                ('metadata-no-song', [], {'bpm': 130, 'sections': sections}, 130),
+                ('partial-meta-no-song', [], {'bpm': 130}, 130),
+                ('no-source', [], None, 140),
+            ]
+            for name, options, meta, expected in cases:
+                with self.subTest(name=name):
+                    metadata.unlink(missing_ok=True)
+                    if meta is not None:
+                        metadata.write_text(json.dumps(meta), encoding='utf-8')
+                    out = root / name
+                    out.mkdir()
+                    (out / 'master.wav').touch()
+                    argv = ['master.py', str(premaster), str(board), str(out), '--no-render', *options]
+                    captured = io.StringIO()
+                    with mock.patch.object(sys, 'argv', argv), mock.patch.object(sys, 'stdout', captured), \
+                            mock.patch.object(master, 'read_wav', return_value=(rate, audio)), \
+                            mock.patch.object(master, 'load_profile', return_value=(None, None)), \
+                            mock.patch.object(master, 'measure', wraps=master.measure) as measurements, \
+                            mock.patch.object(master, 'drums', wraps=master.drums) as drum_measurement:
+                        master.main()
+                    self.assertTrue(all(call.args[2] == expected for call in measurements.call_args_list))
+                    self.assertEqual(drum_measurement.call_args.args[4], expected)
+                    if meta is None:
+                        self.assertIn('No section metadata is available.', captured.getvalue())
+                    elif 'sections' not in meta:
+                        self.assertIn('The metadata has no measurable sections.', captured.getvalue())
+                    if name == 'song-no-meta':
+                        result = json.loads((out / 'measure.json').read_text(encoding='utf-8'))
+                        self.assertEqual(len(result['premaster']['block_rms']), 2)
+
+    def test_master_fit_uses_the_song_tempo_without_metadata(self):
+        rate = 8000
+        wave_data = 0.2 * np.sin(np.arange(rate * 26) * 2 * math.pi * 440 / rate)
+        audio = np.repeat(wave_data[:, None], 2, axis=1)
+        target = master.measure(audio, rate, 160)['loud_rms']
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            song = root / 'song.mixjam'
+            song.write_text(json.dumps(mixjam.Song('tempo', bpm=160).document()), encoding='utf-8')
+            board = root / 'board.json'
+            board.write_text(json.dumps(mixjam.board()), encoding='utf-8')
+            out = root / 'out'
+            argv = ['master.py', str(root / 'premaster.wav'), str(board), str(out),
+                    '--song', str(song), '--fit', str(target), '--quiet']
+            with mock.patch.object(sys, 'argv', argv), mock.patch.object(sys, 'stdout', io.StringIO()), \
+                    mock.patch.object(master, 'read_wav', return_value=(rate, audio)), \
+                    mock.patch.object(master, 'load_profile', return_value=(None, None)), \
+                    mock.patch.object(master, 'render_board', return_value=out / 'master.wav') as render_board:
+                master.main()
+            self.assertEqual(render_board.call_args.args[3], 160)
+            result = json.loads((out / 'measure.json').read_text(encoding='utf-8'))
+            self.assertEqual(len(result['premaster']['block_rms']), 2)
+            self.assertEqual(len(result['master']['block_rms']), 2)
+
+    def test_master_rejects_invalid_supplied_songs_even_with_bpm_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            song = root / 'song.mixjam'
+            board = root / 'board.json'
+            board.write_text(json.dumps(mixjam.board()), encoding='utf-8')
+            cases = [None, '{', '{}', '{"song": {}}', '{"song": {"bpm": "160"}}',
+                     '{"song": {"bpm": 0}}', '{"song": {"bpm": 128}}',
+                     '{"song": {"bpm": NaN}}', '{"song": {"bpm": true}}']
+            for content in cases:
+                with self.subTest(content=content):
+                    song.unlink(missing_ok=True)
+                    if content is not None:
+                        song.write_text(content, encoding='utf-8')
+                    out = root / 'out'
+                    argv = ['master.py', str(root / 'premaster.wav'), str(board), str(out),
+                            '--song', str(song), '--bpm', '125']
+                    with mock.patch.object(sys, 'argv', argv), self.assertRaises(SystemExit):
+                        master.main()
+                    self.assertFalse(out.exists())
+
     def test_exhausted_master_fit_returns_the_last_rendered_board(self):
         gains = []
         def record_render(premaster, board, out, bpm):

@@ -2,27 +2,30 @@
 
 python -I tools/song/render.py SONG.mixjam OUT_DIR [--fit-gain DBFS] [--jobs N] [--no-master]
 
-Renders the parts of a pass:
-- every lane alone, with its twin, its FX returns and the board off, to OUT_DIR/lane-NN.wav,
-  N renders at a time (default: half the processors, at most 8);
-- from their sum, without rendering: OUT_DIR/premaster.wav (the mix before the board), one
-  OUT_DIR/stem-ROLE.wav per role, and OUT_DIR/audible.txt (see audible.py);
-- the master, with the board, once: OUT_DIR/master.wav. --no-master skips it.
+The tool renders each lane with its twin and its FX returns, without the board.
+It writes each lane to OUT_DIR/lane-NN.wav. The default is half the number of
+processors, with a maximum of 8 concurrent renders. From these files, it makes
+OUT_DIR/premaster.wav, one OUT_DIR/stem-ROLE.wav per named role, and
+OUT_DIR/audible.txt (see audible.py). It also renders OUT_DIR/master.wav with
+the board. --no-master skips the master render.
 
 --fit-gain sets the song's master gain so that the premaster peaks at DBFS (for example -0.5) and
-saves the song before the master render. Without track keys, the premaster and stems scale to
-the new gain. With track keys, the lanes render again after each gain change, up to five times;
-the tool reports a remaining difference from the target instead of treating ducking as linear.
+saves the song before the master render. Without track keys, the premaster and
+stems scale to the new gain. With track keys, the tool renders the lanes again
+after each gain change, up to five times. It reports any remaining difference
+from the target.
 
-Lane names and roles come from the `.meta.json` beside the song (mixjam.py writes it); a used track
-without one is its own lane, and without the file there are no stems. The premaster and the stems
-are sums of separate lane renders: an FX return that limits or saturates can differ from a render
-of the whole mix. A group with external keys uses the native track/FX stem exporter, keeping
-key tracks separate from the output. Stem export rejects an out-of-range track or FX part;
-lower that part's gain before trying again. Key tracks remain in the full song context.
+Lane names and roles come from the `.meta.json` beside the song, which mixjam.py
+writes. Each used track without a lane name is its own lane. Without the file,
+the tool writes no role stems. The premaster and stems are sums of separate
+lane renders. An FX return that limits or saturates can differ from a render of
+the whole mix. A group with external keys uses the native track/FX stem
+exporter. Key tracks stay separate from the output and remain in the full song
+context. Stem export rejects an out-of-range track or FX part. Lower that
+part's gain before you try again.
 
-The renderer is the release build in target/release; it runs headless and plays no sound. Each
-render keeps its scan cache in a `.data` folder under OUT_DIR.
+The renderer is the release build in target/release. It runs headless and plays
+no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.
 """
 import json
 import math
@@ -47,7 +50,7 @@ def run(song_path, wav_path, data=None):
     result = subprocess.run([str(env.exe()), 'render', '--mix', str(song_path), '--output', str(wav_path)],
                             capture_output=True, text=True, env=environment)
     if result.returncode != 0:
-        raise SystemExit(f'render failed for {song_path}: {result.stdout}{result.stderr}')
+        raise SystemExit(f'Cannot render {song_path}: {result.stdout}{result.stderr}')
 
 
 def run_stems(song_path, folder, data):
@@ -58,7 +61,7 @@ def run_stems(song_path, folder, data):
     if result.returncode != 0:
         if result.stderr.strip() == 'No track sounds: add clips, or check Mute, Solo, and L/R.':
             return False
-        raise SystemExit(f'stem render failed for {song_path}: {result.stdout}{result.stderr}')
+        raise SystemExit(f'Cannot render stems for {song_path}: {result.stdout}{result.stderr}')
     return True
 
 
@@ -137,7 +140,7 @@ def keyed_parts(document, tracks, path, wav, data):
             return
         files = sorted(folder.glob('*.wav'))
         if not files:
-            raise SystemExit(f'stem render produced no audio for {path}')
+            raise SystemExit(f'The stem render produced no audio for {path}.')
         rate, first = read_wav(files[0])
         total = np.zeros_like(first)
         selected = {f'lane - Track {track:02d}.wav' for track in tracks}
@@ -145,7 +148,7 @@ def keyed_parts(document, tracks, path, wav, data):
             if file.name in selected or file.name.startswith('lane - FX '):
                 part_rate, samples = read_wav(file)
                 if part_rate != rate:
-                    raise SystemExit(f'stem sample rates differ for {path}')
+                    raise SystemExit(f'The stem sample rates differ for {path}.')
                 total = add(total, samples)
         write_wav(wav, rate, total)
     path.unlink()
@@ -197,16 +200,16 @@ def fit_gain(song, peak, target_db):
     """Set the master gain so that a premaster now peaking at `peak` (linear) peaks at target_db;
     save the song; return the factor the gain changed by."""
     if not math.isfinite(target_db) or target_db > 0:
-        raise SystemExit('the gain target must be finite and at or below 0 dBFS')
+        raise SystemExit('The gain target must be finite and at or below 0 dBFS.')
     if peak <= 0:
-        raise SystemExit('the premaster is silent; check the song for missing sounds')
+        raise SystemExit('The premaster is silent. Check the song for missing sounds.')
     document = json.loads(song.read_text(encoding='utf-8'))
     gain = document['song']['masterGain']
     fitted = round(gain * 10 ** (target_db / 20) / peak, 6)
     # Match the song reader's mixer gain limit. Do not replace a valid song
     # with a value that the application will reject on the next render.
     if not math.isfinite(fitted) or not 0 < fitted <= 4.0:
-        raise SystemExit('the required master gain is outside 0 to 4; adjust the lane gains first')
+        raise SystemExit('The required master gain is outside 0 to 4. Adjust the lane gains first.')
     document['song']['masterGain'] = fitted
     song.write_text(json.dumps(document, indent=1), encoding='utf-8')
     return fitted / gain
@@ -240,7 +243,8 @@ def main():
             peak = float(np.abs(premaster).max())
             actual = 20 * math.log10(peak) if peak > 0 else -math.inf
             if abs(actual - target) > 0.05:
-                print(f'gain fit stopped after five changes: peak {actual:.2f} dBFS, target {target:.2f} dBFS',
+                print(f'The gain fit stopped after five changes. The peak is {actual:.2f} dBFS '
+                      f'and the target is {target:.2f} dBFS.',
                       file=sys.stderr)
         else:
             scale = fit_gain(song, float(np.abs(premaster).max()), target)

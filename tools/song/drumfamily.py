@@ -2,11 +2,13 @@
 
 python -I tools/song/drumfamily.py [--bpm 140] FILE...
 
-Per pair: the correlation of their onset patterns on a 16th grid (rhythm, from the energy rise in
-three bands: kick below 150 Hz, snare/clap 150-2500 Hz, hats above 5 kHz) and the distance of their
-band balance (tone, in dB). Loops are compared over their bar-length cycles at --bpm, their own
-tempo (default 140), so give loops of one tempo at a time. Prints, per loop, its band balance, then
-the pair matrix. Use it to choose a drum family whose members alternate without a change of style.
+The tool prints each loop's band balance. It then compares pairs of loops. The
+comparison uses the correlation of their onset patterns on a 16th-note grid
+and the difference in their band balance, in dB. The onset uses the energy rise
+in three bands: kick below 150 Hz, snare or clap at 150-2500 Hz, and hats above
+5 kHz. The tool compares each loop's bar-length cycle at --bpm, which is the
+loop tempo (default 140). Give it loops of one tempo at a time. Use the results
+to choose a drum family whose members alternate without a change of style.
 """
 import itertools
 import sys
@@ -25,7 +27,7 @@ def profile(mono, rate, bpm):
     step = int(round(rate * 60 / bpm / 4))  # one 16th
     bars = len(mono) // (step * 16)
     if bars == 0:
-        raise ValueError(f'shorter than one bar at {bpm:g} BPM')
+        raise ValueError(f'The audio is shorter than one bar at {bpm:g} BPM.')
     mono = mono[: bars * step * 16]
     spectrum = np.fft.rfft(mono)
     freqs = np.fft.rfftfreq(len(mono), 1 / rate)
