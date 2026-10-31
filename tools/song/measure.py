@@ -115,7 +115,7 @@ def mechanical(document, lanes):
         if not Path(sample['path']).exists():
             problems.append(f"missing file: {sample['path']}")
         else:
-            sounds[sample['id']] = Sound(sample['path'], sample['sourceBpm'])
+            sounds[sample['id']] = Sound(sample['path'], sample['sourceBpm'], document['song']['bpm'])
     # A sound the song lists as missing plays as silence.
     silent = Counter(p['sampleId'] for lane in document['lanes'] for p in lane['placements']
                      if p['sampleId'] in missing_ids)
@@ -140,7 +140,7 @@ def mechanical(document, lanes):
                 continue
             bar = p['startTick'] / TICKS_PER_BAR + 1
             name = samples[p['sampleId']]['name']
-            plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.source_bpm)
+            plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.play_bpm)
             if p['durationTicks'] > plays + 4:
                 problems.append(f"track {index + 1} bar {bar:.2f}: {name} clip outlasts its sound by "
                                 f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars (silent gap)")

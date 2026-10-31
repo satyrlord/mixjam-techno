@@ -67,6 +67,13 @@ length can fit half or double its actual tempo. The application then prefers
 88 to 176 BPM unless the fallback names the other tempo. Set the fallback to
 180 before you scan a 180 BPM pack.
 
+A song plays each sound in the octave of its tempo nearest the song tempo, so no
+sound is sped up or slowed down by more than half an octave. A 90 BPM loop in a
+180 BPM song plays at its own pitch as a half-time loop, and each of its bars
+spans two of the song's bars. A new clip of it is placed at that length.
+Imported MixJam v7 sounds keep their saved durations; their calculated playback
+tempos do not use octave selection.
+
 Settings, the scan cache, and generated audio use `%LOCALAPPDATA%\MixJam Techno`.
 Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 
@@ -92,7 +99,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 - Choose a lane in Automation above the arrangement to draw it on every track:
   Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
   the send knob while the lane has points), or Filter (low-pass below the
-  middle, high-pass above it, open in the middle). Click a lane to add a
+  middle, high-pass above it, open in the middle; it crosses between the two
+  without a click). Click a lane to add a
   point, drag a point to move it, and double-click or right-click a point to
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
   points the value moves in a straight line. Choose Off to edit clips again.
@@ -318,38 +326,42 @@ file.
 `d2` songs can also contain packed samples in the original compressed sample
 format. The reader decodes them and retains them as WAV audio. Select the common
 parent sample folder when a song uses sounds from earlier products. `d3` songs
-can reference `d2` sounds; the supported `t2` compatibility bank uses `d2` IDs 1
-through 1957.
+can reference `d2` sounds, and `d4` songs `d3` and `d2` sounds; the supported
+`t2` compatibility bank uses `d2` IDs 1 through 1957.
 
 A `.mix` song stores numeric sample IDs. The application resolves them with
 sample identity catalogs: data files in an `assets/catalog` folder beside the
 application (for a build, the repository's `assets/catalog`). The application
-reads them when it starts; they are not part of the executable, and this
-repository does not contain them. Each catalog file describes one release of one
-original product. It names the product and the release, lists the original files
-it was generated from with their hashes, and gives each sample's native ID, name,
-length, tempo, and a digest of its audio. The application identifies a WAV when
-its audio matches, regardless of filename.
+reads them when it starts; they are not part of the executable. This
+repository contains them in `assets/catalog`. Each catalog file describes one release of one
+original product. It names the product and the release, lists the size and hash
+of each original file it was generated from, and gives each sample's native ID,
+archive code, category, length, tempo, a digest of its audio, and a one-way key
+of its name. A catalog holds no sound names, file names, or audio. The
+application identifies a WAV when its audio matches, regardless of filename, and
+the sound keeps the name of your file.
 Digest comparisons require mono audio at the original 44.1 kHz rate, matching
 frame counts, and more than two frames. If a comparison is unavailable, the
-reader can infer identity from an unambiguous native code or name, category,
+reader can infer identity from an unambiguous native code or name key, category,
 and duration. It rejects a WAV when its available digest differs, even if its
 name and length match. The import error names that WAV.
 
 Catalogs of several releases of one product can be present together. They
 merge when the audio, tempo, and bar count agree for every native ID that they
-share. The application retains alternate names for matching. A catalog with
+share. The application retains alternate name keys for matching. A catalog with
 conflicting audio or timing does not load, and the application names it when it
 starts, as it does for an invalid catalog file. `mixjam-techno inspect`
 lists the loaded catalogs and the files that did not load.
 
 Without a catalog for a product, WAV folders still load as ordinary sounds.
 With WAV-only libraries, native sources that cannot be identified open as
-placeholders in imported or saved songs. Import details name the product that
-had no catalog at import. If a song uses native IDs
-that no loaded catalog of its product lists, Import details say so once for
-that product: the song may come from a release that has no catalog here.
-Add the catalog file to `assets/catalog` and restart the application.
+placeholders in imported or saved songs, named by product, category, and ID,
+such as "D1 loop 731". Import details name the product that had no catalog at
+import. If a song uses native IDs that no loaded catalog of its product lists,
+Import details say so once for that product: the song may come from a release
+that has no catalog here. Add the catalog file to `assets/catalog` and open the
+song again; the application reads the changed folder and scans the sample
+folders again before it opens the song, without a restart.
 
 The optional `source-tempos.json` in the same folder adds tempo identities for
 two original hip-hop products, whose shipped help states that all their samples

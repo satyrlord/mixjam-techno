@@ -11351,6 +11351,45 @@ mod tests {
     }
 
     #[test]
+    fn clip_fade_handles_and_placement_keep_imported_saved_span_timing() {
+        let (ctx, mut app) = fixture();
+        let mut sample = app.session.library().samples[0].clone();
+        sample.id = 1_000_000;
+        sample.source_bpm = 240.0;
+        sample.frame_count = 44_100;
+        sample.group_name = "MixJam".into();
+        let mut project = app.session.project().clone();
+        for clip in &mut project.clips {
+            clip.sample_id = sample.id;
+        }
+        project
+            .source_notices
+            .push("MixJam v7 source controls: {}".into());
+        project
+            .imported_samples
+            .push(crate::engine::ImportedSample {
+                id: sample.id,
+                name: sample.name.clone(),
+                group_name: sample.group_name.clone(),
+                path: PathBuf::from("saved-span.wav"),
+                source_bpm: sample.source_bpm,
+                source_sample_rate: Some(sample.sample_rate),
+                origin: None,
+            });
+        app.session = Session::headless(Arc::new(Library::fixture(vec![sample])), project).unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.placement_ticks(1_000_000), Some(TICKS_PER_BAR));
+        let lanes = app.timeline_rect.unwrap();
+        let clip = &app.session.project().clips[0];
+        let rect = app.clip_rect(clip, lanes);
+        let handle = rect.right_top() + Vec2::new(-4.5, 5.5);
+        assert_eq!(
+            app.clip_handle_at(handle, lanes),
+            Some((clip.id, ClipHandle::FadeOut))
+        );
+    }
+
+    #[test]
     fn clip_edges_fades_and_gain_line_reshape_the_clip_in_one_undo_step_each() {
         let (ctx, mut app) = fixture();
         let lanes = app.timeline_rect.unwrap();

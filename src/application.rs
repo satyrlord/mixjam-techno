@@ -6,7 +6,7 @@ pub use crate::{
     engine::{
         Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_TICKS,
         MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR,
-        TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude,
+        TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude, playback_bpm,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
@@ -335,6 +335,8 @@ pub struct Session {
     library: Arc<Library>,
     catalog_revision: u64,
     wave_scan: Option<WaveScan>,
+    /// Keep a changed catalog pending until a replacement library is adopted.
+    catalog_rescan_needed: bool,
     /// A deferred song, with the render revision and editor generation when queued.
     pending_open: Option<(PathBuf, u64, u64)>,
     /// The deferred song, once opened, until a frontend reports it.
@@ -594,6 +596,7 @@ impl Session {
             library,
             catalog_revision: 0,
             wave_scan: None,
+            catalog_rescan_needed: false,
             pending_open: None,
             opened_after_scan: None,
             wave_folder_adopted: false,
@@ -1208,14 +1211,16 @@ impl Session {
     /// The length that `place` gives a new clip of this sample.
     pub fn placement_ticks(&self, sample_id: u32) -> Option<u32> {
         let sample = self.library.sample_by_id(sample_id)?;
+        let bpm = self
+            .project()
+            .sample_playback_bpm(sample.id, sample.source_bpm);
         Some(if Product::sample_key(sample_id).is_some() {
-            sample.bars.saturating_mul(TICKS_PER_BAR)
+            // A native loop's bars are at its own tempo; at half time each
+            // bar spans two of the song's.
+            (f64::from(sample.bars) * bpm / sample.source_bpm * f64::from(TICKS_PER_BAR)).round()
+                as u32
         } else {
-            duration_ticks(
-                u64::from(sample.frame_count),
-                sample.sample_rate,
-                sample.source_bpm,
-            )
+            duration_ticks(u64::from(sample.frame_count), sample.sample_rate, bpm)
         })
     }
     pub fn place(&mut self, sample_id: u32, track: usize, tick: u32) -> Result<u64, String> {
@@ -1646,6 +1651,11 @@ impl Session {
                 path.display()
             ));
         }
+        // A scan identifies sounds by the catalogs: read changed ones first.
+        if let Some(problems) = crate::catalog::refresh() {
+            self.catalog_rescan_needed = true;
+            self.report_catalog_reload(problems);
+        }
         let progress = Arc::new(crate::library::ScanProgress::default());
         let (sender, receiver) = mpsc::channel();
         let worker_progress = Arc::clone(&progress);
@@ -1716,6 +1726,64 @@ impl Session {
         self.opened_after_scan.take()
     }
 
+    /// Read the sample catalogs again if a catalog was added, changed or
+    /// removed since they were read, and rescan the saved sample folders so
+    /// that a new catalog identifies their sounds. Returns whether a rescan
+    /// started; a song to open should then wait for it ([`Self::open_after_scan`]).
+    pub fn refresh_catalogs(&mut self) -> bool {
+        // A rejected open must not consume the catalog change.
+        if self.is_recording() {
+            return false;
+        }
+        let changed = if let Some(problems) = crate::catalog::refresh() {
+            self.report_catalog_reload(problems);
+            true
+        } else {
+            false
+        };
+        self.rescan_changed_catalogs(changed)
+    }
+
+    fn rescan_changed_catalogs(&mut self, changed: bool) -> bool {
+        self.catalog_rescan_needed |= changed;
+        if self.wave_scan.is_some() && !changed {
+            return true;
+        }
+        if !self.catalog_rescan_needed {
+            return false;
+        }
+        let config = if let Some(scan) = &self.wave_scan {
+            crate::project_io::WaveFolderConfig {
+                roots: scan.roots.clone(),
+                source_bpm: scan.source_bpm,
+            }
+        } else {
+            match crate::project_io::load_wave_config_in(&self.settings_root) {
+                Ok(Some(config)) => config,
+                Ok(None) => return false,
+                Err(error) => {
+                    self.error(error);
+                    return false;
+                }
+            }
+        };
+        match self.start_wave_scan(&config.roots, config.source_bpm) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error(error);
+                false
+            }
+        }
+    }
+
+    fn report_catalog_reload(&mut self, problems: &[(String, String)]) {
+        let mut text = String::from("The sample catalogs changed and were read again.");
+        for (file, error) in problems {
+            text.push_str(&format!(" Sample catalog {file} was not loaded: {error}"));
+        }
+        self.notice = Some((text, !problems.is_empty()));
+    }
+
     /// Open this song after the running folder scan completes, or now when
     /// no scan is running.
     pub fn open_after_scan(&mut self, path: &Path) -> Result<(), String> {
@@ -1747,12 +1815,13 @@ impl Session {
             // invalidating the dry mix.
             *revision != self.revision
                 || *generation != self.editor.generation()
-                || self.needs_save_confirmation()
+                || self.has_recorded_take()
         });
         match result
             .and_then(|library| self.adopt_wave_folder(library, &scan.roots, scan.source_bpm))
         {
             Ok(warnings) => {
+                self.catalog_rescan_needed = false;
                 let count = self.library.samples.len();
                 let mut notice = format!("Sample libraries loaded: {count} sounds.");
                 let mut error = !warnings.is_empty();
@@ -1862,14 +1931,16 @@ impl Session {
         state: &StepSynthState,
     ) -> Result<Pcm, String> {
         let source = if let Some(path) = path {
-            if path
+            let mut source = if path
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"))
             {
                 audio::read_wav(path)?
             } else {
                 crate::library::read_packed_file(path)?
-            }
+            };
+            audio::hide_stray_end(&mut source);
+            source
         } else {
             self.source_pcm(id)?
         };
@@ -4445,7 +4516,7 @@ mod boundary_tests {
         let identity = |native_id| crate::catalog::WaveMetadata {
             native_id,
             code: format!("WAVE{native_id}"),
-            name: "Folder sound".into(),
+            label_key: crate::catalog::label_key("Folder sound"),
             group_name: "Wave".into(),
             bars: 1,
             source_bpm: 140.0,
@@ -4510,7 +4581,7 @@ mod boundary_tests {
         let metadata = [crate::catalog::WaveMetadata {
             native_id: 1,
             code: "TEST".into(),
-            name: "Test".into(),
+            label_key: crate::catalog::label_key("Test"),
             group_name: "Wave".into(),
             bars: 1,
             source_bpm: 140.0,
@@ -4560,6 +4631,77 @@ mod boundary_tests {
         assert!(error && notice.contains("Cannot open"), "{notice}");
         std::fs::remove_dir_all(dir).unwrap();
     }
+    #[test]
+    fn deferred_scan_open_accepts_previously_confirmed_unsaved_changes() {
+        let dir = fixture_dir();
+        let song = dir.join("accepted.json");
+        Project {
+            title: "Replacement".into(),
+            ..Project::default()
+        }
+        .save(&song)
+        .unwrap();
+        let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(dir.join("settings"));
+        session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        assert!(session.unsaved());
+        let (sender, receiver) = mpsc::channel();
+        session.wave_scan = Some(WaveScan {
+            roots: vec![dir.clone()],
+            source_bpm: 140.0,
+            progress: Arc::new(crate::library::ScanProgress::default()),
+            receiver,
+        });
+        // The UI has already confirmed replacement, just as for immediate open.
+        session.open_after_scan(&song).unwrap();
+        sender.send(Ok(Library::empty())).unwrap();
+        session.poll();
+        assert_eq!(session.project().title, "Replacement");
+        assert_eq!(session.take_opened_after_scan(), Some(song));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn cancelled_catalog_rescans_remain_pending_and_use_the_active_scan_folders() {
+        let dir = fixture_dir();
+        let root = dir.join("samples");
+        std::fs::create_dir_all(&root).unwrap();
+        Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 1000],
+        }
+        .write_wav(&root.join("sound.wav"))
+        .unwrap();
+        let settings = dir.join("settings");
+        crate::project_io::save_wave_config_in(&settings, std::slice::from_ref(&root), 120.0)
+            .unwrap();
+        let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(settings);
+        assert!(session.rescan_changed_catalogs(true));
+        session.cancel_wave_scan();
+        assert!(session.catalog_rescan_needed);
+        assert!(session.rescan_changed_catalogs(false));
+        assert_eq!(session.wave_scan.as_ref().unwrap().source_bpm, 120.0);
+        // A second Open waits for the current scan instead of opening stale data.
+        assert!(session.rescan_changed_catalogs(false));
+        // A change during a scan restarts that scan with its current folders/tempo.
+        session.wave_scan.as_mut().unwrap().source_bpm = 160.0;
+        assert!(session.rescan_changed_catalogs(true));
+        assert_eq!(session.wave_scan.as_ref().unwrap().source_bpm, 160.0);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while session.wave_scan().is_some() {
+            session.poll();
+            assert!(std::time::Instant::now() < deadline, "scan timed out");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(!session.catalog_rescan_needed);
+        assert!(!session.rescan_changed_catalogs(false));
+        // Abandoned workers can still finish their cache writes in this test folder.
+    }
+
     #[test]
     fn deferred_scan_open_preserves_intervening_work() {
         let dir = fixture_dir();

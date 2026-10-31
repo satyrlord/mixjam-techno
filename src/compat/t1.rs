@@ -572,7 +572,7 @@ mod tests {
         let metadata = crate::catalog::WaveMetadata {
             native_id: 731,
             code: "r1test.\x70xd".into(),
-            name: "Synthetic sample".into(),
+            label_key: crate::catalog::label_key("Synthetic sample"),
             group_name: "Test".into(),
             bars: 2,
             source_bpm: 180.0,
@@ -740,7 +740,7 @@ mod tests {
         let sample = crate::catalog::WaveMetadata {
             native_id: 731,
             code: "fixture.pxd".into(),
-            name: "Fixture".into(),
+            label_key: crate::catalog::label_key("Fixture"),
             group_name: "Bass".into(),
             bars: 2,
             source_bpm: 180.0,
@@ -768,7 +768,7 @@ mod tests {
         let missing = &project.missing_samples[0];
         assert!(!missing.length_inferred);
         assert_eq!(missing.nominal_ticks, sample.bars * TICKS_PER_BAR);
-        assert_eq!(missing.name, sample.name);
+        assert_eq!(missing.name, sample.display_name(Product::T1));
         assert_eq!(missing.metadata["code"], sample.code);
         assert_eq!(project.clips[0].length_ticks, sample.bars * TICKS_PER_BAR);
         assert_eq!(project.clips[1].start_tick, 12 * TICKS_PER_BAR + 64);

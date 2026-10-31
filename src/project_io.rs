@@ -677,7 +677,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
                 native_id,
                 entry.map_or_else(
                     || format!("{} sample {native_id}", product.label()),
-                    |entry| entry.name.clone(),
+                    |entry| entry.display_name(product),
                 ),
                 entry.map_or(project.bpm, |entry| entry.source_bpm),
                 entry.map_or(ticks, |entry| {
@@ -1264,7 +1264,7 @@ mod tests {
             sample.frame_count = frames as u32;
             if let Some(entry) = entry {
                 sample.code.clone_from(&entry.code);
-                sample.name.clone_from(&entry.name);
+                sample.name = entry.display_name(Product::H1);
                 sample.group_name.clone_from(&entry.group_name);
                 sample.source_bpm = entry.source_bpm;
                 sample.bars = entry.bars;

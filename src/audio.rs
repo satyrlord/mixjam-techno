@@ -78,6 +78,71 @@ pub fn read_wav(path: &Path) -> Result<Pcm, String> {
     })
 }
 
+/// Frames at the end of a sound that can be a stray.
+const STRAY_END_FRAMES: usize = 4;
+
+/// Near silence, in normalized units: the 4 frames before a stray run.
+const STRAY_SILENCE: f32 = 0.001;
+
+/// Hide a stray end: many original product samples are silent or quiet and
+/// then end on one or two frames that jump to a large value, which clicks
+/// wherever the sample ends or loops. Per channel, a run of at most four
+/// final frames is stray when all its frames rise above four times the peak
+/// of the ten milliseconds before the last four frames, or above twice that
+/// peak when the four frames just before the run are near silence, and above
+/// 1% of full scale in both cases. It takes the value of the frame before
+/// the run. A single last frame is also stray when its step from the frame
+/// before is over four times the largest step in that window (and over 5% of
+/// full scale). Real tails, such as a sound cut while loud, are as loud and
+/// as jumpy as the audio before them and stay. The frame count never changes.
+/// Playback and render read audio through this. Sample identity must not.
+pub(crate) fn hide_stray_end(pcm: &mut Pcm) {
+    let channels = usize::from(pcm.channels.max(1));
+    let frames = pcm.samples.len() / channels;
+    let window = (0.010 * f64::from(pcm.sample_rate)).round() as usize;
+    if frames < window + STRAY_END_FRAMES + 1 || frames < 2 * STRAY_END_FRAMES {
+        return;
+    }
+    for channel in 0..channels {
+        let at = |frame: usize| frame * channels + channel;
+        let peak = (frames - STRAY_END_FRAMES - window..frames - STRAY_END_FRAMES)
+            .map(|frame| pcm.samples[at(frame)].abs())
+            .fold(0.0, f32::max);
+        let above = |threshold: f32| {
+            (1..=STRAY_END_FRAMES)
+                .take_while(|back| pcm.samples[at(frames - back)].abs() > threshold)
+                .count()
+        };
+        let mut run = above((4.0 * peak).max(0.01));
+        let loose = above((2.0 * peak).max(0.01));
+        for candidate in (run + 1..=loose).rev() {
+            let silent = (frames - candidate - STRAY_END_FRAMES..frames - candidate)
+                .all(|frame| pcm.samples[at(frame)].abs() <= STRAY_SILENCE);
+            if silent {
+                run = candidate;
+                break;
+            }
+        }
+        if run == 0 {
+            // A lone last frame that steps far more than anything in the
+            // window steps, whatever the tail before it was doing.
+            let steps = (frames - STRAY_END_FRAMES - window + 1..frames - STRAY_END_FRAMES)
+                .map(|frame| (pcm.samples[at(frame)] - pcm.samples[at(frame - 1)]).abs())
+                .fold(0.0, f32::max);
+            let last = (pcm.samples[at(frames - 1)] - pcm.samples[at(frames - 2)]).abs();
+            if last > (4.0 * steps).max(0.05) {
+                run = 1;
+            }
+        }
+        if run > 0 {
+            let hold = pcm.samples[at(frames - run - 1)];
+            for frame in frames - run..frames {
+                pcm.samples[at(frame)] = hold;
+            }
+        }
+    }
+}
+
 /// The largest WAV that the library reads, in samples of all channels.
 pub(crate) const MAX_WAV_SAMPLES: usize = 64_000_000;
 
@@ -688,7 +753,8 @@ impl Mix {
             if !source_bpm.is_finite() || source_bpm <= 0.0 {
                 return Err("A sample has an invalid source tempo.".into());
             }
-            let step = source.sample_rate as f64 / rate as f64 * project.bpm / source_bpm;
+            let step = source.sample_rate as f64 / rate as f64 * project.bpm
+                / project.sample_playback_bpm(clip.sample_id, source_bpm);
             if !step.is_finite() || step <= 0.0 {
                 return Err("The source tempo cannot be represented for sample playback.".into());
             }
@@ -2247,6 +2313,153 @@ mod tests {
     }
 
     #[test]
+    fn a_filter_lane_crossing_zero_renders_without_a_click() {
+        let mix_of = |lane: [(u32, f32); 2]| {
+            let mut project = song();
+            project.clips[0].start_tick = 0;
+            project.clips[0].offset_frames = 0;
+            project.tracks[0].automation.filter = lane
+                .map(|(tick, value)| crate::automation::Point { tick, value })
+                .into();
+            let samples = HashMap::from([(
+                5,
+                Pcm {
+                    sample_rate: 44_100,
+                    channels: 1,
+                    samples: (0..20_000)
+                        .map(|i| {
+                            let t = i as f32 / 44_100.0;
+                            0.4 * ((std::f32::consts::TAU * 100.0 * t).sin()
+                                + (std::f32::consts::TAU * 3000.0 * t).sin())
+                        })
+                        .collect(),
+                },
+            )]);
+            let mix = mix_with_samples(&project, &samples).unwrap();
+            let mut out = vec![0.0; 14_000 * 2];
+            mix.read_block(0, &mut out, None, &mut RenderState::default());
+            let left: Vec<f32> = out.iter().step_by(2).copied().collect();
+            // The 20 ms around the middle of the move between the two points.
+            left[4_000..6_500]
+                .windows(2)
+                .map(|pair| (pair[1] - pair[0]).abs())
+                .fold(0.0, f32::max)
+        };
+        let crossing = mix_of([(8, -0.3), (9, 0.3)]);
+        let low = mix_of([(8, -0.3), (9, -0.001)]);
+        let high = mix_of([(8, 0.001), (9, 0.3)]);
+        assert!(
+            crossing <= low.max(high) + 0.03,
+            "crossing step {crossing} against {low} and {high}"
+        );
+    }
+
+    #[test]
+    fn a_stray_end_is_hidden_and_a_real_tail_is_not() {
+        // Tails of original product samples, 16-bit, after 10 ms of the given
+        // lead-in. The frame count never changes.
+        let tail = |lead: &dyn Fn(usize) -> i16, tail: &[i16]| {
+            let mut pcm = Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: (0..600)
+                    .map(lead)
+                    .chain(tail.iter().copied())
+                    .map(|x| f32::from(x) / 32768.0)
+                    .collect(),
+            };
+            let before = pcm.samples.clone();
+            hide_stray_end(&mut pcm);
+            assert_eq!(pcm.samples.len(), before.len());
+            let end = |samples: &[f32]| -> Vec<i16> {
+                samples[samples.len() - tail.len()..]
+                    .iter()
+                    .map(|x| (x * 32768.0).round() as i16)
+                    .collect()
+            };
+            (end(&before), end(&pcm.samples), before == pcm.samples)
+        };
+        let silent = |_: usize| 0;
+        let loud = |i: usize| (((i * 7) % 13) as i16 - 6) * 3_000;
+        let (_, fixed, _) = tail(&silent, &[0, 0, 0, 0, 0, 0, 0, 9282]);
+        assert_eq!(fixed, [0, 0, 0, 0, 0, 0, 0, 0]);
+        let (_, fixed, _) = tail(&silent, &[0, 0, 0, 0, 0, 0, 0, 399]);
+        assert_eq!(fixed, [0; 8]);
+        let (_, fixed, _) = tail(&|_| -4, &[-4, -4, -4, -3, -4, -4, -4, 1729]);
+        assert_eq!(fixed, [-4, -4, -4, -3, -4, -4, -4, -4]);
+        let (_, fixed, _) = tail(&silent, &[0, 0, 0, 0, 0, 0, -3853, 4756]);
+        assert_eq!(fixed, [0; 8]);
+        // A quiet sound that dies away to silence and ends on one frame
+        // between two and four times its peak.
+        let quiet = |i: usize| (((i * 7) % 13) as i16 - 6) * 500;
+        let (_, fixed, _) = tail(&quiet, &[0, 0, 0, 0, 0, 0, 0, 9282]);
+        assert_eq!(fixed, [0; 8]);
+        let (_, fixed, _) = tail(&quiet, &[0, 0, 0, 2, 0, 0, 0, 9282]);
+        assert_eq!(fixed, [0, 0, 0, 2, 0, 0, 0, 0]);
+        // The same sound that is still sounding at its end is a real tail.
+        let (_, kept, unchanged) =
+            tail(&quiet, &[2000, -2500, 1800, -2200, 2400, -1900, 2100, 7000]);
+        assert!(unchanged, "became {kept:?}");
+        // A sound still sounding at its end, a smooth tail, then a single
+        // frame that jumps (hold-on-005-r).
+        let smooth = |i: usize| ((i % 200) as i16 - 100).abs() * 14 + 1066;
+        let (_, fixed, _) = tail(&smooth, &[1644, 1648, 1494, 1208, 922, 692, 562, 9478]);
+        assert_eq!(fixed, [1644, 1648, 1494, 1208, 922, 692, 562, 562]);
+        // The loud real tails also stay with a lead that continues from their start,
+        // so the lone-jump rule is what must keep them.
+        for real in [
+            [-5338, 4359, 3207, -10247, 15196, -20289, 23170, -21643],
+            [816, 2006, 10203, 18743, 23341, 23767, 16673, 3815],
+        ] {
+            let start = real[0];
+            let (_, kept, unchanged) = tail(&|_| start, &real);
+            assert!(unchanged, "{real:?} became {kept:?}");
+        }
+        for real in [
+            [-5338, 4359, 3207, -10247, 15196, -20289, 23170, -21643],
+            [816, 2006, 10203, 18743, 23341, 23767, 16673, 3815],
+            [-518, -490, 162, 865, 3077, 4644, 8113, 9916],
+        ] {
+            let (_, kept, unchanged) = tail(&loud, &real);
+            assert!(unchanged, "{real:?} became {kept:?}");
+        }
+    }
+
+    #[test]
+    fn a_stray_end_is_hidden_in_one_channel_only() {
+        let mut samples = vec![0.0; 2 * 600];
+        for frame in 0..600 {
+            samples[frame * 2] = -4.0 / 32768.0;
+        }
+        let last = samples.len() - 2;
+        samples[last] = 1729.0 / 32768.0;
+        samples[last + 1] = 0.0;
+        let mut pcm = Pcm {
+            sample_rate: 44_100,
+            channels: 2,
+            samples,
+        };
+        let before = pcm.samples.clone();
+        hide_stray_end(&mut pcm);
+        assert_eq!(pcm.samples.len(), before.len());
+        assert_eq!(pcm.samples[last], -4.0 / 32768.0);
+        assert_eq!(pcm.samples[..last], before[..last]);
+        assert_eq!(pcm.samples[last + 1], before[last + 1]);
+    }
+
+    #[test]
+    fn a_short_sound_keeps_its_end() {
+        let mut pcm = Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
+        };
+        let before = pcm.samples.clone();
+        hide_stray_end(&mut pcm);
+        assert_eq!(pcm.samples, before);
+    }
+
+    #[test]
     fn dry_wav_admission_keeps_the_full_riff_capacity() {
         let mix = Mix {
             frames: (u64::from(u32::MAX) - 36) / 4,
@@ -3035,6 +3248,33 @@ mod tests {
         let out = render_with_samples(&p, &HashMap::from([(1_000_000, pcm)])).unwrap();
         let start = p.frames_per_tick(44100) * 256.0;
         let index = start.round() as usize * 2;
+        assert_eq!(
+            &out.samples[index..index + 6],
+            &[0.05, 0.05, 0.1, 0.1, 0.15, 0.15]
+        );
+    }
+    #[test]
+    fn a_half_time_loop_plays_at_its_own_pitch() {
+        let mut p = song();
+        p.bpm = 180.0;
+        p.clips[0].offset_frames = 0;
+        p.clips[0].sample_id = 1_000_000;
+        p.imported_samples.push(crate::engine::ImportedSample {
+            id: 1_000_000,
+            name: "Half-time loop".into(),
+            group_name: "Wave".into(),
+            path: "loop.wav".into(),
+            source_bpm: 90.0,
+            source_sample_rate: Some(44100),
+            origin: None,
+        });
+        let pcm = Pcm {
+            sample_rate: 44100,
+            channels: 1,
+            samples: vec![0.1, 0.2, 0.3],
+        };
+        let out = render_with_samples(&p, &HashMap::from([(1_000_000, pcm)])).unwrap();
+        let index = (p.frames_per_tick(44100) * 256.0).round() as usize * 2;
         assert_eq!(
             &out.samples[index..index + 6],
             &[0.05, 0.05, 0.1, 0.1, 0.15, 0.15]

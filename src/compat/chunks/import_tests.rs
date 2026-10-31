@@ -464,15 +464,46 @@ fn inherited_ids_keep_the_explicit_d2_namespace_and_loader_boundaries() {
             },
         )
     };
-    for (product, native_id) in [(Product::T2, 1), (Product::T2, 1957), (Product::D3, 6577)] {
-        let library = Library::fixture(vec![sample(Product::D2, native_id)]);
+    for (product, native_id, source) in [
+        (Product::T2, 1, Product::D2),
+        (Product::T2, 1957, Product::D2),
+        (Product::D3, 6577, Product::D2),
+        (Product::D4, 203, Product::D2),
+        (Product::D4, 6861, Product::D2),
+        (Product::D4, 13034, Product::D3),
+        (Product::D4, 18247, Product::D3),
+    ] {
+        let library = Library::fixture(vec![sample(source, native_id)]);
         let project = import(product, native_id as u16, &library).unwrap();
         assert_eq!(
             project.clips[0].sample_id,
-            Product::D2.global_sample_id(native_id).unwrap()
+            source.global_sample_id(native_id).unwrap()
         );
         assert_eq!(project.clips[0].length_ticks, 512);
     }
+    // D4 reads D3 IDs from the D3 catalog. An equal T2 ID is another sound,
+    // and the missing sample names the D3 identity.
+    let wrong = Library::fixture(vec![sample(Product::T2, 13034)]);
+    let unresolved = import(Product::D4, 13034, &wrong).unwrap();
+    assert_eq!(
+        unresolved.clips[0].sample_id,
+        Product::D3.global_sample_id(13034).unwrap()
+    );
+    assert!(matches!(
+        unresolved.missing_samples[0].reference,
+        MissingReference::Native {
+            product: Product::D3,
+            native_id: 13034
+        }
+    ));
+    // The song's own IDs stay in its own namespace.
+    let own = Library::fixture(vec![sample(Product::D3, 18300)]);
+    let unresolved = import(Product::D4, 18300, &own).unwrap();
+    assert_eq!(unresolved.missing_samples.len(), 1);
+    assert_eq!(
+        unresolved.clips[0].sample_id,
+        Product::D4.global_sample_id(18300).unwrap()
+    );
     // T2 loads the base D2 catalog, not the later D2 expansion archives.
     let kits = Library::fixture(vec![sample(Product::D2, 6577)]);
     let unresolved = import(Product::T2, 6577, &kits).unwrap();

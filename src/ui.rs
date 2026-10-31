@@ -960,6 +960,17 @@ impl MixJamApp {
     }
 
     fn open_path(&mut self, path: &Path) {
+        // A changed catalog folder rescans the sample folders; the song opens after.
+        if self.session.refresh_catalogs() {
+            match self.session.open_after_scan(path) {
+                Ok(()) => self.message(format!(
+                    "{} opens after the sample folder scan finishes.",
+                    path.display()
+                )),
+                Err(error) => self.error(format!("Cannot open mix: {error}")),
+            }
+            return;
+        }
         match self.session.open(path) {
             Ok(()) => {
                 self.clear_selection();
@@ -3442,7 +3453,7 @@ fn effects_help(ui: &mut egui::Ui) {
         "Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings. Turning it on restores that section's defaults.",
         "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.",
         "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
-        "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are new algorithms; original-product audio equivalence is not established.",
+        "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are the application's own algorithms.",
         "The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.",
     ] {
         ui.add(egui::Label::new(text).wrap());
@@ -3457,7 +3468,7 @@ fn step_synth_help(ui: &mut egui::Ui) {
         "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
         "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
         "The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
-        "Resampling, source looping, and effects are reconstruction policies. Original-engine audio equivalence is not established.",
+        "Resampling, source looping, and effects are the application's own algorithms.",
     ] {
         ui.add(egui::Label::new(text).wrap());
     }

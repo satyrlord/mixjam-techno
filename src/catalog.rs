@@ -40,13 +40,16 @@ pub enum NativeAudio {
 }
 
 /// Factual sample identity recovered from the source catalogs and headers.
-/// This contains no original program or audio data.
+/// This contains no original program or audio data, and no original names:
+/// the sound's name is kept only as its [`label_key`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WaveMetadata {
     pub native_id: u32,
     pub code: String,
-    pub name: String,
+    /// The [`label_key`] of the original's name for the sound. It recognizes
+    /// a WAV named after the sound without the catalog holding the name.
+    pub label_key: String,
     pub group_name: String,
     pub bars: u32,
     pub source_bpm: f64,
@@ -70,6 +73,29 @@ impl WaveMetadata {
         }
         Some(digest)
     }
+
+    /// The name that the application shows for the sound when no file of
+    /// the user's names it, as in "D1 loop 731".
+    pub fn display_name(&self, product: Product) -> String {
+        let group = self.group_name.trim();
+        if group.is_empty() {
+            format!("{} sample {}", product.label(), self.native_id)
+        } else {
+            format!("{} {group} {}", product.label(), self.native_id)
+        }
+    }
+}
+
+/// A one-way key of a sound's name: the first 8 bytes of SHA-256 over the
+/// name's compact form (lower-case letters and digits, leading zeros of
+/// numbers dropped), in hex. Names that differ only in case, spacing,
+/// punctuation or zero padding share a key, as file names of one sound do.
+pub fn label_key(name: &str) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(crate::library::compact_name(name).as_bytes())[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// Identify decoded audio independently of file names: the first 16 bytes of
@@ -118,11 +144,52 @@ pub fn pcm_identity_hex(samples: &[i16]) -> String {
         .collect()
 }
 
-/// The catalogs of the application's `assets/catalog` folder. They are read
-/// once per process, on first use: a folder scan consults them many times.
+static CATALOGS: std::sync::atomic::AtomicPtr<Catalogs> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+static RELOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The catalogs of the application's `assets/catalog` folder, read on first
+/// use. A folder scan consults them many times, so this does not look at the
+/// folder again; [`refresh`] does.
 pub fn catalogs() -> &'static Catalogs {
-    static CATALOGS: std::sync::OnceLock<Catalogs> = std::sync::OnceLock::new();
-    CATALOGS.get_or_init(|| Catalogs::open(crate::runtime_data::find(FOLDER)))
+    use std::sync::atomic::Ordering;
+    let loaded = CATALOGS.load(Ordering::Acquire);
+    if !loaded.is_null() {
+        // SAFETY: a published set of catalogs is leaked and never freed.
+        return unsafe { &*loaded };
+    }
+    let _guard = RELOAD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let loaded = CATALOGS.load(Ordering::Acquire);
+    if !loaded.is_null() {
+        // SAFETY: as above.
+        return unsafe { &*loaded };
+    }
+    publish(Catalogs::open(crate::runtime_data::find(FOLDER)))
+}
+
+/// Read the catalog folder again if a catalog was added, changed or removed
+/// since it was read, so that a new catalog serves without a restart.
+/// Returns the problems of the new reading, or `None` when nothing changed.
+/// Identities already handed out stay valid: each reading is kept for the
+/// rest of the process (a few megabytes, and only when the folder changes).
+pub fn refresh() -> Option<&'static [(String, String)]> {
+    let current = catalogs();
+    let folder = crate::runtime_data::find(FOLDER);
+    if folder.as_deref() == current.folder() && !current.changed_on_disk() {
+        return None;
+    }
+    let _guard = RELOAD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    Some(publish(Catalogs::open(folder)).problems())
+}
+
+fn publish(catalogs: Catalogs) -> &'static Catalogs {
+    let leaked: &'static mut Catalogs = Box::leak(Box::new(catalogs));
+    CATALOGS.store(leaked, std::sync::atomic::Ordering::Release);
+    leaked
 }
 
 /// The identities of one product from every loaded release, by native ID.
@@ -133,10 +200,6 @@ pub fn identities(product: Product) -> &'static [WaveMetadata] {
 
 pub fn identity(product: Product, native_id: u32) -> Option<&'static WaveMetadata> {
     catalogs().identity(product, native_id)
-}
-
-pub(crate) fn aliases(product: Product, native_id: u32) -> &'static [WaveMetadata] {
-    catalogs().aliases(product, native_id)
 }
 
 pub fn has_native_catalog(product: Product, root: &Path) -> bool {
@@ -598,7 +661,7 @@ mod tests {
         let metadata = WaveMetadata {
             native_id: 1,
             code: String::new(),
-            name: String::new(),
+            label_key: label_key(""),
             group_name: String::new(),
             bars: 1,
             source_bpm: 140.0,
@@ -618,6 +681,31 @@ mod tests {
         .unwrap();
         assert_eq!(legacy.pcm_identity(), None);
         assert_eq!(pcm_identity(&[]), pcm_identity(&[7]));
+    }
+
+    #[test]
+    fn label_keys_follow_the_compact_name_and_hold_no_text() {
+        let key = label_key("Grp. 1 Vers1");
+        assert_eq!(key.len(), 16);
+        assert!(key.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_eq!(key, label_key("grp-01-vers-01"));
+        assert_ne!(key, label_key("Grp. 1 Vers2"));
+        let entry = WaveMetadata {
+            native_id: 731,
+            code: "bm\\asjo.\x70xd".into(),
+            label_key: key,
+            group_name: "loop".into(),
+            bars: 2,
+            source_bpm: 140.0,
+            frame_count: 151_200,
+            pcm_digest: None,
+        };
+        assert_eq!(entry.display_name(Product::D1), "D1 loop 731");
+        let unnamed = WaveMetadata {
+            group_name: " ".into(),
+            ..entry
+        };
+        assert_eq!(unnamed.display_name(Product::D1), "D1 sample 731");
     }
 
     #[test]
@@ -652,7 +740,7 @@ mod tests {
                 assert!(ids.insert(product.global_sample_id(entry.native_id).unwrap()));
                 assert!(entry.bars > 0 && entry.frame_count > 0);
                 assert!(entry.source_bpm.is_finite() && entry.source_bpm > 0.0);
-                assert!(!entry.name.is_empty() && !entry.code.is_empty());
+                assert!(entry.label_key.len() == 16 && !entry.code.is_empty());
             }
         }
     }

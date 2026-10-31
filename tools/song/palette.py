@@ -43,7 +43,6 @@ import ntpath
 import statistics
 import struct
 import sys
-import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -112,16 +111,20 @@ def catalog_object(pairs):
     return result
 
 
-def read_release(path):
-    """Read one format-2 catalog with the same identity checks as the application."""
-    file = json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=catalog_object)
-    if not isinstance(file, dict) or set(file) != {'schema', 'product', 'release', 'fingerprint', 'sources', 'samples'}:
-        raise ValueError('not a format-2 sample catalog')
+def product_slug(name):
     # The earlier product slugs, escaped as in src/products.rs.
     aliases = {'\x74echno2': 't2', '\x72ave': 't1', '\x64ance1': 'd1', '\x64ance2': 'd2', '\x64ance3': 'd3',
                '\x64ance4': 'd4', '\x68ouse': 'h1', '\x74echno3': 't3'}
-    product = aliases.get(file['product'], file['product'])
-    if type(file['schema']) is not int or file['schema'] != 2 or product not in PRODUCT_SLOTS:
+    return aliases.get(name, name)
+
+
+def read_release(path):
+    """Read one format-3 catalog with the same identity checks as the application."""
+    file = json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=catalog_object)
+    if not isinstance(file, dict) or set(file) != {'schema', 'product', 'release', 'fingerprint', 'sources', 'samples'}:
+        raise ValueError('not a format-3 sample catalog')
+    product = product_slug(file['product'])
+    if type(file['schema']) is not int or file['schema'] != 3 or product not in PRODUCT_SLOTS:
         raise ValueError('unsupported format or product')
     if not isinstance(file['release'], str):
         raise ValueError('invalid release name')
@@ -130,30 +133,25 @@ def read_release(path):
         raise ValueError('invalid release name')
     if not isinstance(file['sources'], list) or not file['sources']:
         raise ValueError('no source files')
-    sources, paths = [], set()
+    sources = []
     for source in file['sources']:
-        if (not isinstance(source, dict) or set(source) != {'path', 'bytes', 'sha256'}
-                or not isinstance(source['path'], str) or not isinstance(source['sha256'], str)
+        if (not isinstance(source, dict) or set(source) != {'bytes', 'sha256'}
+                or not isinstance(source['sha256'], str)
                 or type(source['bytes']) is not int or not 0 <= source['bytes'] < 2 ** 64):
             raise ValueError('invalid source file')
-        name, sha = source['path'], source['sha256']
-        normalized = name.lower()
-        if (not name or '\\' in name or ':' in name or any(unicodedata.category(c) == 'Cc' for c in name)
-                or any(not part or part in ('.', '..') for part in name.split('/')) or normalized in paths):
-            raise ValueError('invalid or duplicate source path')
+        sha = source['sha256']
         if len(sha) != 64 or any(c not in '0123456789abcdefABCDEF' for c in sha):
             raise ValueError('invalid source SHA-256')
-        paths.add(normalized)
-        sources.append((normalized, source['bytes'], sha.lower()))
+        sources.append((sha.lower(), source['bytes']))
     digest = hashlib.sha256()
-    for name, size, sha in sorted(sources):
-        digest.update(name.encode('utf-8') + b'\0' + struct.pack('<Q', size) + sha.encode('utf-8') + b'\n')
+    for sha, size in sorted(sources):
+        digest.update(sha.encode('utf-8') + struct.pack('<Q', size) + b'\n')
     if not isinstance(file['fingerprint'], str) or digest.hexdigest() != file['fingerprint'].lower():
         raise ValueError('source fingerprint differs')
     if not isinstance(file['samples'], list) or not file['samples']:
         raise ValueError('no sample identities')
     seen = set()
-    required = {'native_id', 'code', 'name', 'group_name', 'bars', 'source_bpm', 'frame_count'}
+    required = {'native_id', 'code', 'label_key', 'group_name', 'bars', 'source_bpm', 'frame_count'}
     for entry in file['samples']:
         if not isinstance(entry, dict) or not required <= set(entry) <= required | {'pcm_digest'}:
             raise ValueError('invalid sample identity')
@@ -164,13 +162,14 @@ def read_release(path):
                 or type(frames) is not int or not 0 < frames < 2 ** 32
                 or isinstance(bpm, bool) or not isinstance(bpm, (float, int)) or not math.isfinite(bpm) or bpm <= 0
                 or not isinstance(entry['code'], str) or not entry['code'].strip()
-                or not isinstance(entry['name'], str) or not entry['name'].strip()
+                or not isinstance(entry['label_key'], str) or len(entry['label_key']) != 16
+                or any(c not in '0123456789abcdef' for c in entry['label_key'])
                 or not isinstance(entry['group_name'], str)
                 or (pcm is not None and (not isinstance(pcm, str) or len(pcm) != 32
                                          or any(c not in '0123456789abcdefABCDEF' for c in pcm)))):
             raise ValueError(f'invalid identity {ident}')
         seen.add(ident)
-    return product, file['fingerprint'].lower(), file['samples']
+    return product, release, file['fingerprint'].lower(), file['samples']
 
 
 def same_catalog_sound(first, other):
@@ -181,6 +180,45 @@ def same_catalog_sound(first, other):
     return a.lower() == b.lower() if a is not None and b is not None else first['code'].lower() == other['code'].lower()
 
 
+def catalog_names():
+    """{(product, release, native id): name} from the private files that the catalog generator writes
+    (SAMPLE_CATALOG_NAMES, default local-data/catalog-names). Catalogs hold no names; without these
+    files a sound is named by its archive code."""
+    folder = Path(env.path('SAMPLE_CATALOG_NAMES', required=False) or env.ROOT / 'local-data' / 'catalog-names')
+    names = {}
+    for path in sorted(folder.glob('*.json'), key=lambda path: path.name) if folder.is_dir() else []:
+        try:
+            file = json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=catalog_object)
+            if (not isinstance(file, dict) or set(file) != {'product', 'release', 'names'}
+                    or not isinstance(file['product'], str) or not isinstance(file['release'], str)
+                    or not isinstance(file['names'], list)):
+                raise ValueError('invalid catalog name file')
+            product = product_slug(file['product'])
+            release = file['release'].strip()
+            if (product not in PRODUCT_SLOTS or not release or len(release) > 64
+                    or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in release)):
+                raise ValueError('invalid product or release')
+            pending = {}
+            for entry in file['names']:
+                if not isinstance(entry, list) or len(entry) != 2:
+                    raise ValueError('invalid sample name entry')
+                native_id, name = entry
+                if (type(native_id) is not int or not 0 <= native_id < PRODUCT_STRIDE
+                        or native_id in pending or not isinstance(name, str) or not name.strip()):
+                    raise ValueError('invalid or duplicate sample name')
+                pending[native_id] = name
+            for native_id, name in pending.items():
+                names.setdefault((product, release, native_id), name)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError) as error:
+            print(f'{path}: catalog names were not loaded: {error}', file=sys.stderr)
+    return names
+
+
+def code_name(code):
+    """A sound's archive code as a name: its file stem, as in DABSH015(L)."""
+    return ntpath.splitext(ntpath.basename(code.replace('/', '\\')))[0]
+
+
 def product_catalog():
     """{song sample id: (product, group, name)} from the product catalogs (SAMPLE_CATALOGS, default
     assets/catalog), for the products' own sounds that songs place by id; empty without them."""
@@ -189,13 +227,14 @@ def product_catalog():
         _catalog = {}
         folder = env.path('SAMPLE_CATALOGS', required=False) or env.ROOT / 'assets' / 'catalog'
         identities, releases = {}, set()
+        names = catalog_names()
         folder = Path(folder)
         # By name with case, as the application orders them: of two conflicting releases, the same one loads.
         for path in sorted(folder.iterdir(), key=lambda path: path.name) if folder.is_dir() else []:
             if not path.is_file() or path.suffix.lower() != '.json' or path.name.lower() == 'source-tempos.json':
                 continue
             try:
-                product, fingerprint, entries = read_release(path)
+                product, release, fingerprint, entries = read_release(path)
                 if (product, fingerprint) in releases:
                     raise ValueError('duplicate release')
                 slot = PRODUCT_SLOTS[product]
@@ -206,7 +245,8 @@ def product_catalog():
                     sample_id = slot * PRODUCT_STRIDE + entry['native_id']
                     if sample_id not in identities:
                         identities[sample_id] = entry
-                        _catalog[sample_id] = (product, entry['group_name'], entry['name'])
+                        name = names.get((product, release, entry['native_id'])) or code_name(entry['code'])
+                        _catalog[sample_id] = (product, entry['group_name'], name)
                     elif identities[sample_id].get('pcm_digest') is None and entry.get('pcm_digest') is not None:
                         identities[sample_id] = dict(identities[sample_id], pcm_digest=entry['pcm_digest'])
                 releases.add((product, fingerprint))

@@ -2,7 +2,7 @@
 
 python -I tools/song/barnotes.py [--song-bpm 140] PATH BPM CENTS [PATH BPM CENTS ...]
 
-BPM is the sound's own tempo and CENTS the clip pitch. Each bar (at the sound's own tempo) gets its
+BPM is the sound's own tempo and CENTS the clip pitch. Each bar as played in the song gets its
 strongest pitch classes from spectral peaks, after the total shift (varispeed to the song tempo,
 default 140, plus the clip's cents), and its lowest strong note (the root candidate, 40-400 Hz).
 Use it for a WAV without a MIDI file.
@@ -15,12 +15,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harmony import NOTES  # noqa: E402
-from mixjam import read_wav  # noqa: E402
+from mixjam import playback_bpm, read_wav  # noqa: E402
 
 
 def shift_semitones(source_bpm, song_bpm, cents):
-    """The pitch shift in semitones of a sound varispeeded from source_bpm to song_bpm, plus cents."""
-    return (cents + 1200 * math.log2(song_bpm / source_bpm)) / 100
+    """The pitch shift in semitones of a sound varispeeded from source_bpm to song_bpm, plus cents.
+    The engine reads source_bpm in the octave nearest song_bpm, so the shift is under half an octave."""
+    return (cents + 1200 * math.log2(song_bpm / playback_bpm(source_bpm, song_bpm))) / 100
 
 
 def bar_notes(segment, rate, shift):
@@ -56,7 +57,7 @@ def main():
         shift = shift_semitones(bpm, song_bpm, cents)
         rate, data = read_wav(path)
         mono = data.mean(axis=1)
-        bar = int(rate * 240 / bpm)
+        bar = int(rate * 240 / playback_bpm(bpm, song_bpm))
         print(f'{Path(path).name}  (shift {shift:+.2f} st)')
         for i in range(len(mono) // bar):
             top, root = bar_notes(mono[i * bar:(i + 1) * bar], rate, shift)

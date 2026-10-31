@@ -19,6 +19,7 @@ A tool that needs a missing key stops and names the key.
 | `SAMPLE_INDEX` | `samples.py`; optional, default `local-data/samples/index.tsv` |
 | `SAMPLE_TAGS`, `SAMPLE_VERDICTS`, `SAMPLE_OWNER_VERDICTS` | `sampletags.py`, `verdicts.py` and `palette.py`; optional, default `tags.tsv`, `verdicts.tsv` and `owner-verdicts.tsv` beside the index |
 | `SAMPLE_CATALOGS` | `palette.py` (the product sounds that songs place by id); optional, default `assets/catalog` |
+| `SAMPLE_CATALOG_NAMES` | `palette.py` (the names of those sounds, which the catalogs do not hold); optional, default `local-data/catalog-names`, which the catalog generator writes |
 | `REFERENCE_ALBUM_FOLDER` | `master.py --album` |
 | `ARTIST_PROFILE` | the song-review skill; `reference.json` beside it is the default reference profile |
 | `REFERENCE_PROFILE` | `master.py` and `measure.py` (targets and reference columns); optional |
@@ -44,7 +45,7 @@ A tool that needs a missing key stops and names the key.
 | `midinotes.py` | `midinotes.py SEMITONES MIDI...` | Notes per bar of MIDI loops. |
 | `midichords.py` | `midichords.py [--to KEY] FOLDER...` | Chord root per bar of MIDI loops, moved to the song's key. |
 | `fit.py` | `fit.py [--key KEY] --progression "Am F Am G" ... FOLDER...` | Which MIDI loops fit which progressions. |
-| `barnotes.py` | `barnotes.py [--song-bpm N] WAV BPM CENTS ...` | Notes per bar of a WAV after varispeed and clip pitch. |
+| `barnotes.py` | `barnotes.py [--song-bpm N] WAV BPM CENTS ...` | Notes per bar heard at the song tempo, including tempo octave selection, varispeed, and clip pitch. |
 
 `env.py` reads `.env.local`; `harmony.py` holds keys, scales, and chords.
 
@@ -56,8 +57,11 @@ rows with current measurements, old edge measures are updated without repeating
 the other measurements, and a failed edge read is retried on the next run.
 The palette reader checks each verdict against the current file and analysis.
 Palette files made from songs retain pathless native
-samples by ID. The palette reader uses format-2 release catalogs and reports
-invalid or conflicting files.
+samples by ID. The palette reader uses format-3 release catalogs and reports
+invalid or conflicting files. Catalogs hold no sound names: the reader takes
+them from valid private name files for the accepted product and release.
+Invalid name files are rejected in full. Without a matching name, the reader
+identifies a sound by its archive code.
 
 Gain fitting stops before changing the song if the required master gain is
 outside the song format's range. Adjust the lane gains before trying again.

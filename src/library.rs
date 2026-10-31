@@ -568,13 +568,16 @@ impl Library {
         progress: Option<&ScanProgress>,
         cache: Option<&mut ScanCache>,
     ) -> Result<Self, String> {
+        // One reading of the catalogs serves the whole scan.
+        let catalogs = crate::catalog::catalogs();
         Self::open_wav_folders_identified(
             roots,
             source_bpm,
             progress,
             cache,
-            crate::catalog::identities,
-            crate::catalog::aliases,
+            |product| catalogs.identities(product),
+            |product, id| catalogs.aliases(product, id),
+            crate::source_tempo::SourceTempos::for_catalogs(catalogs),
         )
     }
 
@@ -587,6 +590,7 @@ impl Library {
         mut cache: Option<&mut ScanCache>,
         metadata: impl Fn(Product) -> &'m [crate::catalog::WaveMetadata],
         aliases: impl Fn(Product, u32) -> &'m [crate::catalog::WaveMetadata] + Copy,
+        evidence: &crate::source_tempo::SourceTempos,
     ) -> Result<Self, String> {
         check_library_folders(roots)?;
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
@@ -622,7 +626,7 @@ impl Library {
         for listing in listings {
             let root = listing.root.clone();
             let probes = probes.by_ref().take(listing.paths.len()).collect();
-            match library.import_listing(listing, probes, source_bpm) {
+            match library.import_listing(listing, probes, source_bpm, evidence) {
                 Ok((_, tempos, skipped)) => {
                     library.folder_tempos.extend(tempos);
                     library.skipped_waves.extend(skipped);
@@ -797,7 +801,10 @@ impl Library {
     ) -> Result<usize, String> {
         const DIGEST_SCORE: u8 = 3;
         let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+        // File names by compact form, for archive codes, and by label key,
+        // for the original's sound names, which catalogs keep only as keys.
         let mut by_name: HashMap<String, Vec<&Sample>> = HashMap::new();
+        let mut by_label: HashMap<String, Vec<&Sample>> = HashMap::new();
         let mut by_digest: HashMap<([u8; 16], u32), Vec<&Sample>> = HashMap::new();
         // Old scan caches can contain digests for other rates or tiny files.
         // Their samples cannot establish identity against native 44.1 kHz PCM.
@@ -815,7 +822,14 @@ impl Library {
                 continue;
             }
             let name = path.file_stem().unwrap_or_default().to_string_lossy();
-            by_name.entry(compact_name(&name)).or_default().push(sample);
+            let compact = compact_name(&name);
+            if !compact.is_empty() {
+                by_label
+                    .entry(crate::catalog::label_key(&name))
+                    .or_default()
+                    .push(sample);
+            }
+            by_name.entry(compact).or_default().push(sample);
             if let Some(digest) = comparable_digest(sample) {
                 by_digest
                     .entry((digest, sample.frame_count))
@@ -865,11 +879,12 @@ impl Library {
                 entry.pcm_identity().filter(|_| entry.frame_count > 2),
             ));
         }
+        // The sound keeps the name that the user's file gives it: catalogs
+        // hold no names.
         let adopt = |entry: &crate::catalog::WaveMetadata, candidate: &Sample, id: u32| {
             let mut sample = candidate.clone();
             sample.id = id;
             sample.code = entry.code.clone();
-            sample.name = entry.name.clone();
             sample.group_name = entry.group_name.clone();
             sample.bars = entry.bars;
             sample.source_bpm = entry.source_bpm;
@@ -916,11 +931,11 @@ impl Library {
                     .file_stem()
                     .unwrap_or_default()
                     .to_string_lossy();
-                for (name, score) in [
-                    (compact_name(&name_entry.name), 1),
-                    (compact_name(&code_name), 2),
+                for (files, score) in [
+                    (by_label.get(&name_entry.label_key), 1),
+                    (by_name.get(&compact_name(&code_name)), 2),
                 ] {
-                    for sample in by_name.get(&name).into_iter().flatten() {
+                    for sample in files.into_iter().flatten() {
                         let path = sample.wav_path.as_ref().unwrap();
                         if claimed.contains(path) {
                             continue;
@@ -1098,13 +1113,20 @@ impl Library {
         }
         let other = if !crate::catalog::has_native_catalog(product, &root) {
             let mut wav = Self::empty();
-            wav.import_wav_folder(&root, 140.0)?;
+            let catalogs = crate::catalog::catalogs();
+            wav.import_wav_folder_using(
+                &root,
+                140.0,
+                None,
+                None,
+                crate::source_tempo::SourceTempos::for_catalogs(catalogs),
+            )?;
             if wav.identify_wav_product(
                 product,
                 &root,
-                crate::catalog::identities(product),
+                catalogs.identities(product),
                 false,
-                |id| crate::catalog::aliases(product, id),
+                |id| catalogs.aliases(product, id),
             )? == 0
             {
                 return Err(format!(
@@ -1478,7 +1500,15 @@ impl Library {
             .and_then(|index| self.samples.get(*index))
     }
 
+    /// A sample's audio for playback and render, with a stray end hidden.
     pub fn read_pcm(&self, id: u32) -> Result<crate::audio::Pcm, String> {
+        let mut pcm = self.read_original_pcm(id)?;
+        crate::audio::hide_stray_end(&mut pcm);
+        Ok(pcm)
+    }
+
+    /// A sample's audio as its source holds it. Identity and digests read this.
+    pub fn read_original_pcm(&self, id: u32) -> Result<crate::audio::Pcm, String> {
         let sample = self
             .sample_by_id(id)
             .ok_or("The sample is not in the library.")?;
@@ -1607,7 +1637,24 @@ impl Library {
         root: &Path,
         source_bpm: f64,
         progress: Option<&ScanProgress>,
+        cache: Option<&mut ScanCache>,
+    ) -> Result<Vec<crate::engine::ImportedSample>, String> {
+        self.import_wav_folder_using(
+            root,
+            source_bpm,
+            progress,
+            cache,
+            crate::source_tempo::SourceTempos::for_catalogs(crate::catalog::catalogs()),
+        )
+    }
+
+    fn import_wav_folder_using(
+        &mut self,
+        root: &Path,
+        source_bpm: f64,
+        progress: Option<&ScanProgress>,
         mut cache: Option<&mut ScanCache>,
+        evidence: &crate::source_tempo::SourceTempos,
     ) -> Result<Vec<crate::engine::ImportedSample>, String> {
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
             return Err("The WAV folder needs a finite positive source tempo.".into());
@@ -1617,7 +1664,8 @@ impl Library {
             cache.forget_unlisted(std::slice::from_ref(&listing));
         }
         let probes = probe_all(&listing.paths, progress, cache)?;
-        let (imported, tempos, skipped) = self.import_listing(listing, probes, source_bpm)?;
+        let (imported, tempos, skipped) =
+            self.import_listing(listing, probes, source_bpm, evidence)?;
         self.folder_tempos = tempos;
         self.skipped_waves = skipped;
         Ok(imported)
@@ -1632,6 +1680,7 @@ impl Library {
         listing: WavListing,
         probes: Vec<Result<WavProbe, String>>,
         source_bpm: f64,
+        evidence: &crate::source_tempo::SourceTempos,
     ) -> Result<
         (
             Vec<crate::engine::ImportedSample>,
@@ -1751,7 +1800,6 @@ impl Library {
         }
         // Authenticated original audio resolves duration-octave ambiguity.
         // Apply this after the heuristic so sibling guesses cannot change it.
-        let evidence = crate::source_tempo::SourceTempos::shared();
         let mut folder_probes: BTreeMap<&Path, Vec<&WavProbe>> = BTreeMap::new();
         for (path, probe) in paths.iter().zip(&probes) {
             folder_probes
@@ -2691,7 +2739,7 @@ fn slug(name: &str) -> String {
     result
 }
 
-fn compact_name(name: &str) -> String {
+pub(crate) fn compact_name(name: &str) -> String {
     let mut result = String::new();
     let mut digits = String::new();
     fn finish(result: &mut String, digits: &mut String) {
@@ -2815,7 +2863,7 @@ mod tests {
         crate::catalog::WaveMetadata {
             native_id,
             code: format!("CODE{native_id}"),
-            name: name.into(),
+            label_key: crate::catalog::label_key(name),
             group_name: group.into(),
             bars: 1,
             source_bpm: 140.0,
@@ -2828,10 +2876,10 @@ mod tests {
         name: &str,
         entries: Vec<crate::catalog::WaveMetadata>,
     ) -> crate::catalog::CatalogFile {
+        // Each release's own source content gives it its own fingerprint.
         let sources = vec![crate::catalog::SourceFile {
-            path: format!("{name}.inf"),
             bytes: 1,
-            sha256: "ab".repeat(32),
+            sha256: crate::catalog::label_key(name).repeat(4),
         }];
         crate::catalog::CatalogFile {
             schema: crate::catalog::SCHEMA,
@@ -2844,13 +2892,114 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_scan_uses_one_catalog_snapshot_for_identity_and_tempo() {
+        let folder = Folder::new();
+        let catalogs_dir = folder.0.join("catalogs");
+        fs::create_dir(&catalogs_dir).unwrap();
+        let mut entries = Vec::new();
+        for index in 0..3 {
+            let audio = waveform(index + 10, 300);
+            for root in ["First", "Second"] {
+                folder.mono(&format!("{root}/sound-{index}.wav"), &audio);
+            }
+            let mut entry = identity(731 + index as u32, "Sound", "Loop", &audio);
+            entry.source_bpm = 90.0;
+            entries.push(entry);
+        }
+        let own = ["First", "Second"]
+            .map(|root| folder.mono(&format!("{root}/own.wav"), &waveform(99, 300)));
+        let path = catalogs_dir.join("d1.json");
+        fs::write(
+            &path,
+            serde_json::to_vec(&catalog_file("a", entries.clone())).unwrap(),
+        )
+        .unwrap();
+        let earlier = crate::catalog::Catalogs::open(Some(catalogs_dir.clone()));
+        // A replacement catalog is already available before the old scan
+        // imports its listings. Each scan must keep its own reading.
+        for entry in &mut entries {
+            entry.source_bpm = 180.0;
+        }
+        fs::write(
+            &path,
+            serde_json::to_vec(&catalog_file("b", entries)).unwrap(),
+        )
+        .unwrap();
+        let later = crate::catalog::Catalogs::open(Some(catalogs_dir));
+        let roots = [folder.0.join("First"), folder.0.join("Second")];
+        for (catalogs, expected) in [(&earlier, 90.0), (&later, 180.0)] {
+            let evidence = crate::source_tempo::SourceTempos::from_catalogs(catalogs);
+            let library = Library::open_wav_folders_identified(
+                &roots,
+                140.0,
+                None,
+                None,
+                |product| catalogs.identities(product),
+                |product, id| catalogs.aliases(product, id),
+                &evidence,
+            )
+            .unwrap();
+            for native_id in 731..734 {
+                let id = Product::D1.global_sample_id(native_id).unwrap();
+                assert_eq!(library.sample_by_id(id).unwrap().source_bpm, expected);
+            }
+            for path in &own {
+                let sample = library
+                    .samples
+                    .iter()
+                    .find(|sample| sample.wav_path.as_ref() == Some(path))
+                    .unwrap();
+                assert_eq!(sample.source_bpm, expected);
+            }
+            assert_eq!(library.folder_tempos.len(), 2);
+            assert!(
+                library
+                    .folder_tempos
+                    .iter()
+                    .all(|(_, tempo, _)| *tempo == expected)
+            );
+        }
+    }
+
+    #[test]
+    fn original_pcm_keeps_source_identity_when_playback_hides_a_stray_end() {
+        let folder = Folder::new();
+        let mut audio = vec![0; 600];
+        audio.extend([8192, 8192]);
+        let path = folder.mono("source.wav", &audio);
+        let stored = fs::read(&path).unwrap();
+        let mut library = Library::empty();
+        let imports = library.import_wav_folder(&folder.0, 140.0).unwrap();
+        let id = imports[0].id;
+        let original = library.read_original_pcm(id).unwrap();
+        let playback = library.read_pcm(id).unwrap();
+        let integer = |pcm: &crate::audio::Pcm| -> Vec<i16> {
+            pcm.samples
+                .iter()
+                .map(|sample| (sample * 32768.0).round() as i16)
+                .collect()
+        };
+        assert_eq!(integer(&original), audio);
+        assert_eq!(integer(&playback), vec![0; audio.len()]);
+        assert_eq!(
+            crate::catalog::pcm_identity(&integer(&original)),
+            crate::catalog::pcm_identity(&audio)
+        );
+        assert_ne!(
+            crate::catalog::pcm_identity(&integer(&playback)),
+            crate::catalog::pcm_identity(&audio)
+        );
+        assert_eq!(fs::read(path).unwrap(), stored);
+    }
+
+    #[test]
     fn compatible_release_aliases_identify_wavs_without_comparable_digests() {
         let folder = Folder::new();
         let original = waveform(1, 300);
         let first = identity(731, "First name", "Bass", &original);
         let mut second = first.clone();
         second.code = "SECOND-CODE".into();
-        second.name = "Second name".into();
+        second.label_key = crate::catalog::label_key("Second name");
         let catalogs_dir = folder.0.join("catalogs");
         fs::create_dir(&catalogs_dir).unwrap();
         for (name, entry) in [("a", first), ("b", second)] {
@@ -2870,6 +3019,7 @@ mod tests {
             None,
             |product| catalogs.identities(product),
             |product, id| catalogs.aliases(product, id),
+            &crate::source_tempo::SourceTempos::from_catalogs(&catalogs),
         )
         .unwrap();
         let id = Product::D1.global_sample_id(731).unwrap();
@@ -2905,6 +3055,7 @@ mod tests {
             None,
             |product| catalogs.identities(product),
             |product, id| catalogs.aliases(product, id),
+            &crate::source_tempo::SourceTempos::from_catalogs(&catalogs),
         )
         .unwrap();
         let id = Product::D1.global_sample_id(731).unwrap();
@@ -3046,6 +3197,16 @@ mod tests {
         let named = folder.mono("Bass/hihat-hard.wav", &other);
         let mut library = Library::empty();
         library.import_wav_folder(&folder.0, 140.0).unwrap();
+        let own_name = |path: &PathBuf| {
+            library
+                .samples
+                .iter()
+                .find(|sample| sample.wav_path.as_ref() == Some(path))
+                .unwrap()
+                .name
+                .clone()
+        };
+        let first_name = own_name(&first);
         let metadata = [
             identity(1, "hihat hard", "Bass", &original),
             identity(2, "something else", "Loop", &original),
@@ -3066,7 +3227,8 @@ mod tests {
             library.sample_by_id(2).unwrap().wav_path.as_ref(),
             Some(&second)
         );
-        assert_eq!(library.sample_by_id(1).unwrap().name, "hihat hard");
+        // Catalogs hold no names: the sound keeps its own file's name.
+        assert_eq!(library.sample_by_id(1).unwrap().name, first_name);
         assert_eq!(library.verified_count(), 2);
         // The name, category, and duration agree, but the audio does not.
         assert!(library.sample_by_id(3).is_none());
@@ -3490,6 +3652,7 @@ mod tests {
                 None,
                 catalogs,
                 |_, _| &[],
+                &crate::source_tempo::SourceTempos::default(),
             )
             .unwrap();
             let path = |product: Product, native_id: u32| {
@@ -4121,7 +4284,7 @@ mod tests {
         let metadata = crate::catalog::WaveMetadata {
             native_id: 731,
             code: "native-code".into(),
-            name: "soft dust 6".into(),
+            label_key: crate::catalog::label_key("soft dust 6"),
             group_name: "bass".into(),
             bars: 4,
             source_bpm: 180.0,
@@ -4168,7 +4331,7 @@ mod tests {
         let entry = |native_id: u32, name: &str, group: &str| crate::catalog::WaveMetadata {
             native_id,
             code: format!("code-{native_id}"),
-            name: name.into(),
+            label_key: crate::catalog::label_key(name),
             group_name: group.into(),
             bars: 1,
             source_bpm: 180.0,
@@ -4224,7 +4387,7 @@ mod tests {
         let mut metadata = crate::catalog::WaveMetadata {
             native_id: 13776,
             code: "T1DC501".into(),
-            name: "hihat hard".into(),
+            label_key: crate::catalog::label_key("hihat hard"),
             group_name: "Bass".into(),
             bars: 1,
             source_bpm: 140.0,
@@ -4383,7 +4546,7 @@ mod tests {
             let mut decoded = 0;
             for sample in &library.samples {
                 let context = format!("{} / {} / {}", product.label(), sample.id, sample.name);
-                let pcm = match library.read_pcm(sample.id) {
+                let pcm = match library.read_original_pcm(sample.id) {
                     Ok(pcm) => pcm,
                     Err(error) => {
                         failures.push(format!("{context}: {error}"));

@@ -15,6 +15,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'song'))
 import env  # noqa: E402
+import barnotes  # noqa: E402
 import harmony  # noqa: E402
 import mixjam  # noqa: E402
 import master  # noqa: E402
@@ -106,12 +107,48 @@ class SongTests(unittest.TestCase):
             song.eq(1, on=enabled, midDb=-3)
             self.assertIs(song.document()['lanes'][0]['eq']['on'], enabled)
 
+    def test_sounds_play_in_the_octave_nearest_the_song_tempo(self):
+        for source, song, expected in ((90, 180, 180), (90, 160, 180), (90, 120, 90), (80, 160, 160),
+                                       (45, 180, 180), (180, 120, 90), (180, 130, 180), (140, 120, 140)):
+            with self.subTest(source=source, song=song):
+                self.assertEqual(mixjam.playback_bpm(source, song), expected)
+        rate = 44100
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'half-time.wav'
+            mixjam.write_wav(path, rate, np.zeros((rate * 240 // 90, 2)))  # one bar at 90 BPM
+            song = mixjam.Song('half-time', bpm=180)
+            song.tempo(path, 90)
+            self.assertAlmostEqual(song.sound(path).bars, 2.0)
+            self.assertEqual([p['durationTicks'] for p in song.loop(1, path, 1, 4)], [512, 512])
+
     def test_ticks_count_bars_and_beats_from_one(self):
         self.assertEqual(mixjam.tick(1), 0)
         self.assertEqual(mixjam.tick(2), 256)
         self.assertEqual(mixjam.tick(1, 2), 64)
         self.assertEqual(mixjam.tick(3, 1.5), 544)
         self.assertEqual(mixjam.tick(1.5), 128)
+
+    def test_bar_notes_follow_the_bars_played_at_the_song_tempo(self):
+        rate = 12000
+        frames = rate * 240 // 90
+        first = np.sin(2 * np.pi * 220 * np.arange(frames // 2) / rate)
+        second = np.sin(2 * np.pi * 261.625565 * np.arange(frames // 2) / rate)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'half-time.wav'
+            mixjam.write_wav(path, rate, np.r_[first, second][:, None])
+            for source_bpm, song_bpm, count in ((90, 180, 2), (180, 120, 1)):
+                with self.subTest(source=source_bpm, song=song_bpm):
+                    output = io.StringIO()
+                    args = ['barnotes.py', '--song-bpm', str(song_bpm), str(path), str(source_bpm), '0']
+                    with mock.patch.object(sys, 'argv', args), mock.patch('sys.stdout', output):
+                        barnotes.main()
+                    bars = [line for line in output.getvalue().splitlines() if line.startswith('  bar ')]
+                    self.assertEqual(len(bars), count)
+                    if source_bpm == 90:
+                        self.assertIn('root A ', bars[0])
+                        self.assertIn('notes A', bars[0])
+                        self.assertIn('root C ', bars[1])
+                        self.assertIn('notes C', bars[1])
 
     def test_ticks_follow_the_source_tempo(self):
         self.assertAlmostEqual(mixjam.ticks_of(44100 * 240 / 140, 44100, 140), 256)

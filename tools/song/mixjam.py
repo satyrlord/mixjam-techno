@@ -75,21 +75,35 @@ def read_wav(path):
     return rate, data.reshape(-1, channels)
 
 
-def ticks_of(frames, rate, source_bpm):
-    """The song ticks that `frames` of a sound at `source_bpm` fill (the engine varispeeds it)."""
-    return frames / rate * source_bpm / 240 * TICKS_PER_BAR
+def playback_bpm(source_bpm, song_bpm):
+    """The tempo a sound plays at in a song, as the engine reads it: its own tempo in the octave
+    nearest the song's, so a 90 BPM loop plays as a half-time 180 BPM loop in a 180 BPM song."""
+    if not (source_bpm > 0 and song_bpm > 0 and math.isfinite(source_bpm) and math.isfinite(song_bpm)):
+        return source_bpm
+    return source_bpm * 2.0 ** _round_half_away(math.log2(song_bpm / source_bpm))
+
+
+def _round_half_away(value):
+    """Round as Rust's f64::round does: halves away from zero."""
+    return math.floor(abs(value) + 0.5) * (1 if value >= 0 else -1)
+
+
+def ticks_of(frames, rate, bpm):
+    """The song ticks that `frames` of a sound playing at `bpm` fill (the engine varispeeds it)."""
+    return frames / rate * bpm / 240 * TICKS_PER_BAR
 
 
 class Sound:
     """A WAV with its length in ticks and whether it ends loud."""
 
-    def __init__(self, path, source_bpm):
+    def __init__(self, path, source_bpm, song_bpm=None):
         self.path = Path(path)
         rate, data = read_wav(self.path)
         self.rate = rate
         self.frames = len(data)
         self.source_bpm = source_bpm
-        self.ticks = ticks_of(self.frames, rate, source_bpm)
+        self.play_bpm = playback_bpm(source_bpm, song_bpm) if song_bpm else source_bpm
+        self.ticks = ticks_of(self.frames, rate, self.play_bpm)
         mono = data.mean(axis=1)
         whole = float(np.sqrt(np.mean(mono ** 2)) + 1e-12)
         tail = mono[-int(rate * 0.05):]
@@ -163,7 +177,7 @@ class Song:
             if not palettes.allowed(self.palette, path, self.palette_roots):
                 raise ValueError(f'{path} is outside the palette {self.palette_path}')
         if path not in self.sounds:
-            self.sounds[path] = Sound(path, source_bpm)
+            self.sounds[path] = Sound(path, source_bpm, self.bpm)
             sample_id = IMPORTED_ID_START + len(self.samples)
             self.samples[path] = dict(id=sample_id, name=Path(path).stem, groupName=self.title,
                                       path=path, sourceBpm=source_bpm,
@@ -297,7 +311,7 @@ class Song:
                fade_out_beats=None, pitch_cents=0, offset_frames=0):
         """Place a sound once, at its own length or cut to `bars`."""
         sound = self.sound(path)
-        full = sound.ticks - ticks_of(offset_frames, sound.rate, sound.source_bpm)
+        full = sound.ticks - ticks_of(offset_frames, sound.rate, sound.play_bpm)
         length = int(round(full)) if bars is None else int(round(bars * TICKS_PER_BAR))
         placement = self.clip(track, path, tick(bar, beat), length, offset_frames=offset_frames,
                               gain_db=gain_db, pitch_cents=pitch_cents)

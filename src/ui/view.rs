@@ -1080,6 +1080,9 @@ impl MixJamApp {
             clip,
             sample,
             self.timeline_bar_width,
+            self.session
+                .project()
+                .sample_playback_bpm(sample.id, sample.source_bpm),
         )?;
         Some((clip.id, handle))
     }
@@ -1168,7 +1171,12 @@ impl MixJamApp {
         match drag.handle {
             ClipHandle::Start => {
                 // The left edge can reveal the trimmed start of the sound.
-                let frames_per_tick = frames_per_tick(sample);
+                let frames_per_tick = frames_per_tick(
+                    sample,
+                    self.session
+                        .project()
+                        .sample_playback_bpm(sample.id, sample.source_bpm),
+                );
                 let revealable = if frames_per_tick > 0.0 {
                     (f64::from(clip.offset_frames) / frames_per_tick) as u32
                 } else {
@@ -1216,7 +1224,14 @@ impl MixJamApp {
                     .min(clip.length_ticks - clip.fades.fade_out.ticks);
             }
             ClipHandle::FadeOut => {
-                let sound_end = clip.start_tick + sound_ticks(clip, sample);
+                let sound_end = clip.start_tick
+                    + sound_ticks(
+                        clip,
+                        sample,
+                        self.session
+                            .project()
+                            .sample_playback_bpm(sample.id, sample.source_bpm),
+                    );
                 shaped.fades.fade_out.ticks = snap(f64::from(sound_end) - tick, fade_step)
                     .min(clip.length_ticks - clip.fades.fade_in.ticks);
             }
@@ -1465,13 +1480,20 @@ impl MixJamApp {
                                 self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
                             );
-                            draw_fades(&painter, clip_rect, clip, sample, bar_width);
+                            let bpm = sample.map_or(self.session.project().bpm, |sample| {
+                                self.session
+                                    .project()
+                                    .sample_playback_bpm(sample.id, sample.source_bpm)
+                            });
+                            draw_fades(&painter, clip_rect, clip, sample, bar_width, bpm);
                             let handles = shows_handles == Some(clip.id);
                             if handles || self.selected_clips.contains(&clip.id) {
                                 draw_gain_line(&painter, clip_rect, clip.gain);
                             }
                             if handles && let Some(sample) = sample {
-                                draw_fade_handles(&painter, clip_rect, clip, sample, bar_width);
+                                draw_fade_handles(
+                                    &painter, clip_rect, clip, sample, bar_width, bpm,
+                                );
                                 draw_gain_handle(&painter, clip_rect, visible, clip.gain);
                             }
                         }
@@ -3087,13 +3109,14 @@ fn draw_fades(
     clip: &Clip,
     sample: Option<&Sample>,
     bar_width: f32,
+    bpm: f64,
 ) {
     if clip.fades.is_none() {
         return;
     }
     let tick_width = bar_width / TICKS_PER_BAR as f32;
     let sound_end = sample.map_or(rect.right(), |sample| {
-        (rect.left() + sound_ticks(clip, sample) as f32 * tick_width).min(rect.right())
+        (rect.left() + sound_ticks(clip, sample, bpm) as f32 * tick_width).min(rect.right())
     });
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect));
     let fade_in = clip.fades.fade_in;
@@ -3143,18 +3166,18 @@ fn draw_fades(
     }
 }
 
-/// Source frames in one tick of a sound at its own tempo.
-fn frames_per_tick(sample: &Sample) -> f64 {
-    f64::from(sample.sample_rate) * 240.0 / sample.source_bpm / f64::from(TICKS_PER_BAR)
+/// Source frames in one tick at the project's effective source tempo.
+fn frames_per_tick(sample: &Sample, bpm: f64) -> f64 {
+    f64::from(sample.sample_rate) * 240.0 / bpm / f64::from(TICKS_PER_BAR)
 }
 
 /// The ticks from a clip's start to where its sound ends, at most its length.
-fn sound_ticks(clip: &Clip, sample: &Sample) -> u32 {
+fn sound_ticks(clip: &Clip, sample: &Sample, bpm: f64) -> u32 {
     if sample.sample_rate == 0 {
         return clip.length_ticks;
     }
     let frames = f64::from(sample.frame_count.saturating_sub(clip.offset_frames));
-    ((frames / frames_per_tick(sample)) as u32).min(clip.length_ticks)
+    ((frames / frames_per_tick(sample, bpm)) as u32).min(clip.length_ticks)
 }
 
 /// The height of a clip's gain line: unity in the middle, +6 dB at the top.
@@ -3164,9 +3187,10 @@ fn gain_y(rect: Rect, gain: f32) -> f32 {
 
 /// The centers of a clip's fade handles on its top edge: where the fade in
 /// ends and where the fade out starts. A handle without a fade sits in its corner.
-fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32) -> [Pos2; 2] {
+fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32, bpm: f64) -> [Pos2; 2] {
     let tick_width = bar_width / TICKS_PER_BAR as f32;
-    let sound_end = (rect.left() + sound_ticks(clip, sample) as f32 * tick_width).min(rect.right());
+    let sound_end =
+        (rect.left() + sound_ticks(clip, sample, bpm) as f32 * tick_width).min(rect.right());
     let inset = FADE_HANDLE / 2.0;
     let place = |x: f32| {
         Pos2::new(
@@ -3213,6 +3237,7 @@ fn handle_at(
     clip: &Clip,
     sample: &Sample,
     bar_width: f32,
+    bpm: f64,
 ) -> Option<ClipHandle> {
     // A narrow clip is only for moving.
     if rect.width() < 16.0 {
@@ -3229,7 +3254,7 @@ fn handle_at(
         return Some(ClipHandle::Gain);
     }
     if pos.y <= rect.top() + 12.0 {
-        let [fade_in, fade_out] = fade_handles(rect, clip, sample, bar_width);
+        let [fade_in, fade_out] = fade_handles(rect, clip, sample, bar_width, bpm);
         let (to_in, to_out) = ((pos.x - fade_in.x).abs(), (pos.x - fade_out.x).abs());
         if to_in.min(to_out) <= 7.0 {
             return Some(if to_in <= to_out {
@@ -3269,12 +3294,13 @@ fn draw_fade_handles(
     clip: &Clip,
     sample: &Sample,
     bar_width: f32,
+    bpm: f64,
 ) {
     if rect.width() < 16.0 {
         return;
     }
     // A light rim keeps the dark squares visible on fills and fade shading.
-    for center in fade_handles(rect, clip, sample, bar_width) {
+    for center in fade_handles(rect, clip, sample, bar_width, bpm) {
         let square = Rect::from_center_size(center, Vec2::splat(FADE_HANDLE));
         painter.rect_filled(square, 1.5, CANVAS);
         painter.rect_stroke(

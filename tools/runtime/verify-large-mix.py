@@ -4,8 +4,7 @@ This checks file-size boundaries, preserved audio, saved projects, and a short
 render with synthetic fixtures that need no original media. An optional real
 MIX corpus and WAV provider add per-song conversion records with a separate
 verdict. Artifacts (about 1 GB, including a 500 MB fixture) are retained in the
-artifact folder unless --clean is given. It does not establish original-engine
-parity or physical playback.
+artifact folder unless --clean is given. It does not check physical playback.
 """
 from pathlib import Path
 import argparse
@@ -165,7 +164,7 @@ def main():
                  'their verdict is separate. Render checks use one selected clip, moved to '
                  'zero, limited to 256 ticks.',
         'limitations': ['Host installations remain visible; no filesystem sandbox is used.',
-                        'No original-engine parity, full-song render, GUI, or physical audio check.',
+                        'No full-song render, GUI, or physical audio check.',
                         'An over-limit file is created by seeking; filesystem allocation is not measured.',
                         'Real fixture results depend on the supplied WAV provider; they do not '
                         'change the size-limit verdict.'],

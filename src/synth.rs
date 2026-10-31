@@ -1,5 +1,5 @@
 //! Manual-derived StepSynth sequencer state. Resampling, source looping,
-//! and DSP are explicit reconstruction policies, not original engine parity.
+//! and DSP are the application's own policies.
 use crate::{
     audio::Pcm,
     effects::{self, EffectsState},

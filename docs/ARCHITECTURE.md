@@ -67,6 +67,23 @@ The player reads it in blocks on the audio thread, without allocation or locks,
 and export writes it block by block, so neither holds a buffer of the whole
 song and song length is bounded only by the timeline. The mix itself is dry.
 
+`Project::sample_playback_bpm` chooses the nearest tempo octave for factual
+source tempos. MixJam v7 sources instead keep their saved-span timing: their
+tempo was calculated to fit the saved duration, not measured from a loop.
+The adapter's `MixJam` group together with its retained v7 source-controls
+notice identifies these imported sources, including saved projects. Missing
+sources retain the explicit `mixjam-span` timing policy; conflicts retain
+their source spans. Rendering, new placement, and clip handles share this rule.
+
+Playback, render, and the sample editors read sample audio through
+`Library::read_pcm`, which hides a stray end: many original product samples
+end on one or two frames that jump to a large value, and the last frames of a
+channel that are far above everything in the 10 ms before them (or twice as
+loud when the frames just before them are near silent) take the value before
+them, and so does a single last frame whose step is over four times any step
+in that window. Sample identity and digests read `Library::read_original_pcm`,
+which keeps the data as stored.
+
 `Player` plays through rodio on cpal's WASAPI shared-mode output. rodio pulls
 `PlaybackSource` one sample at a time inside the device's callback, about every
 10 ms, and the callback that reaches the end of a block renders the next one
@@ -391,7 +408,7 @@ playback; save uses the existing WAV workflow, registers the result in Wave
 at the source BPM, and selects it. Neither the panel nor the artwork performs
 file or audio operations. Missing sources and invalid ranges disable processing
 with explicit tooltip reasons; the footer shows range and duration or recovery
-guidance. This presentation does not establish original-product DSP parity.
+guidance.
 
 `src/ui/stretch.rs` owns Time Stretcher's content and action responses inside the
 shared shell. Source, tempo, processing, preview, and save feedback use shared
@@ -466,7 +483,7 @@ failure, and success update it. Reset restores `EffectsState::default`.
 Turning an optional section off discards its settings; enabling it uses that
 section's defaults. This presentation does not change the algorithms or the
 shared `effects_controls` form used by Step synth. It does not add a background
-processing job or establish original-product DSP parity.
+processing job.
 
 `src/ui/master.rs` owns the Mastering module of the lower panel, its
 preset selector, and its Bypass all switch: a horizontal pedalboard in
@@ -515,7 +532,7 @@ Pattern save/load uses `Session::save_pattern` and `Session::load_pattern`.
 It replaces only the four-bar draft; the source path and viewed bar remain.
 Clear bar clears only the viewed sixteen steps. The visible +12 through -12
 pitch rows do not narrow the existing -48 through +48 serialized-note range.
-This presentation does not add a worker or establish original-product DSP parity.
+This presentation does not add a worker.
 
 Missing audio is explicit project state. The renderer leaves those placements
 silent. The frontend reads the retained source metadata and sends a chosen WAV
@@ -563,20 +580,32 @@ build in `target/release` or `target/debug/deps`, or the installation folder.
 
 `src/catalog/releases.rs` reads the sample identity catalogs,
 `assets/catalog/*.json`. Each file describes one release of one original
-product: its product, a release name, the original source files with their
-sizes and hashes, a fingerprint of those files, and the identity of each
-sample. `catalog::catalogs()` reads the folder once per process. Releases of
+product (format 3): its product, a release name, the size and hash of each
+original source file, a fingerprint of those files, and the identity of each
+sample. A catalog holds no original names or paths: a sound's name is its
+`label_key`, a one-way digest that still matches a WAV named after the sound.
+`catalog::catalogs()` reads the folder on first use; `catalog::refresh()` reads
+it again when a JSON file was added, changed or removed. `Session` calls it
+before each sample folder scan. Before the window opens a song,
+`Session::refresh_catalogs` calls it, and a changed folder rescans the sample
+folders and opens the song after the scan. Each scan uses one catalog reading
+for both native identities and authenticated source tempos. A change during a
+scan restarts it with its current folders and fallback tempo. Cancellation or
+failure keeps the rescan pending. A deferred open protects edits made after it
+was queued, while accepting unsaved changes already approved for replacement.
+Each reading stays valid for the rest
+of the process, so identities already handed out never dangle. Releases of
 one product merge into one identity list when they agree on audio and timing
-for every native ID they share. The loader retains alternative names and the
-strongest available audio digest. A release that gives a shared ID different
+for every native ID they share. The loader retains alternative label keys and
+the strongest available audio digest. A release that gives a shared ID different
 audio, tempo, or bar count, an invalid file, or
 a second copy of a loaded release does not load and is listed in
 `Catalogs::problems`, which startup reports. `project_io::open_song` adds a
 source notice for each product whose catalogs lack some of a `.mix` song's
 native IDs, unless an original installation serves that product.
-The generated catalogs are not in the repository. Their distribution remains
-an owner decision; a build or installation without them cannot identify native
-WAVs from those catalogs and retains unresolved sources as placeholders.
+The repository carries the generated catalogs in `assets/catalog`. A build or
+installation without them cannot identify native WAVs from those catalogs and
+retains unresolved sources as placeholders.
 
 `src/album_review.rs` owns the Album Review: `Shelf` reads
 `assets/album-review/<id>.json`, sorted by id, and lists each file that does

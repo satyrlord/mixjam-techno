@@ -348,7 +348,7 @@ pub(super) fn native_placeholder(
     let bars = metadata.map_or(inferred_bars, |sample| sample.bars);
     let name = metadata.map_or_else(
         || format!("{} sample {native_id}", product.label()),
-        |sample| sample.name.clone(),
+        |sample| sample.display_name(product),
     );
     let mut missing = MissingSample::native(
         product,
@@ -616,7 +616,7 @@ mod tests {
                 &[crate::catalog::WaveMetadata {
                     native_id: 731,
                     code: "base.\x70xd".into(),
-                    name: "Sample".into(),
+                    label_key: crate::catalog::label_key("Sample"),
                     group_name: "Test".into(),
                     bars: 2,
                     source_bpm: 140.0,
@@ -820,7 +820,7 @@ mod tests {
         let sample = crate::catalog::WaveMetadata {
             native_id: u32::from(FACTORY_FIRST),
             code: "fixture.pxd".into(),
-            name: "Fixture".into(),
+            label_key: crate::catalog::label_key("Fixture"),
             group_name: "Bass".into(),
             bars: 2,
             source_bpm: 140.0,
@@ -843,7 +843,7 @@ mod tests {
         let missing = &project.missing_samples[0];
         assert!(!missing.length_inferred);
         assert_eq!(missing.nominal_ticks, sample.bars * TICKS_PER_BAR);
-        assert_eq!(missing.name, sample.name);
+        assert_eq!(missing.name, sample.display_name(Product::D1));
         assert_eq!(missing.metadata["code"], sample.code);
         assert_eq!(missing.metadata["category"], sample.group_name);
         assert_eq!(project.clips[0].length_ticks, sample.bars * TICKS_PER_BAR);

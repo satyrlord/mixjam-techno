@@ -723,6 +723,40 @@ impl Project {
     pub fn frames_per_tick(&self, sample_rate: u32) -> f64 {
         sample_rate as f64 * 240.0 / self.bpm / TICKS_PER_BAR as f64
     }
+
+    /// MixJam v7 stores an exact source span, represented by a derived tempo.
+    /// Its importer reserves the `MixJam` group and retains its source-controls
+    /// notice. Both survive older native saves; a group name alone is not proof.
+    /// Placeholders and conflict choices also retain an explicit span policy.
+    pub fn sample_uses_exact_tempo(&self, sample_id: u32) -> bool {
+        self.missing_sample(sample_id).is_some_and(|sample| {
+            sample
+                .metadata
+                .get("Playback timing policy")
+                .is_some_and(|policy| policy == "mixjam-span")
+        }) || self
+            .sample_conflicts
+            .iter()
+            .any(|conflict| conflict.source_spans.contains_key(&sample_id))
+            || (self
+                .source_notices
+                .iter()
+                .any(|notice| notice.starts_with("MixJam v7 source controls: "))
+                && self
+                    .imported_samples
+                    .iter()
+                    .any(|sample| sample.id == sample_id && sample.group_name == "MixJam"))
+    }
+
+    /// The source clock used by rendering, placement, and musical trim controls.
+    pub fn sample_playback_bpm(&self, sample_id: u32, source_bpm: f64) -> f64 {
+        if self.sample_uses_exact_tempo(sample_id) {
+            source_bpm
+        } else {
+            playback_bpm(source_bpm, self.bpm)
+        }
+    }
+
     /// The tracks, from 0, that the master pedals that run and the FX buses
     /// with an effect listen to, apart from the lanes' duckers, in that order
     /// and without repeats.
@@ -1008,6 +1042,17 @@ pub fn nearest_supported_bpm(source_bpm: f64) -> Result<f64, String> {
         }
     }
     Ok(SUPPORTED_BPMS[SUPPORTED_BPMS.len() - 1])
+}
+
+/// The tempo at which a sound plays in a song at `song_bpm`. A sound's tempo
+/// holds only up to octaves: a 90 BPM loop is a 180 BPM loop at half time.
+/// Playback reads it in the octave nearest the song tempo, so no sound is sped
+/// up or slowed down by more than half an octave.
+pub fn playback_bpm(source_bpm: f64, song_bpm: f64) -> f64 {
+    if !source_bpm.is_finite() || !song_bpm.is_finite() || source_bpm <= 0.0 || song_bpm <= 0.0 {
+        return source_bpm;
+    }
+    source_bpm * (song_bpm / source_bpm).log2().round().exp2()
 }
 
 /// Preserve valid imported tracks and clips, then apply the current project contract.
@@ -1588,6 +1633,68 @@ mod tests {
             ..Project::default()
         };
         assert!(normalize_import(project).is_err());
+    }
+
+    #[test]
+    fn sounds_play_in_the_octave_nearest_the_song_tempo() {
+        for (source, song, expected) in [
+            (90.0, 180.0, 180.0),
+            (90.0, 160.0, 180.0),
+            (90.0, 120.0, 90.0),
+            (80.0, 160.0, 160.0),
+            (45.0, 180.0, 180.0),
+            (180.0, 120.0, 90.0),
+            (180.0, 130.0, 180.0),
+            (140.0, 120.0, 140.0),
+            (140.0, 180.0, 140.0),
+            (360.0, 180.0, 180.0),
+        ] {
+            assert_eq!(playback_bpm(source, song), expected, "{source} in {song}");
+        }
+        assert!(playback_bpm(f64::NAN, 140.0).is_nan());
+        assert_eq!(playback_bpm(-1.0, 140.0), -1.0);
+    }
+
+    #[test]
+    fn exact_source_tempos_need_adapter_provenance_or_a_saved_span_policy() {
+        let source = ImportedSample {
+            id: 1_000_000,
+            name: "Loop".into(),
+            group_name: "MixJam".into(),
+            path: "loop.wav".into(),
+            source_bpm: 240.0,
+            source_sample_rate: Some(44_100),
+            origin: None,
+        };
+        let mut project = Project {
+            imported_samples: vec![source.clone()].into(),
+            ..Project::default()
+        };
+        assert_eq!(project.sample_playback_bpm(source.id, 240.0), 120.0);
+        project
+            .source_notices
+            .push("MixJam v7 source controls: {}".into());
+        assert_eq!(project.sample_playback_bpm(source.id, 240.0), 240.0);
+        project.imported_samples[0].group_name = "Wave".into();
+        assert_eq!(project.sample_playback_bpm(source.id, 240.0), 120.0);
+        project.source_notices.clear();
+        project.imported_samples.clear();
+        let mut missing = MissingSample::external(&source, 256, "Missing audio.".into());
+        missing
+            .metadata
+            .insert("Playback timing policy".into(), "mixjam-span".into());
+        project.missing_samples.push(missing);
+        assert_eq!(project.sample_playback_bpm(source.id, 240.0), 240.0);
+        project.missing_samples.clear();
+        project.sample_conflicts.push(SampleConflict {
+            reference: "loop.wav".into(),
+            sample_ids: vec![source.id],
+            candidates: vec!["one/loop.wav".into(), "two/loop.wav".into()],
+            selected: 0,
+            confirmed: false,
+            source_spans: BTreeMap::from([(source.id, 256)]),
+        });
+        assert_eq!(project.sample_playback_bpm(source.id, 240.0), 240.0);
     }
 
     #[test]

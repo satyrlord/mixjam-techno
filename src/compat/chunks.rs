@@ -869,7 +869,7 @@ fn stretched_copy(
         return Ok(None);
     }
     let target_bpm = song_bpm * f64::from(sample.bars) / f64::from(bars);
-    let pcm = library.read_pcm(sample.id)?;
+    let pcm = library.read_original_pcm(sample.id)?;
     let stretched = crate::sample_edit::time_stretch(&pcm, sample.source_bpm, target_bpm)?;
     let frames =
         u32::try_from(stretched.frames()).map_err(|_| "The stretched sound is too long.")?;
@@ -1045,7 +1045,7 @@ fn d2_source_wave<'a>(
         ));
     }
     let sample = matches[0];
-    let pcm = library.read_pcm(sample.id)?;
+    let pcm = library.read_original_pcm(sample.id)?;
     Ok(Wave {
         source_path: path.into(),
         frames: u32::try_from(pcm.frames()).map_err(|_| "The imported PXD is too long.")?,
@@ -1079,6 +1079,30 @@ fn conflicting_placement_metadata(
     };
     result.insert(key, value);
     result
+}
+
+/// The product whose catalog a native ID in a `product` song names. The
+/// song's own product comes first. Its loader also reads earlier catalogs:
+/// D3 the D2 IDs, D4 the D3 and D2 IDs (D4 songs save drum pads at D3 IDs
+/// under their D3 catalog names, tagged `[D3]`), and T2 the D2 kind-2
+/// catalog, the contiguous IDs 1..=1957. Do not search other products by ID;
+/// equal numbers can identify unrelated sounds.
+pub(super) fn native_source(
+    product: Product,
+    native_id: u32,
+    library: &Library,
+) -> Result<Product, String> {
+    if library
+        .sample_by_id(product.global_sample_id(native_id)?)
+        .is_some()
+    {
+        return Ok(product);
+    }
+    Ok(match (product, native_id) {
+        (Product::D3 | Product::D4, 1..=12999) | (Product::T2, 1..=1957) => Product::D2,
+        (Product::D4, 13000..=18299) => Product::D3,
+        _ => product,
+    })
 }
 
 pub(crate) fn build_project(
@@ -1215,9 +1239,6 @@ pub(crate) fn build_project(
     let mut resolved_waves: HashMap<String, Result<RetainedWave, String>> = HashMap::new();
     // Saved paths whose missing Time Stretcher copy was rebuilt, with its name.
     let mut stretched_names: HashMap<String, String> = HashMap::new();
-    // D3 keeps the earlier D2 catalog IDs. T2's original loader admits
-    // the D2 kind-2 catalog: the contiguous IDs 1..=1957. Do not search other
-    // products by ID; identical numbers can identify unrelated sounds.
     for event in events {
         let inferred_ticks = source_key(&event.reference)
             .and_then(|key| inferred_sources.get(&key).copied())
@@ -1229,17 +1250,11 @@ pub(crate) fn build_project(
                     Reference::Kit(id) => (u32::from(id), true),
                     _ => unreachable!(),
                 };
-                let current_id = product.global_sample_id(native_id)?;
-                let inherited = matches!(
-                    (product, native_id),
-                    (Product::D3, 1..=12999) | (Product::T2, 1..=1957)
-                );
-                let source_product =
-                    if kit || library.sample_by_id(current_id).is_none() && inherited {
-                        Product::D2
-                    } else {
-                        product
-                    };
+                let source_product = if kit {
+                    Product::D2
+                } else {
+                    native_source(product, native_id, library)?
+                };
                 let id = source_product.global_sample_id(native_id)?;
                 if let Some(sample) = library.sample_by_id(id) {
                     (
@@ -1266,7 +1281,7 @@ pub(crate) fn build_project(
                             native_id,
                             metadata.map_or_else(
                                 || format!("{} sample {native_id}", source_product.label()),
-                                |entry| entry.name.clone(),
+                                |entry| entry.display_name(source_product),
                             ),
                             bpm,
                             ticks,
@@ -1903,7 +1918,7 @@ mod tests {
                     &[crate::catalog::WaveMetadata {
                         native_id: 174,
                         code: "sample".into(),
-                        name: "Sample".into(),
+                        label_key: crate::catalog::label_key("Sample"),
                         group_name: "Test".into(),
                         bars: 2,
                         source_bpm: 140.0,

@@ -30,10 +30,9 @@
 /evidence/
 /samples/
 
-# Private research crate and locally generated sample catalogs
+# Private research crate
 /crates/*
 !/crates/legacy-format/
-/assets/catalog/
 
 # Generated audio and Python cache
 *.wav

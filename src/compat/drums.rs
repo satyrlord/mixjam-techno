@@ -385,7 +385,9 @@ pub(super) fn prepare_kit<'a>(
         if pad.native_id == 0 {
             return Err("An active drum pattern pad has no sample.".into());
         }
-        let id = product.global_sample_id(u32::from(pad.native_id))?;
+        let native_id = u32::from(pad.native_id);
+        let id = super::chunks::native_source(product, native_id, library)?
+            .global_sample_id(native_id)?;
         let pcm = library
             .read_pcm(id)
             .map_err(|error| format!("Cannot load drum pad {}: {error}", pad.name))?;
@@ -590,7 +592,7 @@ mod tests {
         let metadata = crate::catalog::WaveMetadata {
             native_id: 1518,
             code: "drum".into(),
-            name: "Drum".into(),
+            label_key: crate::catalog::label_key("Drum"),
             group_name: "Drum".into(),
             bars: 1,
             source_bpm: 140.0,
@@ -624,6 +626,104 @@ mod tests {
         assert!(prepare_kit(&kit, &library, Product::D2, [&missing]).is_err());
         assert!(rendered.samples[0] > 0.0);
         assert_eq!(rendered.samples[8], 0.0);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn gen3_pads_load_earlier_product_sounds_by_their_native_ids() {
+        let root = std::env::temp_dir().join(format!(
+            "mixjam-techno-inherited-pad-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("pad.wav");
+        let wave = legacy_format::wav::PcmWave {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![8192; 4],
+        }
+        .encode()
+        .unwrap();
+        std::fs::write(&path, wave).unwrap();
+        let library = |product: Product, native_id: u32| {
+            Library::fixture(vec![crate::library::Sample {
+                id: product.global_sample_id(native_id).unwrap(),
+                code: "pad".into(),
+                name: "Pad".into(),
+                bars: 1,
+                group_name: "Perc".into(),
+                offset: 0,
+                length: 0,
+                frame_count: 4,
+                sample_rate: 44100,
+                source_bpm: 140.0,
+                channels: 1,
+                wav_path: Some(path.clone()),
+                digest: None,
+            }])
+        };
+        let kit = |native_id: u16| Kit {
+            pads: (0..16)
+                .map(|_| Pad {
+                    native_id,
+                    name: "Pad".into(),
+                    pitch_semitones: 0,
+                    reverse: false,
+                    gain_native: 32767,
+                    routing_native: 0,
+                    raw_settings: [0; 8],
+                    pan_native: Some(128),
+                    source_paths: Vec::new(),
+                    opaque_native_settings: Vec::new(),
+                })
+                .collect(),
+            source_offset: 0,
+            source_end: 0,
+            opaque_native_settings: Vec::new(),
+            groove_effects: None,
+            header_end: None,
+            raw_header: Vec::new(),
+        };
+        let mut masks = vec![0; 16];
+        masks[0] = 1;
+        let hit = Pattern {
+            native_id: 7217,
+            masks,
+            group: "Start".into(),
+            variant: "1".into(),
+        };
+        // D4 saves a D3 pad at its D3 ID, named like `tom[D3]big 1`.
+        for (product, native_id, source) in [
+            (Product::D4, 16711, Product::D3),
+            (Product::D4, 5884, Product::D2),
+            (Product::D3, 6577, Product::D2),
+        ] {
+            let prepared = prepare_kit(
+                &kit(native_id),
+                &library(source, u32::from(native_id)),
+                product,
+                [&hit],
+            )
+            .unwrap();
+            assert!(render(&prepared, &hit, 140.0).unwrap().samples[0] > 0.0);
+        }
+        // An equal T2 ID is another sound, and the song's own IDs never fall back.
+        for (native_id, source) in [(16711, Product::T2), (19985, Product::D3)] {
+            let error = prepare_kit(
+                &kit(native_id),
+                &library(source, u32::from(native_id)),
+                Product::D4,
+                [&hit],
+            )
+            .err()
+            .unwrap();
+            assert!(error.starts_with("Cannot load drum pad Pad"), "{error}");
+        }
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(root).unwrap();
     }

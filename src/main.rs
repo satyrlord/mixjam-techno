@@ -284,9 +284,7 @@ fn run() -> Result<(), String> {
             if total == 0 {
                 return Err("No demo mixes were found.".into());
             }
-            println!(
-                "Parsed and validated {total} original demo mixes. Audio equivalence is not established."
-            );
+            println!("Parsed and validated {total} original demo mixes.");
             Ok(())
         }
         "convert" => {
@@ -471,7 +469,7 @@ mod tests {
                 &[mixjam_techno::catalog::WaveMetadata {
                     native_id: 174,
                     code: "sample".into(),
-                    name: "Sample".into(),
+                    label_key: mixjam_techno::catalog::label_key("Sample"),
                     group_name: "Wave".into(),
                     bars: 1,
                     source_bpm: 140.0,

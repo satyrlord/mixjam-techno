@@ -716,7 +716,7 @@ mod tests {
                 &[crate::catalog::WaveMetadata {
                     native_id: 174,
                     code: "sample".into(),
-                    name: "Sample".into(),
+                    label_key: crate::catalog::label_key("Sample"),
                     group_name: "Test".into(),
                     bars: 2,
                     source_bpm: 140.0,
@@ -781,7 +781,7 @@ mod tests {
                         &[crate::catalog::WaveMetadata {
                             native_id: 174,
                             code: "sample".into(),
-                            name: "Sample".into(),
+                            label_key: crate::catalog::label_key("Sample"),
                             group_name: "Test".into(),
                             bars: 2,
                             source_bpm: 140.0,
@@ -859,6 +859,19 @@ mod tests {
         .unwrap();
         let mut library = Library::empty();
         library.import_wav_folder(root, 180.0).unwrap();
+        // Catalogs hold no names: the identified sound keeps its file's name.
+        let own_name = library
+            .samples
+            .iter()
+            .find(|sample| {
+                sample
+                    .wav_path
+                    .as_ref()
+                    .is_some_and(|path| path.ends_with("r1la037.wav"))
+            })
+            .unwrap()
+            .name
+            .clone();
         library
             .register_wav_product(
                 Product::T1,
@@ -866,7 +879,7 @@ mod tests {
                 &[crate::catalog::WaveMetadata {
                     native_id: 1193,
                     code: "bn/r1la037.pxd".into(),
-                    name: "birdy 1".into(),
+                    label_key: crate::catalog::label_key("birdy 1"),
                     group_name: "loop".into(),
                     bars: 2,
                     source_bpm: 180.0,
@@ -892,7 +905,7 @@ mod tests {
         let project = load_bytes(&custom_song(&earlier_label(), &[stretched]), &library).unwrap();
         assert!(project.missing_samples.is_empty());
         let sample = &project.imported_samples[0];
-        assert_eq!(sample.name, "birdy 1 140 BPM");
+        assert_eq!(sample.name, format!("{own_name} 140 BPM"));
         assert_eq!(sample.source_bpm, 140.0);
         // Two bars at 140 BPM, at the original pitch.
         assert_eq!(

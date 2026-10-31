@@ -1,5 +1,6 @@
 """Checks for the sample index's edge measures, verdicts and palettes (tools/song)."""
 import json
+import io
 import hashlib
 import os
 import struct
@@ -310,16 +311,23 @@ class PaletteTests(unittest.TestCase):
             self.assertFalse(palette.allowed(chosen, 'E:\\lib\\Pads\\Pad 3.wav', roots))
             self.assertFalse(palette.allowed(chosen, 'E:\\lib\\Bass\\Bass 1.wav', roots))
 
-    def test_product_sounds_resolve_through_format_two_releases(self):
-        with tempfile.TemporaryDirectory() as folder:
+    @staticmethod
+    def catalog_release(name, product, samples):
+        """A format-3 catalog: sources by size and SHA-256 only, names as label keys."""
+        sha = hashlib.sha256(name.encode()).hexdigest()
+        fingerprint = hashlib.sha256(sha.encode() + struct.pack('<Q', 1) + b'\n').hexdigest()
+        return dict(schema=3, product=product, release=name, fingerprint=fingerprint,
+                    sources=[dict(bytes=1, sha256=sha)], samples=samples)
+
+    @staticmethod
+    def catalog_sample(sample_id, digest='11', code=None):
+        return dict(native_id=sample_id, code=code or f'pad{sample_id}.snd', label_key='0123456789abcdef',
+                    group_name='Layer', bars=1, source_bpm=140, frame_count=100, pcm_digest=digest * 16)
+
+    def test_product_sounds_resolve_through_format_three_releases(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as names:
             def release(name, sample_id):
-                sample = dict(native_id=sample_id, name=f'deep pad {sample_id}', code=f'pad{sample_id}',
-                              group_name='Layer', bars=1, source_bpm=140, frame_count=100,
-                              pcm_digest='11' * 16)
-                fingerprint = hashlib.sha256(f'{name}.inf'.encode() + b'\0' + struct.pack('<Q', 1)
-                                             + b'0' * 64 + b'\n').hexdigest()
-                return dict(schema=2, product='d4', release=name, fingerprint=fingerprint,
-                            sources=[dict(path=f'{name}.inf', bytes=1, sha256='0' * 64)], samples=[sample])
+                return self.catalog_release(name, 'd4', [self.catalog_sample(sample_id)])
             Path(folder, 'd4-cd.json').write_text(json.dumps(release('cd', 7)))
             Path(folder, 'd4-download.json').write_text(json.dumps(release('download', 8)))
             conflict = release('other', 7)
@@ -328,37 +336,75 @@ class PaletteTests(unittest.TestCase):
             Path(folder, 'd4-other.json').write_text(json.dumps(conflict))
             Path(folder, 'd4-bad.json').write_text(json.dumps(dict(release('bad', 10), fingerprint='wrong')))
             Path(folder, 'd4-malformed.json').write_text(json.dumps(dict(release('malformed', 11), release=123)))
-            invalid_source = release('source', 12)
-            invalid_source['sources'][0]['path'] = '../source.inf'
-            Path(folder, 'd4-source.json').write_text(json.dumps(invalid_source))
+            named = release('named', 12)
+            named['samples'][0]['name'] = 'deep pad 12'
+            Path(folder, 'd4-named.json').write_text(json.dumps(named))
             duplicated = json.dumps(release('duplicate', 13)).replace('"product": "d4"',
                                                                         '"product": "d4", "product": "d4"')
             Path(folder, 'd4-duplicate.json').write_text(duplicated)
-            with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder}), mock.patch.object(palette, '_catalog', None):
+            old = release('old', 14)
+            old['schema'] = 2
+            Path(folder, 'd4-old.json').write_text(json.dumps(old))
+            # Names live in the generator's private files, not in the catalogs.
+            Path(names, 'd4-cd.json').write_text(json.dumps(dict(product='d4', release='cd',
+                                                                 names=[[7, 'deep pad 7']])))
+            with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder, 'SAMPLE_CATALOG_NAMES': names}), \
+                    mock.patch.object(palette, '_catalog', None):
                 catalog = palette.product_catalog()
                 self.assertEqual(catalog[5 * 100_000 + 7], ('d4', 'Layer', 'deep pad 7'))
-                self.assertEqual(catalog[5 * 100_000 + 8], ('d4', 'Layer', 'deep pad 8'))
-                self.assertNotIn(5 * 100_000 + 9, catalog)
-                self.assertNotIn(5 * 100_000 + 10, catalog)
-                self.assertNotIn(5 * 100_000 + 11, catalog)
-                self.assertNotIn(5 * 100_000 + 12, catalog)
-                self.assertNotIn(5 * 100_000 + 13, catalog)
+                self.assertEqual(catalog[5 * 100_000 + 8], ('d4', 'Layer', 'pad8'))
+                for missing in (9, 10, 11, 12, 13, 14):
+                    self.assertNotIn(5 * 100_000 + missing, catalog)
 
     def test_conflicting_releases_load_in_the_applications_file_order(self):
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as names:
             def release(name, product, digest):
-                sample = dict(native_id=7, name=f'{name} pad', code='pad7', group_name='Layer', bars=1,
-                              source_bpm=140, frame_count=100, pcm_digest=digest * 16)
-                fingerprint = hashlib.sha256(f'{name}.inf'.encode() + b'\0' + struct.pack('<Q', 1)
-                                             + b'0' * 64 + b'\n').hexdigest()
-                return dict(schema=2, product=product, release=name, fingerprint=fingerprint,
-                            sources=[dict(path=f'{name}.inf', bytes=1, sha256='0' * 64)], samples=[sample])
+                return self.catalog_release(name, product, [self.catalog_sample(7, digest, f'kit\\{name}7.snd')])
             # The application sorts file names with case, so D4-b.json loads before d4-a.json. The earlier
             # product slug of D4 also names the product.
             Path(folder, 'd4-a.json').write_text(json.dumps(release('lower', 'd4', '11')))
             Path(folder, 'D4-b.json').write_text(json.dumps(release('upper', '\x64ance4', '22')))
-            with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder}), mock.patch.object(palette, '_catalog', None):
-                self.assertEqual(palette.product_catalog()[5 * 100_000 + 7], ('d4', 'Layer', 'upper pad'))
+            with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder, 'SAMPLE_CATALOG_NAMES': names}), \
+                    mock.patch.object(palette, '_catalog', None):
+                self.assertEqual(palette.product_catalog()[5 * 100_000 + 7], ('d4', 'Layer', 'upper7'))
+
+    def test_product_catalog_names_come_from_the_accepted_release(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as names:
+            current = self.catalog_release('current', 'd4', [self.catalog_sample(7)])
+            rejected = self.catalog_release('rejected', 'd4', [self.catalog_sample(7, digest='22')])
+            Path(folder, 'd4-current.json').write_text(json.dumps(current))
+            Path(folder, 'd4-rejected.json').write_text(json.dumps(rejected))
+            # An absent or rejected release's names must not name an accepted release's sounds.
+            for release in ('absent', 'rejected'):
+                Path(names, f'0-{release}.json').write_text(json.dumps(dict(
+                    product='d4', release=release, names=[[7, f'Wrong {release} sound']])))
+            with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder, 'SAMPLE_CATALOG_NAMES': names}):
+                with mock.patch.object(palette, '_catalog', None):
+                    self.assertEqual(palette.product_catalog()[500007], ('d4', 'Layer', 'pad7'))
+                Path(names, 'd4-current.json').write_text(json.dumps(dict(
+                    product='d4', release='current', names=[[7, 'Correct sound']])))
+                with mock.patch.object(palette, '_catalog', None):
+                    self.assertEqual(palette.product_catalog()[500007], ('d4', 'Layer', 'Correct sound'))
+
+    def test_invalid_catalog_name_files_do_not_partially_load_or_break_song_reports(self):
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as names:
+            catalog = self.catalog_release('current', 'd4', [self.catalog_sample(7), self.catalog_sample(8)])
+            Path(folder, 'd4-current.json').write_text(json.dumps(catalog))
+            song = Path(folder, 'song.mixjam')
+            song.write_text(json.dumps(dict(samples=[], lanes=[dict(placements=[dict(sampleId=500007)])])))
+            bad_entries = ([[7, 42]], [[7, '']], [[True, 'wrong']], [[7, 'wrong'], [8, 42]],
+                           [[7, 'first'], [7, 'duplicate']], [[7, 'wrong'], [8]])
+            for entries in bad_entries:
+                with self.subTest(entries=entries):
+                    Path(names, 'd4-current.json').write_text(json.dumps(dict(
+                        product='d4', release='current', names=entries)))
+                    errors = io.StringIO()
+                    with mock.patch.dict(os.environ, {'SAMPLE_CATALOGS': folder, 'SAMPLE_CATALOG_NAMES': names}), \
+                            mock.patch.object(palette, '_catalog', None), \
+                            mock.patch.object(palette, 'roots', return_value=[]), mock.patch('sys.stderr', errors):
+                        placed = palette.placed_samples(song)
+                    self.assertEqual(placed[0]['name'], 'pad7')
+                    self.assertIn('catalog names were not loaded', errors.getvalue())
 
     def test_make_and_check_round_trip_a_pathless_native_sound(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -689,6 +689,57 @@ mod tests {
     }
 
     #[test]
+    fn v7_exact_source_spans_survive_octave_playback_and_save_reopen() {
+        let root = std::env::temp_dir().join(format!(
+            "mixjam-exact-span-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let wave = root.join("kick.wav");
+        crate::audio::Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: vec![0.25; 44_100],
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut library = Library::empty();
+        library
+            .import_wav_with_tempo(&wave, None, "Drum", 140.0)
+            .unwrap();
+        let mut document = fixture();
+        document["song"]["bpm"] = json!(140);
+        document["lanes"][0]["placements"] = json!([{
+            "id":"a", "sampleRef":"kick.wav", "sampleName":"Kick",
+            "nativeBPM":140, "startTick":0, "durationTicks":32,
+            "durationSeconds":1, "slot":null
+        }]);
+        let input = root.join("original.mixjam");
+        fs::write(&input, serde_json::to_vec(&document).unwrap()).unwrap();
+        let (project, ready) = crate::project_io::open(&input, &library).unwrap();
+        assert_eq!(project.imported_samples[0].source_bpm, 240.0);
+        let rendered = crate::audio::render_project(&project, &ready).unwrap();
+        assert_eq!(rendered.frames(), 75_600);
+        assert!(
+            rendered.samples.iter().all(|sample| *sample > 0.0),
+            "The one-second source must fill its saved one-bar span."
+        );
+        let saved = root.join("saved.mixjam");
+        crate::project_io::save(&project, &saved).unwrap();
+        let (reopened, ready) = crate::project_io::open(&saved, &Library::empty()).unwrap();
+        let rerendered = crate::audio::render_project(&reopened, &ready).unwrap();
+        assert_eq!(rerendered.samples, rendered.samples);
+        for file in [saved, input, wave] {
+            fs::remove_file(file).unwrap();
+        }
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn v7_compressor_attack_accepts_exact_decimal_endpoints() {
         for attack in [0.1_f64, 30.0] {
             let mut value = fixture();

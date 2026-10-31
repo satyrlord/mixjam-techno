@@ -1,7 +1,9 @@
 //! Sample identity catalogs: runtime data files in the application's
 //! `assets/catalog` folder, one file per release of an original product. A
-//! file names its product and release, lists the original files it was
-//! generated from, and gives the identity of every sample. Nothing here is
+//! file names its product and release, lists the size and SHA-256 of each
+//! original file it was generated from, and gives the identity of every
+//! sample. A catalog holds numbers, digests, archive codes and generic
+//! categories only: no original names, file paths or audio. Nothing here is
 //! compiled into the executable.
 use super::WaveMetadata;
 use crate::products::Product;
@@ -10,6 +12,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 /// The catalog folder under the application's `assets`.
@@ -17,15 +20,13 @@ pub const FOLDER: &str = "catalog";
 /// The file of extra source tempos in the catalog folder. It is not a catalog.
 pub const SOURCE_TEMPOS: &str = "source-tempos.json";
 /// The catalog file format that this application reads and writes.
-pub const SCHEMA: u32 = 2;
+pub const SCHEMA: u32 = 3;
 const RELEASE_NAME_LIMIT: usize = 64;
 
-/// One original file that a catalog was generated from.
+/// One original file that a catalog was generated from, by size and content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceFile {
-    /// The path relative to the product's root, with forward slashes.
-    pub path: String,
     pub bytes: u64,
     pub sha256: String,
 }
@@ -44,30 +45,41 @@ pub struct CatalogFile {
     pub samples: Vec<WaveMetadata>,
 }
 
-/// Identify a release by its original files: SHA-256 over each file's path
-/// (in lower case), size and SHA-256, in path order. The same files give the
+/// Identify a release by its original files: SHA-256 over each file's
+/// SHA-256 (in lower case) and size, in that order. The same files give the
 /// same fingerprint, whatever their order in the catalog.
 pub fn fingerprint(sources: &[SourceFile]) -> String {
     let mut files: Vec<_> = sources
         .iter()
-        .map(|file| {
-            (
-                file.path.to_lowercase(),
-                file.bytes,
-                file.sha256.to_ascii_lowercase(),
-            )
-        })
+        .map(|file| (file.sha256.to_ascii_lowercase(), file.bytes))
         .collect();
     files.sort();
     let mut digest = Sha256::new();
-    for (path, bytes, sha256) in files {
-        digest.update(path.as_bytes());
-        digest.update([0]);
-        digest.update(bytes.to_le_bytes());
+    for (sha256, bytes) in files {
         digest.update(sha256.as_bytes());
+        digest.update(bytes.to_le_bytes());
         digest.update(b"\n");
     }
     format!("{:x}", digest.finalize())
+}
+
+/// The catalog folder's JSON files as last seen: name, size and time.
+type Stamp = Vec<(String, u64, Option<SystemTime>)>;
+
+fn stamp(folder: &Path) -> Stamp {
+    let mut files: Stamp = std::fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let metadata = entry.metadata().ok()?;
+            (metadata.is_file() && name.to_ascii_lowercase().ends_with(".json"))
+                .then(|| (name, metadata.len(), metadata.modified().ok()))
+        })
+        .collect();
+    files.sort();
+    files
 }
 
 /// A loaded catalog file.
@@ -98,6 +110,7 @@ impl Release {
 #[derive(Debug, Default)]
 pub struct Catalogs {
     folder: Option<PathBuf>,
+    stamp: Stamp,
     releases: Vec<Release>,
     identities: [Vec<WaveMetadata>; Product::ALL.len()],
     /// Alternative names from compatible releases, keyed by native ID.
@@ -143,6 +156,7 @@ impl Catalogs {
         let Some(folder) = self.folder.clone() else {
             return;
         };
+        self.stamp = stamp(&folder);
         let listing = match std::fs::read_dir(&folder) {
             Ok(listing) => listing,
             Err(error) => {
@@ -225,7 +239,7 @@ impl Catalogs {
                         known.pcm_digest.clone_from(&entry.pcm_digest);
                     }
                     if !known.code.eq_ignore_ascii_case(&entry.code)
-                        || !known.name.eq_ignore_ascii_case(&entry.name)
+                        || known.label_key != entry.label_key
                         || !known.group_name.eq_ignore_ascii_case(&entry.group_name)
                     {
                         aliases.entry(entry.native_id).or_default().push(entry);
@@ -249,6 +263,14 @@ impl Catalogs {
     /// The catalog folder, or `None` when the application has none.
     pub fn folder(&self) -> Option<&Path> {
         self.folder.as_deref()
+    }
+
+    /// Whether a JSON file of the folder was added, changed or removed since
+    /// the folder was read.
+    pub fn changed_on_disk(&self) -> bool {
+        self.folder
+            .as_deref()
+            .is_some_and(|folder| stamp(folder) != self.stamp)
     }
 
     /// The loaded releases, in file name order.
@@ -322,7 +344,7 @@ impl Catalogs {
                     format!(
                         "At import, no {label} sample catalog was loaded for this song's {label} \
                          sounds ({}). If sounds remain missing, add the {label} catalog to {} \
-                         and restart the application.",
+                         and open the song again.",
                         count(n, "native ID", "native IDs"),
                         self.location()
                     )
@@ -330,7 +352,7 @@ impl Catalogs {
                     format!(
                         "At import, {} {} absent from the loaded catalogs ({}). The song may \
                          come from a {label} release without a catalog here. If sounds remain \
-                         missing, add that release's catalog to {} and restart the application.",
+                         missing, add that release's catalog to {} and open the song again.",
                         count(
                             n,
                             &format!("{label} native ID"),
@@ -351,6 +373,16 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
     if text.trim_start().starts_with('[') {
         return Err(
             "This catalog has the earlier format, without its product and release. \
+             Generate it again."
+                .into(),
+        );
+    }
+    let schema = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|value| value.get("schema")?.as_u64());
+    if schema == Some(2) {
+        return Err(
+            "This catalog has format 2, which holds the original sound names and file paths. \
              Generate it again."
                 .into(),
         );
@@ -376,18 +408,7 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
     if file.sources.is_empty() {
         return Err("The catalog names no original source files.".into());
     }
-    let mut source_paths = HashSet::new();
     for source in &file.sources {
-        let valid_path = !source.path.is_empty()
-            && !source.path.contains(['\\', ':'])
-            && !source.path.chars().any(char::is_control)
-            && source
-                .path
-                .split('/')
-                .all(|part| !part.is_empty() && part != "." && part != "..");
-        if !valid_path || !source_paths.insert(source.path.to_lowercase()) {
-            return Err("A catalog source path is invalid or duplicated.".into());
-        }
         if source.sha256.len() != 64 || !source.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
             return Err("A catalog source SHA-256 is invalid.".into());
@@ -410,7 +431,11 @@ fn read_catalog(path: &Path) -> Result<CatalogFile, String> {
             && entry.frame_count > 0
             && entry.source_bpm.is_finite()
             && entry.source_bpm > 0.0
-            && !entry.name.trim().is_empty()
+            && entry.label_key.len() == 16
+            && entry
+                .label_key
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
             && !entry.code.trim().is_empty()
             && (entry.pcm_digest.is_none() || entry.pcm_identity().is_some());
         if !valid {
@@ -481,7 +506,7 @@ mod tests {
         WaveMetadata {
             native_id,
             code: format!("CODE{native_id}"),
-            name: format!("Sound {native_id}"),
+            label_key: super::super::label_key(&format!("Sound {native_id}")),
             group_name: "Bass".into(),
             bars: 1,
             source_bpm: 140.0,
@@ -499,7 +524,6 @@ mod tests {
         samples: Vec<WaveMetadata>,
     ) -> CatalogFile {
         let sources = vec![SourceFile {
-            path: format!("{source}.inf"),
             bytes: 12,
             sha256: format!("{:x}", Sha256::digest(source.as_bytes())),
         }];
@@ -556,8 +580,8 @@ mod tests {
             .collect();
         assert_eq!(ids, [731, 732, 3400]);
         assert_eq!(
-            catalogs.identity(Product::D1, 3400).unwrap().name,
-            "Sound 3400"
+            catalogs.identity(Product::D1, 3400).unwrap().label_key,
+            super::super::label_key("Sound 3400")
         );
         assert!(catalogs.identity(Product::D1, 9000).is_none());
         assert_eq!(catalogs.identities(Product::T2).len(), 1);
@@ -627,7 +651,7 @@ mod tests {
         let mut without_digest = sample(731, 1);
         without_digest.pcm_digest = None;
         let mut known = sample(731, 1);
-        known.name = "Other label".into();
+        known.label_key = super::super::label_key("Other label");
         folder.catalog(
             "a.json",
             &release(Product::D1, "a", "a", vec![without_digest]),
@@ -650,45 +674,71 @@ mod tests {
     }
 
     #[test]
-    fn invalid_source_hashes_and_paths_reject_even_with_matching_fingerprints() {
+    fn invalid_source_hashes_and_label_keys_reject_even_with_matching_fingerprints() {
         let folder = Folder::new("bad-sources");
-        for (index, path) in [
-            "",
-            "../index.inf",
-            "/index.inf",
-            "C:/index.inf",
-            "a\\b",
-            "a//b",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let mut file = release(Product::D1, "a", "a", vec![sample(731, 1)]);
-            file.sources[0].path = path.into();
-            file.fingerprint = fingerprint(&file.sources);
-            folder.catalog(&format!("path-{index}.json"), &file);
-        }
-        let mut duplicate = release(Product::D1, "a", "a", vec![sample(731, 1)]);
-        duplicate.sources.push(SourceFile {
-            path: "A.INF".into(),
-            ..duplicate.sources[0].clone()
-        });
-        duplicate.fingerprint = fingerprint(&duplicate.sources);
-        folder.catalog("duplicate.json", &duplicate);
         let mut hash = release(Product::D1, "a", "a", vec![sample(731, 1)]);
         hash.sources[0].sha256 = "00".into();
         hash.fingerprint = fingerprint(&hash.sources);
         folder.catalog("hash.json", &hash);
+        for (index, key) in ["", "0123456789ABCDEF", "Grp. 1 Vers1", "0123456789abcdef0"]
+            .into_iter()
+            .enumerate()
+        {
+            let mut entry = sample(731, 1);
+            entry.label_key = key.into();
+            folder.catalog(
+                &format!("key-{index}.json"),
+                &release(Product::D1, "a", &format!("key-{index}"), vec![entry]),
+            );
+        }
         let catalogs = folder.open();
         assert!(catalogs.releases().is_empty());
-        assert_eq!(catalogs.problems().len(), 8);
+        assert_eq!(catalogs.problems().len(), 5);
         for (name, reason) in catalogs.problems() {
             assert!(reason.contains(if name == "hash.json" {
                 "SHA-256"
             } else {
-                "source path"
+                "invalid identity data"
             }));
         }
+    }
+
+    #[test]
+    fn a_format_2_catalog_with_names_and_paths_is_refused() {
+        let folder = Folder::new("format-2");
+        folder.write(
+            "d1-download.json",
+            r#"{"schema":2,"product":"d1","release":"download","fingerprint":"x",
+                "sources":[{"path":"index.inf","bytes":1,"sha256":"00"}],
+                "samples":[{"native_id":731,"code":"bm\\asjo.snd","name":"Grp. 1 Vers1",
+                "group_name":"loop","bars":2,"source_bpm":140.0,"frame_count":151200}]}"#,
+        );
+        let catalogs = folder.open();
+        assert!(catalogs.releases().is_empty());
+        assert!(catalogs.problems()[0].1.contains("format 2"));
+        assert!(catalogs.problems()[0].1.contains("Generate it again"));
+    }
+
+    #[test]
+    fn a_folder_change_is_seen_without_reading_the_catalogs_again() {
+        let folder = Folder::new("changes");
+        folder.catalog(
+            "d1.json",
+            &release(Product::D1, "download", "d1", vec![sample(731, 1)]),
+        );
+        let catalogs = folder.open();
+        assert!(!catalogs.changed_on_disk());
+        folder.catalog(
+            "d2.json",
+            &release(Product::D2, "download", "d2", vec![sample(5, 1)]),
+        );
+        assert!(catalogs.changed_on_disk());
+        let again = folder.open();
+        assert!(!again.changed_on_disk());
+        assert_eq!(again.identities(Product::D2).len(), 1);
+        std::fs::remove_file(folder.0.join("d1.json")).unwrap();
+        assert!(again.changed_on_disk());
+        assert!(!Catalogs::open(None).changed_on_disk());
     }
 
     #[test]
@@ -712,7 +762,7 @@ mod tests {
         let mut unnamed = release(Product::T3, " ", "t3", vec![sample(1, 1)]);
         folder.catalog("t3.json", &unnamed);
         unnamed.release = "a".into();
-        unnamed.schema = 3;
+        unnamed.schema = 4;
         folder.catalog("t3-future.json", &unnamed);
         let catalogs = folder.open();
         assert_eq!(catalogs.releases().len(), 1);
@@ -725,7 +775,7 @@ mod tests {
         assert!(reasons["d4.json"].contains("listed twice"));
         assert!(reasons["d4-bars.json"].contains("invalid identity data"));
         assert!(reasons["t3.json"].contains("needs a name"));
-        assert!(reasons["t3-future.json"].contains("format 3 is not supported"));
+        assert!(reasons["t3-future.json"].contains("format 4 is not supported"));
         assert_eq!(reasons.len(), 8);
         let absent = Catalogs::open(Some(folder.0.join("absent")));
         assert!(
@@ -760,24 +810,18 @@ mod tests {
 
     #[test]
     fn the_fingerprint_follows_the_source_files_not_their_order() {
-        let files = |order: [(&str, &str); 2]| {
+        let files = |order: [(u64, &str); 2]| {
             order
-                .map(|(path, sha256)| SourceFile {
-                    path: path.into(),
-                    bytes: 4,
+                .map(|(bytes, sha256)| SourceFile {
+                    bytes,
                     sha256: sha256.into(),
                 })
                 .to_vec()
         };
-        let a = fingerprint(&files([("PXD/aa/one.pxd", "AB"), ("index.inf", "cd")]));
-        assert_eq!(
-            a,
-            fingerprint(&files([("index.inf", "CD"), ("pxd/AA/ONE.PXD", "ab")]))
-        );
-        assert_ne!(
-            a,
-            fingerprint(&files([("index.inf", "cd"), ("pxd/aa/two.pxd", "ab")]))
-        );
+        let a = fingerprint(&files([(4, "AB"), (9, "cd")]));
+        assert_eq!(a, fingerprint(&files([(9, "CD"), (4, "ab")])));
+        assert_ne!(a, fingerprint(&files([(9, "cd"), (5, "ab")])));
+        assert_ne!(a, fingerprint(&files([(9, "cd"), (4, "ef")])));
         assert_eq!(a.len(), 64);
     }
 

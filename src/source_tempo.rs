@@ -7,13 +7,25 @@ pub(crate) struct SourceTempos(HashMap<[u8; 16], Option<f64>>);
 
 impl SourceTempos {
     /// The tempos of the runtime catalogs and their `source-tempos.json`,
-    /// gathered once per process.
-    pub(crate) fn shared() -> &'static Self {
-        static SHARED: std::sync::OnceLock<SourceTempos> = std::sync::OnceLock::new();
-        SHARED.get_or_init(|| Self::from_catalogs(catalog::catalogs()))
+    /// gathered once for each reading of the catalogs.
+    pub(crate) fn for_catalogs(catalogs: &'static catalog::Catalogs) -> &'static Self {
+        type Shared = Option<(usize, &'static SourceTempos)>;
+        static SHARED: std::sync::Mutex<Shared> = std::sync::Mutex::new(None);
+        let reading = std::ptr::from_ref(catalogs) as usize;
+        let mut shared = SHARED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match *shared {
+            Some((known, tempos)) if known == reading => tempos,
+            _ => {
+                let tempos: &'static Self = Box::leak(Box::new(Self::from_catalogs(catalogs)));
+                *shared = Some((reading, tempos));
+                tempos
+            }
+        }
     }
 
-    fn from_catalogs(catalogs: &catalog::Catalogs) -> Self {
+    pub(crate) fn from_catalogs(catalogs: &catalog::Catalogs) -> Self {
         let mut result = Self::default();
         for product in Product::ALL {
             for entry in catalogs.identities(product) {
@@ -130,7 +142,6 @@ mod tests {
         std::fs::create_dir_all(&folder).unwrap();
         let audio = [0, 3, 9, 4, 1];
         let sources = vec![catalog::SourceFile {
-            path: "index.inf".into(),
             bytes: 1,
             sha256: "00".repeat(32),
         }];
@@ -143,7 +154,7 @@ mod tests {
             samples: vec![catalog::WaveMetadata {
                 native_id: 1,
                 code: "CODE".into(),
-                name: "Sound".into(),
+                label_key: crate::catalog::label_key("Sound"),
                 group_name: "Loop".into(),
                 bars: 1,
                 source_bpm: 180.0,

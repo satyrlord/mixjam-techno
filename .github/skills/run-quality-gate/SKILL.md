@@ -63,8 +63,7 @@ Use the current commands in `docs/DEVELOPMENT.md` and `docs/ARCHITECTURE.md`:
     Completion criterion: Each focused test has a current result.
 11. For those changes, run built-artifact scenarios with representative files.
     Completion criterion: Each scenario has a current result.
-12. Record original-engine parity, device behavior, listening, and clean-machine
-    checks separately.
+12. Record device behavior, listening, and clean-machine checks separately.
     Completion criterion: None of these checks inherit a result from another check.
 
 In verify mode, after a failure, run independent safe checks.

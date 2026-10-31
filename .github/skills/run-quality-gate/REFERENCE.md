@@ -24,4 +24,4 @@ action changes quality policy, expands scope materially, or lacks a verifier.
 
 Report the exact blocker. Do not invent a coverage percentage or reinterpret a
 configured threshold. Native captures do not prove listening, microphone,
-file-picker, screen-reader, high-DPI, or original-engine parity behavior.
+file-picker, screen-reader, or high-DPI behavior.
