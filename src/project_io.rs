@@ -353,6 +353,8 @@ pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bo
             _ => crate::compat::chunks::load(path, product, &candidate)?,
         };
         project.libraries = candidate.bindings().to_vec();
+        let notices = catalog_notices(&project, &candidate);
+        project.source_notices.extend(notices);
         (project, false)
     } else if has_song_extension(path) {
         crate::mixjam::load_song(path, &candidate)?
@@ -361,6 +363,22 @@ pub fn open_song(path: &Path, library: &Library) -> Result<(Project, Library, bo
     };
     let (project, library) = resolve(project, &candidate)?;
     Ok((project, library, song))
+}
+
+/// Name the products whose catalogs lack native samples that an imported song
+/// needs. An original installation that serves a product identifies its sounds
+/// without a catalog, so its missing samples are absent from the installation.
+fn catalog_notices(project: &Project, library: &Library) -> Vec<String> {
+    crate::catalog::catalogs().missing_notices(project.missing_samples.iter().filter_map(
+        |sample| match sample.reference {
+            MissingReference::Native { product, native_id }
+                if !library.has_original_provider(product) =>
+            {
+                Some((product, native_id))
+            }
+            _ => None,
+        },
+    ))
 }
 
 pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Library), String> {
@@ -374,7 +392,37 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
     project
         .missing_samples
         .retain(|sample| used.contains(&sample.id));
+    let mut saved_supplements = HashSet::new();
     for binding in project.libraries.clone() {
+        if candidate.has_original_provider(binding.product) {
+            let needed: HashSet<_> = used
+                .iter()
+                .copied()
+                .filter(|id| {
+                    Product::sample_key(*id).is_some_and(|(product, _)| product == binding.product)
+                        && candidate.sample_by_id(*id).is_none()
+                })
+                .collect();
+            if !needed.is_empty() {
+                // Preserve the song's saved folder even when it is temporarily
+                // unavailable, so a later open can try it again.
+                saved_supplements.insert(binding.product);
+                if let Ok(root) = fs::canonicalize(&binding.root)
+                    && candidate.source_root(binding.product) != Some(root.as_path())
+                    && !crate::catalog::has_native_catalog(binding.product, &root)
+                {
+                    let mut saved = Library::empty();
+                    if saved
+                        .register(binding.product, &root, &reference_samples_root())
+                        .is_ok()
+                        && saved.is_wav_product(binding.product)
+                    {
+                        candidate.supplement_loaded_ids(binding.product, &saved, &needed);
+                    }
+                }
+            }
+            continue;
+        }
         // A current provider of the whole product takes precedence over the
         // folder saved in the song. A sample folder without the product, or
         // with only part of it, does not hide the saved folder.
@@ -621,8 +669,7 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
         if let Err(reason) = candidate.read_pcm(id) {
             let (product, native_id) =
                 Product::sample_key(id).ok_or("The native sample ID has no product identity.")?;
-            let catalog = crate::catalog::bundled_wave_metadata(product)?;
-            let entry = catalog.iter().find(|entry| entry.native_id == native_id);
+            let entry = crate::catalog::identity(product, native_id);
             let (ticks, rate, inferred) =
                 sample_timing(&project, candidate.sample_by_id(id), id, project.bpm, None);
             let mut missing = MissingSample::native(
@@ -654,6 +701,14 @@ pub fn resolve(mut project: Project, library: &Library) -> Result<(Project, Libr
     }
     let mut bindings = candidate.bindings().to_vec();
     for binding in &project.libraries {
+        if saved_supplements.contains(&binding.product)
+            && let Some(current) = bindings
+                .iter_mut()
+                .find(|current| current.product == binding.product)
+        {
+            *current = binding.clone();
+            continue;
+        }
         if !bindings
             .iter()
             .any(|current| current.product == binding.product)
@@ -826,9 +881,29 @@ fn save_with_library_in(
                 Some((*id, sample.wav_path.as_deref()?))
             })
             .collect();
-        if files
-            .iter()
-            .any(|(_, file)| !file.starts_with(&binding.root))
+        let original_provider = library.has_original_provider(binding.product);
+        let uses_original = original_provider
+            && used.iter().any(|id| {
+                Product::sample_key(*id).is_some_and(|(product, _)| product == binding.product)
+                    && project.missing_sample(*id).is_none()
+                    && library
+                        .sample_by_id(*id)
+                        .is_some_and(|sample| sample.wav_path.is_none())
+            });
+        if uses_original && !files.is_empty() {
+            return Err(format!(
+                "Cannot save {} sounds from both an original installation and supplemental WAVs. \
+                 This song format can save only one provider folder for each product.",
+                binding.product.label()
+            ));
+        }
+        // A packed provider never scans supplemental WAVs, including WAVs
+        // inside its own folder. Retain them when no packed sound is used.
+        if !files.is_empty()
+            && (original_provider
+                || files
+                    .iter()
+                    .any(|(_, file)| !file.starts_with(&binding.root)))
         {
             binding.root = retain_native_provider(binding.product, files, storage)?;
         }
@@ -871,15 +946,12 @@ fn retain_native_provider(
     fs::create_dir(&stage).map_err(|error| error.to_string())?;
     let result = (|| {
         files.sort_by_key(|(id, _)| *id);
-        let metadata = crate::catalog::bundled_wave_metadata(product)?;
         let mut digest = Sha256::new();
         digest.update(product.slug().as_bytes());
         let mut expected = Vec::with_capacity(files.len());
         for (id, source) in files {
             let (_, native_id) = Product::sample_key(id).ok_or("Invalid native sample ID.")?;
-            let entry = metadata
-                .iter()
-                .find(|entry| entry.native_id == native_id)
+            let entry = crate::catalog::identity(product, native_id)
                 .ok_or("The native sample has no catalog identity.")?;
             let code = entry.code.replace('\\', "/");
             let name = Path::new(&code)
@@ -1023,6 +1095,304 @@ pub fn save(project: &Project, path: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    fn original_house_provider(root: &Path) -> Library {
+        original_house_provider_with_id(root, 1)
+    }
+
+    fn original_house_provider_with_id(root: &Path, native_id: u32) -> Library {
+        let packed = crate::library::packed_folder(root);
+        fs::create_dir_all(&packed).unwrap();
+        let mut record = b"tPxD\x02\0\0T".to_vec();
+        record.extend(5_u32.to_le_bytes());
+        record.extend([0, 0, 0]);
+        fs::write(packed.join("house10"), &record).unwrap();
+        fs::write(
+            packed.join("house10.inf"),
+            format!(
+                "[SAMPLES]\n{native_id}\n6\n\"HOUSE\"\n0\n{}\n\"House sound\"\n\
+                 \"1\"\n1\n18\n\"\"\n0\n\"\"\n",
+                record.len()
+            ),
+        )
+        .unwrap();
+        let mut installed = Library::empty();
+        installed.register(Product::H1, root, root).unwrap();
+        installed
+    }
+
+    fn supplemental_house_sample(native_id: u32, path: PathBuf) -> crate::library::Sample {
+        crate::library::Sample {
+            id: Product::H1.global_sample_id(native_id).unwrap(),
+            code: "SUPPLEMENT".into(),
+            name: "Supplement".into(),
+            bars: 1,
+            group_name: "Bass".into(),
+            offset: 0,
+            length: 0,
+            frame_count: 5,
+            sample_rate: 44_100,
+            source_bpm: 125.0,
+            channels: 1,
+            wav_path: Some(path),
+            digest: None,
+        }
+    }
+
+    #[test]
+    fn imports_name_the_products_whose_catalogs_lack_their_native_ids() {
+        let mut project = Project::default();
+        for product in [Product::D1, Product::H1] {
+            project.missing_samples.push(
+                MissingSample::native(
+                    product,
+                    99_999,
+                    "Unknown".into(),
+                    140.0,
+                    TICKS_PER_BAR,
+                    true,
+                    "Missing.".into(),
+                )
+                .unwrap(),
+            );
+        }
+        let notices = catalog_notices(&project, &Library::empty());
+        assert_eq!(notices.len(), 2, "{notices:?}");
+        assert!(notices[0].contains("D1") && notices[0].contains("native ID"));
+        assert!(notices[1].contains("H1") && notices[1].contains("native ID"));
+        assert!(
+            Library::empty()
+                .describe_missing(Product::D1, 99_999)
+                .starts_with("No loaded D1 sample catalog lists native sample 99999")
+        );
+        // An original installation serves H1 without a catalog, so a sample
+        // that it lacks is missing from the installation, not from a catalog.
+        let root =
+            std::env::temp_dir().join(format!("mixjam-catalog-notice-{}", std::process::id()));
+        let mut installed = original_house_provider(&root);
+        // A replacement provider may be supplemented by WAV sources from a
+        // previously loaded folder. Its original source still establishes
+        // which native IDs are in the installation.
+        let supplemental = Library::fixture(vec![supplemental_house_sample(
+            2,
+            root.join("supplement.wav"),
+        )]);
+        let wav_notices = catalog_notices(&project, &supplemental);
+        assert_eq!(wav_notices.len(), 2, "{wav_notices:?}");
+        assert!(wav_notices[1].contains("H1"));
+        installed.supplement_loaded(Product::H1, &supplemental);
+        assert!(installed.is_wav_product(Product::H1));
+        let notices = catalog_notices(&project, &installed);
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert!(notices[0].contains("D1"));
+        assert_eq!(
+            installed.describe_missing(Product::H1, 99_999),
+            "H1 native sample 99999 is missing from its library."
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn project_using(library: &Library, ids: &[u32]) -> Project {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        for (track, id) in ids.iter().enumerate() {
+            editor.place(*id, track, 0, 256).unwrap();
+        }
+        let mut project = editor.project().clone();
+        project.libraries = library.bindings().to_vec();
+        project
+    }
+
+    #[test]
+    fn mixed_packed_and_supplemental_sources_do_not_replace_the_song() {
+        let root = std::env::temp_dir().join(format!("mixjam-mixed-save-{}", std::process::id()));
+        let provider_root = root.join("provider");
+        let original = original_house_provider(&provider_root);
+        let native_id = Product::H1.global_sample_id(1).unwrap();
+        let song = root.join("song.mixjam");
+        fs::write(&song, b"previous song").unwrap();
+        for path in [
+            provider_root.join("supplement.wav"),
+            root.join("supplement.wav"),
+        ] {
+            let mut library = original.clone();
+            let supplemental = supplemental_house_sample(2, path);
+            let supplemental_id = supplemental.id;
+            library.supplement_loaded(Product::H1, &Library::fixture(vec![supplemental]));
+            let project = project_using(&library, &[native_id, supplemental_id]);
+            let error =
+                save_with_library_in(&project, &library, &song, &root.join("storage")).unwrap_err();
+            assert!(error.contains("both an original installation and supplemental WAVs"));
+            assert!(error.contains("only one provider folder"));
+            assert_eq!(fs::read(&song).unwrap(), b"previous song");
+            assert!(!root.join("storage").exists());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn wav_only_supplement_is_retained_even_inside_the_packed_provider() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-wav-only-save-{}", std::process::id()));
+        let provider_root = root.join("provider");
+        let original = original_house_provider(&provider_root);
+        let entry = crate::catalog::identities(Product::H1)
+            .iter()
+            .find(|entry| entry.native_id != 1 && entry.frame_count < 1_000_000);
+        for (index, inside) in [true, false].into_iter().enumerate() {
+            let folder = if inside { &provider_root } else { &root };
+            let name = entry.map_or_else(
+                || "unknown.wav".into(),
+                |entry| {
+                    Path::new(&entry.code.replace('\\', "/"))
+                        .file_stem()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                        + ".wav"
+                },
+            );
+            let path = folder.join(name);
+            let frames = entry.map_or(5, |entry| entry.frame_count.div_ceil(2) as usize);
+            let pcm = crate::audio::Pcm {
+                sample_rate: 22_050,
+                channels: 1,
+                samples: vec![0.25; frames],
+            };
+            pcm.write_wav(&path).unwrap();
+            let mut sample =
+                supplemental_house_sample(entry.map_or(99_999, |entry| entry.native_id), path);
+            sample.sample_rate = pcm.sample_rate;
+            sample.frame_count = frames as u32;
+            if let Some(entry) = entry {
+                sample.code.clone_from(&entry.code);
+                sample.name.clone_from(&entry.name);
+                sample.group_name.clone_from(&entry.group_name);
+                sample.source_bpm = entry.source_bpm;
+                sample.bars = entry.bars;
+            }
+            let id = sample.id;
+            let mut library = original.clone();
+            library.supplement_loaded(Product::H1, &Library::fixture(vec![sample]));
+            let project = project_using(&library, &[id]);
+            let song = root.join(format!("song-{index}.mixjam"));
+            fs::write(&song, b"previous song").unwrap();
+            let result = save_with_library_in(&project, &library, &song, &root.join("storage"));
+            if entry.is_some() {
+                result.unwrap();
+                let (reopened, ready) = open(&song, &Library::empty()).unwrap();
+                assert!(reopened.missing_samples.is_empty());
+                assert_eq!(ready.read_pcm(id).unwrap().samples, pcm.samples);
+                let (reopened_with_original, ready_with_original) = open(&song, &original).unwrap();
+                assert!(reopened_with_original.missing_samples.is_empty());
+                assert_eq!(
+                    ready_with_original.read_pcm(id).unwrap().samples,
+                    pcm.samples
+                );
+                assert_eq!(reopened_with_original.libraries, reopened.libraries);
+                assert_eq!(
+                    ready_with_original.source_root(Product::H1),
+                    original.source_root(Product::H1)
+                );
+            } else {
+                assert!(result.unwrap_err().contains("no catalog identity"));
+                assert_eq!(fs::read(&song).unwrap(), b"previous song");
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unavailable_saved_supplement_keeps_the_binding_for_a_later_open() {
+        let root =
+            std::env::temp_dir().join(format!("mixjam-missing-supplement-{}", std::process::id()));
+        let original = original_house_provider(&root.join("provider"));
+        let present = Product::H1.global_sample_id(1).unwrap();
+        let missing = Product::H1.global_sample_id(99_999).unwrap();
+        let mut project = project_using(&original, &[present, missing]);
+        let saved = LibraryBinding {
+            product: Product::H1,
+            root: root.join("unavailable"),
+        };
+        project.libraries = vec![saved.clone()];
+        let (reopened, ready) = resolve(project, &original).unwrap();
+        assert_eq!(reopened.libraries, vec![saved]);
+        assert!(reopened.missing_sample(missing).is_some());
+        assert_eq!(ready.read_pcm(present).unwrap().samples, vec![0.0; 5]);
+        assert_eq!(
+            ready.source_root(Product::H1),
+            original.source_root(Product::H1)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn saved_supplement_fills_only_used_missing_ids_without_replacing_originals() {
+        let root = std::env::temp_dir().join(format!(
+            "mixjam-supplement-collision-{}",
+            std::process::id()
+        ));
+        let entries: Vec<_> = crate::catalog::identities(Product::H1)
+            .iter()
+            .filter(|entry| entry.frame_count < 1_000_000)
+            .take(3)
+            .collect();
+        if entries.len() < 3 {
+            // No locally generated catalog is available. Exercise the same
+            // unavailable binding path without claiming WAV identification.
+            let original = original_house_provider(&root.join("provider"));
+            let present = Product::H1.global_sample_id(1).unwrap();
+            let missing = Product::H1.global_sample_id(99_999).unwrap();
+            let mut project = project_using(&original, &[present, missing]);
+            project.libraries[0].root = root.join("unavailable");
+            let (reopened, ready) = resolve(project, &original).unwrap();
+            assert!(reopened.missing_sample(missing).is_some());
+            assert_eq!(ready.read_pcm(present).unwrap().samples, vec![0.0; 5]);
+            fs::remove_dir_all(root).unwrap();
+            return;
+        }
+        let original =
+            original_house_provider_with_id(&root.join("provider"), entries[0].native_id);
+        let saved_root = root.join("saved-wavs");
+        fs::create_dir_all(&saved_root).unwrap();
+        for (index, entry) in entries.iter().enumerate() {
+            let name = Path::new(&entry.code.replace('\\', "/"))
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            crate::audio::Pcm {
+                sample_rate: 22_050,
+                channels: 1,
+                samples: vec![0.25 * (index + 1) as f32; entry.frame_count.div_ceil(2) as usize],
+            }
+            .write_wav(&saved_root.join(format!("{name}.wav")))
+            .unwrap();
+        }
+        let ids: Vec<_> = entries
+            .iter()
+            .map(|entry| Product::H1.global_sample_id(entry.native_id).unwrap())
+            .collect();
+        let mut project = project_using(&original, &ids[..2]);
+        project.libraries[0].root = saved_root.clone();
+        let (reopened, ready) = resolve(project, &original).unwrap();
+        assert!(reopened.missing_samples.is_empty());
+        assert_eq!(ready.read_pcm(ids[0]).unwrap().samples, vec![0.0; 5]);
+        assert!(
+            ready
+                .read_pcm(ids[1])
+                .unwrap()
+                .samples
+                .iter()
+                .all(|&sample| sample == 0.5)
+        );
+        assert!(ready.sample_by_id(ids[2]).is_none());
+        assert_eq!(reopened.libraries[0].root, saved_root);
+        assert_eq!(
+            ready.source_root(Product::H1),
+            original.source_root(Product::H1)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn provider_audio_identity_ignores_riff_metadata() {
         let root =
@@ -1052,10 +1422,30 @@ mod tests {
     }
 
     #[test]
-    fn retained_native_provider_preserves_ids_audio_and_existing_song_on_failure() {
+    fn retained_native_provider_requires_known_ids_and_preserves_audio_on_failure() {
         let root =
             std::env::temp_dir().join(format!("mixjam-retained-provider-{}", std::process::id()));
-        let metadata = crate::catalog::bundled_wave_metadata(Product::D1).unwrap();
+        let metadata = crate::catalog::identities(Product::D1);
+        if metadata.len() < 2 {
+            // A public checkout need not contain the optional catalog files.
+            // In that case, exercise rejection of an unknown identity instead
+            // of indexing an empty local catalog or inventing factory sounds.
+            let native_id = (1..100_000)
+                .find(|id| !metadata.iter().any(|entry| entry.native_id == *id))
+                .unwrap();
+            let id = Product::D1.global_sample_id(native_id).unwrap();
+            let path = root.join("unmatched.wav");
+            let error = retain_native_provider(Product::D1, vec![(id, &path)], &root).unwrap_err();
+            assert_eq!(error, "The native sample has no catalog identity.");
+            assert_eq!(
+                fs::read_dir(root.join("native-providers").join(Product::D1.slug()))
+                    .unwrap()
+                    .count(),
+                0
+            );
+            fs::remove_dir_all(root).unwrap();
+            return;
+        }
         let mut sources = Vec::new();
         let mut editor = crate::engine::Editor::new(Project::default());
         for (index, entry) in metadata.iter().take(2).enumerate() {

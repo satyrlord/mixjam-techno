@@ -360,6 +360,7 @@ impl Library {
     /// Explain an unresolved native identity in a song import error.
     pub fn describe_missing(&self, product: Product, native_id: u32) -> String {
         let label = product.label();
+        let installed = self.has_original_provider(product);
         match product
             .global_sample_id(native_id)
             .ok()
@@ -369,6 +370,11 @@ impl Library {
                 "{label} native sample {native_id} is missing from its library: {} has its name and duration, but its audio differs from the original sample.",
                 path.display()
             ),
+            None if !installed && crate::catalog::identity(product, native_id).is_none() => {
+                format!(
+                    "No loaded {label} sample catalog lists native sample {native_id}, so no WAV can be identified as it."
+                )
+            }
             None => format!("{label} native sample {native_id} is missing from its library."),
         }
     }
@@ -400,6 +406,18 @@ impl Library {
         self.sources.iter().any(|(id, source)| {
             Product::sample_key(*id).is_some_and(|(owner, _)| owner == product)
                 && matches!(source, AudioSource::Wave { .. })
+        })
+    }
+
+    /// Whether this product has audio from an original packed provider.
+    /// Supplemental WAV identities do not change the provider's kind.
+    pub fn has_original_provider(&self, product: Product) -> bool {
+        self.sources.iter().any(|(id, source)| {
+            Product::sample_key(*id).is_some_and(|(owner, _)| owner == product)
+                && matches!(
+                    source,
+                    AudioSource::Archive { .. } | AudioSource::T1Packed { .. }
+                )
         })
     }
 
@@ -555,7 +573,8 @@ impl Library {
             source_bpm,
             progress,
             cache,
-            crate::catalog::bundled_wave_metadata,
+            crate::catalog::identities,
+            crate::catalog::aliases,
         )
     }
 
@@ -566,7 +585,8 @@ impl Library {
         source_bpm: f64,
         progress: Option<&ScanProgress>,
         mut cache: Option<&mut ScanCache>,
-        metadata: impl Fn(Product) -> Result<&'m [crate::catalog::WaveMetadata], String>,
+        metadata: impl Fn(Product) -> &'m [crate::catalog::WaveMetadata],
+        aliases: impl Fn(Product, u32) -> &'m [crate::catalog::WaveMetadata] + Copy,
     ) -> Result<Self, String> {
         check_library_folders(roots)?;
         if !source_bpm.is_finite() || source_bpm <= 0.0 {
@@ -637,7 +657,12 @@ impl Library {
             .cloned()
             .collect();
         for product in Product::ALL {
-            library.register_wav_folders(product, &loaded, metadata(product)?)?;
+            library.register_wav_folders_with_aliases(
+                product,
+                &loaded,
+                metadata(product),
+                |id| aliases(product, id),
+            )?;
         }
         // A folder later in the list can serve an identity that an earlier
         // folder only had a different recording of.
@@ -715,7 +740,7 @@ impl Library {
                 product.label()
             ));
         }
-        self.identify_wav_product(product, root, metadata, false)
+        self.identify_wav_product(product, root, metadata, false, |_| &[])
     }
 
     /// Fill the identities that this product's provider lacks from another
@@ -730,7 +755,7 @@ impl Library {
         if self.source_root(product).is_none() {
             return Err(format!("{} has no sample provider.", product.label()));
         }
-        self.identify_wav_product(product, root, metadata, true)
+        self.identify_wav_product(product, root, metadata, true, |_| &[])
     }
 
     /// Identify one product in library folders, in list order: the first
@@ -742,22 +767,33 @@ impl Library {
         roots: &[PathBuf],
         metadata: &[crate::catalog::WaveMetadata],
     ) -> Result<(), String> {
+        self.register_wav_folders_with_aliases(product, roots, metadata, |_| &[])
+    }
+
+    fn register_wav_folders_with_aliases<'m>(
+        &mut self,
+        product: Product,
+        roots: &[PathBuf],
+        metadata: &[crate::catalog::WaveMetadata],
+        aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata] + Copy,
+    ) -> Result<(), String> {
         for root in roots {
             if self.source_root(product).is_some() {
-                self.supplement_wav_product(product, root, metadata)?;
+                self.identify_wav_product(product, root, metadata, true, aliases)?;
             } else {
-                self.register_wav_product(product, root, metadata)?;
+                self.identify_wav_product(product, root, metadata, false, aliases)?;
             }
         }
         Ok(())
     }
 
-    fn identify_wav_product(
+    fn identify_wav_product<'m>(
         &mut self,
         product: Product,
         root: &Path,
         metadata: &[crate::catalog::WaveMetadata],
         supplement: bool,
+        aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata],
     ) -> Result<usize, String> {
         const DIGEST_SCORE: u8 = 3;
         let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
@@ -873,43 +909,49 @@ impl Library {
             if verified.contains(id) {
                 continue;
             }
-            let code = entry.code.replace('\\', "/");
-            let code_name = Path::new(&code)
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy();
             let mut candidates: HashMap<&PathBuf, (&Sample, u8)> = HashMap::new();
-            for (name, score) in [
-                (compact_name(&entry.name), 1),
-                (compact_name(&code_name), 2),
-            ] {
-                for sample in by_name.get(&name).into_iter().flatten() {
-                    let path = sample.wav_path.as_ref().unwrap();
-                    if claimed.contains(path) {
-                        continue;
+            for name_entry in std::iter::once(*entry).chain(aliases(entry.native_id)) {
+                let code = name_entry.code.replace('\\', "/");
+                let code_name = Path::new(&code)
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                for (name, score) in [
+                    (compact_name(&name_entry.name), 1),
+                    (compact_name(&code_name), 2),
+                ] {
+                    for sample in by_name.get(&name).into_iter().flatten() {
+                        let path = sample.wav_path.as_ref().unwrap();
+                        if claimed.contains(path) {
+                            continue;
+                        }
+                        if score < 2 && in_foreign_product_folder(path, &root, product) {
+                            continue;
+                        }
+                        let category_matches = score == 2
+                            || canonical_group(&sample.group_name)
+                                == canonical_group(&name_entry.group_name)
+                            || sample.group_name == "Wave"
+                            || product_folder_hint(&sample.group_name).is_some();
+                        let measured_frames = f64::from(sample.frame_count) * 44_100.0
+                            / f64::from(sample.sample_rate);
+                        if !category_matches
+                            || (measured_frames - f64::from(entry.frame_count)).abs() > 4.0
+                        {
+                            continue;
+                        }
+                        if let (Some(expected), Some(actual)) =
+                            (expected, comparable_digest(sample))
+                            && *expected != actual
+                        {
+                            unverified.entry(*id).or_insert_with(|| path.clone());
+                            continue;
+                        }
+                        candidates
+                            .entry(path)
+                            .and_modify(|(_, best)| *best = (*best).max(score))
+                            .or_insert((sample, score));
                     }
-                    if score < 2 && in_foreign_product_folder(path, &root, product) {
-                        continue;
-                    }
-                    let category_matches = score == 2
-                        || canonical_group(&sample.group_name)
-                            == canonical_group(&entry.group_name)
-                        || sample.group_name == "Wave"
-                        || product_folder_hint(&sample.group_name).is_some();
-                    let measured_frames =
-                        f64::from(sample.frame_count) * 44_100.0 / f64::from(sample.sample_rate);
-                    if !category_matches
-                        || (measured_frames - f64::from(entry.frame_count)).abs() > 4.0
-                    {
-                        continue;
-                    }
-                    if let (Some(expected), Some(actual)) = (expected, comparable_digest(sample))
-                        && *expected != actual
-                    {
-                        unverified.entry(*id).or_insert_with(|| path.clone());
-                        continue;
-                    }
-                    candidates.insert(path, (sample, score));
                 }
             }
             let best = candidates
@@ -971,7 +1013,11 @@ impl Library {
     /// Whether the sample folder supplies under half of this product's
     /// catalog, as when it only shares some audio with another product.
     pub fn is_sparse_wav_product(&self, product: Product) -> bool {
-        if !self.is_wav_product(product) {
+        self.is_sparse_wav_product_with_count(product, crate::catalog::identities(product).len())
+    }
+
+    fn is_sparse_wav_product_with_count(&self, product: Product, catalog_count: usize) -> bool {
+        if self.has_original_provider(product) || !self.is_wav_product(product) {
             return false;
         }
         let found = self
@@ -979,8 +1025,7 @@ impl Library {
             .iter()
             .filter(|sample| Product::sample_key(sample.id).is_some_and(|(p, _)| p == product))
             .count();
-        crate::catalog::bundled_wave_metadata(product)
-            .is_ok_and(|entries| found * 2 < entries.len())
+        found * 2 < catalog_count
     }
 
     /// The provider folder that a song records for a product. A product read
@@ -989,6 +1034,7 @@ impl Library {
     /// sample folder.
     pub fn song_binding(&self, binding: &LibraryBinding, used: &HashSet<u32>) -> LibraryBinding {
         if self.source_root(binding.product) != Some(binding.root.as_path())
+            || self.has_original_provider(binding.product)
             || !self.is_wav_product(binding.product)
         {
             return binding.clone();
@@ -1053,10 +1099,12 @@ impl Library {
         let other = if !crate::catalog::has_native_catalog(product, &root) {
             let mut wav = Self::empty();
             wav.import_wav_folder(&root, 140.0)?;
-            if wav.register_wav_product(
+            if wav.identify_wav_product(
                 product,
                 &root,
-                crate::catalog::bundled_wave_metadata(product)?,
+                crate::catalog::identities(product),
+                false,
+                |id| crate::catalog::aliases(product, id),
             )? == 0
             {
                 return Err(format!(
@@ -1161,8 +1209,28 @@ impl Library {
     /// Keep any loaded identities that a replacement provider does not have.
     /// Its own identities and binding retain precedence.
     pub(crate) fn supplement_loaded(&mut self, product: Product, loaded: &Self) {
+        self.supplement_loaded_matching(product, loaded, |_| true);
+    }
+
+    /// Keep only selected loaded identities that the current provider lacks.
+    pub(crate) fn supplement_loaded_ids(
+        &mut self,
+        product: Product,
+        loaded: &Self,
+        ids: &HashSet<u32>,
+    ) {
+        self.supplement_loaded_matching(product, loaded, |id| ids.contains(&id));
+    }
+
+    fn supplement_loaded_matching(
+        &mut self,
+        product: Product,
+        loaded: &Self,
+        selected: impl Fn(u32) -> bool,
+    ) {
         for sample in &loaded.samples {
-            if Product::sample_key(sample.id).is_none_or(|(owner, _)| owner != product)
+            if !selected(sample.id)
+                || Product::sample_key(sample.id).is_none_or(|(owner, _)| owner != product)
                 || self.by_id.contains_key(&sample.id)
             {
                 continue;
@@ -1683,7 +1751,7 @@ impl Library {
         }
         // Authenticated original audio resolves duration-octave ambiguity.
         // Apply this after the heuristic so sibling guesses cannot change it.
-        let evidence = crate::source_tempo::SourceTempos::bundled()?;
+        let evidence = crate::source_tempo::SourceTempos::shared();
         let mut folder_probes: BTreeMap<&Path, Vec<&WavProbe>> = BTreeMap::new();
         for (path, probe) in paths.iter().zip(&probes) {
             folder_probes
@@ -2756,6 +2824,216 @@ mod tests {
         }
     }
 
+    fn catalog_file(
+        name: &str,
+        entries: Vec<crate::catalog::WaveMetadata>,
+    ) -> crate::catalog::CatalogFile {
+        let sources = vec![crate::catalog::SourceFile {
+            path: format!("{name}.inf"),
+            bytes: 1,
+            sha256: "ab".repeat(32),
+        }];
+        crate::catalog::CatalogFile {
+            schema: crate::catalog::SCHEMA,
+            product: Product::D1,
+            release: name.into(),
+            fingerprint: crate::catalog::fingerprint(&sources),
+            sources,
+            samples: entries,
+        }
+    }
+
+    #[test]
+    fn compatible_release_aliases_identify_wavs_without_comparable_digests() {
+        let folder = Folder::new();
+        let original = waveform(1, 300);
+        let first = identity(731, "First name", "Bass", &original);
+        let mut second = first.clone();
+        second.code = "SECOND-CODE".into();
+        second.name = "Second name".into();
+        let catalogs_dir = folder.0.join("catalogs");
+        fs::create_dir(&catalogs_dir).unwrap();
+        for (name, entry) in [("a", first), ("b", second)] {
+            fs::write(
+                catalogs_dir.join(format!("{name}.json")),
+                serde_json::to_vec(&catalog_file(name, vec![entry])).unwrap(),
+            )
+            .unwrap();
+        }
+        let catalogs = crate::catalog::Catalogs::open(Some(catalogs_dir));
+        assert!(catalogs.problems().is_empty());
+        let selected = folder.wave("waves/SECOND-CODE.wav", 22_050, 150);
+        let library = Library::open_wav_folders_identified(
+            &[folder.0.join("waves")],
+            140.0,
+            None,
+            None,
+            |product| catalogs.identities(product),
+            |product, id| catalogs.aliases(product, id),
+        )
+        .unwrap();
+        let id = Product::D1.global_sample_id(731).unwrap();
+        assert_eq!(
+            library.sample_by_id(id).unwrap().wav_path.as_ref(),
+            Some(&selected)
+        );
+    }
+
+    #[test]
+    fn later_release_digest_prevents_wrong_named_audio_from_matching() {
+        let folder = Folder::new();
+        let audio = waveform(1, 300);
+        let strong = identity(731, "Bass", "Bass", &audio);
+        let mut weak = strong.clone();
+        weak.pcm_digest = None;
+        let catalogs_dir = folder.0.join("catalogs");
+        fs::create_dir(&catalogs_dir).unwrap();
+        for (name, entry) in [("a", weak), ("b", strong)] {
+            fs::write(
+                catalogs_dir.join(format!("{name}.json")),
+                serde_json::to_vec(&catalog_file(name, vec![entry])).unwrap(),
+            )
+            .unwrap();
+        }
+        let catalogs = crate::catalog::Catalogs::open(Some(catalogs_dir));
+        assert!(catalogs.problems().is_empty());
+        let wrong = folder.mono("waves/CODE731.wav", &waveform(2, 300));
+        let library = Library::open_wav_folders_identified(
+            &[folder.0.join("waves")],
+            140.0,
+            None,
+            None,
+            |product| catalogs.identities(product),
+            |product, id| catalogs.aliases(product, id),
+        )
+        .unwrap();
+        let id = Product::D1.global_sample_id(731).unwrap();
+        assert!(library.sample_by_id(id).is_none());
+        assert_eq!(
+            library.unverified_waves().collect::<Vec<_>>(),
+            [(id, wrong.as_path())]
+        );
+    }
+
+    #[test]
+    fn wav_supplements_do_not_reclassify_or_rebind_an_original_provider() {
+        let folder = Folder::new();
+        let original_root = folder.0.join("original");
+        fs::create_dir(&original_root).unwrap();
+        let wav = folder.mono("extra/supplement.wav", &waveform(3, 300));
+        let original_id = Product::D1.global_sample_id(731).unwrap();
+        let wav_id = Product::D1.global_sample_id(732).unwrap();
+        let sample = |id, wav_path| Sample {
+            id,
+            code: format!("CODE{id}"),
+            name: "Sound".into(),
+            bars: 1,
+            group_name: "Bass".into(),
+            offset: 0,
+            length: 600,
+            frame_count: 300,
+            sample_rate: 44_100,
+            source_bpm: 140.0,
+            channels: 1,
+            wav_path,
+            digest: None,
+        };
+        let mut library = Library::fixture(vec![sample(original_id, None)]);
+        library.sources.insert(
+            original_id,
+            AudioSource::Archive {
+                path: original_root.join("archive"),
+            },
+        );
+        let binding = LibraryBinding {
+            product: Product::D1,
+            root: original_root,
+        };
+        library.bindings.push(binding.clone());
+        let mut supplement = Library::fixture(vec![sample(wav_id, Some(wav.clone()))]);
+        supplement.sources.insert(
+            wav_id,
+            AudioSource::Wave {
+                path: wav,
+                origin: None,
+            },
+        );
+        library.supplement_loaded(Product::D1, &supplement);
+
+        assert!(library.has_original_provider(Product::D1));
+        assert!(library.is_wav_product(Product::D1));
+        assert!(!library.is_sparse_wav_product_with_count(Product::D1, 100));
+        assert_eq!(
+            library.song_binding(&binding, &HashSet::from([original_id, wav_id])),
+            binding
+        );
+        assert_eq!(
+            library.describe_missing(Product::D1, 99_999),
+            "D1 native sample 99999 is missing from its library."
+        );
+    }
+
+    #[test]
+    fn selected_loaded_supplements_keep_current_identities_and_binding() {
+        let folder = Folder::new();
+        let current_path = folder.mono("current.wav", &waveform(1, 300));
+        let old_path = folder.mono("old.wav", &waveform(2, 300));
+        let kept_path = folder.mono("kept.wav", &waveform(3, 300));
+        let skipped_path = folder.mono("skipped.wav", &waveform(4, 300));
+        let foreign_path = folder.mono("foreign.wav", &waveform(5, 300));
+        let current_id = Product::D1.global_sample_id(731).unwrap();
+        let kept_id = Product::D1.global_sample_id(732).unwrap();
+        let skipped_id = Product::D1.global_sample_id(733).unwrap();
+        let foreign_id = Product::D4.global_sample_id(1).unwrap();
+        let sample = |id, path: PathBuf| Sample {
+            id,
+            code: format!("CODE{id}"),
+            name: "Sound".into(),
+            bars: 1,
+            group_name: "Bass".into(),
+            offset: 0,
+            length: 600,
+            frame_count: 300,
+            sample_rate: 44_100,
+            source_bpm: 140.0,
+            channels: 1,
+            wav_path: Some(path),
+            digest: None,
+        };
+        let mut library = Library::fixture(vec![sample(current_id, current_path.clone())]);
+        let binding = LibraryBinding {
+            product: Product::D1,
+            root: folder.0.join("provider"),
+        };
+        library.bindings.push(binding.clone());
+        library.unverified.insert(kept_id, old_path.clone());
+        let mut loaded = Library::fixture(vec![
+            sample(current_id, old_path),
+            sample(kept_id, kept_path.clone()),
+            sample(skipped_id, skipped_path),
+            sample(foreign_id, foreign_path),
+        ]);
+        loaded.verified.insert(kept_id);
+        library.supplement_loaded_ids(
+            Product::D1,
+            &loaded,
+            &HashSet::from([current_id, kept_id, foreign_id]),
+        );
+        assert_eq!(
+            library.sample_by_id(current_id).unwrap().wav_path.as_ref(),
+            Some(&current_path)
+        );
+        assert_eq!(
+            library.sample_by_id(kept_id).unwrap().wav_path.as_ref(),
+            Some(&kept_path)
+        );
+        assert!(library.sample_by_id(skipped_id).is_none());
+        assert!(library.sample_by_id(foreign_id).is_none());
+        assert!(library.verified.contains(&kept_id));
+        assert!(!library.unverified.contains_key(&kept_id));
+        assert_eq!(library.bindings(), &[binding]);
+    }
+
     #[test]
     fn audio_digests_identify_wavs_regardless_of_name_folder_offset_or_final_frame() {
         let folder = Folder::new();
@@ -3061,7 +3339,20 @@ mod tests {
     #[test]
     fn resolving_a_song_keeps_supplemental_native_samples() {
         let folder = Folder::new();
-        let metadata = crate::catalog::bundled_wave_metadata(Product::D1).unwrap();
+        let metadata = crate::catalog::identities(Product::D1);
+        if metadata.len() < 3 {
+            // With no local catalog, the product still preserves unresolved
+            // native placements instead of needing the optional data files.
+            let id = Product::D1.global_sample_id(731).unwrap();
+            let mut editor = crate::engine::Editor::new(crate::engine::Project::default());
+            editor.place(id, 0, 0, 256).unwrap();
+            let (project, _) =
+                crate::project_io::resolve(editor.project().clone(), &Library::empty()).unwrap();
+            assert_eq!(project.clips[0].sample_id, id);
+            assert_eq!(project.missing_samples.len(), 1);
+            assert_eq!(project.missing_samples[0].id, id);
+            return;
+        }
         let write = |root: &str, entry: &crate::catalog::WaveMetadata| {
             let code = entry.code.replace('\\', "/");
             let name = Path::new(&code).file_stem().unwrap().to_string_lossy();
@@ -3181,12 +3472,10 @@ mod tests {
         h1.push(identity(500, "house", "Bass", &house_audio));
         let mut d4 = pads("kick");
         d4.push(identity(600, "dance", "Loop", &dance_audio));
-        let catalogs = |product| {
-            Ok::<_, String>(match product {
-                Product::H1 => h1.as_slice(),
-                Product::D4 => d4.as_slice(),
-                _ => &[],
-            })
+        let catalogs = |product| match product {
+            Product::H1 => h1.as_slice(),
+            Product::D4 => d4.as_slice(),
+            _ => &[],
         };
         let house = fs::canonicalize(folder.0.join("House")).unwrap();
         let dance = fs::canonicalize(folder.0.join("Dance4")).unwrap();
@@ -3194,8 +3483,15 @@ mod tests {
             ([house.clone(), dance.clone()], &dance_pads, &house_pads),
             ([dance.clone(), house.clone()], &house_pads, &dance_pads),
         ] {
-            let library =
-                Library::open_wav_folders_identified(&roots, 140.0, None, None, catalogs).unwrap();
+            let library = Library::open_wav_folders_identified(
+                &roots,
+                140.0,
+                None,
+                None,
+                catalogs,
+                |_, _| &[],
+            )
+            .unwrap();
             let path = |product: Product, native_id: u32| {
                 library
                     .sample_by_id(product.global_sample_id(native_id).unwrap())

@@ -321,30 +321,49 @@ parent sample folder when a song uses sounds from earlier products. `d3` songs
 can reference `d2` sounds; the supported `t2` compatibility bank uses `d2` IDs 1
 through 1957.
 
-A `.mix` song stores numeric sample IDs. The application needs locally generated
-sample identity catalogs to resolve them. This repository does not contain those
-catalogs. Each catalog entry has a digest of the original sample's audio. The
-application identifies a WAV when its audio matches, regardless of filename.
+A `.mix` song stores numeric sample IDs. The application resolves them with
+sample identity catalogs: data files in an `assets/catalog` folder beside the
+application (for a build, the repository's `assets/catalog`). The application
+reads them when it starts; they are not part of the executable, and this
+repository does not contain them. Each catalog file describes one release of one
+original product. It names the product and the release, lists the original files
+it was generated from with their hashes, and gives each sample's native ID, name,
+length, tempo, and a digest of its audio. The application identifies a WAV when
+its audio matches, regardless of filename.
 Digest comparisons require mono audio at the original 44.1 kHz rate, matching
 frame counts, and more than two frames. If a comparison is unavailable, the
 reader can infer identity from an unambiguous native code or name, category,
 and duration. It rejects a WAV when its available digest differs, even if its
 name and length match. The import error names that WAV.
 
-Without catalogs, the build embeds empty catalogs. WAV folders, MixJam projects,
-and saved songs still work; unresolved `.mix` sources open as placeholders. To
-embed catalogs, put `d1.json` through `t3.json` in `assets/catalog/` and rebuild.
-The optional `source-tempos.json` adds tempo identities for two original hip-hop
-products, whose shipped help states that all their samples were recorded at
-90 BPM. It is generated from the original media by the owner-local
-`examples/export_source_tempos.rs` (the `examples/` folder is not published),
-with `MIXJAM_TECHNO_MEDIA_ROOT` set, then rebuilt into the executable. This
-metadata adds tempo evidence; it does not add song-format support for those
-products.
+Catalogs of several releases of one product can be present together. They
+merge when the audio, tempo, and bar count agree for every native ID that they
+share. The application retains alternate names for matching. A catalog with
+conflicting audio or timing does not load, and the application names it when it
+starts, as it does for an invalid catalog file. `mixjam-techno inspect`
+lists the loaded catalogs and the files that did not load.
+
+Without a catalog for a product, WAV folders still load as ordinary sounds.
+With WAV-only libraries, native sources that cannot be identified open as
+placeholders in imported or saved songs. Import details name the product that
+had no catalog at import. If a song uses native IDs
+that no loaded catalog of its product lists, Import details say so once for
+that product: the song may come from a release that has no catalog here.
+Add the catalog file to `assets/catalog` and restart the application.
+
+The optional `source-tempos.json` in the same folder adds tempo identities for
+two original hip-hop products, whose shipped help states that all their samples
+were recorded at 90 BPM. It is generated from the original media by the
+owner-local `examples/export_source_tempos.rs` (the `examples/` folder is not
+published), with `MIXJAM_TECHNO_MEDIA_ROOT` set. This metadata adds tempo
+evidence; it does not add song-format support for those products.
 
 ## Known limits
 
 - Original-format writing and portable project bundles are not implemented.
+- A song that uses both an original packed provider and supplemental WAVs for
+  the same product cannot be saved. The current format records only one folder
+  per product. Save leaves an existing song unchanged and explains the conflict.
 - Imported songs do not reproduce every effect or level curve of their source
   programs. MixJam v7 clip edge fades are not rendered, and its master bus and return
   effects play through this application's own mastering pedals and FX buses;

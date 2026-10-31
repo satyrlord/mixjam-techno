@@ -134,6 +134,19 @@ class Song:
         self.master = board()
         self.master_gain = 1.0
         self.sections = []
+        self.palette = self.palette_path = self.palette_roots = None
+
+    def use_palette(self, path):
+        """Hold the song to a palette (`palette.py make`): a sound outside its families stops the script."""
+        import palette as palettes
+        chosen = palettes.load_palette(path)
+        roots = palettes.roots()
+        for sound in self.sounds:
+            if not palettes.allowed(chosen, sound, roots):
+                raise ValueError(f'{sound} is outside the palette {path}')
+        self.palette_path = Path(path)
+        self.palette = chosen
+        self.palette_roots = roots
 
     # Sounds and lanes.
     def tempo(self, path, bpm):
@@ -145,6 +158,10 @@ class Song:
         """The Sound for `path`, linked once. Its tempo: tempo(), else `source_bpm`, else the song's."""
         path = str(Path(path))
         source_bpm = self.tempos.get(path, source_bpm or self.bpm)
+        if self.palette is not None:
+            import palette as palettes  # tools/song/palette.py; only songs that keep a palette need it
+            if not palettes.allowed(self.palette, path, self.palette_roots):
+                raise ValueError(f'{path} is outside the palette {self.palette_path}')
         if path not in self.sounds:
             self.sounds[path] = Sound(path, source_bpm)
             sample_id = IMPORTED_ID_START + len(self.samples)

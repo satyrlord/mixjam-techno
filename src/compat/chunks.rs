@@ -1215,7 +1215,6 @@ pub(crate) fn build_project(
     let mut resolved_waves: HashMap<String, Result<RetainedWave, String>> = HashMap::new();
     // Saved paths whose missing Time Stretcher copy was rebuilt, with its name.
     let mut stretched_names: HashMap<String, String> = HashMap::new();
-    let mut catalogs: HashMap<Product, Vec<crate::catalog::WaveMetadata>> = HashMap::new();
     // D3 keeps the earlier D2 catalog IDs. T2's original loader admits
     // the D2 kind-2 catalog: the contiguous IDs 1..=1957. Do not search other
     // products by ID; identical numbers can identify unrelated sounds.
@@ -1256,14 +1255,7 @@ pub(crate) fn build_project(
                         ),
                     )
                 } else {
-                    if let std::collections::hash_map::Entry::Vacant(entry) =
-                        catalogs.entry(source_product)
-                    {
-                        entry.insert(crate::catalog::wave_metadata(source_product)?);
-                    }
-                    let metadata = catalogs[&source_product]
-                        .iter()
-                        .find(|entry| entry.native_id == native_id);
+                    let metadata = crate::catalog::identity(source_product, native_id);
                     let ticks = metadata.map_or(inferred_ticks, |entry| {
                         entry.bars.saturating_mul(TICKS_PER_BAR)
                     });

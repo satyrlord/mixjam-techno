@@ -7,8 +7,8 @@ python -I tools/song/sampletags.py summary
 
 `tag` reads the audio of each WAV that `samples.py index` listed, measures it, and writes one row per
 file to SAMPLE_TAGS (default: tags.tsv beside the index). It reads at most the first 20 seconds of a
-file. A later run measures only files whose size or modification time changed. It saves its work
-every 10,000 files, so a stopped run resumes where it stopped.
+file. A later run measures files whose size or modification time changed and rows made by an older
+measurement version. It saves its work every 10,000 files, so a stopped run resumes where it stopped.
 
 Measured, per file:
 - level: RMS and peak (dBFS), and the delay before the sound starts (ms);
@@ -23,6 +23,14 @@ Tags derived from those values: dark, bright, sub, noise, tonal, soft, hard, wid
 late-start (sound starts over 30 ms late, as in MP3-decoded files), off-tune (a tonal sound more
 than 20 cents from equal temperament). The thresholds are in TAG_RULES. Measurements describe the
 file, not its musical worth: a person or a critic still judges it.
+
+The edges, from the first and last 10 ms: end_db (the last 10 ms, dBFS), end_spike (the last 4 frames'
+peak against that level) and seam_step (the step from the last frame to the first, against the
+waveform's usual step beside them). Tags: end-spike (a stray frame at the very end: a click wherever
+the file ends), seam-click (a loop whose wrap jumps), cut-end (a one-shot still near its own level
+when it ends). Rows with current measurements but earlier edge measures get only their edges on the
+next run. Edge tags follow the current index's loop classification. A failed edge read drops the row's
+edge tags and is retried.
 
 `find` searches the tags joined with the index. --tag and --not can repeat.
 """
@@ -41,8 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
 import samples  # noqa: E402
 
-COLUMNS = ['root', 'path', 'bytes', 'mtime', 'rms_db', 'peak_db', 'lead_ms', 'low', 'bright', 'centroid',
-           'flatness', 'attack_ms', 'width_db', 'key', 'key_fit', 'tuning', 'chroma', 'tags', 'error']
+COLUMNS = ['root', 'path', 'bytes', 'mtime', 'measure_version', 'rms_db', 'peak_db', 'lead_ms', 'low', 'bright', 'centroid',
+           'flatness', 'attack_ms', 'width_db', 'key', 'key_fit', 'tuning', 'chroma', 'end_db', 'end_spike',
+           'end_abs', 'seam_step', 'seam_abs', 'edge_version', 'tags', 'error']
 NOTES = samples.NOTES
 SECONDS = 20.0
 CHECKPOINT = 10_000
@@ -63,10 +72,24 @@ TAG_RULES = {
     'late-start': lambda m: m['lead_ms'] > 30,
     'off-tune': lambda m: m['flatness'] < 0.05 and m['key_fit'] > 0.6 and abs(m['tuning']) > 20,
 }
+# The file's edges. A loop's wrap (its last frame into its first) clicks when the step there is many
+# times the waveform's usual step beside it; a one-shot that still sounds near its own level in its last
+# 10 ms was cut off, not faded.
+EDGE_SECONDS = 0.01
+MEASURE_VERSION = '2'
+EDGE_VERSION = '3'
+EDGE_RULES = {
+    # A stray frame at the very end, far over the 10 ms before it (a click wherever the file ends).
+    'end-spike': lambda m, loop: m['end_spike'] > 10 and m['end_abs'] > 0.01,
+    'seam-click': lambda m, loop: (loop and m['seam_step'] > 12 and m['seam_abs'] > 0.01
+                                   and not (m['end_spike'] > 10 and m['end_abs'] > 0.01)),
+    'cut-end': lambda m, loop: not loop and m['end_db'] > -40 and m['end_db'] > m['rms_db'] - 6,
+}
 
 
-def read_audio(path, seconds=SECONDS):
-    """(rate, float frames x channels) of the first `seconds` of a PCM or float WAV."""
+def read_audio(path, seconds=SECONDS, tail=False):
+    """(rate, float frames x channels) of the first `seconds` of a PCM or float WAV, or of the last
+    `seconds` with tail=True."""
     with open(path, 'rb') as f:
         head = f.read(12)
         if head[:4] != b'RIFF' or head[8:12] != b'WAVE':
@@ -88,6 +111,8 @@ def read_audio(path, seconds=SECONDS):
                 tag, channels, rate, align, bits = fmt
                 available = min(length, size - position - 8)
                 frames = min(available // align, int(rate * seconds))
+                if tail:
+                    f.seek(position + 8 + (available // align - frames) * align)
                 raw = f.read(frames * align)
                 return rate, decode(raw, tag, channels, bits)
             position += 8 + length + (length & 1)
@@ -116,11 +141,17 @@ def decode(raw, tag, channels, bits):
 
 def measure(rate, x):
     """The measurements of one file's audio (frames x channels, floats)."""
-    mono = x.mean(axis=1).astype(np.float64)
+    channels = x.astype(np.float64)
+    mono = channels.mean(axis=1)
     peak = float(np.abs(x).max()) if x.size else 0.0
     if peak < 1e-6 or len(mono) < rate // 20:
         raise ValueError('silent or shorter than 50 ms')
-    rms = float(np.sqrt(np.mean(mono ** 2)))
+    rms = float(np.sqrt(np.mean(channels ** 2)))
+    # A stereo fold-down can cancel an audible signal. In that case use the
+    # strongest channel for onset, spectrum and pitch analysis.
+    if np.sqrt(np.mean(mono ** 2)) < rms * 0.1:
+        strongest = int(np.argmax(np.mean(channels ** 2, axis=0)))
+        mono = channels[:, strongest]
     lead = int(np.argmax(np.abs(mono) > peak * 0.01))
     # Tone from averaged 4096-point frames.
     frame = 4096
@@ -172,13 +203,47 @@ def tags_of(m):
     return [name for name, rule in TAG_RULES.items() if rule(m)]
 
 
+def edges(path):
+    """end_db (RMS of the last 10 ms, dBFS), seam_step (the step from the last frame to the first against the
+    mean step beside them) and seam_abs (that step's size)."""
+    rate, head = read_audio(path, EDGE_SECONDS)
+    _, tail = read_audio(path, EDGE_SECONDS, tail=True)
+    if len(tail) < 16 or len(head) < 2:
+        raise ValueError('shorter than its edges')
+    channels = tail[:-4].astype(np.float64)
+    end_rms = float(np.sqrt(np.mean(channels ** 2)))
+    # Compare each channel with its own tail level. A stereo signal can be
+    # nearly silent in mono even though both channels are loud.
+    channel_rms = np.sqrt(np.mean(channels ** 2, axis=0))
+    peaks = np.abs(tail[-4:]).max(axis=0)
+    ratios = peaks / (channel_rms + 1e-4)
+    spike_channel = int(np.argmax(ratios))
+    beside = np.concatenate([np.abs(np.diff(tail, axis=0)).ravel(), np.abs(np.diff(head, axis=0)).ravel()])
+    step = float(np.abs(head[0] - tail[-1]).max())
+    return dict(end_db=round(float(20 * np.log10(end_rms + 1e-9)), 2),
+                end_spike=round(float(ratios[spike_channel]), 2), end_abs=round(float(peaks[spike_channel]), 5),
+                seam_step=round(step / (float(beside.mean()) + 1e-6), 2), seam_abs=round(step, 5))
+
+
+def edge_tags(row, loop):
+    m = {key: float(row[key]) for key in ('end_db', 'end_spike', 'end_abs', 'seam_step', 'seam_abs', 'rms_db')}
+    return [name for name, rule in EDGE_RULES.items() if rule(m, loop)]
+
+
+def retag_edges(row, loop):
+    """Retain the non-edge tags and derive edge tags from the current index."""
+    existing = [tag for tag in row['tags'].split() if tag not in EDGE_RULES]
+    row['tags'] = ' '.join(existing + edge_tags(row, loop))
+
+
 def row_for(item):
     """One tags row; never raises, so one bad file cannot stop a run."""
-    root, path, size, mtime = item
-    row = dict(root=root, path=path, bytes=size, mtime=mtime)
+    root, path, size, mtime, loop = item
+    row = dict(root=root, path=path, bytes=size, mtime=mtime, measure_version=MEASURE_VERSION)
     try:
         m = measure(*read_audio(Path(root) / path))
-        if not all(np.isfinite(v) for k, v in m.items() if k not in ('key', 'chroma'))                 or not np.isfinite(m['chroma']).all():
+        if (not all(np.isfinite(v) for k, v in m.items() if k not in ('key', 'chroma'))
+                or not np.isfinite(m['chroma']).all()):
             raise ValueError('a measurement is not a number')
         values = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in m.items() if k != 'chroma'}
         values['chroma'] = ','.join(str(int(round(v * 1000))) for v in m['chroma'])
@@ -187,6 +252,21 @@ def row_for(item):
         row['error'] = str(error)[:120]
         return row
     row.update(values)
+    return edges_for((row, loop))
+
+
+def edges_for(item):
+    """An earlier row with its edges added (tags.tsv rows from before the edge measures)."""
+    row, loop = item
+    try:
+        row.update(edges(Path(row['root']) / row['path']))
+        row['edge_version'] = EDGE_VERSION
+        retag_edges(row, loop)
+        row['error'] = ''
+    except Exception as error:  # noqa: BLE001 - the row keeps its other tags and records why it has no edges
+        # Edge tags that remain come from an earlier edge algorithm; drop them until the edges are read.
+        row['tags'] = ' '.join(tag for tag in row.get('tags', '').split() if tag not in EDGE_RULES)
+        row['error'] = ('edges: ' + str(error))[:120]
     return row
 
 
@@ -202,6 +282,17 @@ def load(path=None):
         return list(csv.DictReader(f, delimiter='\t'))
 
 
+def matches_index(measurement, info):
+    """A cached measurement applies only to the same indexed file version."""
+    return (measurement is not None and info is not None and measurement.get('bytes') is not None and
+            measurement.get('mtime') is not None and
+            measurement.get('bytes') == info.get('bytes') and measurement.get('mtime') == info.get('mtime'))
+
+
+def matches_measurement(measurement, info):
+    return matches_index(measurement, info) and measurement.get('measure_version') == MEASURE_VERSION
+
+
 def save(rows, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix('.tmp')
@@ -215,24 +306,34 @@ def save(rows, target):
 def tag(jobs, limit=None):
     target = tags_path()
     old = {(r['root'], r['path']): r for r in load(target)} if target.exists() else {}
-    done, todo = {}, []
+    done, todo, edges_todo = {}, [], []
     for row in samples.load():
         if row['type'] != 'wav' or row['kind'] == 'unreadable':
             continue
         key = (row['root'], row['path'])
+        loop = bool(row['bars'])  # a whole number of bars at its tempo
         previous = old.get(key)
         if previous and previous['bytes'] == row['bytes'] and previous['mtime'] == row['mtime']:
             done[key] = previous
+            if previous.get('measure_version') != MEASURE_VERSION:
+                todo.append((row['root'], row['path'], row['bytes'], row['mtime'], loop))
+            elif previous['error'].startswith('edges:') or (
+                    not previous['error'] and previous.get('edge_version') != EDGE_VERSION):
+                edges_todo.append((previous, loop))
+            elif not previous['error']:
+                retag_edges(previous, loop)
         else:
-            todo.append((row['root'], row['path'], row['bytes'], row['mtime']))
+            todo.append((row['root'], row['path'], row['bytes'], row['mtime'], loop))
     todo = todo[:limit] if limit else todo
-    print(f'{len(done)} unchanged, {len(todo)} to measure', file=sys.stderr)
+    edges_todo = edges_todo[:limit] if limit else edges_todo
+    print(f'{len(done)} unchanged ({len(edges_todo)} without edges), {len(todo)} to measure', file=sys.stderr)
     with ProcessPoolExecutor(jobs) as pool:
-        for i, row in enumerate(pool.map(row_for, todo, chunksize=32), 1):
-            done[(row['root'], row['path'])] = row
-            if i % CHECKPOINT == 0:
-                save(done.values(), target)
-                print(f'{i}/{len(todo)}', file=sys.stderr, flush=True)
+        for work, items in ((row_for, todo), (edges_for, edges_todo)):
+            for i, row in enumerate(pool.map(work, items, chunksize=32), 1):
+                done[(row['root'], row['path'])] = row
+                if i % CHECKPOINT == 0:
+                    save(done.values(), target)
+                    print(f'{work.__name__}: {i}/{len(items)}', file=sys.stderr, flush=True)
     save(done.values(), target)
     errors = sum(1 for r in done.values() if r.get('error'))
     print(f'{target}: {len(done)} files ({errors} without tags)')
@@ -244,9 +345,10 @@ def find(args):
     shown = 0
     for row in load():
         tags = set(row['tags'].split())
-        if row['error'] or not set(args.tag) <= tags or set(args.not_) & tags:
+        info = index.get((row['root'], row['path']))
+        if (row['error'] or not matches_measurement(row, info)
+                or not set(args.tag) <= tags or set(args.not_) & tags):
             continue
-        info = index.get((row['root'], row['path']), {})
         text = (row['root'] + '/' + row['path']).lower()
         if any(word.lower() not in text for word in args.words):
             continue

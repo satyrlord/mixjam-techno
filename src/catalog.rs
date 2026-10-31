@@ -1,5 +1,11 @@
 //! Native catalog profiles. Native IDs come from saved indexes or recovered loaders.
 //! Installation paths do not form part of sample identity.
+mod releases;
+
+pub use releases::{
+    CatalogFile, Catalogs, FOLDER, Release, SCHEMA, SOURCE_TEMPOS, SourceFile, fingerprint,
+};
+
 use crate::products::Product;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -112,38 +118,25 @@ pub fn pcm_identity_hex(samples: &[i16]) -> String {
         .collect()
 }
 
-pub fn wave_metadata(product: Product) -> Result<Vec<WaveMetadata>, String> {
-    bundled_wave_metadata(product).map(<[WaveMetadata]>::to_vec)
+/// The catalogs of the application's `assets/catalog` folder. They are read
+/// once per process, on first use: a folder scan consults them many times.
+pub fn catalogs() -> &'static Catalogs {
+    static CATALOGS: std::sync::OnceLock<Catalogs> = std::sync::OnceLock::new();
+    CATALOGS.get_or_init(|| Catalogs::open(crate::runtime_data::find(FOLDER)))
 }
 
-/// The bundled identities of one product. They are parsed once per process:
-/// a folder scan consults every catalog several times.
-pub fn bundled_wave_metadata(product: Product) -> Result<&'static [WaveMetadata], String> {
-    type Parsed = std::sync::OnceLock<Result<Vec<WaveMetadata>, String>>;
-    static CATALOGS: [Parsed; Product::ALL.len()] = [const { Parsed::new() }; Product::ALL.len()];
-    let index = Product::ALL
-        .iter()
-        .position(|known| *known == product)
-        .expect("Product::ALL lists every product.");
-    CATALOGS[index]
-        .get_or_init(|| parse_wave_metadata(product))
-        .as_deref()
-        .map_err(Clone::clone)
+/// The identities of one product from every loaded release, by native ID.
+/// Without a catalog for the product the list is empty.
+pub fn identities(product: Product) -> &'static [WaveMetadata] {
+    catalogs().identities(product)
 }
 
-fn parse_wave_metadata(product: Product) -> Result<Vec<WaveMetadata>, String> {
-    let text = match product {
-        Product::D1 => include_str!(concat!(env!("OUT_DIR"), "/d1.json")),
-        Product::D2 => include_str!(concat!(env!("OUT_DIR"), "/d2.json")),
-        Product::D3 => include_str!(concat!(env!("OUT_DIR"), "/d3.json")),
-        Product::D4 => include_str!(concat!(env!("OUT_DIR"), "/d4.json")),
-        Product::H1 => include_str!(concat!(env!("OUT_DIR"), "/h1.json")),
-        Product::T1 => include_str!(concat!(env!("OUT_DIR"), "/t1.json")),
-        Product::T2 => include_str!(concat!(env!("OUT_DIR"), "/t2.json")),
-        Product::T3 => include_str!(concat!(env!("OUT_DIR"), "/t3.json")),
-    };
-    serde_json::from_str(text)
-        .map_err(|error| format!("Cannot read bundled sample identities: {error}"))
+pub fn identity(product: Product, native_id: u32) -> Option<&'static WaveMetadata> {
+    catalogs().identity(product, native_id)
+}
+
+pub(crate) fn aliases(product: Product, native_id: u32) -> &'static [WaveMetadata] {
+    catalogs().aliases(product, native_id)
 }
 
 pub fn has_native_catalog(product: Product, root: &Path) -> bool {
@@ -647,26 +640,21 @@ mod tests {
     }
     static NEXT: AtomicU64 = AtomicU64::new(0);
     #[test]
-    #[cfg_attr(
-        not(bundled_catalog),
-        ignore = "Needs the locally generated sample catalogs."
-    )]
-    fn bundled_identities_are_complete_valid_and_do_not_need_research_files() {
-        let expected = [2845, 3795, 5049, 5330, 3563, 3017, 4015, 4006];
-        let mut total = 0;
-        for (product, count) in Product::ALL.into_iter().zip(expected) {
-            let metadata = wave_metadata(product).unwrap();
-            assert_eq!(metadata.len(), count, "{}", product.label());
+    fn loaded_runtime_catalog_identities_are_valid_and_unique() {
+        let catalogs = catalogs();
+        // The catalog folder is optional, but every file in it must load:
+        // the application warns at startup about any that does not.
+        assert!(catalogs.problems().is_empty(), "{:?}", catalogs.problems());
+        for product in Product::ALL {
+            let metadata = catalogs.identities(product);
             let mut ids = HashSet::new();
-            for entry in &metadata {
+            for entry in metadata {
                 assert!(ids.insert(product.global_sample_id(entry.native_id).unwrap()));
                 assert!(entry.bars > 0 && entry.frame_count > 0);
                 assert!(entry.source_bpm.is_finite() && entry.source_bpm > 0.0);
                 assert!(!entry.name.is_empty() && !entry.code.is_empty());
             }
-            total += metadata.len();
         }
-        assert_eq!(total, 31_620);
     }
     struct Folder(PathBuf);
     impl Folder {

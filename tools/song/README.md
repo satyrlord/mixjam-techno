@@ -17,6 +17,8 @@ A tool that needs a missing key stops and names the key.
 |---|---|
 | `SAMPLES_FOLDER_1` to `SAMPLES_FOLDER_9` | `samples.py` (the libraries it indexes) and `bright.py` (relative patterns are tried under each library) |
 | `SAMPLE_INDEX` | `samples.py`; optional, default `local-data/samples/index.tsv` |
+| `SAMPLE_TAGS`, `SAMPLE_VERDICTS`, `SAMPLE_OWNER_VERDICTS` | `sampletags.py`, `verdicts.py` and `palette.py`; optional, default `tags.tsv`, `verdicts.tsv` and `owner-verdicts.tsv` beside the index |
+| `SAMPLE_CATALOGS` | `palette.py` (the product sounds that songs place by id); optional, default `assets/catalog` |
 | `REFERENCE_ALBUM_FOLDER` | `master.py --album` |
 | `ARTIST_PROFILE` | the song-review skill; `reference.json` beside it is the default reference profile |
 | `REFERENCE_PROFILE` | `master.py` and `measure.py` (targets and reference columns); optional |
@@ -34,6 +36,9 @@ A tool that needs a missing key stops and names the key.
 | `master.py --album` | `master.py --album [DIR] [--track NAME ...] [--out PROFILE.json]` | Measures a reference album and writes the reference profile. |
 | `stereo.py` | `stereo.py [--bpm N] WAV...` | Low-end share, width above 120 Hz, and side level of sounds. |
 | `samples.py` | `samples.py index` / `samples.py find [WORD ...] [--bpm N] [--key KEY] [--kind KIND] [--loops]` / `samples.py summary` | Indexes WAV headers and WAV/MIDI path metadata (tempo, key, chord, root note, bars, kind, and where each came from), and searches the index. Later runs read headers again when file size, modification time, or pack metadata changes. MIDI notes are not read. |
+| `sampletags.py` | `sampletags.py tag [--jobs N]` / `sampletags.py find [WORD ...] --tag TAG [--not TAG]` / `sampletags.py summary` | Measures every indexed WAV's audio (level, tone, attack, stereo, chroma, key, tuning, and its first and last 10 ms) and tags it: dark, bright, tonal, off-tune, late-start, end-spike, seam-click, cut-end and more. Later runs measure only changed files. |
+| `verdicts.py` | `verdicts.py build` / `verdicts.py show [WORD ...] [--verdict V] [--reason R]` / `verdicts.py summary` / `verdicts.py family WORD...` | Gives every sound a verdict from its measurements (ok, caution, reject, with reasons), groups sounds into families, finds numbered chord files that do not play their chords and families out of tune (with the cents to add), and applies the owner's verdicts over them. |
+| `palette.py` | `palette.py census` / `families SONG` / `suggest [WORD ...] [--kind] [--key] [--tag]` / `make PALETTE --from SONG` / `add` / `remove` / `show` / `check SONG PALETTE` | A song's palette of sound families: counts the families songs use, suggests families from the verdicts, and checks that a song uses only its palette. `Song.use_palette(PATH)` in `mixjam.py` holds a composer script to it. |
 | `bright.py` | `bright.py PATTERN...` | Brightness of sounds, to find harsh hats. |
 | `drumfamily.py` | `drumfamily.py [--bpm N] WAV...` | Rhythm and tone likeness of drum loops. |
 | `midinotes.py` | `midinotes.py SEMITONES MIDI...` | Notes per bar of MIDI loops. |
@@ -42,6 +47,17 @@ A tool that needs a missing key stops and names the key.
 | `barnotes.py` | `barnotes.py [--song-bpm N] WAV BPM CENTS ...` | Notes per bar of a WAV after varispeed and clip pitch. |
 
 `env.py` reads `.env.local`; `harmony.py` holds keys, scales, and chords.
+
+After indexing changed WAVs, run `sampletags.py tag` before `verdicts.py build`.
+A verdict does not use a measurement from an older file. After this update, run
+`sampletags.py tag` once to refresh the cached measurements with channel-aware
+levels, then run `verdicts.py build`. The refresh remeasures older rows. For
+rows with current measurements, old edge measures are updated without repeating
+the other measurements, and a failed edge read is retried on the next run.
+The palette reader checks each verdict against the current file and analysis.
+Palette files made from songs retain pathless native
+samples by ID. The palette reader uses format-2 release catalogs and reports
+invalid or conflicting files.
 
 Gain fitting stops before changing the song if the required master gain is
 outside the song format's range. Adjust the lane gains before trying again.

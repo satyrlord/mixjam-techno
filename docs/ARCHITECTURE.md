@@ -280,12 +280,18 @@ takes providers that are already loaded from the current library and reads a
 provider from disk only when its folder is gone.
 When a saved provider replaces a partial product during song opening, it
 keeps already loaded sample identities that the saved provider does not have.
+When an original provider is already loaded, opening also checks the song's
+saved WAV folder for used native IDs that provider lacks. It supplements only
+those IDs and keeps the current provider's identities and the saved binding.
 If the used native WAVs of one product cannot fit under one saved folder,
 `project_io::save_with_library` retains their exact file bytes together under
 `native-providers/<product>/<content hash>` in the data folder. It verifies
 the native IDs, decoded audio and timing before saving that binding. Repeated
 saves reuse verified content. A retention failure leaves the existing song
 unchanged. This keeps native identities without changing the song format.
+Format 18 records one provider per product. A song using both a packed original
+provider and supplemental WAVs for that product cannot be represented by that
+binding. Save rejects the combination before replacing the song.
 
 A song queued behind a folder scan records both the render revision and the
 editor generation. Any intervening project edit cancels that deferred open,
@@ -546,15 +552,31 @@ new probes change it. `source_tempo.rs` resolves folder tempo from matching
 original audio before the duration-based fallback is used. A pack's `BPM.INF`
 and tempo tokens in file names are stated tempos. They override the duration
 reading but not matching original audio. Optional supplemental tempo identities
-are embedded at build time, like the native identity catalogs.
+come from `source-tempos.json` in the runtime catalog folder.
 
 ## Runtime data folders and Album Review
 
-Some data ships beside the executable and is read at run time, not compiled
-in. `src/runtime_data.rs` finds such a folder, `assets/<name>`, in the
+Some application data lives beside the executable and is read at run time, not
+compiled in. `src/runtime_data.rs` finds such a folder, `assets/<name>`, in the
 executable's folder or up to four folders above it: the repository root for a
 build in `target/release` or `target/debug/deps`, or the installation folder.
-The lookup is generic, so the sample catalogs can use it later.
+
+`src/catalog/releases.rs` reads the sample identity catalogs,
+`assets/catalog/*.json`. Each file describes one release of one original
+product: its product, a release name, the original source files with their
+sizes and hashes, a fingerprint of those files, and the identity of each
+sample. `catalog::catalogs()` reads the folder once per process. Releases of
+one product merge into one identity list when they agree on audio and timing
+for every native ID they share. The loader retains alternative names and the
+strongest available audio digest. A release that gives a shared ID different
+audio, tempo, or bar count, an invalid file, or
+a second copy of a loaded release does not load and is listed in
+`Catalogs::problems`, which startup reports. `project_io::open_song` adds a
+source notice for each product whose catalogs lack some of a `.mix` song's
+native IDs, unless an original installation serves that product.
+The generated catalogs are not in the repository. Their distribution remains
+an owner decision; a build or installation without them cannot identify native
+WAVs from those catalogs and retains unresolved sources as placeholders.
 
 `src/album_review.rs` owns the Album Review: `Shelf` reads
 `assets/album-review/<id>.json`, sorted by id, and lists each file that does

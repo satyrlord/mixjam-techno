@@ -133,6 +133,14 @@ fn run() -> Result<(), String> {
     }
     let mut library = Library::empty();
     let mut startup_messages = Vec::new();
+    for (file, error) in mixjam_techno::catalog::catalogs().problems() {
+        let warning = format!("Sample catalog {file} was not loaded: {error}");
+        if command == "gui" {
+            startup_messages.push(warning);
+        } else {
+            eprintln!("{warning}");
+        }
+    }
     if samples.is_empty() && command == "gui" {
         match project_io::load_wave_config() {
             Ok(Some(config)) => {
@@ -215,6 +223,7 @@ fn run() -> Result<(), String> {
     }
     match command.as_str() {
         "inspect" => {
+            let catalogs = mixjam_techno::catalog::catalogs();
             let mapped = library
                 .samples
                 .iter()
@@ -229,6 +238,8 @@ fn run() -> Result<(), String> {
                     "wavs_with_different_audio":library.unverified_waves().map(|(id,path)| serde_json::json!({"id":id,"path":path})).collect::<Vec<_>>(),
                     "skipped_wavs":library.skipped_waves().iter().map(|(path,error)| serde_json::json!({"path":path,"error":error})).collect::<Vec<_>>(),
                     "duplicate_copies":library.duplicate_copies().len(),"duplicate_copy_examples":library.duplicate_copies().iter().take(5).collect::<Vec<_>>(),
+                    "catalogs":{"folder":catalogs.folder(),"releases":catalogs.releases(),
+                        "unloaded_files":catalogs.problems().iter().map(|(file,error)| serde_json::json!({"file":file,"error":error})).collect::<Vec<_>>()},
                     "tracks":mixjam_techno::engine::TRACK_COUNT,"supported_bpms":mixjam_techno::engine::SUPPORTED_BPMS,
                     "libraries":library.bindings().iter().map(|binding| serde_json::json!({"product":binding.product.slug(),
                         "samples":library.samples.iter().filter(|sample| Product::sample_key(sample.id).is_some_and(|(product,_)|product==binding.product)).count()})).collect::<Vec<_>>()})

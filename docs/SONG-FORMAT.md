@@ -135,6 +135,11 @@ with its name, group, source tempo, sample rate, and origin product.
 unresolved sources, conflict choices, and import provenance, so an imported
 song reopens without its original file.
 
+`libraries` records at most one provider folder for each product. A song
+that uses both packed original audio and supplemental WAVs for one product
+cannot retain both providers in this format. Save rejects that combination
+before replacing the destination.
+
 ## Version history
 
 Each version opens as it sounded when it was saved. Saving an earlier song

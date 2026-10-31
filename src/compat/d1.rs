@@ -57,7 +57,19 @@ fn convert(
     bytes: &[u8],
     path: &Path,
     library: &Library,
+    resolve: impl FnMut(u16) -> Result<(u32, u32, String), String>,
+) -> Result<Project, String> {
+    convert_with_catalog(bytes, path, library, resolve, |native_id| {
+        crate::catalog::identity(Product::D1, native_id)
+    })
+}
+
+fn convert_with_catalog<'a>(
+    bytes: &[u8],
+    path: &Path,
+    library: &Library,
     mut resolve: impl FnMut(u16) -> Result<(u32, u32, String), String>,
+    identity: impl Fn(u32) -> Option<&'a crate::catalog::WaveMetadata>,
 ) -> Result<Project, String> {
     if bytes.len() < TRAILER_OFFSET || bytes.get(..2) != Some(&[6, 10]) {
         return Err("This file does not contain the supported D1 MIX profile.".into());
@@ -114,7 +126,6 @@ fn convert(
         track.left_enabled = matches!(route, 0 | 1);
         track.right_enabled = matches!(route, 0 | 2);
     }
-    let catalog = crate::catalog::wave_metadata(Product::D1)?;
     let mut sources = HashMap::new();
     for (source_id, fields) in footer.imports {
         let base = path.parent().unwrap_or_else(|| Path::new("."));
@@ -213,9 +224,7 @@ fn convert(
                     if unresolved_kit.is_some() {
                         None
                     } else {
-                        catalog
-                            .iter()
-                            .find(|sample| sample.native_id == u32::from(event.sample))
+                        identity(u32::from(event.sample))
                     },
                 )?;
                 if let Some((_, (first, last, name))) = saved_kit {
@@ -808,17 +817,26 @@ mod tests {
 
     #[test]
     fn missing_catalog_audio_keeps_duration_metadata_and_every_placement() {
-        let sample = crate::catalog::wave_metadata(Product::D1)
-            .unwrap()
-            .into_iter()
-            .find(|sample| sample.native_id < u32::from(IMPORT_FIRST) && sample.bars > 1)
-            .unwrap();
+        let sample = crate::catalog::WaveMetadata {
+            native_id: u32::from(FACTORY_FIRST),
+            code: "fixture.pxd".into(),
+            name: "Fixture".into(),
+            group_name: "Bass".into(),
+            bars: 2,
+            source_bpm: 140.0,
+            frame_count: 44_100,
+            pcm_digest: None,
+        };
         let mut bytes = mix();
         place(&mut bytes, 0, 0, sample.native_id as u16, 0);
         place(&mut bytes, 12, 2, sample.native_id as u16, 4);
-        let project = convert(&bytes, Path::new("missing.mix"), &Library::empty(), |_| {
-            Err("Audio unavailable.".into())
-        })
+        let project = convert_with_catalog(
+            &bytes,
+            Path::new("missing.mix"),
+            &Library::empty(),
+            |_| Err("Audio unavailable.".into()),
+            |id| (id == sample.native_id).then_some(&sample),
+        )
         .unwrap();
         assert_eq!(project.clips.len(), 2);
         assert_eq!(project.missing_samples.len(), 1);

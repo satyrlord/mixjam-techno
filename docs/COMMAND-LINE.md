@@ -17,7 +17,10 @@ warning on standard error; the command fails when no folder can be read.
 `--source-bpm BPM` supplies the fallback tempo for unrecognized WAVs in folders
 whose loop lengths do not agree on one.
 `inspect` reports how many identities the audio verified and lists WAVs whose
-audio differs from the sample they are named after. `convert` saves a `.mixjam` song;
+audio differs from the sample they are named after. It also lists the sample
+catalogs loaded from `assets/catalog` and each catalog file that did not load,
+with the reason. Every command reports such a file on standard error.
+`convert` saves a `.mixjam` song;
 `render` writes stereo WAV. With `--stems FOLDER` instead of `--output`, `render`
 writes what Export tracks writes: each track that plays and each fed FX
 return to its own WAV in that folder, which it creates if needed, without the

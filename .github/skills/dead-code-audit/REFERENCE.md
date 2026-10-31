@@ -11,7 +11,9 @@ If all these conditions are true, delete a candidate:
 Common false positives include these items:
 
 - Rust modules used only with `--no-default-features` or the `gui` feature
-- sample catalogs and font or rail assets embedded at build time
+- font and rail assets embedded at build time
+- runtime data that the application reads from `assets/`: the sample catalogs
+  in `assets/catalog` and the reviews in `assets/album-review`
 - CLI commands reached through string dispatch
 - migrations used only by supported older projects
 - optional fixture and oracle tests

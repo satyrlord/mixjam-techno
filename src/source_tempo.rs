@@ -6,27 +6,26 @@ use std::collections::HashMap;
 pub(crate) struct SourceTempos(HashMap<[u8; 16], Option<f64>>);
 
 impl SourceTempos {
-    pub(crate) fn bundled() -> Result<Self, String> {
+    /// The tempos of the runtime catalogs and their `source-tempos.json`,
+    /// gathered once per process.
+    pub(crate) fn shared() -> &'static Self {
+        static SHARED: std::sync::OnceLock<SourceTempos> = std::sync::OnceLock::new();
+        SHARED.get_or_init(|| Self::from_catalogs(catalog::catalogs()))
+    }
+
+    fn from_catalogs(catalogs: &catalog::Catalogs) -> Self {
         let mut result = Self::default();
         for product in Product::ALL {
-            for entry in catalog::bundled_wave_metadata(product)? {
+            for entry in catalogs.identities(product) {
                 if let Some(digest) = entry.pcm_identity().filter(|_| entry.frame_count > 2) {
                     result.insert(digest, entry.source_bpm);
                 }
             }
         }
-        let extra: Vec<([u8; 16], f64)> = serde_json::from_str(include_str!(concat!(
-            env!("OUT_DIR"),
-            "/source-tempos.json"
-        )))
-        .map_err(|error| format!("Cannot read bundled source tempos: {error}"))?;
-        for (digest, bpm) in extra {
-            if !bpm.is_finite() || bpm <= 0.0 {
-                return Err("A bundled source tempo is invalid.".into());
-            }
-            result.insert(digest, bpm);
+        for (digest, bpm) in catalogs.source_tempos() {
+            result.insert(*digest, *bpm);
         }
-        Ok(result)
+        result
     }
 
     fn insert(&mut self, digest: [u8; 16], bpm: f64) {
@@ -122,6 +121,59 @@ mod tests {
         evidence.insert([1; 16], 180.0);
         evidence.insert([1; 16], 90.0);
         assert_eq!(evidence.folder(probes[..20].iter()), None);
+    }
+
+    #[test]
+    fn runtime_catalogs_and_their_source_tempos_both_give_evidence() {
+        let folder =
+            std::env::temp_dir().join(format!("mixjam-source-tempos-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let audio = [0, 3, 9, 4, 1];
+        let sources = vec![catalog::SourceFile {
+            path: "index.inf".into(),
+            bytes: 1,
+            sha256: "00".repeat(32),
+        }];
+        let file = catalog::CatalogFile {
+            schema: catalog::SCHEMA,
+            product: Product::T1,
+            release: "test".into(),
+            fingerprint: catalog::fingerprint(&sources),
+            sources,
+            samples: vec![catalog::WaveMetadata {
+                native_id: 1,
+                code: "CODE".into(),
+                name: "Sound".into(),
+                group_name: "Loop".into(),
+                bars: 1,
+                source_bpm: 180.0,
+                frame_count: 5,
+                pcm_digest: Some(catalog::pcm_identity_hex(&audio)),
+            }],
+        };
+        std::fs::write(folder.join("t1.json"), serde_json::to_vec(&file).unwrap()).unwrap();
+        std::fs::write(
+            folder.join(catalog::SOURCE_TEMPOS),
+            serde_json::to_vec(&[([2_u8; 16], 90.0)]).unwrap(),
+        )
+        .unwrap();
+        let catalogs = catalog::Catalogs::open(Some(folder.clone()));
+        assert!(catalogs.problems().is_empty(), "{:?}", catalogs.problems());
+        let evidence = SourceTempos::from_catalogs(&catalogs);
+        let digest = catalog::pcm_identity(&audio);
+        let probes = [
+            probe(Some(digest)),
+            probe(Some(digest)),
+            probe(Some(digest)),
+        ];
+        assert_eq!(evidence.folder(probes.iter()), Some(180.0));
+        let probes = [
+            probe(Some([2; 16])),
+            probe(Some([2; 16])),
+            probe(Some([2; 16])),
+        ];
+        assert_eq!(evidence.folder(probes.iter()), Some(90.0));
+        std::fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]

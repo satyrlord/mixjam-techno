@@ -70,7 +70,19 @@ fn convert(
     mix: &Mix,
     mix_path: &Path,
     library: &Library,
+    resolve_native: impl FnMut(u16) -> Result<(u32, u32), String>,
+) -> Result<Project, String> {
+    convert_with_catalog(mix, mix_path, library, resolve_native, |native_id| {
+        crate::catalog::identity(Product::T1, native_id)
+    })
+}
+
+fn convert_with_catalog<'a>(
+    mix: &Mix,
+    mix_path: &Path,
+    library: &Library,
     mut resolve_native: impl FnMut(u16) -> Result<(u32, u32), String>,
+    identity: impl Fn(u32) -> Option<&'a crate::catalog::WaveMetadata>,
 ) -> Result<Project, String> {
     if let Some(event) = mix
         .events()
@@ -104,7 +116,6 @@ fn convert(
     }
 
     let base = mix_path.parent().unwrap_or_else(|| Path::new("."));
-    let catalog = crate::catalog::wave_metadata(Product::T1)?;
     let mut sources = HashMap::new();
     for record in &footer.imports {
         let saved_path = import_reference_path(&record.path, base)?;
@@ -217,9 +228,7 @@ fn convert(
                     if unresolved_kit.is_some() {
                         None
                     } else {
-                        catalog
-                            .iter()
-                            .find(|sample| sample.native_id == u32::from(event.sample_id))
+                        identity(u32::from(event.sample_id))
                     },
                 )?;
                 if let Some(kit) = unresolved_kit {
@@ -728,18 +737,32 @@ mod tests {
     #[test]
     fn empty_library_preserves_catalog_lengths_and_all_native_placements() {
         let fixture = Fixture::new();
-        let sample = crate::catalog::wave_metadata(Product::T1)
-            .unwrap()
-            .into_iter()
-            .find(|sample| sample.native_id < 1880 && sample.bars > 1)
-            .unwrap();
+        let sample = crate::catalog::WaveMetadata {
+            native_id: 731,
+            code: "fixture.pxd".into(),
+            name: "Fixture".into(),
+            group_name: "Bass".into(),
+            bars: 2,
+            source_bpm: 180.0,
+            frame_count: 44_100,
+            pcm_digest: None,
+        };
         let mut mix = Mix::default();
         mix.set_cell(0, 0, sample.native_id as u16, 0).unwrap();
         mix.set_cell(12, 2, sample.native_id as u16, 4).unwrap();
         footer(&mut mix, [0; 8]);
         let path = fixture.0.join("missing-native.mix");
         fs::write(&path, mix.to_bytes()).unwrap();
-        let project = load(&path, &Library::empty()).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let parsed = Mix::parse(&bytes).unwrap();
+        let project = convert_with_catalog(
+            &parsed,
+            &path,
+            &Library::empty(),
+            |_| Err("Audio unavailable.".into()),
+            |id| (id == sample.native_id).then_some(&sample),
+        )
+        .unwrap();
         assert_eq!(project.clips.len(), 2);
         assert_eq!(project.missing_samples.len(), 1);
         let missing = &project.missing_samples[0];

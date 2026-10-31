@@ -3110,6 +3110,11 @@ mod tests {
     #[test]
     fn manual_native_resolution_uses_imported_identity_without_factory_identity() {
         let root = manual_fixture_dir();
+        let mut notices = crate::catalog::Catalogs::open(None).missing_notices([(Product::T2, 42)]);
+        assert_eq!(notices.len(), 1);
+        assert!(notices[0].starts_with("At import,"));
+        assert!(notices[0].contains("If sounds remain missing"));
+        notices.push("Unrelated import detail.".into());
         let missing = MissingSample::native(
             Product::T2,
             42,
@@ -3122,6 +3127,7 @@ mod tests {
         .unwrap();
         let mut project = Project {
             missing_samples: vec![missing],
+            source_notices: notices.clone(),
             ..Project::default()
         };
         project.clips.push(Clip {
@@ -3151,6 +3157,21 @@ mod tests {
         assert!(session.project().clips[0].sample_id >= crate::products::IMPORTED_ID_START);
         assert!(session.library.sample_by_id(42).is_none());
         assert_eq!(session.library.verified_count(), 0);
+        assert_eq!(session.project().source_notices, notices);
+
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.missing_samples().len(), 1);
+        assert_eq!(session.project().source_notices, notices);
+        assert!(session.history_step(true).unwrap());
+        assert!(session.missing_samples().is_empty());
+        assert_eq!(session.project().source_notices, notices);
+
+        let song = root.join("resolved.mixjam");
+        crate::project_io::save(session.project(), &song).unwrap();
+        let (reopened, _) = crate::project_io::open(&song, &Library::empty()).unwrap();
+        assert!(reopened.missing_samples.is_empty());
+        assert_eq!(reopened.source_notices, notices);
+        std::fs::remove_file(song).unwrap();
         std::fs::remove_file(&session.project().imported_samples[0].path).unwrap();
         std::fs::remove_file(wave).unwrap();
         std::fs::remove_dir(root.join("settings/manual-samples")).unwrap();
@@ -4386,11 +4407,9 @@ mod boundary_tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
-    #[cfg_attr(
-        not(bundled_catalog),
-        ignore = "Needs the locally generated sample catalogs."
-    )]
     fn folder_adoption_keeps_optional_providers_and_respects_explicit_priority() {
+        // Whether the folder is complete depends on the size of the H1 catalog.
+        let complete_count = crate::catalog::identities(Product::H1).len();
         let dir = fixture_dir();
         let provider_root = dir.join("provider");
         let packed = crate::library::packed_folder(&provider_root);
@@ -4433,13 +4452,17 @@ mod boundary_tests {
             frame_count: 5,
             pcm_digest: Some(crate::catalog::pcm_identity_hex(&[0; 5])),
         };
-        let complete_count = crate::catalog::wave_metadata(Product::H1).unwrap().len();
-        for (house_count, preferred, expect_provider) in [
+        let mut cases = vec![
             (0, false, true), // A D4-only folder must keep H1.
-            (1, false, true), // Shared audio must not displace House.
-            (complete_count, false, false),
-            (complete_count, true, true),
-        ] {
+            (complete_count.max(1), false, false),
+            (complete_count.max(1), true, true),
+        ];
+        if complete_count > 2 {
+            // One shared sound is sparse only when the catalog has at least
+            // three identities. A public checkout can have no local catalog.
+            cases.push((1, false, true));
+        }
+        for (house_count, preferred, expect_provider) in cases {
             let mut scanned = Library::open_wav_folder(&folder, 140.0).unwrap();
             scanned
                 .register_wav_product(Product::D4, &folder, &[identity(1)])
