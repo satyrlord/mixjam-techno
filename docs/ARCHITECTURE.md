@@ -222,6 +222,9 @@ while any bus rings, for at most `TAIL_LIMIT`, in 1024-frame blocks
 (`Mix::TAIL_BLOCK`). Playback also asks whether a bus still rings once a tail
 block, however short its own blocks are, so export and playback give the same
 samples.
+If an FX type change completes inside a processing block, its sidechain key
+changes on that same frame. Processing the same inputs in different block
+sizes must not delay the new key until the next block.
 `src/master.rs` owns the master pedalboard: `MasterChain` is the saved
 settings, `Knob` names each continuous setting with its range, and
 `MasterProcessor` runs the board over the summed stereo mix in blocks, with
@@ -231,7 +234,10 @@ filters, oversampling, and true-peak interpolation (`dsp`), and the playback
 meters (`meters`). `MasterChain` is `Copy` and its `order` a fixed array that
 names each pedal once, so a settings copy never allocates on the audio thread,
 and the whole board state is fixed-size. Pedals that are off pass the signal on
-unchanged. Each pedal keeps its own state when the order changes; the mastering
+unchanged. Each pedal keeps its own state when the order changes. Master
+processors prepare shared oversampling and true-peak filter tables before
+playback reaches the audio thread. First playback and later pedal switches
+must not initialize or wait for those tables in the callback. The mastering
 pedals glide to new settings over about 20 ms. During playback, switching or
 moving a pedal copies the board and crossfades from the old copy to the new one
 over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills
@@ -274,6 +280,10 @@ audio frames or loudness time. Output metering excludes the initial 593 frames
 that playback removes, so loudness windows follow the audible program.
 Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
 size field for its header before it opens a destination file.
+The Multiband's moving minimum retains exactly the active lookahead window,
+including when gain requirements rise for longer than its fixed queue. It
+expires old entries before adding a new one, so a full queue cannot overwrite
+its live minimum.
 `Mix::write_stems` exports the premaster in parts, one pass over the song:
 each sounding track mixes alone through its own `RenderState`, its sends
 summed into the buses' feeds, and `ReturnsProcessor::split` gives each bus's
@@ -306,6 +316,9 @@ If the used native WAVs of one product cannot fit under one saved folder,
 the native IDs, decoded audio and timing before saving that binding. Repeated
 saves reuse verified content. A retention failure leaves the existing song
 unchanged. This keeps native identities without changing the song format.
+WAV path resolution includes verified duplicate copies that the palette omits.
+MixJam v7 suffix relocation and native WAV lookup share this complete path
+inventory, so a reference to a duplicate still resolves after its folder moves.
 Format 18 records one provider per product. A song using both a packed original
 provider and supplemental WAVs for that product cannot be represented by that
 binding. Save rejects the combination before replacing the song.
@@ -316,6 +329,14 @@ including a master-only edit followed by Save. Master-only edits still retain
 the prepared dry mix. Opening a project adopts freshly measured WAV metadata,
 including changes to length and channel count at the same path. History changes
 can still reuse existing metadata without reading each source again.
+The agent's Choose path request for Open also records this edit identity. If
+the user edits the song while that dialog is collapsed, or creates a recorded
+take, confirming the old request keeps the current song and path draft. The
+user must cancel and start Open again. Changes approved before the request do
+not prevent it from opening the selected song.
+Adding or removing an optional sample provider is unavailable while recording
+or scanning sample folders. Rejection preserves the current libraries, scan,
+recorded take, project, and settings.
 
 `src/atomic_file.rs` owns file replacement. Projects, settings, the scan cache,
 synth patterns, and WAV exports are staged beside the destination and renamed
@@ -337,6 +358,9 @@ filters, and tool form drafts. It converts pointer positions into requested
 positions and sends them to the application. It does not own an `Editor` or
 change the live project. It does not decode audio, write projects, or control a
 device directly.
+Replacing a song or adopting scanned folders invalidates held control gestures
+in Mixer, Mastering, Effects, and the channel EQ. Movement from an earlier
+gesture cannot edit the replacement song.
 
 `src/ui/dialog.rs` owns the shared Folded Metal shell and lifecycle for all
 in-app tools, utility windows, and blocking dialogs. It owns header layout,
@@ -377,6 +401,9 @@ replacement of pending file requests. Choose path suspends its parent confirmati
 until the path request resolves. A close action cancels a confirmation, without
 implicitly saving or discarding. Recorded take can collapse while its unsaved
 in-memory take remains available for explicit Save take or Discard take.
+A deferred file or close action checks recording again when it resumes. If a
+recording started while its confirmation was collapsed, the action stays
+pending and the recording remains intact until the user stops it.
 
 Native file dialogs return paths for application operations. Screenshot encoding
 is isolated presentation verification code.

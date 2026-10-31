@@ -104,9 +104,8 @@ class Sound:
         self.source_bpm = source_bpm
         self.play_bpm = playback_bpm(source_bpm, song_bpm) if song_bpm else source_bpm
         self.ticks = ticks_of(self.frames, rate, self.play_bpm)
-        mono = data.mean(axis=1)
-        whole = float(np.sqrt(np.mean(mono ** 2)) + 1e-12)
-        tail = mono[-int(rate * 0.05):]
+        whole = float(np.sqrt(np.mean(data ** 2)) + 1e-12)
+        tail = data[-max(1, int(rate * 0.05)):]
         self.tail_db = db(float(np.sqrt(np.mean(tail ** 2)) + 1e-12)) - db(whole)
         self.peak_db = db(float(np.abs(data).max()) + 1e-12)
 
@@ -190,6 +189,7 @@ class Song:
         A lane named "NAME (twin)" continues lane "NAME" (cross-faded chord changes); the
         reports count the two as one lane.
         """
+        track = _whole_track(track)
         lane = self.lanes[track - 1]
         lane.update(gain=gain(gain_db), pan=pan, sends=[float(s) for s in sends])
         self.roles[track] = role
@@ -200,6 +200,7 @@ class Song:
         midHz, midDb, midQ, the second peak's peak2Hz, peak2Db, peak2Q, highHz, highDb,
         highCut; on=False disables it. The rest keep a new track's values; the second peak's
         keys are written only when they differ from a new track's, as the app saves them."""
+        track = _whole_track(track)
         eq = dict(EQ_DEFAULT, **PEAK2_DEFAULT, on=True)
         unknown = set(settings) - set(eq)
         if unknown:
@@ -261,6 +262,7 @@ class Song:
     def clip(self, track, path, start_tick, length_ticks, offset_frames=0, gain_db=0.0,
              fade_in=0, fade_out=0, curve_in='linear', curve_out='exponential', pitch_cents=0):
         """One clip in ticks. Fades are in ticks; they are shortened to fit the clip."""
+        track = _whole_track(track)
         self.sound(path)
         fade_in = min(int(fade_in), length_ticks)
         fade_out = min(int(fade_out), length_ticks - fade_in)
@@ -286,17 +288,23 @@ class Song:
         between tiles out and in over that many ticks, for a loop whose end does
         not meet its start.
         """
+        track = _whole_track(track)
+        start, end = tick(first_bar), tick(last_bar + 1)
+        if start < 0 or end <= start:
+            raise ValueError('A loop needs a nonempty forward range starting at bar 1 or later.')
+        if size is not None and (not math.isfinite(size) or size * TICKS_PER_BAR < 1):
+            raise ValueError('The loop tile size must be finite, positive, and at least one tick long.')
         sound = self.sound(path)
-        size = size or sound.loop_bars
+        size = sound.loop_bars if size is None else size
         if size is None:
             raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars, not a loop. Use phrase() or set size.')
         if size > sound.bars + 0.03:
             raise ValueError(f'{Path(path).name} is {sound.bars:.3f} bars and is shorter than size {size}.')
-        start, end = tick(first_bar), tick(last_bar + 1)
+        tile_ticks = int(round(size * TICKS_PER_BAR))
         placements = []
         at = start
         while at < end:
-            length = min(size * TICKS_PER_BAR, end - at)
+            length = min(tile_ticks, end - at)
             placements.append(self.clip(track, path, at, length, gain_db=gain_db, pitch_cents=pitch_cents))
             at += length
         last = placements[-1]
@@ -313,6 +321,7 @@ class Song:
     def phrase(self, track, path, bar, beat=1.0, bars=None, gain_db=0.0, fade_in_beats=0.0,
                fade_out_beats=None, pitch_cents=0, offset_frames=0):
         """Place a sound once, at its own length or cut to `bars`."""
+        track = _whole_track(track)
         sound = self.sound(path)
         full = sound.ticks - ticks_of(offset_frames, sound.rate, sound.play_bpm)
         length = int(round(full)) if bars is None else int(round(bars * TICKS_PER_BAR))
@@ -339,11 +348,14 @@ class Song:
         (high-pass), 0 open. Points add to the lane's earlier points, so each section writes its
         own moves; a point on a tick that the lane already has is an error.
         """
+        track = _whole_track(track)
+        if lane not in ('volume', 'filter', 'send1', 'send2', 'send3', 'send4'):
+            raise ValueError('The automation lane must be volume, filter, or send1 through send4.')
         automation = self.automation[track - 1]
         if lane.startswith('send'):
-            entries = automation.setdefault('sends', [[], [], [], []])[int(lane[4:]) - 1]
+            entries = list(automation.get('sends', [[], [], [], []])[int(lane[4:]) - 1])
         else:
-            entries = automation.setdefault(lane, [])
+            entries = list(automation.get(lane, []))
         ticks = {entry['tick'] for entry in entries}
         for bar, value in points:
             if tick(bar) in ticks:
@@ -351,11 +363,16 @@ class Song:
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
+        if lane.startswith('send'):
+            automation.setdefault('sends', [[], [], [], []])[int(lane[4:]) - 1] = entries
+        else:
+            automation[lane] = entries
 
     def bus(self, index, module, return_level=None, powered=True, limiter=True):
         """index 1-4; module from delay()/reverb(); return_level 0-1 (default: the preset's).
         A module's `duckKey` (a track from 1 to 64) ducks the effect while that track sounds,
         instead of its own input; 0 is its own input and is not written."""
+        index = _whole_index(index, 4, 'FX bus')
         module = dict(module)
         if 'duckKey' in module:
             module['duckKey'] = _key(module['duckKey'], f'FX {index} duckKey')
@@ -431,9 +448,13 @@ class Song:
 
 def _whole_track(value, name='track'):
     """A track number from 1 to 64, as an int."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= TRACKS \
+    return _whole_index(value, TRACKS, name)
+
+
+def _whole_index(value, limit, name):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 1 <= value <= limit \
             or value != int(value):
-        raise ValueError(f'The {name} must be a whole track number from 1 to {TRACKS}.')
+        raise ValueError(f'The {name} must be a whole number from 1 to {limit}.')
     return int(value)
 
 

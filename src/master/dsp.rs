@@ -5,6 +5,18 @@
 //! processing never allocates.
 use std::{f64::consts::PI, sync::LazyLock};
 
+#[cfg(test)]
+static TABLE_INITIALIZATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Prepare every shared table before a processor reaches the audio thread.
+/// Even a bypassed board can later enable a pedal or start its meters.
+pub(super) fn prepare_tables() {
+    LazyLock::force(&OUTER);
+    LazyLock::force(&INNER);
+    LazyLock::force(&PHASES);
+}
+
 /// The mix rate, in frames per second.
 pub(crate) const RATE: f64 = 44_100.0;
 
@@ -300,9 +312,17 @@ fn halfband<const TAPS: usize>(beta: f64) -> [f32; TAPS] {
 
 /// The outer stage, between the mix rate and twice it: 127 taps, which
 /// pass up to 20 kHz and stop from 24 kHz by about 90 dB.
-static OUTER: LazyLock<[f32; 64]> = LazyLock::new(|| halfband(9.0));
+static OUTER: LazyLock<[f32; 64]> = LazyLock::new(|| {
+    #[cfg(test)]
+    TABLE_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    halfband(9.0)
+});
 /// The inner stage, between twice and four times the mix rate: 23 taps.
-static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| halfband(9.0));
+static INNER: LazyLock<[f32; 12]> = LazyLock::new(|| {
+    #[cfg(test)]
+    TABLE_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    halfband(9.0)
+});
 
 /// One channel of one halfband stage, up and down. `TAPS - 1` is odd, so
 /// every tap that the polyphase sums use is nonzero.
@@ -421,6 +441,8 @@ impl<const N: usize> Delay<N> {
 /// Kaiser-windowed sinc gives them: within 0.06 dB up to 20 kHz. Each
 /// row's taps sum to one.
 static PHASES: LazyLock<[[f32; 32]; 3]> = LazyLock::new(|| {
+    #[cfg(test)]
+    TABLE_INITIALIZATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     std::array::from_fn(|phase| {
         let fraction = (phase + 1) as f64 / 4.0;
         // History entry `i` holds the sample `i` frames ago; the interval
@@ -526,6 +548,38 @@ pub(crate) fn program(frames: usize) -> Vec<(f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn master_construction_prepares_tables_before_the_first_callback() {
+        const CHILD: &str = "MIXJAM_DSP_TABLE_INIT_TEST";
+        const CHECKED: &str = "DSP tables are ready before processing.";
+        if std::env::var_os(CHILD).is_some() {
+            use std::sync::atomic::Ordering;
+            assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 0);
+            let chain = crate::master::MasterChain::default();
+            let _processor = crate::master::MasterProcessor::new(&chain);
+            assert_eq!(TABLE_INITIALIZATIONS.load(Ordering::Relaxed), 3);
+            println!("{CHECKED}");
+            return;
+        }
+        // A fresh test process proves constructor ownership without depending
+        // on which other DSP tests initialized the process-wide tables first.
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "master::dsp::tests::master_construction_prepares_tables_before_the_first_callback",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success() && String::from_utf8_lossy(&result.stdout).contains(CHECKED),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 
     fn sine(hz: f64, amplitude: f64, frames: usize) -> Vec<f32> {
         (0..frames)

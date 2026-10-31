@@ -648,6 +648,11 @@ impl Session {
     pub(crate) fn hold_gestures(&mut self) {
         self.gesture_gap = std::time::Duration::MAX;
     }
+    /// Give UI lifecycle tests an active recording without an input device.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn start_recording_fixture(&mut self) {
+        self.recorder = Some(crate::recording::Recorder::fixture());
+    }
     pub fn new(library: Arc<Library>, project: Project) -> Result<Self, String> {
         let mut session = Self::headless(library, project)?;
         match Player::new() {
@@ -662,6 +667,11 @@ impl Session {
     }
     pub fn project(&self) -> &Project {
         self.editor.project()
+    }
+    /// Identify the project state for a deferred frontend action. Render-only
+    /// and history-only changes both invalidate an earlier request.
+    pub fn project_change_token(&self) -> (u64, u64) {
+        (self.revision, self.editor.generation())
     }
     pub fn missing_samples(&self) -> &[MissingSample] {
         &self.project().missing_samples
@@ -1539,11 +1549,13 @@ impl Session {
         Ok(())
     }
     pub fn add_library(&mut self, product: Product, root: &Path) -> Result<(), String> {
+        self.require_library_change_ready()?;
         let mut library = (*self.library).clone();
         library.register(product, root, &crate::project_io::reference_samples_root())?;
         self.commit_library(library)
     }
     pub fn remove_library(&mut self, product: Product) -> Result<(), String> {
+        self.require_library_change_ready()?;
         if self.project().clips.iter().any(|clip| {
             Product::sample_key(clip.sample_id).is_some_and(|(source, _)| source == product)
         }) {
@@ -1555,6 +1567,19 @@ impl Session {
         let mut library = (*self.library).clone();
         library.remove_product(product);
         self.commit_library(library)
+    }
+
+    fn require_library_change_ready(&self) -> Result<(), String> {
+        if self.is_recording() {
+            return Err("Stop recording before you change the sample libraries.".into());
+        }
+        if self.wave_scan.is_some() {
+            return Err(
+                "Wait for the sample folder scan to finish before you change the sample libraries."
+                    .into(),
+            );
+        }
+        Ok(())
     }
 
     /// Let these products' providers replace the same products found in a
@@ -3354,6 +3379,83 @@ mod tests {
             app.recorder.take().unwrap().finish().unwrap().samples,
             vec![0.25, -0.25]
         );
+    }
+
+    #[test]
+    fn provider_changes_preserve_an_active_recording_or_folder_scan() {
+        for recording in [true, false] {
+            let mut app = fixture();
+            app.edit(EditCommand::SetTempo(160.0)).unwrap();
+            let progress = Arc::new(crate::library::ScanProgress::default());
+            let (_sender, receiver) = mpsc::channel();
+            let expected = if recording {
+                app.recorder = Some(crate::recording::Recorder::fixture());
+                "Stop recording before you change the sample libraries."
+            } else {
+                app.wave_scan = Some(WaveScan {
+                    roots: vec![PathBuf::from("pending-library")],
+                    source_bpm: 140.0,
+                    progress: Arc::clone(&progress),
+                    receiver,
+                });
+                app.open_after_scan(Path::new("queued.mixjam")).unwrap();
+                "Wait for the sample folder scan to finish before you change the sample libraries."
+            };
+            let project = app.project().clone();
+            let library = Arc::clone(&app.library);
+            let token = app.project_change_token();
+            let pending = app.pending_open.clone();
+            // Invalid paths and a provider in use establish that busy-state
+            // admission happens before provider reads, checks, or settings writes.
+            assert_eq!(
+                app.add_library(Product::T2, Path::new("")).unwrap_err(),
+                expected
+            );
+            assert_eq!(app.remove_library(Product::T2).unwrap_err(), expected);
+            assert_eq!(app.project(), &project);
+            assert!(Arc::ptr_eq(&app.library, &library));
+            assert_eq!(app.project_change_token(), token);
+            assert_eq!(app.pending_open, pending);
+            assert!(app.unsaved());
+            assert!(app.has_history_step(false));
+            assert!(!progress.is_cancelled());
+            if recording {
+                assert_eq!(
+                    app.recorder.take().unwrap().finish().unwrap().samples,
+                    vec![0.25, -0.25]
+                );
+            } else {
+                assert!(Arc::ptr_eq(
+                    &app.wave_scan.as_ref().unwrap().progress,
+                    &progress
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn project_change_tokens_track_live_edits_and_project_replacement() {
+        let mut app = fixture();
+        let initial = app.project_change_token();
+        app.edit(EditCommand::SetTempo(app.project().bpm)).unwrap();
+        assert_eq!(app.project_change_token(), initial);
+        let master = MasterChain {
+            bypass: true,
+            ..app.project().master
+        };
+        app.edit(EditCommand::SetMaster(master)).unwrap();
+        let edited = app.project_change_token();
+        assert_eq!(
+            edited.0, initial.0,
+            "A live board edit keeps the prepared mix."
+        );
+        assert_ne!(edited, initial);
+        app.history_step(false).unwrap();
+        let restored = app.project_change_token();
+        assert_ne!(restored, initial);
+        assert_ne!(restored, edited);
+        app.new_mix().unwrap();
+        assert_ne!(app.project_change_token(), restored);
     }
 
     #[test]

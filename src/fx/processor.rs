@@ -208,8 +208,8 @@ impl ReturnsProcessor {
         processor
     }
     /// Where each bus's ducker finds its key among `keys`.
-    fn key_slots(&self, keys: &crate::ducker::Keys) -> [Option<Option<usize>>; BUSES] {
-        std::array::from_fn(|bus| keys.slot(self.buses[bus].duck_key()))
+    fn key_slots(&self, keys: &crate::ducker::Keys) -> [KeySlot; BUSES] {
+        std::array::from_fn(|bus| KeySlot::new(keys, self.buses[bus].duck_key()))
     }
     /// Whether any bus still sounds.
     pub fn ringing(&self) -> bool {
@@ -250,7 +250,7 @@ impl ReturnsProcessor {
         self.poll();
         if sends.is_some() || self.ringing() {
             let bpm = self.bpm;
-            let slots = self.key_slots(&keys);
+            let mut slots = self.key_slots(&keys);
             for (frame, out) in block.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                 let mut sum = (0.0, 0.0);
                 for (index, bus) in self.buses.iter_mut().enumerate() {
@@ -258,7 +258,7 @@ impl ReturnsProcessor {
                         let at = frame * 2 * BUSES + index * 2;
                         (f64::from(sends[at]), f64::from(sends[at + 1]))
                     });
-                    let key = key_at(&keys, slots[index], frame);
+                    let key = slots[index].frame(&keys, bus.duck_key(), frame);
                     let (l, r) = bus.process(left, right, key, bpm);
                     sum.0 += l;
                     sum.1 += r;
@@ -279,7 +279,7 @@ impl ReturnsProcessor {
             return;
         }
         let bpm = self.bpm;
-        let slots = self.key_slots(&keys);
+        let mut slots = self.key_slots(&keys);
         for (frame, out) in returns
             .as_chunks_mut::<{ 2 * BUSES }>()
             .0
@@ -291,7 +291,7 @@ impl ReturnsProcessor {
                     let at = frame * 2 * BUSES + index * 2;
                     (f64::from(sends[at]), f64::from(sends[at + 1]))
                 });
-                let key = key_at(&keys, slots[index], frame);
+                let key = slots[index].frame(&keys, bus.duck_key(), frame);
                 let (l, r) = bus.process(left, right, key, bpm);
                 out[index * 2] = l as f32;
                 out[index * 2 + 1] = r as f32;
@@ -300,16 +300,29 @@ impl ReturnsProcessor {
     }
 }
 
-/// A bus's key at a frame of the block: `None` for its own input.
-fn key_at(
-    keys: &crate::ducker::Keys,
+/// A bus's key slot for this block. A pending module can become active
+/// between frames, so refresh its slot as soon as its key setting changes.
+struct KeySlot {
+    key: u8,
     slot: Option<Option<usize>>,
-    frame: usize,
-) -> Option<(f64, f64)> {
-    slot.map(|slot| {
-        let (left, right) = keys.frame(slot, frame);
-        (f64::from(left), f64::from(right))
-    })
+}
+impl KeySlot {
+    fn new(keys: &crate::ducker::Keys, key: u8) -> Self {
+        Self {
+            key,
+            slot: keys.slot(key),
+        }
+    }
+
+    fn frame(&mut self, keys: &crate::ducker::Keys, key: u8, frame: usize) -> Option<(f64, f64)> {
+        if key != self.key {
+            *self = Self::new(keys, key);
+        }
+        self.slot.map(|slot| {
+            let (left, right) = keys.frame(slot, frame);
+            (f64::from(left), f64::from(right))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -331,6 +344,59 @@ mod tests {
             output_db: 0.0,
             character: crate::fx::DelayCharacter::Digital,
             ..Echoform::default()
+        }
+    }
+
+    #[test]
+    fn a_module_change_uses_its_new_key_within_the_same_block() {
+        let render = |block_size: usize, split: bool| {
+            let control = MasterControl::new(&crate::master::MasterChain::default());
+            control.set_returns(&buses(Module::AetherformReverb(Aetherform::default())));
+            let mut processor = ReturnsProcessor::live(control.clone(), 140.0);
+            feed(&mut processor, 2048, |_| 0.1);
+            control.set_returns(&buses(Module::EchoformDelay(Echoform {
+                mode: TimeMode::Free,
+                time_ms_l: 5.0,
+                time_ms_r: 5.0,
+                feedback: 0.0,
+                duck_amount: 100.0,
+                duck_key: 1,
+                ..plain_delay()
+            })));
+            let frames = 4096;
+            let mut output = Vec::new();
+            for start in (0..frames).step_by(block_size) {
+                let count = block_size.min(frames - start);
+                let mut sends = vec![0.0; count * 2 * BUSES];
+                for (frame, feed) in sends.chunks_mut(2 * BUSES).enumerate() {
+                    let sample = (0.17 * (start + frame) as f32).sin() * 0.1;
+                    feed[..2].copy_from_slice(&[sample, sample]);
+                }
+                let audio = vec![1.0; count * 2];
+                let keys = crate::ducker::Keys {
+                    tracks: &[0],
+                    audio: &audio,
+                };
+                if split {
+                    let mut returns = vec![0.0; count * 2 * BUSES];
+                    processor.split(&mut returns, Some(&sends), keys);
+                    for frame in returns.chunks(2 * BUSES) {
+                        output.extend_from_slice(&frame[..2]);
+                    }
+                } else {
+                    let mut block = vec![0.0; count * 2];
+                    processor.process_keyed(&mut block, Some(&sends), keys);
+                    output.extend(block);
+                }
+            }
+            output
+        };
+        let expected = render(1, false);
+        assert!(expected.iter().any(|sample| sample.abs() > 0.001));
+        for split in [false, true] {
+            for block_size in [256, 1024] {
+                assert_eq!(render(block_size, split), expected);
+            }
         }
     }
 

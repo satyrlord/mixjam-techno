@@ -231,7 +231,7 @@ pub(super) fn show(
                                 ui.spacing_mut().item_spacing.x = 2.0 * scale;
                                 for &index in &occupied {
                                     ui.scope_builder(
-                                        egui::UiBuilder::new().id(("mixer_track", index)),
+                                        egui::UiBuilder::new().id_salt(("mixer_track", index)),
                                         |ui| {
                                             let (summary, detail) =
                                                 mixer_sample_summary(project, library, index);
@@ -277,7 +277,7 @@ pub(super) fn show(
                                 // The returns follow the tracks that feed them.
                                 for (index, bus) in fx.buses.iter_mut().enumerate() {
                                     ui.scope_builder(
-                                        egui::UiBuilder::new().id(("mixer_return", index)),
+                                        egui::UiBuilder::new().id_salt(("mixer_return", index)),
                                         |ui| {
                                             let (edited, open) =
                                                 return_strip(ui, art, scale, height, index, bus);
@@ -293,7 +293,7 @@ pub(super) fn show(
                     });
             },
         );
-        ui.scope_builder(egui::UiBuilder::new().id("mixer_master"), |ui| {
+        ui.scope_builder(egui::UiBuilder::new().id_salt("mixer_master"), |ui| {
             changed |= strip(
                 ui,
                 art,
@@ -976,7 +976,7 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
     let db = amplitude_to_db(before);
     ui.scope_builder(
         egui::UiBuilder::new()
-            .id(("gain-value", name))
+            .id_salt(("gain-value", name))
             .max_rect(rect),
         |ui| {
             ui.spacing_mut().interact_size = rect.size();

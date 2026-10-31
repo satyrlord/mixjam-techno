@@ -112,11 +112,95 @@ impl<T: Serialize + serde::de::DeserializeOwned> Saved<T> {
         serde_json::to_value(self).unwrap_or_default()
     }
 
+    /// Renaming legacy keys needs a JSON object, but ordinary Value parsing
+    /// discards duplicate fields before the typed settings can reject them.
+    fn migration_json(&self) -> Result<serde_json::Value, String> {
+        match self {
+            Self::Known(settings) => serde_json::to_value(settings),
+            Self::Raw(raw) => serde_json::from_str::<UniqueJson>(raw.get()).map(|json| json.0),
+        }
+        .map_err(|error| format!("The master pedalboard is invalid: {error}"))
+    }
+
     fn settings(self) -> Result<T, serde_json::Error> {
         match self {
             Self::Known(settings) => Ok(settings),
             Self::Raw(raw) => serde_json::from_str(raw.get()),
         }
+    }
+}
+
+/// A JSON value whose objects reject duplicate decoded field names. Nested
+/// settings use the same rule before an older board's keys are renamed.
+struct UniqueJson(serde_json::Value);
+
+impl<'de> Deserialize<'de> for UniqueJson {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = serde_json::Value;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("JSON without duplicate fields")
+            }
+
+            fn visit_bool<E: serde::de::Error>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(value.into())
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(value.into())
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(value.into())
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                serde_json::Number::from_f64(value)
+                    .map(serde_json::Value::Number)
+                    .ok_or_else(|| E::custom("A JSON number must be finite."))
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(value.into())
+            }
+
+            fn visit_string<E: serde::de::Error>(self, value: String) -> Result<Self::Value, E> {
+                Ok(value.into())
+            }
+
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(serde_json::Value::Null)
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut sequence: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(UniqueJson(value)) = sequence.next_element()? {
+                    values.push(value);
+                }
+                Ok(serde_json::Value::Array(values))
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut fields: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = serde_json::Map::new();
+                while let Some(key) = fields.next_key::<String>()? {
+                    if values.contains_key(&key) {
+                        return Err(serde::de::Error::custom(format!("duplicate field `{key}`")));
+                    }
+                    let UniqueJson(value) = fields.next_value()?;
+                    values.insert(key, value);
+                }
+                Ok(serde_json::Value::Object(values))
+            }
+        }
+        deserializer.deserialize_any(Visitor).map(Self)
     }
 }
 
@@ -524,14 +608,15 @@ impl Document {
         let master = match (self.format_version, self.master) {
             (16.., Some(master)) => master.settings().map_err(invalid)?,
             (version @ 12.., Some(master)) => {
-                serde_json::from_value(current_booster_keys(master.json(), version)?)
+                serde_json::from_value(current_booster_keys(master.migration_json()?, version)?)
                     .map_err(invalid)?
             }
-            (11, Some(master)) => {
-                serde_json::from_value::<Booster>(current_booster_keys(master.json(), 11)?)
-                    .map_err(invalid)?
-                    .into_board()
-            }
+            (11, Some(master)) => serde_json::from_value::<Booster>(current_booster_keys(
+                master.migration_json()?,
+                11,
+            )?)
+            .map_err(invalid)?
+            .into_board(),
             (version @ 11.., None) => {
                 return Err(format!("Version {version} songs require master."));
             }
@@ -1443,6 +1528,67 @@ mod tests {
             }
             let found = parse(&serde_json::to_vec(&changed).unwrap()).unwrap_err();
             assert!(found.contains(error), "{pointer}: {found}");
+        }
+    }
+
+    #[test]
+    fn legacy_master_settings_reject_duplicate_fields_before_migration() {
+        for version in 11..=15 {
+            let mut document = serde_json::to_value(Document::new(
+                &Project::default(),
+                timestamp(0),
+                timestamp(0),
+            ))
+            .unwrap();
+            document["formatVersion"] = version.into();
+            with_earlier_booster_keys(&mut document);
+            if version == 11 {
+                document["master"]
+                    .as_object_mut()
+                    .unwrap()
+                    .retain(|key, _| {
+                        key == "order" || BOOSTER_KEYS.iter().any(|(earlier, _)| key == *earlier)
+                    });
+                document["master"]["order"]
+                    .as_array_mut()
+                    .unwrap()
+                    .truncate(3);
+            }
+            if version < 13 {
+                document.as_object_mut().unwrap().remove("fxBuses");
+                for lane in document["lanes"].as_array_mut().unwrap() {
+                    lane.as_object_mut().unwrap().remove("sends");
+                }
+            }
+            if version < 15 {
+                document["master"].as_object_mut().unwrap().remove("bypass");
+            }
+            let text = serde_json::to_string(&document).unwrap();
+            parse(text.as_bytes()).unwrap();
+            let eq = serde_json::to_string(&document["master"]["ejayEq"]).unwrap();
+            let field = format!("\"ejayEq\":{eq}");
+            for replacement in [
+                format!("{field},{field}"),
+                format!(
+                    "\"ejayEq\":{}",
+                    eq.replacen("\"on\":false", "\"on\":false,\"on\":true", 1)
+                ),
+                format!(
+                    "\"ejayEq\":{}",
+                    eq.replacen("\"on\":false", "\"on\":false,\"\\u006fn\":true", 1)
+                ),
+            ] {
+                let changed = text.replacen(&field, &replacement, 1);
+                assert_ne!(changed, text);
+                let error = match parse(changed.as_bytes()) {
+                    Ok(_) => panic!("Version {version} accepted a duplicate master field."),
+                    Err(error) => error,
+                };
+                assert!(
+                    error.contains("duplicate field"),
+                    "version {version}: {error}"
+                );
+            }
         }
     }
 

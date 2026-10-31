@@ -255,6 +255,8 @@ impl PathSpec {
 /// A file request that waits for a typed path.
 struct PathPrompt {
     request: FileRequest,
+    /// The song state whose replacement was approved before Open chose a path.
+    open_token: Option<(u64, u64)>,
     text: String,
     error: Option<String>,
     focused: bool,
@@ -1103,6 +1105,11 @@ impl MixJamApp {
     }
 
     fn run_action(&mut self, action: PendingAction, ctx: &egui::Context) {
+        // A collapsed confirmation permits recording after the initial request.
+        if self.session.is_recording() {
+            self.error("Stop recording before you open, close, or start a new mix.");
+            return;
+        }
         self.pending_action = None;
         self.session.discard_recorded_take();
         match action {
@@ -2337,8 +2344,11 @@ impl MixJamApp {
             return;
         }
         if self.agent.is_some() {
+            let open_token = matches!(request, FileRequest::OpenSong)
+                .then(|| self.session.project_change_token());
             self.path_prompt = Some(PathPrompt {
                 request,
+                open_token,
                 text: String::new(),
                 error: None,
                 focused: false,
@@ -2599,6 +2609,19 @@ impl MixJamApp {
             });
         });
         if confirm {
+            if prompt.open_token.is_some_and(|token| {
+                token != self.session.project_change_token()
+                    || self.session.is_recording()
+                    || self.session.has_recorded_take()
+            }) {
+                prompt.error = Some(
+                    "The mix changed or recording started after Open. Cancel this choice and \
+                     open the song again."
+                        .into(),
+                );
+                self.path_prompt = Some(prompt);
+                return;
+            }
             match spec.checked(&prompt.text) {
                 Ok(path) => {
                     let saves = matches!(
@@ -2794,12 +2817,17 @@ impl MixJamApp {
                                     })
                                     .response;
                                 name_control(products, "Provider product");
-                                if controls::button(
-                                    ui,
-                                    "Choose folder",
-                                    controls::ButtonRole::Secondary,
-                                )
-                                .clicked()
+                                if ui
+                                    .add_enabled_ui(idle, |ui| {
+                                        controls::button(
+                                            ui,
+                                            "Choose folder",
+                                            controls::ButtonRole::Secondary,
+                                        )
+                                    })
+                                    .inner
+                                    .on_disabled_hover_text(busy)
+                                    .clicked()
                                 {
                                     self.ask_path(FileRequest::ProviderFolder(
                                         self.library_product,
@@ -2814,12 +2842,17 @@ impl MixJamApp {
                             for binding in bindings {
                                 ui.horizontal(|ui| {
                                     ui.label(binding.product.label());
-                                    if controls::button(
-                                        ui,
-                                        "Remove",
-                                        controls::ButtonRole::Secondary,
-                                    )
-                                    .clicked()
+                                    if ui
+                                        .add_enabled_ui(idle, |ui| {
+                                            controls::button(
+                                                ui,
+                                                "Remove",
+                                                controls::ButtonRole::Secondary,
+                                            )
+                                        })
+                                        .inner
+                                        .on_disabled_hover_text(busy)
+                                        .clicked()
                                     {
                                         self.remove_library(binding.product);
                                     }

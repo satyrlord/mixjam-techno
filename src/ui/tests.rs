@@ -9732,6 +9732,154 @@ mod tests {
     }
 
     #[test]
+    fn choosing_an_open_path_preserves_edits_made_while_the_chooser_was_collapsed() {
+        for master_only in [false, true] {
+            let (context, mut app, port) = agent_fixture();
+            let folder = std::env::temp_dir().join(format!(
+                "mixjam-stale-open-{}-{master_only}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&folder).unwrap();
+            let song = folder.join("replacement.mixjam");
+            let mut replacement =
+                Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+            replacement.save(&song).unwrap();
+            app.session = app.session.with_settings_root(folder.join("settings"));
+            let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+            assert_eq!(
+                send(&mut app, &["click", "target=Open"])["modal"],
+                "Choose path"
+            );
+            send(&mut app, &["click", "target=Collapse Choose path"]);
+            assert!(dialog::is_collapsed(&context, "Choose path"));
+            if master_only {
+                let mut master = app.session.project().master;
+                master.bypass = !master.bypass;
+                app.session.edit(EditCommand::SetMaster(master)).unwrap();
+            } else {
+                app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+            }
+            let edited = app.session.project().clone();
+            send(&mut app, &["click", "target=Expand Choose path"]);
+            let draft = song.display().to_string();
+            send(&mut app, &["set", "target=Path", &format!("value={draft}")]);
+            send(&mut app, &["click", "target=Confirm path"]);
+            assert!(
+                app.session.project() == &edited,
+                "Open must retain edits made after its path choice started."
+            );
+            let prompt = app.path_prompt.as_ref().expect("Keep the path draft.");
+            assert_eq!(prompt.text, draft);
+            assert!(prompt.error.as_deref().unwrap().contains("changed"));
+            assert!(app.session.unsaved());
+            std::fs::remove_dir_all(folder).unwrap();
+        }
+    }
+
+    #[test]
+    fn choosing_an_open_path_keeps_the_approval_for_an_unchanged_dirty_song() {
+        let (context, mut app, port) = agent_fixture();
+        let folder =
+            std::env::temp_dir().join(format!("mixjam-approved-open-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let song = folder.join("replacement.mixjam");
+        let mut replacement =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        replacement.save(&song).unwrap();
+        app.session = app.session.with_settings_root(folder.join("settings"));
+        app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        assert_eq!(
+            send(&mut app, &["click", "target=Open"])["modal"],
+            "Save your changes?"
+        );
+        assert_eq!(
+            send(&mut app, &["click", "target=Discard changes"])["modal"],
+            "Choose path"
+        );
+        send(
+            &mut app,
+            &["set", "target=Path", &format!("value={}", song.display())],
+        );
+        send(&mut app, &["click", "target=Confirm path"]);
+        assert_eq!(app.session.project().bpm, 140.0);
+        assert!(app.session.project().clips.is_empty());
+        assert_eq!(app.session.file(), Some(song.as_path()));
+        assert!(app.path_prompt.is_none());
+        assert!(!app.session.unsaved());
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn a_mixer_gain_draft_cannot_change_a_replacement_song() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        for _ in 0..4 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Master gain value");
+        let before = app.session.project().master_gain;
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("+6".into()),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        assert_eq!(app.session.project().master_gain, before);
+        app.new_mix();
+        let replacement = app.session.project().clone();
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(
+            app.session.project() == &replacement,
+            "A Mixer gain draft must not commit to the replacement song."
+        );
+        assert!(!app.session.unsaved());
+    }
+
+    #[test]
+    fn a_mixer_drag_cannot_change_a_replacement_song() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        for _ in 0..4 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let gain = effects_control_rect(&output, "Master gain");
+        let start = gain.center();
+        pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(start - Vec2::new(0.0, 12.0))],
+            egui::Modifiers::NONE,
+        );
+        app.new_mix();
+        let replacement = app.session.project().clone();
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(start - Vec2::new(0.0, 30.0))],
+            egui::Modifiers::NONE,
+        );
+        assert!(
+            app.session.project() == &replacement,
+            "A held Mixer control must not edit the replacement song."
+        );
+        assert!(!app.session.unsaved());
+    }
+
+    #[test]
     fn agent_types_file_paths_in_the_choose_path_modal_and_resumes_a_pending_save() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
@@ -10331,6 +10479,7 @@ mod tests {
                 "Choose path" => {
                     app.path_prompt = Some(PathPrompt {
                         request: FileRequest::SaveSong,
+                        open_token: None,
                         text: String::new(),
                         error: None,
                         focused: false,

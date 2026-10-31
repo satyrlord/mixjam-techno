@@ -25,6 +25,9 @@ from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
 to 18 keeps its `createdAt`.
+Master settings reject duplicate fields, including nested fields and escaped
+spellings of the same key. Versions 11 to 15 perform this check before renaming
+the earlier Booster keys during migration.
 
 Ticks are 256 per bar. A song links each WAV file by path; it is not a
 portable audio bundle.

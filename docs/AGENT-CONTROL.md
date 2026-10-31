@@ -52,7 +52,9 @@ port.
   format and the procedure.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
   window in place of the native dialog. Set its **Path** field and select
-  **Confirm path**. A person can type the path too.
+  **Confirm path**. A person can type the path too. If the song changes while
+  an Open path choice is collapsed, cancel that choice and start Open again.
+  The old choice keeps its path draft and cannot replace the later edits.
 - A modal blocks the controls behind it, as it does for a person. Each reply
   names the open modal and the open tool windows, and has the status line.
 

@@ -331,6 +331,15 @@ impl Library {
         &self.duplicate_copies
     }
 
+    /// Every known WAV path, including exact copies omitted from the palette.
+    /// Song reference resolution must use the complete source inventory.
+    pub(crate) fn wav_paths(&self) -> impl Iterator<Item = &Path> {
+        self.samples
+            .iter()
+            .filter_map(|sample| sample.wav_path.as_deref())
+            .chain(self.duplicate_copies.iter().map(PathBuf::as_path))
+    }
+
     /// Native identities whose WAV audio matched the catalog digest.
     pub fn verified_count(&self) -> usize {
         self.verified.len()
@@ -1933,13 +1942,7 @@ impl Library {
         }
         let mut best_score = 0;
         let mut matches = HashSet::new();
-        // A song can name a file that is now an uncounted duplicate copy.
-        let paths = self
-            .samples
-            .iter()
-            .filter_map(|sample| sample.wav_path.as_ref())
-            .chain(&self.duplicate_copies);
-        for path in paths {
+        for path in self.wav_paths() {
             // Most samples have another file name: skip them without allocating.
             if !path
                 .file_name()
@@ -3696,6 +3699,54 @@ mod tests {
             kept.sort();
             assert_eq!(ordinary, kept);
         }
+    }
+
+    #[test]
+    fn relocated_mixjam_references_include_copies_omitted_from_the_palette() {
+        let folder = Folder::new();
+        let audio = waveform(1, 300);
+        folder.mono("First/kit.wav", &audio);
+        let copy = folder.mono("Second/Perc/kick.wav", &audio);
+        let other = folder.mono("Second/Other/kick.wav", &audio);
+        let metadata = [identity(1, "kit", "Drum", &audio)];
+        let library = Library::open_wav_folders_identified(
+            &[folder.0.join("First"), folder.0.join("Second")],
+            140.0,
+            None,
+            None,
+            |product| {
+                if product == Product::T2 {
+                    &metadata
+                } else {
+                    &[]
+                }
+            },
+            |_, _| &[],
+            &crate::source_tempo::SourceTempos::default(),
+        )
+        .unwrap();
+        assert_eq!(library.duplicate_copies().len(), 2);
+        assert!(library.samples.iter().all(|sample| {
+            sample
+                .wav_path
+                .as_ref()
+                .is_none_or(|path| path != &copy && path != &other)
+        }));
+        assert_eq!(
+            library.resolve_wav_reference("Old/Perc/kick.wav").unwrap(),
+            copy
+        );
+        let mut resolver = crate::mixjam::ReferenceResolver::new(&library);
+        assert_eq!(
+            resolver.resolve_candidates("Old/Perc/kick.wav").unwrap(),
+            vec![copy.clone()]
+        );
+        let mut candidates = vec![copy, other];
+        candidates.sort();
+        assert_eq!(
+            resolver.resolve_candidates("Old/kick.wav").unwrap(),
+            candidates
+        );
     }
 
     #[test]

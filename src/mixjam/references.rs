@@ -101,10 +101,8 @@ impl<'a> ReferenceResolver<'a> {
         let name = parts.last().unwrap().to_lowercase();
         let selected = self.selected.get_or_insert_with(|| {
             let mut index = Index::new();
-            for sample in &self.library.samples {
-                if let Some(path) = &sample.wav_path {
-                    insert(&mut index, path.clone());
-                }
+            for path in self.library.wav_paths() {
+                insert(&mut index, path.to_path_buf());
             }
             index
         });

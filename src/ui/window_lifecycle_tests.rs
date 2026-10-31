@@ -32,6 +32,7 @@ fn frame(ctx: &egui::Context, app: &mut MixJamApp, events: Vec<egui::Event>) {
 fn prompt() -> PathPrompt {
     PathPrompt {
         request: FileRequest::SaveSong,
+        open_token: None,
         text: "C:\\Draft\\song.mixjam".into(),
         error: Some("Keep this draft error.".into()),
         focused: false,
@@ -123,6 +124,44 @@ fn resumed_save_waits_for_expansion_before_running_pending_action() {
     assert!(app.allow_close);
     assert!(!app.resume_save_changes);
     assert!(app.pending_action.is_none());
+}
+
+#[test]
+fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed() {
+    for save in [false, true] {
+        let (ctx, mut app) = fixture();
+        let folder = std::env::temp_dir().join(format!(
+            "mixjam-deferred-close-{}-{save}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&folder).unwrap();
+        app.session = app.session.with_settings_root(folder.join("settings"));
+        app.session.save(&folder.join("song.mixjam")).unwrap();
+        app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        app.request_action(PendingAction::Close, &ctx);
+        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        collapsed(&ctx, "Save your changes?", true);
+        assert_eq!(app.blocking_modal(&ctx), None);
+        app.session.start_recording_fixture();
+        collapsed(&ctx, "Save your changes?", false);
+        if save {
+            app.save_changes(PendingAction::Close, &ctx);
+        } else {
+            app.run_action(PendingAction::Close, &ctx);
+        }
+        assert!(
+            !app.allow_close,
+            "A deferred close must keep the recording alive."
+        );
+        assert!(app.session.is_recording());
+        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        assert!(app.status_error);
+        assert!(app.status.contains("Stop recording"));
+        app.session.stop();
+        assert!(app.session.has_recorded_take());
+        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        std::fs::remove_dir_all(folder).unwrap();
+    }
 }
 
 #[test]

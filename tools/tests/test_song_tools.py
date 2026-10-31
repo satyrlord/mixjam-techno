@@ -84,6 +84,74 @@ class EnvTests(unittest.TestCase):
 
 
 class SongTests(unittest.TestCase):
+    def test_song_destinations_reject_invalid_indices_before_changes(self):
+        actions = (
+            lambda song, track: song.lane(track, 'pad', 'pad'),
+            lambda song, track: song.eq(track, midDb=-3),
+            lambda song, track: song.clip(track, 'unread.wav', 0, 256),
+            lambda song, track: song.loop(track, 'unread.wav', 1, 4),
+            lambda song, track: song.phrase(track, 'unread.wav', 1),
+            lambda song, track: song.automate(track, 'volume', [(1, 0)]),
+        )
+        for track in (0, -1, 65, True, 1.5, float('nan')):
+            for action in actions:
+                song = mixjam.Song('indices')
+                before = json.dumps((song.lanes, song.automation, song.samples, song.names, song.roles))
+                with self.subTest(track=track, action=actions.index(action)):
+                    with mock.patch.object(song, 'sound', side_effect=AssertionError('Source was read')):
+                        with self.assertRaises(ValueError):
+                            action(song, track)
+                    self.assertEqual(json.dumps((song.lanes, song.automation, song.samples,
+                                                 song.names, song.roles)), before)
+                    self.assertFalse(song.names)
+                    self.assertFalse(song.roles)
+        for index in (0, -1, 5, True, 1.5, float('nan')):
+            song = mixjam.Song('bus indices')
+            before = json.dumps(song.fx)
+            with self.subTest(bus=index), self.assertRaises(ValueError):
+                song.bus(index, mixjam.delay())
+            self.assertEqual(json.dumps(song.fx), before)
+
+    def test_rejected_automation_batch_preserves_previous_points(self):
+        for lane in ('volume', 'send2'):
+            song = mixjam.Song('automation')
+            song.automate(1, lane, [(1, 0), (9, 0)])
+            before = json.dumps(song.automation)
+            with self.subTest(lane=lane), self.assertRaises(ValueError):
+                song.automate(1, lane, [(5, 0.5), (9, 0)])
+            self.assertEqual(json.dumps(song.automation), before)
+        for lane in ('send0', 'send5', 'send-1', 'gain', ''):
+            song = mixjam.Song('automation destination')
+            before = json.dumps(song.automation)
+            with self.subTest(lane=lane), self.assertRaises(ValueError):
+                song.automate(1, lane, [(1, 0)])
+            self.assertEqual(json.dumps(song.automation), before)
+
+    def test_loop_rejects_nonadvancing_tiles_before_placement(self):
+        sound = mock.Mock(loop_bars=1, bars=1.0, ticks=256)
+        for first, last, size in ((1, 4, -1), (1, 4, 0), (1, 4, float('nan')),
+                                  (1, 4, float('inf')), (1, 4, 1 / 1024),
+                                  (5, 4, 1), (0, 4, 1)):
+            song = mixjam.Song('loop')
+            with self.subTest(first=first, last=last, size=size):
+                with mock.patch.object(song, 'sound', return_value=sound), \
+                        mock.patch.object(song, 'clip', side_effect=AssertionError('Clip was placed')):
+                    with self.assertRaises(ValueError):
+                        song.loop(1, 'loop.wav', first, last, size=size)
+
+    def test_automatic_end_fade_hears_opposite_channel_polarities(self):
+        rate = 12000
+        data = np.full((rate, 2), 0.25)
+        data[-rate // 10:, 1] *= -1
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'stereo.wav'
+            mixjam.write_wav(path, rate, data)
+            song = mixjam.Song('end fade')
+            song.lane(1, 'pad', 'pad')
+            self.assertTrue(song.sound(path).ends_loud)
+            clip = song.phrase(1, path, 1)
+            self.assertEqual(clip['fades']['out']['ticks'], 1)
+
     def test_ducker_rejects_invalid_settings_without_changing_the_lane(self):
         song = mixjam.Song('ducker')
         for track, key, settings in ((0, 2, {}), (65, 2, {}), (1, 0, {}), (1, 65, {}),

@@ -1064,6 +1064,7 @@ impl MasterProcessor {
     /// controls at a fixed value when the library loads and never resets
     /// them; here each playback starts as a settled original would.
     pub fn new(chain: &MasterChain) -> Self {
+        dsp::prepare_tables();
         let mut board = Box::new(Board::new());
         board.apply(chain);
         board.settle();

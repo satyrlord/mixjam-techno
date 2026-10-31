@@ -793,15 +793,19 @@ impl MixJamApp {
         let mut master = self.session.project().master_gain;
         let mut buses = self.session.project().fx;
         let mut board = self.session.project().master;
-        let changes = mixer::show(
-            ui,
-            self.session.project(),
-            self.session.library(),
-            &mut tracks,
-            &mut master,
-            &mut buses,
-            &mut board.bypass,
-        );
+        let changes = ui
+            .push_id(self.master_view_generation, |ui| {
+                mixer::show(
+                    ui,
+                    self.session.project(),
+                    self.session.library(),
+                    &mut tracks,
+                    &mut master,
+                    &mut buses,
+                    &mut board.bypass,
+                )
+            })
+            .inner;
         if changes.tracks {
             let result = self.session.edit(EditCommand::SetMixer {
                 tracks,

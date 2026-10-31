@@ -49,6 +49,14 @@ A tool that needs a missing key stops and names the key.
 
 `env.py` reads `.env.local`; `harmony.py` holds keys, scales, and chords.
 
+Song-writing methods accept whole track numbers from 1 to 64 and whole FX bus
+numbers from 1 to 4. Invalid destinations fail before changing the song.
+Automation accepts `volume`, `filter`, and `send1` through `send4`; a rejected
+batch leaves earlier points unchanged. Loop ranges must advance in time, and
+an explicit tile size must be finite, positive, and at least one tick long.
+Automatic end fades use the energy of both channels. Opposite channel
+polarities do not make an audible ending count as silence.
+
 The song tools expect format 18. `render.py` does not pass sample folders to
 the application, and `measure.py` checks linked paths from its working
 directory. For an earlier song or a library-relative WAV, use the native
