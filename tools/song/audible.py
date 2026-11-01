@@ -16,7 +16,9 @@ its own lane. render.py writes the same table as audible.txt from its lane
 renders. Run this tool alone only for a song that render.py did not render.
 """
 import json
+import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -29,18 +31,28 @@ BANDS = [100 * 2 ** (k / 3) for k in range(0, 28)]  # 100 Hz .. 12.7 kHz
 DROWNED = 0.10
 
 
-def cells(mono, rate):
-    """Energy per 186 ms frame and 1/3-octave band."""
+def spectra(mono, rate):
+    """Windowed spectrum per 186 ms frame, and the frame length."""
     frame = int(rate * 0.186)
     count = len(mono) // frame
-    frames = mono[: count * frame].reshape(count, frame) * np.hanning(frame)
-    spectrum = np.abs(np.fft.rfft(frames, axis=1)) ** 2
+    frames = mono[: count * frame].reshape(count, frame).astype(np.float32) * np.hanning(frame).astype(np.float32)
+    return np.fft.rfft(frames, axis=1), frame
+
+
+def band_energy(spectrum, frame, rate):
+    """Energy per frame and 1/3-octave band of a spectrum from spectra()."""
     freqs = np.fft.rfftfreq(frame, 1 / rate)
-    out = np.zeros((count, len(BANDS) - 1))
+    bands = np.zeros((len(freqs), len(BANDS) - 1), np.float32)
     for k in range(len(BANDS) - 1):
-        band = (freqs >= BANDS[k]) & (freqs < BANDS[k + 1])
-        out[:, k] = spectrum[:, band].sum(axis=1)
-    return out, frame
+        bands[(freqs >= BANDS[k]) & (freqs < BANDS[k + 1]), k] = 1
+    power = spectrum.real ** 2 + spectrum.imag ** 2
+    return (power @ bands).astype(np.float64)
+
+
+def cells(mono, rate):
+    """Energy per 186 ms frame and 1/3-octave band."""
+    spectrum, frame = spectra(mono, rate)
+    return band_energy(spectrum, frame, rate), frame
 
 
 def heard_share(part_cells, rest_cells):
@@ -62,17 +74,21 @@ def lane_bars(document, tracks):
     return bars
 
 
-def audibility(document, groups, rate, mix, part_of):
+def audibility(document, groups, rate, mix, part_of, jobs=None):
     """The table's lines: each lane's level against the rest and the share of it heard.
 
     `mix` is the whole premaster in mono; `part_of(name)` gives a lane's render in mono.
+    The tool measures `jobs` lanes at a time (default: half the processors, at most 8).
     """
     bar_frames = rate * 240 / document['song']['bpm']
-    lines = [f'{"lane":22s} {"bars":>5s} {"vs rest dB":>10s} {"heard":>6s}']
-    for name, tracks in sorted(groups.items(), key=lambda item: min(item[1])):
+    # The windowed FFT is linear, so the rest of the mix is the mix's spectrum minus the lane's.
+    mix_spectrum, frame = spectra(mix, rate)
+
+    def line(item):
+        name, tracks = item
         bars = lane_bars(document, tracks)
         if not bars:
-            continue
+            return None
         part = part_of(name)
         part = np.pad(part, (0, max(0, len(mix) - len(part))))[: len(mix)]
         rest = mix - part
@@ -80,13 +96,20 @@ def audibility(document, groups, rate, mix, part_of):
         for bar in bars:
             mask[int(bar * bar_frames): int((bar + 1) * bar_frames)] = True
         level = 10 * np.log10((np.mean(part[mask] ** 2) + 1e-20) / (np.mean(rest[mask] ** 2) + 1e-20))
-        part_cells, frame = cells(part, rate)
-        rest_cells, _ = cells(rest, rate)
-        frames = [i for i in range(len(part_cells)) if mask[min(len(mask) - 1, i * frame + frame // 2)]]
-        heard = heard_share(part_cells[frames], rest_cells[frames])
+        part_spectrum, _ = spectra(part, rate)
+        centres = np.minimum(len(mask) - 1, np.arange(len(part_spectrum)) * frame + frame // 2)
+        frames = mask[centres]
+        part_cells = band_energy(part_spectrum[frames], frame, rate)
+        rest_cells = band_energy(mix_spectrum[frames] - part_spectrum[frames], frame, rate)
+        heard = heard_share(part_cells, rest_cells)
         flag = '  <- drowned' if heard < DROWNED else ''
-        lines.append(f'{name[:22]:22s} {len(bars):5d} {level:10.1f} {heard * 100:5.0f}%{flag}')
-    return lines
+        return f'{name[:22]:22s} {len(bars):5d} {level:10.1f} {heard * 100:5.0f}%{flag}'
+
+    jobs = jobs or max(1, min(8, (os.cpu_count() or 2) // 2))
+    ordered = sorted(groups.items(), key=lambda item: min(item[1]))
+    with ThreadPoolExecutor(jobs) as pool:
+        rows = [row for row in pool.map(line, ordered) if row is not None]
+    return [f'{"lane":22s} {"bars":>5s} {"vs rest dB":>10s} {"heard":>6s}'] + rows
 
 
 def main():
@@ -101,7 +124,7 @@ def main():
     lanes = render.render_lanes(document, groups, out, jobs)
     rate, premaster, _ = render.mix_down(lanes, {})
     print('\n'.join(audibility(document, groups, rate, premaster.mean(axis=1),
-                               lambda name: read_wav(lanes[name])[1].mean(axis=1))))
+                               lambda name: read_wav(lanes[name])[1].mean(axis=1), jobs)))
 
 
 if __name__ == '__main__':

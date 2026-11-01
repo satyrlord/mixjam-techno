@@ -90,6 +90,12 @@ remove.
 Then a list "Keep" with at most 5 things that work and must not be undone, each
 with its bars and tracks. Give no score.
 
+Lane names come from the song's `.meta.json`, which the tools and reviewers read. The
+owner sees track numbers and the sound names on the clips. Whenever a critique
+or rating names a lane for the owner, give its track number and the names of
+its sounds as well, for example "track 22 (Starshine Seq A 1, A 7)". The same
+applies to every judgement that needs ears.
+
 ## Round log
 
 The main agent keeps one round log per song, `rounds.md` in the review folder.

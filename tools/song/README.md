@@ -30,7 +30,7 @@ A tool that needs a missing key stops and names the key.
 | Tool | Usage | What it does |
 |---|---|---|
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-18 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
-| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak. |
+| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak. Eligible unchanged lanes come from the cache described below. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--fit DB]` | Renders a board over a premaster and compares it with the reference profile. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`; a board copied from a format-15 song has the earlier keys and fails to render until you rename them. |
@@ -66,6 +66,21 @@ directory. For an earlier song or a library-relative WAV, use the native
 sources and unconfirmed conflicts before using its renders. Do not replace the
 original. Retain any files that the converted copy needs in the data folder.
 
+The lane cache defaults to `lane-cache` beside the output folder. It retains
+the most recently used 4 GB in a versioned subfolder. Cache cleanup touches
+only its named entries; earlier cache versions and unrelated files remain.
+Cached audio is copied, so changing an output WAV does not change the cache.
+Missing or damaged entries are rendered again. Use `--no-cache` to render
+every lane.
+
+Caching requires format 18, directly linked absolute imported WAV paths with
+source tempo, and no native, library, missing-source, conflict, or origin
+dependencies. Other songs still render, with no cache reuse. Cache keys include
+source-file content, render settings, global Solo state, master gain, and the
+renderer build. A gain change requires a new render; cached PCM is not rescaled.
+Use `--no-master` for intermediate trials only. `measure.py` and the song-review
+gate require a current `master.wav` from a render without that option.
+
 After indexing changed WAVs, run `sampletags.py tag` before `verdicts.py build`.
 A verdict does not use a measurement from an older file. After this update, run
 `sampletags.py tag` once to refresh the cached measurements with channel-aware
@@ -79,6 +94,12 @@ invalid or conflicting files. Catalogs hold no sound names: the reader takes
 them from valid private name files for the accepted product and release.
 Invalid name files are rejected in full. Without a matching name, the reader
 identifies a sound by its archive code.
+
+When `Song.sound` links an extracted WAV, it can use the product name for a
+matching archive code and duration, including codes from compatible releases.
+Comparable mono 44.1 kHz PCM digests must match. Without comparable digests,
+the name is inferred from code and duration. Ambiguous matches keep the file
+name. This changes the display name only; it does not replace the linked WAV.
 
 Gain fitting stops before changing the song if the required master gain is
 outside the song format's range. Adjust the lane gains before trying again.

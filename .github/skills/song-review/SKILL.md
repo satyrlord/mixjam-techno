@@ -123,6 +123,21 @@ For an improvement loop or mastering recommendation, do not give a pass that
 fails the gate to a critic or rater. For evaluation only, disclose each failed
 or unavailable check to any roles permitted to receive the pass, and in the report.
 
+### Keep repair rounds short
+
+Each repair round costs render time and agent turns. To keep rounds short:
+
+- Collect all the round's findings and fix them in one edit before you
+  render. Do not render after each fix.
+- Use `--no-master` for intermediate repair trials. Before the mechanical
+  gate, render without that option: `measure.py` and the evidence package
+  require a current `master.wav`. `render.py` reuses eligible unchanged lanes
+  from its cache. Check candidate boards with `master.py` on the premaster.
+- Remove superseded audio only after it is no longer needed for comparison
+  or delivery. Keep songs, metadata, reports, critiques, ratings, boards,
+  and the round log. Keep retained source audio and data folders while any
+  saved song depends on them. Check those dependencies before removal.
+
 ## 4. Get two critiques
 
 1. Write each critic's brief: the role, the evidence package, the review

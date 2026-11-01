@@ -16,6 +16,7 @@ that track. The engine holds a lane's last value to the end of the song.
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
 sections and the key. render.py, measure.py, audible.py and master.py read it.
 """
+import hashlib
 import json
 import math
 import wave
@@ -101,6 +102,12 @@ class Sound:
         rate, data = read_wav(self.path)
         self.rate = rate
         self.frames = len(data)
+        self.pcm_digest = None
+        if rate == 44100 and data.shape[1] == 1 and self.frames > 2:
+            # Match catalog::pcm_identity: wrapping PCM16 differences, without the final frame.
+            scaled = data[:, 0] * 32768
+            pcm = np.clip(np.copysign(np.floor(np.abs(scaled) + 0.5), scaled), -32768, 32767).astype('<i2')
+            self.pcm_digest = hashlib.sha256(np.diff(pcm[:-1]).astype('<i2').tobytes()).hexdigest()[:32]
         self.source_bpm = source_bpm
         self.play_bpm = playback_bpm(source_bpm, song_bpm) if song_bpm else source_bpm
         self.ticks = ticks_of(self.frames, rate, self.play_bpm)
@@ -178,7 +185,11 @@ class Song:
         if path not in self.sounds:
             self.sounds[path] = Sound(path, source_bpm, self.bpm)
             sample_id = IMPORTED_ID_START + len(self.samples)
-            self.samples[path] = dict(id=sample_id, name=Path(path).stem, groupName=self.title,
+            # A file extracted from a product is named by its archive code; show the product's name.
+            import palette as palettes
+            sound = self.sounds[path]
+            name = palettes.product_file_name(path, sound.frames, sound.rate, sound.pcm_digest) or Path(path).stem
+            self.samples[path] = dict(id=sample_id, name=name, groupName=self.title,
                                       path=path, sourceBpm=source_bpm,
                                       sourceSampleRate=self.sounds[path].rate, origin=None)
         return self.sounds[path]

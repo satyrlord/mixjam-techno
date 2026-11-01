@@ -99,6 +99,7 @@ def file_key(path):
 PRODUCT_SLOTS = {'t2': 0, 't1': 1, 'd1': 2, 'd2': 3, 'd3': 4, 'd4': 5, 'h1': 6, 't3': 7}  # src/products.rs
 PRODUCT_STRIDE = 100_000
 _catalog = None
+_codes = None  # archive code to [(frame count, name, PCM digest)], filled with _catalog
 
 
 def catalog_object(pairs):
@@ -221,9 +222,9 @@ def code_name(code):
 def product_catalog():
     """{song sample id: (product, group, name)} from the product catalogs (SAMPLE_CATALOGS, default
     assets/catalog), for the products' own sounds that songs place by id; empty without them."""
-    global _catalog
+    global _catalog, _codes
     if _catalog is None:
-        _catalog = {}
+        _catalog, _codes = {}, {}
         folder = env.path('SAMPLE_CATALOGS', required=False) or env.ROOT / 'assets' / 'catalog'
         identities, releases = {}, set()
         names = catalog_names()
@@ -248,10 +249,26 @@ def product_catalog():
                         _catalog[sample_id] = (product, entry['group_name'], name)
                     elif identities[sample_id].get('pcm_digest') is None and entry.get('pcm_digest') is not None:
                         identities[sample_id] = dict(identities[sample_id], pcm_digest=entry['pcm_digest'])
+                    _codes.setdefault(code_name(entry['code']).lower(), set()).add(sample_id)
                 releases.add((product, fingerprint))
             except (OSError, UnicodeError, ValueError, TypeError, KeyError, OverflowError) as error:
                 print(f'Cannot load the catalog {path}. {error}', file=sys.stderr)
+        # Every accepted release contributes codes. Each code uses the strongest merged identity.
+        _codes = {code: [(identities[sample_id]['frame_count'], _catalog[sample_id][2],
+                          identities[sample_id].get('pcm_digest')) for sample_id in ids]
+                  for code, ids in _codes.items()}
     return _catalog
+
+
+def product_file_name(path, frames, rate=44100, pcm_digest=None):
+    """The product's own name for a WAV extracted from a product: a file named by its archive code
+    whose duration matches one catalog name. Reject comparable PCM digest mismatches; without
+    comparable digests the name is inferred from the code and duration. None for other files."""
+    product_catalog()
+    names = {name for count, name, expected in _codes.get(Path(path).stem.lower(), ())
+             if count == frames * 44100 / rate
+             and (expected is None or pcm_digest is None or expected.lower() == pcm_digest.lower())}
+    return names.pop() if len(names) == 1 else None
 
 
 def placed_samples(song_path):

@@ -434,7 +434,7 @@ class MeasureTests(unittest.TestCase):
         document = song.document()
         document['lanes'][1]['placements'] = [dict(id=1)]
         seen = []
-        def lanes(current, groups, out, jobs):
+        def lanes(current, groups, out, jobs, cache=None):
             gain = current['song']['masterGain']
             seen.append(gain)
             path = out / 'lane-02.wav'
@@ -466,6 +466,205 @@ class MeasureTests(unittest.TestCase):
             render.render_lanes(document, {'pad': [2]}, Path(directory), jobs=1)
             parts.assert_called_once()
             run.assert_not_called()
+
+    def test_lane_cache_renders_only_changed_lanes(self):
+        document = mixjam.Song('cache').document()
+        document['lanes'][0]['placements'] = [dict(id=1, sampleId=1_000_000, startTick=0, durationTicks=96)]
+        document['lanes'][1]['placements'] = [dict(id=2, sampleId=1_000_001, startTick=0, durationTicks=96)]
+        renders = []
+        def native(command, **kwargs):
+            part = json.loads(Path(command[command.index('--mix') + 1]).read_text())
+            renders.append([index for index, lane in enumerate(part['lanes'], 1) if lane['placements']])
+            mixjam.write_wav(command[command.index('--output') + 1], 44100,
+                             np.full((8, 2), 0.25 * part['song']['masterGain']))
+            return mock.Mock(returncode=0)
+        groups = {'a': [1], 'b': [2]}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.subprocess, 'run', side_effect=native), \
+                mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            for name in ('a', 'b'):
+                mixjam.write_wav(root / f'{name}.wav', 44100, np.ones((8, 2)))
+            document['samples'] = [dict(id=1_000_000 + index, name=name, path=str(root / f'{name}.wav'),
+                                        sourceBpm=140) for index, name in enumerate(('a', 'b'))]
+            (root / 'r1').mkdir()
+            (root / 'r2').mkdir()
+            render.render_lanes(document, groups, root / 'r1', jobs=1, cache=root / 'cache')
+            self.assertEqual(sorted(renders), [[1], [2]])
+            # A script that adds a sound renumbers the ids; only lane b's clip moves.
+            changed = json.loads(json.dumps(document))
+            for sample in changed['samples']:
+                sample['id'] += 1
+            changed['lanes'][0]['placements'] = [dict(id=5, sampleId=1_000_001, startTick=0, durationTicks=96)]
+            changed['lanes'][1]['placements'] = [dict(id=6, sampleId=1_000_002, startTick=96, durationTicks=96)]
+            renders.clear()
+            result = render.render_lanes(changed, groups, root / 'r2', jobs=1, cache=root / 'cache')
+            self.assertEqual(renders, [[2]])
+            _, cached = mixjam.read_wav(result['a'])
+            np.testing.assert_allclose(cached, 0.25 * document['song']['masterGain'], atol=1 / 32768)
+            # The first round's lane stays as it was rendered.
+            _, first = mixjam.read_wav(root / 'r1' / 'lane-01.wav')
+            np.testing.assert_allclose(first, 0.25 * document['song']['masterGain'], atol=1 / 32768)
+
+    def test_lane_cache_tracks_source_gain_and_global_solo_changes(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.5))
+            song = mixjam.Song('cache dependencies')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            calls = []
+
+            def native(path, wav, data):
+                part = json.loads(path.read_text())
+                calls.append(part)
+                rate, pcm = mixjam.read_wav(source)
+                if any(lane['solo'] for lane in part['lanes']) and not part['lanes'][0]['solo']:
+                    pcm *= 0
+                mixjam.write_wav(wav, rate, pcm * part['song']['masterGain'])
+
+            def rendered(name):
+                out = root / name
+                out.mkdir()
+                with mock.patch.object(render, 'run', side_effect=native):
+                    result = render.render_lanes(document, {'one': [1]}, out, 1, root / 'cache')
+                return float(np.max(mixjam.read_wav(result['one'])[1]))
+
+            self.assertEqual(rendered('first'), 0.5)
+            self.assertEqual(rendered('hit'), 0.5)
+            self.assertEqual(len(calls), 1)
+            # Keep the file's size and timestamp: audio identity must still change.
+            stamp = source.stat()
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            self.assertEqual(rendered('new-source'), 0.25)
+            document['lanes'][1]['solo'] = True
+            self.assertEqual(rendered('other-solo'), 0)
+            document['lanes'][1]['solo'] = False
+            document['song']['masterGain'] = 0
+            self.assertEqual(rendered('zero'), 0)
+            document['song']['masterGain'] = 4
+            self.assertAlmostEqual(rendered('loud'), 1, delta=1 / 32768)
+            document['song']['masterGain'] = 2
+            self.assertEqual(rendered('quieter'), 0.5)
+            self.assertEqual(len(calls), 6)
+
+    def test_cache_bypasses_sources_that_need_native_resolution(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            source = Path(directory) / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('source dependencies')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            self.assertIsNotNone(render.lane_key(document, [1], False))
+            variants = []
+            for field, value in [('formatVersion', 17), ('libraries', [{'product': 't2', 'root': 'library'}]),
+                                 ('missingSamples', [{'id': 1}]), ('sampleConflicts', [{'id': 1}])]:
+                changed = render.copy(document)
+                changed[field] = value
+                variants.append(changed)
+            for sample_id in (1, 2, 1_000_005):
+                changed = render.copy(document)
+                changed['lanes'][0]['placements'][0]['sampleId'] = sample_id
+                variants.append(changed)
+            for field, value in [('path', 'relative.wav'), ('path', str(source.with_name('missing.wav'))),
+                                 ('sourceBpm', None), ('origin', 't2')]:
+                changed = render.copy(document)
+                changed['samples'][0][field] = value
+                variants.append(changed)
+            for changed in variants:
+                with self.subTest(document=changed):
+                    self.assertIsNone(render.lane_key(changed, [1], False))
+
+    def test_cache_does_not_publish_audio_when_its_source_changes_during_render(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            song = mixjam.Song('changing source')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            calls = []
+
+            def native(path, wav, data):
+                calls.append(path)
+                rate, pcm = mixjam.read_wav(source)
+                mixjam.write_wav(wav, rate, pcm)
+                mixjam.write_wav(source, rate, np.full((8, 2), 0.5))
+
+            with mock.patch.object(render, 'run', side_effect=native):
+                render.render_lanes(document, {'one': [1]}, root, 1, root / 'cache')
+                self.assertEqual(list((root / 'cache').rglob('*.wav')), [])
+                result = render.render_lanes(document, {'one': [1]}, root, 1, root / 'cache')
+            self.assertEqual(len(calls), 2)
+            np.testing.assert_array_equal(mixjam.read_wav(result['one'])[1], 0.5)
+
+    def test_cache_key_keeps_source_provenance(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            source = Path(directory) / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('provenance')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            original = render.lane_key(document, [1], False)
+            document['sourceNotices'] = ['adapter provenance']
+            self.assertNotEqual(render.lane_key(document, [1], False), original)
+
+    def test_cache_files_are_independent_and_damaged_entries_are_misses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, source, output = root / 'cache', root / 'source.wav', root / 'output.wav'
+            key = 'a' * 32
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            render.to_cache(cache, key, source)
+            # Editing a delivered lane must not edit the cache, or vice versa.
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.5))
+            self.assertTrue(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            mixjam.write_wav(output, 44100, np.zeros((8, 2)))
+            self.assertTrue(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            entry = cache / render.CACHE_VERSION / f'{key}.wav'
+            entry.write_bytes(entry.read_bytes()[:-4])
+            self.assertFalse(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            entry.write_bytes(b'bad WAV')
+            self.assertFalse(render.from_cache(cache, key, output))
+            entry.unlink()
+            self.assertFalse(render.from_cache(cache, key, output))
+
+    def test_cache_publication_failure_preserves_existing_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, cache = root / 'source.wav', root / 'cache'
+            key = 'a' * 32
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            render.to_cache(cache, key, source)
+            mixjam.write_wav(source, 44100, np.zeros((8, 2)))
+            with mock.patch.object(render.os, 'replace', side_effect=OSError('interrupted')):
+                render.to_cache(cache, key, source)
+            output = root / 'output.wav'
+            self.assertTrue(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            self.assertEqual(list((cache / render.CACHE_VERSION).glob('*.tmp')), [])
+
+    def test_cache_pruning_keeps_unrelated_wavs_and_the_newest_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            unrelated = cache / 'original.wav'
+            mixjam.write_wav(unrelated, 44100, np.zeros((8, 2)))
+            old, new = 'a' * 32, 'b' * 32
+            render.to_cache(cache, old, unrelated)
+            render.to_cache(cache, new, unrelated)
+            folder = cache / render.CACHE_VERSION
+            extra = folder / 'original.wav'
+            mixjam.write_wav(extra, 44100, np.zeros((8, 2)))
+            os.utime(folder / f'{old}.wav', (1, 1))
+            render.prune_cache(cache, limit=unrelated.stat().st_size)
+            self.assertTrue(unrelated.exists())
+            self.assertTrue(extra.exists())
+            self.assertFalse((folder / f'{old}.wav').exists())
+            self.assertTrue((folder / f'{new}.wav').exists())
 
     def test_silent_keyed_song_uses_the_native_silent_mix(self):
         song = mixjam.Song('silent')

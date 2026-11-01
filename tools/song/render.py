@@ -1,6 +1,7 @@
 """Render a song pass: every lane alone, then the master.
 
 python -I tools/song/render.py SONG.mixjam OUT_DIR [--fit-gain DBFS] [--jobs N] [--no-master]
+    [--cache DIR | --no-cache]
 
 The tool renders each lane with its twin and its FX returns, without the board.
 It writes each lane to OUT_DIR/lane-NN.wav. The default is half the number of
@@ -24,23 +25,37 @@ exporter. Key tracks stay separate from the output and remain in the full song
 context. Stem export rejects an out-of-range track or FX part. Lower that
 part's gain before you try again.
 
+Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
+whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
+not change since an earlier render comes from the cache. Only format-18 songs
+with direct absolute imported WAV paths and no library, missing-source, or
+conflict dependencies use the cache. The cache keeps the most recently used
+4 GB in its own versioned subfolder. --no-cache renders every lane.
+
 The renderer is the release build in target/release. It runs headless and plays
 no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.
 """
+import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
+import wave
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
 from mixjam import board_off as _board_off, read_wav, write_wav  # noqa: E402
+
+# Lane renders kept for later rounds; the lanes of a 7-minute song take about 1.6 GB.
+CACHE_LIMIT = 4 * 2 ** 30
+CACHE_VERSION = 'lanes-v2'
 
 
 def run(song_path, wav_path, data=None):
@@ -122,15 +137,20 @@ def ducker_keys(document, tracks):
     return keys
 
 
-def keyed_parts(document, tracks, path, wav, data):
-    """Extract the selected dry tracks and their FX; key audio stays in separate files."""
+def keyed_document(document, tracks):
+    """The premaster with every track playing and only `tracks` feeding the FX buses."""
     part = board_off(copy(document))
     part['song']['title'] = 'lane'
     for index, lane in enumerate(part['lanes'], 1):
         if index not in tracks:
             lane['sends'] = [0.0] * 4
             lane.get('automation', {}).pop('sends', None)
-    path.write_text(json.dumps(part), encoding='utf-8')
+    return part
+
+
+def keyed_parts(document, tracks, path, wav, data):
+    """Extract the selected dry tracks and their FX; key audio stays in separate files."""
+    path.write_text(json.dumps(keyed_document(document, tracks)), encoding='utf-8')
     with TemporaryDirectory(prefix=path.stem + '-parts-', dir=wav.parent) as directory:
         folder = Path(directory)
         if not run_stems(path, folder, data):
@@ -154,25 +174,185 @@ def keyed_parts(document, tracks, path, wav, data):
     path.unlink()
 
 
-def render_lanes(document, groups, out, jobs=None):
-    """Render every lane alone, `jobs` at a time; lane name to its WAV."""
+def exe_stamp():
+    """Size and time of the renderer, so that a new build does not reuse older lane renders."""
+    try:
+        stat = env.exe().stat()
+    except (OSError, SystemExit):
+        return ''
+    return f'{stat.st_size}:{stat.st_mtime_ns}'
+
+
+def source_fingerprints(document):
+    """Hash directly linked WAVs; None when native source resolution is needed.
+
+    Read each distinct used file once per call. A path alone does not identify
+    audio: the owner can replace its contents between rounds.
+    """
+    if document.get('formatVersion') != 18 or any(document.get(field) for field in
+                                                ('libraries', 'missingSamples', 'sampleConflicts')):
+        return None
+    samples = {sample['id']: sample for sample in document['samples']}
+    used = {placement['sampleId'] for lane in document['lanes'] for placement in lane['placements']}
+    fingerprints, paths = {}, {}
+    for sample_id in used:
+        sample = samples.get(sample_id)
+        if sample_id < 1_000_000 or sample is None or sample.get('origin') is not None:
+            return None
+        path = Path(sample.get('path', ''))
+        if not path.is_absolute() or not sample.get('sourceBpm'):
+            return None
+        try:
+            if path not in paths:
+                digest = hashlib.sha256()
+                with path.open('rb') as source:
+                    for block in iter(lambda: source.read(1024 * 1024), b''):
+                        digest.update(block)
+                paths[path] = digest.hexdigest()
+        except OSError:
+            return None
+        fingerprints[sample_id] = paths[path]
+    return fingerprints
+
+
+def lane_key(part, tracks, keyed, fingerprints=None):
+    """A hash of what the lane render of `part` depends on.
+
+    Placements name their sample by its record, not by its id, because the ids follow the
+    order in which a script adds sounds. Global Solo and master gain also affect
+    the output. Cached PCM cannot be rescaled after clipping or nonlinear FX.
+    A keyed lane depends on every track.
+    """
+    if fingerprints is None:
+        fingerprints = source_fingerprints(part)
+    renderer = exe_stamp()
+    if fingerprints is None or not renderer:
+        return None
+    samples = {s['id']: {k: v for k, v in s.items() if k != 'id'} for s in part['samples']}
+    lanes = {}
+    for index, lane in enumerate(part['lanes'], 1):
+        if keyed or index in tracks:
+            placements = [dict({k: v for k, v in p.items() if k not in ('id', 'sampleId')},
+                               sample=samples[p['sampleId']], audio=fingerprints[p['sampleId']])
+                          for p in lane['placements']]
+            lanes[index] = dict(lane, placements=placements)
+    song = {k: v for k, v in part['song'].items() if k != 'title'}
+    context = {k: v for k, v in part.items() if k not in
+               ('song', 'master', 'fxBuses', 'lanes', 'samples', 'createdAt', 'modifiedAt')}
+    blob = json.dumps(dict(formatVersion=part['formatVersion'], keyed=keyed, tracks=sorted(tracks),
+                           anySolo=any(lane['solo'] for lane in part['lanes']), song=song, master=part['master'],
+                           fxBuses=part['fxBuses'], context=context, lanes=lanes,
+                           renderer=renderer), sort_keys=True)
+    return hashlib.sha256(blob.encode('utf-8')).hexdigest()[:32]
+
+
+def atomic_copy(source, destination, validate=False):
+    """Publish a complete independent copy. A failed copy leaves its destination intact."""
+    with NamedTemporaryFile(dir=destination.parent, suffix='.tmp', delete=False) as temporary:
+        path = Path(temporary.name)
+    try:
+        shutil.copyfile(source, path)
+        if validate:
+            with wave.open(str(path), 'rb') as audio:
+                if audio.getnchannels() != 2 or audio.getsampwidth() != 2 or audio.getnframes() <= 0:
+                    raise ValueError('The cached lane is not a stereo PCM16 WAV.')
+                remaining = audio.getnframes() * 4
+                while remaining:
+                    block = audio.readframes(min(262144, (remaining + 3) // 4))
+                    if not block:
+                        raise ValueError('The cached lane WAV is incomplete.')
+                    remaining -= len(block)
+        os.replace(path, destination)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def from_cache(cache, key, wav):
+    """Copy a complete cached lane to `wav`; treat a missing or damaged entry as a miss."""
+    entry = cache / CACHE_VERSION / f'{key}.wav'
+    try:
+        atomic_copy(entry, wav, validate=True)
+    except (OSError, EOFError, ValueError, wave.Error):
+        return False
+    try:
+        os.utime(entry)
+    except OSError:
+        pass  # Another render can prune the entry after the copy.
+    return True
+
+
+def to_cache(cache, key, wav):
+    """Publish one complete lane in the cache, without sharing its writable file."""
+    folder = cache / CACHE_VERSION
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        atomic_copy(wav, folder / f'{key}.wav')
+    except OSError:
+        pass  # Cache failure must not discard a successful render.
+
+
+def prune_cache(cache, limit=CACHE_LIMIT):
+    """Delete the least recently used renders until the cache holds at most `limit` bytes."""
+    entries = []
+    for entry in (cache / CACHE_VERSION).glob('*.wav'):
+        if len(entry.stem) != 32 or any(char not in '0123456789abcdef' for char in entry.stem):
+            continue
+        try:
+            stat = entry.stat()
+            entries.append((stat.st_mtime, stat.st_size, entry))
+        except OSError:
+            continue
+    entries.sort()
+    total = sum(size for _, size, _ in entries)
+    for _, size, entry in entries:
+        if total <= limit:
+            break
+        try:
+            entry.unlink(missing_ok=True)
+            total -= size
+        except OSError:
+            continue
+
+
+def render_lanes(document, groups, out, jobs=None, cache=None):
+    """Render every lane alone, `jobs` at a time; lane name to its WAV.
+
+    With a `cache` folder, a lane whose render inputs did not change since an earlier render
+    comes from the cache instead of a new render.
+    """
     jobs = jobs or max(1, min(8, (os.cpu_count() or 2) // 2))
+    fingerprints = source_fingerprints(document) if cache else None
 
     def one(item):
         name, tracks = item
         path = out / f'lane-{min(tracks):02d}.mixjam'
         wav = path.with_suffix('.wav')
         keys = ducker_keys(document, tracks) - set(tracks)
+        key = None
+        if cache and fingerprints is not None:
+            part = solo(document, tracks) if not keys else keyed_document(document, tracks)
+            key = lane_key(part, tracks, bool(keys), fingerprints)
+            if key is not None and from_cache(cache, key, wav):
+                return name, wav
+        # The lane file can be a link to a cache entry; replace it rather than write through it.
+        wav.unlink(missing_ok=True)
         if not keys:
             path.write_text(json.dumps(solo(document, tracks)), encoding='utf-8')
             run(path, wav, out / '.data' / path.stem)
             path.unlink()
-            return name, wav
-        keyed_parts(document, tracks, path, wav, out / '.data' / path.stem)
+        else:
+            keyed_parts(document, tracks, path, wav, out / '.data' / path.stem)
+        # Do not publish under an earlier identity when a source or the renderer
+        # changed while the native command ran.
+        if cache and key is not None and key == lane_key(part, tracks, bool(keys)):
+            to_cache(cache, key, wav)
         return name, wav
 
     with ThreadPoolExecutor(jobs) as pool:
-        return dict(pool.map(one, groups.items()))
+        lanes = dict(pool.map(one, groups.items()))
+    if cache:
+        prune_cache(cache)
+    return lanes
 
 
 def add(total, data):
@@ -223,10 +403,12 @@ def main():
     song, out = Path(args[0]), Path(args[1])
     out.mkdir(parents=True, exist_ok=True)
     jobs = int(args[args.index('--jobs') + 1]) if '--jobs' in args else None
+    cache = None if '--no-cache' in args else (
+        Path(args[args.index('--cache') + 1]) if '--cache' in args else out.resolve().parent / 'lane-cache')
     document = json.loads(song.read_text(encoding='utf-8'))
     meta = read_meta(song)
     groups = lane_groups(document, meta)
-    lanes = render_lanes(document, groups, out, jobs)
+    lanes = render_lanes(document, groups, out, jobs, cache)
     rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta))
     scale = 1.0
     if '--fit-gain' in args:
@@ -238,7 +420,7 @@ def main():
                     break
                 fit_gain(song, peak, target)
                 document = json.loads(song.read_text(encoding='utf-8'))
-                lanes = render_lanes(document, groups, out, jobs)
+                lanes = render_lanes(document, groups, out, jobs, cache)
                 rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta))
             peak = float(np.abs(premaster).max())
             actual = 20 * math.log10(peak) if peak > 0 else -math.inf
@@ -253,7 +435,7 @@ def main():
     for role, stem in stems.items():
         write_wav(out / f'stem-{role}.wav', rate, stem * scale)
     lines = audible.audibility(document, groups, rate, premaster.mean(axis=1),
-                               lambda name: read_wav(lanes[name])[1].mean(axis=1))
+                               lambda name: read_wav(lanes[name])[1].mean(axis=1), jobs)
     (out / 'audible.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     if '--no-master' not in args:
         run(song, out / 'master.wav')
