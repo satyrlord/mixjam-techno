@@ -75,7 +75,7 @@ Otherwise use the last gated master render for delivery. Then do steps 9 and 10.
    Run the gate on a working copy. `--fit-gain` changes the song it receives.
    Completion criterion: The original song and its metadata are unchanged.
 6. For an earlier song format or a song whose linked WAVs need library roots,
-   convert the copy to format 18 with the native release executable. Set
+   convert the copy to format 19 with the native release executable. Set
    `MIXJAM_TECHNO_DATA_DIR` to a private folder in the review folder and use
    `convert --mix INPUT --output OUTPUT.mixjam`, with `--samples FOLDER` for
    each required WAV folder. Copy any metadata beside the converted song with

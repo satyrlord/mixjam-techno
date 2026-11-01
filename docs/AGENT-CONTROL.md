@@ -30,8 +30,10 @@ port.
 - `key`, `type`, `pointer`, and `scroll` send keyboard and mouse input to a
   position. `state` gives the position of the arrangement and of each clip.
 - The arrangement lanes are one painted surface. `place`, `move_clips`,
-  `delete_clips`, `select`, `seek`, `set_loop`, `automate`, and `clip` edit them
-  without positions. `clip` sets gain, trim, length, fades, and pitch for one clip.
+  `delete_clips`, `select`, `seek`, `set_loop`, `set_sections`, `automate`, and
+  `clip` edit them without positions. `set_sections` replaces the song's named
+  sections, each given by its first `bar` (or `tick`) and its `name`; `state`
+  lists them under `song.sections`. `clip` sets gain, trim, length, fades, and pitch for one clip.
   These edits use the same history as edits made by hand.
 - `libraries` lists the library folders in order and the reason any did not
   load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with

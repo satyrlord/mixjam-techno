@@ -4,9 +4,10 @@ pub use crate::{
     audio::Pcm,
     effects::EffectsState,
     engine::{
-        Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_TICKS,
-        MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict, TICKS_PER_BAR,
-        TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude, playback_bpm,
+        Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_SECTION_NAME,
+        MAX_TICKS, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
+        Section, TICKS_PER_BAR, TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude,
+        playback_bpm,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{
@@ -93,6 +94,8 @@ impl<'a> LibraryView<'a> {
 pub enum EditCommand {
     SetTempo(f64),
     SetLoop(Option<[u32; 2]>),
+    /// Replace the song's sections. They do not change the sound.
+    SetSections(Vec<Section>),
     SetMixer {
         tracks: Vec<Track>,
         master_gain: f32,
@@ -971,6 +974,14 @@ impl Session {
             let _ = crate::project_io::save_song_folder(&self.settings_root, folder);
         }
     }
+    /// Whether the user wants section bookmarks shown on the arrangement.
+    pub fn section_bookmarks_setting(&self) -> bool {
+        crate::project_io::load_section_bookmarks(&self.settings_root)
+    }
+    /// Keep the bookmark choice for later sessions. A failed write only loses that convenience.
+    pub fn remember_section_bookmarks(&self, visible: bool) {
+        let _ = crate::project_io::save_section_bookmarks(&self.settings_root, visible);
+    }
 
     pub fn take_notice(&mut self) -> Option<(String, bool)> {
         self.notice.take()
@@ -994,6 +1005,12 @@ impl Session {
         } else {
             self.prepare_ahead();
         }
+    }
+    /// A change of the song's sections only. They do not change the sound, so
+    /// the prepared mix and playback continue.
+    fn sections_changed(&mut self) {
+        self.gesture = None;
+        self.unsaved = true;
     }
     /// A change of track faders, pans, polarity, or the master gain only.
     /// Playback reads the levels as it plays, so the prepared mix stays
@@ -1141,6 +1158,7 @@ impl Session {
             command,
             EditCommand::SetMaster(_) | EditCommand::SetEffects(_)
         );
+        let sections_only = matches!(command, EditCommand::SetSections(_));
         // The mix renders the tracks that the pedals and the buses listen
         // to, so a new key prepares it again.
         let side_keys = self.project().side_keys();
@@ -1160,6 +1178,7 @@ impl Session {
         let apply = |project: &mut Project| match command {
             EditCommand::SetTempo(bpm) => project.bpm = bpm,
             EditCommand::SetLoop(region) => project.loop_region = region,
+            EditCommand::SetSections(sections) => project.sections = sections,
             EditCommand::SetMixer {
                 tracks,
                 master_gain,
@@ -1209,6 +1228,8 @@ impl Session {
         if self.editor.generation() != generation {
             if master_only && self.project().side_keys() == side_keys {
                 self.master_changed();
+            } else if sections_only {
+                self.sections_changed();
             } else if levels_only {
                 self.levels_changed();
             } else {
@@ -1292,6 +1313,15 @@ impl Session {
             } == *self.project();
         if master_only {
             self.master_changed();
+            return Ok(true);
+        }
+        let sections_only = before.sections != self.project().sections
+            && (Project {
+                sections: self.project().sections.clone(),
+                ..before.clone()
+            }) == *self.project();
+        if sections_only {
+            self.sections_changed();
             return Ok(true);
         }
         // Level history uses the same live path as the original edit. A
@@ -3582,6 +3612,60 @@ mod tests {
             "A previous project's late result must be discarded."
         );
         assert!(app.render_dirty);
+    }
+
+    #[test]
+    fn sections_keep_pending_audio_render() {
+        for history in [None, Some(false), Some(true)] {
+            let mut app = fixture();
+            let sections = vec![Section {
+                start_tick: 0,
+                name: "Intro".into(),
+            }];
+            if history.is_some() {
+                app.edit(EditCommand::SetSections(sections.clone()))
+                    .unwrap();
+                if history == Some(true) {
+                    app.history_step(false).unwrap();
+                }
+            }
+            let (sender, requests) = mpsc::channel();
+            let (results, receiver) = mpsc::channel();
+            app.render_worker = RenderWorker {
+                sender,
+                receiver,
+                in_flight: false,
+                current_revision: None,
+                pending: None,
+            };
+            app.request_render().unwrap();
+            let revision = requests.try_recv().unwrap().revision;
+            app.wants_playback = true;
+            let token = app.project_change_token();
+            match history {
+                Some(redo) => assert!(app.history_step(redo).unwrap()),
+                None => app.edit(EditCommand::SetSections(sections)).unwrap(),
+            }
+            assert_ne!(app.project_change_token(), token);
+            assert_eq!(app.revision, revision, "Section edits do not change audio.");
+            assert_eq!(app.requested_revision, Some(revision));
+            // Stop autoplay without using an audio device. The queued result must
+            // still be accepted after the section edit and its history steps.
+            app.wants_playback = false;
+            let mix =
+                Arc::new(audio::prepare_project(&Project::default(), &Library::empty()).unwrap());
+            results
+                .send(RenderResult {
+                    revision,
+                    mix: Ok(mix.clone()),
+                })
+                .unwrap();
+            app.poll_render();
+            assert!(Arc::ptr_eq(app.render.as_ref().unwrap(), &mix));
+            assert!(!app.render_dirty);
+            assert_eq!(app.requested_revision, None);
+            assert!(requests.try_recv().is_err());
+        }
     }
 
     #[test]

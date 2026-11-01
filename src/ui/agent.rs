@@ -616,6 +616,7 @@ impl MixJamApp {
                 | Request::Select { .. }
                 | Request::Seek { .. }
                 | Request::SetLoop { .. }
+                | Request::SetSections { .. }
                 | Request::Automate { .. }
                 | Request::Clip { .. }
         ) && let Some(modal) = self.blocking_modal(ctx)
@@ -1012,6 +1013,21 @@ impl MixJamApp {
                     }
                 };
                 self.session.edit(EditCommand::SetLoop(region))?;
+                self.sync_notice();
+                Start::run(vec![Step::Idle])
+            }
+            Request::SetSections { sections } => {
+                let sections = sections
+                    .into_iter()
+                    .map(|section| {
+                        Ok(mixjam_techno::application::Section {
+                            start_tick: wire::position_tick(section.bar, section.tick)?,
+                            name: section.name,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                self.session.edit(EditCommand::SetSections(sections))?;
+                self.cancel_section_edit();
                 self.sync_notice();
                 Start::run(vec![Step::Idle])
             }

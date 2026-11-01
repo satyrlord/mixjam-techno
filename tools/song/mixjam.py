@@ -1,4 +1,4 @@
-"""Write format-18 .mixjam songs from Python.
+"""Write format-19 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -26,8 +26,10 @@ from pathlib import Path
 import numpy as np
 
 TICKS_PER_BAR = 256
+MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
+MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 18
+FORMAT_VERSION = 19
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 
@@ -436,15 +438,31 @@ class Song:
             'formatVersion': FORMAT_VERSION, 'appVersion': 'tools-song',
             'createdAt': now, 'modifiedAt': now,
             'song': dict(title=self.title, author=self.author, bpm=self.bpm,
-                         masterGain=self.master_gain, loopRegion=None),
+                         masterGain=self.master_gain, loopRegion=None,
+                         **({'sections': self.song_sections()} if self.sections else {})),
             'master': self.master if master else board_off(self.master), 'fxBuses': self.fx, 'lanes': lanes,
             'samples': list(self.samples.values()), 'missingSamples': [], 'sampleConflicts': [],
             'importNotices': [], 'sourceNotices': [], 'libraries': [],
         }
 
     def section(self, name, first_bar, bars):
-        """Name a span of the form, for the reports."""
+        """Name a span of the form. The song shows it as a bookmark, and the reports use it."""
+        if (not isinstance(name, str) or name != name.strip()
+                or not 1 <= len(name) <= MAX_SECTION_NAME
+                or any(ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF for c in name)):
+            raise ValueError(f'A section name must be 1 to {MAX_SECTION_NAME} characters on one line, '
+                             'without leading or trailing spaces.')
         self.sections.append(dict(name=name, first_bar=first_bar, bars=bars))
+
+    def song_sections(self):
+        """The sections as the song saves them: each start once, in time order."""
+        starts = {}
+        for section in sorted(self.sections, key=lambda s: s['first_bar']):
+            tick = (_whole_index(section['first_bar'], MAX_BARS, 'first bar') - 1) * TICKS_PER_BAR
+            if tick in starts:
+                raise ValueError(f'Two sections start at bar {section["first_bar"]}.')
+            starts[tick] = section['name']
+        return [dict(startTick=tick, name=name) for tick, name in starts.items()]
 
     def save(self, path, master=True):
         """Write the song and, beside it, `.meta.json` with lane names and roles, sections, tempo and key."""

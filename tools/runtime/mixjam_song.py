@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 18) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 19) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -115,8 +115,8 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in range(8, 19):
-        raise RuntimeError(f'{path} is not a format version 8 through 18 .mixjam song.')
+    if version not in range(8, 20):
+        raise RuntimeError(f'{path} is not a format version 8 through 19 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
@@ -158,6 +158,8 @@ def read_song(path):
                    for lane in document['lanes']],
         'clips': sorted(clips, key=lambda clip: clip['id']),
         'loop_region': song['loopRegion'],
+        'sections': [{'start_tick': section['startTick'], 'name': section['name']}
+                     for section in song.get('sections', [])],
         'imported_samples': imported,
         'missing_samples': [
             {'id': item['id'], 'name': item['name'], 'source_bpm': item['sourceBpm'],

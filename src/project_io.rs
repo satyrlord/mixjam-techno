@@ -251,6 +251,25 @@ pub fn save_song_folder(data_root: &Path, folder: &Path) -> Result<(), String> {
     crate::atomic_file::write(&data_root.join("song-folder.json"), &bytes)
 }
 
+/// Whether the arrangement shows section bookmarks. They show until the user
+/// hides them; an unreadable setting shows them.
+pub fn load_section_bookmarks(data_root: &Path) -> bool {
+    let Ok(file) = fs::File::open(data_root.join("section-bookmarks.json")) else {
+        return true;
+    };
+    let mut bytes = Vec::new();
+    if file.take(1024).read_to_end(&mut bytes).is_err() {
+        return true;
+    }
+    serde_json::from_slice(&bytes).unwrap_or(true)
+}
+
+pub fn save_section_bookmarks(data_root: &Path, visible: bool) -> Result<(), String> {
+    fs::create_dir_all(data_root).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(&visible).map_err(|e| e.to_string())?;
+    crate::atomic_file::write(&data_root.join("section-bookmarks.json"), &bytes)
+}
+
 /// An optional folder of extracted WAVs with a `metadata.json`: `samples`
 /// beside the executable, or the folder that `MIXJAM_TECHNO_REFERENCE_SAMPLES`
 /// names. A provider registers without it.

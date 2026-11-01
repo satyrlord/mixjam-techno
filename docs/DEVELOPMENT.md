@@ -63,7 +63,7 @@ its own and reports each region that rustfmt skips. Split a long literal with
 The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`
 (offline), and the `.mixjam` projection used by artifact
-verification. The projection reads formats 8 through 18 and preserves the
+verification. The projection reads formats 8 through 19 and preserves sections, the
 master pedalboard and its bypass, FX buses, sends, automation, channel EQs, and
 clip fades and pitch, lane duckers, compressors, and widths, and master and FX
 keys when a verification script writes a schema-4 JSON project
@@ -73,6 +73,7 @@ for rendering; it gives the Booster pedals their format-16 keys.
 
 `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
+The sections case includes named bookmarks and a long section name.
 `-Executable PATH` selects another build and `-Views` a subset of the cases.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.

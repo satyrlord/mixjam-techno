@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 18 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 19 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 17 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 18 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 18 keeps its `createdAt`.
+to 19 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.
@@ -35,14 +35,21 @@ portable audio bundle.
 ## Song and lanes
 
 `song` holds `title`, `author`, `bpm` (120, 125, 130, 135, 140, 160, or 180),
-`masterGain`, and `loopRegion`. Save names a new song after its file, and Save
+`masterGain`, and `loopRegion`. From version 19 it may also hold `sections`: a
+list of `{"startTick", "name"}` in strictly increasing `startTick` order, each
+within the timeline. A section lasts until the next one starts, or to the end
+of the song. A name is 1 to 48 characters on one line, without leading or
+trailing spaces. If the final section starts at or beyond the song's end, its
+loop spans one bar, bounded by the timeline. A song without sections omits
+the key. Earlier formats reject the key even when its list is empty. Sections do not change
+the sound. Save names a new song after its file, and Save
 As renames a song whose title is its earlier file name; an imported title stays.
 
-`lanes` has exactly 64 entries in track order. In version 18, a lane holds
+`lanes` has exactly 64 entries in track order. From version 18, a lane holds
 `gain` (amplitude from 0 to 4; 1 is 0 dB), `polarityInverted`, `pan`,
 `leftEnabled`, `rightEnabled`, `muted`, `solo`, `sends` (four amounts from 0
 to 1), and `placements`. Earlier versions use the fields listed in the version
-history below. A version-18 lane may also hold:
+history below. A lane from version 18 may also hold:
 
 - `automation`, with any of `volume`, `sends` (four lists), and `filter`:
   lists of `{"tick", "value"}` points in strictly increasing tick order within
@@ -84,7 +91,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 18 are:
+versions 16 to 19 are:
 
 | Key | Settings |
 |---|---|
@@ -147,7 +154,7 @@ before replacing the destination.
 ## Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 18, which earlier builds cannot open.
+earlier song writes version 19, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -162,6 +169,7 @@ earlier song writes version 18, which earlier builds cannot open.
 | 16 | Renames the Booster pedals' keys in `master` and its `order`. | The same Booster settings under the new keys. |
 | 17 | Adds the lane `ducker`, the pedals' `key`, and the effects' `duckKey`. | Every ducker off; every pedal and effect on its own input. |
 | 18 | Adds the EQ's second peak (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. A lane ducker's `threshold` is measured before the master gain; version 17 measured it after. | The second peak flat, every compressor off, every lane at 100% width. Each saved lane `ducker`, on or off, opens with its `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0, so it ducks as it did wherever that range allows; a `masterGain` of 0 leaves it, as the key is silent either way. |
+| 19 | Adds the song's `sections`. | No sections. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

@@ -58,6 +58,10 @@ Arrangement (the lanes have no separate controls)
   select [clips=[ID,...]] [sample=ID|NAME]   The selected sound feeds the tools.
   seek bar=N|tick=N
   set_loop first_bar=N last_bar=N   Omit both to turn the loop off.
+  set_sections sections=[{\"bar\":N,\"name\":\"Intro\"},...]
+                         Replace the song's sections; [] removes them. Each
+                         section starts at its bar (or \"tick\") and lasts until
+                         the next one. Names are 1 to 48 characters.
   automate track=N lane=volume|send1..send4|filter points=[[BAR,VALUE],...]
                          Replace one automation lane of a track; [] clears it.
                          Volume is dB over the fader, -60 (silence) to 6;
@@ -296,6 +300,9 @@ pub enum Request {
         first_bar: Option<u32>,
         last_bar: Option<u32>,
     },
+    SetSections {
+        sections: Vec<SectionArgs>,
+    },
     Automate {
         track: usize,
         #[serde(deserialize_with = "text")]
@@ -489,6 +496,23 @@ pub struct LibraryState {
     pub providers: Vec<ProviderView>,
 }
 
+/// One section of a `set_sections` request: where it starts and its name.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SectionArgs {
+    pub bar: Option<f64>,
+    pub tick: Option<u32>,
+    pub name: String,
+}
+
+/// A section of the song: its first bar, its start, and its name.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct SectionView {
+    pub bar: f64,
+    pub tick: u32,
+    pub name: String,
+}
+
 /// The song and its sources, as the session holds them.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct SongView {
@@ -501,6 +525,7 @@ pub struct SongView {
     pub master_bypass: bool,
     /// The first and last looped bar.
     pub loop_bars: Option<[u32; 2]>,
+    pub sections: Vec<SectionView>,
     pub end_tick: u32,
     /// Tracks that hold clips or have Solo on, including empty soloed tracks.
     pub tracks: Vec<TrackView>,
@@ -764,6 +789,15 @@ pub fn song_view(session: &Session) -> SongView {
                 end.div_ceil(TICKS_PER_BAR).max(start / TICKS_PER_BAR + 1),
             ]
         }),
+        sections: project
+            .sections
+            .iter()
+            .map(|section| SectionView {
+                bar: bar_of(section.start_tick),
+                tick: section.start_tick,
+                name: section.name.clone(),
+            })
+            .collect(),
         end_tick: project.end_tick(),
         tracks,
         clips: project

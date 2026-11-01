@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 18.
+//! The application's own `.mixjam` song format, format version 19.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -38,6 +38,7 @@
 //!   lane is at 100% width. A lane ducker's key leaves out the master gain
 //!   from version 18, so a version 17 lane ducker's threshold opens moved
 //!   by `-20 * log10(masterGain)` dB, held to its range, and ducks as it did.
+//! - Version 19 adds named song sections. Earlier songs have no sections.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -61,7 +62,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 18;
+pub(super) const FORMAT_VERSION: u32 = 19;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -315,6 +316,25 @@ struct Song {
     master_gain: f32,
     #[serde(deserialize_with = "Deserialize::deserialize")]
     loop_region: Option<[u32; 2]>,
+    // Version 19 added sections; songs without them omit the key.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "saved_sections"
+    )]
+    sections: Option<Vec<SavedSection>>,
+}
+
+fn saved_sections<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<SavedSection>>, D::Error> {
+    Vec::<SavedSection>::deserialize(deserializer).map(Some)
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedSection {
+    start_tick: u32,
+    name: String,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -478,6 +498,16 @@ impl Document {
                 bpm: project.bpm,
                 master_gain: project.master_gain,
                 loop_region: project.loop_region,
+                sections: (!project.sections.is_empty()).then(|| {
+                    project
+                        .sections
+                        .iter()
+                        .map(|section| SavedSection {
+                            start_tick: section.start_tick,
+                            name: section.name.clone(),
+                        })
+                        .collect()
+                }),
             },
             master: Some(Saved::Known(project.master)),
             fx_buses: Some(Saved::Known(project.fx)),
@@ -602,6 +632,12 @@ impl Document {
                     self.format_version
                 ));
             }
+        }
+        if self.format_version < 19 && self.song.sections.is_some() {
+            return Err(format!(
+                "Version {} songs cannot contain sections.",
+                self.format_version
+            ));
         }
         let invalid =
             |error: serde_json::Error| format!("The master pedalboard is invalid: {error}");
@@ -780,6 +816,16 @@ impl Document {
             tracks,
             clips,
             loop_region: self.song.loop_region,
+            sections: self
+                .song
+                .sections
+                .unwrap_or_default()
+                .into_iter()
+                .map(|section| crate::engine::Section {
+                    start_tick: section.start_tick,
+                    name: section.name,
+                })
+                .collect(),
             imported_samples: self
                 .samples
                 .into_iter()
@@ -1087,6 +1133,23 @@ mod tests {
         project
     }
 
+    /// The test song with two sections, as version 19 saves them.
+    fn sectioned(project: Project) -> Project {
+        Project {
+            sections: vec![
+                crate::engine::Section {
+                    start_tick: 0,
+                    name: "Intro".into(),
+                },
+                crate::engine::Section {
+                    start_tick: 2_048,
+                    name: "Drift, part I".into(),
+                },
+            ],
+            ..project
+        }
+    }
+
     /// A track as a version 17 song saves it: no second EQ peak, no
     /// compressor, and 100% width.
     fn before_version_18(track: &mut Track) {
@@ -1180,16 +1243,23 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_18_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_19_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = project();
+        let project = sectioned(project());
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 18);
+        assert_eq!(document["formatVersion"], 19);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
+        assert_eq!(
+            document["song"]["sections"],
+            serde_json::json!([
+                {"startTick": 0, "name": "Intro"},
+                {"startTick": 2048, "name": "Drift, part I"}
+            ])
+        );
         assert_eq!(
             document["lanes"][5]["eq"],
             serde_json::json!({
@@ -1372,6 +1442,78 @@ mod tests {
             reopened.into_project().unwrap_err(),
             "Version 16 songs cannot contain key or duckKey."
         );
+    }
+
+    #[test]
+    fn only_version_19_songs_hold_sections() {
+        let project = sectioned(project());
+        let mut document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        document["formatVersion"] = 18.into();
+        let reopened: Document = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(
+            reopened.into_project().unwrap_err(),
+            "Version 18 songs cannot contain sections."
+        );
+        // A song without sections saves no key.
+        let plain = Project {
+            sections: Vec::new(),
+            ..project
+        };
+        let document =
+            serde_json::to_value(Document::new(&plain, timestamp(0), timestamp(0))).unwrap();
+        assert!(document["song"].get("sections").is_none());
+        for version in [18, 19] {
+            let mut explicit_empty = document.clone();
+            explicit_empty["formatVersion"] = version.into();
+            explicit_empty["song"]["sections"] = serde_json::json!([]);
+            let result = parse(&serde_json::to_vec(&explicit_empty).unwrap());
+            if version == 18 {
+                assert_eq!(
+                    result.unwrap_err(),
+                    "Version 18 songs cannot contain sections."
+                );
+            } else {
+                assert!(result.unwrap().sections.is_empty());
+            }
+            explicit_empty["song"]["sections"] = serde_json::Value::Null;
+            assert!(parse(&serde_json::to_vec(&explicit_empty).unwrap()).is_err());
+        }
+        // Sections out of order, or with an unusable name, are not a song.
+        for (sections, error) in [
+            (
+                serde_json::json!([{"startTick": 512, "name": "B"}, {"startTick": 256, "name": "A"}]),
+                "each after the one before",
+            ),
+            (
+                serde_json::json!([{"startTick": 0, "name": " Intro"}]),
+                "1 to 48 characters",
+            ),
+            (
+                serde_json::json!([{"startTick": 0, "name": ""}]),
+                "1 to 48 characters",
+            ),
+            (
+                serde_json::json!([{"startTick": 0, "name": "a
+b"}]),
+                "1 to 48 characters",
+            ),
+        ] {
+            let mut document = document.clone();
+            document["song"]["sections"] = sections;
+            let reopened: Document = serde_json::from_value(document).unwrap();
+            let error_text = reopened
+                .into_project()
+                .and_then(|p| p.validate().map(|()| p));
+            assert!(
+                error_text.as_ref().is_err_and(|text| text.contains(error)),
+                "{error_text:?}"
+            );
+        }
     }
 
     #[test]

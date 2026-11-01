@@ -145,7 +145,20 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(19))
+            self.project(self.document(20))
+
+    def test_version_19_keeps_sections_in_the_json_project(self):
+        document = self.document(19)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        document['song']['sections'] = [dict(startTick=0, name='Intro'),
+                                        dict(startTick=2048, name='Outro')]
+        self.assertEqual(self.project(document)['sections'],
+                         [dict(start_tick=0, name='Intro'), dict(start_tick=2048, name='Outro')])
+        del document['song']['sections']
+        self.assertEqual(self.project(document)['sections'], [])
+        self.assertEqual(earlier['sections'], [])
 
     def test_version_18_keeps_the_second_peak_compressor_and_width(self):
         document = self.document(18)

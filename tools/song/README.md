@@ -29,7 +29,7 @@ A tool that needs a missing key stops and names the key.
 
 | Tool | Usage | What it does |
 |---|---|---|
-| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-18 songs with lanes, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
+| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-19 songs with lanes, sections, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak. Eligible unchanged lanes come from the cache described below. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
@@ -57,10 +57,10 @@ an explicit tile size must be finite, positive, and at least one tick long.
 Automatic end fades use the energy of both channels. Opposite channel
 polarities do not make an audible ending count as silence.
 
-The song tools expect format 18. `render.py` does not pass sample folders to
+The song tools expect format 19 (18 also works). `render.py` does not pass sample folders to
 the application, and `measure.py` checks linked paths from its working
 directory. For an earlier song or a library-relative WAV, use the native
-`convert` command to make a format-18 working copy with the required
+`convert` command to make a format-19 working copy with the required
 `--samples` folders and an isolated `MIXJAM_TECHNO_DATA_DIR`. Copy any
 `.meta.json` beside the new song with the matching name. Check for missing
 sources and unconfirmed conflicts before using its renders. Do not replace the
@@ -73,7 +73,7 @@ Cached audio is copied, so changing an output WAV does not change the cache.
 Missing or damaged entries are rendered again. Use `--no-cache` to render
 every lane.
 
-Caching requires format 18, directly linked absolute imported WAV paths with
+Caching requires format 18 or 19, directly linked absolute imported WAV paths with
 source tempo, and no native, library, missing-source, conflict, or origin
 dependencies. Other songs still render, with no cache reuse. Cache keys include
 source-file content, render settings, global Solo state, master gain, and the

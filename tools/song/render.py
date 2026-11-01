@@ -27,7 +27,7 @@ part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
 whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
-not change since an earlier render comes from the cache. Only format-18 songs
+not change since an earlier render comes from the cache. Only format-18 and 19 songs
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
@@ -51,7 +51,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
-from mixjam import board_off as _board_off, read_wav, write_wav  # noqa: E402
+from mixjam import (MAX_BARS, MAX_SECTION_NAME, TICKS_PER_BAR,
+                    board_off as _board_off, read_wav, write_wav)  # noqa: E402
 
 # Lane renders kept for later rounds; the lanes of a 7-minute song take about 1.6 GB.
 CACHE_LIMIT = 4 * 2 ** 30
@@ -183,14 +184,43 @@ def exe_stamp():
     return f'{stat.st_size}:{stat.st_mtime_ns}'
 
 
+def cacheable_sections(document):
+    """Only valid sections may be left out of the audio cache key.
+
+    Match the native song reader and engine.sections_error. Invalid sections
+    must reach the native renderer's validation, even with --no-master.
+    """
+    song = document['song']
+    if 'sections' not in song:
+        return True
+    sections = song['sections']
+    if document['formatVersion'] < 19 or not isinstance(sections, list):
+        return False
+    previous = -1
+    for section in sections:
+        if not isinstance(section, dict) or section.keys() != {'startTick', 'name'}:
+            return False
+        tick, name = section['startTick'], section['name']
+        if type(tick) is not int or not previous < tick < MAX_BARS * TICKS_PER_BAR:
+            return False
+        if (not isinstance(name, str) or name != name.strip()
+                or not 1 <= len(name) <= MAX_SECTION_NAME
+                or any(ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF for c in name)):
+            return False
+        previous = tick
+    return True
+
+
 def source_fingerprints(document):
     """Hash directly linked WAVs; None when native source resolution is needed.
 
     Read each distinct used file once per call. A path alone does not identify
     audio: the owner can replace its contents between rounds.
     """
-    if document.get('formatVersion') != 18 or any(document.get(field) for field in
+    if document.get('formatVersion') not in (18, 19) or any(document.get(field) for field in
                                                 ('libraries', 'missingSamples', 'sampleConflicts')):
+        return None
+    if not cacheable_sections(document):
         return None
     samples = {sample['id']: sample for sample in document['samples']}
     used = {placement['sampleId'] for lane in document['lanes'] for placement in lane['placements']}
@@ -236,7 +266,8 @@ def lane_key(part, tracks, keyed, fingerprints=None):
                                sample=samples[p['sampleId']], audio=fingerprints[p['sampleId']])
                           for p in lane['placements']]
             lanes[index] = dict(lane, placements=placements)
-    song = {k: v for k, v in part['song'].items() if k != 'title'}
+    # Titles and section bookmarks do not change the sound.
+    song = {k: v for k, v in part['song'].items() if k not in ('title', 'sections')}
     context = {k: v for k, v in part.items() if k not in
                ('song', 'master', 'fxBuses', 'lanes', 'samples', 'createdAt', 'modifiedAt')}
     blob = json.dumps(dict(formatVersion=part['formatVersion'], keyed=keyed, tracks=sorted(tracks),

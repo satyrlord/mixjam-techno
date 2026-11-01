@@ -366,6 +366,14 @@ pub struct MixJamApp {
     timeline_row_height: f32,
     timeline_bar_width: f32,
     loop_start: Option<u32>,
+    /// Whether the arrangement shows the song's section bookmarks.
+    section_bookmarks: bool,
+    /// The section whose name is being edited on the bar ruler.
+    section_rename: Option<SectionRename>,
+    /// What the bar ruler's context menu acts on: the start of the section
+    /// whose tag was right-clicked, or `None` away from every tag, and the bar
+    /// that was right-clicked.
+    section_menu: (Option<u32>, u32),
     status: String,
     status_error: bool,
     /// The scan progress line last written to the status, while a scan runs.
@@ -568,6 +576,7 @@ impl MixJamApp {
                 .then(|| session.library().samples.first().map(|sample| sample.id))
                 .flatten()
         };
+        let section_bookmarks = session.section_bookmarks_setting();
         // Select the clip whose fades the capture demonstrates.
         let capture_clip = (capture_view == "clip-fades")
             .then(|| session.project().clips.first().map(|clip| clip.id))
@@ -633,6 +642,9 @@ impl MixJamApp {
             timeline_row_height: 30.0,
             timeline_bar_width: 62.0,
             loop_start: None,
+            section_bookmarks,
+            section_rename: None,
+            section_menu: (None, 0),
             status,
             status_error,
             scan_status: None,
@@ -734,11 +746,16 @@ impl MixJamApp {
         self.selection_origin = None;
         self.selection_base.clear();
         self.loop_start = None;
+        self.cancel_section_edit();
         self.context_clip = None;
         self.context_missing_sample = None;
         self.show_sample_conflicts = false;
         self.sample_conflicts_dismissed = false;
         self.sample_conflict_error = None;
+    }
+    fn cancel_section_edit(&mut self) {
+        self.section_rename = None;
+        self.section_menu = (None, 0);
     }
     fn reconcile_selection(&mut self) {
         self.selected_clips.retain(|id| {
@@ -1123,6 +1140,7 @@ impl MixJamApp {
     }
 
     fn history_step(&mut self, redo: bool) {
+        self.cancel_section_edit();
         self.handle_drag = None;
         self.automation_drag = None;
         self.session.end_automation_gesture();

@@ -184,6 +184,47 @@ pub(crate) fn optional_bool<'de, D: serde::Deserializer<'de>>(
     bool::deserialize(deserializer).map(Some)
 }
 
+/// The most characters in a section name.
+pub const MAX_SECTION_NAME: usize = 48;
+
+/// A named part of the song. It starts at `start_tick` and lasts until the
+/// next section starts, or to the end of the song.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Section {
+    pub start_tick: u32,
+    pub name: String,
+}
+
+/// Why a section list cannot belong to a song, or `None` when it can: each
+/// section starts on the timeline after the one before and has a short,
+/// single-line name.
+pub fn sections_error(sections: &[Section]) -> Option<String> {
+    let mut previous = None;
+    for section in sections {
+        let name = section.name.trim();
+        if name.is_empty()
+            || name != section.name
+            || name.chars().count() > MAX_SECTION_NAME
+            || name.chars().any(char::is_control)
+        {
+            return Some(format!(
+                "A section name must be 1 to {MAX_SECTION_NAME} characters on one line, \
+                 without leading or trailing spaces."
+            ));
+        }
+        if section.start_tick >= MAX_TICKS
+            || previous.is_some_and(|tick| section.start_tick <= tick)
+        {
+            return Some(
+                "Sections must start within the timeline, each after the one before.".into(),
+            );
+        }
+        previous = Some(section.start_tick);
+    }
+    None
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Clip {
     pub id: u64,
@@ -558,6 +599,9 @@ pub struct Project {
     pub tracks: Vec<Track>,
     pub clips: Vec<Clip>,
     pub loop_region: Option<[u32; 2]>,
+    /// Named parts of the song, in time order. Songs without sections leave it empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sections: Vec<Section>,
     #[serde(default)]
     pub imported_samples: ImportedSamples,
     #[serde(default)]
@@ -669,6 +713,7 @@ impl Default for Project {
             tracks: vec![Track::default(); TRACK_COUNT],
             clips: Vec::new(),
             loop_region: None,
+            sections: Vec::new(),
             imported_samples: ImportedSamples::default(),
             missing_samples: Vec::new(),
             sample_conflicts: Vec::new(),
@@ -719,6 +764,32 @@ impl Project {
             .max()
             .unwrap_or(TICKS_PER_BAR * 4)
             .max(self.loop_region.map_or(0, |[_, b]| b))
+    }
+
+    /// The span of the section that plays at `tick`, as `[start, end)`. Before
+    /// the first section, the span is the lead-in up to it. `None` without
+    /// sections.
+    pub fn section_span(&self, tick: u32) -> Option<[u32; 2]> {
+        let first = self.sections.first()?;
+        let next = self.sections.iter().position(|s| s.start_tick > tick);
+        let (start, end) = match next {
+            Some(0) => (0, first.start_tick),
+            Some(index) => (
+                self.sections[index - 1].start_tick,
+                self.sections[index].start_tick,
+            ),
+            None => {
+                let start = self.sections.last().map_or(0, |s| s.start_tick);
+                let end = self.end_tick();
+                let end = if end > start {
+                    end
+                } else {
+                    start.saturating_add(TICKS_PER_BAR)
+                };
+                (start, end)
+            }
+        };
+        Some([start, end.min(MAX_TICKS)])
     }
     pub fn frames_per_tick(&self, sample_rate: u32) -> f64 {
         sample_rate as f64 * 240.0 / self.bpm / TICKS_PER_BAR as f64
@@ -958,6 +1029,9 @@ impl Project {
             && (a >= b || b > MAX_TICKS)
         {
             return Err("The loop must be within the timeline and have a positive length.".into());
+        }
+        if let Some(error) = sections_error(&self.sections) {
+            return Err(error);
         }
         Ok(())
     }
@@ -1309,6 +1383,76 @@ pub(crate) fn ensure_space(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_section_lasts_until_the_next_one_starts() {
+        let section = |bar: u32, name: &str| Section {
+            start_tick: bar * TICKS_PER_BAR,
+            name: name.into(),
+        };
+        let mut project = Project::default();
+        assert_eq!(project.section_span(0), None);
+        project.sections = vec![
+            section(4, "Intro"),
+            section(12, "Drift"),
+            section(20, "Outro"),
+        ];
+        project.clips.push(Clip {
+            id: 1,
+            sample_id: 1,
+            track: 0,
+            start_tick: 0,
+            length_ticks: 24 * TICKS_PER_BAR,
+            offset_frames: 0,
+            gain: 1.0,
+            fades: Fades::default(),
+            pitch_cents: 0,
+        });
+        // Before the first section, the lead-in is its own span.
+        assert_eq!(project.section_span(0), Some([0, 4 * TICKS_PER_BAR]));
+        assert_eq!(
+            project.section_span(4 * TICKS_PER_BAR),
+            Some([4 * TICKS_PER_BAR, 12 * TICKS_PER_BAR])
+        );
+        assert_eq!(
+            project.section_span(15 * TICKS_PER_BAR + 7),
+            Some([12 * TICKS_PER_BAR, 20 * TICKS_PER_BAR])
+        );
+        // The last section runs to the end of the song.
+        assert_eq!(
+            project.section_span(21 * TICKS_PER_BAR),
+            Some([20 * TICKS_PER_BAR, 24 * TICKS_PER_BAR])
+        );
+        assert_eq!(project.validate(), Ok(()));
+        // A short final section ends with its audio, without adding silence.
+        project.clips[0].length_ticks = 20 * TICKS_PER_BAR + TICKS_PER_BAR / 2;
+        assert_eq!(
+            project.section_span(20 * TICKS_PER_BAR),
+            Some([20 * TICKS_PER_BAR, project.clips[0].length_ticks])
+        );
+        // A planning bookmark at or beyond the song end gets one bounded bar.
+        for end in [19 * TICKS_PER_BAR, 20 * TICKS_PER_BAR] {
+            project.clips[0].length_ticks = end;
+            assert_eq!(
+                project.section_span(20 * TICKS_PER_BAR),
+                Some([20 * TICKS_PER_BAR, 21 * TICKS_PER_BAR])
+            );
+        }
+        project.sections.swap(0, 1);
+        assert!(
+            project
+                .validate()
+                .unwrap_err()
+                .contains("each after the one before")
+        );
+        project.sections = vec![section(0, &"x".repeat(MAX_SECTION_NAME + 1))];
+        assert!(
+            project
+                .validate()
+                .unwrap_err()
+                .contains("1 to 48 characters")
+        );
+    }
+
     #[test]
     fn missing_sample_group_reads_the_key_of_each_importer() {
         let mut missing = MissingSample::native(

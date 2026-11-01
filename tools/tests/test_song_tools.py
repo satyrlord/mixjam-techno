@@ -267,6 +267,20 @@ class SongTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mixjam.board(reverb={})
 
+    def test_sections_are_saved_in_the_song_in_time_order(self):
+        song = mixjam.Song('sections')
+        self.assertNotIn('sections', song.document()['song'])
+        song.section('Drift', 9, 16)
+        song.section('Intro', 1, 8)
+        self.assertEqual(song.document()['song']['sections'],
+                         [dict(startTick=0, name='Intro'), dict(startTick=8 * 256, name='Drift')])
+        for name in ('', ' Intro', 'a\nb', '\ud800', '\udfff', 'x' * 49):
+            with self.assertRaises(ValueError):
+                song.section(name, 17, 8)
+        song.section('Again', 9, 4)
+        with self.assertRaises(ValueError):
+            song.document()
+
     def test_second_peak_keys_are_written_only_when_they_differ(self):
         song = mixjam.Song('peak 2')
         song.eq(1, midDb=-3)
@@ -280,7 +294,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 18)
+        self.assertEqual(song.document()['formatVersion'], 19)
 
     def test_compressor_and_width_check_their_ranges(self):
         song = mixjam.Song('dynamics')
@@ -548,6 +562,43 @@ class MeasureTests(unittest.TestCase):
             document['song']['masterGain'] = 2
             self.assertEqual(rendered('quieter'), 0.5)
             self.assertEqual(len(calls), 6)
+
+    def test_section_changes_reuse_audio_only_when_the_sections_are_valid(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('sections')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            key = render.lane_key(document, [1], False)
+            document['song']['sections'] = [dict(startTick=0, name='Intro')]
+            self.assertEqual(render.lane_key(document, [1], False), key)
+            document['song']['sections'][0]['name'] = 'Renamed'
+            with mock.patch.object(render, 'from_cache', return_value=True) as cached, \
+                    mock.patch.object(render, 'run') as native:
+                render.render_lanes(document, {'one': [1]}, root, 1, root / 'cache')
+                cached.assert_called_once()
+                native.assert_not_called()
+            variants = [(18, []), (18, [dict(startTick=0, name='Intro')]),
+                        (19, None), (19, {}), (19, [dict(startTick=0)]),
+                        (19, [dict(startTick=0, name='Intro', extra=True)])]
+            for tick in (-1, 4096 * 256, True, 0.0):
+                variants.append((19, [dict(startTick=tick, name='Intro')]))
+            for name in ('', ' Intro', 'Intro ', 'a\nb', '\x7f', '\x85', '\ud800', 'x' * 49, None):
+                variants.append((19, [dict(startTick=0, name=name)]))
+            variants.append((19, [dict(startTick=256, name='A'), dict(startTick=0, name='B')]))
+            variants.append((19, [dict(startTick=0, name='A'), dict(startTick=0, name='B')]))
+            for version, sections in variants:
+                with self.subTest(version=version, sections=sections):
+                    document['formatVersion'] = version
+                    document['song']['sections'] = sections
+                    with mock.patch.object(render, 'from_cache', return_value=True) as cached, \
+                            mock.patch.object(render, 'run', side_effect=SystemExit('native validation')) as native:
+                        with self.assertRaisesRegex(SystemExit, 'native validation'):
+                            render.render_lanes(document, {'one': [1]}, root, 1, root / 'cache')
+                        cached.assert_not_called()
+                        native.assert_called_once()
 
     def test_cache_bypasses_sources_that_need_native_resolution(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):

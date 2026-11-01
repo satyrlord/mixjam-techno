@@ -32,8 +32,8 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
 audio player, microphone capture, and pending recorded take. Its project and
 catalog accessors are read-only. It validates the project when it starts and
 after each change. Typed `EditCommand` values change tempo, loop regions, clips,
-routing, and mixer settings. Separate operations place and move clips. Successful
-edits update history and mark the render for update. An accepted command that
+routing, sections, and mixer settings. Separate operations place and move clips.
+Successful edits update history and, when needed, mark the render for update. An accepted command that
 changes nothing is not an edit: it leaves history, the saved state, and the render
 unchanged. Changes to tempo or one gain, pan, send, channel EQ dial, FX knob, or clip control that arrive within 400 ms
 of each other form one history entry, so a slider drag is one undo step. Saving
@@ -44,6 +44,13 @@ its undo step and separate drags do not merge.
 Clip handle drags keep a frontend preview and submit one `edit_discrete` action
 on release. This ends continuous-control grouping before and after the edit,
 so separate drags and agent `clip` requests each keep their own undo step.
+
+Sections are ordered named timeline markers. `SetSections` replaces the list
+as one validated history step. Section edits and their undo/redo mark the song
+modified but preserve the render revision, prepared mix, and pending playback.
+The native UI owns bookmark visibility and rename drafts. Visibility persists
+in the settings folder and does not modify the song. Section positions extend
+the scrollable arrangement without extending the audio render.
 
 Track gain is a nonnegative amplitude and polarity is a separate persistent
 boolean. Playback and export use `Track::effective_gain()` to apply the sign.

@@ -593,11 +593,11 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(19);
+        document["formatVersion"] = json!(20);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(error, "Only MixJam format versions 7 to 18 are supported.");
+        assert_eq!(error, "Only MixJam format versions 7 to 19 are supported.");
     }
 
     #[test]

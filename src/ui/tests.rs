@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use crate::{
-        engine::{Editor, ImportNotice, Track, amplitude_to_db},
+        engine::{Editor, ImportNotice, Section, Track, amplitude_to_db},
         library::Library,
     };
 
@@ -238,6 +238,165 @@ mod tests {
             text.0.contains_rect(text.1),
             "Recovery caption must remain visible."
         );
+    }
+
+    #[test]
+    fn transport_section_toggle_fits_beside_the_rail_at_supported_widths() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+        ] {
+            for _ in 0..2 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            // The rail is 64 points wide; the transport has an 18-point inner margin.
+            let content_right = size.x - 64.0 - 18.0;
+            for name in ["Project BPM", "Zoom", "Follow", "Sections"] {
+                let rect = effects_control_rect(&output, name);
+                assert!(
+                    rect.left() >= 18.0 && rect.right() <= content_right,
+                    "{name} must fit before the rail at {size:?}: {rect:?}, right={content_right}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sections_after_the_audio_remain_reachable_on_the_timeline() {
+        let (ctx, mut app) = fixture();
+        let start_tick = 128 * TICKS_PER_BAR;
+        let end_tick = app.session.project().end_tick();
+        app.session
+            .edit(EditCommand::SetSections(vec![Section {
+                start_tick,
+                name: "Later".into(),
+            }]))
+            .unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.cursor_tick(), 0);
+        assert_eq!(app.session.project().end_tick(), end_tick);
+        assert!(app.timeline_rect.unwrap().width() > 128.0 * app.timeline_bar_width);
+    }
+
+    #[test]
+    fn section_drafts_end_when_the_bookmarks_or_project_change() {
+        let (ctx, mut app) = fixture();
+        app.section_bookmarks = true;
+        app.add_section(0);
+        app.section_menu = (Some(0), 0);
+        app.clear_selection();
+        assert!(app.section_rename.is_none());
+        assert_eq!(app.section_menu, (None, 0));
+
+        app.add_section(0);
+        app.history_step(false);
+        assert!(app.section_rename.is_none());
+
+        app.add_section(0);
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        app.section_rename.as_mut().unwrap().name = "Unfinished".into();
+        app.section_bookmarks = false;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(app.section_rename.is_none());
+        app.section_bookmarks = true;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.session.project().sections[0].name, "Section 1");
+    }
+
+    #[test]
+    fn section_replacement_does_not_commit_an_earlier_name_draft() {
+        let (ctx, mut app, port) = agent_fixture();
+        app.section_bookmarks = true;
+        app.add_section(0);
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        app.section_rename.as_mut().unwrap().name = "Old draft".into();
+        let reply = agent(
+            &ctx,
+            &mut app,
+            &port,
+            &[
+                "set_sections",
+                r#"sections=[{"tick":0,"name":"Replacement"}]"#,
+            ],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::Key {
+                key: egui::Key::Enter,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().sections[0].name, "Replacement");
+        assert!(app.section_rename.is_none());
+    }
+
+    #[test]
+    fn a_new_section_opens_its_name_for_editing() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.section_bookmarks = true;
+        let key = |key: egui::Key| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        app.add_section(4 * TICKS_PER_BAR);
+        app.add_section(0);
+        let names: Vec<_> = app
+            .session
+            .project()
+            .sections
+            .iter()
+            .map(|section| (section.start_tick, section.name.as_str()))
+            .collect();
+        assert_eq!(names, [(0, "Section 2"), (4 * TICKS_PER_BAR, "Section 1")]);
+        // The section added last is the one being named.
+        assert_eq!(app.section_rename.as_ref().unwrap().start_tick, 0);
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Section name");
+        app.section_rename.as_mut().unwrap().name = "Intro ".into();
+        frame(
+            &ctx,
+            &mut app,
+            vec![key(egui::Key::Enter)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.section_rename.is_none());
+        assert_eq!(app.session.project().sections[0].name, "Intro");
+        // Escape keeps the earlier name, and a section that exists is renamed, not added.
+        app.add_section(4 * TICKS_PER_BAR);
+        assert_eq!(app.session.project().sections.len(), 2);
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        app.section_rename.as_mut().unwrap().name = "Drift".into();
+        frame(
+            &ctx,
+            &mut app,
+            vec![key(egui::Key::Escape)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.section_rename.is_none());
+        assert_eq!(app.session.project().sections[1].name, "Section 1");
     }
 
     #[test]
@@ -9684,6 +9843,43 @@ mod tests {
         assert_eq!(state["song"]["loop_bars"], serde_json::json!([2, 3]));
         send(&mut app, &["set_loop"]);
         assert_eq!(app.session.project().loop_region, None);
+
+        // Sections start at bars, and the state lists them in time order.
+        let reply = send(
+            &mut app,
+            &[
+                "set_sections",
+                r#"sections=[{"bar":1,"name":"Intro"},{"bar":3,"name":"Drift"}]"#,
+            ],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(
+            app.session.project().sections,
+            vec![
+                Section {
+                    start_tick: 0,
+                    name: "Intro".into()
+                },
+                Section {
+                    start_tick: 2 * TICKS_PER_BAR,
+                    name: "Drift".into()
+                },
+            ]
+        );
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["song"]["sections"][1]["name"], "Drift");
+        assert_eq!(state["song"]["sections"][1]["bar"], 3.0);
+        let reply = send(
+            &mut app,
+            &[
+                "set_sections",
+                r#"sections=[{"bar":3,"name":"B"},{"bar":1,"name":"A"}]"#,
+            ],
+        );
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert_eq!(app.session.project().sections.len(), 2);
+        send(&mut app, &["set_sections", "sections=[]"]);
+        assert!(app.session.project().sections.is_empty());
 
         // The state gives each clip's place in the window for pointer input.
         send(&mut app, &["select"]);

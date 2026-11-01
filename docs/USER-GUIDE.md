@@ -110,6 +110,18 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
   points the value moves in a straight line. Choose Off to edit clips again.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
+- A song can have sections: named parts such as Intro or Break. Each one is a
+  bookmark, a colored line across the lanes with its name on the bar ruler, and
+  lasts until the next one starts. With sections shown, the Loop button loops
+  the section at the playhead; without them, it loops the whole song.
+  Before the first bookmark, it loops the lead-in. A final bookmark beyond the
+  song's end loops one bar, bounded by the timeline.
+  Hiding bookmarks cancels an unfinished name edit.
+  Double-click the bar ruler to add a section at that bar; type its name and
+  press Enter, or Escape to keep the old one. Double-click a name to rename it,
+  and right-click a name to rename or delete it. Turn Sections beside Follow
+  off to hide the bookmarks. The application keeps that choice. Sections are
+  saved with the song; agents set them with `set_sections`.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
 - Drag the divider above the lower panel to give it more or less room.
@@ -286,7 +298,7 @@ keeps copies of those WAV files together in the application's data folder.
 The song retains its native sample identities. These copies are source audio
 for the saved song; repeated saves reuse unchanged copies.
 
-A `.mixjam` song is JSON, format version 18. [SONG-FORMAT.md](SONG-FORMAT.md)
+A `.mixjam` song is JSON, format version 19. [SONG-FORMAT.md](SONG-FORMAT.md)
 describes it and how earlier versions open. A song links to WAV files. It is
 not a portable audio bundle. A song finds a WAV that moved within a library
 folder, or to another library folder, by the end of its path: the file name and

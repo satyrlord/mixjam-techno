@@ -1,6 +1,7 @@
 use super::*;
 use mixjam_techno::application::{
-    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_TICKS, amplitude_to_db, db_to_amplitude,
+    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, Section, amplitude_to_db,
+    db_to_amplitude,
 };
 
 /// Format Windows filesystem paths for labels only. Stored paths and messages
@@ -48,6 +49,21 @@ pub(super) const DRAG_LABEL: Color32 = Color32::from_rgb(245, 220, 146);
 /// Alternate arrangement rows and the bar lines between four-bar marks.
 const ROW_ALTERNATE: Color32 = Color32::from_rgb(24, 28, 32);
 const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
+/// Section bookmark colors, in section order; a song with more sections
+/// repeats them.
+const SECTION_COLORS: [Color32; 6] = [
+    Color32::from_rgb(242, 190, 92),
+    Color32::from_rgb(110, 205, 214),
+    Color32::from_rgb(196, 150, 245),
+    Color32::from_rgb(240, 132, 180),
+    Color32::from_rgb(130, 176, 250),
+    Color32::from_rgb(236, 150, 104),
+];
+
+pub(super) fn section_color(index: usize) -> Color32 {
+    SECTION_COLORS[index % SECTION_COLORS.len()]
+}
+
 /// The height of an arrangement row. It stays the same at any window or panel
 /// size: more room shows more rows.
 const ROW_HEIGHT: f32 = 36.0;
@@ -442,21 +458,33 @@ impl MixJamApp {
 
     pub(super) fn transport(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_centered(|ui| {
+            // Keep both view toggles clear of the tool rail in compact windows.
+            let compact = ui.available_width() < 1000.0;
+            if compact {
+                ui.spacing_mut().item_spacing.x = 4.0;
+            }
             transport_position(ui, self.session.cursor_tick(), self.session.project().bpm);
-            ui.add_space(12.0);
+            ui.add_space(if compact { 4.0 } else { 12.0 });
+            let sections = self.section_bookmarks && !self.session.project().sections.is_empty();
             if transport_button(
                 ui,
                 TransportIcon::Loop,
                 self.session.project().loop_region.is_some(),
-                "Loop the whole song. Drag the bar ruler to loop a range.",
+                if sections {
+                    "Loop the section at the playhead. Drag the bar ruler to loop a range."
+                } else {
+                    "Loop the whole song. Drag the bar ruler to loop a range."
+                },
             )
             .clicked()
             {
-                let end = self.session.project().end_tick().max(TICKS_PER_BAR);
-                let region = if self.session.project().loop_region.is_some() {
+                let project = self.session.project();
+                let region = if project.loop_region.is_some() {
                     None
+                } else if sections {
+                    project.section_span(self.session.cursor_tick())
                 } else {
-                    Some([0, end])
+                    Some([0, project.end_tick().max(TICKS_PER_BAR)])
                 };
                 let result = self.session.edit(EditCommand::SetLoop(region));
                 self.apply(result);
@@ -514,11 +542,16 @@ impl MixJamApp {
                     self.start_recording();
                 }
             }
-            ui.add_space(12.0);
+            ui.add_space(if compact { 4.0 } else { 12.0 });
             ui.label(egui::RichText::new("BPM").color(MUTED));
             let mut bpm = self.session.project().bpm;
             if name_control(
-                bpm_picker(ui, "Project BPM", &mut bpm, 104.0),
+                bpm_picker(
+                    ui,
+                    "Project BPM",
+                    &mut bpm,
+                    if compact { 88.0 } else { 104.0 },
+                ),
                 "Project BPM",
             )
             .changed()
@@ -526,10 +559,10 @@ impl MixJamApp {
                 let result = self.session.edit(EditCommand::SetTempo(bpm));
                 self.apply(result);
             }
-            ui.add_space(10.0);
+            ui.add_space(if compact { 4.0 } else { 10.0 });
             ui.label(egui::RichText::new("Zoom").color(MUTED));
             // A shorter zoom rail leaves room for the stepped tempo slider.
-            ui.spacing_mut().slider_width = 64.0;
+            ui.spacing_mut().slider_width = if compact { 48.0 } else { 64.0 };
             name_control(
                 ui.add(
                     egui::Slider::new(&mut self.zoom, 0.55..=2.0)
@@ -544,6 +577,19 @@ impl MixJamApp {
                 .changed()
             {
                 self.last_follow_position = None;
+            }
+            if ui
+                .toggle_value(&mut self.section_bookmarks, "Sections")
+                .on_hover_text(
+                    "Show the song's section bookmarks on the bar ruler and the lanes. With \
+                     sections shown, double-click the bar ruler to add a section, double-click \
+                     a name to rename it, right-click a name to delete it, and Loop loops the \
+                     section at the playhead.",
+                )
+                .changed()
+            {
+                self.session
+                    .remember_section_bookmarks(self.section_bookmarks);
             }
         });
     }
@@ -1255,6 +1301,9 @@ impl MixJamApp {
     }
 
     pub(super) fn timeline(&mut self, ui: &mut egui::Ui) {
+        if !self.section_bookmarks {
+            self.cancel_section_edit();
+        }
         ui.horizontal(|ui| {
             ui.label(heading("Arrangement", 18.0));
             ui.add_space(10.0);
@@ -1297,8 +1346,13 @@ impl MixJamApp {
         self.timeline_bar_width = bar_width;
         let track_height = row_height * row_count as f32;
         let cursor_tick = self.session.cursor_tick();
+        let project = self.session.project();
+        let last_section = project
+            .sections
+            .last()
+            .map_or(0, |section| section.start_tick);
         let bars =
-            (self.session.project().end_tick().max(cursor_tick) / TICKS_PER_BAR + 16).max(64);
+            (project.end_tick().max(cursor_tick).max(last_section) / TICKS_PER_BAR + 16).max(64);
         let width = bars as f32 * bar_width;
         let label_width = 122.0;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
@@ -1575,6 +1629,16 @@ impl MixJamApp {
                             Stroke::new(1.0_f32, ACCENT),
                             egui::StrokeKind::Inside,
                         );
+                    }
+                    if self.section_bookmarks {
+                        for (index, section) in self.session.project().sections.iter().enumerate() {
+                            let x = rect.left()
+                                + section.start_tick as f32 / TICKS_PER_BAR as f32 * bar_width;
+                            painter.line_segment(
+                                [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+                                Stroke::new(1.5_f32, section_color(index).gamma_multiply(0.8)),
+                            );
+                        }
                     }
                     let play_x = rect.left()
                         + self.session.cursor_tick() as f32 / TICKS_PER_BAR as f32 * bar_width;
@@ -1936,6 +2000,17 @@ impl MixJamApp {
             );
             ruler_painter.rect_filled(rect, 0.0, ACCENT.gamma_multiply(0.14));
         }
+        let tags = if self.section_bookmarks {
+            section_tags(
+                ui,
+                &ruler_painter,
+                ruler,
+                bar_width,
+                &self.session.project().sections,
+            )
+        } else {
+            Vec::new()
+        };
         let first_bar = ((ruler_clip.left() - ruler.left()) / bar_width)
             .floor()
             .max(0.0) as u32;
@@ -1944,6 +2019,13 @@ impl MixJamApp {
             .min(bars as f32) as u32;
         for bar in first_bar..last_bar {
             let x = ruler.left() + bar as f32 * bar_width;
+            let number_x = x + bar_width * 0.5;
+            if tags
+                .iter()
+                .any(|(_, tag)| (tag.left() - 8.0..=tag.right() + 8.0).contains(&number_x))
+            {
+                continue;
+            }
             ruler_painter.text(
                 Pos2::new(x + bar_width * 0.5, ruler.center().y),
                 Align2::CENTER_CENTER,
@@ -1976,6 +2058,9 @@ impl MixJamApp {
             let region = [start.min(end), start.max(end).saturating_add(TICKS_PER_BAR)];
             let result = self.session.edit(EditCommand::SetLoop(Some(region)));
             self.apply(result);
+        }
+        if self.section_bookmarks {
+            self.section_gestures(ui, &ruler_response, ruler, &tags);
         }
         if let Some((index, switch, on)) = route_change {
             let result = self.session.edit(EditCommand::SetSwitch {
@@ -2095,6 +2180,226 @@ impl MixJamApp {
         self.sample_conflicts_dialog(ctx);
         self.path_prompt_dialog(ctx);
         self.capture(ctx);
+    }
+}
+
+/// Paint each section's tag on the bar ruler: a colored line at its start and
+/// its name on a chip that ends before the next section. Returns each chip
+/// with its section's start.
+fn section_tags(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    ruler: Rect,
+    bar_width: f32,
+    sections: &[Section],
+) -> Vec<(u32, Rect)> {
+    let x_of = |tick: u32| ruler.left() + tick as f32 / TICKS_PER_BAR as f32 * bar_width;
+    let mut chips = Vec::new();
+    for (index, section) in sections.iter().enumerate() {
+        let color = section_color(index);
+        let x = x_of(section.start_tick);
+        let limit = sections
+            .get(index + 1)
+            .map_or(f32::INFINITY, |next| x_of(next.start_tick) - 2.0);
+        painter.line_segment(
+            [Pos2::new(x, ruler.top()), Pos2::new(x, ruler.bottom())],
+            Stroke::new(2.0_f32, color),
+        );
+        let galley =
+            ui.painter()
+                .layout_no_wrap(section.name.clone(), FontId::proportional(11.0), CANVAS);
+        let chip = Rect::from_min_size(
+            Pos2::new(x, ruler.top() + 4.0),
+            Vec2::new(galley.size().x + 10.0, ruler.height() - 8.0),
+        );
+        let visible =
+            Rect::from_min_max(chip.min, Pos2::new(chip.right().min(limit), chip.bottom()));
+        if visible.width() < 4.0 {
+            continue;
+        }
+        let chip_painter = painter.with_clip_rect(visible.intersect(painter.clip_rect()));
+        chip_painter.rect_filled(
+            chip,
+            egui::CornerRadius {
+                nw: 0,
+                sw: 0,
+                ne: 4,
+                se: 4,
+            },
+            color,
+        );
+        chip_painter.galley(
+            Pos2::new(chip.left() + 5.0, chip.center().y - galley.size().y / 2.0),
+            galley,
+            CANVAS,
+        );
+        chips.push((section.start_tick, visible));
+    }
+    chips
+}
+
+/// A section name being edited on the bar ruler.
+pub(super) struct SectionRename {
+    /// The start of the section, which identifies it while the list changes.
+    pub(super) start_tick: u32,
+    pub(super) name: String,
+    /// The editor takes the keyboard focus on its first frame.
+    pub(super) focused: bool,
+}
+
+/// The first "Section N" name that no section of `sections` has.
+fn new_section_name(sections: &[Section]) -> String {
+    (1..)
+        .map(|n| format!("Section {n}"))
+        .find(|name| sections.iter().all(|section| section.name != *name))
+        .unwrap_or_default()
+}
+
+impl MixJamApp {
+    /// Double-click the bar ruler to add a section at that bar, or a tag to
+    /// rename it; right-click for the same choices and Delete.
+    fn section_gestures(
+        &mut self,
+        ui: &mut egui::Ui,
+        ruler_response: &Response,
+        ruler: Rect,
+        tags: &[(u32, Rect)],
+    ) {
+        let tag_at = |pos: Pos2| {
+            tags.iter()
+                .find(|(_, rect)| rect.contains(pos))
+                .map(|(tick, _)| *tick)
+        };
+        if ruler_response.double_clicked()
+            && let Some(pos) = ruler_response.interact_pointer_pos()
+        {
+            // The first click of a double-click starts no loop.
+            self.loop_start = None;
+            match tag_at(pos) {
+                Some(tick) => self.rename_section(tick),
+                None => self.add_section(self.position_tick(pos.x, ruler, false)),
+            }
+        }
+        if ruler_response.secondary_clicked() {
+            let pos = ruler_response.interact_pointer_pos();
+            self.section_menu = (
+                pos.and_then(tag_at),
+                pos.map_or(self.session.cursor_tick(), |pos| {
+                    self.position_tick(pos.x, ruler, false)
+                }),
+            );
+        }
+        let (tag, bar) = self.section_menu;
+        ruler_response.context_menu(|ui| match tag {
+            Some(tick) => {
+                if ui.button("Rename section").clicked() {
+                    self.rename_section(tick);
+                    ui.close();
+                }
+                if ui.button("Delete section").clicked() {
+                    let mut sections = self.session.project().sections.clone();
+                    sections.retain(|section| section.start_tick != tick);
+                    let result = self.session.edit(EditCommand::SetSections(sections));
+                    self.apply(result);
+                    ui.close();
+                }
+            }
+            None => {
+                if ui.button("Add section here").clicked() {
+                    self.add_section(bar);
+                    ui.close();
+                }
+            }
+        });
+        self.section_rename_editor(ui, ruler);
+    }
+
+    /// Add a section named "Section N" at `tick` and edit its name. A section
+    /// that already starts there is renamed instead.
+    pub(super) fn add_section(&mut self, tick: u32) {
+        let sections = &self.session.project().sections;
+        if !sections.iter().any(|section| section.start_tick == tick) {
+            let mut sections = sections.clone();
+            sections.push(Section {
+                start_tick: tick,
+                name: new_section_name(&sections),
+            });
+            sections.sort_by_key(|section| section.start_tick);
+            let result = self.session.edit(EditCommand::SetSections(sections));
+            if result.is_err() {
+                self.apply(result);
+                return;
+            }
+        }
+        self.rename_section(tick);
+    }
+
+    fn rename_section(&mut self, tick: u32) {
+        if let Some(section) = self
+            .session
+            .project()
+            .sections
+            .iter()
+            .find(|section| section.start_tick == tick)
+        {
+            self.section_rename = Some(SectionRename {
+                start_tick: tick,
+                name: section.name.clone(),
+                focused: false,
+            });
+        }
+    }
+
+    /// The name editor over a section's tag. Enter or a click elsewhere keeps
+    /// the name; Escape or an empty name keeps the old one.
+    fn section_rename_editor(&mut self, ui: &mut egui::Ui, ruler: Rect) {
+        let Some(rename) = &mut self.section_rename else {
+            return;
+        };
+        let x = ruler.left()
+            + rename.start_tick as f32 / TICKS_PER_BAR as f32 * self.timeline_bar_width;
+        let mut done = None;
+        egui::Area::new(ui.id().with("section_rename"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(Pos2::new(x, ruler.top() + 1.0))
+            .show(ui.ctx(), |ui| {
+                let response = name_control(
+                    ui.add(
+                        egui::TextEdit::singleline(&mut rename.name)
+                            .char_limit(MAX_SECTION_NAME)
+                            .desired_width(180.0)
+                            .font(FontId::proportional(12.0)),
+                    ),
+                    "Section name",
+                );
+                if !rename.focused {
+                    response.request_focus();
+                    rename.focused = true;
+                }
+                if response.lost_focus() {
+                    done = Some(!ui.input(|input| input.key_pressed(egui::Key::Escape)));
+                }
+            });
+        let Some(keep) = done else {
+            return;
+        };
+        let Some(rename) = self.section_rename.take() else {
+            return;
+        };
+        let name = rename.name.trim();
+        if !keep || name.is_empty() {
+            return;
+        }
+        let mut sections = self.session.project().sections.clone();
+        if let Some(section) = sections
+            .iter_mut()
+            .find(|section| section.start_tick == rename.start_tick)
+            && section.name != name
+        {
+            section.name = name.into();
+            let result = self.session.edit(EditCommand::SetSections(sections));
+            self.apply(result);
+        }
     }
 }
 
