@@ -41,10 +41,20 @@ another one.
 The scan runs in the background. The Libraries window shows progress and has a
 Cancel button. You can use the window during the scan. The application changes
 the sounds when the scan is complete; a cancelled scan changes nothing. It caches
-probe results and decodes changed files again on a later scan. Unchanged scans
+probe results and decodes changed files again on a later scan. A decoder update
+also causes older cached results to be read again. Unchanged scans
 leave the cache file intact. Scans process WAV audio as a stream to limit memory
 use. There is no limit on the number of WAV files. Expand **Folder tempos** to see
 each folder's source tempo; long lists scroll.
+
+Scans read mono and stereo WAVs in 8-, 16-, 24-, or 32-bit PCM and 32-bit float,
+including extensible headers, long format chunks, and odd-length metadata.
+Classic 24-bit PCM in four-byte containers is also supported. Each scanned file
+must fit the 128 MiB file limit and the 64,000,000-sample limit across all channels.
+Audio that ends inside its last frame loses only that partial frame.
+**Skipped WAVs** in the Libraries window lists files that cannot be used, with
+the reason: an empty or damaged file, audio that is cut off, or another encoding
+such as ADPCM. macOS `._` metadata files beside the WAVs are ignored.
 
 If a library folder cannot be read, or has no readable WAV, the other folders
 still load. The status line names the folder and the reason, and the Libraries

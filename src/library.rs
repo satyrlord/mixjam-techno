@@ -145,6 +145,8 @@ pub struct ScanCache {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CachedProbe {
+    #[serde(default)]
+    decoder_version: u8,
     length: u64,
     modified: u128,
     probe: WavProbe,
@@ -152,6 +154,8 @@ struct CachedProbe {
 
 impl ScanCache {
     const MAX_ENTRIES: usize = 1_000_000;
+    // Advance this when decoding changes sample values or admitted layouts.
+    const DECODER_VERSION: u8 = 1;
 
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -206,7 +210,8 @@ impl ScanCache {
     fn get(&self, path: &Path, stamp: (u64, u128)) -> Option<&WavProbe> {
         let entry = self.entries.get(path.to_str()?)?;
         let probe = &entry.probe;
-        (entry.length == stamp.0
+        (entry.decoder_version == Self::DECODER_VERSION
+            && entry.length == stamp.0
             && entry.modified == stamp.1
             && probe.frame_count > 0
             && (1..=384_000).contains(&probe.sample_rate)
@@ -225,6 +230,7 @@ impl ScanCache {
         self.entries.insert(
             key.to_owned(),
             CachedProbe {
+                decoder_version: Self::DECODER_VERSION,
                 length: stamp.0,
                 modified: stamp.1,
                 probe,
@@ -2238,6 +2244,8 @@ fn list_wav_folder(root: &Path, progress: Option<&ScanProgress>) -> Result<WavLi
                 && path
                     .extension()
                     .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+                // macOS copies leave `._NAME.wav` metadata beside each file; it holds no audio.
+                && !entry.file_name().to_string_lossy().starts_with("._")
             {
                 paths.push(path);
             } else if kind.is_file()
@@ -2505,20 +2513,20 @@ fn map_waves(samples: &mut [Sample], embedded_names: &[String], root: &Path) -> 
             return Err("The WAV sample index contains an invalid path.".into());
         }
         let path = root.join(relative);
-        let Ok(reader) = hound::WavReader::open(&path) else {
+        let Some(layout) = fs::File::open(&path).ok().and_then(|file| {
+            let length = file.metadata().ok()?.len();
+            crate::wav::read_layout(&mut std::io::BufReader::new(file), length).ok()
+        }) else {
             continue;
         };
-        let spec = reader.spec();
-        if spec.sample_rate == 0 || spec.channels == 0 {
-            continue;
-        }
+        let spec = layout.spec;
         let key = (canonical_group(&entry.channel), compact_name(&entry.alias));
         lookup.entry(key).or_default().push((
             path,
             slug(&entry.alias),
             spec.sample_rate,
             spec.channels,
-            reader.duration(),
+            layout.frames() as u32,
         ));
     }
     let mut used_paths = HashSet::new();
@@ -3413,9 +3421,18 @@ mod tests {
             let probe = probe_wav(&path, None).unwrap();
             assert_eq!(probe.frame_count, 5);
             assert_eq!(probe.digest, Some(crate::catalog::pcm_identity(&samples)));
-            // Truncated input must fail in both callers of the streaming reader.
+            // Input that ends inside its last frame keeps its whole frames.
+            // Input cut off by a frame or more must fail in both callers of the
+            // streaming reader.
             let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
-            file.set_len(file.metadata().unwrap().len() - 1).unwrap();
+            let length = file.metadata().unwrap().len();
+            let width = u64::from(bits / 8);
+            if width > 1 {
+                file.set_len(length - 1).unwrap();
+                assert_eq!(crate::audio::read_wav(&path).unwrap().samples.len(), 4);
+                assert_eq!(probe_wav(&path, None).unwrap().frame_count, 4);
+            }
+            file.set_len(length - width - 1).unwrap();
             assert!(crate::audio::read_wav(&path).is_err());
             assert!(probe_wav(&path, None).is_err());
         }
@@ -3440,6 +3457,55 @@ mod tests {
             );
             assert!(probe_wav(&path, None).unwrap_err().contains("finite"));
         }
+    }
+
+    #[test]
+    fn scans_replace_unversioned_decoder_probes() {
+        let folder = Folder::new();
+        let path = folder.0.join("extensible.wav");
+        let mut writer = hound::WavWriter::create(
+            &path,
+            hound::WavSpec {
+                channels: 1,
+                sample_rate: 44_100,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Int,
+            },
+        )
+        .unwrap();
+        for value in [0x4000_0000_i32, -0x4000_0000, 0x2000_0000] {
+            writer.write_sample(value).unwrap();
+        }
+        writer.finalize().unwrap();
+        let mut bytes = fs::read(&path).unwrap();
+        assert_eq!(&bytes[20..22], &0xfffe_u16.to_le_bytes());
+        bytes[38..40].copy_from_slice(&24_u16.to_le_bytes());
+        fs::write(&path, bytes).unwrap();
+        let path = fs::canonicalize(path).unwrap();
+        let mut legacy = probe_wav(&path, None).unwrap();
+        let expected = legacy.digest;
+        // Hound reads these left-aligned samples as zero from the low 24 bits.
+        let old: Vec<_> = hound::WavReader::open(&path)
+            .unwrap()
+            .samples::<i32>()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(old, [0, 0, 0]);
+        legacy.digest = Some(crate::catalog::pcm_identity(&[0, 0, 0]));
+        assert_ne!(legacy.digest, expected);
+        let mut cache = ScanCache::default();
+        cache.insert(&path, ScanCache::stamp(&path).unwrap(), legacy);
+        let mut saved = serde_json::to_value(&cache).unwrap();
+        for entry in saved["entries"].as_object_mut().unwrap().values_mut() {
+            entry.as_object_mut().unwrap().remove("decoder_version");
+        }
+        let mut cache: ScanCache = serde_json::from_value(saved).unwrap();
+        let probes = probe_all(std::slice::from_ref(&path), None, Some(&mut cache)).unwrap();
+        assert_eq!(probes[0].as_ref().unwrap().digest, expected);
+        assert!(cache.has_changes());
+        cache = serde_json::from_str(&serde_json::to_string(&cache).unwrap()).unwrap();
+        probe_all(&[path], None, Some(&mut cache)).unwrap();
+        assert!(!cache.has_changes());
     }
 
     #[test]
@@ -4230,6 +4296,7 @@ mod tests {
         assert_eq!(library.imported_samples().len(), 2);
         assert!(library.skipped_waves().is_empty());
         let before = library.imported_samples();
+        fs::write(folder.0.join("Bass/._my original.WAV"), b"Mac OS metadata").unwrap();
         fs::write(folder.0.join("invalid.wav"), b"not audio").unwrap();
         // A header without frames, as some sample packs ship.
         let mut empty = b"RIFF\x24\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0".to_vec();

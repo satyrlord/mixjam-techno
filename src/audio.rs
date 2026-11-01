@@ -151,49 +151,39 @@ pub(crate) fn visit_wav_samples(
     path: &Path,
     mut visit: impl FnMut(hound::WavSpec, f32),
 ) -> Result<(hound::WavSpec, u32), String> {
-    let mut reader =
-        hound::WavReader::open(path).map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
-    let spec = reader.spec();
-    if !(1..=2).contains(&spec.channels)
-        || spec.sample_rate == 0
-        || spec.sample_rate > 384_000
-        || reader.len() as usize > MAX_WAV_SAMPLES
-    {
+    let cannot = |error: String| format!("Cannot read {}: {error}", path.display());
+    let mut file =
+        std::io::BufReader::new(std::fs::File::open(path).map_err(|e| cannot(e.to_string()))?);
+    let length = file
+        .get_ref()
+        .metadata()
+        .map_err(|e| cannot(e.to_string()))?
+        .len();
+    let layout = crate::wav::read_layout(&mut file, length).map_err(cannot)?;
+    let spec = layout.spec;
+    if layout.frames().saturating_mul(u64::from(spec.channels)) > MAX_WAV_SAMPLES as u64 {
         return Err(
             "The WAV must contain mono or stereo audio with a supported sample rate and size."
                 .into(),
         );
     }
-    let mut count = 0_u32;
-    let mut accept = |value: Result<f32, hound::Error>| -> Result<(), String> {
-        let value = value.map_err(|e| e.to_string())?;
+    let float = spec.sample_format == hound::SampleFormat::Float;
+    crate::wav::visit_samples(&mut file, &layout, |value| {
+        // Float audio may overshoot full scale a little; it plays clipped.
+        let value = if float && value.is_finite() {
+            value.clamp(-1.0, 1.0)
+        } else {
+            value
+        };
         if !value.is_finite() || value.abs() > 1.0 {
             return Err(
                 "The audio must contain normalized finite mono or stereo PCM samples.".into(),
             );
         }
         visit(spec, value);
-        count += 1;
         Ok(())
-    };
-    match spec.sample_format {
-        hound::SampleFormat::Float if spec.bits_per_sample == 32 => {
-            for value in reader.samples::<f32>() {
-                accept(value.map(|v| if v.is_finite() { v.clamp(-1.0, 1.0) } else { v }))?;
-            }
-        }
-        hound::SampleFormat::Int if (8..=32).contains(&spec.bits_per_sample) => {
-            let divisor = (1_u64 << (spec.bits_per_sample - 1)) as f32;
-            for value in reader.samples::<i32>() {
-                accept(value.map(|v| v as f32 / divisor))?;
-            }
-        }
-        _ => return Err("This WAV encoding is not supported.".into()),
-    };
-    if !count.is_multiple_of(u32::from(spec.channels)) {
-        return Err("The audio must contain normalized finite mono or stereo PCM samples.".into());
-    }
-    Ok((spec, count / u32::from(spec.channels)))
+    })?;
+    Ok((spec, layout.frames() as u32))
 }
 
 /// Stateful processing belongs to a reader, never to the shared audio data.

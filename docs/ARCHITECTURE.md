@@ -604,8 +604,18 @@ cache entries of files that its folders no longer list. Imported sample IDs
 start at 1,000,000, above the 800,000 native IDs, and grow with the library.
 Folder scans stream validated WAV samples into the catalog identity hash. Each
 worker retains a reader buffer, not the decoded audio. File lists, metadata, and
-the probe cache still grow with the corpus. A scan writes the cache only after
-new probes change it. `source_tempo.rs` resolves folder tempo from matching
+the probe cache still grow with the corpus. `wav.rs` owns RIFF chunk traversal,
+format validation, and buffered decoding for `audio::visit_wav_samples` and
+the optional provider's WAV index. It supports mono/stereo PCM8/16/24/32,
+float32, and their extensible subformats. Classic PCM24 in four-byte containers
+retains its existing right-aligned decoding; extensible PCM uses its declared
+container width with valid bits left-aligned. The reader validates the full
+subformat GUID, extension length, frame size, byte rate, and required chunk
+bounds. It discards a partial final audio frame but rejects a file missing a
+whole frame. A scan writes the cache only after
+new probes change it. Cached probes carry a decoder version; older probes are
+decoded again so their audio identities agree with playback. `source_tempo.rs`
+resolves folder tempo from matching
 original audio before the duration-based fallback is used. A pack's `BPM.INF`
 and tempo tokens in file names are stated tempos. They override the duration
 reading but not matching original audio. Optional supplemental tempo identities
