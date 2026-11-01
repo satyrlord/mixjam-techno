@@ -6,8 +6,9 @@
 //! last pedal, so nothing after it can raise the peaks it holds; the user can
 //! put the others in any order. Two kinds of pedal share the board:
 //! - The Booster pedals are the master effects of the D3, D4, and T3
-//!   products (see `booster`). They match the original library sample for sample and work on
-//!   16-bit samples, as the original does.
+//!   products (see `booster`). Recorded stereo oracle cases match sample for
+//!   sample. Playback starts with settled compressor controls. The pedals work
+//!   on 16-bit samples, as the original does.
 //! - The mastering pedals are this application's own designs (see
 //!   `pedals`). They work on floats. Those with a curve or a lookahead delay
 //!   the sound; export removes the delay, and playback starts that much
@@ -881,8 +882,8 @@ impl MasterControl {
             compressor_track_reset: std::array::from_fn(|_| AtomicU64::new(0)),
         })
     }
-    /// Store the project's track levels. Playback glides to them over its
-    /// next block, so a fader moves without a click and without a new mix.
+    /// Store the project's track levels. Playback glides to them over about
+    /// 23 ms, so a fader moves without a click and without a new mix.
     pub fn set_levels(&self, project: &crate::engine::Project) {
         let mut switched = self.level_writer.lock().unwrap_or_else(|e| e.into_inner());
         let enabled = project

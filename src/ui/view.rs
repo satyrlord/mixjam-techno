@@ -609,7 +609,7 @@ impl MixJamApp {
                  for mixing in another application. Tracks play alone after their EQ, \
                  automation, fader, pan, and outputs, without their sends; the FX returns \
                  hold every send. The master pedalboard is left out. Together the files sum \
-                 to the mix with the board bypassed.",
+                 to the mix with the board bypassed when that sum does not clip.",
             )
             .on_disabled_hover_text("Wait for the current export to finish.")
             .clicked()

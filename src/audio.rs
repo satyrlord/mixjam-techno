@@ -840,10 +840,10 @@ impl Mix {
     }
 
     /// The whole mix in memory, through the FX buses and the master
-    /// pedalboard. Long songs play and export through `read` and
-    /// `write_wav`, which have no length limit. Pedals that delay the sound
-    /// run on past the end, and the delay is cut from the start, so the
-    /// result lines up with the song; the buses' tails ring on after it.
+    /// pedalboard. Long songs play and export block by block through `read`
+    /// and `write_wav`. Pedals that delay the sound run on past the end, and
+    /// the delay is cut from the start, so the result lines up with the song;
+    /// the buses' tails ring on after it.
     pub fn to_pcm(&self, master: &MasterChain, fx: &FxBuses) -> Result<Pcm, String> {
         if self.frames > Self::MAX_PCM_FRAMES {
             return Err("This song is too long to hold in memory. Play or export it.".into());
@@ -2339,8 +2339,12 @@ mod tests {
             let mut out = vec![0.0; 14_000 * 2];
             mix.read_block(0, &mut out, None, &mut RenderState::default());
             let left: Vec<f32> = out.iter().step_by(2).copied().collect();
-            // The 20 ms around the middle of the move between the two points.
-            left[4_000..6_500]
+            // Include the move and the filter's 10 ms crossfade.
+            let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+            let first = (f64::from(lane[0].0) * frames_per_tick).round() as usize;
+            let last = (f64::from(lane[1].0) * frames_per_tick).round() as usize;
+            let margin = Mix::SAMPLE_RATE as usize / 100;
+            left[first - margin..last + margin]
                 .windows(2)
                 .map(|pair| (pair[1] - pair[0]).abs())
                 .fold(0.0, f32::max)

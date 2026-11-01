@@ -395,7 +395,7 @@ fn genre_chips_wrap_inside_supported_and_narrower_windows() {
             let mut checked = 0;
             for shape in &output.shapes {
                 if let egui::Shape::Text(text) = &shape.shape
-                    && text.galley.job.text == "New Age (8)"
+                    && text.galley.job.text.starts_with("New Age (")
                 {
                     checked += 1;
                     let right = text.pos.x + text.galley.size().x;

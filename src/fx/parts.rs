@@ -171,8 +171,9 @@ impl Ducker {
     }
 }
 
-/// Saturation before an effect: `tanh(x g) / g` with `g = 1 + 8 drive`,
-/// blended with the clean input by the drive, so 0 is an exact bypass.
+/// Saturation before an effect: `tanh(x g) / g * (1 + 0.5 drive)` with
+/// `g = 1 + 8 drive`, blended with the clean input by the drive,
+/// so 0 is an exact bypass.
 #[inline]
 pub(super) fn drive(input: f64, amount: f64) -> f64 {
     if amount <= 0.0 {

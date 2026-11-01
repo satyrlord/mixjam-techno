@@ -20,7 +20,8 @@ from mixjam import playback_bpm, read_wav  # noqa: E402
 
 def shift_semitones(source_bpm, song_bpm, cents):
     """The pitch shift in semitones of a sound varispeeded from source_bpm to song_bpm, plus cents.
-    The engine reads source_bpm in the octave nearest song_bpm, so the shift is under half an octave."""
+    The engine reads source_bpm in the octave nearest song_bpm, so the tempo change shifts pitch
+    by at most half an octave."""
     return (cents + 1200 * math.log2(song_bpm / playback_bpm(source_bpm, song_bpm))) / 100
 
 

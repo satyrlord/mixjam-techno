@@ -839,11 +839,9 @@ fn stretched_copy(
     ) else {
         return Ok(None);
     };
-    let Some(stem) = file
-        .len()
-        .checked_sub(4)
-        .filter(|end| file[*end..].eq_ignore_ascii_case(".wav"))
-        .map(|end| &file[..end])
+    let Some((stem, _)) = file
+        .rsplit_once('.')
+        .filter(|(_, extension)| extension.eq_ignore_ascii_case("wav"))
     else {
         return Ok(None);
     };
@@ -2380,10 +2378,8 @@ mod tests {
     #[test]
     #[ignore = "Set MIXJAM_TECHNO_SONG_FIXTURES to a folder that holds saved T3 and D4 songs."]
     fn saved_t3_and_d4_songs_read_every_imported_audio_record() {
-        let Some(root) = std::env::var_os("MIXJAM_TECHNO_SONG_FIXTURES") else {
-            println!("MIXJAM_TECHNO_SONG_FIXTURES is not set; no saved songs were read.");
-            return;
-        };
+        let root = std::env::var_os("MIXJAM_TECHNO_SONG_FIXTURES")
+            .expect("Set MIXJAM_TECHNO_SONG_FIXTURES to the saved T3 and D4 song folder.");
         let products = [Product::T3, Product::D4];
         let (mut songs, mut records) = ([0; 2], [0; 2]);
         let mut folders = vec![PathBuf::from(root)];

@@ -2903,8 +2903,28 @@ mod tests {
                 )),
                 "No cap at {bpm} BPM"
             );
+            let target = Rect::from_min_max(
+                Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+            );
+            let caption = format!("{bpm:.0}");
+            let labels: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| {
+                    if let egui::Shape::Text(text) = &shape.shape
+                        && text.galley.job.text == caption
+                    {
+                        let rect = Rect::from_min_size(text.pos, text.galley.size());
+                        target.contains(rect.center()).then_some(rect)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(labels.len(), 1, "Target BPM must have one {bpm} caption");
             assert!(
-                text_rect(&output, &format!("{bpm:.0}")).center().x - expected.x < 0.5,
+                (labels[0].center().x - expected.x).abs() < 0.5,
                 "{bpm} BPM must be labelled under its notch"
             );
         }
@@ -10263,6 +10283,51 @@ mod tests {
     }
 
     #[test]
+    fn the_strip_eq_button_names_channel_processing_not_the_eq_alone() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        app.bottom_module = BottomModule::Mixer;
+        send(&mut app, &["click", "target=Track 1 EQ"]);
+        send(
+            &mut app,
+            &["set", "target=Track 1 compressor power", "value=true"],
+        );
+        app.eq_track = None;
+        assert!(!app.session.project().tracks[0].eq.on);
+        context.enable_accesskit();
+        context.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let center = effects_control_rect(&output, "Track 1 EQ").center();
+        frame(
+            &context,
+            &mut app,
+            vec![egui::Event::PointerMoved(center)],
+            egui::Modifiers::NONE,
+        );
+        let mut tooltip = None;
+        for _ in 0..4 {
+            let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+            tooltip = tooltip.or_else(|| {
+                output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.contains("Open the channel EQ window") =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+            });
+        }
+        let tooltip = tooltip.expect("The EQ button must explain itself on hover.");
+        // The button lights for the compressor, so the hover must not say the EQ is on.
+        assert!(
+            tooltip.starts_with("Track 1 channel processing: on."),
+            "{tooltip}"
+        );
+    }
+
+    #[test]
     fn bypass_all_and_master_bypass_are_one_switch_and_track_export_asks_for_a_folder() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
@@ -11191,7 +11256,7 @@ mod tests {
             app.session.project().tracks[0].gain < 1.0,
             "The rail click must lower the gain."
         );
-        // Space, undo, and save share one guard: they run only while no control has focus.
+        // A pointer edit leaves keyboard focus unchanged.
         assert!(
             !ctx.wants_keyboard_input(),
             "A pointer edit must not leave the rail holding keyboard focus."

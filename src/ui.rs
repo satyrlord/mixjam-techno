@@ -1866,11 +1866,14 @@ impl MixJamApp {
                      sets +12 dB.",
                 );
                 ui.label(
-                    "EQ opens a track's channel EQ, and lights while it is on: a low cut and a \
-                     high cut at 12 dB per octave, a low shelf, a peak with its Q, and a high \
+                    "EQ opens a track's channel EQ: a low cut and a high cut at 12 dB per \
+                     octave, a low shelf, two peaks with their Q, and a high \
                      shelf, drawn as a curve. It acts on the track's clips before its automation \
                      and fader. An EQ that is off keeps its settings and leaves the track as it \
-                     was; Reset flattens every band. To tame harsh hi-hats, lower the high gain.",
+                     was; Reset flattens every band. To tame harsh hi-hats, lower the high gain. \
+                     The same window holds the track's compressor, stereo width, and ducker. \
+                     The button lights when EQ, compression, or ducking is on, or width differs \
+                     from 100%.",
                 );
                 ui.label(
                     "Bypass on the Master strip skips the master pedalboard for playback and \
@@ -1882,7 +1885,7 @@ impl MixJamApp {
                      track's file holds the track alone after its EQ, automation, fader, pan, \
                      and outputs, without its sends; the FX returns hold the sends. The master \
                      pedalboard is left out, every file is as long as the mix export, and the \
-                     files sum to the mix with the board bypassed.",
+                     files sum to the mix with the board bypassed when that sum does not clip.",
                 );
                 ui.label(
                     "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and \
@@ -3468,7 +3471,7 @@ fn master_help(ui: &mut egui::Ui) {
         "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
         "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
         "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
-        "The Booster pedals are the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. In the original's order (EQ, compressor, wide) they match the original sample for sample. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
+        "The Booster pedals reproduce the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. Each playback starts with settled compressor controls. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
         "The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband holds the peaks of the lows, mids, and highs apart and lifts the sound under them; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.",
         "Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.",
         "Bypass all, beside Preset, skips the whole board, Trim included, for playback and export, so you can export the mix and master it elsewhere. The pedals keep their settings and switches, and the board dims. Switching it during playback crossfades over 30 ms. Presets leave it as it is. The Mixer's Master strip has the same switch.",

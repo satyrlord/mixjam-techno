@@ -2443,12 +2443,12 @@ impl Session {
     }
 }
 
-/// The highest imported sample ID in use; new imports follow it.
 /// The status line of a finished track export.
 fn tracks_exported(stems: audio::Stems, folder: &Path) -> String {
     format!("Exported {stems} to {}.", folder.display())
 }
 
+/// The highest imported sample ID in use; new imports follow it.
 fn last_imported_id(project: &Project, library: &Library) -> u32 {
     project
         .imported_samples
@@ -4940,15 +4940,23 @@ mod boundary_tests {
         let cache_path = data.join("wav-scan-cache.json");
         let cache_modified = std::fs::metadata(&cache_path).unwrap().modified().unwrap();
         assert!(data.join("sample-folder.json").is_file());
-        // A cancelled scan never replaces the library, even after its thread ends.
+        // A cancelled scan cannot deliver a late result to the session.
         let before = session.library().samples.len();
-        session.start_wave_scan(&[dir.join("Loop")], 140.0).unwrap();
+        let progress = Arc::new(crate::library::ScanProgress::default());
+        let (sender, receiver) = mpsc::channel();
+        session.wave_scan = Some(WaveScan {
+            roots: vec![dir.join("Loop")],
+            source_bpm: 140.0,
+            progress: Arc::clone(&progress),
+            receiver,
+        });
         session.open_after_scan(&song).unwrap();
         session.cancel_wave_scan();
         assert!(session.wave_scan().is_none());
+        assert!(progress.is_cancelled());
+        assert!(sender.send(Ok(Library::empty())).is_err());
         let (notice, error) = session.take_notice().unwrap();
         assert!(!error && notice.contains("song.mixjam"), "{notice}");
-        std::thread::sleep(std::time::Duration::from_millis(200));
         assert_eq!(session.poll(), None);
         assert_eq!(session.library().samples.len(), before);
         assert!(

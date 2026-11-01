@@ -43,8 +43,6 @@ those columns, and says so.
 """
 import json
 import math
-import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -53,6 +51,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
 from mixjam import Song, read_wav  # noqa: E402
+from render import run as run_render  # noqa: E402
 
 BLOCK_BARS = 8
 DEFAULT_BPM = 140.0
@@ -81,15 +80,6 @@ def load_profile():
     if path is None or not path.exists():
         return None, path
     return json.loads(path.read_text(encoding='utf-8')), path
-
-
-def run_render(song_path, wav_path):
-    data = Path(wav_path).resolve().parent / '.data'
-    environment = dict(os.environ, MIXJAM_TECHNO_DATA_DIR=str(data))
-    result = subprocess.run([str(env.exe()), 'render', '--mix', str(song_path), '--output', str(wav_path)],
-                            capture_output=True, text=True, env=environment)
-    if result.returncode != 0:
-        raise SystemExit(f'Cannot render {song_path}: {result.stdout}{result.stderr}')
 
 
 def render_board(premaster, board, out, bpm):

@@ -1,4 +1,4 @@
-//! `.mixjam` songs: the application's own format version 16 (`song`) and a
+//! `.mixjam` songs: the application's native song format (`song`) and a
 //! bounded import of the preserved MixJam JSON v7 format.
 //!
 //! The v7 reader imports an arrangement into the shared renderer; it is not MixJam DSP
@@ -178,9 +178,9 @@ fn read(path: &Path) -> Result<(Header, Vec<u8>), String> {
     Ok((header, bytes))
 }
 
-/// Open a version 8 to 16 song or import a version 7 project. The flag is true for
-/// a song, which Save can replace; a version 7 project is an import and stays
-/// unchanged. The file is read once.
+/// Open a song from version 8 through the current native format, or import a
+/// version 7 project. The flag is true for a song, which Save can replace;
+/// a version 7 project is an import and stays unchanged. The file is read once.
 pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), String> {
     let (header, bytes) = read(path)?;
     match header.format_version {
@@ -207,7 +207,7 @@ pub fn load_song(path: &Path, library: &Library) -> Result<(Project, bool), Stri
     }
 }
 
-/// Write the song as a format version 16 document.
+/// Write the song in the current native format.
 pub fn save(project: &Project, path: &Path) -> Result<(), String> {
     song::save(project, path)
 }
@@ -995,9 +995,11 @@ mod tests {
         assert_eq!(conflict.source_spans[&conflicted.clips[0].sample_id], 256);
         assert!(!conflict.confirmed);
         let before_clips = conflicted.clips.clone();
-        let mut session =
-            crate::application::Session::new(std::sync::Arc::new(conflict_library), conflicted)
-                .unwrap();
+        let mut session = crate::application::Session::headless(
+            std::sync::Arc::new(conflict_library),
+            conflicted,
+        )
+        .unwrap();
         session.resolve_sample_conflict(0, 1).unwrap();
         assert_eq!(session.project().clips, before_clips);
         let selected_id = session.project().clips[0].sample_id;

@@ -599,8 +599,8 @@ fn credits(ui: &mut egui::Ui) {
         ui,
         "Cover art",
         "Covers are shown under fair use to identify each album. All rights stay with \
-         their copyright holders. The application stores no cover: it downloads one when you \
-         select Display cover art, and keeps it only in its cover cache. Each album page \
+         their copyright holders. Select Display cover art to download a cover. The \
+         application keeps it only in its cover cache. Each album page \
          names the cover's source.",
         &[
             (

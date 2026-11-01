@@ -839,6 +839,39 @@ mod tests {
     }
 
     #[test]
+    fn missing_wave_labels_with_multibyte_text_remain_placeholders() {
+        let folder = Folder::new("t2-missing-label");
+        let path = folder.0.join("missing.wav").to_string_lossy().into_owned();
+        for label in [&b"\x80xy"[..], b"\xe9xyz", b"caf\xe9.WAV", b"abc"] {
+            let mut record = vec![1];
+            record.extend_from_slice(&(-1i32).to_le_bytes());
+            record.extend_from_slice(&10200u16.to_le_bytes());
+            text(&mut record, &path);
+            record.extend_from_slice(&((label.len() + 2) as u16).to_le_bytes());
+            record.extend_from_slice(label);
+            record.extend_from_slice(&[0, 1]);
+            text(&mut record, r"C:\Original\[time]");
+            record.extend_from_slice(&10u16.to_le_bytes());
+            record.extend_from_slice(&1u32.to_le_bytes());
+            record.extend_from_slice(&0u16.to_le_bytes());
+            let bytes = custom_song(&current_label(), &[record]);
+            let project = load_bytes(&bytes, &Library::empty()).unwrap();
+            assert_eq!(project.clips.len(), 1);
+            assert_eq!(project.missing_samples.len(), 1);
+            assert!(project.imported_samples.is_empty());
+            let missing = &project.missing_samples[0];
+            assert_eq!(missing.id, project.clips[0].sample_id);
+            assert_eq!(missing.metadata["Native label 1"], decode_1252(label));
+            assert_eq!(missing.metadata["Native label 2"], r"C:\Original\[time]");
+            assert!(matches!(
+                &missing.reference,
+                crate::engine::MissingReference::External { path: saved, .. }
+                    if saved == Path::new(&path)
+            ));
+        }
+    }
+
+    #[test]
     fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
         let folder = Folder::new("t2-stretch");
         let root = folder.0.as_path();

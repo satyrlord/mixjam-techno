@@ -35,7 +35,6 @@ tempo and key tag, or left/right mark. See `verdicts.py`.
   or judged out of tune or cheesy, is outside every palette.
 """
 import argparse
-import csv
 import datetime
 import hashlib
 import json
@@ -53,7 +52,6 @@ import samples  # noqa: E402
 import sampletags  # noqa: E402
 import verdicts  # noqa: E402
 
-KEEP_OUT = {'rejected', 'out-of-tune', 'cheesy', 'reject'}
 OWNER_OUT = {'rejected', 'out-of-tune', 'cheesy'}
 # A family this large is a bank of different sounds that share a name, not one sound's variations: a palette
 # made from a song keeps only the files the song uses from it.
@@ -352,8 +350,8 @@ def family_table():
 
 def kept_out(summary):
     verdict_counts = summary['verdicts']
-    owner_out = sum(verdict_counts[v] for v in ('rejected', 'out-of-tune', 'cheesy'))
-    return owner_out > 0 or verdict_counts['reject'] * 2 > summary['files']
+    owner_rejected = sum(verdict_counts[v] for v in OWNER_OUT)
+    return owner_rejected > 0 or verdict_counts['reject'] * 2 > summary['files']
 
 
 def suggest(args):
@@ -457,7 +455,7 @@ def show(path):
 _owner_rules = None
 
 
-def owner_out(path, library_roots):
+def owner_out(path):
     """Whether the owner rejected the file, or judged it out of tune or cheesy."""
     global _owner_rules
     if _owner_rules is None:
@@ -472,7 +470,7 @@ def allowed(palette, path, library_roots=None):
     normal = windows_path(Path(path))
     if library_roots is None:
         library_roots = roots()
-    if owner_out(normal, library_roots):
+    if owner_out(normal):
         return False
     if file_key(normal) in {file_key(f) for f in palette.get('files', [])}:
         return True

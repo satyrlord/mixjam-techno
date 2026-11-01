@@ -551,9 +551,10 @@ fn strip(
         });
         if response
             .on_hover_text(format!(
-                "{name} EQ: {}. Open the channel EQ window: low and high cuts, shelves, and two \
-                 peaks; the compressor and the stereo width, before the track's automation and \
-                 fader; and the ducker, which lowers the track while another track sounds.",
+                "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
+                 shelves, and two peaks; the compressor and the stereo width, before the track's \
+                 automation and fader; and the ducker, which lowers the track while another \
+                 track sounds.",
                 if eq_on { "on" } else { "off" }
             ))
             .clicked()
@@ -1097,8 +1098,8 @@ fn gain_rail(
         Stroke::new(1.0 * scale, EDGE),
         egui::StrokeKind::Outside,
     );
-    // A pointer edit leaves focus alone: a focused rail would take Space,
-    // undo, and save from the workspace. Tab still focuses the rail for keys.
+    // A pointer edit leaves keyboard focus unchanged. Tab focuses the rail
+    // for key adjustments.
     if (response.clicked() || response.dragged())
         && let Some(pos) = response.interact_pointer_pos()
     {

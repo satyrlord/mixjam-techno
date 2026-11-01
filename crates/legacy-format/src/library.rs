@@ -42,7 +42,7 @@ pub fn parse_catalog(bytes: &[u8]) -> Result<Vec<CatalogRecord>, LibraryError> {
                     LibraryError(format!("Catalog record {index} has an unquoted field"))
                 })?;
             // VB Input # uses doubled quotation marks inside quoted fields.
-            let mut chars = inner.chars().peekable();
+            let mut chars = inner.chars();
             while let Some(c) = chars.next() {
                 if c == '"' && chars.next() != Some('"') {
                     return Err(LibraryError(format!(

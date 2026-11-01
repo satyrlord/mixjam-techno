@@ -580,7 +580,7 @@ Transport keyboard focus uses a two-point inset outline: Canvas on the bright
 Play/Pause button and Accent on secondary controls. Header actions, category
 buttons, and empty-state actions use the same outline. Undo and Redo dim and
 disable when no step is available. An engaged Loop keeps a
-one-point Accent outline. Window edges, title bars, the lanes, and the bar ruler
+one-point Accent outline. Window edges, title bars, and the bar ruler
 are pointer surfaces and take no Tab stop.
 Folded Metal windows share rounded chassis edges and the same control geometry.
 The painted chassis uses 8-point corners; the 10-point window radius applies to

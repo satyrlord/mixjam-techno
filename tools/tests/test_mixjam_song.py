@@ -28,13 +28,16 @@ class SongProjectionTests(unittest.TestCase):
             'importNotices': [], 'sourceNotices': [], 'libraries': [],
         }
 
-    def test_current_song_preserves_all_master_settings(self):
+    def test_version_12_song_preserves_all_master_settings(self):
         document = self.document(12)
         master = self.project(self.document())['master']
         master['trim'] = -2.5
         master['limiter'].update(on=True, ceiling=-0.3)
         master['order'][:2] = reversed(master['order'][:2])
-        document['master'] = master
+        earlier = {current: name for name, current in BOOSTER_KEYS}
+        document['master'] = {earlier.get(key, key): copy.deepcopy(value)
+                              for key, value in master.items()}
+        document['master']['order'] = [earlier.get(name, name) for name in master['order']]
         self.assertEqual(self.project(document)['master'], master)
 
     def test_version_11_preserves_booster_and_adds_disabled_pedals(self):

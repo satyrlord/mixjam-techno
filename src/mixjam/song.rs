@@ -3,7 +3,7 @@
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
 //! timestamps, `song`, and lanes that own their placements in visible order.
-//! Versions 8 to 16 differ from version 7 where the editor does:
+//! Native songs differ from version 7 where the editor does:
 //! - Ticks are the editor's 256 per bar, not MixJam's 32.
 //! - `lanes` always has 64 entries with gain, pan, and two channel switches.
 //! - Version 9 separates nonnegative lane amplitude from polarity. Version 8
@@ -26,7 +26,7 @@
 //!   and a board without `bypass` is not bypassed.
 //! - Version 16 renames the Booster pedals' keys in `master` and its
 //!   `order` (`BOOSTER_KEYS`). Versions 11 to 15 keep their earlier keys
-//!   and open with the same settings; only version 16 accepts the new keys.
+//!   and open with the same settings; versions 16 and later accept the new keys.
 //! - Version 17 adds the lane ducker, a lane's `ducker`, and the keys of the
 //!   dynamics pedals (`key`) and of the FX duckers (`duckKey`). A lane
 //!   without `ducker` has its ducker off at the default settings, and a
@@ -1633,7 +1633,7 @@ mod tests {
     }
 
     #[test]
-    fn pedal_and_fx_keys_save_only_when_they_name_a_track() {
+    fn pedal_keys_save_only_when_they_name_a_track() {
         let mut project = project();
         let saved = |project: &Project| {
             serde_json::to_value(Document::new(
@@ -1743,7 +1743,7 @@ mod tests {
     }
 
     #[test]
-    fn version_10_songs_open_with_every_pedal_off_and_version_12_requires_master() {
+    fn version_10_songs_disable_pedals_and_current_songs_require_master() {
         let mut expected = project();
         let earlier = earlier_document(&mut expected, 10);
         let opened = parse(&serde_json::to_vec(&earlier).unwrap()).unwrap();
@@ -1883,7 +1883,7 @@ mod tests {
     }
 
     #[test]
-    fn version_9_requires_explicit_polarity_and_nonnegative_amplitude() {
+    fn current_songs_require_explicit_polarity_and_nonnegative_amplitude() {
         let document =
             serde_json::to_value(Document::new(&project(), timestamp(0), timestamp(0))).unwrap();
         let mut changed = document.clone();

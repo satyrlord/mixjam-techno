@@ -1627,7 +1627,8 @@ impl Library {
     }
 
     /// Load a WAV-only folder without an original installation or a sidecar index.
-    /// The caller supplies the tempo: a WAV file does not establish musical BPM.
+    /// The caller supplies a fallback tempo for files without an authenticated,
+    /// stated, or duration-derived tempo.
     /// Keep the returned records in the project when these samples are used.
     pub fn import_wav_folder(
         &mut self,
@@ -1640,7 +1641,8 @@ impl Library {
     /// Import every WAV below `root`, decoding files on several threads.
     /// `progress` reports the file count and lets another thread cancel the
     /// scan; `cache` skips files whose size and modification time it knows.
-    /// Any unreadable file or a cancellation leaves this library unchanged.
+    /// Unreadable WAVs are skipped and reported. A failed or cancelled scan
+    /// leaves this library unchanged.
     pub fn import_wav_folder_with(
         &mut self,
         root: &Path,
@@ -2694,14 +2696,14 @@ fn canonical_group(group: &str) -> String {
     }
 }
 
-/// Whether the nearest product-named folder, from the file up to the
-/// selected folder, names another product.
 /// The folder of an original installation that holds its packed sample
 /// archives and their indexes.
 pub(crate) fn packed_folder(root: &Path) -> PathBuf {
     root.join("\x65Jay").join("\x50XD")
 }
 
+/// Whether the nearest product-named folder, from the file up to the
+/// selected folder, names another product.
 fn in_foreign_product_folder(path: &Path, root: &Path, product: Product) -> bool {
     path.ancestors()
         .skip(1)
@@ -3972,9 +3974,7 @@ mod tests {
     }
 
     #[test]
-    fn a_scan_has_no_item_cap_and_forgets_cached_files_that_moved() {
-        // The former limit was 200,000 entries; a modest count shows the
-        // listing takes every file without a ceiling of its own.
+    fn a_scan_keeps_listed_files_and_forgets_cached_files_that_moved() {
         let folder = Folder::new();
         for index in 0..600 {
             folder.mono(&format!("One/Pack {}/{index}.wav", index % 7), &[1, 2, 3]);

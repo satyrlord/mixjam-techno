@@ -309,7 +309,8 @@
         {
           "timestamp": "07:42",
           "section": "Locked Loop",
-          "description": "A 4-bar cycle repeats unchanged 16 times — 104 bars without a measured change, the longest such run on the album."
+          "description": "A 104-bar stretch without a measured change begins.",
+          "detail": "Across the track, a 4-bar cycle repeats unchanged at most 16 times in a row."
         },
         {
           "timestamp": "10:47",

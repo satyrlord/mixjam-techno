@@ -637,7 +637,7 @@ class MeasureTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, 'gain'):
                 render.fit_gain(song, 0.01, -0.5)
             self.assertEqual(song.read_text(encoding='utf-8'), original)
-            # A premaster peaking at -6 dBFS doubles the gain, short of -0.5 dBFS.
+            # A -6 dBFS premaster needs 5.5 dB of gain to reach -0.5 dBFS.
             self.assertAlmostEqual(render.fit_gain(song, 10 ** (-6 / 20), -0.5), 10 ** (5.5 / 20), places=5)
 
     def test_lanes_cover_every_used_track_and_sum_to_the_premaster_and_stems(self):

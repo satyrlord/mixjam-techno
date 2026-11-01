@@ -48,9 +48,8 @@ These rules apply to every prose field: `overview`, `role`, the event `descripti
 ## Overview Field
 
 The overview is an analytical statement of 3–8 sentences. It is not a promotional text.
-About two thirds of the entries use one paragraph.
-The other entries use two paragraphs, with a literal `\n\n` in the JSON string between them.
-Two paragraphs usually separate the recording context from the commercial reception.
+Use one paragraph, or two separated by a literal `\n\n` in the JSON string.
+Two paragraphs can separate the recording context from the commercial reception.
 
 **Required content:**
 

@@ -329,6 +329,10 @@ mod tests {
             };
             let mut core = delay(&settings, bpm);
             let left = arrivals(&mut core, 200_000, 0);
+            assert!(
+                left.len() >= 3,
+                "{bpm}: fewer than three left repeats: {left:?}"
+            );
             let quarter = 60.0 / bpm * RATE;
             for (k, &frame) in left.iter().take(3).enumerate() {
                 let expected = quarter * (k + 1) as f64;
@@ -492,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn modulation_stays_within_its_depth_and_zero_depth_holds_still() {
+    fn tape_delay_without_modulation_keeps_a_tone_below_its_input_peak() {
         let settings = Echoform {
             mode: super::super::TimeMode::Free,
             time_ms_l: 200.0,
@@ -503,7 +507,7 @@ mod tests {
             ..plain()
         };
         let mut core = delay(&settings, 120.0);
-        // A steady tone through a still delay keeps its level exactly.
+        // The tape character keeps this tone below its input peak.
         let mut levels = Vec::new();
         for i in 0..60_000 {
             let x = (2.0 * PI * 440.0 * i as f64 / RATE).sin() * 0.5;
@@ -513,6 +517,6 @@ mod tests {
             }
         }
         let peak = levels.iter().fold(0.0_f64, |a, v| a.max(v.abs()));
-        assert!(peak < 0.5 + 1e-3, "{peak}");
+        assert!(peak > 0.0 && peak < 0.5 + 1e-3, "{peak}");
     }
 }

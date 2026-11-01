@@ -103,12 +103,12 @@
       "duration": "5:44",
       "energy": "high",
       "tags": [
-        "Longest Movement",
+        "First-Half Climax",
         "Mechanical Theme",
         "Full Arrangement",
         "Intensification Arc"
       ],
-      "role": "Album role: The album's longest movement and its greatest intensity — a five-minute build that concentrates the sequential arc's forward energy into its most fully orchestrated and rhythmically dense single piece. The title is the album's most explicit conceptual statement about automation.",
+      "role": "Album role: The first half's longest movement and greatest intensity — a five-minute build that concentrates the sequential arc's forward energy into its most fully orchestrated and rhythmically dense single piece. The title is the album's most explicit conceptual statement about automation.",
       "events": [
         {
           "timestamp": "0:00",
@@ -216,7 +216,7 @@
           "timestamp": "1:10",
           "section": "Final held tone and release",
           "description": "the granular texture sustains briefly, then releases completely. The movement's ending is its most quiet point.",
-          "detail": "The deliberate structural poverty of Movement 5 — under a minute and a half — forces the weight of the album's emotional arc onto the movements that surround it."
+          "detail": "The deliberate structural poverty of Movement 5 — just over a minute and a half — forces the weight of the album's emotional arc onto the movements that surround it."
         }
       ]
     },

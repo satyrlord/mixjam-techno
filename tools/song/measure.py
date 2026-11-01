@@ -201,7 +201,7 @@ def main():
         say('- Master tone measurements unavailable: the render is shorter than the 0.1-second measurement window.')
         say(f'- premaster peak {pre_peak:.2f} dBFS')
     if pre_peak > -0.3:
-        say('- **problem: the premaster reaches full scale, so the mix sum clips. Lower the master gain.**')
+        say('- **problem: the premaster exceeds the -0.3 dBFS target. Lower the master gain.**')
     say('')
 
     sections = meta['sections'] or [dict(name='song', first_bar=1, bars=max(1, math.ceil(total_bars)))]

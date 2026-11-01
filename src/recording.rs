@@ -116,7 +116,7 @@ impl Recorder {
             channels: config.channels as usize,
             skip: (sample_rate as f64 * 480.0 / bpm).round() as u64,
             limit,
-            // Reserve the first minute, so that a short take does not
+            // Reserve one tenth of the take limit, so that a short take does not
             // reallocate inside the input callback.
             samples: Vec::with_capacity(limit / 10),
             error: None,

@@ -110,7 +110,7 @@ fn run() -> Result<(), String> {
             }
             "--output" => {
                 output = Some(PathBuf::from(
-                    args.next().ok_or("--output needs a WAV path.")?,
+                    args.next().ok_or("--output needs an output path.")?,
                 ))
             }
             "--stems" => {
