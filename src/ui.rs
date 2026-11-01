@@ -58,6 +58,7 @@ struct PaletteKey {
     group: Option<String>,
     product: Option<Product>,
     sort: PaletteSort,
+    descending: bool,
 }
 
 /// Available modules in the shared bottom section. The selector owns navigation.
@@ -133,6 +134,16 @@ impl PaletteSort {
             Self::Length => "By length",
             Self::Bpm => "By BPM",
             Self::Category => "By category",
+        }
+    }
+
+    /// The order this sort gives, then the order it gives reversed.
+    fn directions(self) -> [&'static str; 2] {
+        match self {
+            Self::Library => ["Library order", "Reversed library order"],
+            Self::Name | Self::Category => ["A to Z", "Z to A"],
+            Self::Length => ["Shortest first", "Longest first"],
+            Self::Bpm => ["Slowest first", "Fastest first"],
         }
     }
 }
@@ -327,6 +338,8 @@ pub struct MixJamApp {
     group: Option<String>,
     palette_product: Option<Product>,
     palette_sort: PaletteSort,
+    /// The sound browser's sort runs from its last item to its first.
+    palette_descending: bool,
     search: String,
     bottom_module: BottomModule,
     show_help: bool,
@@ -595,6 +608,7 @@ impl MixJamApp {
             group: None,
             palette_product: None,
             palette_sort: PaletteSort::default(),
+            palette_descending: false,
             search: String::new(),
             bottom_module: if capture_view.starts_with("mixer") {
                 BottomModule::Mixer
@@ -1385,6 +1399,7 @@ impl MixJamApp {
             group: self.group.clone(),
             product: self.palette_product,
             sort: self.palette_sort,
+            descending: self.palette_descending,
         };
         if let Some(cache) = &self.palette_cache
             && cache.key == key
@@ -1443,11 +1458,23 @@ impl MixJamApp {
                 .then_some(index)
             })
             .collect();
-        // Stable sorts: equal keys keep library order.
-        let name = |&index: &usize| samples[index].name.to_lowercase();
+        // Stable sorts: equal keys keep library order in either direction.
+        let descending = self.palette_descending;
+        let direct = |order: std::cmp::Ordering| {
+            if descending { order.reverse() } else { order }
+        };
+        let text = |text: &str| {
+            let key = text.to_lowercase();
+            if descending {
+                Err(std::cmp::Reverse(key))
+            } else {
+                Ok(key)
+            }
+        };
         match self.palette_sort {
+            PaletteSort::Library if descending => indices.reverse(),
             PaletteSort::Library => {}
-            PaletteSort::Name => indices.sort_by_cached_key(name),
+            PaletteSort::Name => indices.sort_by_cached_key(|&index| text(&samples[index].name)),
             PaletteSort::Length => {
                 // Bars first, as the tiles show them; audio duration orders equal bar counts.
                 indices.sort_by(|&a, &b| {
@@ -1457,14 +1484,13 @@ impl MixJamApp {
                         (sample.bars, seconds)
                     };
                     let (a, b) = (key(&samples[a]), key(&samples[b]));
-                    a.0.cmp(&b.0).then(a.1.total_cmp(&b.1))
+                    direct(a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)))
                 });
             }
-            PaletteSort::Bpm => {
-                indices.sort_by(|&a, &b| samples[a].source_bpm.total_cmp(&samples[b].source_bpm))
-            }
+            PaletteSort::Bpm => indices
+                .sort_by(|&a, &b| direct(samples[a].source_bpm.total_cmp(&samples[b].source_bpm))),
             PaletteSort::Category => {
-                indices.sort_by_cached_key(|&index| samples[index].group_name.to_lowercase());
+                indices.sort_by_cached_key(|&index| text(&samples[index].group_name));
             }
         }
         indices

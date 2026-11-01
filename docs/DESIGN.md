@@ -508,7 +508,10 @@ This keeps category access separate from palette height. A tile's width follows
 its bar count: 96 points per bar plus the 8-point gaps it spans, so a two-bar
 tile covers two one-bar tiles. A sound longer than a row fills the row. The sort
 menu orders the filtered sounds by library order, name, length, BPM, or
-category; it is view state for the current session.
+category. The arrow beside it reverses the sort direction and exposes the
+current direction as an accessible value. Equal sort keys retain library order
+in either direction. Sort order and direction are view state for the current
+session.
 
 Mixer strips appear only for occupied tracks. Track and Master strips are
 108 points wide at the supported prepared scales. Master stays outside the

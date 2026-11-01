@@ -21,7 +21,9 @@ for branding and titles, and Inter Medium for all other application text.
 Transport sits above the arrangement. Sounds, Mixer, Mastering, and Effects share the lower panel;
 use its left-side module selector to switch between them. Sample categories,
 search, and library filters stay together in Sounds; search and filters sit
-beside the selector.
+beside the selector. Sort sounds in library order, by name, length, BPM, or
+category. The arrow beside the sort list reverses the order: for example, longest
+or fastest first.
 The title branding, window, taskbar, and Windows executable use the tribal mask.
 See [the icon assets](../assets/app/README.md) for source and regeneration details.
 [DESIGN.md](DESIGN.md) is the visual contract.

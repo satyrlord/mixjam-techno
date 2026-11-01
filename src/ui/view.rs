@@ -718,6 +718,27 @@ impl MixJamApp {
             })
             .response;
         name_control(sorting, "Sort order");
+        let [forward, reversed] = self.palette_sort.directions();
+        let (now, next) = if self.palette_descending {
+            (reversed, forward)
+        } else {
+            (forward, reversed)
+        };
+        let direction = ui
+            .add(
+                egui::Button::new(if self.palette_descending {
+                    "\u{2193}"
+                } else {
+                    "\u{2191}"
+                })
+                .min_size(Vec2::new(24.0, 0.0)),
+            )
+            .on_hover_text(format!("{now}. Click for {}.", next.to_lowercase()));
+        ui.ctx()
+            .accesskit_node_builder(direction.id, |node| node.set_value(now));
+        if name_control(direction, "Sort direction").clicked() {
+            self.palette_descending = !self.palette_descending;
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.label(
                 egui::RichText::new(format!("{} sounds", samples.len()))

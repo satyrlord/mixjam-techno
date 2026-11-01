@@ -8178,6 +8178,78 @@ mod tests {
             assert_eq!(app.palette_indices(), expected, "{sort:?}");
             assert_eq!(*app.palette_view().0, expected, "{sort:?}");
         }
+        // Reversed, ties still keep library order.
+        app.palette_descending = true;
+        for (sort, expected) in [
+            (PaletteSort::Library, [3, 2, 1, 0]),
+            (PaletteSort::Name, [0, 2, 3, 1]),
+            (PaletteSort::Length, [0, 2, 3, 1]),
+            (PaletteSort::Bpm, [1, 0, 3, 2]),
+            (PaletteSort::Category, [1, 0, 2, 3]),
+        ] {
+            app.palette_sort = sort;
+            assert_eq!(app.palette_indices(), expected, "{sort:?} descending");
+            assert_eq!(*app.palette_view().0, expected, "{sort:?} descending");
+        }
+    }
+
+    #[test]
+    fn sort_direction_exposes_its_state_and_reorders_sounds_through_accessibility() {
+        let (ctx, mut app) = fixture();
+        let first = app.session.library().samples[0].clone();
+        app.session = Session::headless(
+            Arc::new(Library::fixture(vec![
+                Sample {
+                    name: "Zebra".into(),
+                    ..first.clone()
+                },
+                Sample {
+                    id: 2,
+                    name: "alpha".into(),
+                    ..first
+                },
+            ])),
+            app.session.project().clone(),
+        )
+        .unwrap();
+        app.palette_sort = PaletteSort::Name;
+        let project = app.session.project().clone();
+        let unsaved = app.session.unsaved();
+        ctx.enable_accesskit();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            accessible_node(&output, "Sort direction").1.value(),
+            Some("A to Z")
+        );
+        assert_eq!(*app.palette_view().0, [1, 0]);
+        for (value, order) in [("Z to A", [0, 1]), ("A to Z", [1, 0])] {
+            let button = accessible_node(&output, "Sort direction").0;
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Click,
+                        target: button,
+                        data: None,
+                    },
+                )],
+                egui::Modifiers::NONE,
+            );
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(
+                accessible_node(&output, "Sort direction").1.value(),
+                Some(value)
+            );
+            assert_eq!(*app.palette_view().0, order);
+        }
+        assert_eq!(app.session.project(), &project);
+        assert_eq!(app.session.unsaved(), unsaved);
+        assert!(!app.session.has_history_step(false));
+        ctx.fonts_mut(|fonts| {
+            assert!(fonts.has_glyphs(&FontId::proportional(14.0), "\u{2191}\u{2193}"));
+        });
     }
 
     #[test]
