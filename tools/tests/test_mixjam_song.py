@@ -145,7 +145,17 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(20))
+            self.project(self.document(21))
+
+    def test_version_20_keeps_pan_automation_in_the_json_project(self):
+        document = self.document(20)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        automation = {'volume': [{'tick': 0, 'value': -6.0}],
+                      'pan': [{'tick': 0, 'value': -1.0}, {'tick': 16, 'value': 1.0}]}
+        document['lanes'][0]['automation'] = automation
+        self.assertEqual(self.project(document)['tracks'][0]['automation'], automation)
 
     def test_version_19_keeps_sections_in_the_json_project(self):
         document = self.document(19)

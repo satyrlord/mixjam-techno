@@ -8377,7 +8377,7 @@ mod tests {
                         let mut value = bpm.get();
                         tempo_rect = bpm_picker(ui, "Fixture tempo", &mut value, 150.0).rect;
                         bpm.set(value);
-                        pan_rect = pan_control(ui, 0, &mut pan).rect;
+                        pan_rect = pan_control(ui, 0, &mut pan, false).rect;
                     });
                 },
             );
@@ -9661,6 +9661,63 @@ mod tests {
         );
         assert_eq!(reply["ok"], true, "{reply}");
         assert_eq!(app.session.project().clips.len(), project.clips.len() + 1);
+    }
+
+    #[test]
+    fn agent_automates_the_pan_lane_and_reports_it_in_the_state() {
+        let (context, mut app, port) = agent_fixture();
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &[
+                "automate",
+                "track=1",
+                "lane=pan",
+                "points=[[1,-1],[1.25,1],[2,0]]",
+            ],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        let points: Vec<(u32, f32)> = app.session.project().tracks[0]
+            .automation
+            .pan
+            .iter()
+            .map(|point| (point.tick, point.value))
+            .collect();
+        assert_eq!(points, [(0, -1.0), (64, 1.0), (256, 0.0)]);
+        // The knob keeps its value; the state lists the lane beside it.
+        let state = agent(&context, &mut app, &port, &["state"]);
+        assert_eq!(state["song"]["tracks"][0]["pan"], 0.0, "{state}");
+        assert_eq!(
+            state["song"]["tracks"][0]["automation"]["pan"],
+            serde_json::json!([
+                {"tick": 0, "value": -1.0},
+                {"tick": 64, "value": 1.0},
+                {"tick": 256, "value": 0.0}
+            ]),
+            "{state}"
+        );
+        // A value beyond hard left or right, or an unknown lane, changes nothing.
+        for words in [
+            &["automate", "track=1", "lane=pan", "points=[[1,-1.5]]"][..],
+            &["automate", "track=1", "lane=balance", "points=[[1,0]]"],
+        ] {
+            let reply = agent(&context, &mut app, &port, words);
+            assert_eq!(reply["ok"], false, "{words:?}: {reply}");
+        }
+        assert_eq!(app.session.project().tracks[0].automation.pan.len(), 3);
+        // An empty list clears the lane, and the knob applies again.
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "track=1", "lane=pan", "points=[]"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().tracks[0].automation.pan.is_empty());
+        let state = agent(&context, &mut app, &port, &["state"]);
+        let automation = &state["song"]["tracks"][0]["automation"];
+        assert!(automation.get("pan").is_none(), "{state}");
     }
 
     #[test]
@@ -12479,5 +12536,71 @@ mod tests {
             1,
             "Undo restores the point."
         );
+    }
+
+    #[test]
+    fn the_pan_lane_takes_points_from_left_to_right_and_the_mixer_names_it() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.session
+            .edit(EditCommand::SetMixer {
+                tracks: {
+                    let mut tracks = app.session.project().tracks.clone();
+                    tracks[0].pan = 0.5;
+                    tracks
+                },
+                master_gain: app.session.project().master_gain,
+            })
+            .unwrap();
+        app.automation_lane = Some(Lane::Pan);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Automation lane");
+        text_rect(&output, "Pan");
+        let canvas = app.timeline_rect.unwrap();
+        let row = app.timeline_row_height;
+        // The middle of the row is the center, the top hard right, and the
+        // bottom hard left, 4 points in from the row's edges.
+        for (bar, y, value) in [
+            (1.0, row / 2.0 + 0.25, 0.0),
+            (2.0, 4.0, 1.0),
+            (3.0, row - 4.0, -1.0),
+        ] {
+            let pos = Pos2::new(
+                canvas.left() + app.timeline_bar_width * bar,
+                canvas.top() + y,
+            );
+            click(&ctx, &mut app, pos, egui::Modifiers::NONE);
+            // Let the double-click time pass before the next click.
+            for _ in 0..20 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            let points = &app.session.project().tracks[0].automation.pan;
+            let point = points
+                .iter()
+                .find(|point| point.tick == bar as u32 * TICKS_PER_BAR)
+                .unwrap_or_else(|| panic!("{points:?}"));
+            assert_eq!(point.value, value, "bar {bar}");
+        }
+        assert_eq!(
+            app.session.project().tracks[0]
+                .automation
+                .pan
+                .iter()
+                .map(|point| Lane::Pan.format(point.value))
+                .collect::<Vec<_>>(),
+            ["C", "R 100", "L 100"]
+        );
+        // The knob keeps its value, and the mixer says the lane moves the pan.
+        assert_eq!(app.session.project().tracks[0].pan, 0.5);
+        app.automation_lane = None;
+        app.bottom_module = BottomModule::Mixer;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Pan automated");
+        // Undo removes the last point; the other two remain.
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].automation.pan.len(), 2);
     }
 }

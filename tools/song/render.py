@@ -29,7 +29,7 @@ part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
 whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
-not change since an earlier render comes from the cache. Only format-18 and 19 songs
+not change since an earlier render comes from the cache. Only format-18 to 20 songs
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
@@ -219,7 +219,7 @@ def source_fingerprints(document):
     Read each distinct used file once per call. A path alone does not identify
     audio: the owner can replace its contents between rounds.
     """
-    if document.get('formatVersion') not in (18, 19) or any(document.get(field) for field in
+    if document.get('formatVersion') not in (18, 19, 20) or any(document.get(field) for field in
                                                 ('libraries', 'missingSamples', 'sampleConflicts')):
         return None
     if not cacheable_sections(document):

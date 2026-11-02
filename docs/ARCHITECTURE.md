@@ -124,7 +124,10 @@ that has automation, whose ducker is on, or that keys a ducker is a
 `TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
 (`src/eq.rs`), its compressor (`src/compressor.rs`), its width, then its
 filter and volume lanes (`src/automation.rs`), its ducker (`src/ducker.rs`),
-its level, and its send lanes shape before the sum. The mix runs the chains chunk by
+its level, its pan lane, and its send lanes shape before the sum. A track
+whose pan lane has points leaves its pan knob out of its level, and the lane
+applies the same balance law at each frame, so key levels, sends, and stems
+follow the moving pan. The mix runs the chains chunk by
 chunk: each key track first renders alone in a chain of its own, with its own
 filter histories, and leaves its peak level per frame in a stack array (at
 most `MAX_KEYS`); then each chain adds its chunk, and a ducked chain
@@ -167,8 +170,11 @@ live from the `MasterControl` instead, and glides from the level it has
 reached to a new one over `GLIDE_FRAMES` (1024 frames, about 23 ms), across
 playback's blocks, so an edit of faders, pans, polarity, or the
 master gain alone is not a render change, including undo and redo. Each
-track publishes its left and right levels as one atomic pair, so playback
-cannot mix channels from different edits. `MasterControl` also stores the
+track publishes its signed gain and pan knob as one atomic pair. Each prepared
+mix applies the knob only where that mix has no pan lane. Adding or clearing
+a lane therefore keeps the playing mix's pan behavior until its replacement
+is ready, including when a fader moves during the rebuild. Playback cannot
+mix channels from different edits. `MasterControl` also stores the
 master gain inside those levels for the lane duckers' keys. A sequence
 counter covers publication of all pairs and the master gain. Playback makes
 one snapshot attempt per block. If a writer overlaps it, playback retains

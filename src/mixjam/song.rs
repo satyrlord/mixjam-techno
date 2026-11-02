@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 19.
+//! The application's own `.mixjam` song format, format version 20.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -39,6 +39,8 @@
 //!   from version 18, so a version 17 lane ducker's threshold opens moved
 //!   by `-20 * log10(masterGain)` dB, held to its range, and ducks as it did.
 //! - Version 19 adds named song sections. Earlier songs have no sections.
+//! - Version 20 adds the pan lane to a lane's `automation`, under `pan`.
+//!   Earlier songs have no pan automation and reject the key.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -62,7 +64,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 19;
+pub(super) const FORMAT_VERSION: u32 = 20;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -363,8 +365,10 @@ struct Lane {
     solo: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sends: Option<[f32; crate::fx::BUSES]>,
+    // Raw until the version is checked, as version 20 added `pan`, which an
+    // earlier song must not hold even as an empty list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    automation: Option<crate::automation::Automation>,
+    automation: Option<Saved<crate::automation::Automation>>,
     // Raw until the version is checked, as the second peak's keys are
     // optional in the EQ record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -467,7 +471,8 @@ impl Document {
                 muted: Some(track.muted),
                 solo: Some(track.solo),
                 sends: Some(track.sends),
-                automation: (!track.automation.is_empty()).then(|| track.automation.clone()),
+                automation: (!track.automation.is_empty())
+                    .then(|| Saved::Known(track.automation.clone())),
                 eq: (!track.eq.is_default()).then_some(Saved::Known(track.eq)),
                 compressor: (!track.compressor.is_default()).then_some(track.compressor),
                 width: (track.width != TRACK_WIDTH.default).then_some(track.width),
@@ -698,6 +703,24 @@ impl Document {
                     self.format_version
                 ));
             }
+            let automation = match lane.automation {
+                Some(automation) => {
+                    let json = automation.json();
+                    let Some(record) = json.as_object() else {
+                        return Err("The automation must be a JSON object.".into());
+                    };
+                    if self.format_version < 20 && record.contains_key("pan") {
+                        return Err(format!(
+                            "Version {} lanes cannot contain pan automation.",
+                            self.format_version
+                        ));
+                    }
+                    automation
+                        .settings()
+                        .map_err(|error| format!("The automation is invalid: {error}"))?
+                }
+                None => Default::default(),
+            };
             if self.format_version < 17 && lane.ducker.is_some() {
                 return Err(format!(
                     "Version {} lanes cannot contain ducker.",
@@ -743,7 +766,7 @@ impl Document {
                 muted: lane.muted.unwrap_or(false),
                 solo: lane.solo.unwrap_or(false),
                 sends,
-                automation: lane.automation.unwrap_or_default(),
+                automation,
                 eq,
                 compressor: lane.compressor.unwrap_or_default(),
                 width: lane.width.unwrap_or(TRACK_WIDTH.default),
@@ -1133,6 +1156,14 @@ mod tests {
         project
     }
 
+    /// The test song with a pan lane on track 6, as version 20 saves it.
+    fn panned(mut project: Project) -> Project {
+        project.tracks[5].automation.pan = [(0, -1.0), (64, 1.0), (128, 0.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        project
+    }
+
     /// The test song with two sections, as version 19 saves them.
     fn sectioned(project: Project) -> Project {
         Project {
@@ -1243,15 +1274,15 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_19_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_20_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = sectioned(project());
+        let project = panned(sectioned(project()));
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 19);
+        assert_eq!(document["formatVersion"], 20);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["song"]["sections"],
@@ -1306,7 +1337,12 @@ mod tests {
             serde_json::json!({
                 "volume": [{"tick": 0, "value": -60.0}, {"tick": 512, "value": 0.0}],
                 "sends": [[], [{"tick": 256, "value": 0.75}], [], []],
-                "filter": [{"tick": 1024, "value": -0.5}]
+                "filter": [{"tick": 1024, "value": -0.5}],
+                "pan": [
+                    {"tick": 0, "value": -1.0},
+                    {"tick": 64, "value": 1.0},
+                    {"tick": 128, "value": 0.0}
+                ]
             })
         );
         assert!(document["lanes"][4].get("automation").is_none());
@@ -1442,6 +1478,105 @@ mod tests {
             reopened.into_project().unwrap_err(),
             "Version 16 songs cannot contain key or duckKey."
         );
+    }
+
+    #[test]
+    fn automation_records_reject_positional_arrays_in_every_supported_version() {
+        // Serde can read a struct from a positional array. Such an array
+        // must not hide version 20's pan lane from an earlier reader.
+        let document = serde_json::to_value(Document::new(
+            &Project::default(),
+            timestamp(0),
+            timestamp(0),
+        ))
+        .unwrap();
+        for version in 14..=FORMAT_VERSION {
+            let mut document = document.clone();
+            document["formatVersion"] = version.into();
+            if version < 16 {
+                with_earlier_booster_keys(&mut document);
+            }
+            document["lanes"][0]["automation"] = serde_json::json!({});
+            assert!(parse(&serde_json::to_vec(&document).unwrap()).is_ok());
+            for automation in [
+                serde_json::json!([[], [[], [], [], []], []]),
+                serde_json::json!([[], [[], [], [], []], [], []]),
+                serde_json::json!([[], [[], [], [], []], [], [{"tick": 0, "value": 1.0}]]),
+            ] {
+                document["lanes"][0]["automation"] = automation;
+                assert_eq!(
+                    parse(&serde_json::to_vec(&document).unwrap()).unwrap_err(),
+                    "The automation must be a JSON object.",
+                    "version {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_version_20_lanes_hold_pan_automation() {
+        let project = panned(project());
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(
+            reopened.tracks[5].automation.pan,
+            project.tracks[5].automation.pan
+        );
+        // Version 19 rejects the key, even as an empty list, and opens the
+        // same lane without it.
+        for pan in [
+            document["lanes"][5]["automation"]["pan"].clone(),
+            serde_json::json!([]),
+        ] {
+            let mut earlier = document.clone();
+            earlier["formatVersion"] = 19.into();
+            earlier["lanes"][5]["automation"]["pan"] = pan;
+            assert_eq!(
+                parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+                "Version 19 lanes cannot contain pan automation."
+            );
+        }
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 19.into();
+        earlier["lanes"][5]["automation"]
+            .as_object_mut()
+            .unwrap()
+            .remove("pan");
+        let mut expected = project.clone();
+        expected.tracks[5].automation.pan.clear();
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap())
+                .unwrap()
+                .tracks,
+            expected.tracks
+        );
+        // Version 20 takes an empty list as no lane, and checks the values.
+        let mut empty = document.clone();
+        empty["lanes"][5]["automation"]["pan"] = serde_json::json!([]);
+        assert!(
+            parse(&serde_json::to_vec(&empty).unwrap()).unwrap().tracks[5]
+                .automation
+                .pan
+                .is_empty()
+        );
+        for (value, error) in [
+            (serde_json::json!(-1.5), "Pan automation values"),
+            (serde_json::json!(null), "The automation is invalid"),
+        ] {
+            let mut wrong = document.clone();
+            wrong["lanes"][5]["automation"]["pan"][1]["value"] = value;
+            let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{found}");
+        }
+        let mut wrong = document;
+        wrong["lanes"][5]["automation"]["pan"][1]["tick"] = 0.into();
+        let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+        assert!(found.contains("increasing tick order"), "{found}");
     }
 
     #[test]
@@ -2110,7 +2245,7 @@ b"}]),
                 "Filter automation values",
             ),
             (
-                "/lanes/5/automation/pan",
+                "/lanes/5/automation/balance",
                 serde_json::json!([]),
                 "unknown field",
             ),

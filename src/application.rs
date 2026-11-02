@@ -4147,7 +4147,12 @@ mod boundary_tests {
                 assert!(!session.render_dirty);
                 assert!(Arc::ptr_eq(session.render.as_ref().unwrap(), &mix));
                 assert_eq!(
-                    session.master.levels().map(|(levels, _)| levels[0]),
+                    session
+                        .master
+                        .levels(&std::array::from_fn(|track| {
+                            !expected.tracks[track].automation.pan.is_empty()
+                        }))
+                        .map(|(levels, _)| levels[0]),
                     Some(audio::track_levels(expected)[0])
                 );
             }

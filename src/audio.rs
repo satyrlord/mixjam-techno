@@ -222,15 +222,19 @@ const CARRY_FRAMES: u64 = 4096;
 /// master gain during playback: about 23 ms, so the move does not click.
 const GLIDE_FRAMES: u64 = 1024;
 
-/// Each track's left and right level: fader, polarity, pan, and the master gain.
+/// Each track's left and right level: fader, polarity, pan, and the master
+/// gain. A track whose pan lane has points leaves its pan knob out: the lane
+/// pans it frame by frame in its chain.
 pub(crate) fn track_levels(project: &Project) -> [[f32; 2]; crate::engine::TRACK_COUNT] {
     std::array::from_fn(|index| {
         let track = &project.tracks[index];
         let gain = track.effective_gain() * project.master_gain;
-        [
-            gain * (1.0 - track.pan.max(0.0)),
-            gain * (1.0 + track.pan.min(0.0)),
-        ]
+        let pan = if track.automation.pan.is_empty() {
+            track.pan
+        } else {
+            0.0
+        };
+        crate::automation::pan_gains(pan).map(|side| gain * side)
     })
 }
 
@@ -475,7 +479,7 @@ impl SendLevel {
 /// A track with its EQ or compressor on, a width other than 100%, with
 /// automation, with its ducker on, or that keys a ducker. Its voices mix
 /// into a short buffer that its EQ, compressor, width, filter, volume,
-/// ducker, level, and sends then shape, in that order.
+/// ducker, level and pan, and sends then shape, in that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
@@ -486,6 +490,9 @@ struct TrackChain {
     volume: Option<Envelope>,
     sends: [SendLevel; BUSES],
     filter: Option<Envelope>,
+    /// The pan lane, which replaces the pan knob: the track's level then
+    /// holds no pan, and the lane's balance gains apply at each frame.
+    pan: Option<Envelope>,
     /// The ducker and the slot of its key among the mix's keys.
     ducker: Option<(crate::ducker::Run, usize)>,
 }
@@ -511,6 +518,7 @@ impl TrackChain {
                     .map_or(SendLevel::Fixed(track.sends[bus]), SendLevel::Moving)
             }),
             filter: Envelope::new(&automation.filter, frames_per_tick),
+            pan: Envelope::new(&automation.pan, frames_per_tick),
             ducker: None,
         }
     }
@@ -525,8 +533,8 @@ impl TrackChain {
 
     /// Fill `buffer`, stereo frames from `at`, with the track as it sounds:
     /// its voices through its EQ, compressor, width, filter, volume, ducker,
-    /// and level. `duck` holds the key's level at each frame and the
-    /// ducker's history.
+    /// level, and pan lane. `duck` holds the key's level at each frame and
+    /// the ducker's history.
     fn shape(
         &self,
         at: u64,
@@ -563,9 +571,13 @@ impl TrackChain {
             if let (Some((run, _)), Some((keys, history))) = (&self.ducker, duck.as_mut()) {
                 gain *= run.gain(keys[index], history);
             }
-            for channel in 0..2 {
+            // The lane moves at every frame, so a fast sweep has no steps.
+            let sides = self.pan.as_ref().map_or([1.0; 2], |envelope| {
+                crate::automation::pan_gains(envelope.at(frame))
+            });
+            for (channel, side) in sides.into_iter().enumerate() {
                 buffer[index * 2 + channel] =
-                    buffer[index * 2 + channel] * gain * level.at(frame, channel);
+                    buffer[index * 2 + channel] * gain * level.at(frame, channel) * side;
             }
         }
     }
@@ -638,6 +650,9 @@ pub struct Mix {
     side: bool,
     /// The track levels the mix was prepared with.
     levels: [[f32; 2]; crate::engine::TRACK_COUNT],
+    /// Pan ownership belongs to this prepared mix, including while a new
+    /// lane edit is preparing. Live knob levels must use the same ownership.
+    automated_pan: [bool; crate::engine::TRACK_COUNT],
     /// The master gain inside those levels. A track ducker hears its key
     /// without it, so the master gain does not change how far it ducks.
     master_gain: f32,
@@ -812,6 +827,9 @@ impl Mix {
             side: !side_keys.is_empty(),
             keys,
             levels: track_levels(project),
+            automated_pan: std::array::from_fn(|track| {
+                !project.tracks[track].automation.pan.is_empty()
+            }),
             master_gain: project.master_gain,
             bpm: project.bpm,
             fed,
@@ -1205,7 +1223,7 @@ impl Mix {
         let (targets, master_gain) = state
             .live
             .as_ref()
-            .and_then(|live| live.levels())
+            .and_then(|live| live.levels(&self.automated_pan))
             .unwrap_or_else(|| {
                 if state.next_frame.is_some() {
                     (state.levels.map(|ramp| ramp.to), state.master_gain.to[0])
@@ -2107,6 +2125,7 @@ mod tests {
             key_tracks: Vec::new(),
             side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
+            automated_pan: [false; crate::engine::TRACK_COUNT],
             master_gain: 1.0,
             bpm: 140.0,
             fed: [false; BUSES],
@@ -2463,6 +2482,7 @@ mod tests {
             key_tracks: Vec::new(),
             side: false,
             levels: [[1.0; 2]; crate::engine::TRACK_COUNT],
+            automated_pan: [false; crate::engine::TRACK_COUNT],
             master_gain: 1.0,
             bpm: 140.0,
             fed: [false; BUSES],
@@ -2773,6 +2793,277 @@ mod tests {
         project.tracks[0].sends[2] = 0.0;
         project.tracks[0].automation.sends[2] = vec![point(0, 0.5)];
         assert!((level(&project, 440.0, 30_000, true) - plain * 0.5).abs() < 1e-4);
+    }
+
+    /// A steady stereo source at 0.5 in both channels, `frames` long, so a
+    /// track's output is its left and right gains times 0.5.
+    fn steady(frames: usize) -> Pcm {
+        Pcm {
+            sample_rate: 44_100,
+            channels: 2,
+            samples: vec![0.5; frames * 2],
+        }
+    }
+
+    #[test]
+    fn a_pan_lane_pans_its_track_under_the_balance_law_and_replaces_the_knob() {
+        use crate::automation::Point;
+        let point = |tick, value| Point { tick, value };
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 1024).unwrap();
+        let mut project = editor.project().clone();
+        project.master_gain = 1.0;
+        project.tracks[0].sends[0] = 1.0;
+        let samples = HashMap::from([(1, steady(700_000))]);
+        // Hard left through bar 1, to the center by tick 320, held to tick
+        // 512, then hard right from tick 576.
+        project.tracks[0].automation.pan = vec![
+            point(0, -1.0),
+            point(256, -1.0),
+            point(320, 0.0),
+            point(512, 0.0),
+            point(576, 1.0),
+        ];
+        // The left and right output, and the FX 1 feed, at a frame.
+        let at = |project: &Project, frame: u64| {
+            let mix = mix_with_samples(project, &samples).unwrap();
+            let mut out = vec![0.0; 2 * 64];
+            let mut feeds = vec![0.0; 64 * 2 * BUSES];
+            mix.read_block(
+                frame,
+                &mut out,
+                Some(&mut feeds),
+                &mut RenderState::default(),
+            );
+            ([out[0], out[1]], [feeds[0], feeds[1]])
+        };
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: f64| (tick * frames_per_tick) as u64;
+        let close =
+            |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4;
+        for knob in [0.0, 0.7, -1.0] {
+            project.tracks[0].pan = knob;
+            for (tick, expected) in [
+                (100.0, [0.5, 0.0]),
+                (288.0, [0.5, 0.25]),
+                (400.0, [0.5, 0.5]),
+                (700.0, [0.0, 0.5]),
+            ] {
+                let (out, feed) = at(&project, frame(tick));
+                assert!(close(out, expected), "knob {knob}, tick {tick}: {out:?}");
+                // The send follows the pan, as it follows the knob.
+                assert!(close(feed, expected), "knob {knob}, tick {tick}: {feed:?}");
+            }
+        }
+        // The knob's level stays out of the track while the lane has points,
+        // so moving the knob changes nothing.
+        let levels = track_levels(&project);
+        project.tracks[0].pan = 0.7;
+        assert_eq!(track_levels(&project), levels);
+        assert_eq!(levels[0], [1.0, 1.0]);
+        // Without points the knob pans the track again.
+        project.tracks[0].automation.pan.clear();
+        let (out, _) = at(&project, frame(400.0));
+        assert!(close(out, [0.15, 0.5]), "{out:?}");
+        assert_eq!(track_levels(&project)[0], [0.3, 1.0]);
+    }
+
+    #[test]
+    fn live_pan_lane_changes_wait_for_the_prepared_mix_and_keep_fader_edits() {
+        for automated in [false, true] {
+            let mut editor = crate::engine::Editor::new(Project::default());
+            editor.place(1, 0, 0, 256).unwrap();
+            let mut project = editor.project().clone();
+            project.master_gain = 1.0;
+            project.tracks[0].pan = 1.0;
+            project.tracks[0].sends[0] = 1.0;
+            let lane = vec![crate::automation::Point {
+                tick: 0,
+                value: -1.0,
+            }];
+            project.tracks[0].automation.pan = if automated { lane.clone() } else { vec![] };
+            let samples = HashMap::from([(1, steady(44_100))]);
+            let mix = mix_with_samples(&project, &samples).unwrap();
+            let live = MasterControl::new(&project.master);
+            live.set_levels(&project);
+            let mut state = RenderState {
+                live: Some(Arc::clone(&live)),
+                ..RenderState::default()
+            };
+            let mut out = vec![0.0; 2048];
+            let mut sends = vec![0.0; 2048 * BUSES];
+            mix.read_block(0, &mut out, Some(&mut sends), &mut state);
+            let initial = out.clone();
+            // A structural edit publishes live controls before its replacement
+            // mix is ready. The old mix must keep its own pan ownership.
+            project.tracks[0].automation.pan = if automated { vec![] } else { lane.clone() };
+            live.set_levels(&project);
+            mix.read_block(1024, &mut out, Some(&mut sends), &mut state);
+            for (frame, (actual, expected)) in out
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .zip(initial.as_chunks::<2>().0)
+                .enumerate()
+            {
+                assert_eq!(
+                    actual, expected,
+                    "old mix changed pan at {frame}; automated={automated}"
+                );
+            }
+            for (frame, send) in out.as_chunks::<2>().0.iter().zip(sends.as_chunks::<8>().0) {
+                assert_eq!(*frame, [send[0], send[1]]);
+            }
+            // Fader and knob edits still reach the old mix while the new one
+            // prepares. The knob applies only if this mix has no pan lane.
+            project.tracks[0].gain = 0.5;
+            project.tracks[0].pan = -0.5;
+            live.set_levels(&project);
+            mix.read_block(2048, &mut out, None, &mut state);
+            let expected = if automated {
+                [0.25, 0.0]
+            } else {
+                [0.25, 0.125]
+            };
+            assert_eq!(&out[2046..], &expected);
+            // Undo the structural edit while its render is pending.
+            project.tracks[0].automation.pan = if automated { lane.clone() } else { vec![] };
+            live.set_levels(&project);
+            mix.read_block(3072, &mut out, None, &mut state);
+            assert_eq!(&out[..2], &expected);
+            assert_eq!(&out[2046..], &expected);
+            // Redo, then adopt the new mix: only this mix takes the new lane
+            // ownership. Export uses the same resulting pan and live fader.
+            project.tracks[0].automation.pan = if automated { vec![] } else { lane };
+            live.set_levels(&project);
+            let replacement = mix_with_samples(&project, &samples).unwrap();
+            let mut replaced = RenderState {
+                live: Some(live),
+                ..RenderState::default()
+            };
+            replacement.read_block(4096, &mut out, None, &mut replaced);
+            let expected = if automated {
+                [0.25, 0.125]
+            } else {
+                [0.25, 0.0]
+            };
+            assert_eq!(&out[..2], &expected);
+            let playback = out.clone();
+            replacement.read_block(4096, &mut out, None, &mut RenderState::default());
+            assert_eq!(out, playback);
+        }
+    }
+
+    #[test]
+    fn a_fast_pan_sweep_moves_without_steps() {
+        // Ratchets at 180 BPM: a 16th note is 16 ticks, 3675 frames, about
+        // 83 ms. The lane swings from hard left to hard right and back on
+        // each one, for four bars.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 1024).unwrap();
+        let mut project = editor.project().clone();
+        project.bpm = 180.0;
+        project.master_gain = 1.0;
+        project.tracks[0].automation.pan = (0..=64)
+            .map(|step| crate::automation::Point {
+                tick: step * 16,
+                value: if step % 2 == 0 { -1.0 } else { 1.0 },
+            })
+            .collect();
+        let samples = HashMap::from([(1, steady(700_000))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        // Read as playback does, in blocks of uneven sizes that cross the
+        // chain's 128-frame chunks at every phase.
+        let frames = mix.frames() as usize;
+        let mut out = vec![0.0; frames * 2];
+        let mut state = RenderState::default();
+        let mut at = 0;
+        for size in [1000, 1, 127, 4096, 333, 129].into_iter().cycle() {
+            if at >= frames {
+                break;
+            }
+            let size = size.min(frames - at);
+            mix.read_block(
+                at as u64,
+                &mut out[at * 2..(at + size) * 2],
+                None,
+                &mut state,
+            );
+            at += size;
+        }
+        let (left, right): (Vec<f32>, Vec<f32>) = out
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[left, right]| (left, right))
+            .unzip();
+        // The clip starts at frame 0 and ends with the song; judge the frames
+        // between.
+        let inner = 1..frames - 1;
+        // A side's gain falls from 1 to 0 over half a sweep: 1837.5 frames.
+        let slope = 0.5 / (3675.0 / 2.0);
+        for (name, side) in [("left", &left), ("right", &right)] {
+            let side = &side[inner.clone()];
+            let step = side
+                .windows(2)
+                .map(|pair| (pair[1] - pair[0]).abs())
+                .fold(0.0, f32::max);
+            assert!(step <= slope * 1.01 + 1e-6, "{name} steps by {step}");
+            // It swings the whole way.
+            let high = side.iter().copied().fold(0.0, f32::max);
+            let low = side.iter().copied().fold(1.0, f32::min);
+            assert!(high > 0.499 && low < 0.001, "{name}: {low}..{high}");
+        }
+        // At each 16th the sound is at one side.
+        let sixteenth = 3675;
+        assert!(left[sixteenth] < 1e-4 && (right[sixteenth] - 0.5).abs() < 1e-4);
+        assert!(right[2 * sixteenth] < 1e-4 && (left[2 * sixteenth] - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_ducker_key_is_measured_after_its_pan_lane() {
+        // The key holds sound in its left channel only, so its pan changes
+        // its level: hard right silences it.
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 128, 128).unwrap();
+        let mut project = editor.project().clone();
+        let key = stereo(
+            |i| 0.5 * (std::f32::consts::TAU * 60.0 * i as f32 / 44_100.0).sin(),
+            |_| 0.0,
+        );
+        let samples = HashMap::from([(1, tone(220.0)), (2, key)]);
+        let alone = |project: &Project| {
+            let mix = mix_with_samples(project, &samples).unwrap();
+            let mut out = vec![0.0; mix.frames() as usize * 2];
+            mix.mix(0, &mut out, None, &mut RenderState::default(), Some(0));
+            out
+        };
+        let open = alone(&project);
+        project.tracks[0].ducker = crate::ducker::Ducker {
+            on: true,
+            key: 2,
+            threshold: -40.0,
+            depth: 12.0,
+            attack: 0.1,
+            release: 20.0,
+        };
+        let down = |project: &Project| {
+            level_db(&alone(project), 39_000..44_000) - level_db(&open, 39_000..44_000)
+        };
+        assert!((down(&project) + 12.0).abs() < 0.2);
+        // The lane pans the key hard right: its left channel, all its sound,
+        // falls silent, and the track does not duck, whatever the knob says.
+        project.tracks[1].pan = -1.0;
+        project.tracks[1].automation.pan = vec![crate::automation::Point {
+            tick: 0,
+            value: 1.0,
+        }];
+        assert_eq!(alone(&project), open);
+        // Hard left keeps it, though the knob is hard right.
+        project.tracks[1].pan = 1.0;
+        project.tracks[1].automation.pan[0].value = -1.0;
+        assert!((down(&project) + 12.0).abs() < 0.2);
     }
 
     #[test]

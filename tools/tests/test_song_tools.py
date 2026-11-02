@@ -120,7 +120,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(lane=lane), self.assertRaises(ValueError):
                 song.automate(1, lane, [(5, 0.5), (9, 0)])
             self.assertEqual(json.dumps(song.automation), before)
-        for lane in ('send0', 'send5', 'send-1', 'gain', ''):
+        for lane in ('send0', 'send5', 'send-1', 'gain', 'balance', ''):
             song = mixjam.Song('automation destination')
             before = json.dumps(song.automation)
             with self.subTest(lane=lane), self.assertRaises(ValueError):
@@ -237,6 +237,30 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'send2', [(1, 0.5)])
         self.assertEqual(song.automation[0]['sends'][1], [{'tick': 0, 'value': 0.5}])
 
+    def test_pan_automation_sweeps_from_the_knob_and_checks_its_range(self):
+        song = mixjam.Song('pan')
+        song.lane(1, 'ratchet', 'perc', pan=0.25)
+        # Sixteenths from bar 2: left, right, and back to the knob.
+        song.automate(1, 'pan', [(2, -1), (2.0625, 1), (2.125, 0.25)])
+        document = song.document()
+        self.assertEqual(document['formatVersion'], 20)
+        self.assertEqual(document['lanes'][0]['pan'], 0.25)
+        # The lane rests at the knob until its first point.
+        self.assertEqual(document['lanes'][0]['automation']['pan'],
+                         [dict(tick=0, value=0.25), dict(tick=255, value=0.25),
+                          dict(tick=256, value=-1.0), dict(tick=272, value=1.0),
+                          dict(tick=288, value=0.25)])
+        before = json.dumps(song.automation)
+        for value in (-1.01, 1.5, float('nan')):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                song.automate(1, 'pan', [(3, 0), (4, value)])
+            self.assertEqual(json.dumps(song.automation), before)
+        # A lane that ends away from the knob while a later clip plays is refused.
+        song.automate(1, 'pan', [(4, 1)])
+        song.lanes[0]['placements'].append(dict(startTick=5 * 256))
+        with self.assertRaises(ValueError):
+            song.document()
+
     def test_hold_rests_at_neutral_until_the_first_point(self):
         held = mixjam.hold([{'tick': 1024, 'value': -6.0}, {'tick': 2048, 'value': 0.0}], 0.0, [], 'lane')
         self.assertEqual(held[:2], [{'tick': 0, 'value': 0.0}, {'tick': 1023, 'value': 0.0}])
@@ -294,7 +318,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 19)
+        self.assertEqual(song.document()['formatVersion'], 20)
 
     def test_compressor_and_width_check_their_ranges(self):
         song = mixjam.Song('dynamics')

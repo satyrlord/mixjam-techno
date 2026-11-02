@@ -2682,7 +2682,14 @@ fn embedded_effect_dial(
     );
 }
 
-pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Response {
+/// A track's pan knob. While its pan lane has points, the knob is
+/// `automated`: the lane sets the pan while the song plays.
+pub(super) fn pan_control(
+    ui: &mut egui::Ui,
+    index: usize,
+    pan: &mut f32,
+    automated: bool,
+) -> Response {
     let mut response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
     let turn = controls::wheel(ui, &response);
     if turn != 0.0 {
@@ -2705,9 +2712,14 @@ pub(super) fn pan_control(ui: &mut egui::Ui, index: usize, pan: &mut f32) -> Res
     });
     response.on_hover_text(format!(
         "Track {} pan: {}. Drag or use the wheel (Shift for fine steps). Pan does not enable \
-         a disabled L/R output.",
+         a disabled L/R output.{}",
         index + 1,
-        pan_description(*pan)
+        pan_description(*pan),
+        if automated {
+            "\nAutomated: its automation lane sets the pan while the song plays."
+        } else {
+            ""
+        }
     ))
 }
 
@@ -3207,6 +3219,7 @@ impl MixJamApp {
                 // The value the track keeps without points.
                 let value = match lane {
                     automation::Lane::Send(bus) => project.tracks[track].sends[bus],
+                    automation::Lane::Pan => project.tracks[track].pan,
                     _ => 0.0,
                 };
                 let y = automation_y(lane, value, row);
@@ -3424,9 +3437,9 @@ fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
     let value = match lane {
         automation::Lane::Volume => (value * 2.0).round() / 2.0,
         automation::Lane::Send(_) => (value * 100.0).round() / 100.0,
-        // The middle opens the filter.
-        automation::Lane::Filter if value.abs() < 0.04 => 0.0,
-        automation::Lane::Filter => (value * 100.0).round() / 100.0,
+        // The middle opens the filter, or centers the pan.
+        automation::Lane::Filter | automation::Lane::Pan if value.abs() < 0.04 => 0.0,
+        automation::Lane::Filter | automation::Lane::Pan => (value * 100.0).round() / 100.0,
     };
     value.clamp(low, high)
 }

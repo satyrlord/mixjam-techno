@@ -1,4 +1,4 @@
-"""Write format-19 .mixjam songs from Python.
+"""Write format-20 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -9,7 +9,8 @@ Placement rules:
 - By default, `loop` and `phrase` add a one-tick fade when a melodic run is
   cut short or the sound is still loud at its end. You can set another fade.
 
-Automation rules: a lane rests at its neutral value until its first point.
+Automation rules: a lane rests at its neutral value until its first point. A send
+or pan lane's neutral value is its knob, which the lane replaces while it has points.
 Saving rejects a lane that ends away from neutral when a later clip starts on
 that track. The engine holds a lane's last value to the end of the song.
 
@@ -29,7 +30,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 19
+FORMAT_VERSION = 20
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 
@@ -355,15 +356,16 @@ class Song:
 
     # Automation, effects, master.
     def automate(self, track, lane, points):
-        """lane: volume, send1..send4, or filter. points: [(bar, value)], bar 1-based, fractions allowed.
+        """lane: volume, send1..send4, filter, or pan. points: [(bar, value)], bar 1-based, fractions allowed.
 
         Volume is dB over the fader; a send replaces the knob (0-1); filter is -1 (low-pass) to 1
-        (high-pass), 0 open. Points add to the lane's earlier points, so each section writes its
-        own moves; a point on a tick that the lane already has is an error.
+        (high-pass), 0 open; pan replaces the pan knob, -1 (left) to 1 (right), 0 center. Points add
+        to the lane's earlier points, so each section writes its own moves; a point on a tick that
+        the lane already has is an error.
         """
         track = _whole_track(track)
-        if lane not in ('volume', 'filter', 'send1', 'send2', 'send3', 'send4'):
-            raise ValueError('The automation lane must be volume, filter, or send1 through send4.')
+        if lane not in ('volume', 'filter', 'pan', 'send1', 'send2', 'send3', 'send4'):
+            raise ValueError('The automation lane must be volume, filter, pan, or send1 through send4.')
         automation = self.automation[track - 1]
         if lane.startswith('send'):
             entries = list(automation.get('sends', [[], [], [], []])[int(lane[4:]) - 1])
@@ -373,6 +375,8 @@ class Song:
         for bar, value in points:
             if tick(bar) in ticks:
                 raise ValueError(f'Track {track} {lane} has more than one point at bar {bar}.')
+            if lane == 'pan' and not -1.0 <= float(value) <= 1.0:
+                raise ValueError(f'Track {track} pan must be from -1 to 1, not {value}.')
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
@@ -403,7 +407,7 @@ class Song:
             lists = points if key == 'sends' else [points]
             out = []
             for i, entries in enumerate(lists):
-                neutral = lane['sends'][i] if key == 'sends' else 0.0
+                neutral = lane['sends'][i] if key == 'sends' else lane['pan'] if key == 'pan' else 0.0
                 name = key if key != 'sends' else f'send{i + 1}'
                 out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}'))
             held[key] = out if key == 'sends' else out[0]

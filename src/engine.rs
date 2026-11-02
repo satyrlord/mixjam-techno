@@ -51,7 +51,7 @@ pub struct Track {
     /// The share of the track sent to each FX bus, from 0 to 1, after the
     /// fader and pan.
     pub sends: [f32; crate::fx::BUSES],
-    /// Lanes that move the volume, sends, and filter over the song.
+    /// Lanes that move the volume, sends, filter, and pan over the song.
     pub automation: crate::automation::Automation,
     /// The channel EQ, between the clips and the automation.
     pub eq: crate::eq::ChannelEq,

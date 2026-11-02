@@ -259,6 +259,7 @@ pub(super) fn show(
                                                     automated: std::array::from_fn(|bus| {
                                                         !track.automation.sends[bus].is_empty()
                                                     }),
+                                                    pan_automated: !track.automation.pan.is_empty(),
                                                     sends: &mut track.sends,
                                                     any_solo,
                                                     eq_on: track.eq.on
@@ -350,6 +351,8 @@ struct TrackControls<'a> {
     sends: &'a mut [f32; BUSES],
     /// Which sends an automation lane moves instead of the knob.
     automated: [bool; BUSES],
+    /// Whether the pan lane moves the pan instead of the knob.
+    pan_automated: bool,
     /// Whether any track was soloed when the mixer was laid out.
     any_solo: bool,
     /// Whether the track's channel EQ, compressor, or ducker is on or its
@@ -465,6 +468,7 @@ fn strip(
         solo,
         sends,
         automated,
+        pan_automated,
         any_solo,
         eq_on,
         open_eq,
@@ -490,7 +494,7 @@ fn strip(
         ui.scope_builder(egui::UiBuilder::new().max_rect(pan_rect), |ui| {
             ui.spacing_mut().slider_width = pan_rect.width();
             ui.spacing_mut().interact_size.y = 16.0 * scale;
-            let response = pan_control(ui, index, pan);
+            let response = pan_control(ui, index, pan, pan_automated);
             changed |= response.changed();
             focus_ring(ui, &response, pan_rect, scale);
         });
@@ -522,6 +526,8 @@ fn strip(
                 "No output".into()
             } else if any_solo && !*solo {
                 "Solo elsewhere".into()
+            } else if pan_automated {
+                "Pan automated".into()
             } else {
                 pan_description(*pan)
             },

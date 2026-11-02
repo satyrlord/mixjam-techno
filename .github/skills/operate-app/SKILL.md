@@ -48,7 +48,7 @@ Do not start a session on the owner's settings unless the owner requests it.
    Completion criterion: The request selects one control.
 3. Use `place`, `move_clips`, `delete_clips`, `select`, `seek`, `set_loop`, and `set_sections`
    for the arrangement lanes. Tracks and bars count from 1. Use `automate`
-   to replace a track's volume, send, or filter automation lane. Use `clip`
+   to replace a track's volume, send, filter, or pan automation lane. Use `clip`
    to set one clip's gain, trim, length, fades, and pitch; a field you leave
    out keeps its value.
    Completion criterion: The reply and `state` confirm the requested clips,

@@ -831,9 +831,10 @@ pub struct MasterControl {
     returns_generation: AtomicU64,
     returns: Mutex<crate::fx::FxBuses>,
     tail_clears: [AtomicU64; crate::fx::BUSES],
-    /// Each track's two f32 levels packed into one atomic value, so a
-    /// reader cannot combine channels from different edits. NaN until set.
-    levels: [AtomicU64; crate::engine::TRACK_COUNT],
+    /// Each track's signed gain (including master gain) and pan knob packed
+    /// into one atomic value. A prepared mix decides whether its pan lane
+    /// replaces that knob. Both values are NaN until set.
+    gain_and_pan: [AtomicU64; crate::engine::TRACK_COUNT],
     /// Serializes publishers and remembers which lane compressors are on.
     level_writer: Mutex<u64>,
     /// Odd while levels and master gain are being published. Audio makes
@@ -862,7 +863,7 @@ impl MasterControl {
             returns_generation: AtomicU64::new(0),
             returns: Mutex::new(crate::fx::FxBuses::default()),
             tail_clears: std::array::from_fn(|_| AtomicU64::new(0)),
-            levels: std::array::from_fn(|_| {
+            gain_and_pan: std::array::from_fn(|_| {
                 let unset = u64::from(f32::NAN.to_bits());
                 AtomicU64::new(unset | (unset << 32))
             }),
@@ -903,24 +904,36 @@ impl MasterControl {
             *switched = enabled;
         }
         self.level_sequence.fetch_add(1, Ordering::SeqCst);
-        for (stored, level) in self.levels.iter().zip(crate::audio::track_levels(project)) {
-            let [left, right] = level.map(|value| u64::from(value.to_bits()));
-            stored.store(left | (right << 32), Ordering::SeqCst);
+        for (stored, track) in self.gain_and_pan.iter().zip(&project.tracks) {
+            let gain = u64::from((track.effective_gain() * project.master_gain).to_bits());
+            let pan = u64::from(track.pan.to_bits());
+            stored.store(gain | (pan << 32), Ordering::SeqCst);
         }
         self.master_gain
             .store(project.master_gain.to_bits(), Ordering::SeqCst);
         self.level_sequence.fetch_add(1, Ordering::SeqCst);
     }
     /// All track levels and their master gain from the same publication.
+    /// Apply each pan knob only when the prepared mix has no pan lane.
+    /// The edited project's lane may still be waiting for its new mix.
     /// Returns None if unset or a writer overlaps this single attempt.
-    pub(crate) fn levels(&self) -> Option<([[f32; 2]; crate::engine::TRACK_COUNT], f32)> {
+    pub(crate) fn levels(
+        &self,
+        automated_pan: &[bool; crate::engine::TRACK_COUNT],
+    ) -> Option<([[f32; 2]; crate::engine::TRACK_COUNT], f32)> {
         let before = self.level_sequence.load(Ordering::SeqCst);
         if before & 1 != 0 {
             return None;
         }
         let levels = std::array::from_fn(|track| {
-            let packed = self.levels[track].load(Ordering::SeqCst);
-            [packed as u32, (packed >> 32) as u32].map(f32::from_bits)
+            let packed = self.gain_and_pan[track].load(Ordering::SeqCst);
+            let gain = f32::from_bits(packed as u32);
+            let pan = if automated_pan[track] {
+                0.0
+            } else {
+                f32::from_bits((packed >> 32) as u32)
+            };
+            crate::automation::pan_gains(pan).map(|side| gain * side)
         });
         let gain = f32::from_bits(self.master_gain.load(Ordering::SeqCst));
         (before == self.level_sequence.load(Ordering::SeqCst) && gain.is_finite())
@@ -1557,18 +1570,26 @@ mod tests {
             .master_gain
             .store(0.5_f32.to_bits(), Ordering::SeqCst);
         // The former independent reads accepted this torn publication.
-        let packed = control.levels[0].load(Ordering::SeqCst);
-        let old_left = f32::from_bits(packed as u32);
+        let packed = control.gain_and_pan[0].load(Ordering::SeqCst);
+        let old_gain = f32::from_bits(packed as u32);
         let new_gain = f32::from_bits(control.master_gain.load(Ordering::SeqCst));
-        assert_ne!(old_left.abs(), new_gain);
-        assert!(control.levels().is_none());
+        assert_ne!(old_gain.abs(), new_gain);
+        assert!(
+            control
+                .levels(&[false; crate::engine::TRACK_COUNT])
+                .is_none()
+        );
     }
 
     #[test]
     fn live_stereo_levels_are_published_together() {
-        let mut project = crate::engine::Project::default();
+        let mut project = crate::engine::Project {
+            master_gain: 1.0,
+            ..Default::default()
+        };
+        project.tracks[0].pan = 1.0;
         let control = MasterControl::new(&project.master);
-        assert_eq!(control.levels(), None);
+        assert_eq!(control.levels(&[false; crate::engine::TRACK_COUNT]), None);
         control.set_levels(&project);
         let done = std::sync::atomic::AtomicBool::new(false);
         std::thread::scope(|scope| {
@@ -1580,24 +1601,32 @@ mod tests {
                     } else {
                         1.0
                     };
+                    project.tracks[0].pan = if project.tracks[0].polarity_inverted {
+                        -1.0
+                    } else {
+                        1.0
+                    };
                     control.set_levels(&project);
                 }
                 done.store(true, std::sync::atomic::Ordering::Release);
             });
             while !done.load(std::sync::atomic::Ordering::Acquire) {
-                let Some((levels, master_gain)) = control.levels() else {
-                    continue;
-                };
-                let [left, right] = levels[0];
-                assert_eq!(
-                    left, right,
-                    "A level update must keep stereo polarity coherent."
-                );
-                assert_eq!(
-                    left.abs(),
-                    master_gain,
-                    "Master gain must match the track snapshot."
-                );
+                for automated in [false, true] {
+                    let Some((levels, master_gain)) =
+                        control.levels(&[automated; crate::engine::TRACK_COUNT])
+                    else {
+                        continue;
+                    };
+                    let expected = if master_gain == 0.25 {
+                        [-0.25, if automated { -0.25 } else { 0.0 }]
+                    } else {
+                        [if automated { 1.0 } else { 0.0 }, 1.0]
+                    };
+                    assert_eq!(
+                        levels[0], expected,
+                        "Gain, pan, and master gain must share one publication."
+                    );
+                }
             }
         });
     }

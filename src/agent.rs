@@ -62,11 +62,13 @@ Arrangement (the lanes have no separate controls)
                          Replace the song's sections; [] removes them. Each
                          section starts at its bar (or \"tick\") and lasts until
                          the next one. Names are 1 to 48 characters.
-  automate track=N lane=volume|send1..send4|filter points=[[BAR,VALUE],...]
+  automate track=N lane=volume|send1..send4|filter|pan points=[[BAR,VALUE],...]
                          Replace one automation lane of a track; [] clears it.
                          Volume is dB over the fader, -60 (silence) to 6;
                          a send is 0 to 1 and replaces its knob; the filter
-                         is -1 (low-pass) to 1 (high-pass), open at 0.
+                         is -1 (low-pass) to 1 (high-pass), open at 0; the
+                         pan is -1 (left) to 1 (right), center at 0, and
+                         replaces the pan knob.
   clip clip=ID [gain_db= offset_frames= length_ticks= fade_in_ticks=
                          fade_in_curve= fade_out_ticks= fade_out_curve=
                          pitch_cents=]
@@ -447,7 +449,8 @@ pub struct TrackView {
     pub muted: bool,
     pub solo: bool,
     pub sends: [f32; crate::fx::BUSES],
-    /// Only lanes with points.
+    /// Only lanes with points. A send or pan lane with points replaces its
+    /// knob, `sends` or `pan`.
     pub automation: crate::automation::Automation,
     /// Whether the track's channel EQ is on.
     pub eq_on: bool,
@@ -1657,6 +1660,21 @@ mod tests {
                 track: 3,
                 lane: "send2".into(),
                 points: vec![[1.0, 0.0], [4.5, 0.75]],
+            }
+        );
+        let line = request_line(&strings(&[
+            "automate",
+            "track=5",
+            "lane=pan",
+            "points=[[1,-1],[1.25,1],[2,0]]",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Automate {
+                track: 5,
+                lane: "pan".into(),
+                points: vec![[1.0, -1.0], [1.25, 1.0], [2.0, 0.0]],
             }
         );
         let line = request_line(&strings(&[

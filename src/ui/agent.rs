@@ -1040,7 +1040,7 @@ impl MixJamApp {
                     return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
                 }
                 let lane = automation::Lane::from_key(&lane)
-                    .ok_or("Lanes are volume, send1, send2, send3, send4, and filter.")?;
+                    .ok_or("Lanes are volume, send1, send2, send3, send4, filter, and pan.")?;
                 let points = points
                     .into_iter()
                     .map(|[bar, value]| {

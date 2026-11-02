@@ -1,5 +1,5 @@
 //! Track automation: breakpoint lanes that move a track's volume, its FX
-//! sends, and its filter over the song.
+//! sends, its filter, and its pan over the song.
 //!
 //! A lane is a list of points in tick order. Before its first point a lane
 //! holds the first value, after its last point the last value, and between
@@ -25,6 +25,10 @@ pub enum Lane {
     /// A low-pass filter below 0 and a high-pass filter above 0, from -1 to
     /// 1. At 0 the filter is open.
     Filter,
+    /// The pan, from -1 (hard left) through 0 (center) to 1 (hard right),
+    /// under the mixer's balance law. While this lane has points, it
+    /// replaces the track's pan knob.
+    Pan,
 }
 
 /// The lowest volume value, which is silence.
@@ -32,13 +36,14 @@ pub const VOLUME_FLOOR_DB: f32 = -60.0;
 pub const VOLUME_CEILING_DB: f32 = 6.0;
 
 impl Lane {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Volume,
         Self::Send(0),
         Self::Send(1),
         Self::Send(2),
         Self::Send(3),
         Self::Filter,
+        Self::Pan,
     ];
 
     pub fn label(self) -> String {
@@ -46,15 +51,18 @@ impl Lane {
             Self::Volume => "Volume".into(),
             Self::Send(bus) => format!("FX {} send", bus + 1),
             Self::Filter => "Filter".into(),
+            Self::Pan => "Pan".into(),
         }
     }
 
-    /// The lane's name in agent requests: volume, send1 to send4, or filter.
+    /// The lane's name in agent requests: volume, send1 to send4, filter, or
+    /// pan.
     pub fn key(self) -> String {
         match self {
             Self::Volume => "volume".into(),
             Self::Send(bus) => format!("send{}", bus + 1),
             Self::Filter => "filter".into(),
+            Self::Pan => "pan".into(),
         }
     }
 
@@ -67,7 +75,7 @@ impl Lane {
         match self {
             Self::Volume => (VOLUME_FLOOR_DB, VOLUME_CEILING_DB),
             Self::Send(_) => (0.0, 1.0),
-            Self::Filter => (-1.0, 1.0),
+            Self::Filter | Self::Pan => (-1.0, 1.0),
         }
     }
 
@@ -80,8 +88,29 @@ impl Lane {
             Self::Filter if value == 0.0 => "Open".into(),
             Self::Filter if value < 0.0 => format!("Low-pass {:.0} Hz", filter_cutoff(value)),
             Self::Filter => format!("High-pass {:.0} Hz", filter_cutoff(value)),
+            Self::Pan => pan_label(value),
         }
     }
+}
+
+/// A pan value as the pan lane shows it: "L 40", "C", or "R 100", in percent
+/// of the way to one side.
+pub fn pan_label(value: f32) -> String {
+    let percent = (value.abs() * 100.0).round();
+    if percent == 0.0 {
+        "C".into()
+    } else if value < 0.0 {
+        format!("L {percent:.0}")
+    } else {
+        format!("R {percent:.0}")
+    }
+}
+
+/// The left and right gains of a pan value under the mixer's balance law:
+/// the far side falls to silence and the near side stays at unity, so the
+/// centre leaves both channels as they are.
+pub fn pan_gains(pan: f32) -> [f32; 2] {
+    [1.0 - pan.max(0.0), 1.0 + pan.min(0.0)]
 }
 
 /// A track's automation lanes.
@@ -94,6 +123,8 @@ pub struct Automation {
     pub sends: [Vec<Point>; crate::fx::BUSES],
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filter: Vec<Point>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pan: Vec<Point>,
 }
 
 fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
@@ -102,7 +133,10 @@ fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
 
 impl Automation {
     pub fn is_empty(&self) -> bool {
-        self.volume.is_empty() && no_sends(&self.sends) && self.filter.is_empty()
+        self.volume.is_empty()
+            && no_sends(&self.sends)
+            && self.filter.is_empty()
+            && self.pan.is_empty()
     }
 
     pub fn lane(&self, lane: Lane) -> &[Point] {
@@ -110,6 +144,7 @@ impl Automation {
             Lane::Volume => &self.volume,
             Lane::Send(bus) => &self.sends[bus],
             Lane::Filter => &self.filter,
+            Lane::Pan => &self.pan,
         }
     }
 
@@ -118,6 +153,7 @@ impl Automation {
             Lane::Volume => &mut self.volume,
             Lane::Send(bus) => &mut self.sends[bus],
             Lane::Filter => &mut self.filter,
+            Lane::Pan => &mut self.pan,
         }
     }
 
@@ -406,6 +442,7 @@ mod tests {
             ..Default::default()
         };
         automation.sends[2] = points(&[(0, 0.0), (64, 1.0)]);
+        automation.pan = points(&[(0, -1.0), (16, 1.0), (32, 0.0)]);
         automation.validate().unwrap();
         for (lane, bad) in [
             (Lane::Volume, points(&[(0, 6.5)])),
@@ -414,13 +451,33 @@ mod tests {
             (Lane::Filter, points(&[(10, 0.0), (5, 0.5)])),
             (Lane::Volume, points(&[(crate::engine::MAX_TICKS + 1, 0.0)])),
             (Lane::Volume, points(&[(0, f32::NAN)])),
+            (Lane::Pan, points(&[(0, -1.01)])),
+            (Lane::Pan, points(&[(0, 1.01)])),
+            (Lane::Pan, points(&[(4, 0.0), (4, 1.0)])),
         ] {
             let mut changed = automation.clone();
             *changed.lane_mut(lane) = bad;
             assert!(changed.validate().is_err(), "{lane:?}");
         }
         assert_eq!(Lane::from_key("send3"), Some(Lane::Send(2)));
-        assert_eq!(Lane::from_key("pan"), None);
+        assert_eq!(Lane::from_key("pan"), Some(Lane::Pan));
+        assert_eq!(Lane::from_key("balance"), None);
+        assert_eq!(Lane::Pan.key(), "pan");
+        assert_eq!(Lane::Pan.label(), "Pan");
+    }
+
+    #[test]
+    fn pan_values_read_as_left_center_or_right() {
+        assert_eq!(Lane::Pan.format(0.0), "C");
+        assert_eq!(Lane::Pan.format(-0.004), "C");
+        assert_eq!(Lane::Pan.format(-0.4), "L 40");
+        assert_eq!(Lane::Pan.format(1.0), "R 100");
+        assert_eq!(Lane::Pan.format(0.26), "R 26");
+        // The balance law: the far side falls, the near side stays.
+        assert_eq!(pan_gains(0.0), [1.0, 1.0]);
+        assert_eq!(pan_gains(-1.0), [1.0, 0.0]);
+        assert_eq!(pan_gains(1.0), [0.0, 1.0]);
+        assert_eq!(pan_gains(0.25), [0.75, 1.0]);
     }
 
     #[test]

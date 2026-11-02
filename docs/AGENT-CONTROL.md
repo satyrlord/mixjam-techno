@@ -33,7 +33,12 @@ port.
   `delete_clips`, `select`, `seek`, `set_loop`, `set_sections`, `automate`, and
   `clip` edit them without positions. `set_sections` replaces the song's named
   sections, each given by its first `bar` (or `tick`) and its `name`; `state`
-  lists them under `song.sections`. `clip` sets gain, trim, length, fades, and pitch for one clip.
+  lists them under `song.sections`. `automate track=N lane=LANE
+  points=[[BAR,VALUE],...]` replaces one automation lane: `volume`, `send1` to
+  `send4`, `filter`, or `pan` (-1 hard left to 1 hard right, 0 center), and
+  `points=[]` clears it. `state` lists each track's lanes with points under its
+  `automation`; a send or pan lane there replaces the knob in `sends` or `pan`.
+  `clip` sets gain, trim, length, fades, and pitch for one clip.
   These edits use the same history as edits made by hand.
 - `libraries` lists the library folders in order and the reason any did not
   load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with
