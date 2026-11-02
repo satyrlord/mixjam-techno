@@ -2,7 +2,7 @@ use crate::{
     automation::{Envelope, Filter},
     engine::{FadeCurve, Project, SOURCE_BPM},
     eq::{Curve, Filters},
-    fx::{BUSES, FxBuses, ReturnsProcessor},
+    fx::{BUSES, FxBuses, ReturnLanes, ReturnsProcessor},
     library::Library,
     master::{MasterChain, MasterControl, MasterProcessor},
 };
@@ -369,6 +369,10 @@ pub trait Frames: Send + Sync {
     /// Allocate the history that `read_block` needs in `state`, so that the
     /// audio thread does not allocate it.
     fn prepare_state(&self, _state: &mut RenderState) {}
+    /// The FX buses' return lanes of a song mix, if any bus has one.
+    fn return_lanes(&self) -> Option<&ReturnLanes> {
+        None
+    }
 }
 
 impl Frames for Pcm {
@@ -411,6 +415,10 @@ struct Voice {
     fade_out: u64,
     curves: [FadeCurve; 2],
     sound_end: u64,
+    /// Play the clip backwards: each frame reads where the forward clip's
+    /// mirror frame within `start..end` reads, so the result is a pure
+    /// function of the source and never of what played before.
+    reverse: bool,
 }
 
 impl Voice {
@@ -428,9 +436,18 @@ impl Voice {
         let source_channels = source.channels as usize;
         let sending = sends.is_some() && self.sends.iter().any(|send| *send > 0.0);
         for frame in from..to {
-            let pos = self.offset_frames as f64 + (frame - self.start) as f64 * self.step;
+            let along = if self.reverse {
+                self.end - 1 - frame
+            } else {
+                frame - self.start
+            };
+            let pos = self.offset_frames as f64 + along as f64 * self.step;
             let index = pos.floor() as usize;
             if index >= source_frames {
+                // Reversed, the frames past the source's end come first.
+                if self.reverse {
+                    continue;
+                }
                 break;
             }
             let next = (index + 1).min(source_frames - 1);
@@ -523,7 +540,11 @@ impl TrackChain {
         Self {
             track: index,
             voices: Vec::new(),
-            repeat: crate::automation::Repeat::new(&automation.repeat, frames_per_tick),
+            repeat: crate::automation::Repeat::new(
+                &automation.repeat,
+                &automation.repeat_gate,
+                frames_per_tick,
+            ),
             eq: Curve::of(&track.eq),
             // The mix gives each drive its slot.
             drive: track
@@ -772,6 +793,8 @@ pub struct Mix {
     sends: bool,
     /// The drives among the keys and the chains, each with its slot.
     drives: usize,
+    /// The FX buses' return lanes, when any bus has one.
+    returns: Option<ReturnLanes>,
 }
 
 /// The number of files that `Mix::write_stems` wrote.
@@ -894,7 +917,14 @@ impl Mix {
                 fade_in: frames_of(clip.fades.fade_in.ticks),
                 fade_out: frames_of(clip.fades.fade_out.ticks),
                 curves: [clip.fades.fade_in.curve, clip.fades.fade_out.curve],
-                sound_end: end.min(start + source_left.ceil() as u64),
+                // A reversed clip's sound ends with the clip: a source shorter
+                // than the clip leaves silence at its start instead.
+                sound_end: if clip.reverse {
+                    end
+                } else {
+                    end.min(start + source_left.ceil() as u64)
+                },
+                reverse: clip.reverse,
             };
             let keyed = keys.iter().position(|chain| chain.track == clip.track);
             if let Some(slot) = keyed {
@@ -962,6 +992,7 @@ impl Mix {
             fed,
             sends: fed.contains(&true),
             drives,
+            returns: ReturnLanes::new(&project.return_automation, frames_per_tick),
         })
     }
 
@@ -1037,10 +1068,11 @@ impl Mix {
                     Some(returns) => {
                         let sends = &mut sends[..count * 2 * BUSES];
                         let sending = self.read_block(position, samples, Some(sends), &mut state);
-                        returns.process_keyed(
+                        returns.process_at(
                             samples,
                             sending.then_some(&*sends),
                             self.key_block(&state, count),
+                            self.lanes(position),
                         );
                     }
                     None => {
@@ -1051,7 +1083,12 @@ impl Mix {
             } else {
                 samples.fill(0.0);
                 if let Some(returns) = returns.as_mut().filter(|_| ringing) {
-                    returns.process(samples, None);
+                    returns.process_at(
+                        samples,
+                        None,
+                        crate::ducker::Keys::NONE,
+                        self.lanes(position),
+                    );
                     tail += count as u64;
                 }
                 0
@@ -1254,7 +1291,12 @@ impl Mix {
                     write(index, dry)?;
                 }
                 if let Some(returns) = &mut returns {
-                    returns.split(wet, Some(sends), self.key_block(&states[0], count));
+                    returns.split(
+                        wet,
+                        Some(sends),
+                        self.key_block(&states[0], count),
+                        self.lanes(position),
+                    );
                 }
             } else {
                 dry.fill(0.0);
@@ -1262,7 +1304,7 @@ impl Mix {
                     write(index, dry)?;
                 }
                 if let Some(returns) = &mut returns {
-                    returns.split(wet, None, crate::ducker::Keys::NONE);
+                    returns.split(wet, None, crate::ducker::Keys::NONE, self.lanes(position));
                     tail += count as u64;
                 }
             }
@@ -1276,6 +1318,14 @@ impl Mix {
             }
             position += count as u64;
         }
+    }
+
+    /// The return lanes for a block that starts at song frame `first_frame`.
+    /// The song's frames go on counting through the buses' tails.
+    fn lanes(&self, first_frame: u64) -> crate::fx::Lanes<'_> {
+        self.returns
+            .as_ref()
+            .map(|lanes| (lanes, first_frame, None))
     }
 
     /// The key tracks that the master pedals and the FX buses listen to, for
@@ -1514,6 +1564,9 @@ impl Frames for Mix {
     }
     fn keys<'a>(&'a self, state: &'a RenderState, frames: usize) -> crate::ducker::Keys<'a> {
         self.key_block(state, frames)
+    }
+    fn return_lanes(&self) -> Option<&ReturnLanes> {
+        self.returns.as_ref()
     }
     fn prepare_state(&self, state: &mut RenderState) {
         state.drives.resize(self.drives, Default::default());
@@ -1876,12 +1929,22 @@ impl PlaybackSource {
                             Mix::TAIL_BLOCK.min(crate::fx::TAIL_LIMIT - self.ringing);
                     }
                     let count = self.block_frames.min(self.ringing_block as usize);
+                    // The song's frames go on through the tail, as in export.
+                    let lanes = self
+                        .audio
+                        .return_lanes()
+                        .map(|lanes| (lanes, self.end + self.ringing, None));
                     self.ringing += count as u64;
                     self.ringing_block -= count as u64;
                     self.filled = count * self.channels;
                     self.keyed = 0;
                     self.block[..self.filled].fill(0.0);
-                    returns.process(&mut self.block[..self.filled], None);
+                    returns.process_at(
+                        &mut self.block[..self.filled],
+                        None,
+                        crate::ducker::Keys::NONE,
+                        lanes,
+                    );
                     if self.process() {
                         return true;
                     }
@@ -1918,10 +1981,17 @@ impl PlaybackSource {
                         Some(sends),
                         &mut self.state,
                     );
-                    returns.process_keyed(
+                    returns.process_at(
                         &mut self.block[..self.filled],
                         sending.then_some(&*sends),
                         self.audio.keys(&self.state, count),
+                        self.audio.return_lanes().map(|lanes| {
+                            (
+                                lanes,
+                                self.frame,
+                                self.loop_start.map(|start| [start, self.end]),
+                            )
+                        }),
                     );
                 }
                 None => {
@@ -2292,6 +2362,7 @@ mod tests {
             fed: [false; BUSES],
             sends: false,
             drives: 0,
+            returns: None,
         };
         // An invalid destination proves that admission runs before file creation,
         // without writing a multi-gigabyte fixture on a broken implementation.
@@ -2314,6 +2385,7 @@ mod tests {
                 gain: 0.5,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         }
@@ -2650,6 +2722,7 @@ mod tests {
             fed: [false; BUSES],
             sends: false,
             drives: 0,
+            returns: None,
         };
         let error = mix
             .write_wav(Path::new(""), &MasterChain::default(), &FxBuses::default())
@@ -3554,6 +3627,512 @@ mod tests {
         };
         assert!(energy(frame(256)..frame(264), 1) < 0.02 * energy(frame(256)..frame(264), 0));
         assert!(energy(frame(376)..frame(384), 0) < 0.02 * energy(frame(376)..frame(384), 1));
+    }
+
+    /// The Repeat song with the Repeat gate lane `gate` on track 1.
+    fn gated_song(repeat: &[(u32, f32)], gate: &[(u32, f32)]) -> Project {
+        let mut project = repeat_song(repeat);
+        project.tracks[0].automation.repeat_gate = gate
+            .iter()
+            .map(|&(tick, value)| crate::automation::Point { tick, value })
+            .collect();
+        project
+    }
+
+    #[test]
+    fn a_full_repeat_gate_plays_exactly_as_no_gate() {
+        let samples = unique_source();
+        let roll = [(256, 8.0), (320, 16.0), (352, 32.0), (384, 0.0)];
+        let plain = whole(&repeat_song(&roll), &samples);
+        for gate in [&[(0, 100.0)][..], &[(256, 100.0), (352, 100.0)]] {
+            assert_eq!(whole(&gated_song(&roll, gate), &samples), plain, "{gate:?}");
+        }
+        // Without Repeat a gate changes nothing either.
+        assert_eq!(
+            whole(&gated_song(&[], &[(0, 25.0)]), &samples),
+            whole(&repeat_song(&[]), &samples)
+        );
+    }
+
+    #[test]
+    fn a_quarter_gate_silences_each_repeat_after_a_quarter_of_its_slice() {
+        let samples = unique_source();
+        let live = whole(&repeat_song(&[]), &samples);
+        // Sixteen 1/16 repeats from bar 2, each gated to 25%.
+        let project = gated_song(&[(256, 16.0), (512, 0.0)], &[(256, 25.0)]);
+        let out = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let ramp = crate::automation::REPEAT_RAMP_FRAMES as usize;
+        let capture = frame(256);
+        for tick in (256..512).step_by(16) {
+            let (start, next) = (frame(tick), frame(tick + 16));
+            let open = ((next - start) as f64 * 0.25).round() as usize;
+            // Open: the captured slice itself, after the retrigger's rise.
+            let rise = if tick == 256 { 0 } else { ramp };
+            for since in rise..open {
+                for channel in 0..2 {
+                    let (got, want) = (
+                        out[(start + since) * 2 + channel],
+                        live[(capture + since) * 2 + channel],
+                    );
+                    assert!((got - want).abs() < 1e-6, "tick {tick}, {since} in");
+                }
+            }
+            // Within the ramp after a quarter, it falls; after it, silence.
+            for at in start + open + ramp..next {
+                assert_eq!(out[at * 2], 0.0, "tick {tick}, frame {at}");
+                assert_eq!(out[at * 2 + 1], 0.0, "tick {tick}, frame {at}");
+            }
+            let falling = out[(start + open + ramp / 2) * 2].abs();
+            let held = live[(capture + open + ramp / 2) * 2].abs();
+            assert!(falling < held || held < 1e-3, "tick {tick}");
+        }
+        // The live sound returns where the lane turns off.
+        let back = frame(512) + ramp;
+        assert_eq!(out[back * 2..], live[back * 2..]);
+    }
+
+    #[test]
+    fn a_repeat_gate_holds_each_step_from_the_repeat_where_it_starts() {
+        let samples = unique_source();
+        // 25% from bar 2, 75% from beat 3 of it, and a point in the middle
+        // of a repeat (tick 392), which waits for the next one.
+        let project = gated_song(
+            &[(256, 16.0), (512, 0.0)],
+            &[(256, 25.0), (384, 75.0), (392, 50.0)],
+        );
+        let out = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let ramp = crate::automation::REPEAT_RAMP_FRAMES as usize;
+        let energy = |tick: u32, from: f64, to: f64| -> f32 {
+            let (start, next) = (frame(tick), frame(tick + 16));
+            let length = (next - start) as f64;
+            let first = start + (length * from) as usize;
+            let last = start + (length * to) as usize;
+            out[first * 2..last * 2]
+                .iter()
+                .map(|value| value * value)
+                .sum()
+        };
+        // At 25%, the second half of each repeat is silent.
+        for tick in [272, 336, 368] {
+            assert!(energy(tick, 0.0, 0.2) > 0.1, "{tick}");
+            assert_eq!(energy(tick, 0.5, 1.0), 0.0, "{tick}");
+        }
+        // At 75%, it sounds until three quarters; tick 392's 50% waits for
+        // the repeat at 400.
+        assert!(energy(384, 0.55, 0.7) > 0.1);
+        let silent_from = |tick: u32, percent: f64| {
+            let (start, next) = (frame(tick), frame(tick + 16));
+            let open = ((next - start) as f64 * percent).round() as usize;
+            out[(start + open + ramp) * 2..next * 2]
+                .iter()
+                .all(|value| *value == 0.0)
+        };
+        assert!(silent_from(384, 0.75));
+        assert!(energy(400, 0.3, 0.45) > 0.1);
+        assert!(silent_from(400, 0.5));
+        assert!(silent_from(496, 0.5));
+    }
+
+    #[test]
+    fn playback_started_inside_a_gated_run_plays_what_export_plays() {
+        let samples = unique_source();
+        let project = gated_song(
+            &[(256, 8.0), (320, 16.0), (352, 32.0), (384, 0.0)],
+            &[(256, 40.0), (336, 10.0), (360, 70.0)],
+        );
+        let export = whole(&project, &samples);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as u64;
+        let end = frame(512) as usize;
+        for start in [
+            frame(300),
+            frame(336) + 30,
+            frame(337),
+            frame(364) + 7,
+            frame(384) + 60,
+        ] {
+            let start = start as usize;
+            let mut out = vec![0.0; (end - start) * 2];
+            let mut state = RenderState::default();
+            let mut at = start;
+            for size in [1000, 1, 127, 4096, 333, 129].into_iter().cycle() {
+                if at >= end {
+                    break;
+                }
+                let size = size.min(end - at);
+                mix.read_block(
+                    at as u64,
+                    &mut out[(at - start) * 2..(at - start + size) * 2],
+                    None,
+                    &mut state,
+                );
+                at += size;
+            }
+            assert_eq!(out, export[start * 2..end * 2], "from frame {start}");
+        }
+        let mut stem = vec![0.0; export.len()];
+        mix.mix(0, &mut stem, None, &mut RenderState::default(), Some(0));
+        assert_eq!(stem, export);
+    }
+
+    /// The frames of the reverse tests' source: a rising ramp in the left
+    /// channel and a falling one in the right, so a frame read from the
+    /// wrong place or the wrong way shows.
+    const RAMP_FRAMES: usize = 200_000;
+
+    fn ramp_source() -> HashMap<u32, Pcm> {
+        let up = |i: usize| 0.9 * i as f32 / RAMP_FRAMES as f32;
+        HashMap::from([(
+            1,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: (0..RAMP_FRAMES).flat_map(|i| [up(i), -up(i)]).collect(),
+            },
+        )])
+    }
+
+    /// One clip on track 1 from bar 2 for `ticks`, trimmed by `offset`
+    /// frames, forward or reversed.
+    fn reversed_song(offset: u32, ticks: u32, reverse: bool) -> Project {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 256, ticks).unwrap();
+        let mut project = editor.project().clone();
+        project.master_gain = 1.0;
+        project.clips[0].offset_frames = offset;
+        project.clips[0].reverse = reverse;
+        project
+    }
+
+    #[test]
+    fn a_reversed_clip_plays_its_slice_backwards_within_the_clip() {
+        let samples = ramp_source();
+        for (offset, ticks) in [(0, 256), (12_345, 128), (40_000, 300)] {
+            let forward = whole(&reversed_song(offset, ticks, false), &samples);
+            let project = reversed_song(offset, ticks, true);
+            let reversed = whole(&project, &samples);
+            let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+            let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+            let (start, end) = (frame(256), frame(256 + ticks));
+            // Silent outside the clip, and each frame the forward clip's
+            // mirror frame.
+            assert!(reversed[..start * 2].iter().all(|value| *value == 0.0));
+            assert!(reversed[end * 2..].iter().all(|value| *value == 0.0));
+            for at in start..end {
+                let mirror = start + end - 1 - at;
+                assert_eq!(reversed[at * 2], forward[mirror * 2], "{offset}: {at}");
+                assert_eq!(
+                    reversed[at * 2 + 1],
+                    forward[mirror * 2 + 1],
+                    "{offset}: {at}"
+                );
+            }
+            // The left ramp falls through the clip and ends on the frame at
+            // the trim: the slice from `offset` over the clip's length.
+            assert!(reversed[start * 2] > reversed[(end - 1) * 2]);
+            let first = 0.9 * offset as f32 / RAMP_FRAMES as f32;
+            assert!((reversed[(end - 1) * 2] - first).abs() < 1e-6, "{offset}");
+            assert!(
+                reversed[start * 2..end * 2]
+                    .chunks(2)
+                    .zip(reversed[start * 2 + 2..end * 2].chunks(2))
+                    .all(|(a, b)| b[0] <= a[0] && b[1] >= a[1])
+            );
+        }
+    }
+
+    #[test]
+    fn a_reversed_clip_longer_than_its_sound_ends_with_the_clip() {
+        let samples = ramp_source();
+        // 200,000 frames from frame 150,000 leave 50,000, about 0.57 bars at
+        // 140 BPM, in a clip of 2 bars.
+        let forward = whole(&reversed_song(150_000, 512, false), &samples);
+        let project = reversed_song(150_000, 512, true);
+        let reversed = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let (start, end) = (frame(256), frame(768));
+        let sound = forward[start * 2..end * 2]
+            .chunks(2)
+            .take_while(|pair| pair[0] != 0.0)
+            .count();
+        assert!(sound > 1000 && sound < end - start - 1000, "{sound}");
+        assert!(
+            reversed[start * 2..(end - sound) * 2]
+                .iter()
+                .all(|v| *v == 0.0)
+        );
+        assert!(reversed[(end - 1) * 2] > 0.6);
+    }
+
+    #[test]
+    fn a_reversed_clips_fades_and_gain_stay_in_its_own_time() {
+        use crate::engine::{Fade, FadeCurve, Fades};
+        let samples = ramp_source();
+        let raw = whole(&reversed_song(5_000, 256, true), &samples);
+        let mut project = reversed_song(5_000, 256, true);
+        project.clips[0].gain = 0.5;
+        project.clips[0].fades = Fades {
+            fade_in: Fade {
+                ticks: 64,
+                curve: FadeCurve::Linear,
+            },
+            fade_out: Fade {
+                ticks: 32,
+                curve: FadeCurve::Linear,
+            },
+        };
+        let faded = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let (start, end) = (frame(256), frame(512));
+        let (fade_in, fade_out) = (
+            (64.0 * frames_per_tick).round() as usize,
+            (32.0 * frames_per_tick).round() as usize,
+        );
+        // The fade in rises from the clip's start and the fade out falls to
+        // its end, as on a forward clip: they are not mirrored.
+        for since in 0..fade_in {
+            let gain = 0.5 * (since as f32 + 0.5) / fade_in as f32;
+            let at = (start + since) * 2;
+            assert!((faded[at] - raw[at] * gain).abs() < 1e-5, "in {since}");
+        }
+        for left in 1..=fade_out {
+            let gain = 0.5 * (left as f32 - 0.5) / fade_out as f32;
+            let at = (end - left) * 2;
+            assert!((faded[at] - raw[at] * gain).abs() < 1e-5, "out {left}");
+        }
+        let middle = (start + end) / 2 * 2;
+        assert!((faded[middle] - raw[middle] * 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_reversed_clip_pitches_in_its_own_time() {
+        let samples = ramp_source();
+        let mut forward = reversed_song(0, 256, false);
+        forward.clips[0].pitch_cents = 1200;
+        let mut reversed = forward.clone();
+        reversed.clips[0].reverse = true;
+        let (forward_out, reversed_out) = (whole(&forward, &samples), whole(&reversed, &samples));
+        assert_ne!(forward_out, whole(&reversed_song(0, 256, false), &samples));
+        let frames_per_tick = forward.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let (start, end) = (frame(256), frame(512));
+        for at in start..end {
+            let mirror = start + end - 1 - at;
+            assert_eq!(reversed_out[at * 2], forward_out[mirror * 2]);
+        }
+    }
+
+    #[test]
+    fn playback_started_inside_a_reversed_clip_plays_what_export_plays() {
+        let samples = ramp_source();
+        let mut project = reversed_song(7_000, 384, true);
+        // A chain on the track too: a Repeat roll over the reversed sound.
+        project.tracks[0].automation.repeat = [(448, 16.0), (512, 0.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        let export = whole(&project, &samples);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as u64;
+        let end = frame(640) as usize;
+        for start in [frame(300), frame(400) + 17, frame(460) + 3] {
+            let start = start as usize;
+            let mut out = vec![0.0; (end - start) * 2];
+            let mut state = RenderState::default();
+            let mut at = start;
+            for size in [777, 1, 4096, 129].into_iter().cycle() {
+                if at >= end {
+                    break;
+                }
+                let size = size.min(end - at);
+                mix.read_block(
+                    at as u64,
+                    &mut out[(at - start) * 2..(at - start + size) * 2],
+                    None,
+                    &mut state,
+                );
+                at += size;
+            }
+            assert_eq!(out, export[start * 2..end * 2], "from frame {start}");
+        }
+        let mut stem = vec![0.0; export.len()];
+        mix.mix(0, &mut stem, None, &mut RenderState::default(), Some(0));
+        assert_eq!(stem, export);
+    }
+
+    /// A one-bar song at 140 BPM: a 0.1 s tone on track 1 that sends to a
+    /// half-second echo on FX 1, whose Return knob is at `level` and whose
+    /// return lane is `lane`. The bus's safety limiter is off, so the return
+    /// is linear.
+    fn thrown_song(level: f32, lane: &[(u32, f32)]) -> (Project, HashMap<u32, Pcm>) {
+        let source = Pcm {
+            sample_rate: 44_100,
+            channels: 1,
+            samples: (0..4410).map(|i| ((i as f32) * 0.05).sin() * 0.5).collect(),
+        };
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.fx.buses[0].module = crate::fx::Module::EchoformDelay(crate::fx::Echoform {
+            mode: crate::fx::TimeMode::Free,
+            time_ms_l: 500.0,
+            time_ms_r: 500.0,
+            feedback: 40.0,
+            duck_amount: 0.0,
+            ..crate::fx::Echoform::default()
+        });
+        project.fx.buses[0].return_level = level;
+        project.fx.buses[0].limiter = false;
+        project.tracks[0].sends[0] = 0.8;
+        project.return_automation[0] = lane
+            .iter()
+            .map(|&(tick, value)| crate::automation::Point { tick, value })
+            .collect();
+        (project, HashMap::from([(1, source)]))
+    }
+
+    #[test]
+    fn return_automation_wraps_with_the_playback_loop() {
+        let (mut project, samples) = thrown_song(1.0, &[]);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as u64;
+        let region = [frame(80), frame(155)];
+        let render = |project: &Project| {
+            let control = MasterControl::new(&project.master);
+            control.set_returns(&project.fx);
+            let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(project, &samples).unwrap());
+            PlaybackSource::new(mix, 0, Some(region), Some(control))
+                .take((region[1] as usize + 200) * 2)
+                .collect::<Vec<_>>()
+        };
+        let full = render(&project);
+        project.return_automation[0] = [(80, 0.0), (81, 0.0), (154, 1.0), (155, 1.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        let automated = render(&project);
+        let after_wrap = region[1] as usize * 2;
+        let full = &full[after_wrap..after_wrap + 400];
+        let automated = &automated[after_wrap..after_wrap + 400];
+        assert!(full.iter().any(|sample| sample.abs() > 1e-4));
+        assert!(automated.iter().all(|sample| sample.abs() < 1e-7));
+    }
+
+    #[test]
+    fn a_return_lane_replaces_the_return_knob() {
+        let (project, samples) = thrown_song(0.5, &[]);
+        let knob = render_with_samples(&project, &samples).unwrap();
+        // A lane held at the knob's value sounds exactly like the knob, so
+        // the knob's own value no longer counts.
+        for level in [0.0, 1.0] {
+            let (project, samples) = thrown_song(level, &[(0, 0.5)]);
+            assert_eq!(
+                render_with_samples(&project, &samples).unwrap().samples,
+                knob.samples
+            );
+        }
+        let (silent, samples) = thrown_song(0.0, &[]);
+        let silent = render_with_samples(&silent, &samples).unwrap();
+        assert_ne!(silent.samples, knob.samples);
+        // Without points the knob counts again.
+        let (cleared, samples) = thrown_song(0.5, &[]);
+        assert_eq!(
+            render_with_samples(&cleared, &samples).unwrap().samples,
+            knob.samples
+        );
+    }
+
+    #[test]
+    fn a_return_lane_glides_at_every_frame_without_steps() {
+        // The first echo arrives at 0.5 s, tick 74.7 at 140 BPM, and lasts
+        // 0.1 s. The lane rises from silence to full over ticks 70 to 90.
+        let lane = [(70, 0.0), (90, 1.0)];
+        let (project, samples) = thrown_song(1.0, &lane);
+        let moving = render_with_samples(&project, &samples).unwrap().samples;
+        let (dry, samples) = thrown_song(0.0, &[]);
+        let dry = render_with_samples(&dry, &samples).unwrap().samples;
+        let (full, samples) = thrown_song(1.0, &[]);
+        let full = render_with_samples(&full, &samples).unwrap().samples;
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let points = lane.map(|(tick, value)| crate::automation::Point { tick, value });
+        let (first, last) = (
+            (70.0 * frames_per_tick) as usize,
+            (90.0 * frames_per_tick) as usize,
+        );
+        let mut checked = 0;
+        for at in first..last {
+            // The return is the full one scaled by the lane at this very
+            // frame, a straight line from frame to frame.
+            let gain = crate::automation::value_at(&points, at as f64 / frames_per_tick).unwrap();
+            let wet = full[at * 2] - dry[at * 2];
+            let got = moving[at * 2] - dry[at * 2];
+            assert!(
+                (got - wet * gain).abs() < 2e-3 * (1.0 + wet.abs()),
+                "frame {at}"
+            );
+            if wet.abs() > 0.05 {
+                assert!((got / wet - gain).abs() < 0.02, "frame {at}: {}", got / wet);
+                checked += 1;
+            }
+        }
+        assert!(checked > 1000, "{checked}");
+        // Within one block of 256 frames the gain still rises at each frame.
+        let block = (80.0 * frames_per_tick) as usize;
+        let ratios: Vec<f32> = (block..block + 256)
+            .filter(|at| (full[at * 2] - dry[at * 2]).abs() > 0.1)
+            .map(|at| (moving[at * 2] - dry[at * 2]) / (full[at * 2] - dry[at * 2]))
+            .collect();
+        assert!(ratios.len() > 20);
+        assert!(ratios.first().unwrap() < ratios.last().unwrap());
+    }
+
+    #[test]
+    fn a_return_throw_rings_an_echo_tail_after_the_dry_sound_stops() {
+        // The return is shut, then thrown to 200% from the end of the tone's
+        // bar onward, after the tone itself has stopped.
+        let throw = [(200, 0.0), (240, 2.0)];
+        let (project, samples) = thrown_song(0.0, &throw);
+        let thrown = render_with_samples(&project, &samples).unwrap().samples;
+        let (shut, samples) = thrown_song(0.0, &[]);
+        let shut = render_with_samples(&shut, &samples).unwrap().samples;
+        let (open, samples) = thrown_song(1.0, &[]);
+        let open = render_with_samples(&open, &samples).unwrap().samples;
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let after = (240.0 * frames_per_tick) as usize;
+        let rms = |samples: &[f32]| -> f64 {
+            let tail = &samples[after * 2..];
+            (tail.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / tail.len() as f64).sqrt()
+        };
+        // The dry tone has long stopped: the shut return leaves silence.
+        assert_eq!(rms(&shut), 0.0);
+        // The throw rings on as an echo tail, twice the full return.
+        assert!(rms(&thrown) > 1e-3, "{}", rms(&thrown));
+        let ratio = rms(&thrown) / rms(&open);
+        assert!((ratio - 2.0).abs() < 0.01, "{ratio}");
+        assert!(thrown.len() > 2 * (after + 44_100), "the tail lasts");
+    }
+
+    #[test]
+    fn a_return_lane_plays_and_exports_alike_through_the_tail() {
+        // The lane keeps moving past the song's end, into the tail.
+        let (project, samples) = thrown_song(1.0, &[(0, 1.0), (256, 0.2), (700, 1.5)]);
+        let exported = render_with_samples(&project, &samples).unwrap();
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let played: Vec<f32> = PlaybackSource::new(mix.clone(), 0, None, Some(control)).collect();
+        assert_eq!(played, exported.samples);
+        let (still, samples) = thrown_song(1.0, &[(0, 1.0), (256, 0.2)]);
+        assert_ne!(
+            render_with_samples(&still, &samples).unwrap().samples,
+            exported.samples
+        );
     }
 
     #[test]
@@ -5145,6 +5724,17 @@ mod tests {
         ];
         project.tracks[4].right_enabled = false;
         project.tracks[4].sends[3] = 0.4;
+        // FX 4's return lane rises through the song; the parts follow it.
+        project.return_automation[3] = vec![
+            crate::automation::Point {
+                tick: 0,
+                value: 0.2,
+            },
+            crate::automation::Point {
+                tick: 256,
+                value: 1.0,
+            },
+        ];
         // A muted track and an unpowered bus have no file.
         project.tracks[6].muted = true;
         project.fx.buses[1].module = crate::fx::Module::AetherformReverb(

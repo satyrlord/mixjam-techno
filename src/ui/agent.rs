@@ -1033,15 +1033,10 @@ impl MixJamApp {
             }
             Request::Automate {
                 track,
+                bus,
                 lane,
                 points,
             } => {
-                if !(1..=TRACK_COUNT).contains(&track) {
-                    return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
-                }
-                let lane = automation::Lane::from_key(&lane).ok_or(
-                    "Lanes are volume, send1, send2, send3, send4, filter, pan, and repeat.",
-                )?;
                 let points = points
                     .into_iter()
                     .map(|[bar, value]| {
@@ -1051,11 +1046,39 @@ impl MixJamApp {
                         })
                     })
                     .collect::<Result<Vec<_>, String>>()?;
-                self.session.edit(EditCommand::SetAutomation {
-                    track: track - 1,
-                    lane,
-                    points,
-                })?;
+                let command = match (track, bus) {
+                    (Some(track), None) => {
+                        if !(1..=TRACK_COUNT).contains(&track) {
+                            return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
+                        }
+                        let lane = automation::Lane::from_key(&lane).ok_or(
+                            "Track lanes are volume, send1, send2, send3, send4, filter, pan, \
+                             repeat, and repeatgate.",
+                        )?;
+                        EditCommand::SetAutomation {
+                            track: track - 1,
+                            lane,
+                            points,
+                        }
+                    }
+                    (None, Some(bus)) => {
+                        if !(1..=mixjam_techno::application::fx::BUSES).contains(&bus) {
+                            return Err(format!(
+                                "FX buses are 1 to {}.",
+                                mixjam_techno::application::fx::BUSES
+                            ));
+                        }
+                        if lane != "return" {
+                            return Err("An FX bus has one lane: return.".into());
+                        }
+                        EditCommand::SetReturnAutomation {
+                            bus: bus - 1,
+                            points,
+                        }
+                    }
+                    _ => return Err("Give either track= or bus=.".into()),
+                };
+                self.session.edit(command)?;
                 self.sync_notice();
                 Start::run(vec![Step::Idle])
             }
@@ -1305,6 +1328,7 @@ fn clip_edit(clip: &Clip, request: Request) -> Result<EditCommand, String> {
         fade_out_ticks,
         fade_out_curve,
         pitch_cents,
+        reverse,
         ..
     } = request
     else {
@@ -1339,6 +1363,7 @@ fn clip_edit(clip: &Clip, request: Request) -> Result<EditCommand, String> {
         length_ticks,
         fades,
         pitch_cents: pitch_cents.unwrap_or(clip.pitch_cents),
+        reverse: reverse.unwrap_or(clip.reverse),
     })
 }
 
@@ -1363,6 +1388,7 @@ mod tests {
             fade_out_ticks: None,
             fade_out_curve: None,
             pitch_cents: None,
+            reverse: None,
         }
     }
 
@@ -1378,6 +1404,7 @@ mod tests {
             gain: 0.5,
             fades: Default::default(),
             pitch_cents: -100,
+            reverse: false,
         };
         clip.fades.fade_out.ticks = 64;
         let EditCommand::SetClip {
@@ -1388,6 +1415,7 @@ mod tests {
             length_ticks,
             fades,
             pitch_cents,
+            reverse,
         } = clip_edit(
             &clip,
             change(Some(0.0), None, Some((32, FadeCurve::Exponential))),
@@ -1398,6 +1426,7 @@ mod tests {
         };
         assert_eq!((id, start_tick, gain), (4, 512, 1.0));
         assert_eq!((offset_frames, length_ticks, pitch_cents), (10, 256, -100));
+        assert!(!reverse);
         assert_eq!(fades.fade_in.ticks, 32);
         assert_eq!(fades.fade_in.curve, FadeCurve::Exponential);
         assert_eq!(fades.fade_out, clip.fades.fade_out);
@@ -1414,5 +1443,25 @@ mod tests {
         }
         // A shorter clip shortens a fade that the request leaves out.
         assert!(clip_edit(&clip, change(None, Some(32), None)).is_ok());
+        // Reverse switches only when the request gives it.
+        let Request::Clip { .. } = change(None, None, None) else {
+            unreachable!()
+        };
+        let mut flip = change(None, None, None);
+        if let Request::Clip { reverse, .. } = &mut flip {
+            *reverse = Some(true);
+        }
+        let reversed = clip_edit(&clip, flip).unwrap();
+        assert!(matches!(
+            reversed,
+            EditCommand::SetClip {
+                reverse: true,
+                gain: 0.5,
+                ..
+            }
+        ));
+        clip.reverse = true;
+        let kept = clip_edit(&clip, change(Some(0.0), None, None)).unwrap();
+        assert!(matches!(kept, EditCommand::SetClip { reverse: true, .. }));
     }
 }

@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 22) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 23) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -65,11 +65,18 @@ def _master(document):
 
 
 def _fx_buses(document):
-    # Match FxBuses::default: every bus empty, on, at full return, limited.
+    # Match FxBuses::default: every bus empty, on, at full return, limited. The
+    # project holds each bus's return lane apart from its settings.
     if document['formatVersion'] >= 13:
-        return document['fxBuses']
+        return [{key: value for key, value in bus.items() if key != 'returnAutomation'}
+                for bus in document['fxBuses']]
     return [{'module': {'type': 'empty'}, 'powered': True, 'returnLevel': 1.0,
              'limiter': True} for _ in range(4)]
+
+
+def _return_automation(document):
+    """Each FX bus's return lane, from version 23; none before."""
+    return [deepcopy(bus.get('returnAutomation', [])) for bus in document.get('fxBuses', [])]
 
 
 # Match ChannelEq::default: the EQ off, every band flat.
@@ -119,15 +126,17 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in range(8, 23):
-        raise RuntimeError(f'{path} is not a format version 8 through 22 .mixjam song.')
+    if version not in range(8, 24):
+        raise RuntimeError(f'{path} is not a format version 8 through 23 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
               'offset_frames': item['offsetFrames'], 'gain': item['gain'],
               'fades': deepcopy(item.get('fades', _NO_FADES)),
-              'pitch_cents': item.get('pitchCents', 0)}
+              'pitch_cents': item.get('pitchCents', 0),
+              **({'reverse': True} if item.get('reverse') else {})}
              for track, lane in enumerate(document['lanes']) for item in lane['placements']]
+    returns = _return_automation(document)
     imported = []
     for item in document['samples']:
         sample = {'id': item['id'], 'name': item['name'], 'group_name': item['groupName'],
@@ -144,6 +153,7 @@ def read_song(path):
         'master_gain': song['masterGain'],
         'master': _master(document),
         'fx': _fx_buses(document),
+        **({'return_automation': returns} if any(returns) else {}),
         'pitch_ratio': 1.0,
         'tracks': [{'gain': abs(lane['gain']) if version == 8 else lane['gain'],
                     'polarity_inverted': (math.copysign(1, lane['gain']) < 0

@@ -1017,6 +1017,7 @@ impl MixJamApp {
         let mut offset = clip.offset_frames;
         let mut length = clip.length_ticks;
         let mut pitch = clip.pitch_cents;
+        let mut reverse = clip.reverse;
         let mut change = false;
         let mut fades = clip.fades;
         egui::Grid::new("clip_properties")
@@ -1099,6 +1100,14 @@ impl MixJamApp {
                 ui.end_row();
                 change |= pitch_controls(ui, &mut pitch);
                 ui.end_row();
+                ui.label("Reverse");
+                change |= name_control(ui.checkbox(&mut reverse, "Play backwards"), "Clip reverse")
+                    .on_hover_text(
+                        "Play the clip's sound backwards within the clip, for reversed swells \
+                         and risers. Its fades, pitch, and gain stay where they are.",
+                    )
+                    .changed();
+                ui.end_row();
             });
         if change {
             let result = self.session.edit(EditCommand::SetClip {
@@ -1109,6 +1118,7 @@ impl MixJamApp {
                 length_ticks: length,
                 fades,
                 pitch_cents: pitch,
+                reverse,
             });
             self.apply(result);
         }
@@ -1208,6 +1218,7 @@ impl MixJamApp {
                 length_ticks: preview.length_ticks,
                 fades: preview.fades,
                 pitch_cents: preview.pitch_cents,
+                reverse: preview.reverse,
             });
             self.apply(result);
         }
@@ -1516,7 +1527,7 @@ impl MixJamApp {
                     }
                     let pointer = ui.input(|i| i.pointer.latest_pos());
                     // Clip handles work while the lanes edit clips.
-                    let handles = self.automation_lane.is_none() && !self.erase;
+                    let handles = !self.automating() && !self.erase;
                     if handles {
                         self.handle_drag_step(ui, &response, rect);
                     } else {
@@ -1560,6 +1571,9 @@ impl MixJamApp {
                                 self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
                             );
+                            if clip.reverse {
+                                draw_reverse_mark(&painter, clip_rect);
+                            }
                             let bpm = sample.map_or(self.session.project().bpm, |sample| {
                                 self.session
                                     .project()
@@ -1600,7 +1614,7 @@ impl MixJamApp {
                         None => self.selected_sample.filter(|_| {
                             self.place_on_click
                                 && !self.erase
-                                && self.automation_lane.is_none()
+                                && !self.automating()
                                 && response.hovered()
                         }),
                     };
@@ -1629,6 +1643,7 @@ impl MixJamApp {
                                 gain: 1.0,
                                 fades: Default::default(),
                                 pitch_cents: 0,
+                                reverse: false,
                             },
                             rect,
                         );
@@ -1674,6 +1689,10 @@ impl MixJamApp {
                     if let Some(lane) = self.automation_lane {
                         let rows = &visible_tracks[..occupied_count];
                         self.automation_lanes(ui, &response, &painter, rect, lane, rows);
+                        return;
+                    }
+                    if let Some(bus) = self.return_lane {
+                        self.return_lane(ui, &response, &painter, rect, visible, bus);
                         return;
                     }
                     if (response.clicked() || response.double_clicked())
@@ -3135,39 +3154,242 @@ impl MixJamApp {
     /// rows show and edit.
     fn automation_selector(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("Automation").size(12.0).color(MUTED));
-        let current = self
-            .automation_lane
-            .map_or_else(|| "Off".to_string(), automation::Lane::label);
-        let mut choice = self.automation_lane;
+        let current = match (self.automation_lane, self.return_lane) {
+            (_, Some(bus)) => return_lane_label(bus),
+            (Some(lane), None) => lane.label(),
+            (None, None) => "Off".into(),
+        };
+        let shown = (self.automation_lane, self.return_lane);
+        let mut choice = shown;
         let response = egui::ComboBox::from_id_salt("automation_lane")
             .selected_text(current)
             .width(112.0)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(choice.is_none(), "Off").clicked() {
-                    choice = None;
+                if ui.selectable_label(choice == (None, None), "Off").clicked() {
+                    choice = (None, None);
                     ui.close();
                 }
                 for lane in automation::Lane::ALL {
                     if ui
-                        .selectable_label(choice == Some(lane), lane.label())
+                        .selectable_label(choice == (Some(lane), None), lane.label())
                         .clicked()
                     {
-                        choice = Some(lane);
+                        choice = (Some(lane), None);
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                for bus in 0..mixjam_techno::application::fx::BUSES {
+                    if ui
+                        .selectable_label(choice == (None, Some(bus)), return_lane_label(bus))
+                        .clicked()
+                    {
+                        choice = (None, Some(bus));
                         ui.close();
                     }
                 }
             })
             .response;
         name_control(response, "Automation lane").on_hover_text(
-            "Show and edit one automation lane on every track. Click a lane to add a point, \
-             drag a point to move it, and double-click or right-click a point to delete it. \
-             Points snap to 1/16 bar; hold Ctrl for single ticks. Off edits clips again.",
+            "Show and edit one automation lane on every track, or the return lane of one FX \
+             bus across the arrangement. Click a lane to add a point, drag a point to move it, \
+             and double-click or right-click a point to delete it. Points snap to 1/16 bar; \
+             hold Ctrl for single ticks. Off edits clips again.",
         );
-        if choice != self.automation_lane {
-            self.automation_lane = choice;
+        if choice != shown {
+            (self.automation_lane, self.return_lane) = choice;
             self.automation_drag = None;
             self.session.end_automation_gesture();
         }
+    }
+
+    /// Whether the arrangement shows an automation lane, whose points the
+    /// lanes then edit instead of clips.
+    pub(super) fn automating(&self) -> bool {
+        self.automation_lane.is_some() || self.return_lane.is_some()
+    }
+
+    /// Draw FX bus `bus`'s return lane across the visible rows and edit its
+    /// points with the pointer, as a track's lane is edited. The lane runs
+    /// from silence at the bottom to `RETURN_CEILING` at the top; a dashed
+    /// line marks the full return, 100%.
+    fn return_lane(
+        &mut self,
+        ui: &egui::Ui,
+        response: &Response,
+        painter: &egui::Painter,
+        rect: Rect,
+        visible: Rect,
+        bus: usize,
+    ) {
+        painter.rect_filled(rect, 0.0, CANVAS.gamma_multiply(0.45));
+        let row = return_row(rect, visible);
+        let bar_width = self.timeline_bar_width;
+        let x = |tick: u32| rect.left() + tick as f32 / TICKS_PER_BAR as f32 * bar_width;
+        let points = self.session.project().return_automation[bus].clone();
+        let knob = self.session.project().fx.buses[bus].return_level;
+        painter.text(
+            Pos2::new(visible.left() + 8.0, visible.top() + 4.0),
+            Align2::LEFT_TOP,
+            format!("{} (100% dashed)", return_lane_label(bus)),
+            FontId::proportional(12.0),
+            MUTED,
+        );
+        let full = return_y(1.0, row);
+        painter.add(egui::Shape::dashed_line(
+            &[Pos2::new(rect.left(), full), Pos2::new(rect.right(), full)],
+            Stroke::new(1.0_f32, LINE),
+            3.0,
+            6.0,
+        ));
+        let pointer = ui.input(|i| i.pointer.latest_pos());
+        let mut hit = None;
+        if points.is_empty() {
+            // The Return knob, which the bus keeps without points.
+            let y = return_y(knob, row);
+            painter.add(egui::Shape::dashed_line(
+                &[Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+                Stroke::new(1.0_f32, MUTED.gamma_multiply(0.6)),
+                6.0,
+                5.0,
+            ));
+        } else {
+            let markers: Vec<Pos2> = points
+                .iter()
+                .map(|point| Pos2::new(x(point.tick), return_y(point.value, row)))
+                .collect();
+            let mut line = vec![Pos2::new(rect.left(), markers[0].y)];
+            line.extend(markers.iter().copied());
+            line.push(Pos2::new(rect.right(), markers[markers.len() - 1].y));
+            painter.add(egui::Shape::line(line, Stroke::new(1.6_f32, ACCENT)));
+            for (index, point) in markers.iter().enumerate() {
+                let active = self.automation_drag == Some((bus, index));
+                let hovered = pointer.is_some_and(|pos| point.distance(pos) <= AUTOMATION_REACH);
+                if hovered {
+                    hit = Some(index);
+                }
+                painter.circle(
+                    *point,
+                    if active || hovered { 4.5 } else { 3.5 },
+                    if active { TEXT } else { ACCENT },
+                    Stroke::new(1.0_f32, CANVAS),
+                );
+            }
+        }
+        if let Some(index) = self.automation_drag.map(|(_, index)| index).or(hit)
+            && let Some(point) = points.get(index)
+        {
+            response.clone().on_hover_text_at_pointer(format!(
+                "{}, bar {:.2}: {}",
+                return_lane_label(bus),
+                f64::from(point.tick) / f64::from(TICKS_PER_BAR) + 1.0,
+                automation::return_label(point.value)
+            ));
+        }
+        let free = ui.input(|i| i.modifiers.ctrl);
+        let hit_at = |pos: Pos2, points: &[automation::Point]| {
+            points.iter().position(|point| {
+                Pos2::new(x(point.tick), return_y(point.value, row)).distance(pos)
+                    <= AUTOMATION_REACH
+            })
+        };
+        // A click adds a point; a drag from the lane adds one and moves it.
+        if response.drag_started()
+            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
+        {
+            match self.session.begin_return_gesture(bus) {
+                Ok(()) => {
+                    self.automation_drag = hit_at(origin, &points)
+                        .or_else(|| self.return_add(origin, rect, row, bus, free))
+                        .map(|index| (bus, index));
+                    if self.automation_drag.is_none() {
+                        self.session.end_automation_gesture();
+                    }
+                }
+                Err(error) => self.error(error),
+            }
+        }
+        if let Some((_, index)) = self.automation_drag {
+            if response.dragged()
+                && let Some(pos) = pointer
+            {
+                let mut points = self.session.project().return_automation[bus].clone();
+                if index < points.len() {
+                    let low = index
+                        .checked_sub(1)
+                        .map_or(0, |before| points[before].tick + 1);
+                    let high = points
+                        .get(index + 1)
+                        .map_or(MAX_TICKS, |after| after.tick - 1);
+                    let tick = self.automation_tick(pos.x, rect, free);
+                    let point = automation::Point {
+                        tick: if low <= high {
+                            tick.clamp(low, high)
+                        } else {
+                            points[index].tick
+                        },
+                        value: return_value(pos.y, row),
+                    };
+                    if points[index] != point {
+                        points[index] = point;
+                        let result = self
+                            .session
+                            .edit(EditCommand::SetReturnAutomation { bus, points });
+                        self.apply(result);
+                    }
+                }
+            }
+            if response.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+                self.automation_drag = None;
+                self.session.end_automation_gesture();
+            }
+        }
+        if let Some(pos) = response.interact_pointer_pos() {
+            let points = self.session.project().return_automation[bus].clone();
+            let hit = hit_at(pos, &points);
+            if response.double_clicked() || response.secondary_clicked() {
+                if let Some(index) = hit {
+                    let mut points = points;
+                    points.remove(index);
+                    let result = self
+                        .session
+                        .edit(EditCommand::SetReturnAutomation { bus, points });
+                    self.apply(result);
+                }
+            } else if response.clicked() && hit.is_none() {
+                self.return_add(pos, rect, row, bus, free);
+            }
+        }
+    }
+
+    /// Add a point to FX bus `bus`'s return lane where `pos` is, or set the
+    /// value of the point already at its tick. Returns the point's index.
+    fn return_add(
+        &mut self,
+        pos: Pos2,
+        rect: Rect,
+        row: Rect,
+        bus: usize,
+        free: bool,
+    ) -> Option<usize> {
+        if !row.y_range().contains(pos.y) {
+            return None;
+        }
+        let tick = self.automation_tick(pos.x, rect, free);
+        let value = return_value(pos.y, row);
+        let mut points = self.session.project().return_automation[bus].clone();
+        let index = points.partition_point(|point| point.tick < tick);
+        if points.get(index).is_some_and(|point| point.tick == tick) {
+            points[index].value = value;
+        } else {
+            points.insert(index, automation::Point { tick, value });
+        }
+        let result = self
+            .session
+            .edit(EditCommand::SetReturnAutomation { bus, points });
+        let added = result.is_ok();
+        self.apply(result);
+        added.then_some(index)
     }
 
     /// The lane's row rectangle for a track the arrangement shows.
@@ -3221,7 +3443,7 @@ impl MixJamApp {
                 let value = match lane {
                     automation::Lane::Send(bus) => project.tracks[track].sends[bus],
                     automation::Lane::Pan => project.tracks[track].pan,
-                    _ => 0.0,
+                    _ => lane.before_first(),
                 };
                 let y = automation_y(lane, value, row);
                 painter.add(egui::Shape::dashed_line(
@@ -3236,13 +3458,14 @@ impl MixJamApp {
                 .iter()
                 .map(|point| Pos2::new(x(point.tick), automation_y(lane, point.value, row)))
                 .collect();
-            // A stepped lane is off before its first point and holds each
-            // value until the next point; the others hold their first value
-            // and move in straight lines.
+            // A stepped lane holds its resting value before its first point
+            // (Repeat off, the gate at 100%) and each value until the next
+            // point; the others hold their first value and move in straight
+            // lines.
             let mut line = vec![Pos2::new(
                 rect.left(),
                 if lane.steps() {
-                    automation_y(lane, 0.0, row)
+                    automation_y(lane, lane.before_first(), row)
                 } else {
                     markers[0].y
                 },
@@ -3465,8 +3688,58 @@ fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
             let last = (steps.len() - 1) as f32;
             steps[(along * last).round().clamp(0.0, last) as usize]
         }
+        // Whole steps of 5%.
+        automation::Lane::RepeatGate => {
+            (value / automation::REPEAT_GATE_STEP).round() * automation::REPEAT_GATE_STEP
+        }
     };
     value.clamp(low, high)
+}
+
+/// The name of FX bus `bus`'s return lane in the lane menu: "FX 1 return".
+fn return_lane_label(bus: usize) -> String {
+    format!("FX {} return", bus + 1)
+}
+
+/// The return lane's row: the visible rows of the arrangement, below its
+/// name and 4 points above the bottom.
+pub(super) fn return_row(rect: Rect, visible: Rect) -> Rect {
+    let top = visible.top() + 22.0;
+    let bottom = (visible.bottom() - 4.0).max(top + 8.0);
+    Rect::from_x_y_ranges(rect.x_range(), top..=bottom)
+}
+
+/// Where a return lane value sits in its row.
+pub(super) fn return_y(value: f32, row: Rect) -> f32 {
+    row.bottom() - value / automation::RETURN_CEILING * row.height()
+}
+
+/// The return lane value at a height in its row, in whole percent. The
+/// full return, 100%, holds the pointer near it.
+fn return_value(y: f32, row: Rect) -> f32 {
+    let value = (row.bottom() - y) / row.height() * automation::RETURN_CEILING;
+    let value = if (value - 1.0).abs() < 0.04 {
+        1.0
+    } else {
+        (value * 100.0).round() / 100.0
+    };
+    value.clamp(0.0, automation::RETURN_CEILING)
+}
+
+/// Mark a clip that plays backwards: "rev" in its bottom right corner.
+fn draw_reverse_mark(painter: &egui::Painter, rect: Rect) {
+    if rect.width() < 36.0 || rect.height() < 18.0 {
+        return;
+    }
+    painter
+        .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
+        .text(
+            rect.right_bottom() + Vec2::new(-6.0, -3.0),
+            Align2::RIGHT_BOTTOM,
+            "rev",
+            FontId::proportional(10.0),
+            CANVAS,
+        );
 }
 
 /// Shade a clip's fades above their curves. The fade out ends where the
@@ -3541,7 +3814,8 @@ fn frames_per_tick(sample: &Sample, bpm: f64) -> f64 {
 
 /// The ticks from a clip's start to where its sound ends, at most its length.
 fn sound_ticks(clip: &Clip, sample: &Sample, bpm: f64) -> u32 {
-    if sample.sample_rate == 0 {
+    // Reversed, the sound ends with the clip.
+    if sample.sample_rate == 0 || clip.reverse {
         return clip.length_ticks;
     }
     let frames = f64::from(sample.frame_count.saturating_sub(clip.offset_frames));

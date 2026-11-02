@@ -1,5 +1,7 @@
 //! The return stage: it runs the four buses on the send feeds and adds
-//! their returns to the dry mix, for playback and export alike.
+//! their returns to the dry mix, for playback and export alike. A bus's
+//! return lane, when it has points, replaces its return level frame by
+//! frame.
 use super::parts::{Glide, SafetyLimiter};
 use super::{BUSES, FxBus, FxBuses, Module, delay, reverb};
 use crate::master::MasterControl;
@@ -125,8 +127,17 @@ impl Bus {
         }
     }
     /// `key` is the ducker's key at this frame, or `None` for the bus's input.
+    /// `lane` is the return lane's value at this frame, which replaces the
+    /// return level, or `None` without a lane.
     #[inline]
-    fn process(&mut self, left: f64, right: f64, key: Option<(f64, f64)>, bpm: f64) -> (f64, f64) {
+    fn process(
+        &mut self,
+        left: f64,
+        right: f64,
+        key: Option<(f64, f64)>,
+        lane: Option<f64>,
+        bpm: f64,
+    ) -> (f64, f64) {
         let gate = self.input.next();
         let (left, right) = (left * gate, right * gate);
         let fed = left != 0.0 || right != 0.0;
@@ -142,7 +153,16 @@ impl Bus {
             Kind::Delay => self.delay.process_keyed(left, right, key),
             Kind::Reverb => self.reverb.process_keyed(left, right, key),
         };
-        let mut level = self.level.next();
+        // The lane moves at every frame, in straight lines, so it has no
+        // steps. The level's glide starts from the lane's value when a new
+        // lane leaves it.
+        let mut level = match lane {
+            Some(value) => {
+                self.level.hold(value);
+                value
+            }
+            None => self.level.next(),
+        };
         if self.cut > 0 {
             level *= self.cut as f64 / CUT as f64;
             self.cut -= 1;
@@ -172,6 +192,49 @@ impl Bus {
         }
         out
     }
+}
+
+/// The four buses' return lanes resolved to output frames: a lane with
+/// points replaces its bus's return level. Each frame's value depends only on
+/// the frame, so export, stems, and playback started anywhere agree.
+pub struct ReturnLanes {
+    lanes: [Option<crate::automation::Envelope>; BUSES],
+}
+impl ReturnLanes {
+    /// `None` when no bus has a return lane.
+    pub(crate) fn new(
+        lanes: &[Vec<crate::automation::Point>; BUSES],
+        frames_per_tick: f64,
+    ) -> Option<Self> {
+        let lanes = std::array::from_fn(|bus| {
+            crate::automation::Envelope::new(&lanes[bus], frames_per_tick)
+        });
+        lanes.iter().any(Option::is_some).then_some(Self { lanes })
+    }
+    /// Bus `bus`'s return level at song frame `frame`, if its lane has
+    /// points. The bus applies it `LOOKAHEAD` frames before that frame
+    /// leaves its safety limiter, so each returned frame has the lane's
+    /// value at its own time.
+    fn at(&self, bus: usize, frame: u64) -> Option<f64> {
+        self.lanes[bus]
+            .as_ref()
+            .map(|lane| f64::from(lane.at(frame)))
+    }
+}
+
+/// The return lanes, the block's first song frame, and an optional loop.
+pub type Lanes<'a> = Option<(&'a ReturnLanes, u64, Option<[u64; 2]>)>;
+
+fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize) -> Option<f64> {
+    lanes.and_then(|(lanes, first, loop_region)| {
+        let mut at = first + (frame + LOOKAHEAD) as u64;
+        if let Some([start, end]) = loop_region.filter(|[start, end]| start < end)
+            && at >= end
+        {
+            at = start + (at - end) % (end - start);
+        }
+        lanes.at(bus, at)
+    })
 }
 
 /// Runs the buses over blocks of the mix. Its state carries from one block
@@ -247,6 +310,16 @@ impl ReturnsProcessor {
         sends: Option<&[f32]>,
         keys: crate::ducker::Keys,
     ) {
+        self.process_at(block, sends, keys, None);
+    }
+    /// `process_keyed` with the buses' return lanes from the block's frame.
+    pub fn process_at(
+        &mut self,
+        block: &mut [f32],
+        sends: Option<&[f32]>,
+        keys: crate::ducker::Keys,
+        lanes: Lanes,
+    ) {
         self.poll();
         if sends.is_some() || self.ringing() {
             let bpm = self.bpm;
@@ -259,7 +332,8 @@ impl ReturnsProcessor {
                         (f64::from(sends[at]), f64::from(sends[at + 1]))
                     });
                     let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                    let (l, r) = bus.process(left, right, key, bpm);
+                    let lane = lane_at(lanes, index, frame);
+                    let (l, r) = bus.process(left, right, key, lane, bpm);
                     sum.0 += l;
                     sum.1 += r;
                 }
@@ -271,8 +345,14 @@ impl ReturnsProcessor {
     /// Each bus's return alone, for an export in parts: `returns` gets the
     /// four returns, eight interleaved channels a frame as `sends` holds the
     /// feeds, without the dry mix and not held to full scale. The buses run
-    /// as `process` runs them.
-    pub fn split(&mut self, returns: &mut [f32], sends: Option<&[f32]>, keys: crate::ducker::Keys) {
+    /// as `process_at` runs them.
+    pub fn split(
+        &mut self,
+        returns: &mut [f32],
+        sends: Option<&[f32]>,
+        keys: crate::ducker::Keys,
+        lanes: Lanes,
+    ) {
         self.poll();
         returns.fill(0.0);
         if sends.is_none() && !self.ringing() {
@@ -292,7 +372,8 @@ impl ReturnsProcessor {
                     (f64::from(sends[at]), f64::from(sends[at + 1]))
                 });
                 let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                let (l, r) = bus.process(left, right, key, bpm);
+                let lane = lane_at(lanes, index, frame);
+                let (l, r) = bus.process(left, right, key, lane, bpm);
                 out[index * 2] = l as f32;
                 out[index * 2 + 1] = r as f32;
             }
@@ -379,7 +460,7 @@ mod tests {
                 };
                 if split {
                     let mut returns = vec![0.0; count * 2 * BUSES];
-                    processor.split(&mut returns, Some(&sends), keys);
+                    processor.split(&mut returns, Some(&sends), keys, None);
                     for frame in returns.chunks(2 * BUSES) {
                         output.extend_from_slice(&frame[..2]);
                     }

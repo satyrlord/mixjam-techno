@@ -296,6 +296,7 @@ fn convert_with_catalog<'a>(
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
         }
     }

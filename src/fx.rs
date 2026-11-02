@@ -15,8 +15,8 @@ mod parts;
 mod processor;
 mod reverb;
 
-pub use processor::ReturnsProcessor;
 pub(crate) use processor::{LOOKAHEAD, TAIL_LIMIT};
+pub use processor::{Lanes, ReturnLanes, ReturnsProcessor};
 
 use serde::{Deserialize, Serialize};
 

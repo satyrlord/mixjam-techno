@@ -111,19 +111,28 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   with Ctrl). Each completed drag is one undo step. Right-click a clip, or
   select it and press Shift+F10, for exact gain,
   trim start, length, fades in beats with their curves (Linear, Equal power, or
-  Exponential), and pitch in semitones and cents. The fade out ends
+  Exponential), pitch in semitones and cents, and Reverse. The fade out ends
   where the clip's sound ends, which can be before the clip's end, so a phrase
   that stops abruptly can die away instead. Pitch keeps the clip's length and
   timing. The arrangement shades each fade over its clip.
+- Reverse plays a clip backwards: the same stretch of its sound, from the trim
+  start over the clip's length, runs from its end to its start within the
+  clip, for reversed cymbals, swells, and risers. The fades, gain, and pitch
+  stay where they are, so the fade in still opens the clip and the fade out
+  still closes it. A reversed clip whose sound is shorter than the clip
+  starts with silence and ends with the clip. The clip reads "rev" in its
+  corner. The trim and length still describe the forward stretch: dragging
+  the left edge trims what is heard at the clip's end.
 - Choose a lane in Automation above the arrangement to draw it on every track:
   Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
   the send knob while the lane has points), Filter (low-pass below the
   middle, high-pass above it, open in the middle; it crosses between the two
-  without a click), Pan, or Repeat. Click a lane to add a
+  without a click), Pan, Repeat, or Repeat gate. Click a lane to add a
   point, drag a point to move it, and double-click or right-click a point to
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
-  points the value moves in a straight line, except on the Repeat lane, which
-  steps. Choose Off to edit clips again.
+  points the value moves in a straight line, except on the Repeat and Repeat
+  gate lanes, which step. The same menu holds FX 1 to FX 4 return, one lane
+  for a bus's return across the arrangement. Choose Off to edit clips again.
 - The Pan lane moves a track across the stereo field: the top of the row is
   hard right, the bottom hard left, and the middle the center. A point reads
   as L 40, C, or R 100. While the lane has points it replaces the track's pan
@@ -139,6 +148,22 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   repeats up. Off brings the live sound back. Each repeat fades in over a few
   milliseconds, so it does not click, and the repeats go through the track's
   EQ, pan, and FX sends.
+- The Repeat gate lane sets how much of each repeat sounds, from 5% at the
+  bottom of the row to 100% at the top, in 5% steps. It is at 100% before its
+  first point and holds each value until the next, like Repeat; each repeat
+  takes the value held where it starts. At 25% a repeat plays its first
+  quarter and then fades out over 3 ms, so a roll becomes short, punchy
+  plucks without drawing volume points; at 100% the repeats play whole. The
+  gate does nothing while Repeat is off.
+- An FX return lane (FX 1 return to FX 4 return in the Automation menu) moves
+  one bus's return level over the song, as one line across the arrangement:
+  silence at the bottom, the full return (100%, the dashed line) in the
+  middle, and 200%, about 6 dB louder, at the top. While it has points it
+  replaces the bus's Return knob, and it moves at every sample, so it glides
+  without steps. Use it to throw a delay or reverb: hold the return low, raise
+  it on the last repeat of a roll or the end of a phrase, and let the echoes
+  ring out before you bring it back down. The bus's limiter still holds the
+  return under -1 dBFS.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
 - Playback requests a 40 ms output buffer to give busy songs more headroom.
   The device may use another size. A larger buffer can add a short delay
@@ -241,7 +266,8 @@ change smoothly while the song plays, including when you undo or redo them.
   0 to 100%, after its fader and pan. A ringed knob has an automation lane,
   which sets the send while the song plays. After the tracks, a return strip for
   each bus sets its return level and switches its input and limiter; Edit
-  opens the bus in the Effects module.
+  opens the bus in the Effects module. A ringed return knob, marked Return
+  automated, has an FX return lane, which sets the level while the song plays.
 
 ## Mastering
 

@@ -1604,6 +1604,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -1777,6 +1778,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -1841,6 +1843,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -1931,6 +1934,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -1995,6 +1999,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let file = root.join("song.json");
         project.save(&file).unwrap();
@@ -2076,6 +2081,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let file = root.join("song.json");
         project.save(&file).unwrap();
@@ -2180,6 +2186,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let (opened, ready) = resolve(project.clone(), &library).unwrap();
         assert_eq!(opened.imported_samples[0].path, take);
@@ -2243,6 +2250,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         project.save(&path).unwrap();
         let before = fs::read(&path).unwrap();
@@ -2290,6 +2298,7 @@ mod tests {
             gain: 0.75,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let path = root.join("song.mixjam");
         save(&project, &path).unwrap();
@@ -2360,6 +2369,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         fs::remove_file(&wave).unwrap();
         let (opened, mut ready) = resolve(project.clone(), &library).unwrap();

@@ -575,6 +575,7 @@ fn convert(document: Document, path: &Path, library: &Library) -> Result<Project
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
         }
     }
@@ -593,11 +594,11 @@ mod tests {
             std::process::id()
         ));
         let mut document = fixture();
-        document["formatVersion"] = json!(23);
+        document["formatVersion"] = json!(24);
         fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
         let error = load_song(&path, &Library::empty()).unwrap_err();
         fs::remove_file(path).unwrap();
-        assert_eq!(error, "Only MixJam format versions 7 to 22 are supported.");
+        assert_eq!(error, "Only MixJam format versions 7 to 23 are supported.");
     }
 
     #[test]

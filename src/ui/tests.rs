@@ -4189,6 +4189,7 @@ mod tests {
             gain: 0.75,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         project.missing_samples.push(missing);
         app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
@@ -4242,6 +4243,7 @@ mod tests {
                 gain: 0.75,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
         }
         project
@@ -11489,6 +11491,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         project.missing_samples.push(other);
         app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
@@ -11860,6 +11863,7 @@ mod tests {
                 length_ticks: clip.length_ticks,
                 fades,
                 pitch_cents: clip.pitch_cents,
+                reverse: false,
             })
             .unwrap();
         open_clip_menu(&ctx, &mut app, clip.id);
@@ -11961,6 +11965,7 @@ mod tests {
             "Clip fade out curve",
             "Clip pitch (semitones)",
             "Clip pitch (cents)",
+            "Clip reverse",
         ] {
             let bounds = accessible_node(&output, name).1.bounds().unwrap();
             assert!(bounds.x1 <= f64::from(size.x), "{name}: {bounds:?}");
@@ -12206,6 +12211,7 @@ mod tests {
                 length_ticks: 4 * TICKS_PER_BAR,
                 fades: clip.fades,
                 pitch_cents: clip.pitch_cents,
+                reverse: false,
             })
             .unwrap();
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -12249,6 +12255,7 @@ mod tests {
                     length_ticks: clip.length_ticks,
                     fades: clip.fades,
                     pitch_cents: clip.pitch_cents,
+                    reverse: false,
                 })
                 .unwrap();
             let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
@@ -12305,6 +12312,7 @@ mod tests {
                 length_ticks: clip.length_ticks,
                 fades,
                 pitch_cents: clip.pitch_cents,
+                reverse: false,
             })
             .unwrap();
         let rect = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
@@ -12848,5 +12856,376 @@ mod tests {
         let state = agent(&context, &mut app, &port, &["state"]);
         let automation = &state["song"]["tracks"][0]["automation"];
         assert!(automation.get("repeat").is_none(), "{state}");
+    }
+
+    /// Choose `label` in the arrangement's automation lane menu with
+    /// assistive technology clicks.
+    fn choose_automation_lane(ctx: &egui::Context, app: &mut MixJamApp, label: &str) {
+        let action = |action, target| {
+            egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action,
+                target,
+                data: None,
+            })
+        };
+        let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+        let nodes = |output: &egui::FullOutput| -> Vec<(egui::accesskit::NodeId, Option<String>)> {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .map(|(id, node)| (*id, node.label().map(str::to_owned)))
+                .collect()
+        };
+        let known: Vec<_> = nodes(&output).into_iter().map(|(id, _)| id).collect();
+        let (selector, _) = accessible_node(&output, "Automation lane");
+        frame(
+            ctx,
+            app,
+            vec![action(egui::accesskit::Action::Click, selector)],
+            egui::Modifiers::NONE,
+        );
+        frame(ctx, app, vec![], egui::Modifiers::NONE);
+        let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+        // The option is a node that the open menu added.
+        let option = nodes(&output)
+            .into_iter()
+            .find(|(id, name)| !known.contains(id) && name.as_deref() == Some(label))
+            .map(|(id, _)| id)
+            .unwrap_or_else(|| panic!("Missing lane choice {label}."));
+        frame(
+            ctx,
+            app,
+            vec![action(egui::accesskit::Action::Click, option)],
+            egui::Modifiers::NONE,
+        );
+        for _ in 0..3 {
+            frame(ctx, app, vec![], egui::Modifiers::NONE);
+        }
+    }
+
+    #[test]
+    fn the_lane_menu_offers_the_repeat_gate_and_each_fx_return() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        choose_automation_lane(&ctx, &mut app, "Repeat gate");
+        assert_eq!(
+            (app.automation_lane, app.return_lane),
+            (Some(Lane::RepeatGate), None)
+        );
+        choose_automation_lane(&ctx, &mut app, "FX 3 return");
+        assert_eq!((app.automation_lane, app.return_lane), (None, Some(2)));
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "FX 3 return (100% dashed)");
+        choose_automation_lane(&ctx, &mut app, "Off");
+        assert_eq!((app.automation_lane, app.return_lane), (None, None));
+    }
+
+    #[test]
+    fn the_repeat_gate_lane_snaps_to_five_percent_and_steps_down_from_full() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.automation_lane = Some(Lane::RepeatGate);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Repeat gate");
+        let canvas = app.timeline_rect.unwrap();
+        let row = app.timeline_row_height;
+        // 5% at the bottom of the row and 100% at the top, 4 points in.
+        let height = |percent: f32| 4.0 + (row - 8.0) * (1.0 - (percent - 5.0) / 95.0);
+        for (bar, aim, value) in [(1.0, 26.0, 25.0), (1.5, 63.0, 65.0), (2.0, 99.0, 100.0)] {
+            let pos = Pos2::new(
+                canvas.left() + app.timeline_bar_width * bar,
+                canvas.top() + height(aim),
+            );
+            click(&ctx, &mut app, pos, egui::Modifiers::NONE);
+            for _ in 0..20 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            let points = &app.session.project().tracks[0].automation.repeat_gate;
+            let tick = (bar * TICKS_PER_BAR as f32) as u32;
+            let point = points
+                .iter()
+                .find(|point| point.tick == tick)
+                .unwrap_or_else(|| panic!("{points:?}"));
+            assert_eq!(point.value, value, "bar {bar}");
+        }
+        let points = &app.session.project().tracks[0].automation.repeat_gate;
+        assert_eq!(
+            points
+                .iter()
+                .map(|point| Lane::RepeatGate.format(point.value))
+                .collect::<Vec<_>>(),
+            ["25%", "65%", "100%"]
+        );
+        // The line starts at 100% on the left, as the gate is full before
+        // its first point, and steps from there.
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let x = |bar: f32| canvas.left() + app.timeline_bar_width * bar;
+        let y = |percent: f32| canvas.top() + height(percent);
+        let expected = [
+            (canvas.left(), y(100.0)),
+            (x(1.0), y(100.0)),
+            (x(1.0), y(25.0)),
+            (x(1.5), y(25.0)),
+            (x(1.5), y(65.0)),
+            (x(2.0), y(65.0)),
+            (x(2.0), y(100.0)),
+        ];
+        let drawn = output.shapes.iter().any(|shape| match &shape.shape {
+            egui::Shape::Path(path) => {
+                path.points.len() == expected.len() + 1
+                    && path.points.iter().zip(&expected).all(|(point, (x, y))| {
+                        (point.x - x).abs() < 0.01 && (point.y - y).abs() < 0.01
+                    })
+            }
+            _ => false,
+        });
+        assert!(
+            drawn,
+            "The Repeat gate lane must be drawn as steps from 100%."
+        );
+    }
+
+    #[test]
+    fn a_return_lane_spans_the_arrangement_and_edits_its_bus_in_one_undo_step() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.return_lane = Some(1);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let canvas = app.timeline_rect.unwrap();
+        let row = view::return_row(canvas, app.timeline_drop_rect.unwrap());
+        let bar_width = app.timeline_bar_width;
+        let at = |bar: f32, value: f32| {
+            Pos2::new(canvas.left() + bar_width * bar, view::return_y(value, row))
+        };
+        // Clicks add points, at the value of their height.
+        click(&ctx, &mut app, at(1.0, 0.25), egui::Modifiers::NONE);
+        for _ in 0..20 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        click(&ctx, &mut app, at(2.0, 1.5), egui::Modifiers::NONE);
+        for _ in 0..20 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let points = |app: &MixJamApp| -> Vec<(u32, f32)> {
+            app.session.project().return_automation[1]
+                .iter()
+                .map(|point| (point.tick, point.value))
+                .collect()
+        };
+        assert_eq!(points(&app), [(256, 0.25), (512, 1.5)]);
+        // Near the full return the pointer holds 100%.
+        click(&ctx, &mut app, at(3.0, 1.02), egui::Modifiers::NONE);
+        for _ in 0..20 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert_eq!(points(&app)[2], (768, 1.0));
+        // A drag moves a point and is one undo step; the other lanes keep
+        // theirs, and no track lane changes.
+        drag(
+            &ctx,
+            &mut app,
+            at(2.0, 1.5),
+            at(2.5, 2.0),
+            egui::Modifiers::NONE,
+        );
+        for _ in 0..20 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert_eq!(points(&app)[1], (640, 2.0));
+        assert!(app.session.project().return_automation[0].is_empty());
+        assert!(
+            app.session
+                .project()
+                .tracks
+                .iter()
+                .all(|track| track.automation.is_empty())
+        );
+        app.history_step(false);
+        assert_eq!(points(&app)[1], (512, 1.5));
+        // A right-click removes a point; clips do not move meanwhile.
+        let clips = app.session.project().clips.clone();
+        let pos = at(1.0, 0.25);
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+            );
+        }
+        assert_eq!(points(&app), [(512, 1.5), (768, 1.0)]);
+        assert_eq!(app.session.project().clips, clips);
+    }
+
+    #[test]
+    fn the_clip_menu_reverses_a_clip_and_marks_it() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        open_clip_menu(&ctx, &mut app, 1);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (target, node) = accessible_node(&output, "Clip reverse");
+        assert_eq!(node.toggled(), Some(egui::accesskit::Toggled::False));
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Click,
+                    target,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.session.project().clips[0].reverse);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (_, node) = accessible_node(&output, "Clip reverse");
+        assert_eq!(node.toggled(), Some(egui::accesskit::Toggled::True));
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "rev");
+        // The switch is one undo step of its own.
+        app.history_step(false);
+        assert!(!app.session.project().clips[0].reverse);
+        app.history_step(true);
+        assert!(app.session.project().clips[0].reverse);
+    }
+
+    #[test]
+    fn agent_automates_the_gate_and_a_return_and_reverses_a_clip() {
+        let (context, mut app, port) = agent_fixture();
+        for (words, ok) in [
+            (
+                &[
+                    "automate",
+                    "track=1",
+                    "lane=repeat",
+                    "points=[[1,16],[2,0]]",
+                ][..],
+                true,
+            ),
+            (
+                &[
+                    "automate",
+                    "track=1",
+                    "lane=repeatgate",
+                    "points=[[1,25],[1.5,60]]",
+                ],
+                true,
+            ),
+            (
+                &[
+                    "automate",
+                    "bus=2",
+                    "lane=return",
+                    "points=[[1,0.25],[1.75,2],[2,0.25]]",
+                ],
+                true,
+            ),
+            (
+                &["automate", "track=1", "lane=repeatgate", "points=[[1,4]]"],
+                false,
+            ),
+            (
+                &["automate", "track=1", "lane=repeatgate", "points=[[1,101]]"],
+                false,
+            ),
+            (
+                &["automate", "bus=2", "lane=return", "points=[[1,2.5]]"],
+                false,
+            ),
+            (
+                &["automate", "bus=5", "lane=return", "points=[[1,1]]"],
+                false,
+            ),
+            (
+                &["automate", "bus=2", "lane=volume", "points=[[1,1]]"],
+                false,
+            ),
+            (
+                &["automate", "bus=2", "track=1", "lane=return", "points=[]"],
+                false,
+            ),
+            (&["automate", "lane=return", "points=[]"], false),
+        ] {
+            let reply = agent(&context, &mut app, &port, words);
+            assert_eq!(reply["ok"], ok, "{words:?}: {reply}");
+        }
+        let id = app.session.project().clips[0].id;
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["clip", &format!("clip={id}"), "reverse=true"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().clips[0].reverse);
+        let state = agent(&context, &mut app, &port, &["state"]);
+        let song = &state["song"];
+        assert_eq!(
+            song["tracks"][0]["automation"]["repeatGate"],
+            serde_json::json!([{"tick": 0, "value": 25.0}, {"tick": 128, "value": 60.0}]),
+            "{state}"
+        );
+        assert_eq!(song["fx_buses"].as_array().unwrap().len(), 4, "{state}");
+        assert_eq!(song["fx_buses"][1]["bus"], 2);
+        assert_eq!(
+            song["fx_buses"][1]["return_automation"],
+            serde_json::json!([
+                {"tick": 0, "value": 0.25},
+                {"tick": 192, "value": 2.0},
+                {"tick": 256, "value": 0.25}
+            ]),
+            "{state}"
+        );
+        assert_eq!(
+            song["fx_buses"][0]["return_automation"],
+            serde_json::json!([])
+        );
+        let clip = song["clips"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|clip| clip["id"] == id)
+            .unwrap();
+        assert_eq!(clip["reverse"], true, "{state}");
+        // An empty list clears the return lane; reverse=false plays forward.
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "bus=2", "lane=return", "points=[]"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().return_automation[1].is_empty());
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["clip", &format!("clip={id}"), "reverse=false"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(!app.session.project().clips[0].reverse);
     }
 }

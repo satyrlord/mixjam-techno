@@ -363,7 +363,11 @@ pub struct MixJamApp {
     /// The automation lane that the arrangement shows and edits, if any.
     /// While one shows, the lanes edit its points instead of clips.
     automation_lane: Option<automation::Lane>,
-    /// The track and index of the automation point being dragged.
+    /// The FX bus whose return lane the arrangement shows and edits, if any.
+    /// It takes the place of a track lane.
+    return_lane: Option<usize>,
+    /// The track (or, on a return lane, the bus) and index of the
+    /// automation point being dragged.
     automation_drag: Option<(usize, usize)>,
     zoom: f32,
     follow_playhead: bool,
@@ -641,6 +645,7 @@ impl MixJamApp {
             rail_icons: None,
             erase: false,
             automation_lane: (capture_view == "automation").then_some(automation::Lane::Volume),
+            return_lane: None,
             automation_drag: None,
             zoom: 1.0,
             follow_playhead: true,

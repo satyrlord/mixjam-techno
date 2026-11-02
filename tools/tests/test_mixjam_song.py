@@ -145,7 +145,32 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(23))
+            self.project(self.document(24))
+
+    def test_version_23_keeps_return_lanes_gates_and_reversed_clips(self):
+        document = self.document(23)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = copy.deepcopy(earlier['fx'])
+        throw = [dict(tick=0, value=0.25), dict(tick=448, value=2.0), dict(tick=512, value=0.25)]
+        document['fxBuses'][1]['returnAutomation'] = throw
+        document['lanes'][0]['sends'] = [0.0] * 4
+        gate = [dict(tick=256, value=25.0)]
+        document['lanes'][0]['automation'] = {'repeat': [dict(tick=256, value=16.0)], 'repeatGate': gate}
+        placement = dict(id=1, sampleId=1, startTick=0, durationTicks=256, offsetFrames=0, gain=1.0)
+        document['lanes'][0]['placements'] = [dict(placement, reverse=True),
+                                              dict(placement, id=2, startTick=256)]
+        projected = self.project(document)
+        # The project holds the return lanes apart from the buses' settings.
+        self.assertEqual(projected['return_automation'], [[], throw, [], []])
+        self.assertNotIn('returnAutomation', projected['fx'][1])
+        self.assertEqual(projected['fx'][1], earlier['fx'][1])
+        self.assertEqual(projected['tracks'][0]['automation']['repeatGate'], gate)
+        self.assertEqual([clip.get('reverse') for clip in projected['clips']], [True, None])
+        # A song without them projects none, as earlier songs do.
+        del document['fxBuses'][1]['returnAutomation']
+        self.assertNotIn('return_automation', self.project(document))
+        self.assertNotIn('return_automation', earlier)
 
     def test_version_22_keeps_the_drive_and_earlier_songs_have_it_off(self):
         document = self.document(22)

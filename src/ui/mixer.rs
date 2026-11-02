@@ -281,8 +281,11 @@ pub(super) fn show(
                                     ui.scope_builder(
                                         egui::UiBuilder::new().id_salt(("mixer_return", index)),
                                         |ui| {
-                                            let (edited, open) =
-                                                return_strip(ui, art, scale, height, index, bus);
+                                            let automated =
+                                                !project.return_automation[index].is_empty();
+                                            let (edited, open) = return_strip(
+                                                ui, art, scale, height, index, bus, automated,
+                                            );
                                             result.fx |= edited;
                                             if open {
                                                 result.open = Some(index);
@@ -771,7 +774,7 @@ fn send_knob(
          double-click for 0.{}",
         *value * 100.0,
         if automated {
-            "\nAutomated: its automation lane sets the send while the song plays."
+            "\nAutomated: its automation lane sets it while the song plays."
         } else {
             ""
         }
@@ -780,8 +783,10 @@ fn send_knob(
 }
 
 /// The return of one FX bus: its effect, return level, input and limiter
-/// switches, and a button that opens it in the Effects module. Returns
-/// whether the bus changed and whether Edit was pressed.
+/// switches, and a button that opens it in the Effects module. An
+/// `automated` return has a return lane, which sets the level while the
+/// song plays; its knob is ringed. Returns whether the bus changed and
+/// whether Edit was pressed.
 fn return_strip(
     ui: &mut egui::Ui,
     art: Option<&Artwork>,
@@ -789,6 +794,7 @@ fn return_strip(
     height: f32,
     index: usize,
     bus: &mut FxBus,
+    automated: bool,
 ) -> (bool, bool) {
     let name = format!("FX {}", index + 1);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(108.0 * scale, height), Sense::hover());
@@ -814,13 +820,17 @@ fn return_strip(
         scale,
         &format!("{name} return level"),
         &mut level,
-        false,
+        automated,
     );
     bus.return_level = level;
     text(
         ui,
         at(54.0, 116.0),
-        &format!("Return {:.0}%", bus.return_level * 100.0),
+        &if automated {
+            "Return automated".to_string()
+        } else {
+            format!("Return {:.0}%", bus.return_level * 100.0)
+        },
         11.0 * scale,
         CREAM,
     );

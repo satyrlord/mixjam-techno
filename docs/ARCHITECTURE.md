@@ -121,7 +121,12 @@ hundreds of megabytes of samples, and freeing 309 MB takes about 26 ms.
 `Frames::read_block` with a sends buffer gives the dry sum together with the
 feeds of the four FX buses, eight interleaved channels a frame: each voice adds
 its sample, after the track's gains and pan, times the track's send. A voice
-applies its clip's fades per frame. `prepare_project` decodes and checks each
+applies its clip's fades per frame. A reversed clip's voice reads, for each
+output frame, the source position of its mirror frame in the clip (`start +
+end - 1 - frame`), so it plays the forward slice backwards as a pure function
+of the frame, never of what played; its fades, gain, and pitched copy apply in
+the clip's own time, and its sound ends with the clip. Being in the voice, a
+reversal comes before every track stage, the Repeat lane included. `prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that
@@ -142,7 +147,11 @@ are a pure function of the frame. Where the lane turns on at tick T, every
 retrigger reads the voices again from T, one division long, so the slice
 comes from the clips at T whether or not playback passed T. A retrigger, and
 the switch off, crossfade over `REPEAT_RAMP_FRAMES` (132 frames, 3 ms): the
-outgoing slice plays on under the incoming one. Playback started inside a
+outgoing slice plays on under the incoming one. The Repeat gate lane weighs
+each tap: a retrigger with gate G at its own tick keeps weight 1 for G
+percent of its division's frames, then falls over the same ramp to 0, and the
+outgoing tail of a crossfade keeps its own retrigger's gate weight; at 100%
+every weight is unchanged, bit for bit. Playback started inside a
 run, export, and stems therefore read the same repeats; the stages after it
 keep their own histories as for any sound. A key track's own chain repeats
 too, so a ducker hears its key's repeats. The mix runs the chains chunk by
@@ -274,7 +283,17 @@ release time. Export reads straight through from the song's start with no
 continuous control with its range, and `ReturnsProcessor` runs the buses on
 the feeds and adds their returns to the dry sum, before the master pedalboard.
 Its delay lines are sized and allocated when the processor is built, so the
-audio thread never allocates, including when a limiter resets. A bus with no
+audio thread never allocates, including when a limiter resets. A bus's return
+lane (`Project::return_automation`, resolved by the mix into `ReturnLanes`)
+replaces its return level frame by frame: the mix passes the lanes and the
+block's song frame to `ReturnsProcessor::process_at` and `split`, and the bus
+multiplies its effect's output by the lane's straight-line value just before
+its safety limiter, read `LOOKAHEAD` frames ahead so that each returned frame
+carries the lane's value at its own time. The song frame keeps counting
+through the tail, in export and playback alike, so a lane that moves after
+the song's end shapes the tail the same way. The lane only scales the return;
+the effect's state runs on whatever the lane does, as it does behind a zero
+Return knob. A bus with no
 input and no remaining internal tail sleeps; delay sleep allows enough time
 for a pending long echo. Bypass does not hide internal tail activity from this
 check. The safety limiter's fixed 220-frame lookahead comes off the delay's

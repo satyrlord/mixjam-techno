@@ -1649,6 +1649,7 @@ pub(crate) fn build_project(
             gain: event.gain,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
     }
     let project = normalize_import(project)?;
@@ -2205,6 +2206,7 @@ mod tests {
                         gain: if track == 1 { 2.0 } else { 1.0 },
                         fades: Default::default(),
                         pitch_cents: 0,
+                        reverse: false,
                     })
                     .collect(),
                 ..Project::default()

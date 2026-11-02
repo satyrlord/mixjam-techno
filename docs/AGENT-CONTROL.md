@@ -35,15 +35,25 @@ port.
   sections, each given by its first `bar` (or `tick`) and its `name`; `state`
   lists them under `song.sections`. `automate track=N lane=LANE
   points=[[BAR,VALUE],...]` replaces one automation lane: `volume`, `send1` to
-  `send4`, `filter`, `pan` (-1 hard left to 1 hard right, 0 center), or
-  `repeat` (0 off, or 4, 8, 16, 32, or 64 for 1/4 to 1/64 repeats), and
+  `send4`, `filter`, `pan` (-1 hard left to 1 hard right, 0 center),
+  `repeat` (0 off, or 4, 8, 16, 32, or 64 for 1/4 to 1/64 repeats), or
+  `repeatgate` (5 to 100, the percent of each repeat that sounds), and
   `points=[]` clears it. The repeat lane steps: it is off before its first
   point and holds each value until the next point, so
   `points=[[5,8],[5.25,16],[5.375,32],[5.5,0]]` rolls from 1/8 through 1/32 on
-  the slice that starts at bar 5. `state` lists each track's lanes with points
-  under its `automation`; a send or pan lane there replaces the knob in `sends`
-  or `pan`.
-  `clip` sets gain, trim, length, fades, and pitch for one clip.
+  the slice that starts at bar 5. The repeat gate steps too, at 100 before its
+  first point; each repeat takes the value held where it starts, so
+  `automate track=2 lane=repeatgate points=[[5,25],[5.5,100]]` makes the
+  repeats from bar 5 short plucks. `state` lists each track's lanes with points
+  under its `automation` (the gate as `repeatGate`); a send or pan lane there
+  replaces the knob in `sends` or `pan`.
+  `automate bus=N lane=return points=[[BAR,VALUE],...]` replaces FX bus N's
+  return lane, 0 to 2, where 1 is the full return and 2 about +6 dB; while it
+  has points it replaces the bus's Return knob. `points=[]` clears it.
+  `state` lists the four buses under `song.fx_buses`, each with `bus`,
+  `effect`, `powered`, `return_level`, and `return_automation`.
+  `clip` sets gain, trim, length, fades, pitch, and `reverse=true|false` for
+  one clip; `state` gives each clip's `reverse`.
   These edits use the same history as edits made by hand.
 - A track's channel EQ, drive, compressor, width, and ducker are controls in
   its EQ window. Click `Track N EQ` in the Mixer to open it, then `set` the

@@ -36,7 +36,8 @@ pub mod ducker {
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
-        Automation, Lane, Point, REPEAT_STEPS, VOLUME_FLOOR_DB, filter_cutoff, value_at,
+        Automation, Lane, Point, REPEAT_GATE_STEP, REPEAT_STEPS, RETURN_CEILING, VOLUME_FLOOR_DB,
+        filter_cutoff, return_label, value_at,
     };
 }
 /// The FX buses, their effects, and the controls of both.
@@ -114,6 +115,7 @@ pub enum EditCommand {
         length_ticks: u32,
         fades: Fades,
         pitch_cents: i32,
+        reverse: bool,
     },
     SetSwitch {
         track: usize,
@@ -129,6 +131,12 @@ pub enum EditCommand {
     SetAutomation {
         track: usize,
         lane: crate::automation::Lane,
+        points: Vec<crate::automation::Point>,
+    },
+    /// Replace the return lane of one FX bus. A lane with points replaces
+    /// the bus's return level.
+    SetReturnAutomation {
+        bus: usize,
         points: Vec<crate::automation::Point>,
     },
 }
@@ -392,6 +400,8 @@ pub struct Session {
     gesture: Option<(Gesture, std::time::Instant)>,
     /// An arrangement point drag has an explicit lifetime, including pauses.
     automation_gesture: Option<(usize, crate::automation::Lane)>,
+    /// The FX bus whose return lane a point drag edits, as one undo step.
+    return_gesture: Option<usize>,
     /// The pause that ends a gesture: `GESTURE_GAP`, except in some tests.
     gesture_gap: std::time::Duration,
     /// The master pedalboard and FX bus settings that mix playback reads as it
@@ -409,6 +419,8 @@ enum Gesture {
     Clip(u64, ClipControl),
     /// One automation lane, such as the frames of a point drag.
     Automation(usize, crate::automation::Lane),
+    /// One FX bus's return lane.
+    Return(usize),
     /// The trim or one knob of the master pedalboard.
     Pedal(Knob),
     Fx(usize, FxControl),
@@ -456,8 +468,13 @@ impl Gesture {
                 length_ticks,
                 fades,
                 pitch_cents,
+                reverse,
             } => {
                 let clip = project.clips.iter().find(|clip| clip.id == *id)?;
+                // A switch is a step of its own.
+                if clip.reverse != *reverse {
+                    return None;
+                }
                 let mut controls = Vec::new();
                 if clip.start_tick != *start_tick {
                     controls.push(ClipControl::Start);
@@ -646,6 +663,7 @@ impl Session {
             recorded_take: None,
             gesture: None,
             automation_gesture: None,
+            return_gesture: None,
             gesture_gap: GESTURE_GAP,
             master,
         })
@@ -1060,9 +1078,20 @@ impl Session {
         self.automation_gesture = Some((track, lane));
         Ok(())
     }
+    /// Begin one undo step for a point drag on an FX bus's return lane.
+    pub fn begin_return_gesture(&mut self, bus: usize) -> Result<(), String> {
+        if bus >= crate::fx::BUSES {
+            return Err("The FX bus does not exist.".into());
+        }
+        self.end_automation_gesture();
+        self.gesture = None;
+        self.return_gesture = Some(bus);
+        Ok(())
+    }
     /// End a point drag so the next drag or click has its own undo step.
     pub fn end_automation_gesture(&mut self) {
-        if self.automation_gesture.take().is_some() {
+        let track = self.automation_gesture.take().is_some();
+        if self.return_gesture.take().is_some() || track {
             self.gesture = None;
         }
     }
@@ -1136,6 +1165,12 @@ impl Session {
                 }
                 crate::automation::validate_points(*lane, points)?;
             }
+            EditCommand::SetReturnAutomation { bus, points } => {
+                if *bus >= crate::fx::BUSES {
+                    return Err("The FX bus does not exist.".into());
+                }
+                crate::automation::validate_return_points(points)?;
+            }
             EditCommand::DeleteClips(ids) => {
                 let existing: std::collections::HashSet<_> =
                     self.project().clips.iter().map(|clip| clip.id).collect();
@@ -1149,11 +1184,16 @@ impl Session {
             EditCommand::SetAutomation { track, lane, .. } => {
                 self.automation_gesture == Some((*track, *lane))
             }
+            EditCommand::SetReturnAutomation { bus, .. } => self.return_gesture == Some(*bus),
             _ => false,
         };
         let gesture = if explicit_automation {
-            self.automation_gesture
-                .map(|(track, lane)| Gesture::Automation(track, lane))
+            match &command {
+                EditCommand::SetReturnAutomation { bus, .. } => Some(Gesture::Return(*bus)),
+                _ => self
+                    .automation_gesture
+                    .map(|(track, lane)| Gesture::Automation(track, lane)),
+            }
         } else {
             self.end_automation_gesture();
             Gesture::of(&command, self.project())
@@ -1205,6 +1245,7 @@ impl Session {
                 length_ticks,
                 fades,
                 pitch_cents,
+                reverse,
             } => {
                 if let Some(clip) = project.clips.iter_mut().find(|clip| clip.id == id) {
                     clip.start_tick = start_tick;
@@ -1213,6 +1254,7 @@ impl Session {
                     clip.length_ticks = length_ticks;
                     clip.fades = fades.fit(length_ticks);
                     clip.pitch_cents = pitch_cents;
+                    clip.reverse = reverse;
                 }
             }
             EditCommand::SetSwitch { track, switch, on } => {
@@ -1229,6 +1271,9 @@ impl Session {
                 lane,
                 points,
             } => *project.tracks[track].automation.lane_mut(lane) = points,
+            EditCommand::SetReturnAutomation { bus, points } => {
+                project.return_automation[bus] = points;
+            }
         };
         if continuing {
             self.editor.transact_continuing(apply)?;
@@ -2662,6 +2707,7 @@ mod tests {
                     gain: 0.75,
                     fades: Default::default(),
                     pitch_cents: 0,
+                    reverse: false,
                 })
                 .collect(),
             ..Project::default()
@@ -3031,6 +3077,7 @@ mod tests {
                 gain: 0.75,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -3124,6 +3171,7 @@ mod tests {
                 gain: 0.75,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
         }
         let mut session = Session::headless(Arc::new(Library::empty()), project.clone())
@@ -3224,6 +3272,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -3277,6 +3326,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let wave = root.join("chosen.wav");
         Pcm {
@@ -3355,6 +3405,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             }],
             ..Project::default()
         };
@@ -3839,6 +3890,7 @@ mod boundary_tests {
             length_ticks: before.clips[0].length_ticks,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         };
         assert!(session.edit(command(1000)).is_err());
         assert_eq!(session.project(), &before);
@@ -4569,6 +4621,7 @@ mod boundary_tests {
             length_ticks,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         };
         assert!(session.edit(resize(length + 17)).is_err());
         assert_eq!(session.project(), &before);
@@ -4584,6 +4637,7 @@ mod boundary_tests {
             length_ticks: second.start_tick + second.length_ticks - start_tick,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         };
         let before = session.project().clone();
         assert!(session.edit(start(second.start_tick - 1)).is_err());
@@ -4629,6 +4683,7 @@ mod boundary_tests {
             length_ticks,
             fades,
             pitch_cents,
+            reverse: false,
         };
         session.edit(set(length, -30)).unwrap();
         assert_eq!(session.project().clips[0].fades, fades);
@@ -4665,6 +4720,7 @@ mod boundary_tests {
             length_ticks,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         };
         // Frames of a gain drag, then at once frames of a trim drag: two
         // controls, so two steps.

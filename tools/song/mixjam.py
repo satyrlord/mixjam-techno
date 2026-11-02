@@ -1,4 +1,4 @@
-"""Write format-22 .mixjam songs from Python.
+"""Write format-23 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -13,7 +13,10 @@ Automation rules: a lane rests at its neutral value until its first point. A sen
 or pan lane's neutral value is its knob, which the lane replaces while it has points.
 The repeat lane's neutral value is 0 (off). It steps: the engine holds each of its
 points until the next one and keeps it off before the first. Saving rejects a lane that ends away from neutral when a later clip starts on
-that track. The engine holds a lane's last value to the end of the song.
+that track. The engine holds a lane's last value to the end of the song. The repeat gate lane
+steps too and is at 100% before its first point; it acts only while repeat is on, so it may
+end at any value. An FX bus's return lane (`automate_return`) replaces the bus's return level
+while it has points and moves in straight lines.
 
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
 sections and the key. render.py, measure.py, audible.py and master.py read it.
@@ -31,11 +34,15 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 22
+FORMAT_VERSION = 23
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
 REPEAT_VALUES = (0, 4, 8, 16, 32, 64)
+# The repeat gate lane's range in percent of each repeat (src/automation.rs).
+REPEAT_GATE_RANGE = (5.0, 100.0)
+# An FX bus's return lane: 0 to 2, where 1 is the full return (RETURN_CEILING).
+RETURN_RANGE = (0.0, 2.0)
 
 # Roles whose runs end with a fade when the sound is still loud at its end.
 MELODIC = {'pad', 'lead', 'keys', 'arp', 'fx', 'vocal', 'atmos'}
@@ -157,6 +164,7 @@ class Song:
         self.names = {}
         self.next_clip = 1
         self.fx = [dict(module={'type': 'empty'}, powered=True, returnLevel=1.0, limiter=True) for _ in range(4)]
+        self.returns = [[] for _ in range(4)]
         self.master = board()
         self.master_gain = 1.0
         self.sections = []
@@ -298,8 +306,12 @@ class Song:
 
     # Placement.
     def clip(self, track, path, start_tick, length_ticks, offset_frames=0, gain_db=0.0,
-             fade_in=0, fade_out=0, curve_in='linear', curve_out='exponential', pitch_cents=0):
-        """One clip in ticks. Fades are in ticks; they are shortened to fit the clip."""
+             fade_in=0, fade_out=0, curve_in='linear', curve_out='exponential', pitch_cents=0,
+             reverse=False):
+        """One clip in ticks. Fades are in ticks; they are shortened to fit the clip.
+        reverse=True plays the slice from `offset_frames` over the clip's length backwards
+        within the clip, for reversed swells and risers; fades, pitch and gain stay in the
+        clip's own time, so the fade in still starts the clip."""
         track = _whole_track(track)
         self.sound(path)
         fade_in = min(int(fade_in), length_ticks)
@@ -312,6 +324,8 @@ class Song:
                                   'out': {'ticks': fade_out, 'curve': curve_out}}
         if pitch_cents:
             placement['pitchCents'] = int(pitch_cents)
+        if reverse:
+            placement['reverse'] = True
         self.lanes[track - 1]['placements'].append(placement)
         self.next_clip += 1
         return placement
@@ -380,20 +394,27 @@ class Song:
 
     # Automation, effects, master.
     def automate(self, track, lane, points):
-        """lane: volume, send1..send4, filter, pan, or repeat. points: [(bar, value)], bar 1-based,
-        fractions allowed.
+        """lane: volume, send1..send4, filter, pan, repeat, or repeatgate. points: [(bar, value)],
+        bar 1-based, fractions allowed.
 
         Volume is dB over the fader; a send replaces the knob (0-1); filter is -1 (low-pass) to 1
         (high-pass), 0 open; pan replaces the pan knob, -1 (left) to 1 (right), 0 center. Repeat is
         0 (off) or 4, 8, 16, 32, 64 for 1/4 to 1/64 repeats of the slice that starts where the lane
         turns on; it holds each value until the next point, so [(5, 8), (5.25, 16), (5.375, 32),
-        (5.5, 0)] rolls 1/8, 1/16, 1/32 on the slice from bar 5. Points add to the lane's earlier
-        points, so each section writes its own moves; a point on a tick that the lane already has
-        is an error.
+        (5.5, 0)] rolls 1/8, 1/16, 1/32 on the slice from bar 5. Repeatgate is 5 to 100, the percent
+        of each repeat that sounds before it falls silent over 3 ms; it steps like repeat, is 100
+        before its first point, and each repeat takes the value held where it starts:
+        [(5, 25), (5.5, 100)] makes the repeats from bar 5 short plucks. Points add to the lane's
+        earlier points, so each section writes its own moves; a point on a tick that the lane
+        already has is an error.
         """
         track = _whole_track(track)
-        if lane not in ('volume', 'filter', 'pan', 'repeat', 'send1', 'send2', 'send3', 'send4'):
-            raise ValueError('The automation lane must be volume, filter, pan, repeat, or send1 through send4.')
+        if lane not in ('volume', 'filter', 'pan', 'repeat', 'repeatgate', 'send1', 'send2', 'send3',
+                        'send4'):
+            raise ValueError('The automation lane must be volume, filter, pan, repeat, repeatgate, '
+                             'or send1 through send4.')
+        name = lane
+        lane = 'repeatGate' if lane == 'repeatgate' else lane
         automation = self.automation[track - 1]
         if lane.startswith('send'):
             entries = list(automation.get('sends', [[], [], [], []])[int(lane[4:]) - 1])
@@ -402,11 +423,14 @@ class Song:
         ticks = {entry['tick'] for entry in entries}
         for bar, value in points:
             if tick(bar) in ticks:
-                raise ValueError(f'Track {track} {lane} has more than one point at bar {bar}.')
+                raise ValueError(f'Track {track} {name} has more than one point at bar {bar}.')
             if lane == 'pan' and not -1.0 <= float(value) <= 1.0:
                 raise ValueError(f'Track {track} pan must be from -1 to 1, not {value}.')
             if lane == 'repeat' and (isinstance(value, bool) or float(value) not in REPEAT_VALUES):
                 raise ValueError(f'Track {track} repeat must be 0 (off), 4, 8, 16, 32, or 64, not {value}.')
+            low, high = REPEAT_GATE_RANGE
+            if lane == 'repeatGate' and not low <= float(value) <= high:
+                raise ValueError(f'Track {track} repeatgate must be from {low:g} to {high:g}, not {value}.')
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
@@ -429,6 +453,27 @@ class Song:
         module.pop('_return', None)
         self.fx[index - 1] = dict(module=module, powered=powered, returnLevel=level, limiter=limiter)
 
+    def automate_return(self, index, points):
+        """FX bus `index` (1-4): its return lane, which replaces the bus's return level while it has
+        points. points: [(bar, value)], bar 1-based, fractions allowed; the value is 0 to 2, where 1
+        is the full return and 2 about +6 dB. The lane holds its first value back to bar 1 and its
+        last to the end, and moves in straight lines between points. A throw on a bus that rests
+        at 0.3: [(16.75, 0.3), (17, 1.8), (18, 1.8), (18.5, 0.3)] lets the phrase end at bar 17 echo
+        out loud. Points add to the lane's earlier points; a second point on a tick is an error."""
+        index = _whole_index(index, 4, 'FX bus')
+        entries = list(self.returns[index - 1])
+        ticks = {entry['tick'] for entry in entries}
+        low, high = RETURN_RANGE
+        for bar, value in points:
+            if tick(bar) in ticks:
+                raise ValueError(f'FX {index} return has more than one point at bar {bar}.')
+            if isinstance(value, bool) or not low <= float(value) <= high:
+                raise ValueError(f'FX {index} return must be from {low:g} to {high:g}, not {value}.')
+            ticks.add(tick(bar))
+            entries.append(dict(tick=tick(bar), value=float(value)))
+        entries.sort(key=lambda entry: entry['tick'])
+        self.returns[index - 1] = entries
+
     def _held(self, index):
         """Track `index`'s automation as the engine should play it (see the module rules)."""
         lane = self.lanes[index]
@@ -437,6 +482,10 @@ class Song:
             lists = points if key == 'sends' else [points]
             out = []
             for i, entries in enumerate(lists):
+                if key == 'repeatGate':
+                    # The gate acts only while repeat is on, so it may end anywhere.
+                    out.append([dict(entry) for entry in entries])
+                    continue
                 neutral = lane['sends'][i] if key == 'sends' else lane['pan'] if key == 'pan' else 0.0
                 name = key if key != 'sends' else f'send{i + 1}'
                 out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}',
@@ -475,7 +524,10 @@ class Song:
             'song': dict(title=self.title, author=self.author, bpm=self.bpm,
                          masterGain=self.master_gain, loopRegion=None,
                          **({'sections': self.song_sections()} if self.sections else {})),
-            'master': self.master if master else board_off(self.master), 'fxBuses': self.fx, 'lanes': lanes,
+            'master': self.master if master else board_off(self.master),
+            'fxBuses': [dict(bus, returnAutomation=lane) if lane else bus
+                        for bus, lane in zip(self.fx, self.returns)],
+            'lanes': lanes,
             'samples': list(self.samples.values()), 'missingSamples': [], 'sampleConflicts': [],
             'importNotices': [], 'sourceNotices': [], 'libraries': [],
         }

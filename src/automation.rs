@@ -1,12 +1,14 @@
 //! Track automation: breakpoint lanes that move a track's volume, its FX
-//! sends, its filter, and its pan over the song, and the Repeat lane that
-//! retriggers its sound.
+//! sends, its filter, and its pan over the song, the Repeat lane that
+//! retriggers its sound and the Repeat gate lane that shortens each repeat,
+//! and the return lanes of the FX buses.
 //!
 //! A lane is a list of points in tick order. Before its first point a lane
 //! holds the first value, after its last point the last value, and between
-//! two points it moves in a straight line. The Repeat lane is the exception:
-//! it steps. It is off before its first point and holds each point's value
-//! until the next point. A lane without points does nothing.
+//! two points it moves in a straight line. The Repeat and Repeat gate lanes
+//! are the exceptions: they step. Repeat is off, and the gate at 100%, before
+//! the first point, and each holds each point's value until the next point.
+//! A lane without points does nothing.
 use serde::{Deserialize, Serialize};
 
 /// One automation point: a lane's value at a tick.
@@ -42,6 +44,13 @@ pub enum Lane {
     /// It shapes the track's sound before the EQ, so the repeats go through
     /// the rest of the track's chain. See `Repeat`.
     Repeat,
+    /// How much of each repeat sounds, from 5 to 100 percent of its slice.
+    /// Like Repeat it steps: it is at 100% before its first point and holds
+    /// each point's value until the next point. Each repeat takes the value
+    /// held where it starts, plays for that share of its slice, and then
+    /// falls to silence over `REPEAT_RAMP_FRAMES`. At 100% a repeat plays its
+    /// whole slice. It does nothing while Repeat is off.
+    RepeatGate,
 }
 
 /// The lowest volume value, which is silence.
@@ -52,8 +61,19 @@ pub const VOLUME_CEILING_DB: f32 = 6.0;
 /// 1/4, 1/8, 1/16, 1/32, and 1/64 notes.
 pub const REPEAT_STEPS: [f32; 6] = [0.0, 4.0, 8.0, 16.0, 32.0, 64.0];
 
+/// The Repeat gate lane's range in percent of each repeat's slice, and the
+/// step that the arrangement snaps its points to.
+pub const REPEAT_GATE_FLOOR: f32 = 5.0;
+pub const REPEAT_GATE_FULL: f32 = 100.0;
+pub const REPEAT_GATE_STEP: f32 = 5.0;
+
+/// The highest value of an FX bus's return lane: twice the full return,
+/// about +6 dB. A throw then rises above a bus whose knob is at 100%, and the
+/// bus's safety limiter still holds the return under -1 dBFS.
+pub const RETURN_CEILING: f32 = 2.0;
+
 impl Lane {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Volume,
         Self::Send(0),
         Self::Send(1),
@@ -62,6 +82,7 @@ impl Lane {
         Self::Filter,
         Self::Pan,
         Self::Repeat,
+        Self::RepeatGate,
     ];
 
     pub fn label(self) -> String {
@@ -71,11 +92,12 @@ impl Lane {
             Self::Filter => "Filter".into(),
             Self::Pan => "Pan".into(),
             Self::Repeat => "Repeat".into(),
+            Self::RepeatGate => "Repeat gate".into(),
         }
     }
 
     /// The lane's name in agent requests: volume, send1 to send4, filter,
-    /// pan, or repeat.
+    /// pan, repeat, or repeatgate.
     pub fn key(self) -> String {
         match self {
             Self::Volume => "volume".into(),
@@ -83,13 +105,23 @@ impl Lane {
             Self::Filter => "filter".into(),
             Self::Pan => "pan".into(),
             Self::Repeat => "repeat".into(),
+            Self::RepeatGate => "repeatgate".into(),
         }
     }
 
     /// Whether the lane steps, holding each point's value until the next
     /// point, instead of moving in a straight line between points.
     pub fn steps(self) -> bool {
-        self == Self::Repeat
+        matches!(self, Self::Repeat | Self::RepeatGate)
+    }
+
+    /// The value that a stepped lane holds before its first point.
+    pub fn before_first(self) -> f32 {
+        if self == Self::RepeatGate {
+            REPEAT_GATE_FULL
+        } else {
+            0.0
+        }
     }
 
     pub fn from_key(key: &str) -> Option<Self> {
@@ -103,6 +135,7 @@ impl Lane {
             Self::Send(_) => (0.0, 1.0),
             Self::Filter | Self::Pan => (-1.0, 1.0),
             Self::Repeat => (0.0, 64.0),
+            Self::RepeatGate => (REPEAT_GATE_FLOOR, REPEAT_GATE_FULL),
         }
     }
 
@@ -118,6 +151,7 @@ impl Lane {
             Self::Pan => pan_label(value),
             Self::Repeat if value == 0.0 => "Off".into(),
             Self::Repeat => format!("1/{value:.0}"),
+            Self::RepeatGate => format!("{value:.0}%"),
         }
     }
 }
@@ -156,6 +190,8 @@ pub struct Automation {
     pub pan: Vec<Point>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub repeat: Vec<Point>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repeat_gate: Vec<Point>,
 }
 
 fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
@@ -169,6 +205,7 @@ impl Automation {
             && self.filter.is_empty()
             && self.pan.is_empty()
             && self.repeat.is_empty()
+            && self.repeat_gate.is_empty()
     }
 
     pub fn lane(&self, lane: Lane) -> &[Point] {
@@ -178,6 +215,7 @@ impl Automation {
             Lane::Filter => &self.filter,
             Lane::Pan => &self.pan,
             Lane::Repeat => &self.repeat,
+            Lane::RepeatGate => &self.repeat_gate,
         }
     }
 
@@ -188,6 +226,7 @@ impl Automation {
             Lane::Filter => &mut self.filter,
             Lane::Pan => &mut self.pan,
             Lane::Repeat => &mut self.repeat,
+            Lane::RepeatGate => &mut self.repeat_gate,
         }
     }
 
@@ -209,23 +248,45 @@ pub fn validate_points(lane: Lane, points: &[Point]) -> Result<(), String> {
     {
         return Err("Repeat automation values must be 0 (off), 4, 8, 16, 32, or 64.".into());
     }
-    let (low, high) = lane.range();
+    check_points(&lane.label(), lane.range(), points)
+}
+
+/// Points of `label`'s lane must be in strictly increasing tick order,
+/// within the timeline, and from `low` to `high`.
+fn check_points(label: &str, (low, high): (f32, f32), points: &[Point]) -> Result<(), String> {
     if points
         .iter()
         .any(|point| !(low..=high).contains(&point.value) || point.tick > crate::engine::MAX_TICKS)
     {
         return Err(format!(
-            "{} automation values must be from {low} to {high}, within the timeline.",
-            lane.label()
+            "{label} automation values must be from {low} to {high}, within the timeline."
         ));
     }
     if points.windows(2).any(|pair| pair[0].tick >= pair[1].tick) {
         return Err(format!(
-            "{} automation points must be in increasing tick order, one per tick.",
-            lane.label()
+            "{label} automation points must be in increasing tick order, one per tick."
         ));
     }
     Ok(())
+}
+
+/// An FX bus's return lane: points from 0 to `RETURN_CEILING` in strictly
+/// increasing tick order within the timeline. While it has points, it
+/// replaces the bus's return level, and it moves in straight lines.
+pub fn validate_return_points(points: &[Point]) -> Result<(), String> {
+    check_points("FX return", (0.0, RETURN_CEILING), points)
+}
+
+/// A return lane value as the arrangement shows it, in percent of the full
+/// return: "150%".
+pub fn return_label(value: f32) -> String {
+    format!("{:.0}%", value * 100.0)
+}
+
+/// The return lanes of the four FX buses. A lane with points replaces its
+/// bus's return level.
+pub fn no_returns(lanes: &[Vec<Point>; crate::fx::BUSES]) -> bool {
+    lanes.iter().all(Vec::is_empty)
 }
 
 /// The value of a lane at a tick, which may fall between ticks. This is the
@@ -324,10 +385,19 @@ pub(crate) const REPEAT_RAMP_FRAMES: u64 = 132;
 /// slice back to the live sound. Playback that starts inside a run therefore
 /// plays the same repeats as an export: nothing depends on what played
 /// before.
+///
+/// The Repeat gate shortens each repeat: a repeat that starts at a tick
+/// where the gate holds G percent plays for G percent of its division and
+/// then falls to silence over `REPEAT_RAMP_FRAMES`, with the falling half of
+/// the same raised cosine. The gate weighs the repeat in the crossfades too,
+/// so a gated repeat that is already silent does not come back in the next
+/// one's rise. At 100% the gate leaves each weight as it is.
 #[derive(Debug)]
 pub(crate) struct Repeat {
     frames_per_tick: f64,
     runs: Vec<Run>,
+    /// The Repeat gate lane's points, in percent.
+    gate: Vec<Point>,
 }
 
 /// A stretch where the Repeat lane is on.
@@ -343,15 +413,16 @@ struct Run {
 }
 
 impl Run {
-    /// The last retrigger tick before `tick`, which is after the run's start.
-    fn last_retrigger_before(&self, tick: u32) -> u32 {
+    /// The last retrigger tick before `tick`, which is after the run's
+    /// start, and the length of its division.
+    fn last_retrigger_before(&self, tick: u32) -> (u32, u32) {
         let &(start, division) = self
             .divisions
             .iter()
             .rev()
             .find(|(start, _)| *start < tick)
             .expect("a run's first division starts before its later ticks");
-        start + (tick - start - 1) / division * division
+        (start + (tick - start - 1) / division * division, division)
     }
 }
 
@@ -365,8 +436,9 @@ pub(crate) struct Tap {
 }
 
 impl Repeat {
-    /// `None` for a lane that never turns on.
-    pub(crate) fn new(points: &[Point], frames_per_tick: f64) -> Option<Self> {
+    /// `None` for a lane that never turns on. `gate` is the Repeat gate
+    /// lane.
+    pub(crate) fn new(points: &[Point], gate: &[Point], frames_per_tick: f64) -> Option<Self> {
         let mut runs: Vec<Run> = Vec::new();
         let mut held = 0;
         for point in points {
@@ -397,9 +469,10 @@ impl Repeat {
             }
             held = value;
         }
-        (!runs.is_empty()).then_some(Self {
+        (!runs.is_empty()).then(|| Self {
             frames_per_tick,
             runs,
+            gate: gate.to_vec(),
         })
     }
 
@@ -411,6 +484,26 @@ impl Repeat {
     fn rise(since: u64) -> f32 {
         let along = (since as f32 + 0.5) / REPEAT_RAMP_FRAMES as f32;
         0.5 - 0.5 * (std::f32::consts::PI * along).cos()
+    }
+
+    /// The gate's weight `since` frames into the repeat that starts at tick
+    /// `retrigger` and is `division` ticks long: 1 while it is open, then a
+    /// fall to silence over `REPEAT_RAMP_FRAMES`. Exactly 1 at 100%.
+    fn gate(&self, retrigger: u32, division: u32, since: u64) -> f32 {
+        let held = self.gate.partition_point(|point| point.tick <= retrigger);
+        let percent = held
+            .checked_sub(1)
+            .map_or(REPEAT_GATE_FULL, |index| self.gate[index].value);
+        if percent >= REPEAT_GATE_FULL {
+            return 1.0;
+        }
+        let length = self.frame(retrigger + division) - self.frame(retrigger);
+        let open = (length as f64 * f64::from(percent) / 100.0).round() as u64;
+        match since.checked_sub(open) {
+            None => 1.0,
+            Some(closing) if closing < REPEAT_RAMP_FRAMES => 1.0 - Self::rise(closing),
+            Some(_) => 0.0,
+        }
     }
 
     /// Where output `frame` reads the track's sound.
@@ -434,11 +527,15 @@ impl Repeat {
             if since >= REPEAT_RAMP_FRAMES {
                 return live;
             }
-            let last = self.frame(run.last_retrigger_before(end));
+            let (last, division) = run.last_retrigger_before(end);
+            let played = frame - self.frame(last);
             let rise = Self::rise(since);
             return Tap {
                 main: (frame, rise),
-                tail: Some((capture + (frame - last), 1.0 - rise)),
+                tail: Some((
+                    capture + played,
+                    (1.0 - rise) * self.gate(last, division, played),
+                )),
             };
         }
         let at = run
@@ -459,21 +556,26 @@ impl Repeat {
         let retrigger = start + count * division;
         let since = frame - self.frame(retrigger);
         let main = capture + since;
+        let open = self.gate(retrigger, division, since);
         if retrigger == run.capture || since >= REPEAT_RAMP_FRAMES {
             return Tap {
-                main: (main, 1.0),
+                main: (main, open),
                 tail: None,
             };
         }
-        let previous = if count > 0 {
-            retrigger - division
+        let (previous, length) = if count > 0 {
+            (retrigger - division, division)
         } else {
             run.last_retrigger_before(start)
         };
+        let played = frame - self.frame(previous);
         let rise = Self::rise(since);
         Tap {
-            main: (main, rise),
-            tail: Some((capture + (frame - self.frame(previous)), 1.0 - rise)),
+            main: (main, rise * open),
+            tail: Some((
+                capture + played,
+                (1.0 - rise) * self.gate(previous, length, played),
+            )),
         }
     }
 }
@@ -679,6 +781,10 @@ mod tests {
             (Lane::Repeat, points(&[(0, 2.0)])),
             (Lane::Repeat, points(&[(0, -16.0)])),
             (Lane::Repeat, points(&[(8, 16.0), (8, 0.0)])),
+            (Lane::RepeatGate, points(&[(0, 4.9)])),
+            (Lane::RepeatGate, points(&[(0, 100.5)])),
+            (Lane::RepeatGate, points(&[(0, f32::NAN)])),
+            (Lane::RepeatGate, points(&[(8, 50.0), (8, 25.0)])),
         ] {
             let mut changed = automation.clone();
             *changed.lane_mut(lane) = bad;
@@ -697,6 +803,72 @@ mod tests {
             value: 64.0,
         });
         automation.validate().unwrap();
+        assert_eq!(Lane::from_key("repeatgate"), Some(Lane::RepeatGate));
+        assert_eq!(Lane::RepeatGate.label(), "Repeat gate");
+        automation.repeat_gate = points(&[(0, 5.0), (16, 37.5), (32, 100.0)]);
+        automation.validate().unwrap();
+    }
+
+    #[test]
+    fn return_lanes_hold_zero_to_twice_the_full_return() {
+        validate_return_points(&points(&[(0, 0.0), (64, 2.0), (128, 0.35)])).unwrap();
+        for bad in [
+            points(&[(0, -0.01)]),
+            points(&[(0, 2.01)]),
+            points(&[(0, f32::INFINITY)]),
+            points(&[(64, 1.0), (64, 0.5)]),
+            points(&[(crate::engine::MAX_TICKS + 1, 1.0)]),
+        ] {
+            assert!(validate_return_points(&bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(return_label(1.5), "150%");
+        assert!(no_returns(&Default::default()));
+    }
+
+    #[test]
+    fn a_repeat_gate_reads_as_a_percentage_and_steps_from_full() {
+        assert_eq!(Lane::RepeatGate.format(25.0), "25%");
+        assert_eq!(Lane::RepeatGate.range(), (5.0, 100.0));
+        assert!(Lane::RepeatGate.steps());
+        assert_eq!(Lane::RepeatGate.before_first(), 100.0);
+        assert_eq!(Lane::Repeat.before_first(), 0.0);
+    }
+
+    #[test]
+    fn a_gated_repeat_plays_its_share_of_the_slice_then_falls_silent() {
+        let ramp = REPEAT_RAMP_FRAMES;
+        // At 100 frames a tick, 1/16 (16 ticks) is 1600 frames. The gate is
+        // 25% from tick 10, 50% from tick 42, and the lane rolls from 10.
+        let lane = points(&[(10, 16.0), (58, 0.0)]);
+        let gate = points(&[(10, 25.0), (42, 50.0)]);
+        let repeat = Repeat::new(&lane, &gate, 100.0).unwrap();
+        // The first slice at T is open for 400 frames, then falls.
+        assert_eq!(repeat.tap(1000 + 399).main, (1399, 1.0));
+        let falling = repeat.tap(1000 + 400 + ramp / 2).main.1;
+        assert!(falling > 0.3 && falling < 0.7, "{falling}");
+        assert_eq!(repeat.tap(1000 + 400 + ramp).main.1, 0.0);
+        assert_eq!(repeat.tap(2599).main.1, 0.0);
+        // The next repeat rises, open, and the silent one stays silent.
+        let tap = repeat.tap(2600 + 3);
+        assert!(tap.main.1 > 0.0);
+        assert_eq!(tap.tail.unwrap().1, 0.0);
+        assert_eq!(repeat.tap(2600 + ramp + 10).main, (1000 + ramp + 10, 1.0));
+        assert_eq!(repeat.tap(2600 + 400 + ramp).main.1, 0.0);
+        // From tick 42 each repeat holds 50%: 800 frames.
+        assert_eq!(repeat.tap(4200 + 799).main.1, 1.0);
+        assert_eq!(repeat.tap(4200 + 800 + ramp).main.1, 0.0);
+        // Off at tick 58: the live sound returns over the silent tail.
+        let tap = repeat.tap(5800 + 2);
+        assert_eq!(tap.main.0, 5802);
+        assert_eq!(tap.tail.unwrap().1, 0.0);
+        // At 100% the gate changes nothing.
+        let full = Repeat::new(&lane, &points(&[(0, 100.0)]), 100.0).unwrap();
+        let plain = Repeat::new(&lane, &[], 100.0).unwrap();
+        for frame in (900..6200).step_by(7) {
+            assert_eq!(full.tap(frame), plain.tap(frame), "{frame}");
+        }
+        // Without Repeat the gate does nothing at all.
+        assert!(Repeat::new(&[], &gate, 100.0).is_none());
     }
 
     #[test]
@@ -710,7 +882,7 @@ mod tests {
         assert!(
             Lane::ALL
                 .iter()
-                .all(|lane| lane.steps() == (*lane == Lane::Repeat))
+                .all(|lane| lane.steps() == matches!(lane, Lane::Repeat | Lane::RepeatGate))
         );
     }
 
@@ -719,7 +891,7 @@ mod tests {
         let ramp = REPEAT_RAMP_FRAMES;
         // At 100 frames a tick, 1/16 (16 ticks) is 1600 frames.
         let lane = points(&[(0, 0.0), (10, 16.0), (26, 16.0), (42, 32.0), (60, 0.0)]);
-        let repeat = Repeat::new(&lane, 100.0).unwrap();
+        let repeat = Repeat::new(&lane, &[], 100.0).unwrap();
         let live = |frame| Tap {
             main: (frame, 1.0),
             tail: None,
@@ -754,8 +926,8 @@ mod tests {
         assert_eq!(tap.tail.unwrap().0, 1000 + 203);
         assert_eq!(repeat.tap(6000 + ramp), live(6000 + ramp));
         // A lane that never turns on is no Repeat at all.
-        assert!(Repeat::new(&points(&[(0, 0.0), (64, 0.0)]), 100.0).is_none());
-        assert!(Repeat::new(&[], 100.0).is_none());
+        assert!(Repeat::new(&points(&[(0, 0.0), (64, 0.0)]), &[], 100.0).is_none());
+        assert!(Repeat::new(&[], &[], 100.0).is_none());
     }
 
     #[test]

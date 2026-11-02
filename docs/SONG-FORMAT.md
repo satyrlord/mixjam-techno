@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 22 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 23 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 21 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 22 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 22 keeps its `createdAt`.
+to 23 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.
@@ -52,8 +52,9 @@ to 1), and `placements`. Earlier versions use the fields listed in the version
 history below. A lane from version 18 may also hold:
 
 - `automation`, a JSON object with any of `volume`, `sends` (four lists), `filter`,
-  from version 20 `pan`, and from version 21 `repeat`: lists of `{"tick",
-  "value"}` points in strictly increasing tick order within the timeline.
+  from version 20 `pan`, from version 21 `repeat`, and from version 23
+  `repeatGate`: lists of `{"tick", "value"}` points in strictly increasing
+  tick order within the timeline.
   Volume is from -60 to 6 dB, a send from 0 to 1, the filter from -1 to 1, and
   the pan from -1 (hard left) through 0 (center) to 1 (hard right). A send or
   pan list with points replaces the lane's send or `pan` for playback and
@@ -72,6 +73,17 @@ history below. A lane from version 18 may also hold:
   the clips' sound before the EQ, drive, compressor, width, other automation,
   fader, pan, ducker, and sends. Versions 20 and earlier reject `repeat`, even as an
   empty list. Repeat can continue past its source clip until the song ends.
+  `repeatGate` is the share of each repeat that sounds, from 5 to 100 percent
+  of its division. It steps like `repeat`: it is 100 before its first point
+  and holds each point's value until the next point. Each retrigger, the
+  first at T included, takes the value held at its own tick: with G percent,
+  it plays the first G percent of its division's frames (rounded to a frame),
+  then falls to silence over the same 132-frame raised-cosine ramp that
+  crossfades the retriggers, and stays silent until the next retrigger. The
+  gate also weighs a repeat's outgoing tail in the next crossfade and when
+  the lane turns off. At 100 the repeats are exactly as without a gate, and
+  while `repeat` is off the gate does nothing. Versions 22 and earlier reject
+  `repeatGate`, even as an empty list.
   Automation points do not extend the song's duration.
 - `eq`, the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
   "midQ", "highHz", "highDb", "highCut"}`, every key required, and the second
@@ -121,7 +133,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 22 are:
+versions 16 to 23 are:
 
 | Key | Settings |
 |---|---|
@@ -152,7 +164,16 @@ a pedal reject.
 ## FX buses
 
 `fxBuses` holds exactly four buses in order, each with `module`, `powered`,
-`returnLevel` from 0 to 1, and `limiter`. A `module` is `{"type": "empty"}`, or
+`returnLevel` from 0 to 1, and `limiter`. From version 23 a bus may also hold
+`returnAutomation`, its return lane: a list of `{"tick", "value"}` points in
+strictly increasing tick order within the timeline, each value from 0 to 2,
+where 1 is the full return and 2 about +6 dB. A bus whose lane has no points
+omits the key. While the lane has points it replaces `returnLevel` for
+playback, export, and stems; like the volume lane it holds its first value
+before its first point and its last after its last point, and between two
+points it moves in a straight line at every frame. The bus's safety limiter
+follows it. Versions 22 and earlier reject the key, even as an empty list.
+A `module` is `{"type": "empty"}`, or
 `echoform-delay` or `aetherform-reverb` with every setting under the
 version-7 names (`mode`, `divisionL`, `timeMsL`, `feedback`, ...;
 `spaceModel`, `preDelayMs`, `decaySeconds`, ...). From version 17 either
@@ -167,7 +188,14 @@ A placement holds `id`, `sampleId`, `startTick`, `durationTicks`,
 `offsetFrames`, and `gain` (0 to 2). It may also hold `fades`, with `in` and
 `out`, each `{"ticks", "curve"}` where the curve is `linear`, `equal-power`, or
 `exponential` and the two lengths together are no longer than the placement,
-and `pitchCents` from -2400 to 2400. Placements load in `id` order.
+and `pitchCents` from -2400 to 2400. From version 23 it may hold `reverse`,
+a boolean: `true` plays the placement backwards, the slice that starts at
+`offsetFrames` and lasts `durationTicks`, reversed within the placement, so
+the placement's last frame plays the slice's first. A source shorter than the
+slice leaves silence at the placement's start. Fades, pitch, and gain apply
+in the placement's own time: the fade in from its start and the fade out to
+its end. A placement that plays forward omits the key; versions 22 and
+earlier reject it. Placements load in `id` order.
 
 A placement names audio by ID. Product catalog IDs resolve through
 `libraries`, other IDs through `samples`. `samples` links each used WAV by path
@@ -184,7 +212,7 @@ before replacing the destination.
 ## Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 22, which earlier builds cannot open.
+earlier song writes version 23, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -203,6 +231,7 @@ earlier song writes version 22, which earlier builds cannot open.
 | 20 | Adds the lane automation `pan`. | No pan automation. |
 | 21 | Adds the lane automation `repeat`. | No repeat automation. |
 | 22 | Adds the lane `drive`. | Every drive off. |
+| 23 | Adds FX bus return automation, the lane automation `repeatGate`, and the placement `reverse`. | Static returns, full-length repeats, no reversed clips. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

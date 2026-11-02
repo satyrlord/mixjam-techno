@@ -248,6 +248,11 @@ pub struct Clip {
     /// A pitch change in cents that keeps the clip's timing.
     #[serde(default)]
     pub pitch_cents: i32,
+    /// Play the clip backwards: the slice that starts at `offset_frames` and
+    /// lasts the clip's length, reversed within the clip. Fades, pitch, and
+    /// gain still apply in the clip's own time.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reverse: bool,
 }
 
 /// The widest clip pitch change: two octaves either way.
@@ -631,6 +636,10 @@ pub struct Project {
     /// the song filled them.
     #[serde(default)]
     pub fx: crate::fx::FxBuses,
+    /// Each FX bus's return lane. A lane with points replaces its bus's
+    /// return level for playback and export.
+    #[serde(default, skip_serializing_if = "crate::automation::no_returns")]
+    pub return_automation: [Vec<crate::automation::Point>; crate::fx::BUSES],
 }
 
 /// Earlier JSON projects have no board-format version. Accept their saved
@@ -730,6 +739,7 @@ impl Default for Project {
             libraries: Vec::new(),
             master: crate::master::MasterChain::default(),
             fx: crate::fx::FxBuses::default(),
+            return_automation: Default::default(),
         }
     }
 }
@@ -893,6 +903,10 @@ impl Project {
         }
         self.master.validate()?;
         self.fx.validate()?;
+        for (bus, lane) in self.return_automation.iter().enumerate() {
+            crate::automation::validate_return_points(lane)
+                .map_err(|error| format!("FX {}: {error}", bus + 1))?;
+        }
         if self
             .tracks
             .iter()
@@ -1313,6 +1327,7 @@ impl Editor {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             })
         })?;
         Ok(id)
@@ -1414,6 +1429,7 @@ mod tests {
             gain: 1.0,
             fades: Fades::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         // Before the first section, the lead-in is its own span.
         assert_eq!(project.section_span(0), Some([0, 4 * TICKS_PER_BAR]));
@@ -1740,6 +1756,7 @@ mod tests {
                 gain: 0.5,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
             project.loop_region = Some([3, 999]);
             let original = project.clone();
@@ -1778,6 +1795,7 @@ mod tests {
                 gain: 1.0,
                 fades: Default::default(),
                 pitch_cents: 0,
+                reverse: false,
             });
             assert!(normalize_import(project).is_err());
         }
@@ -1982,6 +2000,7 @@ mod tests {
             gain: 0.5,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         original.import_notices.push(ImportNotice {
             source_bpm: 146.0,
@@ -2046,6 +2065,7 @@ mod tests {
             gain: 1.0,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         project.validate().unwrap();
         assert_eq!(
@@ -2103,6 +2123,7 @@ mod tests {
             gain: 0.4,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         });
         let mut value = serde_json::to_value(&old_project).unwrap();
         value.as_object_mut().unwrap().remove("schema_version");

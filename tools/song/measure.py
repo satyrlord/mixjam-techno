@@ -112,6 +112,7 @@ def mechanical(document, lanes):
     names = sample_names(document)
     problems = []
     sounds = {}
+    reversed_sources = {}
     # Catalog audio resolves through the application and its provider libraries.
     # This file-only check cannot establish its source duration or end level.
     for sample_id in sorted(set(names) - set(samples) - set(missing_ids)):
@@ -148,14 +149,35 @@ def mechanical(document, lanes):
             name = samples[p['sampleId']]['name']
             plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.play_bpm)
             if p['durationTicks'] > plays + 4:
+                gap = 'at its start' if p.get('reverse', False) else 'at its end'
                 problems.append(f"The {name} clip on track {index + 1} at bar {bar:.2f} outlasts its sound by "
-                                f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars. This leaves a silent gap.")
+                                f"{(p['durationTicks'] - plays) / TICKS_PER_BAR:.2f} bars. "
+                                f"This leaves a silent gap {gap}.")
             end = p['startTick'] + p['durationTicks']
             fade_out = p.get('fades', {}).get('out', {}).get('ticks', 0)
             cut = p['durationTicks'] < plays - 4
             continued = any(t in starts for t in range(end - 16, end + 1))
-            if info and info['role'] in MELODIC and not continued and not fade_out and (cut or sound.ends_loud):
+            if not info or info['role'] not in MELODIC or continued or fade_out:
+                continue
+            if p.get('reverse', False):
+                # The last output frames read forward from the trim offset, not
+                # the source tail. Limit the window to this placement's slice.
+                if p['sampleId'] not in reversed_sources:
+                    reversed_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
+                data = reversed_sources[p['sampleId']]
+                first = p['offsetFrames']
+                source_per_second = sound.rate * document['song']['bpm'] / sound.play_bpm
+                slice_frames = p['durationTicks'] / TICKS_PER_BAR * 240 / document['song']['bpm'] * source_per_second
+                last = min(len(data), first + max(1, int(min(source_per_second * 0.05, slice_frames))))
+                segment = data[first:last]
+                whole = float(np.sqrt(np.mean(data ** 2)))
+                level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
+                abrupt = level > 1e-12 and level >= whole * 0.1
+                reason = 'The reversed slice is still loud at its end.'
+            else:
+                abrupt = cut or sound.ends_loud
                 reason = 'The clip is cut short.' if cut else 'The sound is still loud at its end.'
+            if abrupt:
                 problems.append(f"The {name} clip on track {index + 1} ({info['name']}) starts at bar {bar:.2f} "
                                 f"and stops at bar {end / TICKS_PER_BAR + 1:.2f} without a fade out. {reason}")
     return problems

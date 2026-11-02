@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 22.
+//! The application's own `.mixjam` song format, format version 23.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -45,6 +45,10 @@
 //!   `repeat`. Earlier songs have no repeat automation and reject the key.
 //! - Version 22 adds the lane drive, a lane's `drive`. Without it the drive
 //!   is off at the default settings; earlier songs reject the key.
+//! - Version 23 adds an FX bus's return lane, `returnAutomation` in a bus of
+//!   `fxBuses`, the Repeat gate lane, `repeatGate` in a lane's `automation`,
+//!   and a placement's `reverse`. Earlier songs have static returns,
+//!   full-length repeats, and no reversed clips, and reject the keys.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -68,7 +72,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 22;
+pub(super) const FORMAT_VERSION: u32 = 23;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -114,11 +118,13 @@ impl<'de, T> Deserialize<'de> for Saved<T> {
     }
 }
 
-impl<T: Serialize + serde::de::DeserializeOwned> Saved<T> {
+impl<T: Serialize> Saved<T> {
     fn json(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or_default()
     }
+}
 
+impl<T: Serialize + serde::de::DeserializeOwned> Saved<T> {
     /// Renaming legacy keys needs a JSON object, but ordinary Value parsing
     /// discards duplicate fields before the typed settings can reject them.
     fn migration_json(&self) -> Result<serde_json::Value, String> {
@@ -299,9 +305,11 @@ struct Document {
     // Required from version 11; earlier versions have no master pedalboard.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     master: Option<Saved<MasterChain>>,
-    // Required from version 13; earlier versions have no FX buses.
+    // Required from version 13; earlier versions have no FX buses. Raw
+    // until the version is checked, as version 23 added each bus's
+    // `returnAutomation`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    fx_buses: Option<Saved<crate::fx::FxBuses>>,
+    fx_buses: Option<Saved<SongBuses>>,
     lanes: Vec<Lane>,
     samples: Vec<Sample>,
     missing_samples: Vec<Missing>,
@@ -369,9 +377,9 @@ struct Lane {
     solo: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sends: Option<[f32; crate::fx::BUSES]>,
-    // Raw until the version is checked, as version 20 added `pan` and
-    // version 21 `repeat`, which an earlier song must not hold even as an
-    // empty list.
+    // Raw until the version is checked, as version 20 added `pan`, version
+    // 21 `repeat`, and version 23 `repeatGate`, which an earlier song must
+    // not hold even as an empty list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation: Option<Saved<crate::automation::Automation>>,
     // Raw until the version is checked, as the second peak's keys are
@@ -401,6 +409,83 @@ fn saved_drive<'de, D: serde::Deserializer<'de>>(
     crate::drive::Drive::deserialize(deserializer).map(Some)
 }
 
+/// The FX buses as a song saves them: each bus's settings and, from version
+/// 23, its return lane when it has points.
+#[derive(Serialize)]
+#[serde(transparent)]
+struct SongBuses(Vec<SongBus>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SongBus {
+    #[serde(flatten)]
+    bus: crate::fx::FxBus,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    return_automation: Vec<crate::automation::Point>,
+}
+
+// Serde also accepts positional arrays for structs. The song format names
+// each point's fields, while legacy project JSON keeps its existing reader.
+fn point_arrays_have_objects(value: &serde_json::Value) -> bool {
+    value
+        .as_array()
+        .is_none_or(|points| points.iter().all(serde_json::Value::is_object))
+}
+
+/// The FX buses of a saved song and their return lanes. Versions 13 to 22
+/// reject a bus's `returnAutomation`, even as an empty list.
+fn saved_buses(
+    buses: &Saved<SongBuses>,
+    version: u32,
+) -> Result<
+    (
+        crate::fx::FxBuses,
+        [Vec<crate::automation::Point>; crate::fx::BUSES],
+    ),
+    String,
+> {
+    let invalid = |error: serde_json::Error| format!("The FX buses are invalid: {error}");
+    let Saved::Raw(raw) = buses else {
+        return Err("The FX buses are not a saved record.".into());
+    };
+    if version < 23 {
+        let lanes = buses.json().as_array().is_some_and(|buses| {
+            buses
+                .iter()
+                .any(|bus| bus.get("returnAutomation").is_some())
+        });
+        if lanes {
+            return Err(format!(
+                "Version {version} songs cannot contain FX return automation."
+            ));
+        }
+        let fx = serde_json::from_str(raw.get()).map_err(invalid)?;
+        return Ok((fx, Default::default()));
+    }
+    let UniqueJson(mut json) = serde_json::from_str(raw.get()).map_err(invalid)?;
+    let mut returns: [Vec<crate::automation::Point>; crate::fx::BUSES] = Default::default();
+    if let Some(buses) = json.as_array_mut() {
+        for (bus, record) in buses.iter_mut().enumerate() {
+            let lane = record
+                .as_object_mut()
+                .and_then(|record| record.remove("returnAutomation"));
+            if let (Some(lane), Some(slot)) = (lane, returns.get_mut(bus)) {
+                if !point_arrays_have_objects(&lane) {
+                    return Err(format!(
+                        "FX {} return automation points must be JSON objects.",
+                        bus + 1
+                    ));
+                }
+                *slot = serde_json::from_value(lane).map_err(|error| {
+                    format!("The FX {} return automation is invalid: {error}", bus + 1)
+                })?;
+            }
+        }
+    }
+    let fx = serde_json::from_value(json).map_err(invalid)?;
+    Ok((fx, returns))
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Placement {
@@ -414,6 +499,14 @@ struct Placement {
     fades: Option<Fades>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pitch_cents: Option<i32>,
+    // Version 23 added reverse; a placement that plays forward omits it. An
+    // explicit null is not a switch.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::engine::optional_bool"
+    )]
+    reverse: Option<bool>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -511,6 +604,7 @@ impl Document {
                 gain: clip.gain,
                 fades: (clip.fades != Fades::default()).then_some(clip.fades),
                 pitch_cents: (clip.pitch_cents != 0).then_some(clip.pitch_cents),
+                reverse: clip.reverse.then_some(true),
             });
         }
         Self {
@@ -536,7 +630,18 @@ impl Document {
                 }),
             },
             master: Some(Saved::Known(project.master)),
-            fx_buses: Some(Saved::Known(project.fx)),
+            fx_buses: Some(Saved::Known(SongBuses(
+                project
+                    .fx
+                    .buses
+                    .iter()
+                    .zip(&project.return_automation)
+                    .map(|(bus, lane)| SongBus {
+                        bus: *bus,
+                        return_automation: lane.clone(),
+                    })
+                    .collect(),
+            ))),
             lanes,
             samples: project
                 .imported_samples
@@ -693,14 +798,12 @@ impl Document {
                 self.format_version
             ));
         }
-        let fx = match (self.format_version, self.fx_buses) {
-            (13.., Some(buses)) => buses
-                .settings()
-                .map_err(|error| format!("The FX buses are invalid: {error}"))?,
+        let (fx, return_automation) = match (self.format_version, self.fx_buses) {
+            (version @ 13.., Some(buses)) => saved_buses(&buses, version)?,
             (version @ 13.., None) => {
                 return Err(format!("Version {version} songs require fxBuses."));
             }
-            (_, None) => crate::fx::FxBuses::default(),
+            (_, None) => Default::default(),
             (version, Some(_)) => {
                 return Err(format!("Version {version} songs cannot contain fxBuses."));
             }
@@ -741,6 +844,23 @@ impl Document {
                             "Version {} lanes cannot contain repeat automation.",
                             self.format_version
                         ));
+                    }
+                    if self.format_version < 23 && record.contains_key("repeatGate") {
+                        return Err(format!(
+                            "Version {} lanes cannot contain repeat gate automation.",
+                            self.format_version
+                        ));
+                    }
+                    let lanes_are_objects = ["volume", "filter", "pan", "repeat", "repeatGate"]
+                        .iter()
+                        .filter_map(|key| record.get(*key))
+                        .all(point_arrays_have_objects);
+                    let sends_are_objects = record
+                        .get("sends")
+                        .and_then(serde_json::Value::as_array)
+                        .is_none_or(|sends| sends.iter().all(point_arrays_have_objects));
+                    if !lanes_are_objects || !sends_are_objects {
+                        return Err("The automation points must be JSON objects.".into());
                     }
                     automation
                         .settings()
@@ -847,6 +967,12 @@ impl Document {
                         self.format_version
                     ));
                 }
+                if self.format_version < 23 && placement.reverse.is_some() {
+                    return Err(format!(
+                        "Version {} placements cannot contain reverse.",
+                        self.format_version
+                    ));
+                }
                 clips.push(Clip {
                     id: placement.id,
                     sample_id: placement.sample_id,
@@ -857,6 +983,7 @@ impl Document {
                     gain: placement.gain,
                     fades: placement.fades.unwrap_or_default(),
                     pitch_cents: placement.pitch_cents.unwrap_or(0),
+                    reverse: placement.reverse.unwrap_or(false),
                 });
             }
         }
@@ -952,6 +1079,7 @@ impl Document {
             libraries: self.libraries,
             master,
             fx,
+            return_automation,
         };
         project.validate()?;
         Ok(project)
@@ -1055,6 +1183,7 @@ mod tests {
             gain: 0.75,
             fades: Default::default(),
             pitch_cents: 0,
+            reverse: false,
         };
         let mut project = Project {
             title: "Night drive".into(),
@@ -1223,6 +1352,21 @@ mod tests {
         project
     }
 
+    /// The test song with version 23's tools: a throw on FX 2's return lane,
+    /// a Repeat gate on track 6, and the clip on track 64 reversed.
+    fn thrown(mut project: Project) -> Project {
+        let points = |pairs: &[(u32, f32)]| -> Vec<crate::automation::Point> {
+            pairs
+                .iter()
+                .map(|&(tick, value)| crate::automation::Point { tick, value })
+                .collect()
+        };
+        project.return_automation[1] = points(&[(0, 0.25), (448, 0.25), (480, 2.0), (512, 0.25)]);
+        project.tracks[5].automation.repeat_gate = points(&[(256, 25.0), (384, 60.0)]);
+        project.clips[0].reverse = true;
+        project
+    }
+
     /// The test song with two sections, as version 19 saves them.
     fn sectioned(project: Project) -> Project {
         Project {
@@ -1333,15 +1477,15 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_22_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_23_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = driven(rolled(panned(sectioned(project()))));
+        let project = thrown(driven(rolled(panned(sectioned(project())))));
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 22);
+        assert_eq!(document["formatVersion"], 23);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["song"]["sections"],
@@ -1419,13 +1563,31 @@ mod tests {
                     {"tick": 320, "value": 16.0},
                     {"tick": 384, "value": 32.0},
                     {"tick": 512, "value": 0.0}
+                ],
+                "repeatGate": [
+                    {"tick": 256, "value": 25.0},
+                    {"tick": 384, "value": 60.0}
                 ]
             })
         );
         assert!(document["lanes"][4].get("automation").is_none());
-        // A placement without fades or pitch saves neither.
+        // A placement without fades, pitch, or reverse saves none of them.
         let plain = document["lanes"][0]["placements"][0].as_object().unwrap();
         assert!(!plain.contains_key("fades") && !plain.contains_key("pitchCents"));
+        assert!(!plain.contains_key("reverse"));
+        assert_eq!(document["lanes"][63]["placements"][0]["reverse"], true);
+        // A bus with a return lane saves it after its settings; one without
+        // saves none.
+        assert_eq!(
+            document["fxBuses"][1]["returnAutomation"],
+            serde_json::json!([
+                {"tick": 0, "value": 0.25},
+                {"tick": 448, "value": 0.25},
+                {"tick": 480, "value": 2.0},
+                {"tick": 512, "value": 0.25}
+            ])
+        );
+        assert!(document["fxBuses"][0].get("returnAutomation").is_none());
         assert_eq!(
             document["lanes"][5]["sends"],
             serde_json::json!([0.25, 0.0, 0.5, 1.0])
@@ -1440,9 +1602,18 @@ mod tests {
         assert_eq!(
             document["fxBuses"][1],
             serde_json::json!({
-                "module": {"type": "empty"}, "powered": true, "returnLevel": 1.0, "limiter": true
+                "module": {"type": "empty"}, "powered": true, "returnLevel": 1.0, "limiter": true,
+                "returnAutomation": [
+                    {"tick": 0, "value": 0.25},
+                    {"tick": 448, "value": 0.25},
+                    {"tick": 480, "value": 2.0},
+                    {"tick": 512, "value": 0.25}
+                ]
             })
         );
+        // The return lane follows the bus's settings.
+        let bus = text.find(r#""returnLevel": 1.0,"#).unwrap();
+        assert!(text[bus..].find(r#""returnAutomation""#).is_some());
         assert_eq!(document["master"]["boosterCompressor"]["on"], true);
         assert_eq!(document["master"]["boosterCompressor"]["drive"], 368);
         assert_eq!(document["master"]["boosterEq"]["bands"][9], 0);
@@ -1560,8 +1731,8 @@ mod tests {
     #[test]
     fn automation_records_reject_positional_arrays_in_every_supported_version() {
         // Serde can read a struct from a positional array. Such an array
-        // must not hide version 20's pan lane or version 21's repeat lane
-        // from an earlier reader.
+        // must not hide version 20's pan lane, version 21's repeat lane, or
+        // version 23's repeat gate lane from an earlier reader.
         let document = serde_json::to_value(Document::new(
             &Project::default(),
             timestamp(0),
@@ -1582,6 +1753,8 @@ mod tests {
                 serde_json::json!([[], [[], [], [], []], [], [{"tick": 0, "value": 1.0}]]),
                 serde_json::json!([[], [[], [], [], []], [], [], []]),
                 serde_json::json!([[], [[], [], [], []], [], [], [{"tick": 0, "value": 16.0}]]),
+                serde_json::json!([[], [[], [], [], []], [], [], [], []]),
+                serde_json::json!([[], [[], [], [], []], [], [], [], [{"tick": 0, "value": 50.0}]]),
             ] {
                 document["lanes"][0]["automation"] = automation;
                 assert_eq!(
@@ -1591,6 +1764,208 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn song_automation_points_must_be_objects() {
+        let document = serde_json::to_value(Document::new(
+            &Project::default(),
+            timestamp(0),
+            timestamp(0),
+        ))
+        .unwrap();
+        for (pointer, points) in [
+            ("/fxBuses/0/returnAutomation", serde_json::json!([[0, 1.0]])),
+            (
+                "/lanes/0/automation",
+                serde_json::json!({"repeatGate": [[0, 50.0]]}),
+            ),
+            (
+                "/lanes/0/automation",
+                serde_json::json!({"volume": [[0, -6.0]]}),
+            ),
+            (
+                "/lanes/0/automation",
+                serde_json::json!({"sends": [[[0, 0.5]], [], [], []]}),
+            ),
+        ] {
+            let mut wrong = document.clone();
+            let (parent, key) = pointer.rsplit_once('/').unwrap();
+            wrong.pointer_mut(parent).unwrap()[key] = points;
+            let error = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(
+                error.contains("points must be JSON objects"),
+                "{pointer}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
+        let project = thrown(project());
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        assert_eq!(document["formatVersion"], 23);
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(reopened, project);
+        // Version 22 and earlier reject each key, even when it holds nothing.
+        let empty = [
+            ("/fxBuses/1/returnAutomation", serde_json::json!([])),
+            ("/lanes/5/automation/repeatGate", serde_json::json!([])),
+            ("/lanes/63/placements/0/reverse", serde_json::json!(false)),
+        ];
+        let full = [
+            (
+                "/fxBuses/1/returnAutomation",
+                document["fxBuses"][1]["returnAutomation"].clone(),
+            ),
+            (
+                "/lanes/5/automation/repeatGate",
+                document["lanes"][5]["automation"]["repeatGate"].clone(),
+            ),
+            ("/lanes/63/placements/0/reverse", serde_json::json!(true)),
+        ];
+        let without = |document: &serde_json::Value| {
+            let mut earlier = document.clone();
+            earlier["fxBuses"][1]
+                .as_object_mut()
+                .unwrap()
+                .remove("returnAutomation");
+            earlier["lanes"][5]["automation"]
+                .as_object_mut()
+                .unwrap()
+                .remove("repeatGate");
+            earlier["lanes"][63]["placements"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("reverse");
+            earlier
+        };
+        for version in [18, 21, 22] {
+            for (index, (pointer, value)) in empty.iter().chain(&full).enumerate() {
+                let mut earlier = without(&document);
+                earlier["formatVersion"] = version.into();
+                let (parent, key) = pointer.rsplit_once('/').unwrap();
+                earlier.pointer_mut(parent).unwrap()[key] = value.clone();
+                let error = parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err();
+                let expected = match index % 3 {
+                    0 => format!("Version {version} songs cannot contain FX return automation."),
+                    1 => format!("Version {version} lanes cannot contain repeat gate automation."),
+                    _ => format!("Version {version} placements cannot contain reverse."),
+                };
+                assert_eq!(error, expected, "{pointer} {value}");
+            }
+        }
+        // Without the keys, version 22 opens with a static return, full-length
+        // repeats, and the clip forward.
+        let mut earlier = without(&document);
+        earlier["formatVersion"] = 22.into();
+        let mut expected = project.clone();
+        expected.return_automation = Default::default();
+        expected.tracks[5].automation.repeat_gate.clear();
+        expected.clips[0].reverse = false;
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap()).unwrap(),
+            expected
+        );
+        // Version 23 takes empty lanes as none and a false switch as forward.
+        let mut quiet = document.clone();
+        for (pointer, value) in &empty {
+            let (parent, key) = pointer.rsplit_once('/').unwrap();
+            quiet.pointer_mut(parent).unwrap()[key] = value.clone();
+        }
+        let mut forward = project.clone();
+        forward.return_automation = Default::default();
+        forward.tracks[5].automation.repeat_gate.clear();
+        forward.clips[0].reverse = false;
+        assert_eq!(
+            parse(&serde_json::to_vec(&quiet).unwrap()).unwrap(),
+            forward
+        );
+        // Each holds its range and form.
+        for (pointer, value, error) in [
+            (
+                "/fxBuses/1/returnAutomation/2/value",
+                serde_json::json!(2.5),
+                "FX return automation values",
+            ),
+            (
+                "/fxBuses/1/returnAutomation/0/value",
+                serde_json::json!(-0.1),
+                "FX return automation values",
+            ),
+            (
+                "/fxBuses/1/returnAutomation/1/tick",
+                serde_json::json!(0),
+                "increasing tick order",
+            ),
+            (
+                "/fxBuses/1/returnAutomation/1/level",
+                serde_json::json!(1),
+                "unknown field",
+            ),
+            (
+                "/fxBuses/1/returnAutomation",
+                serde_json::json!({}),
+                "return automation is invalid",
+            ),
+            (
+                "/fxBuses/1/returnAutomation",
+                serde_json::Value::Null,
+                "return automation is invalid",
+            ),
+            (
+                "/lanes/5/automation/repeatGate/0/value",
+                serde_json::json!(4),
+                "Repeat gate automation values",
+            ),
+            (
+                "/lanes/5/automation/repeatGate/1/value",
+                serde_json::json!(101),
+                "Repeat gate automation values",
+            ),
+            (
+                "/lanes/5/automation/repeatGate/1/tick",
+                serde_json::json!(256),
+                "increasing tick order",
+            ),
+            (
+                "/lanes/63/placements/0/reverse",
+                serde_json::Value::Null,
+                "invalid type",
+            ),
+            (
+                "/lanes/63/placements/0/reverse",
+                serde_json::json!(1),
+                "invalid type",
+            ),
+        ] {
+            let mut wrong = document.clone();
+            let (parent, key) = pointer.rsplit_once('/').unwrap();
+            match wrong.pointer_mut(parent).unwrap() {
+                serde_json::Value::Array(items) => items[key.parse::<usize>().unwrap()] = value,
+                record => record[key] = value,
+            }
+            let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{pointer}: {found}");
+        }
+        // A duplicate return lane in one bus is rejected too.
+        let text = serde_json::to_string(&document).unwrap();
+        let duplicate = text.replacen(
+            "\"returnAutomation\":[",
+            "\"returnAutomation\":[],\"returnAutomation\":[",
+            1,
+        );
+        assert_ne!(duplicate, text);
+        assert!(
+            parse(duplicate.as_bytes())
+                .unwrap_err()
+                .contains("duplicate field")
+        );
     }
 
     #[test]
@@ -1668,7 +2043,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 22);
+        assert_eq!(document["formatVersion"], 23);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened.tracks, project.tracks);
         // Version 20 rejects the key, even as an empty list, and opens the
@@ -1792,7 +2167,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 22);
+        assert_eq!(document["formatVersion"], 23);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened.tracks, project.tracks);
         // Version 21 and earlier reject the key, on or off, and open the

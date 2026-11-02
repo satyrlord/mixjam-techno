@@ -227,6 +227,10 @@ impl Glide {
     pub(super) fn settle(&mut self) {
         self.value = self.target;
     }
+    /// Set the value, keeping the target: the glide goes on from there.
+    pub(super) fn hold(&mut self, value: f64) {
+        self.value = value;
+    }
     pub(super) fn value(&self) -> f64 {
         self.value
     }

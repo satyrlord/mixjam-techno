@@ -62,7 +62,8 @@ Arrangement (the lanes have no separate controls)
                          Replace the song's sections; [] removes them. Each
                          section starts at its bar (or \"tick\") and lasts until
                          the next one. Names are 1 to 48 characters.
-  automate track=N lane=volume|send1..send4|filter|pan|repeat points=[[BAR,VALUE],...]
+  automate track=N lane=volume|send1..send4|filter|pan|repeat|repeatgate
+                         points=[[BAR,VALUE],...]
                          Replace one automation lane of a track; [] clears it.
                          Volume is dB over the fader, -60 (silence) to 6;
                          a send is 0 to 1 and replaces its knob; the filter
@@ -72,17 +73,24 @@ Arrangement (the lanes have no separate controls)
                          16, 32, or 64 to repeat 1/4 to 1/64 notes of the
                          track's sound from where it turns on; it holds each
                          value until the next point and is off before the
-                         first.
+                         first. Repeat gate is 5 to 100, the percent of each
+                         repeat that sounds before it falls silent; it holds
+                         each value like Repeat and is 100 before the first.
+  automate bus=N lane=return points=[[BAR,VALUE],...]
+                         Replace FX bus N's return lane (1 to 4); [] clears
+                         it. The return is 0 to 2 (1 is 100%, 2 about +6 dB)
+                         and replaces the bus's Return knob.
   clip clip=ID [gain_db= offset_frames= length_ticks= fade_in_ticks=
                          fade_in_curve= fade_out_ticks= fade_out_curve=
-                         pitch_cents=]
+                         pitch_cents= reverse=true|false]
                          Change one clip; a field left out keeps its value.
                          gain_db is -60 (silence) to 6; state reports gain as
                          amplitude. offset_frames skips that many source frames.
                          Curves are linear, equal-power, or exponential. The
                          fade out ends where the clip's sound ends. Pitch is
-                         -2400 to 2400 cents and keeps the timing. Use
-                         move_clips to move a clip.
+                         -2400 to 2400 cents and keeps the timing. reverse
+                         plays the clip's slice backwards within the clip.
+                         Use move_clips to move a clip.
 
 Libraries
   libraries              The library folders in order, and why any did not load.
@@ -309,8 +317,11 @@ pub enum Request {
     SetSections {
         sections: Vec<SectionArgs>,
     },
+    /// Replace a track's automation lane, or with `bus` an FX bus's return
+    /// lane.
     Automate {
-        track: usize,
+        track: Option<usize>,
+        bus: Option<usize>,
         #[serde(deserialize_with = "text")]
         lane: String,
         points: Vec<[f64; 2]>,
@@ -326,6 +337,7 @@ pub enum Request {
         fade_out_ticks: Option<u32>,
         fade_out_curve: Option<crate::engine::FadeCurve>,
         pitch_cents: Option<i32>,
+        reverse: Option<bool>,
     },
     Libraries,
     /// Replace the library folders and scan them.
@@ -438,6 +450,8 @@ pub struct ClipView {
     pub gain: f32,
     pub fades: crate::engine::Fades,
     pub pitch_cents: i32,
+    /// Whether the clip plays backwards.
+    pub reverse: bool,
     /// Where the clip is in the window, when the arrangement shows its track.
     pub rect: Option<[f32; 4]>,
 }
@@ -454,7 +468,7 @@ pub struct TrackView {
     pub solo: bool,
     pub sends: [f32; crate::fx::BUSES],
     /// Only lanes with points. A send or pan lane with points replaces its
-    /// knob, `sends` or `pan`. A repeat lane's points are steps.
+    /// knob, `sends` or `pan`. Repeat and repeat gate points are steps.
     pub automation: crate::automation::Automation,
     /// Whether the track's channel EQ is on.
     pub eq_on: bool,
@@ -465,6 +479,18 @@ pub struct TrackView {
     /// The track's stereo width in percent.
     pub width: f32,
     pub clips: usize,
+}
+
+/// One FX bus: its effect, its Return knob, and its return lane.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BusView {
+    pub bus: usize,
+    pub effect: &'static str,
+    pub powered: bool,
+    pub return_level: f32,
+    /// The return lane's points, ticks and values from 0 to 2. With points
+    /// it replaces `return_level`.
+    pub return_automation: Vec<crate::automation::Point>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -539,6 +565,8 @@ pub struct SongView {
     /// Tracks that hold clips or have Solo on, including empty soloed tracks.
     pub tracks: Vec<TrackView>,
     pub clips: Vec<ClipView>,
+    /// The four FX buses in order.
+    pub fx_buses: Vec<BusView>,
     pub missing_samples: Vec<MissingView>,
     pub sample_conflicts: Vec<ConflictView>,
     pub import_notices: Vec<String>,
@@ -836,8 +864,23 @@ pub fn song_view(session: &Session) -> SongView {
                     gain: clip.gain,
                     fades: clip.fades,
                     pitch_cents: clip.pitch_cents,
+                    reverse: clip.reverse,
                     rect: None,
                 }
+            })
+            .collect(),
+        fx_buses: project
+            .fx
+            .buses
+            .iter()
+            .zip(&project.return_automation)
+            .enumerate()
+            .map(|(index, (bus, lane))| BusView {
+                bus: index + 1,
+                effect: bus.module.label(),
+                powered: bus.powered,
+                return_level: bus.return_level,
+                return_automation: lane.clone(),
             })
             .collect(),
         missing_samples: session
@@ -1664,7 +1707,8 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Request>(&line).unwrap(),
             Request::Automate {
-                track: 3,
+                track: Some(3),
+                bus: None,
                 lane: "send2".into(),
                 points: vec![[1.0, 0.0], [4.5, 0.75]],
             }
@@ -1679,7 +1723,8 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Request>(&line).unwrap(),
             Request::Automate {
-                track: 5,
+                track: Some(5),
+                bus: None,
                 lane: "pan".into(),
                 points: vec![[1.0, -1.0], [1.25, 1.0], [2.0, 0.0]],
             }
@@ -1694,9 +1739,42 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Request>(&line).unwrap(),
             Request::Automate {
-                track: 2,
+                track: Some(2),
+                bus: None,
                 lane: "repeat".into(),
                 points: vec![[5.0, 8.0], [5.25, 16.0], [5.5, 32.0], [6.0, 0.0]],
+            }
+        );
+        let line = request_line(&strings(&[
+            "automate",
+            "track=2",
+            "lane=repeatgate",
+            "points=[[5,25],[5.5,100]]",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Automate {
+                track: Some(2),
+                bus: None,
+                lane: "repeatgate".into(),
+                points: vec![[5.0, 25.0], [5.5, 100.0]],
+            }
+        );
+        let line = request_line(&strings(&[
+            "automate",
+            "bus=3",
+            "lane=return",
+            "points=[[8,0.2],[8.75,2],[9,0.2]]",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Automate {
+                track: None,
+                bus: Some(3),
+                lane: "return".into(),
+                points: vec![[8.0, 0.2], [8.75, 2.0], [9.0, 0.2]],
             }
         );
         let line = request_line(&strings(&[
@@ -1719,8 +1797,19 @@ mod tests {
                 fade_out_ticks: Some(128),
                 fade_out_curve: Some(crate::engine::FadeCurve::EqualPower),
                 pitch_cents: None,
+                reverse: None,
             }
         );
+        let line = request_line(&strings(&["clip", "clip=7", "reverse=true"])).unwrap();
+        assert!(matches!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Clip {
+                clip: 7,
+                reverse: Some(true),
+                gain_db: None,
+                ..
+            }
+        ));
         let line = request_line(&strings(&[
             "set_libraries",
             r#"folders=["C:/one","D:/two"]"#,
