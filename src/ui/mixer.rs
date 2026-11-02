@@ -327,7 +327,7 @@ pub(super) fn show(
                 )
             });
             if response
-                .on_hover_text(format!(
+                .hover_hint(format!(
                     "Master bypass: {}. Bypass skips the master pedalboard, trim included, for \
                      playback and export, so you can master the exported mix elsewhere. The \
                      pedals keep their settings. Mastering's Bypass all is the same switch.",
@@ -394,7 +394,7 @@ fn strip(
         summary_rect,
         egui::Label::new(egui::RichText::new(summary).size(11.0 * scale).color(INK)).truncate(),
     )
-    .on_hover_text(detail);
+    .hover_hint(detail);
     let value_rect = Rect::from_min_size(at(8.0, 42.0), Vec2::new(92.0, 22.0) * scale);
     let mut changed = gain_value(ui, value_rect, scale, name, gain);
     // Leave room for the cap at silence above the send knobs.
@@ -456,7 +456,7 @@ fn strip(
         false,
     );
     if unity
-        .on_hover_text("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
+        .hover_hint("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
         .clicked()
     {
         changed |= *gain != 1.0;
@@ -514,7 +514,7 @@ fn strip(
             false,
         );
         if center
-            .on_hover_text("Reset pan to center. Output routing stays unchanged.")
+            .hover_hint("Reset pan to center. Output routing stays unchanged.")
             .clicked()
         {
             changed |= *pan != 0.0;
@@ -560,7 +560,7 @@ fn strip(
             )
         });
         if response
-            .on_hover_text(format!(
+            .hover_hint(format!(
                 "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
                  shelves, and two peaks; the drive, which adds harmonics; the compressor and the \
                  stereo width, before the track's automation and fader; and the ducker, which \
@@ -616,7 +616,7 @@ fn strip(
             )
         });
         if response
-            .on_hover_text(format!(
+            .hover_hint(format!(
                 "{name} polarity: {}. Invert the sign of both output channels without changing \
                  gain or pan. Negative dB values only reduce level.",
                 if *inverted { "inverted" } else { "normal" }
@@ -769,7 +769,7 @@ fn send_knob(
         builder.add_action(Action::Increment);
         builder.add_action(Action::Decrement);
     });
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{name}: {:.0}%. Drag, or use the wheel or arrow keys; Shift for fine steps; \
          double-click for 0.{}",
         *value * 100.0,
@@ -862,7 +862,7 @@ fn return_strip(
             egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, &key)
         });
         if response
-            .on_hover_text(format!("{key}: {}. {hint}", if *on { "on" } else { "off" }))
+            .hover_hint(format!("{key}: {}. {hint}", if *on { "on" } else { "off" }))
             .clicked()
         {
             *on = !*on;
@@ -879,7 +879,7 @@ fn return_strip(
         scale,
         false,
     )
-    .on_hover_text(format!(
+    .hover_hint(format!(
         "Show {name} in the Effects module, with all its controls."
     ))
     .clicked();
@@ -980,7 +980,7 @@ fn switch_button(
         )
     });
     let clicked = response
-        .on_hover_text(switch_hint(&label, switch, *enabled))
+        .hover_hint(switch_hint(&label, switch, *enabled))
         .clicked();
     if clicked {
         *enabled = !*enabled;
@@ -1078,7 +1078,7 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
                 info.current_text_value = Some(db_text(db));
                 info
             });
-            response.on_hover_text(format!(
+            response.hover_hint(format!(
                 "{name} gain: {}. Click to enter dB, then press Enter. Negative dB attenuates. \
                  Enter -inf for silence. Polarity stays unchanged.",
                 db_text(db)
@@ -1238,7 +1238,7 @@ fn gain_rail(
     if before != *gain {
         response.mark_changed();
     }
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{name} gain: {}. Drag to adjust; Shift gives fine movement. \
          The wheel and arrow keys change 0.5 dB \
          (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB \

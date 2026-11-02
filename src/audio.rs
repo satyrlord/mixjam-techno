@@ -535,7 +535,12 @@ impl TrackChain {
     /// The stack buffer used to sum voices before frame-by-frame automation.
     const CHUNK: usize = 128;
 
-    fn new(index: usize, track: &crate::engine::Track, frames_per_tick: f64) -> Self {
+    fn new(
+        index: usize,
+        track: &crate::engine::Track,
+        frames_per_tick: f64,
+        quality: crate::playback_quality::PlaybackQuality,
+    ) -> Self {
         let automation = &track.automation;
         Self {
             track: index,
@@ -547,10 +552,12 @@ impl TrackChain {
             ),
             eq: Curve::of(&track.eq),
             // The mix gives each drive its slot.
-            drive: track
-                .drive
-                .on
-                .then(|| (crate::drive::Run::new(&track.drive), 0)),
+            drive: track.drive.on.then(|| {
+                (
+                    crate::drive::Run::with_quality(&track.drive, quality.drive),
+                    0,
+                )
+            }),
             compressor: track
                 .compressor
                 .on
@@ -766,6 +773,7 @@ fn widen(frames: &mut [f32], width: f32) {
 /// any range of the song on demand, so playback and export need no buffer of
 /// the whole song and a song can be as long as the timeline.
 pub struct Mix {
+    quality: crate::playback_quality::PlaybackQuality,
     frames: u64,
     voices: Vec<Voice>,
     /// The tracks with their EQ, drive, or compressor on, a width other
@@ -840,6 +848,7 @@ impl Mix {
         project: &Project,
         samples: &HashMap<SourceKey, Arc<Pcm>>,
         source_tempos: &HashMap<u32, f64>,
+        quality: crate::playback_quality::PlaybackQuality,
     ) -> Result<Self, String> {
         project.validate()?;
         let rate = Self::SAMPLE_RATE;
@@ -868,7 +877,12 @@ impl Mix {
             .map(|index| project.tracks[index].ducker.key_track());
         for key in ducker_keys.chain(side_keys.iter().copied()) {
             if !keys.iter().any(|chain| chain.track == key) {
-                keys.push(TrackChain::new(key, &project.tracks[key], frames_per_tick));
+                keys.push(TrackChain::new(
+                    key,
+                    &project.tracks[key],
+                    frames_per_tick,
+                    quality,
+                ));
             }
         }
         for clip in &project.clips {
@@ -946,7 +960,7 @@ impl Mix {
                 continue;
             }
             let index = *chain_index[clip.track].get_or_insert_with(|| {
-                let mut chain = TrackChain::new(clip.track, track, frames_per_tick);
+                let mut chain = TrackChain::new(clip.track, track, frames_per_tick, quality);
                 if ducking(clip.track) {
                     let key = track.ducker.key_track();
                     let slot = keys.iter().position(|chain| chain.track == key);
@@ -977,6 +991,7 @@ impl Mix {
             crate::master::dsp::prepare_tables();
         }
         Ok(Self {
+            quality,
             frames,
             voices,
             chains,
@@ -1000,6 +1015,18 @@ impl Mix {
         self.frames
     }
 
+    /// The runtime quality used by this prepared playback mix.
+    pub fn quality(&self) -> crate::playback_quality::PlaybackQuality {
+        self.quality
+    }
+
+    fn check_export_quality(&self) -> Result<(), String> {
+        if self.quality != crate::playback_quality::PlaybackQuality::FULL {
+            return Err("Prepare the song at 4x quality before export.".into());
+        }
+        Ok(())
+    }
+
     /// Whether the mix was prepared with the project's track levels.
     /// Playback reads them live; an export needs them in the mix.
     pub fn has_levels(&self, project: &Project) -> bool {
@@ -1012,6 +1039,7 @@ impl Mix {
     /// the delay is cut from the start, so the result lines up with the song;
     /// the buses' tails ring on after it.
     pub fn to_pcm(&self, master: &MasterChain, fx: &FxBuses) -> Result<Pcm, String> {
+        self.check_export_quality()?;
         if self.frames > Self::MAX_PCM_FRAMES {
             return Err("This song is too long to hold in memory. Play or export it.".into());
         }
@@ -1103,6 +1131,7 @@ impl Mix {
     /// Write stereo PCM16 through the FX buses and the master pedalboard,
     /// mixing one block at a time.
     pub fn write_wav(&self, path: &Path, master: &MasterChain, fx: &FxBuses) -> Result<(), String> {
+        self.check_export_quality()?;
         // Both the data chunk and the RIFF size are 32-bit. Stereo PCM16
         // uses four bytes per frame plus 36 bytes in the RIFF payload.
         let tail = if self.sends && fx.is_active() {
@@ -1165,6 +1194,7 @@ impl Mix {
     /// An out-of-range part rejects before any file is replaced. Each file
     /// is named after `song`.
     pub fn write_stems(&self, folder: &Path, song: &str, fx: &FxBuses) -> Result<Stems, String> {
+        self.check_export_quality()?;
         let tracks = self.sounding_tracks();
         if tracks.is_empty() {
             return Err("No track sounds: add clips, or check Mute, Solo, and L/R.".into());
@@ -1613,7 +1643,20 @@ pub fn render_project(project: &Project, library: &Library) -> Result<Pcm, Strin
 
 /// Decode a project's sources and prepare its mix.
 pub fn prepare_project(project: &Project, library: &Library) -> Result<Mix, String> {
-    prepare_project_reusing(project, library, &mut HashMap::new())
+    prepare_project_with_quality(
+        project,
+        library,
+        crate::playback_quality::PlaybackQuality::FULL,
+    )
+}
+
+/// Prepare playback without changing the song or any export constructor.
+pub fn prepare_project_with_quality(
+    project: &Project,
+    library: &Library,
+    quality: crate::playback_quality::PlaybackQuality,
+) -> Result<Mix, String> {
+    prepare_project_reusing_with_quality(project, library, &mut HashMap::new(), quality)
 }
 
 /// A decoded source at one clip pitch in cents. Pitch 0 is the source as it is.
@@ -1737,10 +1780,25 @@ fn in_parallel<T: Sync, R: Send>(items: &[T], work: impl Fn(&T) -> R + Sync) -> 
 /// Prepare a mix with the sources that an earlier call for the same library
 /// decoded. `decoded` then holds exactly the sources of this project, so its
 /// size follows the song. The caller clears it when the library changes.
+#[cfg(test)]
 pub(crate) fn prepare_project_reusing(
     project: &Project,
     library: &Library,
     decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
+) -> Result<Mix, String> {
+    prepare_project_reusing_with_quality(
+        project,
+        library,
+        decoded,
+        crate::playback_quality::PlaybackQuality::FULL,
+    )
+}
+
+pub(crate) fn prepare_project_reusing_with_quality(
+    project: &Project,
+    library: &Library,
+    decoded: &mut HashMap<SourceKey, Arc<Pcm>>,
+    quality: crate::playback_quality::PlaybackQuality,
 ) -> Result<Mix, String> {
     project.validate()?;
     load_sources(project, decoded, |id| library.read_pcm(id))?;
@@ -1756,13 +1814,26 @@ pub(crate) fn prepare_project_reusing(
             )
         })
         .collect();
-    Mix::new(project, decoded, &source_tempos)
+    Mix::new(project, decoded, &source_tempos, quality)
 }
 
 #[cfg(test)]
 pub(crate) fn mix_with_samples(
     project: &Project,
     samples: &HashMap<u32, Pcm>,
+) -> Result<Mix, String> {
+    mix_with_samples_quality(
+        project,
+        samples,
+        crate::playback_quality::PlaybackQuality::FULL,
+    )
+}
+
+#[cfg(test)]
+fn mix_with_samples_quality(
+    project: &Project,
+    samples: &HashMap<u32, Pcm>,
+    quality: crate::playback_quality::PlaybackQuality,
 ) -> Result<Mix, String> {
     let source_tempos = project
         .imported_samples
@@ -1776,7 +1847,7 @@ pub(crate) fn mix_with_samples(
             .cloned()
             .ok_or_else(|| format!("Sample {id} is missing."))
     })?;
-    Mix::new(project, &decoded, &source_tempos)
+    Mix::new(project, &decoded, &source_tempos, quality)
 }
 
 #[cfg(test)]
@@ -1789,6 +1860,8 @@ pub(crate) fn render_with_samples(
 
 pub struct Player {
     output: output::Output,
+    preview_gain: f32,
+    previewing: bool,
     current: Option<Current>,
     start_frame: u64,
     total_frames: u64,
@@ -1842,6 +1915,7 @@ impl PlaybackSource {
     /// (`GLIDE_FRAMES`, `MasterProcessor`, `Mix::TAIL_BLOCK`).
     const BLOCK_FRAMES: usize = 256;
 
+    #[cfg(test)]
     fn new(
         audio: Arc<dyn Frames>,
         start: u64,
@@ -1852,12 +1926,31 @@ impl PlaybackSource {
     }
 
     /// A source that renders blocks of `block_frames` frames.
+    #[cfg(test)]
     fn with_block(
         audio: Arc<dyn Frames>,
         start: u64,
         loop_region: Option<[u64; 2]>,
         master: Option<Arc<MasterControl>>,
         block_frames: usize,
+    ) -> Self {
+        Self::with_quality_block(
+            audio,
+            start,
+            loop_region,
+            master,
+            block_frames,
+            crate::playback_quality::PlaybackQuality::FULL,
+        )
+    }
+
+    fn with_quality_block(
+        audio: Arc<dyn Frames>,
+        start: u64,
+        loop_region: Option<[u64; 2]>,
+        master: Option<Arc<MasterControl>>,
+        block_frames: usize,
+        quality: crate::playback_quality::PlaybackQuality,
     ) -> Self {
         let channels = audio.channels() as usize;
         let master = master.filter(|_| channels == 2);
@@ -1866,7 +1959,8 @@ impl PlaybackSource {
             .as_ref()
             .zip(audio.tempo())
             .map(|(control, bpm)| ReturnsProcessor::live(Arc::clone(control), bpm));
-        let master = master.map(MasterProcessor::live);
+        let master =
+            master.map(|control| MasterProcessor::live_with_quality(control, quality.master));
         let latency = master.as_ref().map_or(0, MasterProcessor::latency);
         let sends = if returns.is_some() {
             vec![0.0; block_frames * 2 * BUSES]
@@ -2250,10 +2344,16 @@ pub fn priority_failure() -> Option<String> {
 
 impl Player {
     pub fn new() -> Result<Self, String> {
-        let output =
-            output::Output::open().map_err(|e| format!("Cannot open the audio output: {e}"))?;
+        Self::new_with_buffer(crate::options::PlaybackBufferTarget::Ms40)
+    }
+
+    pub fn new_with_buffer(target: crate::options::PlaybackBufferTarget) -> Result<Self, String> {
+        let output = output::Output::open_with_target(target)
+            .map_err(|e| format!("Cannot open the audio output: {e}"))?;
         Ok(Self {
             output,
+            preview_gain: 1.0,
+            previewing: false,
             current: None,
             start_frame: 0,
             total_frames: 0,
@@ -2265,6 +2365,43 @@ impl Player {
     pub fn output_configuration(&self) -> OutputConfiguration {
         self.output.configuration()
     }
+
+    pub fn output_status(&self) -> String {
+        self.output.status()
+    }
+
+    pub fn buffer_target_error(
+        &self,
+        target: crate::options::PlaybackBufferTarget,
+    ) -> Option<String> {
+        self.output.buffer_target_error(target)
+    }
+
+    pub(crate) fn prepare_output(
+        &self,
+        target: crate::options::PlaybackBufferTarget,
+    ) -> Result<output::Output, String> {
+        self.output.replacement(target)
+    }
+
+    pub(crate) fn adopt_output(&mut self, output: output::Output) {
+        self.stop();
+        self.output = output;
+    }
+
+    /// Attenuate only preview sinks, without changing their source PCM.
+    pub fn set_preview_gain(&mut self, gain: f32) {
+        self.preview_gain = if gain.is_finite() {
+            gain.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        if self.previewing
+            && let Some(current) = &self.current
+        {
+            current.sink.set_volume(self.preview_gain);
+        }
+    }
     /// Play validated audio. Callers check decoded PCM before they pass it.
     /// A mix plays through `master`, whose settings can change as it plays.
     pub fn play(
@@ -2273,6 +2410,23 @@ impl Player {
         start_frame: u64,
         loop_region: Option<[u64; 2]>,
         master: Option<Arc<MasterControl>>,
+    ) -> Result<(), String> {
+        self.play_with_quality(
+            audio,
+            start_frame,
+            loop_region,
+            master,
+            crate::playback_quality::PlaybackQuality::FULL,
+        )
+    }
+
+    pub fn play_with_quality(
+        &mut self,
+        audio: Arc<dyn Frames>,
+        start_frame: u64,
+        loop_region: Option<[u64; 2]>,
+        master: Option<Arc<MasterControl>>,
+        quality: crate::playback_quality::PlaybackQuality,
     ) -> Result<(), String> {
         let total = audio.frames();
         if !(1..=2).contains(&audio.channels())
@@ -2295,8 +2449,19 @@ impl Player {
             start_frame.min(total)
         };
         let sink = self.output.sink();
+        self.previewing = master.is_none();
+        if self.previewing {
+            sink.set_volume(self.preview_gain);
+        }
         let sample_rate = audio.sample_rate();
-        let source = PlaybackSource::new(audio, start, loop_region, master);
+        let source = PlaybackSource::with_quality_block(
+            audio,
+            start,
+            loop_region,
+            master,
+            PlaybackSource::BLOCK_FRAMES,
+            quality,
+        );
         self.current = Some(Current::start(sink, source, self.current.take()));
         self.start_frame = start;
         self.total_frames = total;
@@ -2349,6 +2514,7 @@ mod tests {
     fn wav_export_rejects_riff_size_overflow_before_opening_output() {
         // The data fits u32, but adding the 36-byte RIFF payload header does not.
         let mix = Mix {
+            quality: crate::playback_quality::PlaybackQuality::FULL,
             frames: (u64::from(u32::MAX) - 36) / 4 + 1,
             voices: Vec::new(),
             chains: Vec::new(),
@@ -2709,6 +2875,7 @@ mod tests {
     #[test]
     fn dry_wav_admission_keeps_the_full_riff_capacity() {
         let mix = Mix {
+            quality: crate::playback_quality::PlaybackQuality::FULL,
             frames: (u64::from(u32::MAX) - 36) / 4,
             voices: Vec::new(),
             chains: Vec::new(),
@@ -5047,6 +5214,127 @@ mod tests {
         assert!(playback.fill());
         assert_eq!(playback.state.drives.len(), 3);
         assert_eq!(playback.state.drives.as_ptr(), allocation);
+    }
+
+    #[test]
+    fn playback_quality_keeps_key_alignment_seeks_loops_and_export_boundary() {
+        use crate::playback_quality::{Oversampling, PlaybackQuality};
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(1, 1, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[1].gain = 0.0;
+        project.master.bus_compressor.on = true;
+        // Key 1 is track index 0. Its active Drive runs independently in
+        // the audible chain and the master's separate key chain below.
+        project.master.bus_compressor.key = 1;
+        let samples = HashMap::from([(
+            1,
+            stereo(
+                |i| {
+                    if i == 0 {
+                        0.8
+                    } else {
+                        (i as f32 * 0.1).sin() * 0.4
+                    }
+                },
+                |i| {
+                    if i == 3 {
+                        -0.6
+                    } else {
+                        (i as f32 * 0.13).sin() * -0.3
+                    }
+                },
+            ),
+        )]);
+        let full_export = mix_with_samples(&project, &samples)
+            .unwrap()
+            .to_pcm(&project.master, &project.fx)
+            .unwrap();
+        for drive in [Oversampling::FourX, Oversampling::Off] {
+            for master in [Oversampling::FourX, Oversampling::Off] {
+                let quality = PlaybackQuality { drive, master };
+                for mix_value in [0.0, 100.0] {
+                    project.tracks[0].drive = crate::drive::Drive {
+                        on: true,
+                        mix: mix_value,
+                        amount: 24.0,
+                        ..Default::default()
+                    };
+                    let prepared = mix_with_samples_quality(&project, &samples, quality).unwrap();
+                    assert_eq!(prepared.quality(), quality);
+                    let mut expected = vec![0.0; 4096];
+                    let mut state = RenderState::default();
+                    prepared.prepare_state(&mut state);
+                    let allocation = state.drives.as_ptr();
+                    prepared.read_block(0, &mut expected, None, &mut state);
+                    assert_eq!(allocation, state.drives.as_ptr());
+                    let keys = prepared.keys(&state, expected.len() / 2);
+                    assert_eq!(
+                        &keys.audio[..expected.len()],
+                        expected,
+                        "audible/key Drive alignment {quality:?} Mix {mix_value}"
+                    );
+                    let mut blocked = vec![0.0; expected.len()];
+                    let mut state = RenderState::default();
+                    for (index, chunk) in blocked.chunks_mut(34).enumerate() {
+                        prepared.read_block((index * 17) as u64, chunk, None, &mut state);
+                    }
+                    assert_eq!(blocked, expected);
+                    let mut seek = vec![0.0; 512];
+                    let mut fresh = vec![0.0; 512];
+                    prepared.read_block(8192, &mut seek, None, &mut state);
+                    prepared.read_block(8192, &mut fresh, None, &mut RenderState::default());
+                    assert_eq!(seek, fresh);
+                    if quality != PlaybackQuality::FULL {
+                        assert!(prepared.to_pcm(&project.master, &project.fx).is_err());
+                        assert!(
+                            prepared
+                                .write_wav(Path::new(""), &project.master, &project.fx)
+                                .is_err()
+                        );
+                        assert!(
+                            prepared
+                                .write_stems(Path::new(""), "test", &project.fx)
+                                .is_err()
+                        );
+                    }
+                    let audio: Arc<dyn Frames> = Arc::new(prepared);
+                    for span in [1, 16, 68, 70] {
+                        let mut playback = PlaybackSource::with_quality_block(
+                            audio.clone(),
+                            0,
+                            Some([0, span]),
+                            Some(MasterControl::new(&project.master)),
+                            PlaybackSource::BLOCK_FRAMES,
+                            quality,
+                        );
+                        let actual: Vec<_> = playback.by_ref().take(span as usize * 4).collect();
+                        assert_eq!(actual.len(), span as usize * 4);
+                        assert!(actual.iter().all(|x| x.is_finite()));
+                    }
+                    // Zero Mix keeps both independent channels at their exact
+                    // positions, including the compensated initial impulses.
+                    if mix_value == 0.0 {
+                        let mut clean_project = project.clone();
+                        clean_project.tracks[0].drive.on = false;
+                        let clean = mix_with_samples(&clean_project, &samples).unwrap();
+                        let mut dry = vec![0.0; expected.len()];
+                        clean.read_block(0, &mut dry, None, &mut RenderState::default());
+                        assert_eq!(dry, expected);
+                    }
+                }
+            }
+        }
+        project.tracks[0].drive.on = false;
+        assert_eq!(
+            full_export.samples,
+            mix_with_samples(&project, &samples)
+                .unwrap()
+                .to_pcm(&project.master, &project.fx)
+                .unwrap()
+                .samples
+        );
     }
 
     /// One second of a stereo source: `left` and `right` of the frame.

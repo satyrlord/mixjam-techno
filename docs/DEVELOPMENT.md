@@ -74,20 +74,50 @@ for rendering; it gives the Booster pedals their format-16 keys.
 ## Audio output verification
 
 The optional `audio::output::tests::native_output_buffer_probe` test opens
-the default physical output for six seconds of silence. Run it separately
+the default physical output for nine seconds of silence. Run it separately
 with `cargo.ps1 -CargoArguments @('test','--lib','native_output_buffer_probe',
-'--','--ignored','--nocapture')`. It compares system-default buffering with
-the app's 40 ms request and reports callback sizes and intervals. CPAL's
+'--','--ignored','--nocapture')`. It compares Automatic, 20 ms, and 40 ms
+requests and reports unsupported targets, opening failures, callback sizes,
+and measured intervals separately. Production output status also reports
+the last callback's frames and the last measured callback interval; neither
+value is negotiated buffer capacity, which CPAL does not expose. CPAL's
 reported timestamp lead is derived from available frames, not an independent
 measurement of output latency. This probe does not prove that a heavy song
 plays without underruns. Report benchmark limits against the measured or
 explicitly modeled callback period.
+
+The Options contract is in [OPTIONS-PAGE-SPEC.md](OPTIONS-PAGE-SPEC.md).
+Preference tests cover defaults, section-visibility migration, malformed and
+future files, validation, atomic failure, and song/history independence.
+Playback quality tests cover Drive and master timing and export separation.
+Run the callback benchmark in `src/audio/realtime_bench.rs` in an optimized
+build for CPU claims; record workload, rate, cadence, mean, p99, maximum, and
+missed deadlines. An accepted larger buffer request does not establish a
+longer processing deadline. Physical listening, microphone operation, native
+pickers, screen readers, high DPI, and minimum-machine capacity need separate
+results. Automated tests and screenshots do not establish those results.
+
+The ignored `realtime_options_bench` test covers sparse, dense Drive,
+master-heavy, and 64-track synthetic arrangements, with all four quality
+combinations at 44.1 and 48 kHz. It measures starts, seeks, replacements, and
+uninterrupted playback after eight seconds. The representative `realtime_bench`
+accepts `MIXJAM_BENCH_DRIVE` and `MIXJAM_BENCH_MASTER` (`4x` or `off`). Set
+`MIXJAM_BENCH_CONTINUOUS=1` to play from the song's start before measuring the
+position selected by `MIXJAM_BENCH_START`. Warmup is excluded from the measured
+sample; its audio and wall duration are reported. Leave the 10 ms modeled
+deadline unchanged. See [OPTIONS-VERIFICATION.md](OPTIONS-VERIFICATION.md)
+for the implementation's checks and limitations.
 
 ## UI verification
 
 `tools/verify-ui.ps1` captures the built native interface at all three
 supported window sizes with isolated synthetic fixtures and settings.
 The sections case includes named bookmarks and a long section name.
+Options capture views are `options-audio`, `options-workspace`, and `options-files`;
+inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+draft editing, Apply, Cancel, Restore options defaults, and focus restoration
+through the built app's agent channel. Inspect its accessibility tree separately
+from capture appearance.
 `-Executable PATH` selects another build and `-Views` a subset of the cases.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.

@@ -73,7 +73,7 @@ pub(super) fn show(
                 node.set_label("Step synth source sound");
                 node.set_value(source.name);
             });
-            label.on_hover_text(source.name);
+            label.hover_hint(source.name);
             for (x, width, text, next) in [
                 (252.0, 164.0, "Choose source file", Action::ChooseSource),
                 (426.0, 154.0, "Use palette sound", Action::PaletteSource),
@@ -146,7 +146,7 @@ pub(super) fn show(
                 true,
                 false,
             )
-            .on_hover_text("Clear the notes in the viewed bar.")
+            .hover_hint("Clear the notes in the viewed bar.")
             .clicked()
             {
                 let start = *view_bar * 16;
@@ -249,9 +249,9 @@ pub(super) fn show(
                     _ => "Listen to the active bars in sequence.",
                 };
                 let response = if enabled {
-                    response.on_hover_text(hint)
+                    response.hover_hint(hint)
                 } else {
-                    response.on_disabled_hover_text(hint)
+                    response.disabled_hint(hint)
                 };
                 if response.clicked() {
                     action = next;
@@ -485,7 +485,7 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                     if current && reveal {
                         ui.scroll_to_rect(cell, None);
                     }
-                    if (response.on_hover_text(label).clicked() || (current && toggle))
+                    if (response.hover_hint(label).clicked() || (current && toggle))
                         && let Some(value) = state.steps.get_mut(index)
                     {
                         *value = if selected { None } else { Some(note) };
@@ -545,7 +545,7 @@ fn toggle(ui: &mut egui::Ui, center: Pos2, label_at: Pos2, name: &str, value: &m
         ),
         _ => status,
     };
-    response.on_hover_text(tooltip);
+    response.hover_hint(tooltip);
 }
 fn button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool, primary: bool) -> Response {
     keyed_button(ui, rect, text, text, enabled, primary)
@@ -598,7 +598,7 @@ fn select_button(
             name,
         )
     });
-    response.on_hover_text(name)
+    response.hover_hint(name)
 }
 fn lettering(ui: &egui::Ui, center: Pos2, text: &str, size: f32, color: Color32) {
     let font = FontId::proportional(size);

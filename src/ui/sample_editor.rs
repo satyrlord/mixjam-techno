@@ -49,7 +49,7 @@ pub(super) fn show(
             );
             name_control(name.clone(), "Source sound");
             ctx.accesskit_node_builder(name.id, |node| node.set_value(source.name));
-            name.on_hover_text(source.name);
+            name.hover_hint(source.name);
             label(&panel, at(34.0, 126.0), "Start frame", 13.0);
             label(&panel, at(342.0, 126.0), "End frame", 13.0);
             panel.add_enabled_ui(source.available && source.frames > 0, |ui| {
@@ -93,10 +93,10 @@ pub(super) fn show(
                 ready,
             );
             if listen
-                .on_hover_text(
+                .hover_hint(
                     "Preview the selected frames at this pitch. The source stays unchanged.",
                 )
-                .on_disabled_hover_text(reason.unwrap_or_default())
+                .disabled_hint(reason.unwrap_or_default())
                 .clicked()
             {
                 action = Action::Listen;
@@ -109,10 +109,10 @@ pub(super) fn show(
                 ready,
             );
             if save
-                .on_hover_text(
+                .hover_hint(
                     "Save the edit as a new WAV in Wave. The original source stays unchanged.",
                 )
-                .on_disabled_hover_text(reason.unwrap_or_default())
+                .disabled_hint(reason.unwrap_or_default())
                 .clicked()
             {
                 action = Action::Save;
@@ -153,7 +153,7 @@ pub(super) fn show(
                 node.set_value(summary.as_str());
                 node.set_live(egui::accesskit::Live::Polite);
             });
-            status.on_hover_text(&summary);
+            status.hover_hint(&summary);
             if source.missing
                 && action_button(
                     &mut panel,
@@ -246,7 +246,7 @@ fn frame_value(
             if response.changed() {
                 *value = (*value).clamp(*range.start(), *range.end());
             }
-            name_control(response, name).on_hover_text(if name == "Start frame" {
+            name_control(response, name).hover_hint(if name == "Start frame" {
                 "First included source frame (zero-based). Click for exact entry; Enter \
                  applies. Use the adjacent buttons for one-frame steps (Shift: 100)."
             } else {
@@ -268,7 +268,7 @@ fn frame_value(
             up,
         );
         if button
-            .on_hover_text("Change one frame. Hold Shift to change 100 frames.")
+            .hover_hint("Change one frame. Hold Shift to change 100 frames.")
             .clicked()
         {
             let amount = if ui.input(|input| input.modifiers.shift) {
@@ -320,7 +320,7 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
             if response.changed() {
                 *pitch = pitch.clamp(-24.0, 24.0);
             }
-            name_control(response, "Pitch value").on_hover_text(
+            name_control(response, "Pitch value").hover_hint(
                 "Enter semitones from -24 to +24. Pitch changes playback speed and output \
                  duration together. Zero keeps the source pitch.",
             );
@@ -342,7 +342,7 @@ fn pitch_value(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
             up,
         );
         if button
-            .on_hover_text("Change 0.1 semitone. Hold Shift for one semitone.")
+            .hover_hint("Change 0.1 semitone. Hold Shift for one semitone.")
             .clicked()
         {
             let amount = if ui.input(|input| input.modifiers.shift) {
@@ -363,7 +363,7 @@ fn pitch_rail(ui: &mut egui::Ui, rect: Rect, pitch: &mut f64) {
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
         |ui| {
             ui.spacing_mut().slider_width = rect.width();
-            controls::slider(ui, pitch, -24.0..=24.0, "Pitch (semitones)").on_hover_text(
+            controls::slider(ui, pitch, -24.0..=24.0, "Pitch (semitones)").hover_hint(
                 "Pitch changes playback speed and sample length. +12 is one octave up and half \
                  the duration; -12 is one octave down and twice the duration. Use the numeric \
                  value for exact entry.",

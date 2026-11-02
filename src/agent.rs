@@ -411,6 +411,8 @@ pub struct UiNode {
     pub role: &'static str,
     pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number: Option<f64>,
@@ -638,6 +640,12 @@ pub struct ArrangementView {
 pub struct StateView {
     pub version: &'static str,
     pub song: SongView,
+    /// Application preferences are independent of song state.
+    pub options: crate::options::AppOptions,
+    pub options_revision: u64,
+    pub options_error: Option<String>,
+    pub audio_apply_blocked_reason: Option<String>,
+    pub playback_buffer: String,
     pub transport: Transport,
     pub status: Status,
     pub modal: Option<&'static str>,

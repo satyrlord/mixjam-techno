@@ -18,6 +18,19 @@ pub(super) enum Action {
 pub(super) struct Metering {
     pub reading: MeterReading,
     pub playing: bool,
+    pub reduced: bool,
+}
+impl Metering {
+    pub(super) fn repaint_delay(&self) -> Duration {
+        Duration::from_millis(if self.reduced { 67 } else { 33 })
+    }
+}
+pub(super) fn display_needle(ctx: &egui::Context, id: egui::Id, target: f32, reduced: bool) -> f32 {
+    if reduced {
+        target
+    } else {
+        ctx.animate_value_with_time(id, target, 0.06)
+    }
 }
 
 const MARGIN: f32 = 8.0;
@@ -556,7 +569,7 @@ pub(super) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<
             }
         })
         .response;
-    name_control(response, "Mastering preset").on_hover_text(
+    name_control(response, "Mastering preset").hover_hint(
         "Load a factory board. A preset sets every pedal and the pedal order, and turns \
          the Booster pedals off. Trim stays as you set it for the mix. Undo restores \
          the board before it.",
@@ -570,7 +583,7 @@ pub(super) fn bypass_switch(ui: &mut egui::Ui, bypass: &mut bool) -> bool {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(112.0, 28.0), Sense::hover());
     let response = controls::toggle_at(ui, rect, "Bypass all pedals", "Bypass all", bypass);
     let clicked = response.clicked();
-    name_control(response, "Bypass all pedals").on_hover_text(format!(
+    name_control(response, "Bypass all pedals").hover_hint(format!(
         "Bypass all: {}. Skip the whole board, trim included, for playback and export, so you \
          can master the exported mix elsewhere. The pedals keep their settings and switches; \
          presets leave this switch alone. The Mixer's Master bypass is the same switch.",
@@ -589,7 +602,7 @@ pub(super) fn show(
 ) -> Action {
     let mut draft = *chain;
     if metering.playing {
-        ui.ctx().request_repaint_after(Duration::from_millis(33));
+        ui.ctx().request_repaint_after(metering.repaint_delay());
     }
     let area = ui.available_rect_before_wrap();
     ui.advance_cursor_after_rect(area);
@@ -758,7 +771,7 @@ fn pedal_row(
             if !kind.movable() {
                 let header =
                     ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::hover());
-                name_region(header, &format!("{} always runs last", name(*kind))).on_hover_text(
+                name_region(header, &format!("{} always runs last", name(*kind))).hover_hint(
                     "The limiter always runs last, just before the output, so no pedal can raise \
                      the peaks it holds.",
                 );
@@ -769,7 +782,7 @@ fn pedal_row(
             let grip = ui.interact(handle, ui.id().with(("pedal-grip", *kind)), Sense::DRAG);
             let grip = name_region(grip, &format!("Drag {}", name(*kind)))
                 .on_hover_cursor(egui::CursorIcon::Grab)
-                .on_hover_text(
+                .hover_hint(
                     "Drag along the board to change where this pedal sits in the signal path.",
                 );
             if grip.dragged_by(egui::PointerButton::Primary) {
@@ -914,9 +927,12 @@ fn input_unit(
         rect.min + Vec2::new(12.0, 44.0),
         Vec2::new(rect.width() - 24.0, 74.0),
     );
-    let needle = ui
-        .ctx()
-        .animate_value_with_time(ui.id().with("vu-needle"), vu_position(vu), 0.06);
+    let needle = display_needle(
+        ui.ctx(),
+        ui.id().with("vu-needle"),
+        vu_position(vu),
+        metering.reduced,
+    );
     vu_meter(ui, meter, needle);
     let lit = [0, 1].map(|side| live && now - lamps.peaks[side] < 0.4);
     for (side, label) in ["L", "R"].into_iter().enumerate() {
@@ -963,7 +979,7 @@ fn input_unit(
         "Input level: no mix playing".to_owned()
     };
     named(&level, egui::WidgetType::Label, &text);
-    level.on_hover_text("0 VU is -18 dBFS. Peak lamps light at -1 dBFS.");
+    level.hover_hint("0 VU is -18 dBFS. Peak lamps light at -1 dBFS.");
 
     let x = rect.center().x - 8.0;
     let before = decimal(chain.trim);
@@ -1051,7 +1067,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
     };
     ui.ctx()
         .accesskit_node_builder(response.id, |node| node.set_description(state));
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{state} Lights when the output's true peak passes {OVER_DBTP:.0} dBTP, and stays lit \
          until you click it."
     ));
@@ -1118,7 +1134,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
         egui::WidgetType::Label,
         &format!("Output loudness: {summary}"),
     );
-    readings.on_hover_text(
+    readings.hover_hint(
         "Momentary and short-term loudness follow the last 400 ms and 3 s. Integrated loudness \
          and the true peak cover the playback so far.",
     );
@@ -1596,7 +1612,7 @@ fn pedal(
             enabled,
         );
         arrow(ui, button.center(), direction, enabled);
-        let response = reveal(name_control(response, &label)).on_hover_text(format!(
+        let response = reveal(name_control(response, &label)).hover_hint(format!(
             "Move {} one place {step} in the signal path.",
             name(kind)
         ));
@@ -1650,7 +1666,7 @@ fn pedal(
             name(kind),
         )
     });
-    reveal(response).on_hover_text(format!(
+    reveal(response).hover_hint(format!(
         "{}: {}. A pedal that is off keeps its settings and passes the signal on.",
         name(kind),
         if switch { "on" } else { "off" }
@@ -1707,7 +1723,7 @@ fn reduction_meter(ui: &egui::Ui, center: Pos2, pedal: &str, reduction: f32, ste
         egui::WidgetType::Label,
         &format!("{pedal} gain reduction {reduction:.1} dB"),
     );
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "Gain reduction. The lamps light at {} dB.",
         steps.map(|step| step.to_string()).join(", ")
     ));
@@ -1795,7 +1811,7 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
         if response.gained_focus() {
             response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
         }
-        let response = response.on_hover_text(format!(
+        let response = response.hover_hint(format!(
             "{}: {}. Click to bring it into view.",
             name(*kind),
             if on { "on" } else { "off" }
@@ -2423,7 +2439,7 @@ pub(super) fn dial(
                 input.num_accesskit_action_requests(response.id, egui::accesskit::Action::SetValue)
                     > 0
             });
-        reveal(response).on_hover_text(&hint);
+        reveal(response).hover_hint(&hint);
         if spec.choices.is_empty() && *value != before {
             *value = on_grid(*value, (!absolute).then_some(before), &range);
         }
@@ -2449,7 +2465,7 @@ pub(super) fn dial(
                 Rect::from_center_size(well, WELL + Vec2::new(-2.0, 4.0)),
                 entry,
             );
-            reveal(name_control(response, &format!("{} value", spec.name))).on_hover_text(&hint);
+            reveal(name_control(response, &format!("{} value", spec.name))).hover_hint(&hint);
             if *value != typed {
                 *value = if spec.choices.is_empty() {
                     on_grid(*value, None, &range)

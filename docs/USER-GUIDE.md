@@ -4,6 +4,7 @@
 
 - [Interface](#interface)
 - [Sample libraries](#sample-libraries)
+- [Options](#options)
 - [Arrange](#arrange)
 - [Mixer](#mixer)
 - [Mastering](#mastering)
@@ -34,16 +35,17 @@ Hover over the right-hand tool icons for action names.
 
 ## Sample libraries
 
-On first launch, select **Libraries → Add library folder**. A library folder can
+On first launch, Options opens its **Sample libraries** page. Select
+**Add library folder**. Later, select the **Options** gear and **Sample libraries**. A library folder can
 have WAV files in subfolders. You can add up to 9 library folders. The application
-scans all of them and shows their sounds together in Sounds. The Libraries window
+scans all of them and shows their sounds together in Sounds. The Sample libraries page
 lists the folders in order. **Remove** next to a folder takes it out of the list;
 the list keeps at least one folder. **Scan again** reads every folder again, for
 example after you add files or connect a drive. A library folder cannot be inside
 another one.
 
-The scan runs in the background. The Libraries window shows progress and has a
-Cancel button. You can use the window during the scan. The application changes
+The scan runs in the background. The Sample libraries page shows progress and has a
+**Cancel library scan** button. You can use Options during the scan. The application changes
 the sounds when the scan is complete; a cancelled scan changes nothing. It caches
 probe results and decodes changed files again on a later scan. A decoder update
 also causes older cached results to be read again. Unchanged scans
@@ -56,13 +58,13 @@ including extensible headers, long format chunks, and odd-length metadata.
 Classic 24-bit PCM in four-byte containers is also supported. Each scanned file
 must fit the 128 MiB file limit and the 64,000,000-sample limit across all channels.
 Audio that ends inside its last frame loses only that partial frame.
-**Skipped WAVs** in the Libraries window lists files that cannot be used, with
+**Skipped WAVs** on the Sample libraries page lists files that cannot be used, with
 the reason: an empty or damaged file, audio that is cut off, or another encoding
 such as ADPCM. macOS `._` metadata files beside the WAVs are ignored.
 
 If a library folder cannot be read, or has no readable WAV, the other folders
-still load. The status line names the folder and the reason, and the Libraries
-window shows it under the folder. The folder stays in the list, but its sounds
+still load. The status line names the folder and the reason, and the Sample libraries
+page shows it under the folder. The folder stays in the list, but its sounds
 are not in Sounds until a later scan can read it. Songs that use those sounds
 show them as missing. When no folder can be read, the scan fails and the sounds
 do not change. When several folders contain original product samples, the
@@ -80,7 +82,7 @@ A pack's `BPM.INF` can correct that estimate. A tempo and key in a file name,
 such as `HARDCORE_BASS001_180_C_SL3.WAV`, can set the tempo for that file.
 An authenticated folder tempo takes precedence over these estimates and names.
 An identified product sample keeps its catalog tempo.
-If the application cannot find a tempo, it uses the fallback BPM from Libraries
+If the application cannot find a tempo, it uses the fallback BPM from the Sample libraries page
 (140 by default). A loop length can fit half or double its actual tempo. The
 application then prefers 88 to 176 BPM unless the fallback names the other
 tempo. Set the fallback to 180 before you scan a 180 BPM pack when neither a
@@ -95,6 +97,66 @@ tempos do not use octave selection.
 
 Settings, the scan cache, and generated audio use `%LOCALAPPDATA%\MixJam Techno`.
 Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
+
+## Options
+
+Select the **Options** gear in the tool rail's utility group, or press **Ctrl+,**.
+The window has Audio, Workspace, Files, and Sample libraries pages. **Apply**
+saves preference changes and
+keeps the window open. **Cancel**, Escape, or close discards changes since the
+last Apply. **Restore options defaults** changes the draft; select Apply to save
+it. These actions do not change the song, undo history, libraries, or caches.
+If another control changes a preference while Options is open, select **Reload active options**
+before Apply. Reload replaces the draft with the active preferences.
+
+On **Audio**:
+
+- **Drive playback oversampling** and **Master playback oversampling** default
+  to **4x**. Set either to **Off** to use less CPU during playback. Off still
+  runs saturation, which can sound harsher. The master switch affects Soft
+  clip, Tube, Maximizer, and Tape only. Normal exports, track exports, and
+  song-tool renders always use 4x.
+- **Playback buffer target** offers **Automatic**, **20 ms**, and **40 ms**.
+  The default is 40 ms where supported. A larger buffer can absorb processing
+  bursts and increase the delay between an action and its sound. The target
+  is a request, not a measured callback interval. The output status shows the
+  request and observed callback separately. Negotiated capacity is unavailable.
+  If a target cannot open, Apply keeps the working output and reports the error.
+  At startup, an unavailable target can use the system default with a warning.
+- **Preview level** attenuates previews from -30 to 0 dB; **Mute previews**
+  silences them. These controls cover sound, clip, tool, and recorded-take
+  previews. They do not change recordings, saved sounds, song volume, or exports.
+- **Meter display rate → Reduced** displays meter values at most 15 times per
+  second. Audio analysis and peak detection remain active.
+
+Stop playback, previews, and recording before you apply audio changes.
+Options does not stop them for you. Workspace and Files changes can apply
+while playback continues.
+
+On **Workspace**, set **Follow playhead on startup**, **Show section bookmarks**,
+**Starting module**, and **Show tooltips**. Follow and Starting module apply on
+the next launch. The toolbar still controls Follow for the current session.
+Show section bookmarks shares its saved value with the Sections toolbar toggle.
+Turning tooltips off keeps control names, keyboard focus, errors, and visible
+instructions available.
+
+On **Files**, **Song dialog folder → Last used** keeps the current Open and
+Save as behavior. Select **Fixed folder**, then choose or enter an existing
+absolute folder and Apply to use it as the initial location. Cancelling the
+picker leaves the draft unchanged. If the folder later becomes unavailable,
+the app keeps its configured path, reports the problem, and uses the last-used
+or default location. Existing songs stay in place. **Go to sample libraries**
+opens the Sample libraries page in the same Options window. Library folder,
+scan, and provider actions run separately through their existing services.
+Folder changes take effect after a successful scan. Fallback BPM is used by
+Add library folder and Scan again.
+Options Apply saves preference drafts only; Options Cancel does not stop or
+roll back a library scan. Use **Cancel library scan** to cancel a scan.
+
+Options are stored in `options.json` in the settings folder. Invalid settings
+use safe defaults with an error; Restore options defaults and Apply can replace
+them. Settings from a newer options schema stay intact and cannot be overwritten
+by this build.
 
 ## Arrange
 
@@ -165,9 +227,8 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   ring out before you bring it back down. The bus's limiter still holds the
   return under -1 dBFS.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
-- Playback requests a 40 ms output buffer to give busy songs more headroom.
-  The device may use another size. A larger buffer can add a short delay
-  between an action and its sound; it does not change exported audio.
+- Playback uses the output-buffer target in [Options](#options), 40 ms by
+  default where supported. The actual callback interval remains device-controlled.
 - A song can have sections: named parts such as Intro or Break. Each one is a
   bookmark, a colored line across the lanes with its name on the bar ruler, and
   lasts until the next one starts. With sections shown, the Loop button loops

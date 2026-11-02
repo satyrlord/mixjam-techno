@@ -10,6 +10,8 @@ fn fixture() -> (egui::Context, MixJamApp) {
         false,
     );
     app.capture_path = None;
+    // This fixture tests workspace input, not the empty-library startup page.
+    app.options = None;
     (ctx, app)
 }
 

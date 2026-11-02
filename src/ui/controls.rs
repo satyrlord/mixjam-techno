@@ -1,5 +1,6 @@
 //! Shared Folded Metal controls. Tools own values and actions; this module owns
 //! their appearance, pointer and keyboard interaction, and accessibility.
+use super::HoverHints;
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, Vec2};
 use std::{ops::RangeInclusive, sync::Arc};
 
@@ -735,7 +736,7 @@ pub(super) fn header_button(
         egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
     });
     focus(ui, &response);
-    response.on_hover_text(name)
+    response.hover_hint(name)
 }
 
 pub(super) fn toggle_at(
@@ -858,7 +859,7 @@ pub(super) fn status_text(
         ui.ctx().accesskit_node_builder(label.id, |node| {
             node.set_live(egui::accesskit::Live::Polite)
         });
-        label.on_hover_text(hover);
+        label.hover_hint(hover);
     });
 }
 
@@ -1207,7 +1208,7 @@ pub(super) fn stepped_slider(
         .map(|choice| format!("{choice:.0}"))
         .collect::<Vec<_>>()
         .join(", ");
-    response.on_hover_text(match reset {
+    response.hover_hint(match reset {
         Some(reset) => format!(
             "{name}: {choices}. Drag, click a notch, or use the arrow keys. Double-click to reset \
              to {reset:.0}."
@@ -1478,7 +1479,7 @@ pub(super) fn rotary(
             }
         }
     });
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{}: drag or use arrow keys. Hold Shift for fine movement. Double-click to reset.",
         spec.name
     ))

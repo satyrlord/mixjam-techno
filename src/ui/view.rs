@@ -1,4 +1,70 @@
 use super::*;
+/// Hover hints can be hidden without removing a control's accessible help.
+pub(super) trait HoverHints {
+    fn hover_hint(self, text: impl Into<egui::WidgetText>) -> Self;
+    fn hover_hint_at_pointer(self, text: impl Into<egui::WidgetText>) -> Self;
+    fn disabled_hint(self, text: impl Into<egui::WidgetText>) -> Self;
+    fn hover_details(self, contents: impl FnOnce(&mut egui::Ui)) -> Self;
+}
+impl HoverHints for Response {
+    fn hover_hint_at_pointer(self, text: impl Into<egui::WidgetText>) -> Self {
+        let text = text.into();
+        self.ctx.accesskit_node_builder(self.id, |node| {
+            if node.description().is_none() {
+                node.set_description(text.text());
+            }
+        });
+        if self.ctx.data(|data| {
+            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
+                .unwrap_or(true)
+        }) {
+            self.on_hover_text_at_pointer(text)
+        } else {
+            self
+        }
+    }
+    fn hover_hint(self, text: impl Into<egui::WidgetText>) -> Self {
+        let text = text.into();
+        self.ctx.accesskit_node_builder(self.id, |node| {
+            if node.description().is_none() {
+                node.set_description(text.text());
+            }
+        });
+        if self.ctx.data(|data| {
+            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
+                .unwrap_or(true)
+        }) {
+            self.on_hover_text(text)
+        } else {
+            self
+        }
+    }
+    fn disabled_hint(self, text: impl Into<egui::WidgetText>) -> Self {
+        let text = text.into();
+        if !self.enabled() {
+            self.ctx
+                .accesskit_node_builder(self.id, |node| node.set_description(text.text()));
+        }
+        if self.ctx.data(|data| {
+            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
+                .unwrap_or(true)
+        }) {
+            self.on_disabled_hover_text(text)
+        } else {
+            self
+        }
+    }
+    fn hover_details(self, contents: impl FnOnce(&mut egui::Ui)) -> Self {
+        if self.ctx.data(|data| {
+            data.get_temp::<bool>(egui::Id::new("show-hover-hints"))
+                .unwrap_or(true)
+        }) {
+            self.on_hover_ui(contents)
+        } else {
+            self
+        }
+    }
+}
 use mixjam_techno::application::{
     Fade, FadeCurve, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, Section, amplitude_to_db,
     db_to_amplitude,
@@ -187,7 +253,7 @@ impl MixJamApp {
                 },
                 icon.hint(),
             ),
-            None => action_button(ui, label, false).on_hover_text(label),
+            None => action_button(ui, label, false).hover_hint(label),
         };
         egui::TopBottomPanel::top("header")
             .exact_height(66.0)
@@ -256,9 +322,9 @@ impl MixJamApp {
                         self.export();
                     }
                     controls::rail_separator(ui);
-                    if rail_button(ui, &icons, RailIcon::Libraries, self.show_libraries).clicked() {
-                        self.show_libraries = !self.show_libraries;
-                        self.close_libraries_after_scan = false;
+                    if rail_button(ui, &icons, RailIcon::Options, self.options.is_some()).clicked()
+                    {
+                        self.open_options(ctx);
                     }
                     if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
                         self.erase = !self.erase;
@@ -347,7 +413,7 @@ impl MixJamApp {
                         )
                         .open_in_new_tab(true),
                     )
-                    .on_hover_text("Open MixJam Techno on GitHub");
+                    .hover_hint("Open MixJam Techno on GitHub");
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         if !self.session.sample_conflicts().is_empty()
                             && notice(ui, "Sample conflicts").clicked()
@@ -372,12 +438,15 @@ impl MixJamApp {
                                 .size(12.0)
                                 .color(CORAL),
                             )
-                            .on_hover_text(
+                            .hover_hint(
                                 "Missing samples play silence. Open Import details to see their \
                                  saved references.",
                             );
                         }
                         let color = if self.status_error { CORAL } else { MUTED };
+                        if self.session.options().quality_reduced() {
+                            ui.colored_label(WARNING, "Playback quality reduced; exports use 4x");
+                        }
                         // The idle text would contradict a missing-sound notice.
                         let status = if self.status == DEFAULT_STATUS
                             && !self.session.missing_samples().is_empty()
@@ -393,7 +462,7 @@ impl MixJamApp {
                                 )
                                 .truncate(),
                             )
-                            .on_hover_text(&status);
+                            .hover_hint(&status);
                         }
                     });
                 });
@@ -574,23 +643,26 @@ impl MixJamApp {
             );
             if ui
                 .toggle_value(&mut self.follow_playhead, "Follow")
-                .on_hover_text("Keep the playhead in view during playback and seeking.")
+                .hover_hint("Keep the playhead in view during playback and seeking.")
                 .changed()
             {
                 self.last_follow_position = None;
             }
             if ui
                 .toggle_value(&mut self.section_bookmarks, "Sections")
-                .on_hover_text(
+                .hover_hint(
                     "Show the song's section bookmarks on the bar ruler and the lanes. With \
                      sections shown, double-click the bar ruler to add a section, double-click \
                      a name to rename it, right-click a name to delete it, and Loop loops the \
                      section at the playhead.",
                 )
                 .changed()
+                && let Err(error) = self
+                    .session
+                    .remember_section_bookmarks(self.section_bookmarks)
             {
-                self.session
-                    .remember_section_bookmarks(self.section_bookmarks);
+                self.section_bookmarks = self.session.options().show_section_bookmarks;
+                self.error(error);
             }
         });
     }
@@ -626,7 +698,7 @@ impl MixJamApp {
                             .response
                     })
                     .inner;
-                name_control(response, "Bottom module").on_hover_text(
+                name_control(response, "Bottom module").hover_hint(
                     "Choose the module shown in this section. Sounds selects source audio; Mixer \
                      adjusts track levels, pan, EQ, sends, polarity and outputs; Mastering \
                      processes the whole mix on the master pedalboard; Effects holds the four FX \
@@ -651,14 +723,14 @@ impl MixJamApp {
             egui::Button::new(egui::RichText::new("Export tracks…").size(13.0)),
         );
         if name_control(response, "Export tracks")
-            .on_hover_text(
+            .hover_hint(
                 "Write each track and each FX return to its own stereo WAV file in a folder, \
                  for mixing in another application. Tracks play alone after their EQ, \
                  automation, fader, pan, and outputs, without their sends; the FX returns \
                  hold every send. The master pedalboard is left out. Together the files sum \
                  to the mix with the board bypassed when that sum does not clip.",
             )
-            .on_disabled_hover_text("Wait for the current export to finish.")
+            .disabled_hint("Wait for the current export to finish.")
             .clicked()
         {
             self.ask_path(FileRequest::ExportTracks);
@@ -734,7 +806,7 @@ impl MixJamApp {
                 })
                 .min_size(Vec2::new(24.0, 0.0)),
             )
-            .on_hover_text(format!("{now}. Click for {}.", next.to_lowercase()));
+            .hover_hint(format!("{now}. Click for {}.", next.to_lowercase()));
         ui.ctx()
             .accesskit_node_builder(direction.id, |node| node.set_value(now));
         if name_control(direction, "Sort direction").clicked() {
@@ -780,8 +852,7 @@ impl MixJamApp {
             ));
             if self.session.library().samples.is_empty() {
                 if action_button(ui, "Open sample libraries", true).clicked() {
-                    self.show_libraries = true;
-                    self.close_libraries_after_scan = false;
+                    self.open_sample_libraries(ui.ctx());
                 }
             } else if action_button(ui, "Clear filters", false).clicked() {
                 self.search.clear();
@@ -917,7 +988,7 @@ impl MixJamApp {
         let room = (ui.available_width() - 40.0).max(0.0);
         ui.allocate_ui(Vec2::new(room, 28.0), |ui| {
             ui.add(egui::Label::new(egui::RichText::new(&status).size(12.0)).truncate())
-                .on_hover_text(path);
+                .hover_hint(path);
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
@@ -957,11 +1028,14 @@ impl MixJamApp {
         // A capture of the meters shows a fixed, representative reading.
         let sample = self.capture_view_is("master-metering");
         let metering = master::Metering {
+            reduced: self.session.options().meter_display_rate
+                == mixjam_techno::application::options::MeterDisplayRate::Reduced,
             reading: if sample {
                 MeterReading {
                     run: 1,
                     input_vu: -1.5,
                     input_peaks: [false, true],
+                    input_peak_counts: [0, 1],
                     compressor_reduction: 1.7,
                     limiter_reduction: 2.6,
                     momentary: -12.6,
@@ -972,7 +1046,12 @@ impl MixJamApp {
                     overs: 1,
                 }
             } else {
-                self.session.master_meters()
+                self.meter_display.sample(
+                    self.session.master_meters(),
+                    self.session.options().meter_display_rate
+                        == mixjam_techno::application::options::MeterDisplayRate::Reduced,
+                    ui.input(|input| input.time),
+                )
             },
             playing: sample || self.session.playing_mix(),
         };
@@ -1052,9 +1131,7 @@ impl MixJamApp {
                     ),
                     "Clip gain",
                 )
-                .on_hover_text(
-                    "Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.",
-                )
+                .hover_hint("Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.")
                 .changed()
                 {
                     gain = clip_gain_from_db(db);
@@ -1070,7 +1147,7 @@ impl MixJamApp {
                     ),
                     "Clip trim start (frames)",
                 )
-                .on_hover_text("Source frames that the clip skips. The clip does not move.")
+                .hover_hint("Source frames that the clip skips. The clip does not move.")
                 .changed();
                 ui.end_row();
                 ui.label("Length (bars)");
@@ -1102,7 +1179,7 @@ impl MixJamApp {
                 ui.end_row();
                 ui.label("Reverse");
                 change |= name_control(ui.checkbox(&mut reverse, "Play backwards"), "Clip reverse")
-                    .on_hover_text(
+                    .hover_hint(
                         "Play the clip's sound backwards within the clip, for reversed swells \
                          and risers. Its fades, pitch, and gain stay where they are.",
                     )
@@ -1464,7 +1541,7 @@ impl MixJamApp {
                             .find(|clip| self.clip_rect(clip, rect).contains(pos))
                         && let Some(missing) = self.session.missing_sample(clip.sample_id)
                     {
-                        response.clone().on_hover_text_at_pointer(format!(
+                        response.clone().hover_hint_at_pointer(format!(
                             "{}\n{}\nRight-click to resolve. Import details has copyable \
                              metadata.",
                             missing_sample_details(missing),
@@ -1913,9 +1990,8 @@ impl MixJamApp {
                                     egui::StrokeKind::Inside,
                                 );
                             }
-                            response.on_hover_text(
-                                "Drop a sound on this row or select it for recording.",
-                            );
+                            response
+                                .hover_hint("Drop a sound on this row or select it for recording.");
                             continue;
                         }
                         ui.painter().rect_filled(rect.shrink(1.0), 4.0, PANEL);
@@ -1964,7 +2040,7 @@ impl MixJamApp {
                             self.armed_track = index;
                             self.message(format!("Track {} is ready for recording.", index + 1));
                         }
-                        arm.on_hover_text("Select this track for recording");
+                        arm.hover_hint("Select this track for recording");
                         let track = &self.session.project().tracks[index];
                         for (switch, x) in
                             TrackSwitch::ALL.into_iter().zip([12.0, 36.0, 60.0, 110.0])
@@ -2003,7 +2079,7 @@ impl MixJamApp {
                                     egui::StrokeKind::Inside,
                                 );
                             }
-                            response.on_hover_text(switch_hint(&label, switch, on));
+                            response.hover_hint(switch_hint(&label, switch, on));
                         }
                     }
                 },
@@ -2193,6 +2269,13 @@ impl MixJamApp {
 
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
         self.poll_application(ctx);
+        self.section_bookmarks = self.session.options().show_section_bookmarks;
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("show-hover-hints"),
+                self.session.options().show_tooltips,
+            )
+        });
         if ctx.input(|i| i.viewport().close_requested())
             && !self.allow_close
             && (self.session.unsaved()
@@ -2477,7 +2560,7 @@ fn transport_position(ui: &mut egui::Ui, tick: u32, bpm: f64) -> Response {
             TEXT,
         );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{text} (minutes : seconds). Bar {bars}, beat {beat}"
     ))
 }
@@ -2631,7 +2714,7 @@ fn embedded_effect_group(ui: &mut egui::Ui, name: &str, enabled: &mut bool) -> b
     let (band, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
     controls::section(ui, band, "");
     controls::toggle_at(ui, band.shrink2(Vec2::new(8.0, 0.0)), name, name, enabled)
-        .on_hover_text(format!("{name}: turning it off discards its settings."))
+        .hover_hint(format!("{name}: turning it off discards its settings."))
         .changed()
 }
 
@@ -2730,7 +2813,7 @@ pub(super) fn pan_control(
         info.current_text_value = Some(pan_description(*pan));
         info
     });
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "Track {} pan: {}. Drag or use the wheel (Shift for fine steps). Pan does not enable \
          a disabled L/R output.{}",
         index + 1,
@@ -2815,9 +2898,8 @@ pub(super) fn recording_destination(
             }
         })
         .response;
-    name_control(response, "Recording track").on_hover_text(
-        "Choose a track for recording. Unused tracks appear only when you add a sound.",
-    )
+    name_control(response, "Recording track")
+        .hover_hint("Choose a track for recording. Unused tracks appear only when you add a sound.")
 }
 
 pub(super) fn configure_style(ctx: &egui::Context) {
@@ -2938,8 +3020,8 @@ fn action_icon_button(
     focus_outline(ui, &response, ACCENT);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
     response
-        .on_hover_text(hint)
-        .on_disabled_hover_text(format!("{hint}: nothing to {}.", label.to_lowercase()))
+        .hover_hint(hint)
+        .disabled_hint(format!("{hint}: nothing to {}.", label.to_lowercase()))
 }
 
 pub(super) fn rail_button(
@@ -2976,7 +3058,7 @@ pub(super) fn rail_button(
             egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), icon.label())
         }
     });
-    response.on_hover_text(icon.hint())
+    response.hover_hint(icon.hint())
 }
 
 pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon) {
@@ -2990,7 +3072,7 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), icon.label())
     });
-    response.on_hover_text(icon.label());
+    response.hover_hint(icon.label());
 }
 
 pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
@@ -3003,7 +3085,7 @@ pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> R
             .min_size(Vec2::new(40.0, 26.0)),
     );
     focus_outline(ui, &response, ACCENT);
-    name_control(response, &action).on_hover_text(action)
+    name_control(response, &action).hover_hint(action)
 }
 
 pub(super) fn group_color(group: &str) -> Color32 {
@@ -3103,7 +3185,7 @@ pub(super) fn sample_button(
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &sample.name)
     });
     // Build the details only for the tile under the pointer.
-    response.on_hover_ui(|ui| {
+    response.hover_details(|ui| {
         ui.label(sample_details(sample, product));
     })
 }
@@ -3190,7 +3272,7 @@ impl MixJamApp {
                 }
             })
             .response;
-        name_control(response, "Automation lane").on_hover_text(
+        name_control(response, "Automation lane").hover_hint(
             "Show and edit one automation lane on every track, or the return lane of one FX \
              bus across the arrangement. Click a lane to add a point, drag a point to move it, \
              and double-click or right-click a point to delete it. Points snap to 1/16 bar; \
@@ -3279,7 +3361,7 @@ impl MixJamApp {
         if let Some(index) = self.automation_drag.map(|(_, index)| index).or(hit)
             && let Some(point) = points.get(index)
         {
-            response.clone().on_hover_text_at_pointer(format!(
+            response.clone().hover_hint_at_pointer(format!(
                 "{}, bar {:.2}: {}",
                 return_lane_label(bus),
                 f64::from(point.tick) / f64::from(TICKS_PER_BAR) + 1.0,
@@ -3495,7 +3577,7 @@ impl MixJamApp {
         if let Some((track, index)) = self.automation_drag.or(hit)
             && let Some(point) = project.tracks[track].automation.lane(lane).get(index)
         {
-            response.clone().on_hover_text_at_pointer(format!(
+            response.clone().hover_hint_at_pointer(format!(
                 "Track {}, bar {:.2}: {}",
                 track + 1,
                 f64::from(point.tick) / f64::from(TICKS_PER_BAR) + 1.0,
@@ -3992,7 +4074,7 @@ fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> b
             ),
             &format!("Clip fade {edge} (beats)"),
         )
-        .on_hover_text(if edge == "in" {
+        .hover_hint(if edge == "in" {
             "Fade in from the clip's start, in beats. 0 is no fade."
         } else {
             "Fade out to the end of the clip's sound, in beats: the clip's end, or earlier \
@@ -4019,7 +4101,7 @@ fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> b
                 }
             })
             .response;
-        name_control(response, &name).on_hover_text(
+        name_control(response, &name).hover_hint(
             "Linear, Equal power for crossfades that keep their loudness, or Exponential, \
          even steps in decibels like a natural decay.",
         );
@@ -4045,7 +4127,7 @@ fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
                 ),
                 "Clip pitch (semitones)",
             )
-            .on_hover_text("Transpose the clip in semitones. Its length and timing stay the same.")
+            .hover_hint("Transpose the clip in semitones. Its length and timing stay the same.")
             .changed();
             let cent_change = name_control(
                 ui.add(
@@ -4056,7 +4138,7 @@ fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
                 ),
                 "Clip pitch (cents)",
             )
-            .on_hover_text("Fine-tune the clip in cents, hundredths of a semitone.")
+            .hover_hint("Fine-tune the clip in cents, hundredths of a semitone.")
             .changed();
             semitone_change || cent_change
         })
@@ -4396,7 +4478,7 @@ pub(super) fn transport_button(
             egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tooltip)
         }
     });
-    response.on_hover_text(tooltip)
+    response.hover_hint(tooltip)
 }
 
 fn configure_fonts(ctx: &egui::Context) {

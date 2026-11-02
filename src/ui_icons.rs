@@ -48,7 +48,7 @@ pub(crate) enum RailIcon {
     SaveAs,
     Export,
     Import,
-    Libraries,
+    Options,
     New,
     Mixer,
     Master,
@@ -72,7 +72,7 @@ impl RailIcon {
         Self::SaveAs,
         Self::Export,
         Self::Import,
-        Self::Libraries,
+        Self::Options,
         Self::New,
         Self::Mixer,
         Self::Master,
@@ -96,7 +96,7 @@ impl RailIcon {
             Self::SaveAs => "Save as",
             Self::Export => "Export",
             Self::Import => "Import",
-            Self::Libraries => "Libraries",
+            Self::Options => "Options",
             Self::New => "New",
             Self::Mixer => "Mixer",
             Self::Master => "Mastering",
@@ -123,7 +123,7 @@ impl RailIcon {
             Self::SaveAs => "Save as a new song file (Ctrl+Shift+S)",
             Self::Export => "Export the song as a stereo WAV",
             Self::Import => "Import a WAV sound",
-            Self::Libraries => "Libraries: show or close Sample libraries",
+            Self::Options => "Options: open or focus preferences (Ctrl+,)",
             Self::New => "New song (Ctrl+N)",
             Self::Mixer => "Mixer: switch between Mixer and Sounds",
             Self::Master => "Mastering: show or close the master pedalboard",
@@ -144,7 +144,7 @@ impl RailIcon {
     pub(crate) fn is_toggle(self) -> bool {
         matches!(
             self,
-            Self::Libraries
+            Self::Options
                 | Self::Mixer
                 | Self::Master
                 | Self::Erase
@@ -163,7 +163,7 @@ impl RailIcon {
             Self::SaveAs => rail_pngs!("save-as")[density],
             Self::Export => rail_pngs!("export")[density],
             Self::Import => rail_pngs!("import")[density],
-            Self::Libraries => rail_pngs!("libraries")[density],
+            Self::Options => rail_pngs!("options")[density],
             Self::New => rail_pngs!("new")[density],
             Self::Mixer => rail_pngs!("mixer")[density],
             Self::Master => rail_pngs!("master")[density],

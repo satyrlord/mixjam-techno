@@ -399,7 +399,7 @@ fn switch(
         FontId::proportional(11.5),
         INK,
     );
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{name}: {}. {hint}",
         if *value { "on" } else { "off" }
     ))
@@ -432,7 +432,7 @@ fn choice<T: Copy + PartialEq>(
                 }
             })
             .response;
-        name_control(response, name).on_hover_text(hint);
+        name_control(response, name).hover_hint(hint);
     });
 }
 
@@ -813,7 +813,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                 true,
             );
             if name_control(response, &label)
-                .on_hover_text(
+                .hover_hint(
                     "Cut the effect's ringing tail now. This is not an edit and cannot be undone.",
                 )
                 .clicked()

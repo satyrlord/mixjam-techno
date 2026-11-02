@@ -48,9 +48,47 @@ so separate drags and agent `clip` requests each keep their own undo step.
 Sections are ordered named timeline markers. `SetSections` replaces the list
 as one validated history step. Section edits and their undo/redo mark the song
 modified but preserve the render revision, prepared mix, and pending playback.
-The native UI owns bookmark visibility and rename drafts. Visibility persists
-in the settings folder and does not modify the song. Section positions extend
+The native UI owns section rename drafts. `Session` owns bookmark visibility
+as an application option; the Sections toolbar and Options window use the same
+validated preference API. Visibility does not modify the song. Section positions extend
 the scrollable arrangement without extending the audio render.
+
+`src/options.rs` owns the typed application preference schema, defaults,
+validation, and persistence in `options.json` under `project_io::data_root()`.
+`Session` owns the active values, their revision, and `apply_options`.
+`src/ui/options.rs` owns one editable window draft and page selection. Apply
+checks the revision, validates the complete draft, and prepares a replacement
+output when needed before one atomic file replacement. Active values change
+only after the write succeeds. Cancel and close discard the draft; Restore
+options defaults changes the draft only. No-op Apply performs no write or
+audio rebuild. Options do not enter song history or modify song data.
+
+Missing options import only the existing section-bookmark visibility. The old
+file remains intact and receives no further writes. Invalid files load safe
+defaults with a visible error and need explicit Restore options defaults before
+replacement. A future schema remains intact and blocks preference writes.
+Library configuration and the last-used song folder retain their own storage.
+`src/ui/libraries.rs` renders library management as the Sample libraries page of
+Options. Folder scans and provider changes still use their existing Session
+operations and storage. A successful scan adopts its folder changes; fallback
+BPM is used by Add library folder and Scan again. The options draft and its
+Cancel action cannot commit, stop, or roll back these operations. There is no separate library window.
+Untouched startup Options may close after its initial scan fills the library;
+manual navigation, a preference draft, or Restore defaults keeps it open.
+New fixed song folders must be absolute existing directories when applied. A folder
+that later becomes unavailable remains configured; song dialogs report it and
+use the last-used/default location. Unrelated preferences and no-op Apply remain
+available while that configured folder is unavailable.
+
+Audio preferences require playback, pending playback, previews, and recording
+to stop before Apply. Workspace and Files changes do not require a stopped
+transport. A playback-quality change invalidates prepared mixes and advances
+the render revision, so older worker results cannot replace the new quality.
+`src/playback_quality.rs` supplies explicit independent Drive and master
+saturation quality outside `Project` and `MasterChain`. Exports prepare full
+quality explicitly, including when a reduced-quality playback mix exists.
+Preview gain applies at the preview sink only. Meter display throttling retains
+peaks between displayed readings and does not change audio analysis.
 
 Track gain is a nonnegative amplitude and polarity is a separate persistent
 boolean. Playback and export use `Track::effective_gain()` to apply the sign.
@@ -92,10 +130,15 @@ in that window. Sample identity and digests read `Library::read_original_pcm`,
 which keeps the data as stored.
 
 `Player` owns a cpal stream through `src/audio/output.rs` and attaches rodio
-sink queues to its dynamic mixer. The output requests a 40 ms buffer, held
-to a reported device range. If that request fails, it tries the system
-default before other supported formats and devices. `output_configuration`
-reports the accepted request, not a measured buffer capacity or latency.
+sink queues to its dynamic mixer. Options select Automatic, 20 ms, or 40 ms
+(default). Fixed targets request the corresponding frame count at the existing
+device rate. A known unsupported range rejects the target. Startup can use the
+system default if a target fails, with an explicit fallback reason. Apply opens
+a silent replacement on the same device and format while stopped. It retains
+the old stream until settings persistence succeeds and rejects opening failures.
+`output_configuration` reports requested frames separately from observed
+callback frames and the last measured callback interval. CPAL does not expose
+negotiated buffer capacity; that value remains unavailable.
 WASAPI shared-mode callback cadence remains device-controlled; requesting
 40 ms does not promise 40 ms callbacks. rodio pulls
 `PlaybackSource` one sample at a time inside the device's callback, and the
@@ -207,6 +250,11 @@ instead of calculating it again. Until the first nonzero input, a drive skips
 untouched silent frames. After input starts, every frame runs through the
 processor so later silence retains the filter tails. These paths preserve
 the sample values.
+Playback Options can run the Drive curve and its ADAA reference at the base
+rate instead. This mode retains the matching, focus, Mix, Output, and DC-removal
+stages. A plain delay keeps the same 69-frame integer alignment; switching
+quality does not bypass Drive. Audible chains and separate key chains use the
+same explicit playback configuration. The default 4x path remains unchanged.
 Its oversampling delays
 the copy by `drive::LATENCY` (69 frames), so a chain with a drive reads its
 voices, Repeat lane, and EQ that many frames ahead and the drive's output
@@ -319,6 +367,10 @@ unchanged. Each pedal keeps its own state when the order changes. Master
 processors prepare shared oversampling and true-peak filter tables before
 playback reaches the audio thread. First playback and later pedal switches
 must not initialize or wait for those tables in the callback. The mastering
+playback quality option changes only Soft clip, Tube, Maximizer, and Tape.
+Off runs their saturation at the base rate with the same integer stage delay.
+It does not change limiter lookahead, true-peak interpolation, metering,
+other processors, or the fixed live delay. The mastering
 pedals glide to new settings over about 20 ms. During playback, switching or
 moving a pedal copies the board and crossfades from the old copy to the new one
 over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills

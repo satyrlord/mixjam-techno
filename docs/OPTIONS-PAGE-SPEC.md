@@ -1,10 +1,11 @@
-# Options page proposal
+# Options page specification
 
-Status: proposed, 2026-11-02. This document is a handoff for a separate
-implementation task. The owner requested an options page with DSP and app
-options. The defaults and details below are recommendations, not approved
-product decisions. This proposal does not implement the page or disable
-oversampling in the current application.
+Status: implemented, 2026-11-02. The owner requested
+implementation of this specification on that date, including its recommended
+baseline. The implementation adds the options below without changing the song
+format. Verification results and manual-check limits must accompany delivery;
+this status does not establish release readiness or a supported hardware limit.
+See [OPTIONS-VERIFICATION.md](OPTIONS-VERIFICATION.md) for results and manual limits.
 
 ## Purpose and boundaries
 
@@ -12,7 +13,7 @@ Give the user one place to select playback quality and app preferences.
 Keep the current sound and behavior as the default. Offer a lower CPU mode
 when a project cannot play reliably on the user's computer.
 
-Use a native Options window containing Audio, Workspace, and Files pages.
+Use a native Options window containing Audio, Workspace, Files, and Sample libraries pages.
 Use the existing Folded Metal Utility shell and controls. This is not a web
 page, a replacement for the Mixer, or a new song editor.
 
@@ -20,8 +21,9 @@ In scope: the controls below, preference persistence, safe application of
 changes, existing-control synchronization, agent access, and verification.
 Out of scope: device selection, ASIO or exclusive audio, sample-rate changes,
 plugins, autosave, theme editing, arbitrary UI
-scaling, new song DSP parameters, and a change to song format 22. Do not expose
-an internal processing block size as a device latency control.
+scaling, new song DSP parameters, and a change to song format 23. Do not expose
+an internal processing block size as a device latency control. The current
+song format is 23; options use their own schema.
 
 ## Current evidence
 
@@ -48,7 +50,7 @@ of uninterrupted playback from the song's start. Keep private fixture paths
 out of public documentation.
 
 Oversampling costs CPU and also introduces a signal delay. The existing delay
-is compensated. Turning oversampling off is proposed to reduce CPU work;
+is compensated. Turning oversampling off is intended to reduce CPU work;
 the page must not promise lower device latency.
 
 A silent probe on the default Steinberg UR-RT2 at 48 kHz observed 1,056
@@ -58,7 +60,7 @@ confirms a change in the initial writable buffer on that device, not a
 40 ms callback interval or glitch-free heavy-song playback. The backend
 request is already implemented; this proposal adds user control over it.
 
-## Proposed options
+## Options
 
 ### Audio
 
@@ -124,16 +126,30 @@ workspace status when either playback switch is Off.
 |---|---|---|
 | Song dialog folder | Last used | Choices: Last used, Fixed folder. Last used keeps current behavior. Fixed folder uses a user-selected absolute folder as the initial location for song Open and Save as. |
 | Fixed song folder | None | Enabled only with Fixed folder selected. Validate an existing directory when applying. If it later becomes unavailable, keep the configured path, show a useful message, and fall back to the current last-used/default-folder behavior. Never relocate existing songs. |
-| Manage sample libraries | Action, not a preference | Opens the existing Sample libraries window. Display the configured folder count here; keep library scans, folder order, fallback tempo, and provider management in their existing owner. |
+| Go to sample libraries | Navigation, not a preference | Selects Sample libraries in this Options window. Display the configured folder count here. |
 
 Choosing a path does not commit a preference. Cancelling the picker leaves the
-draft unchanged. Library management is a separate action and must not imply
-that Options Apply also commits or rolls back a library scan.
+draft unchanged. Library management uses the Sample libraries page in this same window. Its
+folder and provider actions run separately through existing Session services
+and storage. A successful scan adopts its folder changes; fallback BPM is used
+by Add library folder and Scan again. Options Apply and Cancel do not commit or
+roll back library changes.
+
+### Sample libraries
+
+Move the complete former Sample libraries window into this Options page. Keep
+folder registration and removal, configured order, scan progress and cancellation,
+fallback BPM, individual folder-tempo reports, skipped WAV and unreadable-folder
+messages, and optional product-provider management. Use `Cancel library scan` to
+distinguish scan cancellation from Options Cancel. Retire the standalone window
+and its rail action. The Options rail entry is a gear with prepared PNG variants.
+Show `Folder and provider actions apply separately. Apply and Cancel affect options only.`
+Keep the options preference draft intact while navigating to this page.
 
 ## Interaction and application rules
 
 1. Add a clearly named `Options` utility action and `Ctrl+,` shortcut. Reuse
-   the rail's utility group. If an icon is needed, use the required PNG density
+   the rail's utility group. Use the gear icon with the required PNG density
    variants; do not add SVG. A second activation focuses the existing window.
 2. Use one draft per open window, with Apply, Cancel, and Restore defaults.
    Apply validates and saves, updates active preferences, and keeps the window
@@ -220,7 +236,7 @@ Changing quality while stopped avoids a new live quality-crossfade feature.
 - Reset concerns only options in this document. Never delete audio, retained
   manual sources, sample caches, library registrations, or preservation data.
 
-Proposed stored fields: `schemaVersion`, `drivePlaybackOversampling`,
+Stored fields: `schemaVersion`, `drivePlaybackOversampling`,
 `masterPlaybackOversampling`, `previewLevelDb`, `previewMuted`,
 `playbackBufferTarget`, `meterDisplayRate`, `followOnStartup`, `showSectionBookmarks`, `startingModule`,
 `showTooltips`, `songFolderMode`, and `fixedSongFolder`. Do not store transient

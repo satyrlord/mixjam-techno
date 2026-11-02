@@ -21,6 +21,13 @@ pub use crate::{
 pub mod eq {
     pub use crate::eq::{ChannelEq, EqParam};
 }
+/// Validated application preferences, independent of the song model.
+pub mod options {
+    pub use crate::options::{
+        AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SongFolderMode,
+        StartingModule,
+    };
+}
 /// The drive of each track and its controls.
 pub mod drive {
     pub use crate::drive::{Drive, DriveParam};
@@ -193,6 +200,7 @@ impl TrackSwitch {
 
 struct RenderRequest {
     revision: u64,
+    quality: crate::playback_quality::PlaybackQuality,
     project: Project,
     library: Arc<Library>,
 }
@@ -238,10 +246,11 @@ impl RenderWorker {
                         decoded.clear();
                         decoded_from = library;
                     }
-                    let mix = audio::prepare_project_reusing(
+                    let mix = audio::prepare_project_reusing_with_quality(
                         &request.project,
                         &request.library,
                         &mut decoded,
+                        request.quality,
                     )
                     .map(Arc::new);
                     if results
@@ -365,6 +374,11 @@ pub struct Session {
     preferred_providers: Vec<Product>,
     /// Where the sample folder setting and scan cache live.
     settings_root: PathBuf,
+    options: crate::options::AppOptions,
+    options_revision: u64,
+    options_error: Option<String>,
+    options_invalid: bool,
+    options_future: bool,
     editor: Editor,
     player: Option<Player>,
     /// The prepared mix of the current revision. With audio output, each
@@ -636,6 +650,11 @@ impl Session {
             stretch_result: None,
             preferred_providers: Vec::new(),
             settings_root: crate::project_io::data_root(),
+            options: crate::options::AppOptions::default(),
+            options_revision: 0,
+            options_error: None,
+            options_invalid: false,
+            options_future: false,
             editor: Editor::new(project),
             player: None,
             render: None,
@@ -672,6 +691,7 @@ impl Session {
     #[cfg(test)]
     pub(crate) fn with_settings_root(mut self, root: PathBuf) -> Self {
         self.settings_root = root;
+        self.load_options();
         self
     }
     /// Let a gesture continue through any pause. Gestures end after a pause in
@@ -687,8 +707,10 @@ impl Session {
     }
     pub fn new(library: Arc<Library>, project: Project) -> Result<Self, String> {
         let mut session = Self::headless(library, project)?;
-        match Player::new() {
-            Ok(player) => {
+        session.load_options();
+        match Player::new_with_buffer(session.options.playback_buffer_target) {
+            Ok(mut player) => {
+                player.set_preview_gain(session.options.preview_gain());
                 session.player = Some(player);
                 session.prepares_ahead = true;
                 session.prepare_ahead();
@@ -994,7 +1016,29 @@ impl Session {
 
     /// Where a song file dialog starts: the folder of the song last chosen in one.
     pub fn song_folder(&self) -> Option<PathBuf> {
+        if self.options.song_folder_mode == crate::options::SongFolderMode::Fixed
+            && let Some(folder) = self
+                .options
+                .fixed_song_folder
+                .as_ref()
+                .filter(|p| p.is_dir())
+        {
+            return Some(folder.clone());
+        }
         crate::project_io::load_song_folder(&self.settings_root)
+    }
+
+    pub fn song_folder_warning(&self) -> Option<String> {
+        if self.options.song_folder_mode == crate::options::SongFolderMode::Fixed
+            && let Some(folder) = &self.options.fixed_song_folder
+            && !folder.is_dir()
+        {
+            return Some(format!(
+                "The fixed song folder {} is unavailable. Song dialogs use the last used folder.",
+                folder.display()
+            ));
+        }
+        None
     }
     /// Start later song file dialogs in the folder of `song`. A failed write
     /// only loses that convenience.
@@ -1005,11 +1049,131 @@ impl Session {
     }
     /// Whether the user wants section bookmarks shown on the arrangement.
     pub fn section_bookmarks_setting(&self) -> bool {
-        crate::project_io::load_section_bookmarks(&self.settings_root)
+        self.options.show_section_bookmarks
     }
     /// Keep the bookmark choice for later sessions. A failed write only loses that convenience.
-    pub fn remember_section_bookmarks(&self, visible: bool) {
-        let _ = crate::project_io::save_section_bookmarks(&self.settings_root, visible);
+    pub fn remember_section_bookmarks(&mut self, visible: bool) -> Result<(), String> {
+        let mut options = self.options.clone();
+        options.show_section_bookmarks = visible;
+        self.apply_options(options, self.options_revision, false)
+            .map(|_| ())
+    }
+
+    fn load_options(&mut self) {
+        let loaded = crate::options::load(&self.settings_root);
+        self.options = loaded.values;
+        self.options_error = loaded.error;
+        self.options_invalid = loaded.invalid;
+        self.options_future = loaded.future;
+        if let Some(error) = self.options_error.clone() {
+            self.error(error);
+        }
+    }
+
+    pub fn options(&self) -> &crate::options::AppOptions {
+        &self.options
+    }
+    pub fn options_revision(&self) -> u64 {
+        self.options_revision
+    }
+    pub fn options_error(&self) -> Option<&str> {
+        self.options_error.as_deref()
+    }
+
+    pub fn audio_options_blocked_reason(&self) -> Option<&'static str> {
+        (self.wants_playback || self.playing_mix() || self.is_previewing() || self.is_recording())
+            .then_some("Stop playback, previews, and recording to apply audio options.")
+    }
+
+    pub fn buffer_status(&self) -> String {
+        self.player.as_ref().map_or_else(
+            || {
+                "Audio output is unavailable. Buffer capacity and callback period are unavailable."
+                    .into()
+            },
+            Player::output_status,
+        )
+    }
+
+    pub fn buffer_target_error(
+        &self,
+        target: crate::options::PlaybackBufferTarget,
+    ) -> Option<String> {
+        self.player
+            .as_ref()
+            .and_then(|player| player.buffer_target_error(target))
+    }
+
+    /// Validate and prepare first. Publish the file before adopting active values.
+    /// A no-op neither writes settings nor invalidates playback preparation.
+    pub fn apply_options(
+        &mut self,
+        draft: crate::options::AppOptions,
+        expected_revision: u64,
+        restore_invalid: bool,
+    ) -> Result<bool, String> {
+        if expected_revision != self.options_revision {
+            return Err("Options changed outside this window. Select Reload before Apply.".into());
+        }
+        draft.validate()?;
+        if self.options_future && (draft != self.options || restore_invalid) {
+            return Err(
+                "This options file needs a newer application. Persistent writes are blocked."
+                    .into(),
+            );
+        }
+        if draft == self.options && !(self.options_invalid && restore_invalid) {
+            return Ok(false);
+        }
+        if self.options_invalid && !restore_invalid {
+            return Err(
+                "The options file is invalid. Select Restore options defaults before Apply.".into(),
+            );
+        }
+        // An already accepted folder can disappear after Apply. Keep its
+        // fallback usable for unrelated preferences, including Sections.
+        if draft.song_folder_mode != self.options.song_folder_mode
+            || draft.fixed_song_folder != self.options.fixed_song_folder
+        {
+            draft.validate_apply()?;
+        }
+        if self.options.audio_changed(&draft)
+            && let Some(reason) = self.audio_options_blocked_reason()
+        {
+            return Err(reason.into());
+        }
+        let replacement = if self.options.playback_buffer_target != draft.playback_buffer_target {
+            Some(
+                self.player
+                    .as_ref()
+                    .ok_or("Audio output is unavailable. The buffer target was not changed.")?
+                    .prepare_output(draft.playback_buffer_target)?,
+            )
+        } else {
+            None
+        };
+        crate::options::save(&self.settings_root, &draft)?;
+        let quality_changed = self.options.playback_quality() != draft.playback_quality();
+        self.options = draft;
+        self.options_revision = self.options_revision.wrapping_add(1);
+        self.options_error = None;
+        self.options_invalid = false;
+        if let Some(output) = replacement {
+            self.player.as_mut().unwrap().adopt_output(output);
+        }
+        if let Some(player) = &mut self.player {
+            player.set_preview_gain(self.options.preview_gain());
+        }
+        if quality_changed {
+            // The render revision also rejects an old job which completes after Apply.
+            self.revision = self.revision.wrapping_add(1);
+            self.render_dirty = true;
+            self.render = None;
+            self.failed_revision = None;
+            self.cancel_playback_request();
+            self.prepare_ahead();
+        }
+        Ok(true)
     }
 
     pub fn take_notice(&mut self) -> Option<(String, bool)> {
@@ -1488,7 +1652,11 @@ impl Session {
     /// is current, or a new one.
     fn current_mix(&self) -> Result<Arc<audio::Mix>, String> {
         match &self.render {
-            Some(mix) if !self.render_dirty && mix.has_levels(self.project()) => {
+            Some(mix)
+                if !self.render_dirty
+                    && mix.has_levels(self.project())
+                    && mix.quality() == crate::playback_quality::PlaybackQuality::FULL =>
+            {
                 Ok(Arc::clone(mix))
             }
             _ => audio::prepare_project(self.project(), &self.library).map(Arc::new),
@@ -1549,10 +1717,11 @@ impl Session {
         if self.export.is_some() {
             return Err("Wait for the current export to finish.".into());
         }
-        let rendered = self
-            .render
-            .clone()
-            .filter(|mix| !self.render_dirty && mix.has_levels(self.project()));
+        let rendered = self.render.clone().filter(|mix| {
+            !self.render_dirty
+                && mix.has_levels(self.project())
+                && mix.quality() == crate::playback_quality::PlaybackQuality::FULL
+        });
         let project = self.project().clone();
         let library = self.library.clone();
         let (sender, receiver) = mpsc::channel();
@@ -2217,6 +2386,7 @@ impl Session {
     fn request_render(&mut self) -> Result<(), String> {
         self.render_worker.request(RenderRequest {
             revision: self.revision,
+            quality: self.options.playback_quality(),
             project: self.editor.project().clone(),
             library: self.library.clone(),
         })?;
@@ -2244,12 +2414,13 @@ impl Session {
         self.master.set_returns(&self.editor.project().fx);
         self.master.set_levels(self.editor.project());
         let master = Some(self.master.clone());
-        match self
-            .player
-            .as_mut()
-            .unwrap()
-            .play(mix, start, region, master)
-        {
+        match self.player.as_mut().unwrap().play_with_quality(
+            mix,
+            start,
+            region,
+            master,
+            self.options.playback_quality(),
+        ) {
             Ok(()) => {
                 self.previewing = false;
                 self.preview_revision = self.preview_revision.wrapping_add(1);
@@ -3101,6 +3272,252 @@ mod tests {
         std::fs::remove_dir(root).unwrap();
     }
 
+    #[test]
+    fn options_apply_is_atomic_and_independent_of_song_history() {
+        let root = manual_fixture_dir();
+        let mut session = fixture().with_settings_root(root.clone());
+        let project = session.project().clone();
+        let token = session.project_change_token();
+        let mut draft = session.options().clone();
+        draft.show_section_bookmarks = false;
+        draft.follow_on_startup = false;
+        assert!(session.apply_options(draft.clone(), 0, false).unwrap());
+        assert_eq!(session.project(), &project);
+        assert_eq!(session.project_change_token(), token);
+        assert!(!session.unsaved());
+        assert!(!session.has_history_step(false));
+        assert_eq!(crate::options::load(&root).values, draft);
+        let bytes = std::fs::read(root.join("options.json")).unwrap();
+        assert!(!session.apply_options(draft.clone(), 1, false).unwrap());
+        assert_eq!(std::fs::read(root.join("options.json")).unwrap(), bytes);
+        assert_eq!(session.options_revision(), 1);
+        let mut stale = draft.clone();
+        stale.show_tooltips = false;
+        session.remember_section_bookmarks(true).unwrap();
+        assert!(
+            session
+                .apply_options(stale, 1, false)
+                .unwrap_err()
+                .contains("Reload")
+        );
+        assert!(session.options().show_section_bookmarks);
+        // A failed atomic publication must not adopt any part of the draft.
+        let before = session.options().clone();
+        let revision = session.options_revision();
+        std::fs::remove_file(root.join("options.json")).unwrap();
+        std::fs::create_dir(root.join("options.json")).unwrap();
+        draft.show_tooltips = false;
+        assert!(session.apply_options(draft, revision, false).is_err());
+        assert_eq!(session.options(), &before);
+        assert_eq!(session.options_revision(), revision);
+        assert_eq!(session.project(), &project);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_options_require_explicit_restore_and_future_options_block_writes() {
+        let root = manual_fixture_dir();
+        for (bytes, future) in [("broken", false), ("{\"schemaVersion\":999}", true)] {
+            std::fs::write(root.join("options.json"), bytes).unwrap();
+            let mut session = fixture().with_settings_root(root.clone());
+            assert!(session.options_error().is_some());
+            let mut draft = session.options().clone();
+            draft.show_tooltips = false;
+            assert!(session.apply_options(draft, 0, false).is_err());
+            let restored = session.apply_options(crate::options::AppOptions::default(), 0, true);
+            if future {
+                assert!(restored.is_err());
+                assert_eq!(
+                    std::fs::read_to_string(root.join("options.json")).unwrap(),
+                    bytes
+                );
+            } else {
+                assert!(restored.unwrap());
+                assert!(session.options_error().is_none());
+            }
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn options_write_failure_retains_existing_file_and_active_values() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = manual_fixture_dir();
+        let mut session = fixture().with_settings_root(root.clone());
+        let mut values = session.options().clone();
+        values.show_tooltips = false;
+        session.apply_options(values, 0, false).unwrap();
+        let path = root.join("options.json");
+        let before = std::fs::read(&path).unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let active = session.options().clone();
+        let mut draft = active.clone();
+        draft.preview_level_db = -12.0;
+        assert!(session.apply_options(draft, 1, false).is_err());
+        assert_eq!(session.options(), &active);
+        assert_eq!(session.options_revision(), 1);
+        drop(held);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn audio_options_wait_for_transport_but_workspace_changes_do_not() {
+        let root = manual_fixture_dir();
+        let mut session = fixture().with_settings_root(root.clone());
+        session.wants_playback = true;
+        let mut draft = session.options().clone();
+        draft.preview_muted = true;
+        assert!(
+            session
+                .apply_options(draft, 0, false)
+                .unwrap_err()
+                .contains("Stop playback")
+        );
+        let mut draft = session.options().clone();
+        draft.meter_display_rate = crate::options::MeterDisplayRate::Reduced;
+        assert!(session.apply_options(draft, 0, false).unwrap());
+        session.wants_playback = false;
+        session.recorder = Some(crate::recording::Recorder::fixture());
+        let mut draft = session.options().clone();
+        draft.drive_playback_oversampling = crate::options::Oversampling::Off;
+        assert!(session.apply_options(draft.clone(), 1, false).is_err());
+        session.recorder.take();
+        let project = session.project().clone();
+        assert!(session.apply_options(draft, 1, false).unwrap());
+        assert_eq!(session.project(), &project);
+        assert!(!session.unsaved());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn quality_apply_rejects_old_preparation_and_exports_use_full_quality() {
+        let root = manual_fixture_dir();
+        let wave = root.join("source.wav");
+        Pcm {
+            sample_rate: 44100,
+            channels: 2,
+            samples: (0..8820)
+                .map(|i| ((i / 2) as f32 * 0.07).sin() * 0.4)
+                .collect(),
+        }
+        .write_wav(&wave)
+        .unwrap();
+        let mut session = Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(root.clone());
+        let source = session.register_file(&wave, "Wave", 140.0).unwrap();
+        session.place(source, 0, 0).unwrap();
+        let mut tracks = session.project().tracks.clone();
+        tracks[0].drive.on = true;
+        tracks[0].drive.amount = 24.0;
+        session
+            .edit(EditCommand::SetMixer {
+                tracks,
+                master_gain: 1.0,
+            })
+            .unwrap();
+        let old_revision = session.revision;
+        let full = Arc::new(audio::prepare_project(session.project(), &session.library).unwrap());
+        let (sender, _requests) = mpsc::channel();
+        let (results, receiver) = mpsc::channel();
+        session.render_worker = RenderWorker {
+            sender,
+            receiver,
+            in_flight: true,
+            current_revision: Some(old_revision),
+            pending: None,
+        };
+        session.render = Some(full.clone());
+        session.render_dirty = false;
+        let mut draft = session.options().clone();
+        draft.drive_playback_oversampling = crate::options::Oversampling::Off;
+        draft.master_playback_oversampling = crate::options::Oversampling::Off;
+        session.apply_options(draft, 0, false).unwrap();
+        results
+            .send(RenderResult {
+                revision: old_revision,
+                mix: Ok(full.clone()),
+            })
+            .unwrap();
+        session.poll_render();
+        assert!(session.render.is_none());
+        assert!(session.render_dirty);
+        session.render = Some(Arc::new(
+            audio::prepare_project_with_quality(
+                session.project(),
+                &session.library,
+                session.options.playback_quality(),
+            )
+            .unwrap(),
+        ));
+        session.render_dirty = false;
+        assert_eq!(
+            session.current_mix().unwrap().quality(),
+            crate::playback_quality::PlaybackQuality::FULL
+        );
+        let path = root.join("full.wav");
+        session.export(&path).unwrap();
+        let expected = root.join("reference.wav");
+        full.write_wav(&expected, &session.project().master, &session.project().fx)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(path).unwrap(),
+            std::fs::read(expected).unwrap()
+        );
+        let async_path = root.join("async.wav");
+        session.start_export(&async_path).unwrap();
+        let mut draft = session.options().clone();
+        draft.preview_muted = true;
+        session.apply_options(draft, 1, false).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while session.is_exporting() {
+            session.poll_export();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Export did not finish."
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(
+            std::fs::read(async_path).unwrap(),
+            std::fs::read(root.join("reference.wav")).unwrap()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn fixed_song_folder_falls_back_without_forgetting_configured_path() {
+        let root = manual_fixture_dir();
+        let fixed = root.join("fixed");
+        std::fs::create_dir(&fixed).unwrap();
+        let mut session = fixture().with_settings_root(root.clone());
+        session.remember_song_folder(&root.join("song.mixjam"));
+        let mut draft = session.options().clone();
+        draft.song_folder_mode = crate::options::SongFolderMode::Fixed;
+        draft.fixed_song_folder = Some(fixed.clone());
+        session.apply_options(draft, 0, false).unwrap();
+        assert_eq!(session.song_folder(), Some(fixed.clone()));
+        std::fs::remove_dir(&fixed).unwrap();
+        assert_eq!(session.song_folder(), Some(root.clone()));
+        assert_eq!(session.options().fixed_song_folder, Some(fixed));
+        assert!(session.song_folder_warning().is_some());
+        session.remember_section_bookmarks(false).unwrap();
+        assert!(!session.options().show_section_bookmarks);
+        let revision = session.options_revision();
+        assert!(
+            !session
+                .apply_options(session.options().clone(), revision, false)
+                .unwrap()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     fn fixture() -> Session {
         let sample = Sample {
             id: 1,
@@ -3564,6 +3981,7 @@ mod tests {
         };
         let request = |revision| RenderRequest {
             revision,
+            quality: crate::playback_quality::PlaybackQuality::FULL,
             project: app.editor.project().clone(),
             library: app.library.clone(),
         };
@@ -3611,6 +4029,7 @@ mod tests {
         };
         let request = |revision| RenderRequest {
             revision,
+            quality: crate::playback_quality::PlaybackQuality::FULL,
             project: app.editor.project().clone(),
             library: app.library.clone(),
         };
@@ -5320,6 +5739,8 @@ mod boundary_tests {
             ("ui/dialog.rs", include_str!("ui/dialog.rs")),
             ("ui/agent.rs", include_str!("ui/agent.rs")),
             ("ui/album_review.rs", include_str!("ui/album_review.rs")),
+            ("ui/options.rs", include_str!("ui/options.rs")),
+            ("ui/libraries.rs", include_str!("ui/libraries.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
         ];

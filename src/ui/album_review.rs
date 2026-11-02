@@ -336,7 +336,7 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
                     chip(ui, &label, active, &format!("Genre filter: {genre}"))
                 })
                 .inner
-                .on_disabled_hover_text("No album has this tag together with the selection.");
+                .disabled_hint("No album has this tag together with the selection.");
             if response.clicked() && !state.filter.genres.remove(genre) {
                 state.filter.genres.insert(genre.clone());
             }
@@ -490,7 +490,7 @@ fn card(ui: &mut egui::Ui, state: &AlbumReviewState, review: &Review) -> Respons
     text(188.0, &detail, 11.5, MUTED);
     let name = format!("Open review: {} — {}", review.artist, review.title);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{} — {} ({})\n{}",
         review.artist,
         review.title,
@@ -526,14 +526,14 @@ fn footer(ui: &mut egui::Ui, state: &mut AlbumReviewState) {
                 controls::button(ui, "Clear cover cache", controls::ButtonRole::Secondary)
             })
             .inner
-            .on_hover_text("Remove every downloaded cover. Each cover downloads again on request.")
-            .on_disabled_hover_text("Wait for cover loading to finish.")
+            .hover_hint("Remove every downloaded cover. Each cover downloads again on request.")
+            .disabled_hint("Wait for cover loading to finish.")
             .clicked()
         {
             state.clear_cache();
         }
         if controls::button(ui, "Reload reviews", controls::ButtonRole::Secondary)
-            .on_hover_text("Read the reviews folder again, after its files change.")
+            .hover_hint("Read the reviews folder again, after its files change.")
             .clicked()
         {
             state.reload = true;
@@ -678,7 +678,7 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
         return;
     };
     let back = controls::button(ui, "← All albums", controls::ButtonRole::Secondary)
-        .on_hover_text("Back to the cover grid");
+        .hover_hint("Back to the cover grid");
     if back.clicked() {
         state.page = None;
         return;
@@ -760,7 +760,7 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         if controls::button(ui, "↑ Top", controls::ButtonRole::Secondary)
-            .on_hover_text("Back to the top of the page")
+            .hover_hint("Back to the top of the page")
             .clicked()
         {
             ui.scroll_to_rect(top, Some(egui::Align::TOP));
@@ -787,8 +787,8 @@ fn cover_controls(ui: &mut egui::Ui, state: &mut AlbumReviewState, review: &Revi
                     controls::button(ui, "Display cover art", controls::ButtonRole::Primary)
                 })
                 .inner
-                .on_hover_text(format!("Download the cover from {url}"))
-                .on_disabled_hover_text("The cover is downloading.");
+                .hover_hint(format!("Download the cover from {url}"))
+                .disabled_hint("The cover is downloading.");
             if response.clicked() {
                 state.cover_errors.remove(&review.id);
                 state.covers().request(&review.id, Some(url));
@@ -802,8 +802,7 @@ fn cover_controls(ui: &mut egui::Ui, state: &mut AlbumReviewState, review: &Revi
         Some(_) => {}
     }
     if let Some(source) = &review.cover_source {
-        ui.hyperlink_to("Cover source", source)
-            .on_hover_text(source);
+        ui.hyperlink_to("Cover source", source).hover_hint(source);
     }
 }
 
@@ -823,7 +822,7 @@ fn listening(ui: &mut egui::Ui, review: &Review) {
     ui.horizontal_wrapped(|ui| {
         for (label, url) in links {
             if let Some(url) = url {
-                ui.hyperlink_to(label, url).on_hover_text(url);
+                ui.hyperlink_to(label, url).hover_hint(url);
             }
         }
     });
@@ -833,7 +832,7 @@ fn listening(ui: &mut egui::Ui, review: &Review) {
             ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new(label).color(MUTED));
                 ui.add(egui::Label::new(&shown).truncate())
-                    .on_hover_text(&shown);
+                    .hover_hint(&shown);
             });
         }
     }
@@ -913,7 +912,7 @@ fn timeline_chart(ui: &mut egui::Ui, review: &Review) -> Option<u32> {
         let name = format!("Timeline of track {}: {}", track.num, track.title);
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
         if response
-            .on_hover_text(format!("{title}\n{}", sections.join("\n")))
+            .hover_hint(format!("{title}\n{}", sections.join("\n")))
             .clicked()
         {
             clicked = Some(track.num);

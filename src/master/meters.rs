@@ -22,6 +22,9 @@ pub struct MeterReading {
     pub input_vu: f32,
     /// Left and right input samples at or above -1 dBFS in the last block.
     pub input_peaks: [bool; 2],
+    /// Per-channel peak-block counts in this playback. Display readers can
+    /// retain peaks between draws without consuming another reader's events.
+    pub input_peak_counts: [u32; 2],
     /// Gain reduction of the bus compressor and of the limiter in the last
     /// block, in dB.
     pub compressor_reduction: f32,
@@ -44,6 +47,7 @@ impl Default for MeterReading {
             run: 0,
             input_vu: f32::NEG_INFINITY,
             input_peaks: [false; 2],
+            input_peak_counts: [0; 2],
             compressor_reduction: 0.0,
             limiter_reduction: 0.0,
             momentary: f32::NEG_INFINITY,
@@ -65,6 +69,7 @@ pub(super) struct Shared {
     run: AtomicU32,
     input_vu: AtomicU32,
     input_peaks: AtomicU32,
+    input_peak_counts: [AtomicU64; 2],
     compressor_reduction: AtomicU32,
     limiter_reduction: AtomicU32,
     momentary: AtomicU32,
@@ -83,6 +88,7 @@ impl Shared {
             run: AtomicU32::new(0),
             input_vu: level(),
             input_peaks: AtomicU32::new(0),
+            input_peak_counts: [AtomicU64::new(0), AtomicU64::new(0)],
             compressor_reduction: AtomicU32::new(0),
             limiter_reduction: AtomicU32::new(0),
             momentary: level(),
@@ -96,6 +102,9 @@ impl Shared {
     /// Begin a new playback's readings, and return its run.
     pub(super) fn start(&self) -> u32 {
         let run = self.run.load(Ordering::Relaxed).wrapping_add(1).max(1);
+        for count in &self.input_peak_counts {
+            count.store(u64::from(run) << 32, Ordering::Relaxed);
+        }
         self.store_levels(&MeterReading {
             run,
             ..MeterReading::default()
@@ -122,6 +131,15 @@ impl Shared {
             u32::from(reading.input_peaks[0]) | u32::from(reading.input_peaks[1]) << 1,
             Ordering::Relaxed,
         );
+        for (channel, count) in self.input_peak_counts.iter().enumerate() {
+            // An old playback may finish a block after start(). Keep
+            // its events out of the new playback's display baseline.
+            let _ = count.try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                ((value >> 32) as u32 == reading.run).then(|| {
+                    (u64::from(reading.run) << 32) | u64::from(reading.input_peak_counts[channel])
+                })
+            });
+        }
         float(&self.compressor_reduction, reading.compressor_reduction);
         float(&self.limiter_reduction, reading.limiter_reduction);
         float(&self.momentary, reading.momentary);
@@ -143,6 +161,14 @@ impl Shared {
             run,
             input_vu: float(&self.input_vu),
             input_peaks: [peaks & 1 != 0, peaks & 2 != 0],
+            input_peak_counts: std::array::from_fn(|channel| {
+                let value = self.input_peak_counts[channel].load(Ordering::Relaxed);
+                if (value >> 32) as u32 == run {
+                    value as u32
+                } else {
+                    0
+                }
+            }),
             compressor_reduction: float(&self.compressor_reduction),
             limiter_reduction: float(&self.limiter_reduction),
             momentary: float(&self.momentary),
@@ -321,6 +347,7 @@ pub(super) struct Meters {
     needle: [[f64; 2]; 2],
     needle_step: f64,
     input_peaks: [bool; 2],
+    input_peak_counts: [u32; 2],
     loudness: Loudness,
     true_peaks: [TruePeak; 2],
     block_peak: f32,
@@ -335,6 +362,7 @@ impl Meters {
             needle: [[0.0; 2]; 2],
             needle_step: 1.0 - pole(0.045_2),
             input_peaks: [false; 2],
+            input_peak_counts: [0; 2],
             loudness: Loudness::new(),
             true_peaks: [TruePeak::ZERO; 2],
             block_peak: 0.0,
@@ -392,10 +420,15 @@ impl Meters {
         if block_peak > OVER_DBTP {
             self.overs += 1;
         }
+        let input_peaks = std::mem::take(&mut self.input_peaks);
+        for (count, peak) in self.input_peak_counts.iter_mut().zip(input_peaks) {
+            *count = count.saturating_add(u32::from(peak));
+        }
         shared.store_current(&MeterReading {
             run: self.run,
             input_vu: (gain_to_db(needle) + SINE_FORM_DB - REFERENCE_DBFS) as f32,
-            input_peaks: std::mem::take(&mut self.input_peaks),
+            input_peaks,
+            input_peak_counts: self.input_peak_counts,
             compressor_reduction: compressor,
             limiter_reduction: limiter,
             momentary: self.loudness.momentary as f32,
@@ -542,6 +575,42 @@ mod tests {
                 ..MeterReading::default()
             }
         );
+    }
+
+    #[test]
+    fn peak_events_survive_silent_blocks_and_independent_reads() {
+        let shared = Shared::new();
+        let run = shared.start();
+        shared.store_current(&MeterReading {
+            run,
+            input_peaks: [true, false],
+            input_peak_counts: [1, 0],
+            ..MeterReading::default()
+        });
+        shared.store_current(&MeterReading {
+            run,
+            input_peak_counts: [1, 0],
+            ..MeterReading::default()
+        });
+        assert_eq!(shared.read().input_peaks, [false; 2]);
+        assert_eq!(shared.read().input_peak_counts, [1, 0]);
+        assert_eq!(shared.read().input_peak_counts, [1, 0]);
+        shared.store_current(&MeterReading {
+            run,
+            input_peaks: [true, true],
+            input_peak_counts: [2, 1],
+            ..MeterReading::default()
+        });
+        assert_eq!(shared.read().input_peak_counts, [2, 1]);
+        let next = shared.start();
+        // Simulate an old store racing across start(), after its run check.
+        shared.store_levels(&MeterReading {
+            run,
+            input_peaks: [true; 2],
+            ..MeterReading::default()
+        });
+        assert_eq!(shared.read().run, next);
+        assert_eq!(shared.read().input_peak_counts, [0; 2]);
     }
 
     #[test]

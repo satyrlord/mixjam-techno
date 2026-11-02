@@ -7,12 +7,16 @@
 //! through a saturation curve and adds what the curve changed to the clean
 //! track, so the clean sound stays and the new harmonics come in under it.
 //!
-//! - The curve runs at four times the mix rate (`master::dsp::Oversampler`),
+//! - At full quality the curve runs at four times the mix rate
+//!   (`master::dsp::Oversampler`),
 //!   and each of its samples is the curve's mean between two input samples
 //!   (antiderivative anti-aliasing), so the harmonics of high notes and hits
 //!   do not fold back as aliases. The clean track that the copy is compared
 //!   with takes the same path through a straight line, so the two differ only
 //!   by what the curve adds.
+//!   Reduced playback runs both interval means at the base rate and keeps
+//!   the integer stage delay with plain delays. It retains anti-aliasing by
+//!   the antiderivative method, but has more aliases and a different response.
 //! - `amount` drives the copy into the curve. `character` bends one half of
 //!   the wave less than the other: symmetric at 0% gives odd harmonics,
 //!   one-sided at 100% mostly even ones, at any drive.
@@ -32,10 +36,12 @@
 //! The power detectors follow both channels together, each through two
 //! smoothing stages, so the gains move without steps or ripple and the
 //! stereo image stays put. The settings are fixed for a prepared mix; a
-//! change prepares a new mix, as an EQ change does. The oversampling delays
-//! the copy by `LATENCY` frames, and an eighth of a frame more: the track
-//! chain reads its sound that much ahead, so the drive adds no delay that
-//! matters. The clean track itself passes through a plain delay, so a `mix`
+//! change prepares a new mix, as an EQ change does. Both quality modes delay
+//! the copy by `LATENCY` integer frames, which the track chain compensates.
+//! The curve and its straight-line reference also share an interval mean's
+//! fractional delay: an eighth of a frame at 4x, half a frame at the base
+//! rate. Their phases agree with each other, but are not equivalent between
+//! modes. The clean track itself passes through a plain delay, so a `mix`
 //! of 0% at 0 dB output gives the track back bit for bit. A track whose drive is off mixes
 //! exactly as it did before the drive existed.
 use crate::master::{
@@ -43,6 +49,7 @@ use crate::master::{
     dsp::{Biquad, Coefficients, DcBlocker, Delay, Oversampler, db_to_gain, flush, pole},
     range, ratio_range,
 };
+use crate::playback_quality::Oversampling;
 use serde::{Deserialize, Serialize};
 
 /// The frames by which the drive's output follows its input.
@@ -211,6 +218,21 @@ struct Mean {
 
 impl Mean {
     #[inline]
+    fn pair(
+        &mut self,
+        sample: f32,
+        held: &mut f32,
+        gain: f64,
+        inverse: f64,
+        character: f64,
+    ) -> [f32; 2] {
+        let shaped = self.next(f64::from(sample) * gain, character) * inverse;
+        let line = 0.5 * (*held + sample);
+        *held = sample;
+        [shaped as f32, line]
+    }
+
+    #[inline]
     fn next(&mut self, to: f64, character: f64) -> f64 {
         let from = self.last;
         self.last = to;
@@ -256,6 +278,7 @@ const OUTPUT_MATCH_DB: f64 = 12.0;
 /// A drive's settings, ready for the audio thread at the mix rate.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Run {
+    oversampling: Oversampling,
     gain: f64,
     inverse: f64,
     character: f64,
@@ -272,11 +295,17 @@ pub(crate) struct Run {
 }
 
 impl Run {
+    #[cfg(test)]
     pub(crate) fn new(drive: &Drive) -> Self {
+        Self::with_quality(drive, Oversampling::FourX)
+    }
+
+    pub(crate) fn with_quality(drive: &Drive, oversampling: Oversampling) -> Self {
         let amount = f64::from(drive.amount);
         let gain = db_to_gain(amount);
         let focus = f64::from(drive.focus);
         Self {
+            oversampling,
             gain,
             inverse: 1.0 / gain,
             character: f64::from(drive.character) / 100.0,
@@ -318,17 +347,26 @@ impl Run {
                 // sample before it, and the clean track's the straight
                 // line's: both lag half a sample at four times the rate.
                 let (mut mean, mut held) = (state.means[channel], state.held[channel]);
-                let [shaped, reference] = state.oversamplers[channel].process_pair(
-                    &mut state.references[channel],
-                    input,
-                    |sample| {
-                        let driven = f64::from(sample) * gain;
-                        let shaped = mean.next(driven, character) * inverse;
-                        let line = 0.5 * (held + sample);
-                        held = sample;
-                        [shaped as f32, line]
-                    },
-                );
+                let shape = |sample: f32| mean.pair(sample, &mut held, gain, inverse, character);
+                let [shaped, reference] = match self.oversampling {
+                    Oversampling::FourX => state.oversamplers[channel].process_pair(
+                        &mut state.references[channel],
+                        input,
+                        shape,
+                    ),
+                    Oversampling::Off => {
+                        // ADAA and its straight-line reference both run at
+                        // the base rate. Both lag half a base-rate frame,
+                        // rather than the 4x path's eighth of a frame. Keep
+                        // their shared phase and the chain's integer delay.
+                        let [shaped, reference] = {
+                            let mut shape = shape;
+                            shape(input)
+                        };
+                        let [curve_delay, reference_delay] = &mut state.base_delays[channel];
+                        [curve_delay.push(shaped), reference_delay.push(reference)]
+                    }
+                };
                 (state.means[channel], state.held[channel]) = (mean, held);
                 dry[channel] = f64::from(state.dry[channel].push(input));
                 let [copy_blocker, clean_blocker] = &mut state.blockers[channel];
@@ -388,6 +426,8 @@ pub(crate) struct State {
     means: [Mean; 2],
     held: [f32; 2],
     dry: [Delay<LATENCY>; 2],
+    /// The base-rate curve and reference keep the oversampler's integer delay.
+    base_delays: [[Delay<LATENCY>; 2]; 2],
     /// Each channel's blockers for the copy and the clean track.
     blockers: [[DcBlocker; 2]; 2],
     focus: [Biquad; 2],
@@ -408,6 +448,7 @@ impl Default for State {
             means: [Mean::default(); 2],
             held: [0.0; 2],
             dry: [Delay::ZERO; 2],
+            base_delays: [[Delay::ZERO; 2]; 2],
             blockers: [[DcBlocker::ZERO; 2]; 2],
             focus: [Biquad::FLAT; 2],
             detectors: [Detector::default(); 4],
@@ -626,6 +667,120 @@ mod tests {
             &input,
         );
         assert!(output == input);
+    }
+
+    #[test]
+    fn playback_qualities_keep_delay_stereo_identity_and_block_history() {
+        let mut input = tone(55.0, 0.6, 4096);
+        // Independent channels, an initial impulse, and a source gap.
+        input[..2].copy_from_slice(&[0.8, -0.4]);
+        for frame in input.as_chunks_mut::<2>().0 {
+            frame[1] *= -0.5;
+        }
+        input[1024..2048].fill(0.0);
+        for quality in [Oversampling::FourX, Oversampling::Off] {
+            for mix in [0.0, 100.0] {
+                let settings = Drive {
+                    amount: 24.0,
+                    character: 100.0,
+                    mix,
+                    ..on()
+                };
+                let run = Run::with_quality(&settings, quality);
+                let mut state = State::new(&run);
+                let mut whole = input.clone();
+                whole.extend([0.0; LATENCY * 2]);
+                run.process(&mut whole, &mut state);
+                if quality == Oversampling::Off || mix == 0.0 {
+                    assert!(whole[..LATENCY * 2].iter().all(|x| *x == 0.0));
+                }
+                let mut blocked = input.clone();
+                blocked.extend([0.0; LATENCY * 2]);
+                let mut state = State::new(&run);
+                for block in blocked.chunks_mut(34) {
+                    run.process(block, &mut state);
+                }
+                assert_eq!(whole, blocked, "{quality:?} mix {mix}");
+                if mix == 0.0 {
+                    assert_eq!(&whole[LATENCY * 2..], input);
+                } else {
+                    assert_ne!(&whole[LATENCY * 2..], input, "Off must still saturate");
+                    assert!(whole.iter().all(|x| x.is_finite()));
+                }
+                if quality == Oversampling::FourX {
+                    let mut legacy = input.clone();
+                    legacy.extend([0.0; LATENCY * 2]);
+                    let legacy_run = Run::new(&settings);
+                    legacy_run.process(&mut legacy, &mut State::new(&legacy_run));
+                    assert_eq!(whole, legacy);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn base_rate_curve_and_reference_have_the_same_half_frame_phase() {
+        let input = tone(10_000.0, 1e-8, 44_100);
+        // The reference is the straight line's interval mean at the base
+        // rate, not the undelayed current sample. Integer compensation does
+        // not remove its half-frame phase or its cos(pi*f/rate) roll-off.
+        let mut held = 0.0_f32;
+        let mut mean = Mean::default();
+        let mut pair_output = Vec::new();
+        for (frame, samples) in input.as_chunks::<2>().0.iter().enumerate() {
+            let pair = mean.pair(samples[0], &mut held, 1.0, 1.0, 0.0);
+            let previous = if frame == 0 {
+                0.0
+            } else {
+                input[(frame - 1) * 2]
+            };
+            let expected = 0.5 * (previous + samples[0]);
+            assert!((pair[0] - expected).abs() < 2e-15);
+            assert_eq!(pair[1], expected);
+            pair_output.extend([pair[1], pair[1]]);
+        }
+        let magnitude = amplitude(&pair_output, 10_000.0) / amplitude(&input, 10_000.0);
+        let expected = (std::f64::consts::PI * 10_000.0 / RATE).cos();
+        assert!((magnitude - expected).abs() < 1e-4);
+    }
+
+    #[test]
+    fn playback_quality_records_alias_and_frequency_response_tradeoffs() {
+        let input = tone(5000.0, 0.9, 2 * 44_100);
+        let settings = Drive {
+            amount: 24.0,
+            character: 0.0,
+            mix: 100.0,
+            focus: 20.0,
+            ..on()
+        };
+        let mut aliases = [0.0; 2];
+        for (index, quality) in [Oversampling::FourX, Oversampling::Off]
+            .into_iter()
+            .enumerate()
+        {
+            let run = Run::with_quality(&settings, quality);
+            let mut state = State::new(&run);
+            let mut output = input.clone();
+            output.extend([0.0; LATENCY * 2]);
+            run.process(&mut output, &mut state);
+            let output = &output[(44_100 + LATENCY) * 2..];
+            let fundamental = amplitude(output, 5000.0);
+            // The fifth harmonic above Nyquist folds from 25 to 19.1 kHz.
+            aliases[index] = db(amplitude(output, 19_100.0) / fundamental);
+            println!(
+                "Drive {quality:?}: 5 kHz tone, 24 dB Drive, 19.1 kHz alias {:.2} dBc",
+                aliases[index]
+            );
+        }
+        assert!(aliases[0] < -65.0);
+        assert!(aliases[1] > aliases[0] + 10.0);
+        for hz in [55.0, 1000.0, 5000.0, 10_000.0, 19_000.0] {
+            let reference_db = db((std::f64::consts::PI * hz / RATE).cos());
+            println!(
+                "Drive Off interval-mean reference at {hz} Hz: {reference_db:.3} dB, half-frame phase lag"
+            );
+        }
     }
 
     #[test]

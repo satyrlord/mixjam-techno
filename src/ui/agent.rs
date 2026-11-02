@@ -172,6 +172,7 @@ fn nodes(update: &accesskit::TreeUpdate) -> Vec<UiNode> {
                 id: format!("#{}", id.0),
                 role: role_name(node.role()),
                 label: label.unwrap_or_default().to_string(),
+                description: node.description().map(str::to_owned),
                 text: text.map(str::to_string),
                 number: node.numeric_value(),
                 checked: node
@@ -1216,7 +1217,7 @@ impl MixJamApp {
             (self.show_step_synth_help, "Step synth help"),
             (self.show_sample_edit_help, "Sample editor help"),
             (self.show_master_help, "Mastering help"),
-            (self.show_libraries, "Sample libraries"),
+            (self.options.is_some(), "Options"),
             (self.show_import_details, "Import details"),
             (self.show_effects, "Effect Studio"),
             (self.show_step_synth, "Step synth"),
@@ -1270,6 +1271,14 @@ impl MixJamApp {
         StateView {
             version: mixjam_techno::application::APP_VERSION,
             song,
+            options: self.session.options().clone(),
+            options_revision: self.session.options_revision(),
+            options_error: self.session.options_error().map(str::to_owned),
+            audio_apply_blocked_reason: self
+                .session
+                .audio_options_blocked_reason()
+                .map(str::to_owned),
+            playback_buffer: self.session.buffer_status(),
             transport: wire::transport(&self.session),
             status: self.agent_status(),
             modal: self.blocking_modal(ctx),

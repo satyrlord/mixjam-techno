@@ -72,7 +72,7 @@ pub(super) fn show(
                     builder.set_label("Source sound");
                     builder.set_value(source.name);
                 });
-                label.on_hover_text(source.name);
+                label.hover_hint(source.name);
             });
 
             let mut filter_enabled = state.filter.is_some();
@@ -349,7 +349,7 @@ fn toggle(ui: &mut egui::Ui, center: Pos2, name: &str, value: &mut bool) -> bool
         egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *value, name)
     });
     let changed = response.changed();
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{name}: {}. Turning it off discards its settings.",
         if *value { "on" } else { "off" }
     ));
@@ -412,7 +412,7 @@ fn control(
                     .fixed_decimals(spec.decimals),
             );
             name_control(response, &format!("{} value", spec.name))
-                .on_hover_text(format!("{}: drag, or click to enter a value.", spec.name));
+                .hover_hint(format!("{}: drag, or click to enter a value.", spec.name));
         });
     });
 }
@@ -429,8 +429,8 @@ fn action_button(ui: &mut egui::Ui, rect: Rect, text: &str, enabled: bool) -> Re
         },
         enabled,
     )
-    .on_disabled_hover_text("Select an available sound to process it.")
-    .on_hover_text(if text == "Save sound" {
+    .disabled_hint("Select an available sound to process it.")
+    .hover_hint(if text == "Save sound" {
         "Save a new WAV and add it to Effect."
     } else {
         text

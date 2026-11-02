@@ -17,6 +17,19 @@ pub(super) fn is_collapsed(ctx: &egui::Context, identity: &str) -> bool {
 pub(super) fn expand(ctx: &egui::Context, identity: &str) {
     set_collapsed(ctx, identity, false);
 }
+pub(super) fn top_window(ctx: &egui::Context, identity: &str) -> bool {
+    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new(identity));
+    ctx.memory(|memory| {
+        memory.top_modal_layer().is_none()
+            && memory
+                .layer_ids()
+                .filter(|other| {
+                    other.order == egui::Order::Middle && memory.areas().is_visible(other)
+                })
+                .last()
+                == Some(layer)
+    })
+}
 fn set_collapsed(ctx: &egui::Context, identity: &str, value: bool) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(("hardware-collapsed", identity)), value));
     if value && let Some(id) = ctx.memory(|m| m.focused()) {
@@ -78,6 +91,8 @@ struct Shell<'a> {
     inset_body: bool,
     /// Follow the height of the content until the user resizes the window.
     fit: bool,
+    scroll: bool,
+    focus_controls: Option<fn(&Response)>,
 }
 struct ShellResponse {
     help: bool,
@@ -217,7 +232,7 @@ fn show_shell<R>(
                 if collapsed { "Expand" } else { "Collapse" },
                 spec.identity
             );
-            if controls::header_button(
+            let collapse = controls::header_button(
                 ui,
                 left,
                 "collapse",
@@ -227,9 +242,11 @@ fn show_shell<R>(
                 } else {
                     controls::HeaderIcon::Collapse
                 },
-            )
-            .clicked()
-            {
+            );
+            if let Some(focus) = spec.focus_controls {
+                focus(&collapse);
+            }
+            if collapse.clicked() {
                 set_collapsed(ctx, spec.identity, !collapsed);
             }
             let title_rect = Rect::from_min_max(
@@ -267,14 +284,17 @@ fn show_shell<R>(
                     Pos2::new(header.right() - 24.0, header.center().y),
                     Vec2::splat(28.0),
                 );
-                close = controls::header_button(
+                let close_button = controls::header_button(
                     ui,
                     rect,
                     "close",
                     &format!("Close {}", spec.identity),
                     controls::HeaderIcon::Close,
-                )
-                .clicked();
+                );
+                if let Some(focus) = spec.focus_controls {
+                    focus(&close_button);
+                }
+                close = close_button.clicked();
             }
             if !collapsed {
                 ui.painter().line_segment(
@@ -308,7 +328,7 @@ fn show_shell<R>(
                     foreground_color: true,
                     ..egui::style::ScrollStyle::solid()
                 };
-                let scrolled = egui::ScrollArea::both()
+                let scrolled = egui::ScrollArea::new([spec.scroll; 2])
                     .id_salt("hardware-scroll")
                     .auto_shrink([false, false])
                     .min_scrolled_height(0.0)
@@ -453,6 +473,8 @@ pub(super) struct Window<'a> {
     size: Vec2,
     max_height: f32,
     viewport: Option<Rect>,
+    scroll: bool,
+    focus_controls: Option<fn(&Response)>,
 }
 pub(super) fn window(title: &str) -> Window<'_> {
     Window {
@@ -461,9 +483,20 @@ pub(super) fn window(title: &str) -> Window<'_> {
         size: Vec2::new(460.0, 280.0),
         max_height: f32::INFINITY,
         viewport: None,
+        scroll: true,
+        focus_controls: None,
     }
 }
 impl<'a> Window<'a> {
+    pub(super) fn focus_controls(mut self, register: fn(&Response)) -> Self {
+        self.focus_controls = Some(register);
+        self
+    }
+    /// Let a surface provide its own scrolling body and fixed action row.
+    pub(super) fn scroll(mut self, enabled: bool) -> Self {
+        self.scroll = enabled;
+        self
+    }
     pub(super) fn open(mut self, open: &'a mut bool) -> Self {
         self.open = Some(open);
         self
@@ -510,6 +543,8 @@ impl<'a> Window<'a> {
                 },
                 inset_body: true,
                 fit: self.title == "Recorded take",
+                scroll: self.scroll,
+                focus_controls: self.focus_controls,
             },
             contents,
         );
@@ -548,6 +583,8 @@ pub(super) fn tool<R>(
             palette,
             inset_body: false,
             fit: false,
+            scroll: true,
+            focus_controls: None,
         },
         contents,
     );
@@ -589,6 +626,8 @@ pub(super) fn modal<R>(
             palette: controls::Palette::Utility,
             inset_body: true,
             fit: true,
+            scroll: true,
+            focus_controls: None,
         },
         contents,
     );

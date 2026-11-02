@@ -498,7 +498,8 @@ another track's Solo silences is dimmed, and its track number uses Muted. The
 fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
 timeline scrolls horizontally without moving track labels.
 
-Follow is enabled by default in the transport. It moves the horizontal viewport
+Follow is enabled by default in the transport. Options can change its startup
+default without changing the current session's toggle. It moves the horizontal viewport
 when the playhead approaches an edge, including seeks and backward loop jumps.
 It leaves vertical scrolling unchanged. While paused, manual horizontal scroll
 stays where the user leaves it until the position or viewport geometry changes.
@@ -524,8 +525,8 @@ grouped within each strip. A track with
 several distinct sounds shows their count and lists their names on hover.
 Narrow strips preserve visible tracks without enlarging every control.
 
-Sample libraries constrains its floating window to the viewport and scrolls
-vertically. A large expanded Folder tempos list must leave the provider
+The Sample libraries page in Options scrolls vertically inside the shared
+window. A large expanded Folder tempos list must leave the provider
 controls reachable.
 
 All in-app tools, utility windows, and blocking dialogs use one resizable shell.
@@ -626,16 +627,18 @@ The fixed 64-point rail uses the utility Folded Metal finish: dark neutral
 paint, subtle monochromatic grain, smooth folded edges, and shared dark button
 faces. Orange marks active controls and focus. Icons stay centered in 48 by
 30-point targets. Recessed horizontal separators divide file commands (New,
-Open, Save, Save as, Import, Export), utilities (Libraries, Erase, Delete),
+Open, Save, Save as, Import, Export), utilities (Options, Erase, Delete),
 and musical tools (Mixer, Mastering, Effect Studio, Step synth, Sample editor,
 Time Stretcher, Album Review). The microphone icon and visible recording-track selector come last,
 after a final separator. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 
-Libraries and musical tools toggle their open state. Erase toggles its editing
+Musical tools toggle their open state. Erase toggles its editing
 mode. Active toggles use a subtle accent outline and icon tint and expose their
 selected state to accessibility. A collapsed window stays active until closed.
 File commands and Delete remain one-shot actions.
+Options uses a gear PNG icon in the utility group. Its second activation
+focuses the existing window and retains its draft.
 
 The header places a 40-point tribal mask before the MixJam Techno title.
 The artwork retains its original colors and transparent background. The native
@@ -981,10 +984,44 @@ only cue. Empty states are explicit: No reviews folder, No albums available,
 and No results with Clear filters. Covers are review content and are exempt
 from the raster asset rules; the rail icon is not.
 
+### Options
+
+Options uses the Utility Folded Metal shell. A vertical Audio, Workspace,
+Files, and Sample libraries selector stays beside a scrollable body. A fixed action row provides
+Restore options defaults, Apply, and Cancel. Page selection and each page's
+scroll position survive collapse and navigation while the window is open.
+At 960x720, 1024x768, and 1440x1000, controls and actions must remain reachable
+without horizontal scrolling. Ctrl+, opens or focuses this window. Escape and
+close discard edits since Apply; collapse retains them without applying.
+
+Place the 4x/Off explanation beside the separate Drive and master controls.
+Show reduced playback quality in Options and the accessible workspace status.
+Keep buffer target, requested frames, and measured callback interval distinct.
+Label unavailable negotiated capacity explicitly. A known unsupported target
+has a disabled reason; a failed opening leaves the current output in use.
+
+Audio changes show a stopped-transport requirement until playback, previews,
+and recording stop. Workspace and Files changes remain available during
+playback. Show stale-draft feedback with Reload when preferences change outside
+the window; retain unsaved edits until Reload is selected. Show persistence and
+validation errors in the window. Restore options defaults edits the draft only.
+Sample libraries contains the complete former library-management body: folder
+registration and removal, progress and scan cancellation, fallback BPM, folder
+tempo and skipped-WAV reports, and optional product providers. These operations
+use their existing Session operations. Scans adopt folder changes when complete;
+fallback BPM is used by Add library folder and Scan again. Show that these
+actions are separate from the options
+draft and are not rolled back by Cancel. No separate library window remains.
+Files shows the configured folder count and navigates to this same page.
+
+Show tooltips controls hover hints; accessible names, focus, errors, and visible
+guidance remain available. Reduced meter display samples at most 15 times per
+second while retaining intervening peaks and the audio-owned OVER latch.
+
 ### Utility windows and blocking dialogs
 
 Help, Time Stretcher help, Effect Studio help, Mastering help, Step synth help,
-Sample editor help, Sample libraries, Album Review,
+Sample editor help, Options, Album Review,
 Import details, Recorded take, Save your changes?, Sample conflicts, Choose path,
 and Import sound use the same shell and controls as musical tools. Preserve their
 stable identities and exact accessible names independently of uppercase titles.

@@ -18,10 +18,14 @@ mod effects;
 mod eq;
 #[path = "ui/fx.rs"]
 mod fx;
+#[path = "ui/libraries.rs"]
+mod libraries;
 #[path = "ui/master.rs"]
 mod master;
 #[path = "ui/mixer.rs"]
 mod mixer;
+#[path = "ui/options.rs"]
+mod options;
 #[path = "ui/sample_editor.rs"]
 mod sample_editor;
 #[path = "ui/step_synth.rs"]
@@ -218,6 +222,7 @@ enum FileRequest {
     SynthSource,
     SavePattern,
     LoadPattern,
+    OptionsFolder,
     ResolveMissing(u32),
 }
 
@@ -348,10 +353,10 @@ pub struct MixJamApp {
     show_step_synth_help: bool,
     show_sample_edit_help: bool,
     show_master_help: bool,
-    show_libraries: bool,
-    /// Startup opened Sample libraries for its folder scan; close the window
-    /// when the scan fills the library, unless the user takes it over first.
-    close_libraries_after_scan: bool,
+    options: Option<options::OptionsDraft>,
+    meter_display: options::MeterDisplay,
+    /// Close untouched startup Options after its scan fills the library.
+    close_options_after_scan: bool,
     show_import_details: bool,
     show_sample_conflicts: bool,
     /// Escape hid the resolver without confirming; the status bar reopens it.
@@ -462,7 +467,7 @@ impl MixJamApp {
         let (status, status_error) = startup_status(&mut session);
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
-            if app.capture_view_is("library-expanded") {
+            if app.capture_view_is("options-library-expanded") {
                 cc.egui_ctx.data_mut(|data| {
                     data.insert_persisted(
                         egui::Id::new("sounds"),
@@ -594,6 +599,24 @@ impl MixJamApp {
                 .flatten()
         };
         let section_bookmarks = session.section_bookmarks_setting();
+        let follow_on_startup = session.options().follow_on_startup;
+        let starting_module = match session.options().starting_module {
+            mixjam_techno::application::options::StartingModule::Sounds => BottomModule::Sounds,
+            mixjam_techno::application::options::StartingModule::Mixer => BottomModule::Mixer,
+            mixjam_techno::application::options::StartingModule::Mastering => {
+                BottomModule::Mastering
+            }
+            mixjam_techno::application::options::StartingModule::Effects => BottomModule::Effects,
+        };
+        let options_draft =
+            (capture_view.starts_with("options") || needs_sample_folder).then(|| {
+                let page = if needs_sample_folder && !capture_view.starts_with("options") {
+                    options::Page::Libraries
+                } else {
+                    options::Page::from_capture(&capture_view)
+                };
+                options::OptionsDraft::new(&session, page)
+            });
         // Select the clip whose fades the capture demonstrates.
         let capture_clip = (capture_view == "clip-fades")
             .then(|| session.project().clips.first().map(|clip| clip.id))
@@ -621,7 +644,11 @@ impl MixJamApp {
             } else if capture_view.starts_with("fx") {
                 BottomModule::Effects
             } else {
-                BottomModule::Sounds
+                if capture_view.is_empty() {
+                    starting_module
+                } else {
+                    BottomModule::Sounds
+                }
             },
             show_help: capture_view == "help",
             show_stretch_help: false,
@@ -629,11 +656,11 @@ impl MixJamApp {
             show_step_synth_help: false,
             show_sample_edit_help: false,
             show_master_help: false,
-            show_libraries: matches!(
-                capture_view.as_str(),
-                "libraries" | "library-providers" | "library-tempos"
-            ) || needs_sample_folder,
-            close_libraries_after_scan: needs_sample_folder && startup_scan,
+            options: options_draft,
+            meter_display: options::MeterDisplay::default(),
+            close_options_after_scan: needs_sample_folder
+                && startup_scan
+                && capture_view.is_empty(),
             show_import_details: matches!(
                 capture_view.as_str(),
                 "missing-details" | "import-details"
@@ -648,7 +675,7 @@ impl MixJamApp {
             return_lane: None,
             automation_drag: None,
             zoom: 1.0,
-            follow_playhead: true,
+            follow_playhead: follow_on_startup,
             last_follow_position: None,
             drag: None,
             handle_drag: None,
@@ -846,11 +873,15 @@ impl MixJamApp {
             Some(_) => {}
             None => {
                 self.scan_status = None;
-                if std::mem::take(&mut self.close_libraries_after_scan)
+                if std::mem::take(&mut self.close_options_after_scan)
                     && !self.status_error
                     && !self.session.library().samples.is_empty()
+                    && self.sample_libraries_open()
+                    && self.options.as_ref().is_some_and(|draft| {
+                        !draft.restored && draft.values == *self.session.options()
+                    })
                 {
-                    self.show_libraries = false;
+                    self.close_options(ctx);
                 }
             }
         }
@@ -1090,7 +1121,7 @@ impl MixJamApp {
     ) -> Result<(), String> {
         self.session.start_wave_scan(&roots, fallback_bpm)?;
         self.fallback_bpm = fallback_bpm;
-        self.close_libraries_after_scan = false;
+        self.close_options_after_scan = false;
         self.clear_selection();
         self.message(format!("Scanning {}…", scan_subject(&roots)));
         Ok(())
@@ -1308,6 +1339,32 @@ impl MixJamApp {
     }
 
     fn keyboard(&mut self, ctx: &egui::Context) {
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma)) {
+            self.open_options(ctx);
+            return;
+        }
+        if let Some(options) = &self.options
+            && !dialog::is_collapsed(ctx, "Options")
+            && dialog::top_window(ctx, "Options")
+        {
+            if !egui::Popup::is_any_open(ctx) {
+                let direction = ctx.input_mut(|input| {
+                    if input.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) {
+                        Some(true)
+                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::Tab) {
+                        Some(false)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(reverse) = direction {
+                    options.cycle_focus(ctx, reverse);
+                }
+            }
+            // The top utility owns its keys. Its shell handles Escape after
+            // text fields and popups have had their normal input pass.
+            return;
+        }
         let focused = ctx.memory(|memory| memory.focused());
         // A value that is being typed keeps every key.
         if focused.is_some_and(|id| egui::TextEdit::load_state(ctx, id).is_some()) {
@@ -2310,6 +2367,15 @@ impl MixJamApp {
             FileRequest::LibraryFolder => {
                 ("Choose library folder".into(), Folder, None, None, None)
             }
+            FileRequest::OptionsFolder => (
+                "Choose fixed song folder".into(),
+                Folder,
+                None,
+                None,
+                self.options
+                    .as_ref()
+                    .and_then(|draft| draft.values.fixed_song_folder.clone()),
+            ),
             FileRequest::ProviderFolder(product) => (
                 format!("Choose {} folder", product.label()),
                 Folder,
@@ -2387,6 +2453,11 @@ impl MixJamApp {
     /// Ask for the path of `request`, then carry the request out. An agent
     /// cannot operate a native dialog, so its session types the path instead.
     fn ask_path(&mut self, request: FileRequest) {
+        if matches!(request, FileRequest::OpenSong | FileRequest::SaveSong)
+            && let Some(warning) = self.session.song_folder_warning()
+        {
+            self.error(warning);
+        }
         if self.path_prompt.is_some() {
             self.error("Finish or cancel Choose path before starting another file action.");
             return;
@@ -2457,6 +2528,11 @@ impl MixJamApp {
             return;
         };
         match request {
+            FileRequest::OptionsFolder => {
+                if let Some(draft) = &mut self.options {
+                    draft.values.fixed_song_folder = Some(path);
+                }
+            }
             FileRequest::OpenSong => {
                 self.session.remember_song_folder(&path);
                 self.open_path(&path);
@@ -2696,228 +2772,9 @@ impl MixJamApp {
     }
 
     fn tool_windows(&mut self, ctx: &egui::Context) {
+        self.options_window(ctx);
         self.eq_window(ctx);
         album_review::show(ctx, &mut self.show_album_review, &mut self.album_review);
-        if self.show_libraries {
-            let mut open = true;
-            dialog::window("Sample libraries")
-                .default_height(260.0)
-                .open(&mut open)
-                .default_width(540.0)
-                .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-                .constrain_to(ctx.viewport_rect().shrink(12.0))
-                .show(ctx, |ui| {
-                    let scan = self.session.wave_scan();
-                    let folders = self.session.library().wav_roots().to_vec();
-                    if scan.is_none() && folders.is_empty() {
-                        ui.label(format!(
-                            "Add a folder of WAV files to fill the Sounds panel. Subfolders are \
-                             included. Up to {MAX_LIBRARY_FOLDERS} library folders share the \
-                             browser. Fallback BPM applies only to sounds whose tempo cannot be \
-                             recognized."
-                        ));
-                    }
-                    let idle = !self.session.is_recording() && scan.is_none();
-                    let busy = if scan.is_some() {
-                        "Wait for the current scan to finish or cancel it."
-                    } else {
-                        "Stop recording before you change the library folders."
-                    };
-                    ui.horizontal(|ui| {
-                        ui.label("Fallback BPM");
-                        controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM")
-                            .on_hover_text(
-                                "Recognized product audio keeps its original tempo. Folders use \
-                                 matching original audio when enough sources agree, then loop \
-                                 lengths, then this fallback. Unresolved half/double matches \
-                                 prefer 88–176 BPM unless the fallback selects the other tempo.",
-                            );
-                        let room = folders.len() < MAX_LIBRARY_FOLDERS;
-                        if ui
-                            .add_enabled_ui(idle && room, |ui| {
-                                controls::button(
-                                    ui,
-                                    "Add library folder",
-                                    controls::ButtonRole::Secondary,
-                                )
-                            })
-                            .inner
-                            .on_disabled_hover_text(if room {
-                                busy.to_string()
-                            } else {
-                                format!(
-                                    "The browser holds up to {MAX_LIBRARY_FOLDERS} library \
-                                     folders. Remove one first."
-                                )
-                            })
-                            .clicked()
-                        {
-                            self.ask_path(FileRequest::LibraryFolder);
-                        }
-                        if !folders.is_empty()
-                            && ui
-                                .add_enabled_ui(idle, |ui| {
-                                    controls::button(
-                                        ui,
-                                        "Scan again",
-                                        controls::ButtonRole::Secondary,
-                                    )
-                                })
-                                .inner
-                                .on_hover_text("Read every library folder again.")
-                                .on_disabled_hover_text(busy)
-                                .clicked()
-                        {
-                            self.scan_library_folders(folders.clone());
-                        }
-                    });
-                    if let Some(scan) = &scan {
-                        ui.horizontal(|ui| {
-                            let (text, fraction) = if scan.files_total == 0 {
-                                ("Listing files…".to_string(), None)
-                            } else {
-                                (
-                                    format!("{} of {} WAVs", scan.files_done, scan.files_total),
-                                    Some(scan.files_done as f32 / scan.files_total as f32),
-                                )
-                            };
-                            let width = (ui.available_width() - 80.0).clamp(80.0, 300.0);
-                            controls::progress(ui, &text, fraction, width);
-                            if controls::button(ui, "Cancel", controls::ButtonRole::Secondary)
-                                .clicked()
-                            {
-                                self.session.cancel_wave_scan();
-                                self.sync_notice();
-                            }
-                        });
-                        ui.small(format!("Scanning {}", scan_subject(&scan.roots)));
-                    }
-                    let library = self.session.library();
-                    let mut remove = None;
-                    for (index, folder) in folders.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("Library {}", index + 1));
-                            let response = ui
-                                .add_enabled_ui(idle && folders.len() > 1, |ui| {
-                                    controls::button(ui, "Remove", controls::ButtonRole::Secondary)
-                                })
-                                .inner
-                                .on_disabled_hover_text(if folders.len() > 1 {
-                                    busy
-                                } else {
-                                    "Add another library folder before you remove this one."
-                                });
-                            if name_control(response, &format!("Remove library {}", index + 1))
-                                .clicked()
-                            {
-                                remove = Some(index);
-                            }
-                        });
-                        let path = display_paths(&folder.to_string_lossy());
-                        ui.add(egui::Label::new(&path).truncate())
-                            .on_hover_text(&path);
-                        if let Some((_, error)) = library
-                            .unloaded_roots()
-                            .iter()
-                            .find(|(root, _)| root == folder)
-                        {
-                            ui.colored_label(CORAL, format!("Not loaded: {error}"));
-                        }
-                        ui.add_space(4.0);
-                    }
-                    if !library.folder_tempos().is_empty() {
-                        controls::disclosure(format!(
-                            "Folder tempos ({})",
-                            library.folder_tempos().len()
-                        ))
-                        .default_open(self.capture_view_is("library-tempos"))
-                        .show(ui, |ui| {
-                            for (folder, bpm, count) in library.folder_tempos() {
-                                let name = library_relative(library, folder);
-                                ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
-                            }
-                        });
-                    }
-                    if !library.skipped_waves().is_empty() {
-                        controls::disclosure(format!(
-                            "Skipped WAVs ({})",
-                            library.skipped_waves().len()
-                        ))
-                        .show(ui, |ui| {
-                            for (path, error) in library.skipped_waves() {
-                                ui.small(format!("{}: {error}", library_relative(library, path)));
-                            }
-                        });
-                    }
-                    if let Some(index) = remove {
-                        self.remove_library_folder(index);
-                    }
-                    controls::disclosure("Optional product providers")
-                        .default_open(self.capture_view_is("library-providers"))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                let products = egui::ComboBox::from_id_salt("library_product")
-                                    .selected_text(self.library_product.label())
-                                    .show_ui(ui, |ui| {
-                                        for product in Product::ALL {
-                                            ui.selectable_value(
-                                                &mut self.library_product,
-                                                product,
-                                                product.label(),
-                                            );
-                                        }
-                                    })
-                                    .response;
-                                name_control(products, "Provider product");
-                                if ui
-                                    .add_enabled_ui(idle, |ui| {
-                                        controls::button(
-                                            ui,
-                                            "Choose folder",
-                                            controls::ButtonRole::Secondary,
-                                        )
-                                    })
-                                    .inner
-                                    .on_disabled_hover_text(busy)
-                                    .clicked()
-                                {
-                                    self.ask_path(FileRequest::ProviderFolder(
-                                        self.library_product,
-                                    ));
-                                }
-                            });
-                            ui.separator();
-                            let bindings = self.session.library().bindings().to_vec();
-                            if bindings.is_empty() {
-                                ui.label("No providers");
-                            }
-                            for binding in bindings {
-                                ui.horizontal(|ui| {
-                                    ui.label(binding.product.label());
-                                    if ui
-                                        .add_enabled_ui(idle, |ui| {
-                                            controls::button(
-                                                ui,
-                                                "Remove",
-                                                controls::ButtonRole::Secondary,
-                                            )
-                                        })
-                                        .inner
-                                        .on_disabled_hover_text(busy)
-                                        .clicked()
-                                    {
-                                        self.remove_library(binding.product);
-                                    }
-                                });
-                                let path = display_paths(&binding.root.to_string_lossy());
-                                ui.add(egui::Label::new(&path).truncate())
-                                    .on_hover_text(&path);
-                                ui.add_space(6.0);
-                            }
-                        });
-                });
-            self.show_libraries = open;
-        }
         if self.show_import_details {
             let mut open = true;
             dialog::window("Import details")
@@ -2946,7 +2803,7 @@ impl MixJamApp {
                                         &format!("Resolve manually: {}", missing.name),
                                     );
                                     if action
-                                        .on_hover_text(
+                                        .hover_hint(
                                             "Choose the WAV file for this sound. Every clip that \
                                              uses it keeps its position, length, and gain.",
                                         )
@@ -3019,11 +2876,11 @@ impl MixJamApp {
         {
             let response = dialog::modal(ctx, "Import sound", "Import sound", |ui| {
                 ui.label(path.file_name().unwrap_or_default().to_string_lossy())
-                    .on_hover_text(display_paths(&path.to_string_lossy()));
+                    .hover_hint(display_paths(&path.to_string_lossy()));
                 ui.horizontal(|ui| {
                     ui.label("Source BPM");
                     controls::number(ui, &mut self.import_bpm, 7.5..=1200.0, "Source BPM")
-                        .on_hover_text("The sound's original tempo, separate from project BPM.");
+                        .hover_hint("The sound's original tempo, separate from project BPM.");
                 });
                 ui.horizontal(|ui| {
                     if dialog::primary(ui, "Import into Wave").clicked() {

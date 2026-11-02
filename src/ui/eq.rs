@@ -316,7 +316,7 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Actio
         &mut draft.on,
     );
     switched |= response.clicked();
-    name_control(response, &power_name).on_hover_text(format!(
+    name_control(response, &power_name).hover_hint(format!(
         "{power_name}: {}. An EQ that is off keeps its settings and passes the track on \
          unchanged.",
         if draft.on { "on" } else { "off" }
@@ -334,7 +334,7 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Actio
         true,
     );
     if name_control(response, &reset_name)
-        .on_hover_text("Return every band to flat. The power switch stays as it is.")
+        .hover_hint("Return every band to flat. The power switch stays as it is.")
         .clicked()
     {
         draft = ChannelEq {
@@ -433,7 +433,7 @@ fn drive_section(ui: &mut egui::Ui, bounds: Rect, track: usize, drive: &Drive) -
         &mut draft.on,
     );
     let switched = response.clicked();
-    name_control(response, &power_name).on_hover_text(format!(
+    name_control(response, &power_name).hover_hint(format!(
         "{power_name}: {}. The drive adds harmonics to this track after its EQ and before its \
          compressor, so a bass can be heard on small speakers, and keeps the track's level.",
         if draft.on { "on" } else { "off" }
@@ -490,7 +490,7 @@ fn compressor_section(
         &mut draft.on,
     );
     let switched = response.clicked();
-    name_control(response, &power_name).on_hover_text(format!(
+    name_control(response, &power_name).hover_hint(format!(
         "{power_name}: {}. The compressor evens out this track's level after its EQ and \
          drive, such as the hits of a drum loop, before its width, automation, and fader.",
         if draft.on { "on" } else { "off" }
@@ -578,7 +578,7 @@ fn ducker_section(
         &mut draft.on,
     );
     let switched = response.clicked();
-    name_control(response, &power_name).on_hover_text(format!(
+    name_control(response, &power_name).hover_hint(format!(
         "{power_name}: {}. The ducker lowers this track while its key track sounds, as a \
          bass makes room for the kick. It works after the fader and before the sends.",
         if draft.on { "on" } else { "off" }
@@ -712,7 +712,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
         egui::WidgetType::Other,
         &format!("{name} response curve"),
     );
-    response.on_hover_text(format!(
+    response.hover_hint(format!(
         "{name}: the change in level across the spectrum{}. The grid marks 100 Hz, 1 kHz, \
          and 10 kHz, and 12 dB steps.",
         if eq.on { "" } else { " once the EQ is on" }

@@ -123,7 +123,7 @@ pub(super) fn show(
                                             },
                                             true,
                                         )
-                                        .on_hover_text(&sample.name)
+                                        .hover_hint(&sample.name)
                                         .clicked()
                                         {
                                             chosen_source = Some(sample.id);
@@ -134,7 +134,7 @@ pub(super) fn show(
                         }
                     })
                     .response;
-                name_control(sounds, "Source sound").on_hover_text(source.name);
+                name_control(sounds, "Source sound").hover_hint(source.name);
             });
             if let Some(id) = chosen_source {
                 action = Action::Select(id);
@@ -179,7 +179,7 @@ pub(super) fn show(
                         .speed(1.0),
                 );
                 name_control(value, "Original BPM")
-                    .on_hover_text("Original BPM: drag, or click to enter a value.");
+                    .hover_hint("Original BPM: drag, or click to enter a value.");
             });
             let previewed =
                 feedback
@@ -249,7 +249,7 @@ pub(super) fn show(
                 enabled || feedback.listening,
             );
             if name_control(listen, listen_name)
-                .on_disabled_hover_text(unavailable)
+                .disabled_hint(unavailable)
                 .clicked()
             {
                 action = if feedback.listening {
@@ -266,7 +266,7 @@ pub(super) fn show(
                 controls::ButtonRole::Primary,
                 enabled,
             )
-            .on_disabled_hover_text(unavailable)
+            .disabled_hint(unavailable)
             .clicked()
             {
                 action = Action::Save;

@@ -14,7 +14,13 @@
 //! song (120 and 60 seconds by default), and `MIXJAM_BENCH_REPLACES` the
 //! number of replaced mixes (5 by default). Both measured stretches must
 //! fit within the song; each replacement measures 2.2 seconds.
+//! `MIXJAM_BENCH_DRIVE=off` and `MIXJAM_BENCH_MASTER=off` select reduced
+//! playback independently. They never change export construction.
+//! `MIXJAM_BENCH_CONTINUOUS=1` plays from the song's start through the
+//! unmeasured stretch before `MIXJAM_BENCH_START`, then measures the selected
+//! stretch at both rates. Replacement measurements stay in the default mode.
 use super::*;
+use crate::playback_quality::{Oversampling, PlaybackQuality};
 use rodio::{Sink, dynamic_mixer};
 use std::time::Instant;
 
@@ -195,6 +201,163 @@ fn control(project: &Project) -> Arc<MasterControl> {
     control
 }
 
+/// A fixed synthetic arrangement for repeatable options comparisons. Every
+/// lane has sounded by the eighth second; each lane repeats for 32 bars.
+fn options_fixture(
+    tracks: usize,
+    drives: usize,
+    master_heavy: bool,
+) -> (Project, HashMap<u32, Pcm>) {
+    let mut editor = crate::engine::Editor::new(Project::default());
+    for track in 0..tracks {
+        for bar in track % 4..32 {
+            editor.place(1, track, (bar * 256) as u32, 256).unwrap();
+        }
+    }
+    let mut project = editor.project().clone();
+    for (index, track) in project.tracks[..tracks].iter_mut().enumerate() {
+        track.gain = 0.7 / tracks as f32;
+        track.drive.on = index < drives;
+        track.drive.amount = 24.0;
+        track.drive.mix = 100.0;
+        track.drive.focus = 20.0;
+        track.eq.on = index % 3 == 0;
+        track.compressor.on = index % 4 == 0;
+    }
+    project.master.limiter.on = true;
+    if master_heavy {
+        for pedal in [
+            crate::master::PedalKind::SoftClip,
+            crate::master::PedalKind::Tube,
+            crate::master::PedalKind::Maximizer,
+            crate::master::PedalKind::Tape,
+        ] {
+            project.master.set_on(pedal, true);
+        }
+        project.master.tube.drive = 10.0;
+        project.master.maximizer.boost = 25.0;
+        project.master.tape.drive = 10.0;
+    }
+    let source = Pcm {
+        sample_rate: Mix::SAMPLE_RATE,
+        channels: 2,
+        samples: (0..Mix::SAMPLE_RATE * 4)
+            .flat_map(|frame| {
+                let seconds = f64::from(frame) / f64::from(Mix::SAMPLE_RATE);
+                let sample = (0.5 * (std::f64::consts::TAU * 55.0 * seconds).sin()
+                    + 0.25 * (std::f64::consts::TAU * 5000.0 * seconds).sin())
+                    as f32;
+                [sample, -0.8 * sample]
+            })
+            .collect(),
+    };
+    (project, HashMap::from([(1, source)]))
+}
+
+fn options_source(
+    mix: Arc<dyn Frames>,
+    project: &Project,
+    quality: PlaybackQuality,
+    first: u64,
+) -> PlaybackSource {
+    PlaybackSource::with_quality_block(
+        mix,
+        first,
+        None,
+        Some(control(project)),
+        PlaybackSource::BLOCK_FRAMES,
+        quality,
+    )
+}
+
+/// Modeled device callbacks, without audible device output. Run in release
+/// on a quiet machine. The 10 ms deadline is unchanged by buffer preferences.
+#[test]
+#[ignore = "release benchmark; use a quiet machine"]
+fn realtime_options_bench() {
+    let cycles = cycles_per_ms();
+    SYSTEM_PRIORITY.with(|system| system.set(true));
+    for (name, tracks, drives, master_heavy) in [
+        ("sparse", 8, 2, false),
+        ("dense-Drive", 22, 22, false),
+        ("master-heavy", 12, 0, true),
+        ("64-track-stress", 64, 64, true),
+    ] {
+        let (project, samples) = options_fixture(tracks, drives, master_heavy);
+        for drive in [Oversampling::FourX, Oversampling::Off] {
+            for master in [Oversampling::FourX, Oversampling::Off] {
+                let quality = PlaybackQuality { drive, master };
+                let mix: Arc<dyn Frames> =
+                    Arc::new(mix_with_samples_quality(&project, &samples, quality).unwrap());
+                for (rate, frames) in [(48_000, 480), (44_100, 441)] {
+                    let label = format!(
+                        "{name}, tracks={tracks}, Drives={drives}, {quality:?}, {rate} Hz, {frames} frames"
+                    );
+                    let mut device = Device::new(rate, frames, cycles);
+                    let mut current =
+                        Some(device.play(options_source(mix.clone(), &project, quality, 0), None));
+                    let mut times = Times::default();
+                    for _ in 0..100 {
+                        device.callback(&mut times);
+                    }
+                    times.report(&format!("{label}, start: 1 s"), 1.0);
+                    current = Some(device.play(
+                        options_source(
+                            mix.clone(),
+                            &project,
+                            quality,
+                            12 * u64::from(Mix::SAMPLE_RATE),
+                        ),
+                        current.take(),
+                    ));
+                    let mut times = Times::default();
+                    for _ in 0..100 {
+                        device.callback(&mut times);
+                    }
+                    times.report(&format!("{label}, seek to 12 s: 1 s"), 1.0);
+                    // A new prepared object, with separate histories, replaces
+                    // the previous source at its current musical position.
+                    let replacement: Arc<dyn Frames> =
+                        Arc::new(mix_with_samples_quality(&project, &samples, quality).unwrap());
+                    current = Some(device.play(
+                        options_source(
+                            replacement,
+                            &project,
+                            quality,
+                            13 * u64::from(Mix::SAMPLE_RATE),
+                        ),
+                        current.take(),
+                    ));
+                    let mut times = Times::default();
+                    for _ in 0..100 {
+                        device.callback(&mut times);
+                    }
+                    times.report(&format!("{label}, replacement at 13 s: 1 s"), 1.0);
+                    drop(current);
+                    let mut continuous = Device::new(rate, frames, cycles);
+                    let _current =
+                        continuous.play(options_source(mix.clone(), &project, quality, 0), None);
+                    let mut warmup = Times::default();
+                    for _ in 0..800 {
+                        continuous.callback(&mut warmup);
+                    }
+                    let mut times = Times::default();
+                    for _ in 0..100 {
+                        continuous.callback(&mut times);
+                    }
+                    times.report(
+                        &format!("{label}, uninterrupted from start after 8 s: 1 s"),
+                        1.0,
+                    );
+                }
+            }
+        }
+    }
+    if let Some(failure) = priority_failure() {
+        println!("{failure}");
+    }
+}
+
 #[test]
 #[ignore = "needs a heavy song in MIXJAM_BENCH_SONG and a quiet machine"]
 fn realtime_bench() {
@@ -202,9 +365,25 @@ fn realtime_bench() {
     let started = Instant::now();
     let (project, library) =
         crate::project_io::open(Path::new(&song), &Library::empty()).expect("the song opens");
+    let oversampling = |name| match std::env::var(name).as_deref() {
+        Ok("off") => Oversampling::Off,
+        Ok("4x") | Err(_) => Oversampling::FourX,
+        _ => panic!("Use off or 4x for {name}"),
+    };
+    let quality = PlaybackQuality {
+        drive: oversampling("MIXJAM_BENCH_DRIVE"),
+        master: oversampling("MIXJAM_BENCH_MASTER"),
+    };
+    let continuous = match std::env::var("MIXJAM_BENCH_CONTINUOUS").as_deref() {
+        Ok("1") => true,
+        Ok("0") | Err(_) => false,
+        _ => panic!("Use 0 or 1 for MIXJAM_BENCH_CONTINUOUS"),
+    };
+    println!("playback quality: {quality:?}");
     println!("opened in {:.2} s", started.elapsed().as_secs_f64());
     let started = Instant::now();
-    let mix: Arc<dyn Frames> = Arc::new(prepare_project(&project, &library).expect("prepared"));
+    let mix: Arc<dyn Frames> =
+        Arc::new(prepare_project_with_quality(&project, &library, quality).expect("prepared"));
     println!(
         "prepared in {:.2} s: {:.1} s of song, block {} frames",
         started.elapsed().as_secs_f64(),
@@ -234,21 +413,58 @@ fn realtime_bench() {
         let mut device = Device::new(rate, frames, cycles_per_ms);
         let control = control(&project);
         let _playing = device.play(
-            PlaybackSource::new(Arc::clone(&mix), first, None, Some(control)),
+            PlaybackSource::with_quality_block(
+                Arc::clone(&mix),
+                if continuous { 0 } else { first },
+                None,
+                Some(control),
+                PlaybackSource::BLOCK_FRAMES,
+                quality,
+            ),
             None,
         );
+        let warmup_callbacks = if continuous {
+            (first as f64 / f64::from(Mix::SAMPLE_RATE) * f64::from(rate) / frames as f64) as usize
+        } else {
+            0
+        };
+        if warmup_callbacks > 0 {
+            let warmup_started = Instant::now();
+            let mut discarded = Times::default();
+            for _ in 0..warmup_callbacks {
+                device.callback(&mut discarded);
+            }
+            println!(
+                "{rate} Hz uninterrupted warmup: {warmup_callbacks} callbacks, \
+                 {:.2} s audio in {:.2} s wall",
+                warmup_callbacks as f64 * frames as f64 / f64::from(rate),
+                warmup_started.elapsed().as_secs_f64()
+            );
+        }
         let mut times = Times::default();
         let callbacks = (seconds * f64::from(rate) / frames as f64) as usize;
         for _ in 0..callbacks {
             device.callback(&mut times);
         }
-        times.report(
-            &format!(
+        let label = if continuous {
+            format!(
+                "{rate} Hz, {frames}-frame callbacks, uninterrupted after {:.2} s \
+                 warmup from song start",
+                warmup_callbacks as f64 * frames as f64 / f64::from(rate)
+            )
+        } else {
+            format!(
                 "{rate} Hz, {frames}-frame callbacks, from {} s",
                 first / 44_100
-            ),
-            seconds,
-        );
+            )
+        };
+        times.report(&label, seconds);
+    }
+    if continuous {
+        if let Some(failure) = priority_failure() {
+            println!("{failure}");
+        }
+        return;
     }
 
     // A rebuilt mix replaces the playing one, whose sources nothing else
@@ -256,15 +472,18 @@ fn realtime_bench() {
     drop(mix);
     let mut device = Device::new(48_000, 480, cycles_per_ms);
     let control = control(&project);
-    let mut playing =
-        Some(Arc::new(prepare_project(&project, &library).unwrap()) as Arc<dyn Frames>);
+    let mut playing = Some(Arc::new(
+        prepare_project_with_quality(&project, &library, quality).unwrap(),
+    ) as Arc<dyn Frames>);
     let mut position = first;
     let mut current = Some(device.play(
-        PlaybackSource::new(
+        PlaybackSource::with_quality_block(
             playing.clone().unwrap(),
             position,
             None,
             Some(Arc::clone(&control)),
+            PlaybackSource::BLOCK_FRAMES,
+            quality,
         ),
         None,
     ));
@@ -275,13 +494,16 @@ fn realtime_bench() {
             device.callback(&mut before);
         }
         position += 200 * 441;
-        let next: Arc<dyn Frames> = Arc::new(prepare_project(&project, &library).unwrap());
+        let next: Arc<dyn Frames> =
+            Arc::new(prepare_project_with_quality(&project, &library, quality).unwrap());
         current = Some(device.play(
-            PlaybackSource::new(
+            PlaybackSource::with_quality_block(
                 Arc::clone(&next),
                 position,
                 None,
                 Some(Arc::clone(&control)),
+                PlaybackSource::BLOCK_FRAMES,
+                quality,
             ),
             current.take(),
         ));

@@ -5,7 +5,8 @@ files in this directory. Each PNG is 96 by 96 pixels with a transparent
 background, antialiased edges, and navy (`#05092a`) artwork. These PNGs are the
 canonical source assets. Edit them directly with raster tools. The UI supplies each action's
 name as a tooltip and accessible name.
-Help has its own question-mark artwork, distinct from the library icon.
+Help has its own question-mark artwork. Options uses a gear. Sample library
+management is part of Options; its former books icon is retired.
 
 The numbered subfolders contain prepared display PNGs at 20, 30, and 40 pixels.
 These cover 100%, 150%, and 200% display density for a nominal 20-point control.
@@ -37,7 +38,7 @@ license status. This adaptation does not assign a new license to donor work.
 | `save-as` | Donor `save` outline, opened at lower right for a new pencil |
 | `import` | Donor `export` tray with its arrow reversed |
 | `open` | New open-folder path in the donor family |
-| `libraries` | New books path in the donor family |
+| `options` | New eight-tooth gear in the donor family, drawn with Pillow at eight times the size and reduced once |
 | `new` | New document and plus path in the donor family |
 | `step-synth` | New lightning path in the donor family |
 | `edit` | New pencil path in the donor family |

@@ -261,35 +261,35 @@
       ]
     },
     {
-      "name": "libraries",
-      "png_sha256": "1f5cc705bac5c99eafceb38405c398e23131337a2628eca69eb086bf87f5a900",
+      "name": "options",
+      "png_sha256": "64a1d9026c442e569ac3e5ca05d2de2cd671086f827382dbcf85f4fefdf4e166",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 3472,
-      "opaque_pixels": 2669,
-      "transparent_pixels": 5744,
-      "antialiased_pixels": 803,
+      "visible_pixels": 3435,
+      "opaque_pixels": 1315,
+      "transparent_pixels": 5781,
+      "antialiased_pixels": 2120,
       "alpha_bounds": [
-        8,
-        12,
-        92,
-        84
+        6,
+        6,
+        90,
+        90
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "165dca63f1b0f17ad52bd5a8993e60090c82527c82f48f828261c1e6bd8e8a1e"
+          "png_sha256": "ec1f7751383101fab15dee7ca2ffcfbe6b1afde7b11678e47170d1bd9718ad2a"
         },
         {
           "size": 30,
-          "png_sha256": "58eeb572fbbe003922bde00e5459a3b345a6d63957892651c7f995f5363b6232"
+          "png_sha256": "fdd824f0ae923885747d43d62fc10213205a1527a15fe864715355eae52b77c0"
         },
         {
           "size": 40,
-          "png_sha256": "3eadb8135745d49789e4afd633205c3d4a5c316b4e8df364c1410ede69d17fd4"
+          "png_sha256": "638f36b412cc81c98193ec91eee13648bdbbaf2c8eb7eb78194e261777c81c8d"
         }
       ]
     },

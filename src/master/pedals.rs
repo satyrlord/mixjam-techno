@@ -1,17 +1,53 @@
 //! The mastering pedals, designed for this application. Each works on
 //! normalized stereo floats with its own state, and each continuous setting
-//! glides to a new value. Pedals with a curve run it four times oversampled
-//! and so delay the signal by `Oversampler::LATENCY`; the limiter delays it
-//! by its lookahead.
+//! glides to a new value. At full quality, pedals with a curve run it four
+//! times oversampled and delay the signal by `Oversampler::LATENCY`. Reduced
+//! playback runs their curves at the base rate with the same integer delay.
+//! The limiter always keeps its lookahead and true-peak detector.
 use super::dsp::{
     Biquad, Coefficients, DETECTOR, DcBlocker, Delay, KNEE_DB, Oversampler, Smoothed, TruePeak,
     db_to_gain, flush, gain_to_db, pole, reduction,
 };
 use crate::master as settings;
+use crate::playback_quality::Oversampling;
 use std::f64::consts::FRAC_1_SQRT_2;
 
 /// How often a pedal whose filters glide recomputes their coefficients.
 const REFRESH: u32 = 16;
+
+/// The same integer stage delay in both playback qualities. Only the
+/// saturation curve's oversampling changes; detector and limiter paths do not.
+#[derive(Clone, Copy)]
+struct Saturation {
+    oversampler: Oversampler,
+    delay: Delay<{ Oversampler::LATENCY }>,
+    quality: Oversampling,
+}
+
+impl Saturation {
+    fn new(quality: Oversampling) -> Self {
+        Self {
+            oversampler: Oversampler::ZERO,
+            delay: Delay::ZERO,
+            quality,
+        }
+    }
+
+    fn clear(&mut self) {
+        *self = Self::new(self.quality);
+    }
+
+    #[inline]
+    fn process(&mut self, sample: f32, curve: impl FnMut(f32) -> f32) -> f32 {
+        match self.quality {
+            Oversampling::FourX => self.oversampler.process(sample, curve),
+            Oversampling::Off => {
+                let mut curve = curve;
+                self.delay.push(curve(sample))
+            }
+        }
+    }
+}
 
 /// Counts down the frames until a gliding pedal next redesigns its filters.
 #[derive(Clone, Copy)]
@@ -55,16 +91,21 @@ fn soft_clip(sample: f32, knee: f32, ceiling: f32) -> f32 {
 /// ceiling the curve starts to bend.
 #[derive(Clone, Copy)]
 pub(super) struct SoftClip {
-    oversamplers: [Oversampler; 2],
+    oversamplers: [Saturation; 2],
     knee: Smoothed,
     ceiling: Smoothed,
 }
 impl SoftClip {
     pub(super) const LATENCY: usize = Oversampler::LATENCY;
 
+    #[cfg(test)]
     pub(super) fn new() -> Self {
+        Self::with_quality(Oversampling::FourX)
+    }
+
+    pub(super) fn with_quality(quality: Oversampling) -> Self {
         Self {
-            oversamplers: [Oversampler::ZERO; 2],
+            oversamplers: [Saturation::new(quality); 2],
             knee: Smoothed::new(1.0),
             ceiling: Smoothed::new(1.0),
         }
@@ -76,7 +117,7 @@ impl SoftClip {
             .set(db_to_gain(ceiling - f64::from(settings.amount)));
     }
     pub(super) fn clear(&mut self) {
-        self.oversamplers = [Oversampler::ZERO; 2];
+        self.oversamplers.iter_mut().for_each(Saturation::clear);
         self.knee.settle();
         self.ceiling.settle();
     }
@@ -111,7 +152,7 @@ fn tube(sample: f32, drive: f32) -> f32 {
 /// leaves an offset that a 5 Hz high-pass removes.
 #[derive(Clone, Copy)]
 pub(super) struct Tube {
-    oversamplers: [Oversampler; 2],
+    oversamplers: [Saturation; 2],
     dry: [Delay<{ Oversampler::LATENCY }>; 2],
     blockers: [DcBlocker; 2],
     /// The drive control, 0 to 10; the curve's gain is `4 (drive / 10)²`.
@@ -123,9 +164,14 @@ pub(super) struct Tube {
 impl Tube {
     pub(super) const LATENCY: usize = Oversampler::LATENCY;
 
+    #[cfg(test)]
     pub(super) fn new() -> Self {
+        Self::with_quality(Oversampling::FourX)
+    }
+
+    pub(super) fn with_quality(quality: Oversampling) -> Self {
         Self {
-            oversamplers: [Oversampler::ZERO; 2],
+            oversamplers: [Saturation::new(quality); 2],
             dry: [Delay::ZERO; 2],
             blockers: [DcBlocker::ZERO; 2],
             drive: Smoothed::new(0.0),
@@ -138,7 +184,7 @@ impl Tube {
         self.mix.set(f64::from(settings.mix) / 100.0);
     }
     pub(super) fn clear(&mut self) {
-        self.oversamplers = [Oversampler::ZERO; 2];
+        self.oversamplers.iter_mut().for_each(Saturation::clear);
         self.dry = [Delay::ZERO; 2];
         self.blockers = [DcBlocker::ZERO; 2];
         self.drive.settle();
@@ -315,16 +361,21 @@ const MAXIMIZER_CEILING_DB: f64 = -1.0;
 /// ceiling.
 #[derive(Clone, Copy)]
 pub(super) struct Maximizer {
-    oversamplers: [Oversampler; 2],
+    oversamplers: [Saturation; 2],
     drive: Smoothed,
     knee: Smoothed,
 }
 impl Maximizer {
     pub(super) const LATENCY: usize = Oversampler::LATENCY;
 
+    #[cfg(test)]
     pub(super) fn new() -> Self {
+        Self::with_quality(Oversampling::FourX)
+    }
+
+    pub(super) fn with_quality(quality: Oversampling) -> Self {
         Self {
-            oversamplers: [Oversampler::ZERO; 2],
+            oversamplers: [Saturation::new(quality); 2],
             drive: Smoothed::new(1.0),
             knee: Smoothed::new(1.0),
         }
@@ -336,7 +387,7 @@ impl Maximizer {
             .set(db_to_gain(MAXIMIZER_CEILING_DB - 1.0 - drive));
     }
     pub(super) fn clear(&mut self) {
-        self.oversamplers = [Oversampler::ZERO; 2];
+        self.oversamplers.iter_mut().for_each(Saturation::clear);
         self.drive.settle();
         self.knee.settle();
     }
@@ -442,7 +493,7 @@ fn tape(sample: f32, drive: f32) -> f32 {
 /// At zero drive the tape adds nothing.
 #[derive(Clone, Copy)]
 pub(super) struct Tape {
-    oversamplers: [Oversampler; 2],
+    oversamplers: [Saturation; 2],
     /// Emphasis, de-emphasis, head bump, and roll-off.
     filters: [Biquad; 4],
     drive: Smoothed,
@@ -453,10 +504,15 @@ pub(super) struct Tape {
 impl Tape {
     pub(super) const LATENCY: usize = Oversampler::LATENCY;
 
+    #[cfg(test)]
     pub(super) fn new() -> Self {
+        Self::with_quality(Oversampling::FourX)
+    }
+
+    pub(super) fn with_quality(quality: Oversampling) -> Self {
         let (hz, slope, db) = EMPHASIS;
         Self {
-            oversamplers: [Oversampler::ZERO; 2],
+            oversamplers: [Saturation::new(quality); 2],
             filters: [
                 Biquad::new(Coefficients::high_shelf(hz, slope, db)),
                 Biquad::new(Coefficients::high_shelf(hz, slope, -db)),
@@ -484,7 +540,7 @@ impl Tape {
         ));
     }
     pub(super) fn clear(&mut self) {
-        self.oversamplers = [Oversampler::ZERO; 2];
+        self.oversamplers.iter_mut().for_each(Saturation::clear);
         self.filters.iter_mut().for_each(Biquad::clear);
         self.drive.settle();
         self.speed.settle();
@@ -1067,6 +1123,48 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn reduced_saturation_keeps_integer_impulse_delay_and_parallel_dry_paths() {
+        for quality in [Oversampling::FourX, Oversampling::Off] {
+            let mut tube = Tube::with_quality(quality);
+            tube.set(&settings::Tube {
+                mix: 0.0,
+                drive: 10.0,
+                ..Default::default()
+            });
+            tube.clear();
+            for frame in 0..200 {
+                let input = if frame == 0 {
+                    (0.75, -0.25)
+                } else {
+                    (0.0, 0.0)
+                };
+                let expected = if frame == Oversampler::LATENCY {
+                    (0.75, -0.25)
+                } else {
+                    (0.0, 0.0)
+                };
+                assert_eq!(
+                    tube.process(input.0, input.1),
+                    expected,
+                    "{quality:?} {frame}"
+                );
+            }
+        }
+        let mut saturation = Saturation::new(Oversampling::Off);
+        for frame in 0..200 {
+            let output = saturation.process(if frame == 0 { 0.8 } else { 0.0 }, |x| x * 0.5);
+            assert_eq!(
+                output,
+                if frame == Oversampler::LATENCY {
+                    0.4
+                } else {
+                    0.0
+                }
+            );
         }
     }
 

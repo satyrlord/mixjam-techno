@@ -285,6 +285,9 @@ mod tests {
     #[test]
     fn section_drafts_end_when_the_bookmarks_or_project_change() {
         let (ctx, mut app) = fixture();
+        let root =
+            std::env::temp_dir().join(format!("mixjam-section-options-ui-{}", std::process::id()));
+        app.session = app.session.with_settings_root(root.clone());
         app.section_bookmarks = true;
         app.add_section(0);
         app.section_menu = (Some(0), 0);
@@ -301,12 +304,13 @@ mod tests {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
         app.section_rename.as_mut().unwrap().name = "Unfinished".into();
-        app.section_bookmarks = false;
+        app.session.remember_section_bookmarks(false).unwrap();
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(app.section_rename.is_none());
-        app.section_bookmarks = true;
+        app.session.remember_section_bookmarks(true).unwrap();
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(app.session.project().sections[0].name, "Section 1");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1373,6 +1377,7 @@ mod tests {
             }
             chain.validate().unwrap();
             let metering = master::Metering {
+                reduced: false,
                 reading: MeterReading::default(),
                 playing: false,
             };
@@ -1966,6 +1971,7 @@ mod tests {
                 },
                 |ctx| {
                     let metering = master::Metering {
+                        reduced: false,
                         reading,
                         playing: true,
                     };
@@ -2040,6 +2046,7 @@ mod tests {
             run: 1,
             input_vu: -1.5,
             input_peaks: [false, true],
+            input_peak_counts: [0, 1],
             compressor_reduction: 1.7,
             limiter_reduction: 2.6,
             momentary: -12.6,
@@ -2050,6 +2057,7 @@ mod tests {
             overs: 1,
         };
         let metering = master::Metering {
+            reduced: false,
             reading,
             playing: true,
         };
@@ -2089,6 +2097,7 @@ mod tests {
         // When playback stops, the live meters rest; integrated loudness and
         // the true peak of the playback remain.
         let stopped = master::Metering {
+            reduced: false,
             reading,
             playing: false,
         };
@@ -3861,7 +3870,10 @@ mod tests {
             project,
         )
         .unwrap();
-        app.show_libraries = true;
+        app.options = Some(options::OptionsDraft::new(
+            &app.session,
+            options::Page::Libraries,
+        ));
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         for label in [
@@ -3870,7 +3882,7 @@ mod tests {
             "STIINTA SI RITM",
             "ARRANGEMENT",
             "SOUNDS",
-            "SAMPLE LIBRARIES",
+            "OPTIONS",
         ] {
             let text = output
                 .shapes
@@ -4193,7 +4205,7 @@ mod tests {
         });
         project.missing_samples.push(missing);
         app.session = Session::headless(Arc::new(Library::fixture(vec![])), project).unwrap();
-        app.show_libraries = false;
+        app.options = None;
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         (context, app)
     }
@@ -4259,7 +4271,7 @@ mod tests {
         let mut library = Library::fixture(vec![]);
         library.apply_imports(&project.imported_samples).unwrap();
         app.session = Session::headless(Arc::new(library), project).unwrap();
-        app.show_libraries = false;
+        app.options = None;
         context.enable_accesskit();
         for _ in 0..3 {
             frame(&context, &mut app, vec![], egui::Modifiers::NONE);
@@ -8932,7 +8944,7 @@ mod tests {
                 RailIcon::SaveAs,
                 RailIcon::Import,
                 RailIcon::Export,
-                RailIcon::Libraries,
+                RailIcon::Options,
                 RailIcon::Erase,
                 RailIcon::Delete,
                 RailIcon::Mixer,
@@ -8987,6 +8999,19 @@ mod tests {
                     rect
                 })
                 .collect();
+            let options = effects_control_rect(&output, "Options");
+            assert!(
+                viewport.contains_rect(options),
+                "Options must fit at {density}x."
+            );
+            assert!(
+                (options.width() - 48.0).abs() < 0.01 && (options.height() - 30.0).abs() < 0.01
+            );
+            assert!((options.center().x - (size.x - 32.0)).abs() < 0.6);
+            assert!(
+                bounds[5].bottom() < options.top() && options.bottom() < bounds[7].top(),
+                "Options must stay between file actions and Erase."
+            );
             for pair in bounds.windows(2) {
                 assert!(
                     pair[0].bottom() < pair[1].top(),
@@ -9102,7 +9127,6 @@ mod tests {
         app.selected_sample = Some(1);
         let project = app.session.project().clone();
         for (icon, window) in [
-            (RailIcon::Libraries, "Sample libraries"),
             (RailIcon::Effects, "Effect Studio"),
             (RailIcon::StepSynth, "Step synth"),
             (RailIcon::Edit, "Sample editor"),
@@ -9364,7 +9388,10 @@ mod tests {
             let library = Library::open_wav_folders_with(roots, 140.0, None, None).unwrap();
             let session = Session::headless(Arc::new(library), Project::default()).unwrap();
             let mut app = MixJamApp::from_session(session, String::new(), false);
-            app.show_libraries = true;
+            app.options = Some(options::OptionsDraft::new(
+                &app.session,
+                options::Page::Libraries,
+            ));
             let context = egui::Context::default();
             configure_style(&context);
             context.enable_accesskit();
@@ -9410,7 +9437,10 @@ mod tests {
         assert_eq!(library.folder_tempos().len(), 60);
         let session = Session::headless(Arc::new(library), Project::default()).unwrap();
         let mut app = MixJamApp::from_session(session, String::new(), false);
-        app.show_libraries = true;
+        app.options = Some(options::OptionsDraft::new(
+            &app.session,
+            options::Page::Libraries,
+        ));
         let context = egui::Context::default();
         configure_style(&context);
         let size = Vec2::new(960.0, 720.0);
@@ -9543,7 +9573,7 @@ mod tests {
                 .start_wave_scan(&[root.to_path_buf()], 140.0)
                 .unwrap();
             let mut app = MixJamApp::from_session(session, String::new(), false);
-            assert!(app.show_libraries);
+            assert!(app.sample_libraries_open());
             if manual {
                 app.scan_library_folders(vec![root.to_path_buf()]);
             }
@@ -9554,7 +9584,7 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(5));
             }
             app.poll_application(&context);
-            app.show_libraries
+            app.sample_libraries_open()
         };
         assert!(
             !startup(&full, false),
@@ -10900,7 +10930,7 @@ mod tests {
             "Effect Studio help",
             "Step synth help",
             "Sample editor help",
-            "Sample libraries",
+            "Options",
             "Import details",
         ] {
             let (ctx, mut app) = fixture();
@@ -10912,7 +10942,7 @@ mod tests {
                 "Effect Studio help" => app.show_effects_help = true,
                 "Step synth help" => app.show_step_synth_help = true,
                 "Sample editor help" => app.show_sample_edit_help = true,
-                "Sample libraries" => app.show_libraries = true,
+                "Options" => app.open_sample_libraries(&ctx),
                 "Import details" => app.show_import_details = true,
                 _ => unreachable!(),
             }
@@ -10953,7 +10983,7 @@ mod tests {
                     "Effect Studio help" => app.show_effects_help,
                     "Step synth help" => app.show_step_synth_help,
                     "Sample editor help" => app.show_sample_edit_help,
-                    "Sample libraries" => app.show_libraries,
+                    "Options" => app.options.is_some(),
                     "Import details" => app.show_import_details,
                     _ => unreachable!(),
                 },

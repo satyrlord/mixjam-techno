@@ -354,7 +354,7 @@ fn genre_chips_wrap_inside_supported_and_narrower_windows() {
                 CoverCache::new(root.join("covers"), 1 << 20),
             );
             app.show_album_review = true;
-            app.show_libraries = false;
+            app.options = None;
             if filtered {
                 app.album_review.filter.search = "eno".into();
                 app.album_review.filter.genres.insert("Ambient".into());
@@ -426,7 +426,7 @@ fn opening_an_album_from_a_scrolled_grid_starts_at_the_top_of_its_page() {
         })
         .collect();
     let (ctx, mut app, root) = fixture("page-scroll", &reviews);
-    app.show_libraries = false;
+    app.options = None;
     app.show_album_review = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());

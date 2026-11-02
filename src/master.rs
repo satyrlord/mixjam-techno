@@ -1078,8 +1078,16 @@ impl MasterProcessor {
     /// controls at a fixed value when the library loads and never resets
     /// them; here each playback starts as a settled original would.
     pub fn new(chain: &MasterChain) -> Self {
+        Self::with_quality(chain, crate::playback_quality::Oversampling::FourX)
+    }
+
+    /// Construct playback saturation at an explicit quality. Exports use `new`.
+    pub fn with_quality(
+        chain: &MasterChain,
+        quality: crate::playback_quality::Oversampling,
+    ) -> Self {
         dsp::prepare_tables();
-        let mut board = Box::new(Board::new());
+        let mut board = Box::new(Board::with_quality(quality));
         board.apply(chain);
         board.settle();
         Self {
@@ -1097,9 +1105,16 @@ impl MasterProcessor {
     /// A processor that takes its settings from `control` as they change
     /// and measures for its meters.
     pub fn live(control: Arc<MasterControl>) -> Self {
+        Self::live_with_quality(control, crate::playback_quality::Oversampling::FourX)
+    }
+
+    pub fn live_with_quality(
+        control: Arc<MasterControl>,
+        quality: crate::playback_quality::Oversampling,
+    ) -> Self {
         let mut seen = 0;
         let chain = control.poll(&mut seen).unwrap_or_else(|| control.get());
-        let mut processor = Self::new(&chain);
+        let mut processor = Self::with_quality(&chain, quality);
         processor.board.live = true;
         processor.previous.live = true;
         processor.meters = Some(Box::new(meters::Meters::new(&control.meters)));
@@ -1317,7 +1332,12 @@ struct Board {
 /// for a pedal that listens to its own input.
 type KeyFrame = [Option<(f32, f32)>; 4];
 impl Board {
+    #[cfg(test)]
     fn new() -> Self {
+        Self::with_quality(crate::playback_quality::Oversampling::FourX)
+    }
+
+    fn with_quality(quality: crate::playback_quality::Oversampling) -> Self {
         Self {
             chain: MasterChain::default(),
             live: false,
@@ -1328,13 +1348,13 @@ impl Board {
             equalizer: booster::Equalizer::new(),
             compressor: booster::Compressor::at_load(),
             wide: booster::Wide::new(),
-            soft_clip: pedals::SoftClip::new(),
-            tube: pedals::Tube::new(),
+            soft_clip: pedals::SoftClip::with_quality(quality),
+            tube: pedals::Tube::with_quality(quality),
             trim_eq: pedals::TrimEq::new(),
             bus_compressor: pedals::BusCompressor::new(),
-            maximizer: pedals::Maximizer::new(),
+            maximizer: pedals::Maximizer::with_quality(quality),
             lift_eq: pedals::LiftEq::new(),
-            tape: pedals::Tape::new(),
+            tape: pedals::Tape::with_quality(quality),
             imaging: pedals::Imaging::new(),
             multiband: pedals::Multiband::new(),
             limiter: pedals::Limiter::new(),
@@ -1748,6 +1768,73 @@ mod tests {
             mastered().latency(),
             4 * dsp::Oversampler::LATENCY + pedals::Multiband::LATENCY + pedals::Limiter::LATENCY
         );
+    }
+
+    #[test]
+    fn master_playback_quality_preserves_delay_safety_and_full_quality_samples() {
+        use crate::playback_quality::Oversampling;
+        let input: Vec<f32> = (0..5000)
+            .flat_map(|frame| {
+                let x = (frame as f32 * 0.71).sin() * 0.8;
+                [x, -0.4 * x]
+            })
+            .collect();
+        let saturation = [
+            PedalKind::SoftClip,
+            PedalKind::Tube,
+            PedalKind::Maximizer,
+            PedalKind::Tape,
+        ];
+        for mask in 0..16 {
+            let mut chain = MasterChain::default();
+            for (bit, pedal) in saturation.into_iter().enumerate() {
+                chain.set_on(pedal, mask & (1 << bit) != 0);
+            }
+            chain.soft_clip.amount = 12.0;
+            chain.tube.drive = 10.0;
+            chain.maximizer.boost = 50.0;
+            chain.tape.drive = 10.0;
+            // Detector oversampling and lookahead remain enabled in both modes.
+            chain.limiter.on = true;
+            chain.multiband.on = true;
+            let mut full = MasterProcessor::new(&chain);
+            let mut explicit = MasterProcessor::with_quality(&chain, Oversampling::FourX);
+            let mut reduced = MasterProcessor::with_quality(&chain, Oversampling::Off);
+            assert_eq!(full.latency(), reduced.latency());
+            let mut expected = input.clone();
+            let mut actual = input.clone();
+            let mut off = input.clone();
+            full.process(&mut expected);
+            for chunk in actual.chunks_mut(74) {
+                explicit.process(chunk);
+            }
+            for chunk in off.chunks_mut(74) {
+                reduced.process(chunk);
+            }
+            assert_eq!(actual, expected, "full quality mask {mask}");
+            assert!(
+                off.iter()
+                    .all(|value| value.is_finite() && value.abs() <= 1.0)
+            );
+            if mask == 0 {
+                assert_eq!(off, expected);
+            } else {
+                assert_ne!(off, expected, "saturation mask {mask}");
+            }
+            for quality in [Oversampling::FourX, Oversampling::Off] {
+                let control = MasterControl::new(&chain);
+                let mut live = MasterProcessor::live_with_quality(control.clone(), quality);
+                assert_eq!(live.latency(), LIVE_LATENCY);
+                let mut block = input.clone();
+                live.process(&mut block);
+                chain.soft_clip.on = !chain.soft_clip.on;
+                control.set(&chain);
+                live.process(&mut block);
+                assert_eq!(live.latency(), LIVE_LATENCY);
+                assert!(block.iter().all(|x| x.is_finite()));
+                chain.soft_clip.on = !chain.soft_clip.on;
+            }
+        }
     }
 
     #[test]

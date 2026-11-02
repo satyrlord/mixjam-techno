@@ -62,9 +62,28 @@ port.
   character`, `drive mix`, `drive focus` (Hz), and `drive output` (dB). `state`
   lists each track's `eq_on`, `compressor_on`, and `width`, and its `drive`
   with its switch and settings.
+- Click `Options`, or send Ctrl+, through `key`, to open or focus its Utility
+  window. Its named `Audio`, `Workspace`, `Files`, and `Sample libraries` selectors expose the
+  controls on each page. Use `set` with labels such as `Drive playback
+  oversampling` (`4x` or `Off`), `Playback buffer target` (`Automatic`, `20 ms`,
+  `40 ms`), `Preview level` (dB), `Mute previews`, `Starting module`, and
+  `Song dialog folder`. Click `Apply`, `Cancel`, `Restore options defaults`, or
+  `Reload active options` in `window="Options"`. Apply uses the same validation, stopped-audio
+  requirement, stale-draft check, persistence, and errors as a person does.
+  `Go to sample libraries` on Files selects the Sample libraries page in the same
+  window. Library actions run separately and do not use Apply or Cancel. Fallback
+  BPM is used by Add library folder and Scan again. Use
+  `Cancel library scan` for scan cancellation. The provider picker is
+  `Choose provider folder`; its path choice remains a modal.
+  `state` lists active preferences under `options`, separate from `song`, with
+  `options_revision`, `options_error`, `audio_apply_blocked_reason`, and
+  `playback_buffer`. The buffer text separates requested frames from observed
+  callback frames and interval; negotiated capacity is unavailable. Inspect
+  disabled reasons and `status` after Apply. Direct settings-file changes do
+  not exercise the UI path.
 - `libraries` lists the library folders in order and the reason any did not
   load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with
-  1 to 9 folders and scans them, as the Libraries window does. One folder can be
+  1 to 9 folders and scans them, as the Sample libraries page in Options does. One folder can be
   given as text: `folders=D:\drums`. The sounds change when the scan ends; send
   `wait idle=true` before you use them. `state` also has the folders under
   `song.library`.

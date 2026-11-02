@@ -17,7 +17,9 @@ pub mod legacy_mix;
 pub mod library;
 pub mod master;
 pub mod mixjam;
+pub mod options;
 pub mod packed;
+pub mod playback_quality;
 pub mod products;
 pub mod project_io;
 pub mod recording;
@@ -40,6 +42,8 @@ mod ui_test_harness {
     include!("ui/tests.rs");
     #[path = "../ui/album_review_tests.rs"]
     mod album_review_tests;
+    #[path = "../ui/options_tests.rs"]
+    mod options_tests;
     #[path = "../ui/window_lifecycle_tests.rs"]
     mod window_lifecycle_tests;
 }
