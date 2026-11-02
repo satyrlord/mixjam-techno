@@ -25,6 +25,7 @@ import json
 import math
 import re
 import sys
+from bisect import bisect_right
 from collections import Counter
 from pathlib import Path
 
@@ -105,14 +106,63 @@ def sample_names(document):
     return names
 
 
+class PitchClock:
+    """The native Pitch lane's integrated speed, in 44.1 kHz output frames."""
+
+    def __init__(self, points, bpm):
+        self.frames_per_tick = 44100 * 240 / bpm / TICKS_PER_BAR
+        self.frames = [self.frame(point['tick']) for point in points]
+        self.cents = [point['value'] for point in points]
+        self.times = [self.frames[0]]
+        for index in range(1, len(points)):
+            length = self.frames[index] - self.frames[index - 1]
+            self.times.append(self.times[-1] + self.segment(index - 1, length))
+
+    def frame(self, tick):
+        # Match Rust f64::round for the nonnegative timeline.
+        return math.floor(tick * self.frames_per_tick + 0.5)
+
+    def segment(self, index, along):
+        speed = 2 ** (self.cents[index] / 1200)
+        if index + 1 == len(self.frames):
+            return speed * along
+        length = self.frames[index + 1] - self.frames[index]
+        rate = (self.cents[index + 1] - self.cents[index]) / length * math.log(2) / 1200
+        return speed * along if abs(rate) < 1e-15 else speed * math.expm1(rate * along) / rate
+
+    def at(self, frame):
+        index = bisect_right(self.frames, frame) - 1
+        return frame if index < 0 else self.times[index] + self.segment(index, frame - self.frames[index])
+
+    def source_ticks(self, placement, sound, bpm):
+        """How long the available source sounds, with reversal anchored at the clip end."""
+        start = self.frame(placement['startTick'])
+        end = self.frame(placement['startTick'] + placement['durationTicks'])
+        step = sound.rate / 44100 * bpm / sound.play_bpm
+        distance = max(0, sound.frames - placement['offsetFrames']) / step
+        reverse = placement.get('reverse', False)
+        origin = self.at(end - 1 if reverse else start)
+        low = start
+        # The admitted Pitch range never runs slower than 1/16 speed.
+        high = end - 1 if reverse else start + math.ceil(distance * 16) + 1
+        while low < high:
+            middle = (low + high) // 2
+            passed = origin - self.at(middle) < distance if reverse else self.at(middle) - origin >= distance
+            if passed:
+                high = middle
+            else:
+                low = middle + 1
+        return (end - low if reverse else low - start) / self.frames_per_tick
+
+
 def mechanical(document, lanes):
-    """The gate's problem list."""
+    """The gate's problem list. Source duration and ending windows follow Pitch."""
     samples = {s['id']: s for s in document['samples']}
     missing_ids = {s['id']: s['name'] for s in document.get('missingSamples', [])}
     names = sample_names(document)
     problems = []
     sounds = {}
-    reversed_sources = {}
+    ending_sources = {}
     # Catalog audio resolves through the application and its provider libraries.
     # This file-only check cannot establish its source duration or end level.
     for sample_id in sorted(set(names) - set(samples) - set(missing_ids)):
@@ -132,6 +182,8 @@ def mechanical(document, lanes):
                         f"placements: " + ', '.join(missing_ids[i] for i, _ in silent.most_common(8)) + '.')
     name_of = lambda i: twin_base((lanes.get(str(i + 1)) or {}).get('name', ''))
     for index, lane in enumerate(document['lanes']):
+        pitch = lane.get('automation', {}).get('pitch', [])
+        clock = PitchClock(pitch, document['song']['bpm']) if pitch else None
         info = lanes.get(str(index + 1))
         placements = sorted(lane['placements'], key=lambda p: p['startTick'])
         group = name_of(index) if info else None
@@ -148,6 +200,8 @@ def mechanical(document, lanes):
             bar = p['startTick'] / TICKS_PER_BAR + 1
             name = samples[p['sampleId']]['name']
             plays = sound.ticks - ticks_of(p['offsetFrames'], sound.rate, sound.play_bpm)
+            if clock:
+                plays = clock.source_ticks(p, sound, document['song']['bpm'])
             if p['durationTicks'] > plays + 4:
                 gap = 'at its start' if p.get('reverse', False) else 'at its end'
                 problems.append(f"The {name} clip on track {index + 1} at bar {bar:.2f} outlasts its sound by "
@@ -162,20 +216,44 @@ def mechanical(document, lanes):
             if p.get('reverse', False):
                 # The last output frames read forward from the trim offset, not
                 # the source tail. Limit the window to this placement's slice.
-                if p['sampleId'] not in reversed_sources:
-                    reversed_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
-                data = reversed_sources[p['sampleId']]
+                if p['sampleId'] not in ending_sources:
+                    ending_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
+                data = ending_sources[p['sampleId']]
                 first = p['offsetFrames']
                 source_per_second = sound.rate * document['song']['bpm'] / sound.play_bpm
                 slice_frames = p['durationTicks'] / TICKS_PER_BAR * 240 / document['song']['bpm'] * source_per_second
-                last = min(len(data), first + max(1, int(min(source_per_second * 0.05, slice_frames))))
+                window_frames = min(source_per_second * 0.05, slice_frames)
+                if clock:
+                    last_output = clock.frame(end) - 1
+                    first_output = max(clock.frame(p['startTick']), last_output - round(44100 * 0.05))
+                    window_frames = (clock.at(last_output) - clock.at(first_output)) * source_per_second / 44100
+                last = min(len(data), first + max(1, int(window_frames)))
                 segment = data[first:last]
                 whole = float(np.sqrt(np.mean(data ** 2)))
                 level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
                 abrupt = level > 1e-12 and level >= whole * 0.1
                 reason = 'The reversed slice is still loud at its end.'
             else:
-                abrupt = cut or sound.ends_loud
+                ends_loud = sound.ends_loud
+                if clock and not cut:
+                    if p['sampleId'] not in ending_sources:
+                        ending_sources[p['sampleId']] = read_wav(samples[p['sampleId']]['path'])[1]
+                    data = ending_sources[p['sampleId']]
+                    start_output = clock.frame(p['startTick'])
+                    # The source can end before the placement. Inspect the
+                    # final 50 ms of its sound, before any silent remainder.
+                    sound_end = min(clock.frame(end), clock.frame(p['startTick'] + plays))
+                    first_output = max(start_output, sound_end - round(44100 * 0.05))
+                    step = sound.rate / 44100 * document['song']['bpm'] / sound.play_bpm
+                    origin = clock.at(start_output)
+                    first = p['offsetFrames'] + math.floor((clock.at(first_output) - origin) * step)
+                    last_position = (clock.at(max(start_output, sound_end - 1)) - origin) * step
+                    last = p['offsetFrames'] + math.floor(last_position) + 1
+                    segment = data[first:min(len(data), last)]
+                    whole = float(np.sqrt(np.mean(data ** 2)))
+                    level = float(np.sqrt(np.mean(segment ** 2))) if len(segment) else 0.0
+                    ends_loud = level > 1e-12 and level >= whole * 0.1
+                abrupt = cut or ends_loud
                 reason = 'The clip is cut short.' if cut else 'The sound is still loud at its end.'
             if abrupt:
                 problems.append(f"The {name} clip on track {index + 1} ({info['name']}) starts at bar {bar:.2f} "

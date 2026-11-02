@@ -1,14 +1,16 @@
 //! Track automation: breakpoint lanes that move a track's volume, its FX
 //! sends, its filter, and its pan over the song, the Repeat lane that
 //! retriggers its sound and the Repeat gate lane that shortens each repeat,
-//! and the return lanes of the FX buses.
+//! the Pitch lane that changes its playback speed, and the return lanes of
+//! the FX buses.
 //!
 //! A lane is a list of points in tick order. Before its first point a lane
 //! holds the first value, after its last point the last value, and between
 //! two points it moves in a straight line. The Repeat and Repeat gate lanes
 //! are the exceptions: they step. Repeat is off, and the gate at 100%, before
 //! the first point, and each holds each point's value until the next point.
-//! A lane without points does nothing.
+//! The Pitch lane moves in straight lines but rests at 0 before its first
+//! point. A lane without points does nothing.
 use serde::{Deserialize, Serialize};
 
 /// One automation point: a lane's value at a tick.
@@ -51,6 +53,14 @@ pub enum Lane {
     /// falls to silence over `REPEAT_RAMP_FRAMES`. At 100% a repeat plays its
     /// whole slice. It does nothing while Repeat is off.
     RepeatGate,
+    /// The playback speed in cents, from `PITCH_FLOOR_CENTS` (four octaves
+    /// down, 1/16 speed) to `PITCH_CEILING_CENTS` (two octaves up, 4x
+    /// speed). It is varispeed, as on a tape machine: pitch and speed move
+    /// together, so a fall to the floor slows the sound to a stop. It rests
+    /// at 0 before its first point, moves in straight lines in cents between
+    /// points, and adds to each clip's own pitch. It acts where the clips
+    /// read their sources, before the Repeat lane. See `Varispeed`.
+    Pitch,
 }
 
 /// The lowest volume value, which is silence.
@@ -72,8 +82,14 @@ pub const REPEAT_GATE_STEP: f32 = 5.0;
 /// bus's safety limiter still holds the return under -1 dBFS.
 pub const RETURN_CEILING: f32 = 2.0;
 
+/// The Pitch lane's range in cents: four octaves down to two octaves up.
+/// Four octaves down plays at 1/16 speed, where a sound has fallen far
+/// enough to read as a tape that has stopped.
+pub const PITCH_FLOOR_CENTS: f32 = -4800.0;
+pub const PITCH_CEILING_CENTS: f32 = 2400.0;
+
 impl Lane {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Volume,
         Self::Send(0),
         Self::Send(1),
@@ -83,6 +99,7 @@ impl Lane {
         Self::Pan,
         Self::Repeat,
         Self::RepeatGate,
+        Self::Pitch,
     ];
 
     pub fn label(self) -> String {
@@ -93,11 +110,12 @@ impl Lane {
             Self::Pan => "Pan".into(),
             Self::Repeat => "Repeat".into(),
             Self::RepeatGate => "Repeat gate".into(),
+            Self::Pitch => "Pitch".into(),
         }
     }
 
     /// The lane's name in agent requests: volume, send1 to send4, filter,
-    /// pan, repeat, or repeatgate.
+    /// pan, repeat, repeatgate, or pitch.
     pub fn key(self) -> String {
         match self {
             Self::Volume => "volume".into(),
@@ -106,6 +124,7 @@ impl Lane {
             Self::Pan => "pan".into(),
             Self::Repeat => "repeat".into(),
             Self::RepeatGate => "repeatgate".into(),
+            Self::Pitch => "pitch".into(),
         }
     }
 
@@ -115,7 +134,14 @@ impl Lane {
         matches!(self, Self::Repeat | Self::RepeatGate)
     }
 
-    /// The value that a stepped lane holds before its first point.
+    /// Whether the lane rests at `before_first` before its first point
+    /// instead of holding the first point's value: the stepped lanes and
+    /// the Pitch lane.
+    pub fn rests_before_first(self) -> bool {
+        self.steps() || self == Self::Pitch
+    }
+
+    /// The value that a resting lane holds before its first point.
     pub fn before_first(self) -> f32 {
         if self == Self::RepeatGate {
             REPEAT_GATE_FULL
@@ -136,6 +162,7 @@ impl Lane {
             Self::Filter | Self::Pan => (-1.0, 1.0),
             Self::Repeat => (0.0, 64.0),
             Self::RepeatGate => (REPEAT_GATE_FLOOR, REPEAT_GATE_FULL),
+            Self::Pitch => (PITCH_FLOOR_CENTS, PITCH_CEILING_CENTS),
         }
     }
 
@@ -152,7 +179,21 @@ impl Lane {
             Self::Repeat if value == 0.0 => "Off".into(),
             Self::Repeat => format!("1/{value:.0}"),
             Self::RepeatGate => format!("{value:.0}%"),
+            Self::Pitch => pitch_label(value),
         }
+    }
+}
+
+/// A Pitch lane value as the lane shows it, in semitones: "0 st", "-24 st",
+/// or "+3.50 st".
+pub fn pitch_label(cents: f32) -> String {
+    let semitones = cents / 100.0;
+    if semitones == 0.0 {
+        "0 st".into()
+    } else if semitones.fract() == 0.0 {
+        format!("{semitones:+.0} st")
+    } else {
+        format!("{semitones:+.2} st")
     }
 }
 
@@ -192,6 +233,8 @@ pub struct Automation {
     pub repeat: Vec<Point>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub repeat_gate: Vec<Point>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pitch: Vec<Point>,
 }
 
 fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
@@ -206,6 +249,7 @@ impl Automation {
             && self.pan.is_empty()
             && self.repeat.is_empty()
             && self.repeat_gate.is_empty()
+            && self.pitch.is_empty()
     }
 
     pub fn lane(&self, lane: Lane) -> &[Point] {
@@ -216,6 +260,7 @@ impl Automation {
             Lane::Pan => &self.pan,
             Lane::Repeat => &self.repeat,
             Lane::RepeatGate => &self.repeat_gate,
+            Lane::Pitch => &self.pitch,
         }
     }
 
@@ -227,6 +272,7 @@ impl Automation {
             Lane::Pan => &mut self.pan,
             Lane::Repeat => &mut self.repeat,
             Lane::RepeatGate => &mut self.repeat_gate,
+            Lane::Pitch => &mut self.pitch,
         }
     }
 
@@ -359,6 +405,113 @@ impl Envelope {
     /// Whether the lane ever rises above zero.
     pub(crate) fn any_positive(&self) -> bool {
         self.values.iter().any(|value| *value > 0.0)
+    }
+}
+
+/// The Pitch lane resolved to output frames: a varispeed clock.
+///
+/// At each output frame the lane plays at the speed `2^(cents / 1200)`,
+/// with the cents moving in a straight line between points, at 0 before the
+/// first point and at the last value after the last point. `at` gives the
+/// clock's time at a frame: the integral of the speed from frame 0, in
+/// frames at normal speed. A clip reads its source at the clock's distance
+/// from the clip's start instead of the frame's, so pitch and speed move
+/// together and the read never jumps. The integral has a closed form on
+/// each segment, so the clock is a pure function of the frame: playback
+/// from any frame and an export read the same positions.
+#[derive(Debug)]
+pub(crate) struct Varispeed {
+    /// Each point's frame, its cents, and the clock's time there.
+    frames: Vec<f64>,
+    cents: Vec<f64>,
+    times: Vec<f64>,
+}
+
+impl Varispeed {
+    /// `None` for a lane without points.
+    pub(crate) fn new(points: &[Point], frames_per_tick: f64) -> Option<Self> {
+        if points.is_empty() {
+            return None;
+        }
+        let frames: Vec<f64> = points
+            .iter()
+            .map(|point| (f64::from(point.tick) * frames_per_tick).round())
+            .collect();
+        let cents: Vec<f64> = points.iter().map(|point| f64::from(point.value)).collect();
+        // The clock runs at normal speed up to the first point.
+        let mut times = vec![frames[0]];
+        for index in 1..frames.len() {
+            let length = frames[index] - frames[index - 1];
+            let time =
+                times[index - 1] + Self::segment(cents[index - 1], cents[index], length, length);
+            times.push(time);
+        }
+        Some(Self {
+            frames,
+            cents,
+            times,
+        })
+    }
+
+    /// The speed at `cents`.
+    fn speed(cents: f64) -> f64 {
+        (cents / 1200.0).exp2()
+    }
+
+    /// The clock's advance `along` frames into a segment `length` frames
+    /// long whose cents move from `from` to `to`.
+    fn segment(from: f64, to: f64, length: f64, along: f64) -> f64 {
+        let start = Self::speed(from);
+        // The speed is exp(rate * frames) times its start.
+        let rate = if length > 0.0 {
+            (to - from) / length * std::f64::consts::LN_2 / 1200.0
+        } else {
+            0.0
+        };
+        if rate.abs() < 1e-15 {
+            start * along
+        } else {
+            start * (rate * along).exp_m1() / rate
+        }
+    }
+
+    /// The clock's time at an output frame.
+    pub(crate) fn at(&self, frame: u64) -> f64 {
+        let frame = frame as f64;
+        let after = self.frames.partition_point(|at| *at <= frame);
+        if after == 0 {
+            return frame;
+        }
+        let index = after - 1;
+        let along = frame - self.frames[index];
+        let time = self.times[index];
+        match self.frames.get(after) {
+            Some(next) => {
+                time + Self::segment(
+                    self.cents[index],
+                    self.cents[after],
+                    next - self.frames[index],
+                    along,
+                )
+            }
+            None => time + Self::speed(self.cents[index]) * along,
+        }
+    }
+
+    /// The first frame from `from` to `limit` at which the clock has run
+    /// `distance` frames past its time at `from`, or `limit`.
+    pub(crate) fn reach(&self, from: u64, distance: f64, limit: u64) -> u64 {
+        let base = self.at(from);
+        let (mut low, mut high) = (from, limit);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if self.at(middle) - base >= distance {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        low
     }
 }
 
@@ -785,6 +938,10 @@ mod tests {
             (Lane::RepeatGate, points(&[(0, 100.5)])),
             (Lane::RepeatGate, points(&[(0, f32::NAN)])),
             (Lane::RepeatGate, points(&[(8, 50.0), (8, 25.0)])),
+            (Lane::Pitch, points(&[(0, -4800.5)])),
+            (Lane::Pitch, points(&[(0, 2400.5)])),
+            (Lane::Pitch, points(&[(0, f32::NAN)])),
+            (Lane::Pitch, points(&[(8, 0.0), (8, -1200.0)])),
         ] {
             let mut changed = automation.clone();
             *changed.lane_mut(lane) = bad;
@@ -807,6 +964,51 @@ mod tests {
         assert_eq!(Lane::RepeatGate.label(), "Repeat gate");
         automation.repeat_gate = points(&[(0, 5.0), (16, 37.5), (32, 100.0)]);
         automation.validate().unwrap();
+        assert_eq!(Lane::from_key("pitch"), Some(Lane::Pitch));
+        assert_eq!(Lane::Pitch.label(), "Pitch");
+        automation.pitch = points(&[(0, -4800.0), (16, 2400.0), (32, 12.5)]);
+        automation.validate().unwrap();
+        assert!(!automation.is_empty());
+    }
+
+    #[test]
+    fn pitch_values_read_as_semitones_and_rest_at_zero() {
+        assert_eq!(Lane::Pitch.format(0.0), "0 st");
+        assert_eq!(Lane::Pitch.format(-4800.0), "-48 st");
+        assert_eq!(Lane::Pitch.format(350.0), "+3.50 st");
+        assert_eq!(Lane::Pitch.range(), (-4800.0, 2400.0));
+        assert!(!Lane::Pitch.steps());
+        assert!(Lane::Pitch.rests_before_first());
+        assert_eq!(Lane::Pitch.before_first(), 0.0);
+        assert!(!Lane::Pan.rests_before_first());
+    }
+
+    #[test]
+    fn the_varispeed_clock_integrates_the_speed_of_the_pitch_lane() {
+        // At 100 frames a tick: normal speed to tick 10, an octave down at
+        // once, a straight fall in cents to two octaves down at tick 20, and
+        // held there.
+        let clock = Varispeed::new(&points(&[(10, -1200.0), (20, -2400.0)]), 100.0).unwrap();
+        assert_eq!(clock.at(0), 0.0);
+        assert_eq!(clock.at(1000), 1000.0);
+        // The integral of 2^(-1 - x / 1000) over 1000 frames.
+        let fall = 1000.0 * (0.5 - 0.25) / std::f64::consts::LN_2;
+        assert!((clock.at(2000) - (1000.0 + fall)).abs() < 1e-9);
+        assert!((clock.at(1500) - clock.at(1499) - 2.0_f64.powf(-1.5)).abs() < 1e-3);
+        assert!((clock.at(3000) - clock.at(2000) - 250.0).abs() < 1e-9);
+        // Each frame advances the clock: it never stands still or runs back.
+        for frame in 0..4000 {
+            assert!(clock.at(frame + 1) > clock.at(frame));
+        }
+        // A flat lane at 0 is the frame itself.
+        let flat = Varispeed::new(&points(&[(0, 0.0), (40, 0.0)]), 100.0).unwrap();
+        assert_eq!(flat.at(1234), 1234.0);
+        assert_eq!(flat.at(9999), 9999.0);
+        // The frame where the clock has run a distance.
+        let reached = clock.reach(2000, 100.0, 10_000);
+        assert_eq!(reached, 2400);
+        assert_eq!(clock.reach(2000, 1e9, 10_000), 10_000);
+        assert!(Varispeed::new(&[], 100.0).is_none());
     }
 
     #[test]

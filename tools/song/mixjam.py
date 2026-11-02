@@ -1,4 +1,4 @@
-"""Write format-23 .mixjam songs from Python.
+"""Write format-24 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -15,8 +15,9 @@ The repeat lane's neutral value is 0 (off). It steps: the engine holds each of i
 points until the next one and keeps it off before the first. Saving rejects a lane that ends away from neutral when a later clip starts on
 that track. The engine holds a lane's last value to the end of the song. The repeat gate lane
 steps too and is at 100% before its first point; it acts only while repeat is on, so it may
-end at any value. An FX bus's return lane (`automate_return`) replaces the bus's return level
-while it has points and moves in straight lines.
+end at any value. The pitch lane rests at 0 cents before its first point too, so it needs no
+resting points, and moves in straight lines. An FX bus's return lane (`automate_return`) replaces
+the bus's return level while it has points and moves in straight lines.
 
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
 sections and the key. render.py, measure.py, audible.py and master.py read it.
@@ -34,13 +35,15 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 23
+FORMAT_VERSION = 24
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
 REPEAT_VALUES = (0, 4, 8, 16, 32, 64)
 # The repeat gate lane's range in percent of each repeat (src/automation.rs).
 REPEAT_GATE_RANGE = (5.0, 100.0)
+# The pitch lane's range in cents (PITCH_FLOOR_CENTS and PITCH_CEILING_CENTS in src/automation.rs).
+PITCH_RANGE = (-4800.0, 2400.0)
 # An FX bus's return lane: 0 to 2, where 1 is the full return (RETURN_CEILING).
 RETURN_RANGE = (0.0, 2.0)
 
@@ -394,7 +397,7 @@ class Song:
 
     # Automation, effects, master.
     def automate(self, track, lane, points):
-        """lane: volume, send1..send4, filter, pan, repeat, or repeatgate. points: [(bar, value)],
+        """lane: volume, send1..send4, filter, pan, repeat, repeatgate, or pitch. points: [(bar, value)],
         bar 1-based, fractions allowed.
 
         Volume is dB over the fader; a send replaces the knob (0-1); filter is -1 (low-pass) to 1
@@ -404,15 +407,20 @@ class Song:
         (5.5, 0)] rolls 1/8, 1/16, 1/32 on the slice from bar 5. Repeatgate is 5 to 100, the percent
         of each repeat that sounds before it falls silent over 3 ms; it steps like repeat, is 100
         before its first point, and each repeat takes the value held where it starts:
-        [(5, 25), (5.5, 100)] makes the repeats from bar 5 short plucks. Points add to the lane's
+        [(5, 25), (5.5, 100)] makes the repeats from bar 5 short plucks. Pitch is cents, -4800 to
+        2400, added to each clip's own pitch as a speed change, like a tape: pitch and speed move
+        together, so [(8.5, 0), (9, -4800), (9.0625, 0)] is a tape-stop over the last half bar of
+        bar 8 that comes back at bar 9.0625. It is 0 before its first point, moves in straight lines
+        in cents, and runs before the repeat lane, so repeats replay the pitched sound. End it at 0
+        before a later clip on the track. Points add to the lane's
         earlier points, so each section writes its own moves; a point on a tick that the lane
         already has is an error.
         """
         track = _whole_track(track)
-        if lane not in ('volume', 'filter', 'pan', 'repeat', 'repeatgate', 'send1', 'send2', 'send3',
-                        'send4'):
+        if lane not in ('volume', 'filter', 'pan', 'repeat', 'repeatgate', 'pitch', 'send1', 'send2',
+                        'send3', 'send4'):
             raise ValueError('The automation lane must be volume, filter, pan, repeat, repeatgate, '
-                             'or send1 through send4.')
+                             'pitch, or send1 through send4.')
         name = lane
         lane = 'repeatGate' if lane == 'repeatgate' else lane
         automation = self.automation[track - 1]
@@ -431,6 +439,9 @@ class Song:
             low, high = REPEAT_GATE_RANGE
             if lane == 'repeatGate' and not low <= float(value) <= high:
                 raise ValueError(f'Track {track} repeatgate must be from {low:g} to {high:g}, not {value}.')
+            low, high = PITCH_RANGE
+            if lane == 'pitch' and (isinstance(value, bool) or not low <= float(value) <= high):
+                raise ValueError(f'Track {track} pitch must be from {low:g} to {high:g} cents, not {value}.')
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
@@ -489,7 +500,7 @@ class Song:
                 neutral = lane['sends'][i] if key == 'sends' else lane['pan'] if key == 'pan' else 0.0
                 name = key if key != 'sends' else f'send{i + 1}'
                 out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}',
-                                steps=key == 'repeat'))
+                                steps=key in ('repeat', 'pitch')))
             held[key] = out if key == 'sends' else out[0]
         return held
 
@@ -599,7 +610,7 @@ def hold(entries, neutral, placements, label, steps=False):
     The engine holds a lane's first value back to bar 1 and its last value to the end. The lane
     rests at `neutral` until its first point, and a lane that ends away from neutral while a
     later clip of the track still plays is an error. A stepped lane (repeat) is already off
-    before its first point, so it needs no resting points.
+    before its first point, and the pitch lane at 0, so they need no resting points.
     """
     entries = [dict(e) for e in entries]
     if not steps and entries and entries[0]['tick'] > 0 and entries[0]['value'] != neutral:

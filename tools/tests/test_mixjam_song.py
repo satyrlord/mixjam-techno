@@ -145,7 +145,19 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(24))
+            self.project(self.document(25))
+
+    def test_version_24_keeps_pitch_automation_in_the_json_project(self):
+        document = self.document(24)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        document['lanes'][0]['sends'] = [0.0] * 4
+        stop = [dict(tick=128, value=0.0), dict(tick=256, value=-4800.0)]
+        document['lanes'][0]['automation'] = {'pitch': stop}
+        projected = self.project(document)
+        self.assertEqual(projected['tracks'][0]['automation']['pitch'], stop)
+        self.assertNotIn('pitch', earlier['tracks'][0]['automation'])
 
     def test_version_23_keeps_return_lanes_gates_and_reversed_clips(self):
         document = self.document(23)

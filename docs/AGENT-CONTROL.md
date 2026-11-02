@@ -37,14 +37,18 @@ port.
   points=[[BAR,VALUE],...]` replaces one automation lane: `volume`, `send1` to
   `send4`, `filter`, `pan` (-1 hard left to 1 hard right, 0 center),
   `repeat` (0 off, or 4, 8, 16, 32, or 64 for 1/4 to 1/64 repeats), or
-  `repeatgate` (5 to 100, the percent of each repeat that sounds), and
-  `points=[]` clears it. The repeat lane steps: it is off before its first
+  `repeatgate` (5 to 100, the percent of each repeat that sounds), or
+  `pitch` (-4800 to 2400 cents of playback speed), and `points=[]` clears it. The repeat lane steps: it is off before its first
   point and holds each value until the next point, so
   `points=[[5,8],[5.25,16],[5.375,32],[5.5,0]]` rolls from 1/8 through 1/32 on
   the slice that starts at bar 5. The repeat gate steps too, at 100 before its
   first point; each repeat takes the value held where it starts, so
   `automate track=2 lane=repeatgate points=[[5,25],[5.5,100]]` makes the
-  repeats from bar 5 short plucks. `state` lists each track's lanes with points
+  repeats from bar 5 short plucks. The pitch lane is varispeed, like a tape:
+  pitch and speed move together and add to each clip's own pitch. It is 0
+  before its first point and moves in straight lines, so
+  `automate track=3 lane=pitch points=[[8.5,0],[9,-4800],[9.0625,0]]` is a
+  tape-stop over the second half of bar 8. `state` lists each track's lanes with points
   under its `automation` (the gate as `repeatGate`); a send or pan lane there
   replaces the knob in `sends` or `pan`.
   `automate bus=N lane=return points=[[BAR,VALUE],...]` replaces FX bus N's

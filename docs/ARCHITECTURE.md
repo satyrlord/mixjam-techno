@@ -169,7 +169,18 @@ output frame, the source position of its mirror frame in the clip (`start +
 end - 1 - frame`), so it plays the forward slice backwards as a pure function
 of the frame, never of what played; its fades, gain, and pitched copy apply in
 the clip's own time, and its sound ends with the clip. Being in the voice, a
-reversal comes before every track stage, the Repeat lane included. `prepare_project` decodes and checks each
+reversal comes before every track stage, the Repeat lane included. The Pitch
+lane is in the voice too: `automation::Varispeed` turns the track's lane into
+a clock, the integral of the speed `2^(cents / 1200)` over the output frames,
+with a closed form on each straight segment in cents. A voice of that track
+reads its source at the clock's distance from the clip's start (reversed,
+back from the clip's last frame), times the tempo step, instead of at the
+frame's distance, so the read moves at the lane's speed without a jump and
+is still a pure function of the frame. Preparation finds where the clock
+has run through the source, to end the clip's sound and its fade out there.
+The lane scales the read rate of the clip's pitched copy, so clip pitch and
+lane add in cents, and it comes before the Repeat lane, which replays the
+slowed sound. `prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that
@@ -228,7 +239,8 @@ compressor's curve (`master::dsp::reduction`), so the fader does not change
 how hard it works, and the width scales the side of each frame, on a track
 whose outputs are both on. After them every stage is linear and per channel
 up to the ducker, whose gain follows the separate key, so this order sounds
-as the signal order clips, Repeat lane, EQ, drive, compressor, width,
+as the signal order clips (read by the Pitch lane), Repeat lane, EQ, drive,
+compressor, width,
 automation, fader and pan, ducker, sends. A track with none of these mixes its voices straight into the
 sum, so an EQ, drive, or compressor that is off, or a width of 100%, leaves the
 render bit for bit as it was.

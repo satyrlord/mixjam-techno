@@ -62,7 +62,7 @@ Arrangement (the lanes have no separate controls)
                          Replace the song's sections; [] removes them. Each
                          section starts at its bar (or \"tick\") and lasts until
                          the next one. Names are 1 to 48 characters.
-  automate track=N lane=volume|send1..send4|filter|pan|repeat|repeatgate
+  automate track=N lane=volume|send1..send4|filter|pan|repeat|repeatgate|pitch
                          points=[[BAR,VALUE],...]
                          Replace one automation lane of a track; [] clears it.
                          Volume is dB over the fader, -60 (silence) to 6;
@@ -76,6 +76,10 @@ Arrangement (the lanes have no separate controls)
                          first. Repeat gate is 5 to 100, the percent of each
                          repeat that sounds before it falls silent; it holds
                          each value like Repeat and is 100 before the first.
+                         Pitch is cents, -4800 to 2400, added to each clip's
+                         pitch as a speed change, like a tape: -1200 plays
+                         an octave down at half speed, so a fall to -4800
+                         is a tape-stop. It is 0 before the first point.
   automate bus=N lane=return points=[[BAR,VALUE],...]
                          Replace FX bus N's return lane (1 to 4); [] clears
                          it. The return is 0 to 2 (1 is 100%, 2 about +6 dB)
@@ -470,7 +474,8 @@ pub struct TrackView {
     pub solo: bool,
     pub sends: [f32; crate::fx::BUSES],
     /// Only lanes with points. A send or pan lane with points replaces its
-    /// knob, `sends` or `pan`. Repeat and repeat gate points are steps.
+    /// knob, `sends` or `pan`. Repeat and repeat gate points are steps. Pitch
+    /// points are cents of playback speed.
     pub automation: crate::automation::Automation,
     /// Whether the track's channel EQ is on.
     pub eq_on: bool,
@@ -1767,6 +1772,22 @@ mod tests {
                 bus: None,
                 lane: "repeatgate".into(),
                 points: vec![[5.0, 25.0], [5.5, 100.0]],
+            }
+        );
+        let line = request_line(&strings(&[
+            "automate",
+            "track=2",
+            "lane=pitch",
+            "points=[[7.5,0],[8,-4800]]",
+        ]))
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Request>(&line).unwrap(),
+            Request::Automate {
+                track: Some(2),
+                bus: None,
+                lane: "pitch".into(),
+                points: vec![[7.5, 0.0], [8.0, -4800.0]],
             }
         );
         let line = request_line(&strings(&[

@@ -3542,18 +3542,19 @@ impl MixJamApp {
                 .collect();
             // A stepped lane holds its resting value before its first point
             // (Repeat off, the gate at 100%) and each value until the next
-            // point; the others hold their first value and move in straight
-            // lines.
+            // point; the Pitch lane rests at 0 before its first point and
+            // then moves in straight lines; the others hold their first
+            // value and move in straight lines.
             let mut line = vec![Pos2::new(
                 rect.left(),
-                if lane.steps() {
+                if lane.rests_before_first() {
                     automation_y(lane, lane.before_first(), row)
                 } else {
                     markers[0].y
                 },
             )];
-            for marker in &markers {
-                if lane.steps() {
+            for (index, marker) in markers.iter().enumerate() {
+                if lane.steps() || (index == 0 && lane.rests_before_first()) {
                     line.push(Pos2::new(marker.x, line[line.len() - 1].y));
                 }
                 line.push(*marker);
@@ -3774,6 +3775,8 @@ fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
         automation::Lane::RepeatGate => {
             (value / automation::REPEAT_GATE_STEP).round() * automation::REPEAT_GATE_STEP
         }
+        // Whole semitones.
+        automation::Lane::Pitch => (value / 100.0).round() * 100.0,
     };
     value.clamp(low, high)
 }

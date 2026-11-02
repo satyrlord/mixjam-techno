@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 23 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 24 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 22 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 23 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 23 keeps its `createdAt`.
+to 24 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.
@@ -52,9 +52,9 @@ to 1), and `placements`. Earlier versions use the fields listed in the version
 history below. A lane from version 18 may also hold:
 
 - `automation`, a JSON object with any of `volume`, `sends` (four lists), `filter`,
-  from version 20 `pan`, from version 21 `repeat`, and from version 23
-  `repeatGate`: lists of `{"tick", "value"}` points in strictly increasing
-  tick order within the timeline.
+  from version 20 `pan`, from version 21 `repeat`, from version 23
+  `repeatGate`, and from version 24 `pitch`: lists of `{"tick", "value"}`
+  points in strictly increasing tick order within the timeline.
   Volume is from -60 to 6 dB, a send from 0 to 1, the filter from -1 to 1, and
   the pan from -1 (hard left) through 0 (center) to 1 (hard right). A send or
   pan list with points replaces the lane's send or `pan` for playback and
@@ -84,6 +84,25 @@ history below. A lane from version 18 may also hold:
   the lane turns off. At 100 the repeats are exactly as without a gate, and
   while `repeat` is off the gate does nothing. Versions 22 and earlier reject
   `repeatGate`, even as an empty list.
+  `pitch` is the lane's playback speed in cents, from -4800 (four octaves
+  down, 1/16 speed) to 2400 (two octaves up, 4x speed). It is varispeed, as
+  on a tape machine: at each frame the lane's clips read their sources at
+  `2^(cents / 1200)` times their normal rate, so pitch and speed move
+  together and a fall to -4800 slows the sound to a tape-stop. It is 0
+  before its first point, holds its last value after its last point, and
+  moves in a straight line in cents between points, at every frame. The read
+  position is the integral of that speed from each placement's start, so it
+  never jumps; reversed, the read moves backwards at the same speed and
+  reaches `offsetFrames` at the placement's end. The lane adds to each
+  placement's `pitchCents`: the placement's pitch keeps its length, and the
+  lane's then changes the speed of that pitched sound, on top of the tempo
+  match to the song. A placement keeps its length in the arrangement: slowed,
+  it ends at its end before its source does; sped up, its sound ends where
+  the source runs out, and its fade out ends there. Fades stay in the
+  placement's own time. The lane acts where the placements read their
+  sources, before `repeat`, so the repeats replay the pitched sound, and
+  before the EQ and everything after it. Versions 23 and earlier reject
+  `pitch`, even as an empty list.
   Automation points do not extend the song's duration.
 - `eq`, the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
   "midQ", "highHz", "highDb", "highCut"}`, every key required, and the second
@@ -133,7 +152,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 23 are:
+versions 16 to 24 are:
 
 | Key | Settings |
 |---|---|
@@ -212,7 +231,7 @@ before replacing the destination.
 ## Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 23, which earlier builds cannot open.
+earlier song writes version 24, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -232,6 +251,7 @@ earlier song writes version 23, which earlier builds cannot open.
 | 21 | Adds the lane automation `repeat`. | No repeat automation. |
 | 22 | Adds the lane `drive`. | Every drive off. |
 | 23 | Adds FX bus return automation, the lane automation `repeatGate`, and the placement `reverse`. | Static returns, full-length repeats, no reversed clips. |
+| 24 | Adds the lane automation `pitch`. | No pitch automation. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

@@ -419,6 +419,8 @@ struct Voice {
     /// mirror frame within `start..end` reads, so the result is a pure
     /// function of the source and never of what played before.
     reverse: bool,
+    /// The track's Pitch lane, which moves the read at its own speed.
+    varispeed: Option<Arc<crate::automation::Varispeed>>,
 }
 
 impl Voice {
@@ -435,13 +437,23 @@ impl Voice {
         let source_frames = source.frames() as usize;
         let source_channels = source.channels as usize;
         let sending = sends.is_some() && self.sends.iter().any(|send| *send > 0.0);
-        for frame in from..to {
-            let along = if self.reverse {
-                self.end - 1 - frame
+        // Under a Pitch lane, the read moves by the lane's clock instead of
+        // the frames. Reversed, it reaches the clip's offset at its end.
+        let origin = self.varispeed.as_ref().map(|clock| {
+            if self.reverse {
+                clock.at(self.end - 1)
             } else {
-                frame - self.start
+                clock.at(self.start)
+            }
+        });
+        for frame in from..to {
+            let along = match (&self.varispeed, origin) {
+                (Some(clock), Some(origin)) if self.reverse => origin - clock.at(frame),
+                (Some(clock), Some(origin)) => clock.at(frame) - origin,
+                _ if self.reverse => (self.end - 1 - frame) as f64,
+                _ => (frame - self.start) as f64,
             };
-            let pos = self.offset_frames as f64 + along as f64 * self.step;
+            let pos = self.offset_frames as f64 + along * self.step;
             let index = pos.floor() as usize;
             if index >= source_frames {
                 // Reversed, the frames past the source's end come first.
@@ -504,7 +516,8 @@ impl SendLevel {
 }
 
 /// A track with its EQ, drive, or compressor on, a width other than 100%,
-/// with automation, with its ducker on, or that keys a ducker. Its voices
+/// with automation, with its ducker on, or that keys a ducker. Its voices,
+/// which read their sources at its Pitch lane's speed (`Voice::varispeed`),
 /// mix into a short buffer, through its Repeat lane, that its EQ, drive,
 /// compressor, width, filter, volume, ducker, level and pan, and sends then
 /// shape, in that order.
@@ -862,6 +875,9 @@ impl Mix {
         let mut voices = Vec::new();
         let mut chains = Vec::new();
         let mut chain_index = [None; crate::engine::TRACK_COUNT];
+        // Each track's Pitch lane, resolved once for all its clips.
+        let mut varispeeds: [Option<Option<Arc<crate::automation::Varispeed>>>;
+            crate::engine::TRACK_COUNT] = std::array::from_fn(|_| None);
         let any_solo = project.any_solo();
         // A ducker works when its own track sounds; its key may be silent.
         let ducking = |index: usize| {
@@ -915,6 +931,18 @@ impl Mix {
             let frames_of = |ticks: u32| (f64::from(ticks) * frames_per_tick).round() as u64;
             let source_left =
                 (source.frames() as f64 - f64::from(clip.offset_frames)).max(0.0) / step;
+            let varispeed = varispeeds[clip.track]
+                .get_or_insert_with(|| {
+                    crate::automation::Varispeed::new(&track.automation.pitch, frames_per_tick)
+                        .map(Arc::new)
+                })
+                .clone();
+            // Under a Pitch lane the source runs out where the lane's clock
+            // has run its length, so the fade out ends there.
+            let source_end = match &varispeed {
+                Some(clock) => clock.reach(start, source_left, end),
+                None => start + source_left.ceil() as u64,
+            };
             // Channel enables depend only on the track: resolve them once per clip.
             let voice = Voice {
                 track: clip.track,
@@ -936,9 +964,10 @@ impl Mix {
                 sound_end: if clip.reverse {
                     end
                 } else {
-                    end.min(start + source_left.ceil() as u64)
+                    end.min(source_end)
                 },
                 reverse: clip.reverse,
+                varispeed,
             };
             let keyed = keys.iter().position(|chain| chain.track == clip.track);
             if let Some(slot) = keyed {
@@ -4132,6 +4161,146 @@ mod tests {
         let mut stem = vec![0.0; export.len()];
         mix.mix(0, &mut stem, None, &mut RenderState::default(), Some(0));
         assert_eq!(stem, export);
+    }
+
+    /// One clip on track 1 from bar 2 for `ticks`, with the Pitch lane
+    /// `pitch`.
+    fn pitched_song(ticks: u32, pitch: &[(u32, f32)]) -> Project {
+        let mut project = reversed_song(0, ticks, false);
+        project.tracks[0].automation.pitch = pitch
+            .iter()
+            .map(|&(tick, value)| crate::automation::Point { tick, value })
+            .collect();
+        project
+    }
+
+    /// The value of `plain`'s left channel at a fractional frame.
+    fn left_at(plain: &[f32], frame: f64) -> f32 {
+        let index = frame.floor() as usize;
+        let fraction = (frame - index as f64) as f32;
+        plain[index * 2] + (plain[index * 2 + 2] - plain[index * 2]) * fraction
+    }
+
+    #[test]
+    fn a_pitch_lane_reads_the_source_at_its_varispeed_clock() {
+        let samples = ramp_source();
+        // Normal speed to bar 2.5, then a fall to two octaves down at bar 3,
+        // held to the clip's end at bar 3.5.
+        let lane = [(384, 0.0), (512, -2400.0)];
+        let project = pitched_song(384, &lane);
+        let plain = whole(&pitched_song(384, &[]), &samples);
+        let out = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let (start, fall, end) = (frame(256), frame(384), frame(640));
+        // To the first point the sound is the plain clip to the bit.
+        assert_eq!(out[..fall * 2], plain[..fall * 2]);
+        let points = project.tracks[0].automation.pitch.clone();
+        let clock = crate::automation::Varispeed::new(&points, frames_per_tick).unwrap();
+        // After it, each frame reads where the clock has come to: the plain
+        // clip at the clock's distance from the clip's start.
+        for at in (fall..end).step_by(7) {
+            let along = clock.at(at as u64) - clock.at(start as u64);
+            let want = left_at(&plain, start as f64 + along);
+            assert!((out[at * 2] - want).abs() < 1e-5, "frame {at}");
+        }
+        // Two octaves down plays at a quarter of the speed.
+        let late = frame(600);
+        let slope = |samples: &[f32], at: usize| samples[(at + 100) * 2] - samples[at * 2];
+        let ratio = slope(&out, late) / slope(&plain, late);
+        assert!((ratio - 0.25).abs() < 1e-3, "{ratio}");
+        // The read never jumps: no frame moves further than at normal
+        // speed, beyond the rounding of the samples.
+        let largest = |samples: &[f32]| {
+            (start + 1..end)
+                .map(|at| (samples[at * 2] - samples[(at - 1) * 2]).abs())
+                .fold(0.0_f32, f32::max)
+        };
+        let (moved, normal) = (largest(&out), largest(&plain));
+        assert!(moved <= normal * 1.01, "{moved} against {normal}");
+    }
+
+    #[test]
+    fn a_fast_pitch_lane_ends_the_source_with_the_clip_fade_and_reads_no_further() {
+        let samples = ramp_source();
+        // An octave up from the clip's start runs the 200,000-frame source
+        // out at twice the speed, before the four-bar clip ends.
+        let mut project = pitched_song(1024, &[(256, 1200.0)]);
+        project.clips[0].fades.fade_out.ticks = 64;
+        let out = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let (start, end) = (frame(256), frame(1280));
+        let source_end = start + RAMP_FRAMES.div_ceil(2);
+        assert!(source_end < end);
+        // The fade out ends where the source does, and silence follows.
+        assert!(out[source_end * 2..].iter().all(|value| *value == 0.0));
+        let last = out[(source_end - 1) * 2];
+        assert!(last > 0.0 && last < 0.001, "{last}");
+        let fade = frame(64);
+        let before = out[(source_end - fade) * 2];
+        assert!(before > 0.7, "{before}");
+        // A tape-stop: slowed four octaves, the clip ends before its source
+        // and its own fade out ends the sound at the clip's end.
+        let mut stopped = pitched_song(1024, &[(256, 0.0), (384, -4800.0)]);
+        stopped.clips[0].fades.fade_out.ticks = 64;
+        let out = whole(&stopped, &samples);
+        assert!(out[(end - 1) * 2] > 0.0);
+        assert!(out[end * 2..].iter().all(|value| *value == 0.0));
+    }
+
+    #[test]
+    fn playback_started_inside_a_pitch_fall_plays_what_export_plays() {
+        let samples = unique_source();
+        let mut project = repeat_song(&[(448, 16.0), (512, 0.0)]);
+        // A tape-stop from bar 1.5 to bar 2.5, then back up, under a Repeat
+        // roll.
+        project.tracks[0].automation.pitch = [(128, 0.0), (384, -4800.0), (400, 0.0), (480, 700.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        let export = whole(&project, &samples);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as u64;
+        let end = frame(640) as usize;
+        for start in [frame(100), frame(250) + 13, frame(390), frame(460) + 3] {
+            let start = start as usize;
+            let mut out = vec![0.0; (end - start) * 2];
+            let mut state = RenderState::default();
+            let mut at = start;
+            for size in [1000, 1, 127, 4096, 333, 129].into_iter().cycle() {
+                if at >= end {
+                    break;
+                }
+                let size = size.min(end - at);
+                mix.read_block(
+                    at as u64,
+                    &mut out[(at - start) * 2..(at - start + size) * 2],
+                    None,
+                    &mut state,
+                );
+                at += size;
+            }
+            assert_eq!(out, export[start * 2..end * 2], "from frame {start}");
+        }
+        let mut stem = vec![0.0; export.len()];
+        mix.mix(0, &mut stem, None, &mut RenderState::default(), Some(0));
+        assert_eq!(stem, export);
+    }
+
+    #[test]
+    fn the_repeat_lane_replays_the_pitched_sound() {
+        let samples = unique_source();
+        let pitch = [(128, 0.0), (256, -1200.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        let mut live = repeat_song(&[]);
+        live.tracks[0].automation.pitch = pitch.clone();
+        let mut project = repeat_song(&[(320, 16.0), (384, 0.0)]);
+        project.tracks[0].automation.pitch = pitch;
+        let (live_out, out) = (whole(&live, &samples), whole(&project, &samples));
+        // Each sixteenth from tick 320 replays the slowed sound from 320.
+        assert_slices(&out, &live_out, &project, 320, &[320, 336, 352, 368, 384]);
     }
 
     /// A one-bar song at 140 BPM: a 0.1 s tone on track 1 that sends to a

@@ -243,7 +243,7 @@ class SongTests(unittest.TestCase):
         # Sixteenths from bar 2: left, right, and back to the knob.
         song.automate(1, 'pan', [(2, -1), (2.0625, 1), (2.125, 0.25)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 23)
+        self.assertEqual(document['formatVersion'], 24)
         self.assertEqual(document['lanes'][0]['pan'], 0.25)
         # The lane rests at the knob until its first point.
         self.assertEqual(document['lanes'][0]['automation']['pan'],
@@ -268,7 +268,7 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'repeat', [(2, 8), (2.25, 16), (2.375, 32), (2.5, 0)])
         song.automate(1, 'repeat', [(4, 4), (4.5, 64), (4.75, 0)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 23)
+        self.assertEqual(document['formatVersion'], 24)
         # The lane is off before its first point, so no resting points are added.
         self.assertEqual(document['lanes'][0]['automation']['repeat'],
                          [dict(tick=256, value=8.0), dict(tick=320, value=16.0),
@@ -295,12 +295,12 @@ class SongTests(unittest.TestCase):
             song = mixjam.Song('repeat cache')
             song.clip(1, source, 0, 96)
             document = song.document()
-            self.assertEqual(document['formatVersion'], 23)
+            self.assertEqual(document['formatVersion'], 24)
             self.assertIsNotNone(render.source_fingerprints(document))
             key = render.lane_key(document, [1], False)
             document['lanes'][0]['automation'] = {'repeat': [dict(tick=0, value=16.0), dict(tick=64, value=0.0)]}
             self.assertNotEqual(render.lane_key(document, [1], False), key)
-            document['formatVersion'] = 24
+            document['formatVersion'] = 25
             self.assertIsNone(render.source_fingerprints(document))
 
     def test_hold_rests_at_neutral_until_the_first_point(self):
@@ -360,7 +360,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 23)
+        self.assertEqual(song.document()['formatVersion'], 24)
 
     def test_drive_checks_its_ranges_and_saves_as_the_app_does(self):
         song = mixjam.Song('drive')
@@ -368,7 +368,7 @@ class SongTests(unittest.TestCase):
         self.assertEqual(song.lanes[0]['drive'], dict(on=True, amount=18.0, character=25.0, mix=40.0,
                                                       focus=98.0, output=0.0))
         document = song.document()
-        self.assertEqual(document['formatVersion'], 23)
+        self.assertEqual(document['formatVersion'], 24)
         self.assertEqual(document['lanes'][0]['drive']['focus'], 98.0)
         for settings in ({'amount': -1}, {'amount': 25}, {'character': 101}, {'mix': -0.5}, {'mix': 101},
                          {'focus': 19}, {'focus': 2001}, {'output': 12.5}, {'output': float('nan')}):
@@ -397,7 +397,7 @@ class SongTests(unittest.TestCase):
             key = render.lane_key(document, [1], False)
             song.drive(1, amount=18)
             driven = song.document()
-            self.assertEqual(driven['formatVersion'], 23)
+            self.assertEqual(driven['formatVersion'], 24)
             self.assertNotEqual(render.lane_key(driven, [1], False), key)
 
     def test_repeat_gate_steps_without_resting_points_and_checks_its_range(self):
@@ -406,7 +406,7 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'repeatgate', [(2, 25), (2.5, 60)])
         song.automate(1, 'repeatgate', [(4, 5)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 23)
+        self.assertEqual(document['formatVersion'], 24)
         # The gate is full before its first point and acts only while repeat is
         # on, so it needs no resting points and may end anywhere.
         self.assertEqual(document['lanes'][0]['automation']['repeatGate'],
@@ -419,13 +419,53 @@ class SongTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             song.automate(1, 'repeatGate', [(5, 50)])
 
+    def test_pitch_rests_at_zero_without_resting_points_and_checks_its_range(self):
+        song = mixjam.Song('tape-stop')
+        song.automate(1, 'pitch', [(1.5, 0), (2, -4800), (2.0625, 0)])
+        document = song.document()
+        self.assertEqual(document['formatVersion'], 24)
+        # The lane is 0 before its first point, so no resting points are added.
+        self.assertEqual(document['lanes'][0]['automation']['pitch'],
+                         [dict(tick=128, value=0.0), dict(tick=256, value=-4800.0),
+                          dict(tick=272, value=0.0)])
+        for value in (-4801, 2400.5, True, float('nan')):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                song.automate(2, 'pitch', [(1, value)])
+        with self.assertRaises(ValueError):
+            song.automate(1, 'pitch', [(2, -1200)])
+        # A lane held away from 0 over a later clip of its track is an error.
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'tape.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)) * 0.25)
+            held = mixjam.Song('held')
+            held.clip(1, source, 0, 256)
+            held.clip(1, source, 512, 256)
+            held.automate(1, 'pitch', [(1.5, 0), (2, -1200)])
+            with self.assertRaisesRegex(ValueError, 'pitch'):
+                held.document()
+
+    def test_lane_cache_keys_the_pitch_lane(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('pitch cache')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            self.assertEqual(document['formatVersion'], 24)
+            self.assertIsNotNone(render.source_fingerprints(document))
+            key = render.lane_key(document, [1], False)
+            document['lanes'][0]['automation'] = {'pitch': [dict(tick=0, value=0.0), dict(tick=64, value=-4800.0)]}
+            self.assertNotEqual(render.lane_key(document, [1], False), key)
+
     def test_return_lanes_save_on_their_bus_and_check_their_range(self):
         song = mixjam.Song('throw')
         song.bus(3, mixjam.delay(), return_level=0.3)
         song.automate_return(3, [(16.75, 0.3), (17, 1.8)])
         song.automate_return(3, [(18.5, 0.3)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 23)
+        self.assertEqual(document['formatVersion'], 24)
         self.assertEqual(document['fxBuses'][2]['returnAutomation'],
                          [dict(tick=4032, value=0.3), dict(tick=4096, value=1.8), dict(tick=4480, value=0.3)])
         self.assertEqual(document['fxBuses'][2]['returnLevel'], 0.3)
@@ -1223,6 +1263,81 @@ class MeasureTests(unittest.TestCase):
         song['lanes'][0]['placements'].append(dict(id=3, sampleId=43, startTick=128,
                                                   durationTicks=256, offsetFrames=0, gain=1))
         self.assertTrue(any('overlaps' in problem for problem in measure.mechanical(song, meta['lanes'])))
+
+    def test_pitch_changes_the_mechanical_source_duration_and_gap_direction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'constant.wav'
+            mixjam.write_wav(source, 44100, np.full((44100, 2), 0.25))
+            for reverse in (False, True):
+                for cents, duration, has_gap in ((-1200, 256, False), (1200, 128, True)):
+                    with self.subTest(reverse=reverse, cents=cents):
+                        song = mixjam.Song('pitched duration')
+                        song.clip(1, source, 0, duration, reverse=reverse)
+                        document = song.document()
+                        document['lanes'][0]['automation'] = {'pitch': [{'tick': 0, 'value': cents}]}
+                        problems = measure.mechanical(document, {})
+                        gaps = [problem for problem in problems if 'silent gap' in problem]
+                        self.assertEqual(bool(gaps), has_gap)
+                        if has_gap:
+                            self.assertIn('at its start' if reverse else 'at its end', gaps[0])
+                            self.assertIn('0.21 bars', gaps[0])
+
+    def test_pitch_fall_before_a_clip_changes_its_cut_status_and_fade_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'decaying.wav'
+            data = np.full((44100, 2), 0.25)
+            data[-4410:] = 0
+            mixjam.write_wav(source, 44100, data)
+            song = mixjam.Song('pitch fall')
+            clip = song.clip(1, source, 128, 149)
+            document = song.document()
+            roles = {'1': {'name': 'Pad', 'role': 'pad'}}
+            self.assertEqual(measure.mechanical(document, roles), [])
+            # The fall crosses the placement's start. At the normal source end,
+            # the slowed read is still inside the source, so the clip cuts it.
+            document['lanes'][0]['automation'] = {'pitch': [
+                {'tick': 64, 'value': 0}, {'tick': 256, 'value': -2400}]}
+            problems = measure.mechanical(document, roles)
+            self.assertEqual(len(problems), 1)
+            self.assertIn('The clip is cut short.', problems[0])
+            document['lanes'][0]['placements'][0]['fades'] = {'out': {'ticks': 8, 'curve': 'linear'}}
+            self.assertEqual(measure.mechanical(document, roles), [])
+
+    def test_reverse_pitch_uses_the_last_output_window_for_the_end_level(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'quiet-start.wav'
+            data = np.full((44100, 2), 0.25)
+            data[:300] = 0
+            mixjam.write_wav(source, 44100, data)
+            song = mixjam.Song('reverse pitch')
+            song.clip(1, source, 0, 64, reverse=True)
+            document = song.document()
+            roles = {'1': {'name': 'Pad', 'role': 'pad'}}
+            self.assertTrue(any('without a fade out' in p for p in measure.mechanical(document, roles)))
+            # At 1/16 speed the last 50 ms read only the quiet first 138 frames.
+            document['lanes'][0]['automation'] = {'pitch': [{'tick': 0, 'value': -4800}]}
+            self.assertEqual(measure.mechanical(document, roles), [])
+
+    def test_forward_pitch_checks_the_output_window_at_source_exhaustion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'quiet-tail.wav'
+            roles = {'1': {'name': 'Pad', 'role': 'pad'}}
+            for cents, quiet_frames, duration, loud_end in ((-4800, 300, 2048, False),
+                                                            (2400, 3000, 48, True)):
+                with self.subTest(cents=cents):
+                    data = np.full((44100, 2), 0.25)
+                    data[-quiet_frames:] = 0
+                    mixjam.write_wav(source, 44100, data)
+                    song = mixjam.Song('forward pitch end', bpm=120)
+                    song.clip(1, source, 0, duration)
+                    document = song.document()
+                    document['lanes'][0]['automation'] = {'pitch': [{'tick': 0, 'value': cents}]}
+                    problems = measure.mechanical(document, roles)
+                    # At 1/16 speed the final 50 ms read only quiet frames.
+                    # At 4x speed they include loud frames, even though the
+                    # source ends before the placement's silent final 16 ticks.
+                    endings = [p for p in problems if 'without a fade out' in p]
+                    self.assertEqual(bool(endings), loud_end)
 
     def test_reversed_melodic_end_uses_the_trim_start_not_the_source_tail(self):
         with tempfile.TemporaryDirectory() as directory:

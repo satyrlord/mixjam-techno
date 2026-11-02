@@ -1,0 +1,657 @@
+{
+  "id": "mike-oldfield-tubular-beats",
+  "kind": "reference",
+  "artist": "Mike Oldfield",
+  "title": "Tubular Beats",
+  "year": 2013,
+  "label": "earMUSIC · Edel",
+  "producer": "Mike Oldfield · Torsten Stenzel",
+  "genre": "Trance / Downtempo",
+  "genreTags": [
+    "Trance",
+    "Downtempo",
+    "Electronic",
+    "Remix Album"
+  ],
+  "runtime": "1:16:36",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/c/c4/Tubular_Beats.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Tubular_Beats",
+  "overview": "Tubular Beats is a remix album produced by Mike Oldfield with Torsten Stenzel — the German trance producer behind York — after Oldfield's publisher put the two in touch and Stenzel flew to Oldfield's studio in Nassau. The work then ran as a file exchange over the Internet: the tracks were rebuilt from the original multitrack recordings, Oldfield added newly recorded guitar parts, and by Oldfield's own account Stenzel did most of the work while Oldfield wrote new material — \"it's more Torsten's album.\" The sources span 25 years of Oldfield's catalogue: Tubular Bells (1973), Ommadawn (1975), the disco single \"Guilty\" (1979), \"North Star\" from Platinum (1979), \"Moonlight Shadow\" from Crises (1983), \"To France\" from Discovery (1984), \"Let There Be Light\" from The Songs of Distant Earth (1994), and \"Far Above the Clouds\" from Tubular Bells III (1998). Steve Brian co-remixed the two radio mixes, and Tarja Turunen, formerly of Nightwish, sings on the one new song, \"Never Too Far\". The sequence opens at 87 BPM, moves into a club block of extended mixes at 124–132 BPM that peaks with the 10:39 \"Tubular Bells\", drops to three radio-length tracks, returns to club length for a second \"Guilty\" and \"Tubular Bells 2\", and closes on a new song whose full beat waits until 5:40.\n\nearMUSIC, a division of Edel, released the album on 1 February 2013. It reached Netherlands No. 54, Germany No. 55, Sweden No. 55, Austria No. 67, and Spain No. 96. Reviews were split: Chain D.L.K. credited York with the production, Regen Magazine gave three stars and called the sounds \"overtly familiar\", and the New Age Music Guide found that it offered little new even for a remix album.\n\nTimestamps come from band-energy, transient, and chroma measurements of the CD audio and are approximate to ±3 seconds. Tempos are measured; instrument names follow the press release and published reviews.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Let There Be Light (York Remix)",
+      "duration": "7:35",
+      "energy": "mid",
+      "tags": [
+        "Downtempo",
+        "87 BPM",
+        "Guitar Hook",
+        "Album Opener"
+      ],
+      "role": "Album role: The downtempo opener and the slowest track on the album at 87 BPM — the 1994 \"Let There Be Light\" from The Songs of Distant Earth, extended to 7:35 with its spoken sample and guitar hook kept.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "beatless opening of mid-range textures with no sub-bass; the sub-bass enters at 0:15.",
+          "detail": "Chain D.L.K. and Regen Magazine both note that the original spoken sample and reverberating guitar hook are retained."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Beat Entry",
+          "description": "drums enter at reduced level: a hi-hat pattern and a light low end over the half-time pulse."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Full Groove",
+          "description": "the sub-bass rises about 12 dB to full level and the 87 BPM groove locks in, with the harmony moving between A, C, and D.",
+          "detail": "Chain D.L.K. describes the treatment as a Delerium-style groove."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Breakdown",
+          "description": "hi-hats and kick fall away; sub-bass and mid-range material carry the section for about 45 seconds."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Groove Returns",
+          "description": "the full kit returns at its earlier level."
+        },
+        {
+          "timestamp": "5:02",
+          "section": "Harmonic Shift",
+          "description": "the harmonic centre moves from the A–C–D field to B♭–F–D, a darker turn for the final third."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Second Breakdown",
+          "description": "the hi-hats drop out again for 22 seconds before the groove resumes at 5:54 on the B♭–F–D harmony."
+        },
+        {
+          "timestamp": "7:12",
+          "section": "Outro",
+          "description": "the drums stop; sub-bass and a low D-centred tail close the track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Far Above the Clouds (York Remix)",
+      "duration": "7:28",
+      "energy": "high",
+      "tags": [
+        "Trance",
+        "124 BPM",
+        "Tubular Bells III Source",
+        "Replaced Percussion"
+      ],
+      "role": "Album role: The step up to club tempo, from 87 to 124 BPM — the closing track of Tubular Bells III (1998) with its original percussion replaced by a four-on-the-floor beat and added synthesizer parts.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "a sub-bass pulse alone, with almost no mid-range or treble content."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Thinning",
+          "description": "the sub-bass drops back and mid-range and high material enter in a lighter texture."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Beat Entry",
+          "description": "kick and sub-bass return at full weight; the hi-hats build through 1:00.",
+          "detail": "Chain D.L.K. notes that the original percussion is submerged and replaced with a club beat, with extra synthesizer parts added."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Short Break",
+          "description": "a 14-second dip in sub-bass under bright hi-hats sets up the drop."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Main Drop",
+          "description": "the sub-bass reaches full level and the A-minor four-on-the-floor runs unbroken to 2:48."
+        },
+        {
+          "timestamp": "3:51",
+          "section": "Hi-Hat Dropout",
+          "description": "the hi-hats fall away while the kick continues; the texture stays reduced until 5:08."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Peak",
+          "description": "the strongest kick pulse of the track, with full sub-bass and top end, for 47 seconds."
+        },
+        {
+          "timestamp": "6:28",
+          "section": "Outro",
+          "description": "the sub-bass leaves and the kick stops at 6:32; a beatless high-register tail ends the track.",
+          "detail": "The spectral centroid rises from about 350 Hz to 1.4 kHz across the outro, which clears the low end before \"Ommadawn\" opens without a beat."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Ommadawn (Mike Oldfield & York Remix)",
+      "duration": "10:16",
+      "energy": "high",
+      "tags": [
+        "Progressive House",
+        "128 BPM",
+        "Two-Minute Beatless Intro",
+        "Three Drops"
+      ],
+      "role": "Album role: The first extended mix over ten minutes and an even Oldfield–York collaboration, according to Chain D.L.K. — the 1975 Ommadawn as a 128 BPM progressive house piece that holds the kick back for two minutes and then builds through three drops.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "quiet beatless opening with little sub-bass."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Theme Entry",
+          "description": "mid-range melodic material comes forward, centred on F♯, A, and D, with no percussion."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Hi-Hats",
+          "description": "a steady hi-hat pattern enters without a kick."
+        },
+        {
+          "timestamp": "2:02",
+          "section": "Kick Entry",
+          "description": "the kick enters and the sub-bass rises; the full beat sets the 128 BPM tempo.",
+          "detail": "Chain D.L.K. calls the result a \"trancey prog-house take on the piece.\""
+        },
+        {
+          "timestamp": "2:48",
+          "section": "Riser",
+          "description": "kick and sub-bass cut out for a 16-second high-frequency sweep, with the spectral centroid above 3 kHz."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "First Drop",
+          "description": "full sub-bass and four-on-the-floor for 76 seconds."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Mid-Section",
+          "description": "the sub-bass drops back and the mid-range melody returns to the front until 5:09."
+        },
+        {
+          "timestamp": "5:09",
+          "section": "Second Drop",
+          "description": "the full low end returns, with the harmony now on G and F."
+        },
+        {
+          "timestamp": "6:20",
+          "section": "Breakdown",
+          "description": "the kick stops; the hi-hats continue and the harmony moves to B and G♯ for the longest beatless passage after the intro."
+        },
+        {
+          "timestamp": "7:47",
+          "section": "Build",
+          "description": "a 16-second kick passage, then a pulsing riser without kick from 8:04."
+        },
+        {
+          "timestamp": "8:14",
+          "section": "Final Drop",
+          "description": "the last full section: sub-bass, kick, and the brightest top end of the track until 9:28."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Outro",
+          "description": "kick and sub-bass leave; a high-register tail fades to silence by 10:16."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Guilty (Mike Oldfield & York Remix)",
+      "duration": "7:53",
+      "energy": "high",
+      "tags": [
+        "130 BPM",
+        "Disco Single Source",
+        "Percussion Intro",
+        "Long Breakdown"
+      ],
+      "role": "Album role: The first of two versions of the 1979 disco single \"Guilty\" — the club-length remix at 130 BPM; the second, an electro-funk mix, follows as track 9.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Percussion Intro",
+          "description": "hi-hat and snare-band transients with no kick and little sub-bass.",
+          "detail": "Chain D.L.K. notes that the original \"sounded discoed-out\" and that the remix gives it a modern club feel."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Beat Entry",
+          "description": "kick and sub-bass enter together; the bass groove on C and A runs to 1:44."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Break",
+          "description": "a 14-second break with the sub-bass reduced and the harmony moved to E and F♯."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Second Break",
+          "description": "the kick stops for 12 seconds; the groove returns in full at 3:12."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Breakdown",
+          "description": "kick and sub-bass leave for the longest break of the track, on the E–F♯ harmony."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Build",
+          "description": "the treble rises steadily over a returning low end."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Final Drop",
+          "description": "kick and sub-bass return at full level, with the harmony on C and E for the closing section."
+        },
+        {
+          "timestamp": "7:24",
+          "section": "Outro",
+          "description": "the sub-bass leaves and the kick stops at 7:32; percussion closes the track."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Tubular Bells (Mike Oldfield & York Remix)",
+      "duration": "10:39",
+      "energy": "peak",
+      "tags": [
+        "Exorcist Theme",
+        "132 BPM",
+        "Album Centrepiece",
+        "Piano Coda",
+        "Two Drops"
+      ],
+      "role": "Album role: The summit and the longest track — the 1973 opening theme, used in The Exorcist, rebuilt as a 132 BPM trance mix with two drops and a piano coda.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Theme Intro",
+          "description": "the opening-theme motif alone at low level over a soft hi-hat pulse, centred on A minor.",
+          "detail": "Chain D.L.K. identifies the Exorcist riff as the main theme of the remix and calls the mix \"much more spacey\" than the original."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Bass Entry",
+          "description": "the sub-bass enters under the theme, without a regular kick."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Hi-Hats",
+          "description": "the treble rises with a hi-hat pattern; the kick enters at 2:08."
+        },
+        {
+          "timestamp": "2:11",
+          "section": "First Drop",
+          "description": "full sub-bass and kick at 132 BPM."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Breakdown",
+          "description": "the kick stops and the sub-bass falls away; at 4:14 the treble also drops, the quietest passage after the intro."
+        },
+        {
+          "timestamp": "4:41",
+          "section": "Bass Returns",
+          "description": "the sub-bass returns without a regular kick under a brighter mid-range section."
+        },
+        {
+          "timestamp": "5:32",
+          "section": "Bright Section",
+          "description": "the treble reaches its highest level of the track; a broken kick pattern becomes regular at 5:44."
+        },
+        {
+          "timestamp": "6:45",
+          "section": "Break",
+          "description": "treble and kick fall back for 39 seconds."
+        },
+        {
+          "timestamp": "7:24",
+          "section": "Final Drop",
+          "description": "four-on-the-floor with full sub-bass and top end until 8:50."
+        },
+        {
+          "timestamp": "8:50",
+          "section": "Strip-Down",
+          "description": "the mid-range thins while kick and sub-bass continue; the kick stops at 9:32."
+        },
+        {
+          "timestamp": "9:37",
+          "section": "Silence",
+          "description": "a 13-second near-silent gap separates the club mix from the coda."
+        },
+        {
+          "timestamp": "9:50",
+          "section": "Piano Coda",
+          "description": "a beatless piano outro on D, F♯, and G — away from the A-minor theme — ends the track.",
+          "detail": "Chain D.L.K. identifies the outro as piano; the measurement shows no sub-bass and no content above 6 kHz in this section."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "To France (York & Steve Brian Radio Mix)",
+      "duration": "3:35",
+      "energy": "high",
+      "tags": [
+        "Radio Mix",
+        "128 BPM",
+        "Steve Brian Co-Remix",
+        "Processed Vocal"
+      ],
+      "role": "Album role: The first of three radio-length tracks — the 1984 single from Discovery recut by York and Steve Brian as a 3:35 dance-pop edit, with the vocal treated with Auto-Tune and effects.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "a short beatless opening; mid-range material enters at 0:08."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat Entry",
+          "description": "the kick enters, with full sub-bass from 0:19.",
+          "detail": "Chain D.L.K. describes the vocals as \"jazzed up with autotune and effects\" and the result as a pop dance tune."
+        },
+        {
+          "timestamp": "0:41",
+          "section": "Break",
+          "description": "sub-bass and hi-hats pull back while partial kick patterns continue."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Full Section",
+          "description": "the full low end and kick return until 1:58."
+        },
+        {
+          "timestamp": "1:58",
+          "section": "Second Break",
+          "description": "an 18-second drop in sub-bass and kick."
+        },
+        {
+          "timestamp": "2:38",
+          "section": "Final Section",
+          "description": "the strongest kick pulse of the track runs to 3:08."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Outro",
+          "description": "sub-bass and kick pull back; the track ends at 3:35."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Northstar (Mike Oldfield & York Remix)",
+      "duration": "4:06",
+      "energy": "high",
+      "tags": [
+        "Philip Glass Composition",
+        "124 BPM",
+        "Platinum Source",
+        "Short Club Mix"
+      ],
+      "role": "Album role: A four-minute club mix between the two radio edits — Oldfield's 1979 Platinum arrangement of Philip Glass's \"North Star\" set to a 124 BPM beat.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "an eight-second lead-in."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Beat Entry",
+          "description": "full kick and sub-bass from the first bar, centred on C.",
+          "detail": "Chain D.L.K. finds that the piece \"works a lot better in this remix with a stronger beat.\""
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Breakdown",
+          "description": "the kick breaks into fragments and the hi-hats stop; mid-range material holds the C–G harmony."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Beat Returns",
+          "description": "kick and sub-bass return at full level until 2:43."
+        },
+        {
+          "timestamp": "2:43",
+          "section": "Kick Dropout",
+          "description": "the kick stops while the hi-hats continue for 31 seconds."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Final Section",
+          "description": "the full beat for 32 seconds."
+        },
+        {
+          "timestamp": "3:46",
+          "section": "Outro",
+          "description": "kick and treble pull back; the track ends at 4:06 with the sub-bass still present."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Moonlight Shadow (York & Steve Brian Radio Mix)",
+      "duration": "3:32",
+      "energy": "high",
+      "tags": [
+        "Radio Mix",
+        "128 BPM",
+        "Euro Dance",
+        "Crises Source"
+      ],
+      "role": "Album role: The second radio mix, built on Oldfield's most successful single — the 1983 \"Moonlight Shadow\" from Crises, rearranged by York and Steve Brian as a 128 BPM Euro dance track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "beatless opening on E and G♯."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Kick Entry",
+          "description": "the kick enters without hi-hats."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Full Beat",
+          "description": "sub-bass and hi-hats complete the beat, and the harmony moves to C and D.",
+          "detail": "Regen Magazine describes a euro dance version \"driven by sweet vocals and a lively techno arrangement.\""
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Mid-Range Drop",
+          "description": "the mid-range thins and the hi-hats come forward for 19 seconds."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Full Arrangement",
+          "description": "the full mid-range returns and the beat runs unbroken until 3:10."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Outro",
+          "description": "the kick stops at 3:12; the track ends at 3:32."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Guilty (York & Mike's Electrofunkremix)",
+      "duration": "4:53",
+      "energy": "high",
+      "tags": [
+        "Electro-Funk",
+        "126 BPM",
+        "Promo Video Edit",
+        "Second Guilty Version"
+      ],
+      "role": "Album role: The return to \"Guilty\" after four other tracks — an electro-funk mix at 126 BPM, four BPM slower than track 4; a shortened edit is the soundtrack of earMUSIC's \"Guilty 2013\" promo video.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "the kick from the first bar over a partial bassline in F."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Full Groove",
+          "description": "the sub-bass reaches full level."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Break",
+          "description": "kick and sub-bass stop; a bright mid-range passage holds for 25 seconds."
+        },
+        {
+          "timestamp": "1:53",
+          "section": "Rebuild",
+          "description": "the kick returns in broken patterns and the sub-bass rises in steps."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Main Section",
+          "description": "the full groove, with a mid-range layer that alternates on and off in 15- to 30-second blocks."
+        },
+        {
+          "timestamp": "3:59",
+          "section": "Stripped Groove",
+          "description": "the mid-range layer drops out; kick and bass carry the last section."
+        },
+        {
+          "timestamp": "4:44",
+          "section": "Ending",
+          "description": "the kick stops and a high-frequency tail ends the track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Tubular Bells 2 (Mike Oldfield & York Remix)",
+      "duration": "7:53",
+      "energy": "high",
+      "tags": [
+        "Finale Source",
+        "126 BPM",
+        "A Minor Tune Melody",
+        "Four-on-the-Floor"
+      ],
+      "role": "Album role: The last club mix — despite its title a remix of the \"Finale\" of Tubular Bells (1973), not of Tubular Bells II (1992), built on the instrument-introduction riff with a melody from \"A Minor Tune\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "a short opening on D and E; scattered kicks start at 0:08."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Full Beat",
+          "description": "kick and sub-bass at full level, centred on D.",
+          "detail": "Chain D.L.K. calls the mix \"very tranced-out\" and notes that the theme is the riff over which the original instruments are introduced."
+        },
+        {
+          "timestamp": "1:32",
+          "section": "Short Break",
+          "description": "a 14-second drop in sub-bass and kick; the full beat returns at 1:46."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Kick Dropout",
+          "description": "the kick falls to single hits for 24 seconds and the hi-hats leave; the sub-bass carries the section."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Rebuild",
+          "description": "the mid-range rises and the hi-hats return at full density."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Breakdown",
+          "description": "the kick stops and the sub-bass falls back for 36 seconds."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Final Drop",
+          "description": "the full beat, with the strongest kick pulse of the track, until 7:07."
+        },
+        {
+          "timestamp": "7:07",
+          "section": "Outro",
+          "description": "mid-range and sub-bass recede; the kick stops at 7:36 and the track ends at 7:53."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Never Too Far (with Tarja Turunen)",
+      "duration": "8:46",
+      "energy": "mid",
+      "tags": [
+        "New Song",
+        "Tarja Turunen",
+        "Wordless Vocal",
+        "Delayed Beat"
+      ],
+      "role": "Album role: The closer and the only new composition — a song with Tarja Turunen, formerly of Nightwish, that withholds its full beat until 5:40.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "a dark beatless opening with no content above 6 kHz.",
+          "detail": "According to Chain D.L.K., Turunen's vocal stays wordless for nearly the first half of the song."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Harmony Entry",
+          "description": "the level rises about 9 dB as low-register harmony on F and D enters."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Bass Entry",
+          "description": "the sub-bass reaches full level and the harmony moves to A and C."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Percussion",
+          "description": "a hi-hat pattern enters, still without a kick."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Half-Time Kick",
+          "description": "a sparse half-time kick pattern enters and the treble opens up."
+        },
+        {
+          "timestamp": "5:24",
+          "section": "Pause",
+          "description": "the kick stops for 16 seconds."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Full Beat",
+          "description": "the full beat enters and runs until 7:40.",
+          "detail": "Chain D.L.K. notes that there is \"no beat until 5:40\"; the transient measurement places the full kick entry at the same point."
+        },
+        {
+          "timestamp": "7:45",
+          "section": "Outro",
+          "description": "the sub-bass leaves and the kick stops at 7:57; the track fades out by 8:46."
+        }
+      ]
+    }
+  ]
+}

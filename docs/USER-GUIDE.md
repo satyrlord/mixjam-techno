@@ -189,7 +189,7 @@ by this build.
   Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
   the send knob while the lane has points), Filter (low-pass below the
   middle, high-pass above it, open in the middle; it crosses between the two
-  without a click), Pan, Repeat, or Repeat gate. Click a lane to add a
+  without a click), Pan, Repeat, Repeat gate, or Pitch. Click a lane to add a
   point, drag a point to move it, and double-click or right-click a point to
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
   points the value moves in a straight line, except on the Repeat and Repeat
@@ -217,6 +217,18 @@ by this build.
   quarter and then fades out over 3 ms, so a roll becomes short, punchy
   plucks without drawing volume points; at 100% the repeats play whole. The
   gate does nothing while Repeat is off.
+- The Pitch lane bends a track's playback speed, for tape-stops and pitch
+  falls. Its row runs from four octaves down (-48 st) at the bottom to two
+  octaves up (+24 st) at the top, with no change two thirds of the way
+  up, and a point snaps to whole semitones. It works like a tape machine:
+  pitch and speed move together, so an octave down plays at half speed, and
+  a fall to the bottom over half a bar slows the sound to a stop. The lane is
+  at 0 before its first point, then moves in straight lines, at every sample,
+  and adds to each clip's own pitch. A clip keeps its place and length: when
+  slowed it ends at its usual end, and when sped up its sound ends where the
+  sample runs out, with its fade out. Draw the lane back to 0 before the
+  track's next clip. The Repeat lane repeats the pitched sound, and the EQ,
+  drive, and the rest of the track come after it.
 - An FX return lane (FX 1 return to FX 4 return in the Automation menu) moves
   one bus's return level over the song, as one line across the arrangement:
   silence at the bottom, the full return (100%, the dashed line) in the

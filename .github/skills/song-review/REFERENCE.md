@@ -42,7 +42,7 @@ write role stems without role metadata. The mechanical report checks abrupt
 melodic endings only for lanes with a recognized melodic role. Without role
 metadata, a report of zero problems does not cover that check. State the limit.
 
-The song tools expect a format-23 document (18 to 22 also work). `render.py` does not pass sample
+The song tools expect a format-24 document (18 to 23 also work). `render.py` does not pass sample
 folders to the application, and `measure.py` checks linked paths from its
 working directory. Convert earlier formats or resolve library-relative WAVs
 with the native application as described in the setup step. Do not substitute

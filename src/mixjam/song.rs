@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 23.
+//! The application's own `.mixjam` song format, format version 24.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -49,6 +49,8 @@
 //!   `fxBuses`, the Repeat gate lane, `repeatGate` in a lane's `automation`,
 //!   and a placement's `reverse`. Earlier songs have static returns,
 //!   full-length repeats, and no reversed clips, and reject the keys.
+//! - Version 24 adds the Pitch lane, `pitch` in a lane's `automation`.
+//!   Earlier songs have no pitch automation and reject the key.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -72,7 +74,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 23;
+pub(super) const FORMAT_VERSION: u32 = 24;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -378,8 +380,8 @@ struct Lane {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sends: Option<[f32; crate::fx::BUSES]>,
     // Raw until the version is checked, as version 20 added `pan`, version
-    // 21 `repeat`, and version 23 `repeatGate`, which an earlier song must
-    // not hold even as an empty list.
+    // 21 `repeat`, version 23 `repeatGate`, and version 24 `pitch`, which an
+    // earlier song must not hold even as an empty list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation: Option<Saved<crate::automation::Automation>>,
     // Raw until the version is checked, as the second peak's keys are
@@ -851,10 +853,17 @@ impl Document {
                             self.format_version
                         ));
                     }
-                    let lanes_are_objects = ["volume", "filter", "pan", "repeat", "repeatGate"]
-                        .iter()
-                        .filter_map(|key| record.get(*key))
-                        .all(point_arrays_have_objects);
+                    if self.format_version < 24 && record.contains_key("pitch") {
+                        return Err(format!(
+                            "Version {} lanes cannot contain pitch automation.",
+                            self.format_version
+                        ));
+                    }
+                    let lanes_are_objects =
+                        ["volume", "filter", "pan", "repeat", "repeatGate", "pitch"]
+                            .iter()
+                            .filter_map(|key| record.get(*key))
+                            .all(point_arrays_have_objects);
                     let sends_are_objects = record
                         .get("sends")
                         .and_then(serde_json::Value::as_array)
@@ -1337,6 +1346,15 @@ mod tests {
         project
     }
 
+    /// The test song with a tape-stop on track 6's Pitch lane, as version
+    /// 24 saves it.
+    fn stopped(mut project: Project) -> Project {
+        project.tracks[5].automation.pitch = [(768, 0.0), (832, -4800.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        project
+    }
+
     /// The test song with a drive on track 6, and one that is off but keeps
     /// its settings on track 9, as version 22 saves them.
     fn driven(mut project: Project) -> Project {
@@ -1477,15 +1495,15 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_23_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_24_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = thrown(driven(rolled(panned(sectioned(project())))));
+        let project = stopped(thrown(driven(rolled(panned(sectioned(project()))))));
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 23);
+        assert_eq!(document["formatVersion"], 24);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["song"]["sections"],
@@ -1567,6 +1585,10 @@ mod tests {
                 "repeatGate": [
                     {"tick": 256, "value": 25.0},
                     {"tick": 384, "value": 60.0}
+                ],
+                "pitch": [
+                    {"tick": 768, "value": 0.0},
+                    {"tick": 832, "value": -4800.0}
                 ]
             })
         );
@@ -1731,8 +1753,9 @@ mod tests {
     #[test]
     fn automation_records_reject_positional_arrays_in_every_supported_version() {
         // Serde can read a struct from a positional array. Such an array
-        // must not hide version 20's pan lane, version 21's repeat lane, or
-        // version 23's repeat gate lane from an earlier reader.
+        // must not hide version 20's pan lane, version 21's repeat lane,
+        // version 23's repeat gate lane, or version 24's pitch lane from an
+        // earlier reader.
         let document = serde_json::to_value(Document::new(
             &Project::default(),
             timestamp(0),
@@ -1755,6 +1778,16 @@ mod tests {
                 serde_json::json!([[], [[], [], [], []], [], [], [{"tick": 0, "value": 16.0}]]),
                 serde_json::json!([[], [[], [], [], []], [], [], [], []]),
                 serde_json::json!([[], [[], [], [], []], [], [], [], [{"tick": 0, "value": 50.0}]]),
+                serde_json::json!([[], [[], [], [], []], [], [], [], [], []]),
+                serde_json::json!([
+                    [],
+                    [[], [], [], []],
+                    [],
+                    [],
+                    [],
+                    [],
+                    [{"tick": 0, "value": -1200.0}]
+                ]),
             ] {
                 document["lanes"][0]["automation"] = automation;
                 assert_eq!(
@@ -1809,7 +1842,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 23);
+        assert_eq!(document["formatVersion"], 24);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened, project);
         // Version 22 and earlier reject each key, even when it holds nothing.
@@ -2035,6 +2068,82 @@ mod tests {
     }
 
     #[test]
+    fn only_version_24_lanes_hold_pitch_automation() {
+        let project = stopped(project());
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        assert_eq!(document["formatVersion"], 24);
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(reopened.tracks, project.tracks);
+        // Version 23 rejects the key, even as an empty list, and opens the
+        // same lane without it.
+        for pitch in [
+            document["lanes"][5]["automation"]["pitch"].clone(),
+            serde_json::json!([]),
+        ] {
+            let mut earlier = document.clone();
+            earlier["formatVersion"] = 23.into();
+            earlier["lanes"][5]["automation"]["pitch"] = pitch;
+            assert_eq!(
+                parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+                "Version 23 lanes cannot contain pitch automation."
+            );
+        }
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 23.into();
+        earlier["lanes"][5]["automation"]
+            .as_object_mut()
+            .unwrap()
+            .remove("pitch");
+        let mut expected = project.clone();
+        expected.tracks[5].automation.pitch.clear();
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap())
+                .unwrap()
+                .tracks,
+            expected.tracks
+        );
+        // Version 24 takes an empty list as no lane, and any value in the
+        // range, but none outside it.
+        let mut empty = document.clone();
+        empty["lanes"][5]["automation"]["pitch"] = serde_json::json!([]);
+        assert!(
+            parse(&serde_json::to_vec(&empty).unwrap()).unwrap().tracks[5]
+                .automation
+                .pitch
+                .is_empty()
+        );
+        for value in [-4800.0, -1234.5, 0.0, 2400.0] {
+            let mut each = document.clone();
+            each["lanes"][5]["automation"]["pitch"][1]["value"] = value.into();
+            assert!(
+                parse(&serde_json::to_vec(&each).unwrap()).is_ok(),
+                "{value}"
+            );
+        }
+        for (value, error) in [
+            (serde_json::json!(-4801.0), "Pitch automation values"),
+            (serde_json::json!(2401.0), "Pitch automation values"),
+            (serde_json::json!(null), "The automation is invalid"),
+        ] {
+            let mut wrong = document.clone();
+            wrong["lanes"][5]["automation"]["pitch"][1]["value"] = value;
+            let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{found}");
+        }
+        let mut wrong = document;
+        wrong["lanes"][5]["automation"]["pitch"][1] = serde_json::json!([832, -1200.0]);
+        assert_eq!(
+            parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err(),
+            "The automation points must be JSON objects."
+        );
+    }
+
+    #[test]
     fn only_version_21_lanes_hold_repeat_automation() {
         let project = rolled(panned(project()));
         let document = serde_json::to_value(Document::new(
@@ -2043,7 +2152,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 23);
+        assert_eq!(document["formatVersion"], 24);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened.tracks, project.tracks);
         // Version 20 rejects the key, even as an empty list, and opens the
@@ -2167,7 +2276,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 23);
+        assert_eq!(document["formatVersion"], 24);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened.tracks, project.tracks);
         // Version 21 and earlier reject the key, on or off, and open the

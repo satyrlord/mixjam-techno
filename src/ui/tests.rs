@@ -13023,6 +13023,143 @@ mod tests {
     }
 
     #[test]
+    fn the_pitch_lane_snaps_to_semitones_and_rests_at_zero_before_its_first_point() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        choose_automation_lane(&ctx, &mut app, "Pitch");
+        assert_eq!(
+            (app.automation_lane, app.return_lane),
+            (Some(Lane::Pitch), None)
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Pitch");
+        let canvas = app.timeline_rect.unwrap();
+        let row = app.timeline_row_height;
+        // -4800 cents at the bottom of the row and 2400 at the top, 4 points in.
+        let height = |cents: f32| 4.0 + (row - 8.0) * (1.0 - (cents + 4800.0) / 7200.0);
+        for (bar, aim, value) in [
+            (1.0, -2390.0, -2400.0),
+            (1.5, -4800.0, -4800.0),
+            (2.0, 40.0, 0.0),
+        ] {
+            let pos = Pos2::new(
+                canvas.left() + app.timeline_bar_width * bar,
+                canvas.top() + height(aim),
+            );
+            click(&ctx, &mut app, pos, egui::Modifiers::NONE);
+            for _ in 0..20 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            let points = &app.session.project().tracks[0].automation.pitch;
+            let tick = (bar * TICKS_PER_BAR as f32) as u32;
+            let point = points
+                .iter()
+                .find(|point| point.tick == tick)
+                .unwrap_or_else(|| panic!("{points:?}"));
+            assert_eq!(point.value, value, "bar {bar}");
+        }
+        let points = &app.session.project().tracks[0].automation.pitch;
+        assert_eq!(
+            points
+                .iter()
+                .map(|point| Lane::Pitch.format(point.value))
+                .collect::<Vec<_>>(),
+            ["-24 st", "-48 st", "0 st"]
+        );
+        // The line rests at 0 on the left, jumps to the first point, and
+        // moves in straight lines from there.
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let x = |bar: f32| canvas.left() + app.timeline_bar_width * bar;
+        let y = |cents: f32| canvas.top() + height(cents);
+        let expected = [
+            (canvas.left(), y(0.0)),
+            (x(1.0), y(0.0)),
+            (x(1.0), y(-2400.0)),
+            (x(1.5), y(-4800.0)),
+            (x(2.0), y(0.0)),
+        ];
+        let drawn = output.shapes.iter().any(|shape| match &shape.shape {
+            egui::Shape::Path(path) => {
+                path.points.len() == expected.len() + 1
+                    && path.points.iter().zip(&expected).all(|(point, (x, y))| {
+                        (point.x - x).abs() < 0.01 && (point.y - y).abs() < 0.01
+                    })
+            }
+            _ => false,
+        });
+        assert!(
+            drawn,
+            "The Pitch lane must rest at 0 before its first point."
+        );
+    }
+
+    #[test]
+    fn agent_automates_the_pitch_lane_and_reports_it_in_the_state() {
+        let (context, mut app, port) = agent_fixture();
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &[
+                "automate",
+                "track=1",
+                "lane=pitch",
+                "points=[[1,0],[1.5,-4800],[2,350.5]]",
+            ],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        let points: Vec<(u32, f32)> = app.session.project().tracks[0]
+            .automation
+            .pitch
+            .iter()
+            .map(|point| (point.tick, point.value))
+            .collect();
+        assert_eq!(points, [(0, 0.0), (128, -4800.0), (256, 350.5)]);
+        let state = agent(&context, &mut app, &port, &["state"]);
+        assert_eq!(
+            state["song"]["tracks"][0]["automation"]["pitch"],
+            serde_json::json!([
+                {"tick": 0, "value": 0.0},
+                {"tick": 128, "value": -4800.0},
+                {"tick": 256, "value": 350.5}
+            ]),
+            "{state}"
+        );
+        // A value outside the range changes nothing.
+        for value in ["-4801", "2401"] {
+            let points = format!("points=[[1,{value}]]");
+            let reply = agent(
+                &context,
+                &mut app,
+                &port,
+                &["automate", "track=1", "lane=pitch", &points],
+            );
+            assert_eq!(reply["ok"], false, "{value}: {reply}");
+        }
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "track=1", "lane=tapestop", "points=[[1,0]]"],
+        );
+        let error = reply["error"].as_str().unwrap_or_default();
+        assert!(error.contains("pitch"), "{reply}");
+        assert_eq!(app.session.project().tracks[0].automation.pitch.len(), 3);
+        // An empty list clears the lane.
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "track=1", "lane=pitch", "points=[]"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        let state = agent(&context, &mut app, &port, &["state"]);
+        let automation = &state["song"]["tracks"][0]["automation"];
+        assert!(automation.get("pitch").is_none(), "{state}");
+    }
+
+    #[test]
     fn a_return_lane_spans_the_arrangement_and_edits_its_bus_in_one_undo_step() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();

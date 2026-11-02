@@ -1054,7 +1054,7 @@ impl MixJamApp {
                         }
                         let lane = automation::Lane::from_key(&lane).ok_or(
                             "Track lanes are volume, send1, send2, send3, send4, filter, pan, \
-                             repeat, and repeatgate.",
+                             repeat, repeatgate, and pitch.",
                         )?;
                         EditCommand::SetAutomation {
                             track: track - 1,
