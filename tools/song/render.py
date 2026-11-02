@@ -11,10 +11,12 @@ OUT_DIR/audible.txt (see audible.py). It also renders OUT_DIR/master.wav with
 the board. --no-master skips the master render.
 
 --fit-gain sets the song's master gain so that the premaster peaks at DBFS (for example -0.5) and
-saves the song before the master render. Without track keys, the premaster and
-stems scale to the new gain. With track keys, the tool renders the lanes again
+saves the song before the master render. Without track keys, the lane files,
+premaster and stems scale to the new gain. With track keys, the tool renders the lanes again
 after each gain change, up to five times. It reports any remaining difference
 from the target.
+An unkeyed fit rejects a lane or role stem that would exceed full scale before
+changing the song or rescaling the audio. Lower the target or adjust the lane gains.
 
 Lane names and roles come from the `.meta.json` beside the song, which mixjam.py
 writes. Each used track without a lane name is its own lane. Without the file,
@@ -407,9 +409,13 @@ def mix_down(lanes, roles):
     return rate, premaster, stems
 
 
-def fit_gain(song, peak, target_db):
+def fit_gain(song, peak, target_db, part_peaks=()):
     """Set the master gain so that a premaster now peaking at `peak` (linear) peaks at target_db;
-    save the song; return the factor the gain changed by."""
+    save the song; return the factor the gain changed by.
+
+    Check optional (name, peak) parts before saving: cancellation can keep the
+    premaster in range while a scaled lane or role stem exceeds PCM full scale.
+    """
     if not math.isfinite(target_db) or target_db > 0:
         raise SystemExit('The gain target must be finite and at or below 0 dBFS.')
     if peak <= 0:
@@ -421,9 +427,14 @@ def fit_gain(song, peak, target_db):
     # with a value that the application will reject on the next render.
     if not math.isfinite(fitted) or not 0 < fitted <= 4.0:
         raise SystemExit('The required master gain is outside 0 to 4. Adjust the lane gains first.')
+    scale = fitted / gain
+    for name, part_peak in part_peaks:
+        if part_peak * scale > 1.0:
+            raise SystemExit(f'The fitted {name} would exceed full scale. '
+                             'Lower the gain target or adjust the lane gains.')
     document['song']['masterGain'] = fitted
     song.write_text(json.dumps(document, indent=1), encoding='utf-8')
-    return fitted / gain
+    return scale
 
 
 def main():
@@ -460,11 +471,23 @@ def main():
                       f'and the target is {target:.2f} dBFS.',
                       file=sys.stderr)
         else:
-            scale = fit_gain(song, float(np.abs(premaster).max()), target)
+            part_peaks = [(f'lane "{name}"', float(np.abs(read_wav(wav)[1]).max()))
+                          for name, wav in lanes.items()]
+            part_peaks.extend((f'stem "{role}"', float(np.abs(stem).max()))
+                              for role, stem in stems.items())
+            scale = fit_gain(song, float(np.abs(premaster).max()), target, part_peaks)
         print(f'master gain {json.loads(song.read_text(encoding="utf-8"))["song"]["masterGain"]}')
-    write_wav(out / 'premaster.wav', rate, premaster * scale)
+    if scale != 1.0:
+        premaster *= scale
+        stems = {role: stem * scale for role, stem in stems.items()}
+        # The lane files must match the premaster they sum to. They are copies, so the
+        # cache keeps its entries at the gain they were rendered with.
+        for wav in lanes.values():
+            lane_rate, data = read_wav(wav)
+            write_wav(wav, lane_rate, data * scale)
+    write_wav(out / 'premaster.wav', rate, premaster)
     for role, stem in stems.items():
-        write_wav(out / f'stem-{role}.wav', rate, stem * scale)
+        write_wav(out / f'stem-{role}.wav', rate, stem)
     lines = audible.audibility(document, groups, rate, premaster.mean(axis=1),
                                lambda name: read_wav(lanes[name])[1].mean(axis=1), jobs)
     (out / 'audible.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')

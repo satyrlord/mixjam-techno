@@ -30,7 +30,7 @@ A tool that needs a missing key stops and names the key.
 | Tool | Usage | What it does |
 |---|---|---|
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-19 songs with lanes, sections, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
-| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak. Eligible unchanged lanes come from the cache described below. |
+| `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak and rescales the lane files, premaster and stems to it. Eligible unchanged lanes come from the cache described below. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--fit DB]` | Renders a board over a premaster and compares it with the reference profile. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`; a board copied from a format-15 song has the earlier keys and fails to render until you rename them. |
@@ -48,6 +48,12 @@ A tool that needs a missing key stops and names the key.
 | `barnotes.py` | `barnotes.py [--song-bpm N] WAV BPM CENTS ...` | Notes per bar heard at the song tempo, including tempo octave selection, varispeed, and clip pitch. |
 
 `env.py` reads `.env.local`; `harmony.py` holds keys, scales, and chords.
+
+For songs without track keys, `render.py --fit-gain` checks each scaled lane
+and role stem before saving the gain or rescaling the audio. If a part would
+exceed full scale, the tool stops and names it. Lower the target or adjust the
+lane gains. Opposite-polarity parts can exceed full scale even when their sum
+does not. Songs with track keys render again after each gain change.
 
 Song-writing methods accept whole track numbers from 1 to 64 and whole FX bus
 numbers from 1 to 4. Invalid destinations fail before changing the song.

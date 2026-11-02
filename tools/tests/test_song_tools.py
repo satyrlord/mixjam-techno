@@ -442,6 +442,68 @@ class MeasureTests(unittest.TestCase):
             _, data = mixjam.read_wav(result['bass'])
             np.testing.assert_allclose(data, 0.625, atol=1 / 32768)
 
+    def test_gain_fit_scales_unkeyed_lanes_with_the_premaster(self):
+        document = mixjam.Song('fit lanes').document()
+        document['lanes'][0]['placements'] = [dict(id=1)]
+        document['lanes'][1]['placements'] = [dict(id=2)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'song.mixjam'
+            source.write_text(json.dumps(document))
+            def lanes(current, groups, out, jobs, cache=None):
+                paths = {}
+                for name, level in (('track 1', 0.25), ('track 2', 0.125)):
+                    paths[name] = out / f'{name}.wav'
+                    mixjam.write_wav(paths[name], 44100, np.full((8, 2), level))
+                return paths
+            with mock.patch.object(render, 'render_lanes', side_effect=lanes), \
+                    mock.patch('audible.audibility', return_value=[]), \
+                    mock.patch.object(sys, 'argv', ['render.py', str(source), str(root), '--fit-gain', '-6', '--no-master']), \
+                    mock.patch.object(sys, 'stdout', io.StringIO()):
+                render.main()
+            _, premaster = mixjam.read_wav(root / 'premaster.wav')
+            _, one = mixjam.read_wav(root / 'track 1.wav')
+            _, two = mixjam.read_wav(root / 'track 2.wav')
+        np.testing.assert_allclose(premaster, 10 ** (-6 / 20), atol=2 / 32768)
+        np.testing.assert_allclose(one + two, premaster, atol=2 / 32768)
+
+    def test_gain_fit_rejects_clipped_parts_before_changing_song_or_audio(self):
+        cases = [('lane', [0.75, -0.5], ['a', 'b']),
+                 ('stem', [0.375, 0.375, -0.25, -0.25], ['a', 'a', 'b', 'b'])]
+        for kind, levels, roles in cases:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                document = mixjam.Song('cancelling lanes').document()
+                meta = {'lanes': {}}
+                for track, role in enumerate(roles, 1):
+                    document['lanes'][track - 1]['placements'] = [dict(id=track)]
+                    meta['lanes'][str(track)] = dict(name=f'part {track}', role=role)
+                source = root / 'song.mixjam'
+                source.write_text(json.dumps(document), encoding='utf-8')
+                original = source.read_bytes()
+                source.with_suffix('.meta.json').write_text(json.dumps(meta), encoding='utf-8')
+                paths, originals = {}, {}
+                for track, level in enumerate(levels, 1):
+                    path = root / f'lane-{track:02d}.wav'
+                    mixjam.write_wav(path, 44100, np.full((8, 2), level))
+                    paths[f'part {track}'] = path
+                    originals[path] = path.read_bytes()
+                for name in ('premaster.wav', 'stem-a.wav', 'audible.txt'):
+                    path = root / name
+                    path.write_bytes(b'previous output')
+                    originals[path] = path.read_bytes()
+                with mock.patch.object(render, 'render_lanes', return_value=paths), \
+                        mock.patch('audible.audibility') as audibility, \
+                        mock.patch.object(sys, 'argv', ['render.py', str(source), str(root),
+                                                      '--fit-gain', '-6', '--no-master']), \
+                        mock.patch.object(sys, 'stdout', io.StringIO()), \
+                        self.assertRaisesRegex(SystemExit, f'{kind}.*exceed'):
+                    render.main()
+                self.assertEqual(source.read_bytes(), original)
+                for path, data in originals.items():
+                    self.assertEqual(path.read_bytes(), data, path.name)
+                audibility.assert_not_called()
+
     def test_gain_fit_renders_keyed_audio_at_the_saved_gain(self):
         song = mixjam.Song('fit')
         song.ducker(2, 1)
