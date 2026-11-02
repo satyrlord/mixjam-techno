@@ -91,12 +91,18 @@ them, and so does a single last frame whose step is over four times any step
 in that window. Sample identity and digests read `Library::read_original_pcm`,
 which keeps the data as stored.
 
-`Player` plays through rodio on cpal's WASAPI shared-mode output. rodio pulls
-`PlaybackSource` one sample at a time inside the device's callback, about every
-10 ms, and the callback that reaches the end of a block renders the next one
+`Player` owns a cpal stream through `src/audio/output.rs` and attaches rodio
+sink queues to its dynamic mixer. The output requests a 40 ms buffer, held
+to a reported device range. If that request fails, it tries the system
+default before other supported formats and devices. `output_configuration`
+reports the accepted request, not a measured buffer capacity or latency.
+WASAPI shared-mode callback cadence remains device-controlled; requesting
+40 ms does not promise 40 ms callbacks. rodio pulls
+`PlaybackSource` one sample at a time inside the device's callback, and the
+callback that reaches the end of a block renders the next one
 within its own period. Playback therefore renders short blocks,
 `PlaybackSource::BLOCK_FRAMES` (256 frames, 5.8 ms), so a callback renders one
-or two and no callback carries much more than its share; export keeps its own
+or more according to the device's request; export keeps its own
 65,536-frame blocks. Nothing audible depends on playback's block size: the
 level glides, the FX tails, and the meters keep their own 1024-frame timing,
 so playback in blocks of any size gives export's samples. On its first read
@@ -119,17 +125,17 @@ applies its clip's fades per frame. `prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that
-pitch. A track whose channel EQ or compressor is on, whose width is not 100%,
-that has automation, whose ducker is on, or that keys a ducker is a
+pitch. A track whose channel EQ, drive, or compressor is on, whose width is
+not 100%, that has automation, whose ducker is on, or that keys a ducker is a
 `TrackChain`: it mixes its voices into a 128-frame stack buffer, which its
-Repeat lane, its EQ (`src/eq.rs`), its compressor (`src/compressor.rs`), its
-width, then its filter and volume lanes (`src/automation.rs`), its ducker
-(`src/ducker.rs`), its level, its pan lane, and its send lanes shape before
-the sum. A track
+Repeat lane, its EQ (`src/eq.rs`), its drive (`src/drive.rs`), its compressor
+(`src/compressor.rs`), its width, then its filter and volume lanes
+(`src/automation.rs`), its ducker (`src/ducker.rs`), its level, its pan lane,
+and its send lanes shape before the sum. A track
 whose pan lane has points leaves its pan knob out of its level, and the lane
 applies the same balance law at each frame, so key levels, sends, and stems
 follow the moving pan. The Repeat lane (`automation::Repeat`) comes first, on
-the clips' sound, so its repeats go through the EQ, compressor, width,
+the clips' sound, so its repeats go through the EQ, drive, compressor, width,
 filter, volume, fader, pan knob or lane, ducker, and FX sends. It does not
 record what played: it maps each output frame to a frame of the voices, which
 are a pure function of the frame. Where the lane turns on at tick T, every
@@ -170,10 +176,41 @@ compressor's curve (`master::dsp::reduction`), so the fader does not change
 how hard it works, and the width scales the side of each frame, on a track
 whose outputs are both on. After them every stage is linear and per channel
 up to the ducker, whose gain follows the separate key, so this order sounds
-as the signal order clips, Repeat lane, EQ, compressor, width, automation,
-fader and pan, ducker, sends. A track with none of these mixes its voices straight into the
-sum, so an EQ or compressor that is off, or a width of 100%, leaves the
-render bit for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
+as the signal order clips, Repeat lane, EQ, drive, compressor, width,
+automation, fader and pan, ducker, sends. A track with none of these mixes its voices straight into the
+sum, so an EQ, drive, or compressor that is off, or a width of 100%, leaves the
+render bit for bit as it was.
+The drive comes after the EQ and before the compressor. The EQ then chooses
+what is driven, such as a low cut that keeps rumble out of the curve or a
+boost that drives one band harder. The compressor after it evens out the
+driven sound and hears the harmonics the drive added, so its detector follows
+the track as it sounds. Like the compressor, the drive works before the
+fader, so the fader does not change how hard it drives, and before the
+automation and the sends, which therefore carry its harmonics. The drive
+(`drive::Run`) bends a copy of the track through its curve at four times the
+mix rate, with antiderivative anti-aliasing on each sample, matches the
+copy's power to the track's, high-passes the difference between the copy and
+the track at its focus, adds the mix's share of it to the track, and holds the
+result at the track's power before the output trim. The driven and reference
+signals share their identical upsampling filters and keep separate
+downsampling histories. The curve reuses the preceding sample's integral
+instead of calculating it again. Until the first nonzero input, a drive skips
+untouched silent frames. After input starts, every frame runs through the
+processor so later silence retains the filter tails. These paths preserve
+the sample values.
+Its oversampling delays
+the copy by `drive::LATENCY` (69 frames), so a chain with a drive reads its
+voices, Repeat lane, and EQ that many frames ahead and the drive's output
+lines up with the song. The track itself goes through a plain delay of the
+same length, so a mix of 0% at 0 dB output is bit for bit the track. A read that does not
+continue the last one first runs the drive over the 69 frames from its first
+frame, as the other histories start from silence there, so a seek leaves no
+gap. During loop playback, those source reads stop at the loop end and fill
+the remaining lookahead with silence, so sound outside the loop cannot leak
+into its final frames. Each drive's history, a key chain's too, lives in the `RenderState` in a
+slot that the mix gives it; `Frames::prepare_state` allocates the slots
+before playback hands the source to the device. A drive edit is a track edit
+and prepares a new mix, as an EQ edit does. `src/eq.rs` owns `ChannelEq`, the saved settings, and
 `EqParam`, each control with its range; a mix designs a chain's EQ curve once
 from the master board's shared RBJ biquads (`master::dsp`). An EQ edit is a
 track edit, so it prepares a new mix and playback resumes on it. A mix keeps
@@ -487,8 +524,8 @@ scrolling occupied-track bank. Each track strip's EQ button starts the row of
 Mute and Solo, above polarity, and the Master strip's Bypass sits under its
 output labels; both mirror project state. `src/ui/eq.rs` owns the channel EQ
 window: the frontend keeps which track it shows, and the window edits copies
-of that track's `ChannelEq`, `Compressor`, width, and `Ducker`, sent as
-`EditCommand::SetMixer`. It reuses the
+of that track's `ChannelEq`, `Drive`, `Compressor`, width, and `Ducker`, sent
+as `EditCommand::SetMixer`. It reuses the
 Mastering dials and paints its response curve. The Mixer's toolbar holds
 Export tracks, which asks for a folder through `ask_path`. Native controls
 paint live labels, dB values,

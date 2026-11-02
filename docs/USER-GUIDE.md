@@ -138,6 +138,9 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   milliseconds, so it does not click, and the repeats go through the track's
   EQ, pan, and FX sends.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
+- Playback requests a 40 ms output buffer to give busy songs more headroom.
+  The device may use another size. A larger buffer can add a short delay
+  between an action and its sound; it does not change exported audio.
 - A song can have sections: named parts such as Intro or Break. Each one is a
   bookmark, a colored line across the lanes with its name on the bar ruler, and
   lasts until the next one starts. With sections shown, the Loop button loops
@@ -195,10 +198,22 @@ change smoothly while the song plays, including when you undo or redo them.
   ducks), Attack, and
   Release. The track ducks by as much as the key rises over the threshold,
   after its fader and before its sends. A muted key does not duck. The EQ
-  button lights while the EQ, the compressor, or the ducker is on, or while
-  the width is not 100%.
-- Between the EQ and the ducker, the window holds the track's compressor,
-  which evens out the track's level after its EQ, such as the hits of a drum
+  button lights while the EQ, the drive, the compressor, or the ducker is on,
+  or while the width is not 100%.
+- Under the EQ, the window holds the track's drive, which adds harmonics: a
+  held bass that is close to a pure tone can then be heard on laptops and
+  phones, whose speakers cannot play its fundamental. Switch it on and set
+  Amount (how hard a copy of the track is driven), Character (0% bends both
+  halves of the wave alike, for odd harmonics, like tape; 100% bends one half,
+  for even harmonics, like a tube), Mix (how much of the change is added),
+  Focus (below this frequency the track stays clean), and Output. For a bass,
+  set Focus to about twice its lowest note: the fundamental stays as it is and
+  only the harmonics come in. The drive keeps the track's power, so switching
+  it on does not make the track louder; Output moves the level by hand. It
+  works after the EQ and before the compressor, so the fader does not change
+  how hard it drives. Mix at 0% leaves the track unchanged when Output is 0 dB.
+- Between the drive and the ducker, the window holds the track's compressor,
+  which evens out the track's level after its EQ and drive, such as the hits of a drum
   loop. Switch it on and set Thresh (the level above which it compresses),
   Ratio, Attack, Release, and Makeup. It works before the track's width,
   automation, and fader, so moving the fader does not change how hard it
@@ -213,7 +228,7 @@ change smoothly while the song plays, including when you undo or redo them.
 - Export tracks… in the Mixer's toolbar asks for a folder and writes each
   track that plays, and the return of each FX bus that it feeds, to its own
   WAV file, for mixing in another application. A track's file is the track
-  alone after its EQ, compressor, width, automation, fader, pan, outputs, and ducker,
+  alone after its EQ, drive, compressor, width, automation, fader, pan, outputs, and ducker,
   without its sends;
   the FX returns hold every track's sends. The files leave the master
   pedalboard out and are as long as the mix export. They sum to the mix with

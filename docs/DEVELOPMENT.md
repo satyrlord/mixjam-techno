@@ -5,6 +5,7 @@
 - [Toolchain and folders](#toolchain-and-folders)
 - [Version](#version)
 - [Checks](#checks)
+- [Audio output verification](#audio-output-verification)
 - [UI verification](#ui-verification)
 - [Visual assets](#visual-assets)
 
@@ -63,11 +64,23 @@ its own and reports each region that rustfmt skips. Split a long literal with
 The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`
 (offline), and the `.mixjam` projection used by artifact
-verification. The projection reads formats 8 through 21 and preserves sections, the
+verification. The projection reads formats 8 through 22 and preserves sections, the
 master pedalboard and its bypass, FX buses, sends, automation, channel EQs, and
-clip fades and pitch, lane duckers, compressors, and widths, and master and FX
+clip fades and pitch, lane duckers, drives, compressors, and widths, and master and FX
 keys when a verification script writes a schema-4 JSON project
 for rendering; it gives the Booster pedals their format-16 keys.
+
+## Audio output verification
+
+The optional `audio::output::tests::native_output_buffer_probe` test opens
+the default physical output for six seconds of silence. Run it separately
+with `cargo.ps1 -CargoArguments @('test','--lib','native_output_buffer_probe',
+'--','--ignored','--nocapture')`. It compares system-default buffering with
+the app's 40 ms request and reports callback sizes and intervals. CPAL's
+reported timestamp lead is derived from available frames, not an independent
+measurement of output latency. This probe does not prove that a heavy song
+plays without underruns. Report benchmark limits against the measured or
+explicitly modeled callback period.
 
 ## UI verification
 

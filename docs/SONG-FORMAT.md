@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 21 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 22 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 20 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 21 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 21 keeps its `createdAt`.
+to 22 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.
@@ -69,8 +69,8 @@ history below. A lane from version 18 may also hold:
   division in the same run keeps T, so a faster division shortens the slice.
   A point with the value already held changes nothing. At 0 the live sound
   returns, and the next turn on captures at its own tick. The repeats run on
-  the clips' sound before the EQ, compressor, width, other automation, fader,
-  pan, ducker, and sends. Versions 20 and earlier reject `repeat`, even as an
+  the clips' sound before the EQ, drive, compressor, width, other automation,
+  fader, pan, ducker, and sends. Versions 20 and earlier reject `repeat`, even as an
   empty list. Repeat can continue past its source clip until the song ends.
   Automation points do not extend the song's duration.
 - `eq`, the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
@@ -84,7 +84,19 @@ history below. A lane from version 18 may also hold:
   from -18 to 18 dB, where 0 is off; and `highCut`, a 12 dB/octave low-pass,
   from 1000 to 20,000 Hz, where 20,000 is off. The bands run in that order. A
   lane whose EQ is off at the default settings omits `eq`.
-- `compressor`, the lane compressor after the EQ: `{"on", "threshold",
+- `drive`, from version 22, the lane drive after the EQ and before the
+  compressor: `{"on", "amount", "character", "mix", "focus", "output"}`, every
+  key required. `amount` runs from 0 to 24 dB, how hard a copy of the lane is
+  driven into the saturation curve; `character` from 0 to 100 percent, from a
+  symmetric curve (odd harmonics) to a one-sided one (mostly even harmonics);
+  `mix` from 0 to 100 percent, how much of the copy's change is added to the
+  clean lane; `focus` from 20 to 2000 Hz, the corner of a 24 dB/octave
+  high-pass on that change, below which the lane stays clean; and `output`
+  from -12 to 12 dB. The drive matches the result to the input power, then
+  applies the `output` trim. A `mix` of 0 leaves the lane unchanged when
+  `output` is 0 dB. A lane whose drive is off at the default settings (12 dB, 25%, 50%,
+  100 Hz, 0 dB) omits `drive`; versions 21 and earlier reject the key.
+- `compressor`, the lane compressor after the drive: `{"on", "threshold",
   "ratio", "attack", "release", "makeup"}`, every key required. `threshold`
   runs from -60 to 0 dBFS, `ratio` from 1 to 20, `attack` from 0.1 to
   100 ms, `release` from 10 to 1000 ms, and `makeup` from 0 to 24 dB. A lane
@@ -109,7 +121,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 21 are:
+versions 16 to 22 are:
 
 | Key | Settings |
 |---|---|
@@ -172,7 +184,7 @@ before replacing the destination.
 ## Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 21, which earlier builds cannot open.
+earlier song writes version 22, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -190,6 +202,7 @@ earlier song writes version 21, which earlier builds cannot open.
 | 19 | Adds the song's `sections`. | No sections. |
 | 20 | Adds the lane automation `pan`. | No pan automation. |
 | 21 | Adds the lane automation `repeat`. | No repeat automation. |
+| 22 | Adds the lane `drive`. | Every drive off. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

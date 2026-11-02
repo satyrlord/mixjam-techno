@@ -11,7 +11,7 @@ static TABLE_INITIALIZATIONS: std::sync::atomic::AtomicUsize =
 
 /// Prepare every shared table before a processor reaches the audio thread.
 /// Even a bypassed board can later enable a pedal or start its meters.
-pub(super) fn prepare_tables() {
+pub(crate) fn prepare_tables() {
     LazyLock::force(&OUTER);
     LazyLock::force(&INNER);
     LazyLock::force(&PHASES);
@@ -389,6 +389,37 @@ impl Oversampler {
         self.held = d;
         self.outer.down(outer, pair)
     }
+
+    /// Run two curves on the same upsampled input, with separate output
+    /// filters. Both histories must start at ZERO and remain paired: the
+    /// reference's input filters are unused, so do not call `process` on it.
+    /// Each output keeps the arithmetic order of an independent processor.
+    #[inline]
+    pub(crate) fn process_pair(
+        &mut self,
+        reference: &mut Self,
+        sample: f32,
+        mut curve: impl FnMut(f32) -> [f32; 2],
+    ) -> [f32; 2] {
+        let (outer, inner) = (&*OUTER, &*INNER);
+        let [a, b] = self.outer.up(outer, sample);
+        let [p0, p1] = self.inner.up(inner, a);
+        let [p2, p3] = self.inner.up(inner, b);
+        let shaped = [p0, p1, p2, p3].map(&mut curve);
+        let mut output = [0.0; 2];
+        for (index, state) in [self, reference].into_iter().enumerate() {
+            let c = state
+                .inner
+                .down(inner, [shaped[0][index], shaped[1][index]]);
+            let d = state
+                .inner
+                .down(inner, [shaped[2][index], shaped[3][index]]);
+            let pair = [state.held, c];
+            state.held = d;
+            output[index] = state.outer.down(outer, pair);
+        }
+        output
+    }
 }
 
 // Delays and peaks ---------------------------------------------------------------------
@@ -589,6 +620,56 @@ mod tests {
 
     fn rms(samples: &[f32]) -> f64 {
         (samples.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / samples.len() as f64).sqrt()
+    }
+
+    #[test]
+    fn paired_oversampling_matches_independent_histories_bit_for_bit() {
+        let mut input = sine(55.0, 0.8, 4000);
+        input.extend(sine(17_000.0, 0.9, 4000));
+        let mut seed = 0x1234_5678_u32;
+        input.extend((0..4000).map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            (f64::from(seed) / f64::from(u32::MAX) * 2.0 - 1.0) as f32
+        }));
+        input.extend(std::iter::repeat_n(0.0, 4000));
+        let (mut driven, mut reference) = (Oversampler::ZERO, Oversampler::ZERO);
+        let (mut paired, mut paired_reference) = (Oversampler::ZERO, Oversampler::ZERO);
+        let (mut last, mut paired_last) = ([0.0_f32; 2], [0.0_f32; 2]);
+        // Stateful curves exercise the order of the four inputs. The
+        // histories carry through arbitrary block boundaries and silence.
+        let shape = |sample: f32, previous: &mut f32, nonlinear: bool| {
+            let mean = 0.5 * (sample + *previous);
+            *previous = sample;
+            if nonlinear { (mean * 8.0).tanh() } else { mean }
+        };
+        let mut start = 0;
+        for size in [1, 3, 128, 441, 69, 2049].into_iter().cycle() {
+            let end = (start + size).min(input.len());
+            for (offset, sample) in input[start..end].iter().copied().enumerate() {
+                let expected = [
+                    driven.process(sample, |x| shape(x, &mut last[0], true)),
+                    reference.process(sample, |x| shape(x, &mut last[1], false)),
+                ];
+                let actual = paired.process_pair(&mut paired_reference, sample, |x| {
+                    [
+                        shape(x, &mut paired_last[0], true),
+                        shape(x, &mut paired_last[1], false),
+                    ]
+                });
+                assert_eq!(
+                    actual.map(f32::to_bits),
+                    expected.map(f32::to_bits),
+                    "frame {}",
+                    start + offset
+                );
+            }
+            start = end;
+            if start == input.len() {
+                break;
+            }
+        }
     }
 
     #[test]

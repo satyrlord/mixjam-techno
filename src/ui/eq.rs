@@ -1,8 +1,9 @@
 //! The channel EQ window of one track: its power switch, Reset, the
 //! response curve of its settings, and a dial for each control, in signal
-//! order from the low cut to the high cut; below them the track's
-//! compressor, with its switch and dials, and the track's width; at the
-//! foot the track's ducker, with its switch, its key track, and its dials.
+//! order from the low cut to the high cut; below them the track's drive and
+//! then its compressor, each with its switch and dials, and the track's
+//! width; at the foot the track's ducker, with its switch, its key track,
+//! and its dials.
 //! The window edits copies of the track's settings; the caller turns
 //! changed copies into a mixer edit.
 use super::controls::CREAM;
@@ -11,6 +12,7 @@ use super::*;
 use mixjam_techno::application::{
     KnobRange, TRACK_WIDTH,
     compressor::{Compressor, CompressorParam},
+    drive::{Drive, DriveParam},
     ducker::{Ducker, DuckerParam},
     eq::{ChannelEq, EqParam},
 };
@@ -19,6 +21,7 @@ use mixjam_techno::application::{
 #[derive(Clone, Copy, PartialEq)]
 struct Channel {
     eq: ChannelEq,
+    drive: Drive,
     compressor: Compressor,
     width: f32,
     ducker: Ducker,
@@ -40,16 +43,20 @@ const COLUMN: f32 = 86.0;
 const ROW: f32 = 92.0;
 /// Where the first row of dials starts below the curve.
 const DIALS_TOP: f32 = 36.0 + CURVE_HEIGHT + 10.0;
-/// Where the compressor's section starts: below the EQ's three rows of
-/// dials, with room between the Q label and the section divider.
-const COMPRESSOR_TOP: f32 = DIALS_TOP + 48.0 + 2.0 * ROW + 80.0;
+/// Where the drive's section starts: below the EQ's three rows of dials,
+/// with room between the Q label and the section divider.
+const DRIVE_TOP: f32 = DIALS_TOP + 48.0 + 2.0 * ROW + 80.0;
 /// A section's switch and row of dials, and the gap to the next divider.
 const SECTION: f32 = 48.0 + 70.0;
 const SECTION_GAP: f32 = 14.0;
+/// Where the compressor's section starts, below the drive's, in signal
+/// order.
+const COMPRESSOR_TOP: f32 = DRIVE_TOP + SECTION + SECTION_GAP;
 /// Where the ducker's section starts, below the compressor's.
 const DUCKER_TOP: f32 = COMPRESSOR_TOP + SECTION + SECTION_GAP;
 /// The content's height: the controls row, the curve, the column headings,
-/// three rows of dials, and the compressor's and the ducker's sections.
+/// three rows of dials, and the drive's, the compressor's, and the
+/// ducker's sections.
 const HEIGHT: f32 = DUCKER_TOP + SECTION;
 /// The key dial: a track from 1 to 64.
 const KEY_RANGE: KnobRange = KnobRange {
@@ -137,12 +144,48 @@ fn face(param: EqParam) -> (&'static str, &'static str, Format) {
     }
 }
 
+/// The printed label, description, and value format of a drive control.
+fn drive_face(param: DriveParam) -> (&'static str, &'static str, Format) {
+    match param {
+        DriveParam::Amount => (
+            "Amount",
+            "How hard a copy of the track is driven. More drive makes more and higher \
+             harmonics; the level stays.",
+            Format::db(false),
+        ),
+        DriveParam::Character => (
+            "Character",
+            "0% bends both halves of the wave alike, for odd harmonics, like tape. 100% bends \
+             one half, for even harmonics, like a tube.",
+            Format::whole("%"),
+        ),
+        DriveParam::Mix => (
+            "Mix",
+            "How much of the change the drive adds to the track. At 0% only Output changes its level.",
+            Format::whole("%"),
+        ),
+        DriveParam::Focus => (
+            "Focus",
+            "Below this frequency the track stays clean. At about twice a bass's lowest note \
+             the fundamental stays as it is and only harmonics are added; at 20 Hz the whole \
+             track is driven.",
+            Format::Hertz,
+        ),
+        DriveParam::Output => (
+            "Output",
+            "The level after the drive. The drive keeps the track's power by itself; this \
+             moves it by hand.",
+            Format::db(true),
+        ),
+    }
+}
+
 /// The printed label, description, and value format of a compressor control.
 fn compressor_face(param: CompressorParam) -> (&'static str, &'static str, Format) {
     match param {
         CompressorParam::Threshold => (
             "Thresh",
-            "Compression starts above this level of the track after its EQ.",
+            "Compression starts above this level of the track after its EQ and drive.",
             Format::db(false),
         ),
         CompressorParam::Ratio => (
@@ -202,6 +245,7 @@ impl MixJamApp {
         let settings = &self.session.project().tracks[track];
         let channel = Channel {
             eq: settings.eq,
+            drive: settings.drive,
             compressor: settings.compressor,
             width: settings.width,
             ducker: settings.ducker,
@@ -235,6 +279,7 @@ impl MixJamApp {
         };
         let mut tracks = self.session.project().tracks.clone();
         tracks[track].eq = changed.eq;
+        tracks[track].drive = changed.drive;
         tracks[track].compressor = changed.compressor;
         tracks[track].width = changed.width;
         tracks[track].ducker = changed.ducker;
@@ -339,18 +384,20 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Actio
             }
         }
     }
+    let (drive, drive_switched) = drive_section(ui, bounds, track, &channel.drive);
     let (compressor, width, compressor_switched) =
         compressor_section(ui, bounds, track, &channel.compressor, channel.width);
     let (ducker, ducker_switched) = ducker_section(ui, bounds, track, &channel.ducker);
     let changed = Channel {
         eq: draft,
+        drive,
         compressor,
         width,
         ducker,
     };
     if changed == *channel {
         Action::None
-    } else if switched || compressor_switched || ducker_switched {
+    } else if switched || drive_switched || compressor_switched || ducker_switched {
         Action::Switch(changed)
     } else {
         Action::Turn(changed)
@@ -367,7 +414,57 @@ fn dial_points(x: f32, y: f32) -> [Pos2; 3] {
     ]
 }
 
-/// The compressor's switch and dials below the EQ, and the track's width
+/// The drive's switch and dials below the EQ, and whether the switch
+/// changed.
+fn drive_section(ui: &mut egui::Ui, bounds: Rect, track: usize, drive: &Drive) -> (Drive, bool) {
+    let mut draft = *drive;
+    let label = format!("Track {}", track + 1);
+    let top = bounds.top() + DRIVE_TOP;
+    controls::inset(
+        ui,
+        Rect::from_min_size(Pos2::new(bounds.left(), top - 8.0), Vec2::new(WIDTH, 1.0)),
+    );
+    let power_name = format!("{label} drive power");
+    let response = controls::toggle_at(
+        ui,
+        Rect::from_min_size(Pos2::new(bounds.left(), top), Vec2::new(120.0, 28.0)),
+        &power_name,
+        "Drive",
+        &mut draft.on,
+    );
+    let switched = response.clicked();
+    name_control(response, &power_name).on_hover_text(format!(
+        "{power_name}: {}. The drive adds harmonics to this track after its EQ and before its \
+         compressor, so a bass can be heard on small speakers, and keeps the track's level.",
+        if draft.on { "on" } else { "off" }
+    ));
+    let y = top + 48.0;
+    for (column, param) in DriveParam::ALL.into_iter().enumerate() {
+        let (label_text, hint, format) = drive_face(param);
+        let before = decimal(param.get(&draft));
+        let mut value = before;
+        dial(
+            ui,
+            dial_points(column_x(bounds, column), y),
+            &mut value,
+            Dial {
+                name: &format!("{label} {}", param.name()),
+                label: label_text,
+                hint,
+                range: param.range(),
+                format,
+                choices: &[],
+            },
+            draft.on,
+        );
+        if value != before {
+            param.set(&mut draft, value as f32);
+        }
+    }
+    (draft, switched)
+}
+
+/// The compressor's switch and dials below the drive, and the track's width
 /// at the end of their row; whether the switch changed. The width has no
 /// switch: at 100% it leaves the track as it is.
 fn compressor_section(
@@ -394,8 +491,8 @@ fn compressor_section(
     );
     let switched = response.clicked();
     name_control(response, &power_name).on_hover_text(format!(
-        "{power_name}: {}. The compressor evens out this track's level after its EQ, such as \
-         the hits of a drum loop, before its width, automation, and fader.",
+        "{power_name}: {}. The compressor evens out this track's level after its EQ and \
+         drive, such as the hits of a drum loop, before its width, automation, and fader.",
         if draft.on { "on" } else { "off" }
     ));
     let y = top + 48.0;

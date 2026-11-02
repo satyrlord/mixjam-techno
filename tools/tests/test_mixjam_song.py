@@ -145,7 +145,26 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(22))
+            self.project(self.document(23))
+
+    def test_version_22_keeps_the_drive_and_earlier_songs_have_it_off(self):
+        document = self.document(22)
+        earlier = self.project(self.document())
+        document['master'] = earlier['master']
+        document['fxBuses'] = earlier['fx']
+        document['lanes'][0]['sends'] = [0.0] * 4
+        drive = dict(on=True, amount=18.0, character=60.0, mix=40.0, focus=98.0, output=-1.5)
+        document['lanes'][0]['drive'] = drive
+        document['lanes'].append(copy.deepcopy(document['lanes'][0]))
+        del document['lanes'][1]['drive']
+        projected = self.project(document)
+        self.assertEqual(projected['tracks'][0]['drive'], drive)
+        off = dict(on=False, amount=12.0, character=25.0, mix=50.0, focus=100.0, output=0.0)
+        self.assertEqual(projected['tracks'][1]['drive'], off)
+        self.assertEqual(earlier['tracks'][0]['drive'], off)
+        # Each lane's default is its own copy.
+        projected['tracks'][1]['drive']['on'] = True
+        self.assertFalse(self.project(document)['tracks'][1]['drive']['on'])
 
     def test_version_21_keeps_repeat_automation_in_the_json_project(self):
         document = self.document(21)

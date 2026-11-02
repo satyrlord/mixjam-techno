@@ -1,5 +1,5 @@
 //! The lane compressor: it evens out its track's level, such as the
-//! transients of a drum loop, right after the channel EQ.
+//! transients of a drum loop, after the channel EQ and the drive.
 //!
 //! One detector follows the mean power of both channels, as the master's
 //! Bus compressor does, so both get the same gain. Above the threshold a

@@ -1,4 +1,4 @@
-"""Write format-21 .mixjam songs from Python.
+"""Write format-22 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -31,7 +31,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 21
+FORMAT_VERSION = 22
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -232,9 +232,30 @@ class Song:
                 del eq[key]
         self.lanes[track - 1]['eq'] = eq
 
+    def drive(self, track, amount=12.0, character=25.0, mix=50.0, focus=100.0, output=0.0, on=True):
+        """Switch on a lane's drive, after its EQ and before its compressor: a copy of the lane is
+        driven `amount` dB into a saturation curve, symmetric at `character` 0 (odd harmonics) to
+        one-sided at 100 (even), and `mix` percent of its change above `focus` Hz is added to the
+        clean lane. The lane keeps its power; `output` trims it in dB. For a held bass, set `focus`
+        to about twice the lowest note, so the fundamental stays clean and only harmonics are
+        added. on=False at the default settings removes the drive, as the app saves it."""
+        _whole_track(track)
+        settings = dict(amount=amount, character=character, mix=mix, focus=focus, output=output)
+        settings = {name: float(value) for name, value in settings.items()}
+        for name, (low, high) in DRIVE_RANGES.items():
+            if not low <= settings[name] <= high:
+                raise ValueError(f'The drive setting {name} on track {track} is {settings[name]:g}. '
+                                 f'It must be from {low:g} to {high:g}.')
+        lane = self.lanes[int(track) - 1]
+        drive = dict(on=bool(on), **settings)
+        if drive == DRIVE_DEFAULT:
+            lane.pop('drive', None)
+        else:
+            lane['drive'] = drive
+
     def compressor(self, track, threshold=-20.0, ratio=4.0, attack=10.0, release=100.0, makeup=0.0,
                    on=True):
-        """Switch on a lane's compressor, after its EQ and before its width, automation and
+        """Switch on a lane's compressor, after its EQ and drive and before its width, automation and
         fader: above `threshold` dBFS (the mean power of both channels) the level comes down
         by `ratio`, with a 6 dB soft knee; attack and release in ms, `makeup` in dB after it."""
         _whole_track(track)
@@ -552,6 +573,10 @@ EQ_RANGES = dict(lowCut=(20.0, 2000.0), lowHz=(40.0, 500.0), lowDb=(-18.0, 18.0)
                  peak2Q=(0.3, 8.0), highHz=(1500.0, 16000.0), highDb=(-18.0, 18.0),
                  highCut=(1000.0, 20000.0))
 DUCKER_RANGES = dict(threshold=(-60.0, 0.0), depth=(0.0, 24.0), attack=(0.1, 50.0), release=(10.0, 1000.0))
+# The lane drive's ranges and a new track's drive, which the song omits (`src/drive.rs`).
+DRIVE_RANGES = dict(amount=(0.0, 24.0), character=(0.0, 100.0), mix=(0.0, 100.0), focus=(20.0, 2000.0),
+                    output=(-12.0, 12.0))
+DRIVE_DEFAULT = dict(on=False, amount=12.0, character=25.0, mix=50.0, focus=100.0, output=0.0)
 # The lane compressor's ranges (`src/compressor.rs`) and the lane width's (`TRACK_WIDTH`).
 COMPRESSOR_RANGES = dict(threshold=(-60.0, 0.0), ratio=(1.0, 20.0), attack=(0.1, 100.0),
                          release=(10.0, 1000.0), makeup=(0.0, 24.0))

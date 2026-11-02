@@ -1,4 +1,4 @@
-"""Read a saved .mixjam song (format versions 8 through 21) for verification scripts.
+"""Read a saved .mixjam song (format versions 8 through 22) for verification scripts.
 
 The result uses the field names of the earlier JSON project format, which the
 application still opens. The scripts compare songs in that form and write it
@@ -101,6 +101,10 @@ def _ducker(lane, version, master_gain):
     return ducker
 
 
+# Match Drive::default: disabled at its default settings.
+_NO_DRIVE = {'on': False, 'amount': 12.0, 'character': 25.0, 'mix': 50.0, 'focus': 100.0,
+             'output': 0.0}
+
 # Match Compressor::default: disabled at its default settings.
 _NO_COMPRESSOR = {'on': False, 'threshold': -20.0, 'ratio': 4.0, 'attack': 10.0,
                   'release': 100.0, 'makeup': 0.0}
@@ -115,8 +119,8 @@ _NO_FADES = {'in': {'ticks': 0, 'curve': 'linear'}, 'out': {'ticks': 0, 'curve':
 def read_song(path):
     document = json.loads(Path(path).read_text(encoding='utf-8'))
     version = document['formatVersion']
-    if version not in range(8, 22):
-        raise RuntimeError(f'{path} is not a format version 8 through 21 .mixjam song.')
+    if version not in range(8, 23):
+        raise RuntimeError(f'{path} is not a format version 8 through 22 .mixjam song.')
     song = document['song']
     clips = [{'id': item['id'], 'sample_id': item['sampleId'], 'track': track,
               'start_tick': item['startTick'], 'length_ticks': item['durationTicks'],
@@ -152,6 +156,7 @@ def read_song(path):
                     'sends': lane.get('sends', [0.0] * 4),
                     'automation': lane.get('automation', {}),
                     'eq': deepcopy(lane.get('eq', _FLAT_EQ)),
+                    'drive': deepcopy(lane.get('drive', _NO_DRIVE)),
                     'compressor': deepcopy(lane.get('compressor', _NO_COMPRESSOR)),
                     'width': lane.get('width', _FULL_WIDTH),
                     'ducker': _ducker(lane, version, song['masterGain'])}

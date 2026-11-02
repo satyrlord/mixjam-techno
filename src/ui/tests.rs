@@ -10608,6 +10608,67 @@ mod tests {
     }
 
     #[test]
+    fn the_eq_window_holds_the_drive() {
+        let (context, mut app, port) = agent_fixture();
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        app.bottom_module = BottomModule::Mixer;
+        send(&mut app, &["click", "target=Track 1 EQ"]);
+        // The drive's dials wait for its switch.
+        let reply = send(&mut app, &["ui", "all=true", "window=Track 1 EQ"]);
+        let nodes = reply["nodes"].as_array().unwrap();
+        let named = |label: &str| {
+            nodes
+                .iter()
+                .find(|node| node["label"] == label)
+                .unwrap_or_else(|| panic!("Missing {label}: {reply}"))
+        };
+        for control in ["amount", "character", "mix", "focus", "output"] {
+            let label = format!("Track 1 drive {control}");
+            assert_eq!(named(&label)["enabled"], false, "{label}");
+        }
+        named("Track 1 drive power");
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 drive power", "value=true"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.session.project().tracks[0].drive.on);
+        let reply = send(
+            &mut app,
+            &["set", "target=Track 1 drive amount", "value=18"],
+        );
+        assert_eq!(reply["control"]["number"], 18.0, "{reply}");
+        send(&mut app, &["set", "target=Track 1 drive focus", "value=98"]);
+        send(&mut app, &["set", "target=Track 1 drive mix", "value=40"]);
+        let drive = app.session.project().tracks[0].drive;
+        assert_eq!((drive.amount, drive.focus, drive.mix), (18.0, 98.0, 40.0));
+        // The state reports the drive with its settings.
+        let state = send(&mut app, &["state"]);
+        assert_eq!(
+            state["song"]["tracks"][0]["drive"],
+            serde_json::json!({
+                "on": true, "amount": 18.0, "character": 25.0, "mix": 40.0, "focus": 98.0,
+                "output": 0.0
+            }),
+            "{state}"
+        );
+        // The strip's EQ button lights for the drive.
+        assert!(!app.session.project().tracks[0].eq.on);
+        let reply = send(&mut app, &["ui", "contains=Track 1 EQ"]);
+        assert_eq!(reply["nodes"][0]["checked"], true, "{reply}");
+        // Each control is an undo step of its own; the switch is one too.
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].drive.mix, 50.0);
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].drive.focus, 100.0);
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].drive.amount, 12.0);
+        assert!(app.session.project().tracks[0].drive.on);
+        app.history_step(false);
+        assert!(!app.session.project().tracks[0].drive.on);
+    }
+
+    #[test]
     fn the_strip_eq_button_names_channel_processing_not_the_eq_alone() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);

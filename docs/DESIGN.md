@@ -715,7 +715,7 @@ Mixer uses compact ivory strips against a graphite material surround. Track
 identity and gain lead the hierarchy. L/R routing uses small named toggle
 buttons with live enabled indicators. Mute and Solo sit in their own row
 above polarity and L/R, after a 26 by 24-point EQ button above polarity that
-fills amber while the EQ, compressor, or ducker is on, or the width differs
+fills amber while the EQ, drive, compressor, or ducker is on, or the width differs
 from 100%. The status line under pan names why a track is
 silent: Muted, then No output (both L and R off), then Solo elsewhere.
 Gain runs from
@@ -735,8 +735,11 @@ on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB steps,
 follows; six columns below name the bands, Low cut, Low shelf, Mid peak, Peak
 2, High shelf, and High cut, with their Mastering dials stacked. The curve uses the
 palette's print color while the EQ is on and faint cream while it is off;
-the dials are disabled while it is off. Below the EQ, the compressor's power
-switch starts a row of five dials in the band columns, Thresh, Ratio, Attack,
+the dials are disabled while it is off. Below the EQ, the drive's power switch
+starts a row of five dials in the band columns: Amount, Character, Mix, Focus,
+and Output. These dials are disabled while the drive is off. Below the drive,
+the compressor's power switch starts a row of five dials in the band columns,
+Thresh, Ratio, Attack,
 Release, and Makeup, disabled while the compressor is off; the sixth column,
 headed Stereo, holds the Width dial, which has no switch. Below them, the
 ducker's power switch starts a row of five dials in the same columns, Key (a
@@ -745,8 +748,7 @@ is off. Each section starts under a divider. The Key dial steps over the
 window's own track. The window's content is 520 points wide. Its default outer
 width reserves the vertical scrollbar, so a short viewport scrolls the content
 vertically without adding horizontal overflow. The strip's EQ button lights
-while the EQ, the compressor, or the ducker is on, or while the width is not
-100%.
+while the EQ, drive, compressor, or ducker is on, or while the width is not 100%.
 
 Four send knobs sit below each track's gain rail. After the tracks, four return
 strips hold the FX bus return levels, input switches, limiter switches, and

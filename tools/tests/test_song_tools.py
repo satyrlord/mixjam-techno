@@ -243,7 +243,7 @@ class SongTests(unittest.TestCase):
         # Sixteenths from bar 2: left, right, and back to the knob.
         song.automate(1, 'pan', [(2, -1), (2.0625, 1), (2.125, 0.25)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 21)
+        self.assertEqual(document['formatVersion'], 22)
         self.assertEqual(document['lanes'][0]['pan'], 0.25)
         # The lane rests at the knob until its first point.
         self.assertEqual(document['lanes'][0]['automation']['pan'],
@@ -268,7 +268,7 @@ class SongTests(unittest.TestCase):
         song.automate(1, 'repeat', [(2, 8), (2.25, 16), (2.375, 32), (2.5, 0)])
         song.automate(1, 'repeat', [(4, 4), (4.5, 64), (4.75, 0)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 21)
+        self.assertEqual(document['formatVersion'], 22)
         # The lane is off before its first point, so no resting points are added.
         self.assertEqual(document['lanes'][0]['automation']['repeat'],
                          [dict(tick=256, value=8.0), dict(tick=320, value=16.0),
@@ -295,12 +295,12 @@ class SongTests(unittest.TestCase):
             song = mixjam.Song('repeat cache')
             song.clip(1, source, 0, 96)
             document = song.document()
-            self.assertEqual(document['formatVersion'], 21)
+            self.assertEqual(document['formatVersion'], 22)
             self.assertIsNotNone(render.source_fingerprints(document))
             key = render.lane_key(document, [1], False)
             document['lanes'][0]['automation'] = {'repeat': [dict(tick=0, value=16.0), dict(tick=64, value=0.0)]}
             self.assertNotEqual(render.lane_key(document, [1], False), key)
-            document['formatVersion'] = 22
+            document['formatVersion'] = 23
             self.assertIsNone(render.source_fingerprints(document))
 
     def test_hold_rests_at_neutral_until_the_first_point(self):
@@ -360,7 +360,45 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 21)
+        self.assertEqual(song.document()['formatVersion'], 22)
+
+    def test_drive_checks_its_ranges_and_saves_as_the_app_does(self):
+        song = mixjam.Song('drive')
+        song.drive(1, amount=18, mix=40, focus=98)
+        self.assertEqual(song.lanes[0]['drive'], dict(on=True, amount=18.0, character=25.0, mix=40.0,
+                                                      focus=98.0, output=0.0))
+        document = song.document()
+        self.assertEqual(document['formatVersion'], 22)
+        self.assertEqual(document['lanes'][0]['drive']['focus'], 98.0)
+        for settings in ({'amount': -1}, {'amount': 25}, {'character': 101}, {'mix': -0.5}, {'mix': 101},
+                         {'focus': 19}, {'focus': 2001}, {'output': 12.5}, {'output': float('nan')}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                song.drive(2, **settings)
+        self.assertNotIn('drive', song.lanes[1])
+        # A drive that is off keeps its settings; off at the defaults it is gone.
+        song.drive(1, amount=6, on=False)
+        self.assertEqual(song.lanes[0]['drive']['amount'], 6.0)
+        song.drive(1, on=False)
+        self.assertNotIn('drive', song.lanes[0])
+        for track in (0, 65, 1.5):
+            with self.subTest(track=track), self.assertRaises(ValueError):
+                song.drive(track)
+
+    def test_lane_cache_keys_the_drive(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('drive cache')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            self.assertIsNotNone(render.source_fingerprints(document))
+            key = render.lane_key(document, [1], False)
+            song.drive(1, amount=18)
+            driven = song.document()
+            self.assertEqual(driven['formatVersion'], 22)
+            self.assertNotEqual(render.lane_key(driven, [1], False), key)
 
     def test_compressor_and_width_check_their_ranges(self):
         song = mixjam.Song('dynamics')

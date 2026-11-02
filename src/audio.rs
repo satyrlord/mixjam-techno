@@ -6,9 +6,12 @@ use crate::{
     library::Library,
     master::{MasterChain, MasterControl, MasterProcessor},
 };
-use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::{Sink, Source};
+mod output;
+pub use output::OutputConfiguration;
 use std::{
     collections::HashMap,
+    ops::Range,
     path::{Path, PathBuf},
     sync::{
         Arc, OnceLock,
@@ -208,6 +211,9 @@ pub struct RenderState {
     /// after its end is a loop pass.
     loop_region: Option<[u64; 2]>,
     compressor_epoch: Option<u64>,
+    /// The drives' histories, in the order of the mix's drive slots.
+    /// Playback allocates them before the device reads the mix.
+    drives: Vec<crate::drive::State>,
 }
 
 /// How far behind the frame where playback kept a compressor's history a
@@ -321,6 +327,7 @@ impl Default for RenderState {
             live: None,
             loop_region: None,
             compressor_epoch: None,
+            drives: Vec::new(),
         }
     }
 }
@@ -359,6 +366,9 @@ pub trait Frames: Send + Sync {
     fn keys<'a>(&'a self, _state: &'a RenderState, _frames: usize) -> crate::ducker::Keys<'a> {
         crate::ducker::Keys::NONE
     }
+    /// Allocate the history that `read_block` needs in `state`, so that the
+    /// audio thread does not allocate it.
+    fn prepare_state(&self, _state: &mut RenderState) {}
 }
 
 impl Frames for Pcm {
@@ -476,17 +486,21 @@ impl SendLevel {
     }
 }
 
-/// A track with its EQ or compressor on, a width other than 100%, with
-/// automation, with its ducker on, or that keys a ducker. Its voices mix
-/// into a short buffer, through its Repeat lane, that its EQ, compressor,
-/// width, filter, volume, ducker, level and pan, and sends then shape, in
-/// that order.
+/// A track with its EQ, drive, or compressor on, a width other than 100%,
+/// with automation, with its ducker on, or that keys a ducker. Its voices
+/// mix into a short buffer, through its Repeat lane, that its EQ, drive,
+/// compressor, width, filter, volume, ducker, level and pan, and sends then
+/// shape, in that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
     /// The Repeat lane, which reads the voices at other frames.
     repeat: Option<crate::automation::Repeat>,
     eq: Option<Curve>,
+    /// The drive and the slot of its history among the mix's drives. The
+    /// chain reads its sound `drive::LATENCY` frames ahead of the drive, so
+    /// the drive's output lines up with the song.
+    drive: Option<(crate::drive::Run, usize)>,
     compressor: Option<crate::compressor::Run>,
     /// The side's gain: the width as a fraction of 100%.
     width: Option<f32>,
@@ -511,6 +525,11 @@ impl TrackChain {
             voices: Vec::new(),
             repeat: crate::automation::Repeat::new(&automation.repeat, frames_per_tick),
             eq: Curve::of(&track.eq),
+            // The mix gives each drive its slot.
+            drive: track
+                .drive
+                .on
+                .then(|| (crate::drive::Run::new(&track.drive), 0)),
             compressor: track
                 .compressor
                 .on
@@ -535,17 +554,23 @@ impl TrackChain {
         }
     }
 
-    /// Fill `buffer` with the track's voices, stereo frames from `at`,
-    /// as its Repeat lane reads them.
-    fn sound(&self, at: u64, buffer: &mut [f32]) {
+    /// Fill `buffer` with the track's voices from `span.start`, as its
+    /// Repeat lane reads them. Frames at or past `span.end` stay silent:
+    /// a drive's lookahead must not read sound beyond the playback loop.
+    fn sound(&self, span: Range<u64>, buffer: &mut [f32]) {
         buffer.fill(0.0);
+        let count = span
+            .end
+            .saturating_sub(span.start)
+            .min((buffer.len() / 2) as u64) as usize;
+        let buffer = &mut buffer[..count * 2];
+        let at = span.start;
         let Some(repeat) = &self.repeat else {
             for voice in &self.voices {
                 voice.add(at, buffer, None, &Ramp::UNITY);
             }
             return;
         };
-        let count = buffer.len() / 2;
         let mut taps = [crate::automation::Tap {
             main: (0, 0.0),
             tail: None,
@@ -587,21 +612,51 @@ impl TrackChain {
         }
     }
 
-    /// Fill `buffer`, stereo frames from `at`, with the track as it sounds:
-    /// its voices through its Repeat lane, EQ, compressor, width, filter,
-    /// volume, ducker, level, and pan lane. `duck` holds the key's level at
-    /// each frame and the ducker's history.
+    /// Fill `buffer`, stereo frames from `span.start`, with the track as it sounds:
+    /// its voices through its Repeat lane, EQ, drive, compressor, width,
+    /// filter, volume, ducker, level, and pan lane. `drives` holds the
+    /// drives' histories, and `duck` the key's level at each frame and the
+    /// ducker's history. `span.end` bounds the source reads at the loop end.
     fn shape(
         &self,
-        at: u64,
+        span: Range<u64>,
         buffer: &mut [f32],
         state: &mut ChainState,
+        drives: &mut [crate::drive::State],
         level: &Ramp,
         mut duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
-        self.sound(at, buffer);
-        if let Some(curve) = &self.eq {
-            state.eq.process(buffer, curve);
+        let at = span.start;
+        match &self.drive {
+            Some((run, slot)) => {
+                // The drive's output follows its input by its latency, so the
+                // sound before it runs that far ahead. A history that does not
+                // lead up to this block, after a seek or at the start, first
+                // takes the frames from `at`, as the EQ starts from silence.
+                const LEAD: usize = crate::drive::LATENCY;
+                let history = &mut drives[*slot];
+                if history.next != Some(at + LEAD as u64) {
+                    *history = crate::drive::State::new(run);
+                    let mut lead = [0.0_f32; LEAD * 2];
+                    self.sound(span.clone(), &mut lead);
+                    if let Some(curve) = &self.eq {
+                        state.eq.process(&mut lead, curve);
+                    }
+                    run.process(&mut lead, history);
+                }
+                self.sound(at + LEAD as u64..span.end, buffer);
+                if let Some(curve) = &self.eq {
+                    state.eq.process(buffer, curve);
+                }
+                run.process(buffer, history);
+                history.next = Some(at + (LEAD + buffer.len() / 2) as u64);
+            }
+            None => {
+                self.sound(span, buffer);
+                if let Some(curve) = &self.eq {
+                    state.eq.process(buffer, curve);
+                }
+            }
         }
         if let Some(compressor) = &self.compressor {
             compressor.process(buffer, &mut state.compressor);
@@ -635,24 +690,26 @@ impl TrackChain {
         }
     }
 
-    /// Add `count` frames of the track, from `at`, to `out` and `sends` at
+    /// Add `count` frames of the track, from `span.start`, to `out` and `sends` at
     /// frame `offset` of the block. Runs on the audio thread: the buffer is
     /// on the stack.
     #[allow(clippy::too_many_arguments)]
     fn add(
         &self,
-        at: u64,
+        span: Range<u64>,
         offset: usize,
         count: usize,
         out: &mut [f32],
         sends: Option<&mut [f32]>,
         state: &mut ChainState,
+        drives: &mut [crate::drive::State],
         level: &Ramp,
         duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
+        let at = span.start;
         let mut buffer = [0.0_f32; Self::CHUNK * 2];
         let buffer = &mut buffer[..count * 2];
-        self.shape(at, buffer, state, level, duck);
+        self.shape(span, buffer, state, drives, level, duck);
         for (sum, value) in out[offset * 2..(offset + count) * 2]
             .iter_mut()
             .zip(buffer.iter())
@@ -690,9 +747,9 @@ fn widen(frames: &mut [f32], width: f32) {
 pub struct Mix {
     frames: u64,
     voices: Vec<Voice>,
-    /// The tracks with their EQ or compressor on, a width other than 100%,
-    /// with automation, or with a ducker on or that key one, which hold
-    /// their own voices.
+    /// The tracks with their EQ, drive, or compressor on, a width other
+    /// than 100%, with automation, or with a ducker on or that key one,
+    /// which hold their own voices.
     chains: Vec<TrackChain>,
     /// The key tracks of the duckers, the master pedals, and the FX buses,
     /// in key slot order, each in a chain of its own that only measures it.
@@ -713,6 +770,8 @@ pub struct Mix {
     /// Whether any voice sends to each FX bus, and to any.
     fed: [bool; BUSES],
     sends: bool,
+    /// The drives among the keys and the chains, each with its slot.
+    drives: usize,
 }
 
 /// The number of files that `Mix::write_stems` wrote.
@@ -841,12 +900,13 @@ impl Mix {
             if let Some(slot) = keyed {
                 keys[slot].voices.push(voice.clone());
             }
-            // A track whose EQ and compressor are off, at 100% width, that
-            // has no automation, and that neither ducks nor keys a ducker
-            // mixes its voices straight into the sum, as before the EQ
-            // existed.
+            // A track whose EQ, drive, and compressor are off, at 100%
+            // width, that has no automation, and that neither ducks nor keys
+            // a ducker mixes its voices straight into the sum, as before the
+            // EQ existed.
             if track.automation.is_empty()
                 && !track.eq.on
+                && !track.drive.on
                 && !track.compressor.on
                 && !track.widens()
                 && !ducking(clip.track)
@@ -872,6 +932,20 @@ impl Mix {
             voices.iter().any(|voice| voice.sends[bus] > 0.0)
                 || chains.iter().any(|chain| chain.feeds(bus))
         });
+        // Each drive, a key chain's too, keeps a history of its own.
+        let mut drives = 0;
+        for (_, slot) in keys
+            .iter_mut()
+            .chain(&mut chains)
+            .filter_map(|chain| chain.drive.as_mut())
+        {
+            *slot = drives;
+            drives += 1;
+        }
+        if drives > 0 {
+            // The oversampling tables are ready before playback reads them.
+            crate::master::dsp::prepare_tables();
+        }
         Ok(Self {
             frames,
             voices,
@@ -887,6 +961,7 @@ impl Mix {
             bpm: project.bpm,
             fed,
             sends: fed.contains(&true),
+            drives,
         })
     }
 
@@ -1257,6 +1332,9 @@ impl Mix {
                 };
             }
             state.duckers.fill(crate::ducker::State::default());
+            for drive in &mut state.drives {
+                drive.next = None;
+            }
             if carries
                 && !wraps
                 && let Some(live) = &state.live
@@ -1292,6 +1370,10 @@ impl Mix {
         if let Some(sends) = sends.as_deref_mut() {
             sends.fill(0.0);
         }
+        // Playback allocated the drives before the device read the mix.
+        if state.drives.len() < self.drives {
+            state.drives.resize(self.drives, Default::default());
+        }
         let included = |track: usize| only.is_none_or(|only| only == track);
         for voice in self.voices.iter().filter(|voice| included(voice.track)) {
             voice.add(first_frame, out, sends.as_deref_mut(), &levels[voice.track]);
@@ -1307,6 +1389,7 @@ impl Mix {
             .advance(first_frame, continues, [master_gain; 2]);
         let mastered = state.master_gain;
         let frames = out.len() / 2;
+        let end = state.loop_region.map_or(u64::MAX, |[_, end]| end);
         let stride = 2 * self.keys.len();
         if self.side && state.key_audio.len() < frames * stride {
             state.key_audio.resize(frames * stride, 0.0);
@@ -1324,7 +1407,14 @@ impl Mix {
             {
                 let mut buffer = [0.0_f32; TrackChain::CHUNK * 2];
                 let buffer = &mut buffer[..count * 2];
-                chain.shape(at, buffer, history, &levels[chain.track], None);
+                chain.shape(
+                    at..end,
+                    buffer,
+                    history,
+                    &mut state.drives,
+                    &levels[chain.track],
+                    None,
+                );
                 for (index, (level, &[left, right])) in
                     key.iter_mut().zip(buffer.as_chunks::<2>().0).enumerate()
                 {
@@ -1349,12 +1439,13 @@ impl Mix {
                 if included(chain.track) {
                     let duck = chain.ducker.map(|(_, slot)| (&keys[slot][..count], ducker));
                     chain.add(
-                        at,
+                        at..end,
                         offset,
                         count,
                         out,
                         sends.as_deref_mut(),
                         history,
+                        &mut state.drives,
                         &levels[chain.track],
                         duck,
                     );
@@ -1423,6 +1514,9 @@ impl Frames for Mix {
     }
     fn keys<'a>(&'a self, state: &'a RenderState, frames: usize) -> crate::ducker::Keys<'a> {
         self.key_block(state, frames)
+    }
+    fn prepare_state(&self, state: &mut RenderState) {
+        state.drives.resize(self.drives, Default::default());
     }
     fn tempo(&self) -> Option<f64> {
         Some(self.bpm)
@@ -1641,8 +1735,7 @@ pub(crate) fn render_with_samples(
 }
 
 pub struct Player {
-    _stream: OutputStream,
-    handle: OutputStreamHandle,
+    output: output::Output,
     current: Option<Current>,
     start_frame: u64,
     total_frames: u64,
@@ -1727,20 +1820,23 @@ impl PlaybackSource {
         } else {
             Vec::new()
         };
-        Self {
-            state: RenderState {
-                compressor_epoch: live.as_ref().map(|live| live.compressor_epoch()),
-                live,
-                loop_region,
-                // Allocate key scratch before the device reads this source.
-                // A short first block must also leave room for a full block.
-                key_audio: if audio.tempo().is_some() {
-                    vec![0.0; block_frames * 2 * crate::engine::MAX_KEYS]
-                } else {
-                    Vec::new()
-                },
-                ..RenderState::default()
+        let mut state = RenderState {
+            compressor_epoch: live.as_ref().map(|live| live.compressor_epoch()),
+            live,
+            loop_region,
+            // Allocate key scratch before the device reads this source.
+            // A short first block must also leave room for a full block.
+            key_audio: if audio.tempo().is_some() {
+                vec![0.0; block_frames * 2 * crate::engine::MAX_KEYS]
+            } else {
+                Vec::new()
             },
+            ..RenderState::default()
+        };
+        // The drives' histories too.
+        audio.prepare_state(&mut state);
+        Self {
+            state,
             returns,
             sends,
             ringing: 0,
@@ -2084,17 +2180,20 @@ pub fn priority_failure() -> Option<String> {
 
 impl Player {
     pub fn new() -> Result<Self, String> {
-        let (stream, handle) = OutputStream::try_default()
-            .map_err(|e| format!("Cannot open the audio output: {e}"))?;
+        let output =
+            output::Output::open().map_err(|e| format!("Cannot open the audio output: {e}"))?;
         Ok(Self {
-            _stream: stream,
-            handle,
+            output,
             current: None,
             start_frame: 0,
             total_frames: 0,
             sample_rate: 44100,
             loop_region: None,
         })
+    }
+    /// The accepted output request. The device's callback interval can differ.
+    pub fn output_configuration(&self) -> OutputConfiguration {
+        self.output.configuration()
     }
     /// Play validated audio. Callers check decoded PCM before they pass it.
     /// A mix plays through `master`, whose settings can change as it plays.
@@ -2125,7 +2224,7 @@ impl Player {
         } else {
             start_frame.min(total)
         };
-        let sink = Sink::try_new(&self.handle).map_err(|e| e.to_string())?;
+        let sink = self.output.sink();
         let sample_rate = audio.sample_rate();
         let source = PlaybackSource::new(audio, start, loop_region, master);
         self.current = Some(Current::start(sink, source, self.current.take()));
@@ -2192,6 +2291,7 @@ mod tests {
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,
+            drives: 0,
         };
         // An invalid destination proves that admission runs before file creation,
         // without writing a multi-gigabyte fixture on a broken implementation.
@@ -2549,6 +2649,7 @@ mod tests {
             bpm: 140.0,
             fed: [false; BUSES],
             sends: false,
+            drives: 0,
         };
         let error = mix
             .write_wav(Path::new(""), &MasterChain::default(), &FxBuses::default())
@@ -4167,6 +4268,206 @@ mod tests {
         project.tracks[0].compressor.makeup = 6.0;
         let made_up = level_db(&render(&project), frames) - compressed;
         assert!((made_up + 6.0).abs() < 0.05, "{made_up:.3} dB");
+    }
+
+    #[test]
+    fn a_drive_does_not_read_sound_outside_the_playback_loop() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        // The selected first bar is silent. Sound starts in the next bar.
+        editor.place(1, 0, 256, 256).unwrap();
+        let mut project = editor.project().clone();
+        // The master's key reads the same track in its own chain.
+        project.master.bus_compressor.on = true;
+        project.master.bus_compressor.key = 1;
+        let end = (256.0 * project.frames_per_tick(Mix::SAMPLE_RATE)).round() as u64;
+        let samples = HashMap::from([(1, tone(5000.0))]);
+        for on in [false, true] {
+            project.tracks[0].drive = crate::drive::Drive {
+                on,
+                amount: 24.0,
+                mix: 100.0,
+                focus: 20.0,
+                ..Default::default()
+            };
+            for frames in [16, 256] {
+                let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+                let start = end - frames as u64;
+                let mut playback = PlaybackSource::new(mix, start, Some([start, end]), None);
+                // Two cycles check the restart as well. The 16-frame loop
+                // ends before even the drive's priming read has finished.
+                let output: Vec<f32> = playback.by_ref().take(frames * 4).collect();
+                assert_eq!(output.len(), frames * 4);
+                let peak = output.iter().fold(0.0_f32, |peak, x| peak.max(x.abs()));
+                assert_eq!(
+                    peak, 0.0,
+                    "drive on={on}, {frames} frames: sound outside loop leaked at {peak}"
+                );
+                let keys = playback.audio.keys(&playback.state, frames);
+                assert!(!keys.audio.is_empty());
+                assert!(keys.audio.iter().all(|sample| *sample == 0.0));
+            }
+        }
+    }
+
+    #[test]
+    fn a_drive_that_is_off_or_at_no_mix_renders_exactly_as_before() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(2, 1, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[1].eq.on = true;
+        project.tracks[1].eq.low_db = 6.0;
+        let samples = HashMap::from([(1, tone(55.0)), (2, tone(5000.0))]);
+        let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+        let before = render(&project);
+        // Settings that the drive keeps while it is off change nothing.
+        for track in &mut project.tracks[..2] {
+            track.drive = crate::drive::Drive {
+                amount: 24.0,
+                mix: 100.0,
+                ..Default::default()
+            };
+        }
+        assert!(render(&project) == before);
+        // On at no mix, it gives the sound back bit for bit and on time: the
+        // chain reads ahead by the drive's delay, on a plain track and after
+        // an EQ.
+        for track in &mut project.tracks[..2] {
+            track.drive.on = true;
+            track.drive.mix = 0.0;
+        }
+        assert!(render(&project) == before);
+    }
+
+    #[test]
+    fn the_drive_adds_harmonics_before_the_fader_and_keeps_the_level() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        let samples = HashMap::from([(1, tone(55.0))]);
+        let render = |project: &Project| render_with_samples(project, &samples).unwrap().samples;
+        // The tone lasts one second of the one-bar clip; 0.5 s settles.
+        let frames = 22_050..44_100;
+        let left = |samples: &[f32]| -> Vec<f32> {
+            samples[frames.start * 2..frames.end * 2]
+                .iter()
+                .step_by(2)
+                .copied()
+                .collect()
+        };
+        let amplitude = |samples: &[f32], hz: f64| {
+            let (mut re, mut im) = (0.0, 0.0);
+            for (frame, x) in left(samples).iter().enumerate() {
+                let phase = std::f64::consts::TAU * hz * (frames.start + frame) as f64 / 44_100.0;
+                re += f64::from(*x) * phase.cos();
+                im += f64::from(*x) * phase.sin();
+            }
+            2.0 * (re * re + im * im).sqrt() / frames.len() as f64
+        };
+        let clean = render(&project);
+        let open = level_db(&clean, frames.clone());
+        project.tracks[0].drive = crate::drive::Drive {
+            on: true,
+            amount: 24.0,
+            character: 0.0,
+            mix: 100.0,
+            focus: 110.0,
+            output: 0.0,
+        };
+        let driven = render(&project);
+        // The level holds, and the fundamental with it, while the 3rd
+        // harmonic comes up from nothing.
+        let level = level_db(&driven, frames.clone()) - open;
+        assert!(level.abs() < 0.2, "{level:.2} dB");
+        let fundamental = 20.0 * (amplitude(&driven, 55.0) / amplitude(&clean, 55.0)).log10();
+        assert!(fundamental.abs() < 0.75, "{fundamental:.2} dB");
+        let third = 20.0 * (amplitude(&driven, 165.0) / amplitude(&driven, 55.0)).log10();
+        let before = 20.0 * (amplitude(&clean, 165.0) / amplitude(&clean, 55.0)).log10();
+        assert!(
+            before < -90.0 && third > -14.0,
+            "{before:.1} to {third:.1} dB"
+        );
+        // The fader follows the drive, so it does not change how hard the
+        // drive works: 12 dB down on the fader is 12 dB down.
+        project.tracks[0].gain = crate::engine::db_to_amplitude(-12.0);
+        let lower = level_db(&render(&project), frames.clone()) - open;
+        assert!((lower + 12.0 - level).abs() < 0.01, "{lower:.3} dB");
+        // The output trim moves it by hand.
+        project.tracks[0].gain = 1.0;
+        project.tracks[0].drive.output = -3.0;
+        let trimmed = level_db(&render(&project), frames) - open;
+        assert!((trimmed + 3.0 - level).abs() < 0.01, "{trimmed:.3} dB");
+    }
+
+    #[test]
+    fn a_driven_track_reads_alike_in_any_blocks_and_after_a_seek() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        project.tracks[0].eq.on = true;
+        project.tracks[0].eq.high_db = -6.0;
+        project.tracks[0].drive = crate::drive::Drive {
+            on: true,
+            amount: 18.0,
+            ..Default::default()
+        };
+        let samples = HashMap::from([(1, tone(220.0))]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let mut expected = vec![0.0; 12_000];
+        mix.read_block(0, &mut expected, None, &mut RenderState::default());
+        let mut state = RenderState::default();
+        mix.prepare_state(&mut state);
+        let mut actual = vec![0.0; expected.len()];
+        let mut start = 0;
+        for size in [1, 131, 79, 2049, 3, 997, 68, 69, 70].into_iter().cycle() {
+            let end = (start + size).min(actual.len() / 2);
+            mix.read_block(
+                start as u64,
+                &mut actual[start * 2..end * 2],
+                None,
+                &mut state,
+            );
+            start = end;
+            if start == actual.len() / 2 {
+                break;
+            }
+        }
+        assert!(actual == expected, "block sizes changed the drive");
+        // A seek starts the drive's history again at the new frame, as a
+        // fresh read does, and leads it up to the frame: no silent gap.
+        let mut seeked = [0.0; 512];
+        let mut fresh = [0.0; 512];
+        mix.read_block(20_000, &mut seeked, None, &mut state);
+        mix.read_block(20_000, &mut fresh, None, &mut RenderState::default());
+        assert_eq!(seeked, fresh);
+        assert!(
+            seeked[..crate::drive::LATENCY * 2]
+                .iter()
+                .any(|x| x.abs() > 0.1)
+        );
+    }
+
+    #[test]
+    fn playback_drive_history_is_allocated_before_the_first_read() {
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 256).unwrap();
+        editor.place(1, 1, 0, 256).unwrap();
+        let mut project = editor.project().clone();
+        // A drive on a plain track and on a ducker's key, which mixes in a
+        // chain of its own too.
+        project.tracks[0].drive.on = true;
+        project.tracks[1].drive.on = true;
+        project.tracks[0].ducker.on = true;
+        project.tracks[0].ducker.key = 2;
+        let samples = HashMap::from([(1, tone(110.0))]);
+        let mix: Arc<dyn Frames> = Arc::new(mix_with_samples(&project, &samples).unwrap());
+        let mut playback =
+            PlaybackSource::new(mix, 0, None, Some(MasterControl::new(&project.master)));
+        assert_eq!(playback.state.drives.len(), 3);
+        let allocation = playback.state.drives.as_ptr();
+        assert!(playback.fill());
+        assert_eq!(playback.state.drives.len(), 3);
+        assert_eq!(playback.state.drives.as_ptr(), allocation);
     }
 
     /// One second of a stereo source: `left` and `right` of the frame.

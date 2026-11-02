@@ -21,6 +21,10 @@ pub use crate::{
 pub mod eq {
     pub use crate::eq::{ChannelEq, EqParam};
 }
+/// The drive of each track and its controls.
+pub mod drive {
+    pub use crate::drive::{Drive, DriveParam};
+}
 /// The compressor of each track and its controls.
 pub mod compressor {
     pub use crate::compressor::{Compressor, CompressorParam};
@@ -415,6 +419,7 @@ enum TrackControl {
     Pan,
     Send(usize),
     Eq(crate::eq::EqParam),
+    Drive(crate::drive::DriveParam),
     Compressor(crate::compressor::CompressorParam),
     Width,
     Ducker(crate::ducker::DuckerParam),
@@ -489,6 +494,7 @@ impl Gesture {
                     if old.polarity_inverted != new.polarity_inverted
                         || old.automation != new.automation
                         || old.eq.on != new.eq.on
+                        || old.drive.on != new.drive.on
                         || old.compressor.on != new.compressor.on
                         || old.ducker.on != new.ducker.on
                         || TrackSwitch::ALL
@@ -511,6 +517,11 @@ impl Gesture {
                     for param in crate::eq::EqParam::ALL {
                         if param.get(&old.eq) != param.get(&new.eq) {
                             controls.push(Self::Track(index, TrackControl::Eq(param)));
+                        }
+                    }
+                    for param in crate::drive::DriveParam::ALL {
+                        if param.get(&old.drive) != param.get(&new.drive) {
+                            controls.push(Self::Track(index, TrackControl::Drive(param)));
                         }
                     }
                     for param in crate::compressor::CompressorParam::ALL {

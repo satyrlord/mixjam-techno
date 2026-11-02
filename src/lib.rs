@@ -7,6 +7,7 @@ pub mod automation;
 pub mod catalog;
 pub mod compat;
 pub mod compressor;
+pub mod drive;
 pub mod ducker;
 pub mod effects;
 pub mod engine;

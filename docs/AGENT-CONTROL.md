@@ -45,6 +45,13 @@ port.
   or `pan`.
   `clip` sets gain, trim, length, fades, and pitch for one clip.
   These edits use the same history as edits made by hand.
+- A track's channel EQ, drive, compressor, width, and ducker are controls in
+  its EQ window. Click `Track N EQ` in the Mixer to open it, then `set` the
+  control by name: `set target="Track 1 drive power" value=true`, then
+  `set target="Track 1 drive amount" value=18`, and likewise `drive
+  character`, `drive mix`, `drive focus` (Hz), and `drive output` (dB). `state`
+  lists each track's `eq_on`, `compressor_on`, and `width`, and its `drive`
+  with its switch and settings.
 - `libraries` lists the library folders in order and the reason any did not
   load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the list with
   1 to 9 folders and scans them, as the Libraries window does. One folder can be

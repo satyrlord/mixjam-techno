@@ -55,7 +55,9 @@ pub struct Track {
     pub automation: crate::automation::Automation,
     /// The channel EQ, between the clips and the automation.
     pub eq: crate::eq::ChannelEq,
-    /// Evens out the track's level, after the EQ.
+    /// Adds harmonics to the track, after the EQ.
+    pub drive: crate::drive::Drive,
+    /// Evens out the track's level, after the drive.
     pub compressor: crate::compressor::Compressor,
     /// The stereo width in percent (`TRACK_WIDTH`), after the compressor
     /// and before the automation, fader, and pan.
@@ -76,6 +78,7 @@ impl Default for Track {
             sends: [0.0; crate::fx::BUSES],
             automation: Default::default(),
             eq: Default::default(),
+            drive: Default::default(),
             compressor: Default::default(),
             width: TRACK_WIDTH.default,
             ducker: Default::default(),
@@ -139,6 +142,9 @@ impl<'de> Deserialize<'de> for Track {
             // Projects saved before the channel EQ existed have it off.
             #[serde(default)]
             eq: crate::eq::ChannelEq,
+            // Projects saved before the drive existed have it off.
+            #[serde(default)]
+            drive: crate::drive::Drive,
             // Projects saved before the compressor and width existed have
             // the compressor off and the track as wide as its clips.
             #[serde(default)]
@@ -161,6 +167,7 @@ impl<'de> Deserialize<'de> for Track {
             sends: saved.sends,
             automation: saved.automation,
             eq: saved.eq,
+            drive: saved.drive,
             compressor: saved.compressor,
             width: saved.width,
             ducker: saved.ducker,
@@ -918,6 +925,7 @@ impl Project {
                 .automation
                 .validate()
                 .and_then(|()| track.eq.validate())
+                .and_then(|()| track.drive.validate())
                 .and_then(|()| track.compressor.validate())
                 .and_then(|()| track.ducker.validate(index))
                 .map_err(|error| format!("Track {}: {error}", index + 1))?;
@@ -1717,6 +1725,7 @@ mod tests {
                 sends: [0.0; crate::fx::BUSES],
                 automation: Default::default(),
                 eq: Default::default(),
+                drive: Default::default(),
                 compressor: Default::default(),
                 width: TRACK_WIDTH.default,
                 ducker: Default::default(),

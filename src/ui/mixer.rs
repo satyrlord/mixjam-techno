@@ -263,6 +263,7 @@ pub(super) fn show(
                                                     sends: &mut track.sends,
                                                     any_solo,
                                                     eq_on: track.eq.on
+                                                        || track.drive.on
                                                         || track.compressor.on
                                                         || track.width != TRACK_WIDTH.default
                                                         || track.ducker.on,
@@ -558,9 +559,9 @@ fn strip(
         if response
             .on_hover_text(format!(
                 "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
-                 shelves, and two peaks; the compressor and the stereo width, before the track's \
-                 automation and fader; and the ducker, which lowers the track while another \
-                 track sounds.",
+                 shelves, and two peaks; the drive, which adds harmonics; the compressor and the \
+                 stereo width, before the track's automation and fader; and the ducker, which \
+                 lowers the track while another track sounds.",
                 if eq_on { "on" } else { "off" }
             ))
             .clicked()

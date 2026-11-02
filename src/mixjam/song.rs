@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 21.
+//! The application's own `.mixjam` song format, format version 22.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -43,6 +43,8 @@
 //!   Earlier songs have no pan automation and reject the key.
 //! - Version 21 adds the Repeat lane to a lane's `automation`, under
 //!   `repeat`. Earlier songs have no repeat automation and reject the key.
+//! - Version 22 adds the lane drive, a lane's `drive`. Without it the drive
+//!   is off at the default settings; earlier songs reject the key.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -66,7 +68,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 21;
+pub(super) const FORMAT_VERSION: u32 = 22;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -376,6 +378,12 @@ struct Lane {
     // optional in the EQ record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     eq: Option<Saved<crate::eq::ChannelEq>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "saved_drive"
+    )]
+    drive: Option<crate::drive::Drive>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     compressor: Option<crate::compressor::Compressor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -384,6 +392,15 @@ struct Lane {
     ducker: Option<crate::ducker::Ducker>,
     placements: Vec<Placement>,
 }
+
+// A missing drive is off. An explicit null is not a drive record and must
+// not erase the presence of a version-22 setting in an earlier song.
+fn saved_drive<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<crate::drive::Drive>, D::Error> {
+    crate::drive::Drive::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Placement {
@@ -477,6 +494,7 @@ impl Document {
                 automation: (!track.automation.is_empty())
                     .then(|| Saved::Known(track.automation.clone())),
                 eq: (!track.eq.is_default()).then_some(Saved::Known(track.eq)),
+                drive: (!track.drive.is_default()).then_some(track.drive),
                 compressor: (!track.compressor.is_default()).then_some(track.compressor),
                 width: (track.width != TRACK_WIDTH.default).then_some(track.width),
                 ducker: (!track.ducker.is_default()).then_some(track.ducker),
@@ -742,6 +760,12 @@ impl Document {
                     self.format_version
                 ));
             }
+            if self.format_version < 22 && lane.drive.is_some() {
+                return Err(format!(
+                    "Version {} lanes cannot contain drive.",
+                    self.format_version
+                ));
+            }
             if self.format_version < 15 && lane.eq.is_some() {
                 return Err(format!(
                     "Version {} lanes cannot contain eq.",
@@ -777,6 +801,7 @@ impl Document {
                 sends,
                 automation,
                 eq,
+                drive: lane.drive.unwrap_or_default(),
                 compressor: lane.compressor.unwrap_or_default(),
                 width: lane.width.unwrap_or(TRACK_WIDTH.default),
                 ducker: lane.ducker.unwrap_or_default(),
@@ -1096,6 +1121,7 @@ mod tests {
                 high_db: -7.5,
                 ..Default::default()
             },
+            drive: Default::default(),
             compressor: crate::compressor::Compressor {
                 on: true,
                 threshold: -24.0,
@@ -1179,6 +1205,21 @@ mod tests {
         project.tracks[5].automation.repeat = [(256, 8.0), (320, 16.0), (384, 32.0), (512, 0.0)]
             .map(|(tick, value)| crate::automation::Point { tick, value })
             .to_vec();
+        project
+    }
+
+    /// The test song with a drive on track 6, and one that is off but keeps
+    /// its settings on track 9, as version 22 saves them.
+    fn driven(mut project: Project) -> Project {
+        project.tracks[5].drive = crate::drive::Drive {
+            on: true,
+            amount: 18.0,
+            character: 60.0,
+            mix: 40.0,
+            focus: 98.0,
+            output: -1.5,
+        };
+        project.tracks[8].drive.amount = 6.0;
         project
     }
 
@@ -1292,15 +1333,15 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_21_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_22_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = rolled(panned(sectioned(project())));
+        let project = driven(rolled(panned(sectioned(project()))));
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 21);
+        assert_eq!(document["formatVersion"], 22);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["song"]["sections"],
@@ -1330,6 +1371,18 @@ mod tests {
         );
         assert_eq!(document["lanes"][5]["width"], 150.0);
         assert_eq!(document["lanes"][9]["width"], 0.0);
+        assert_eq!(
+            document["lanes"][5]["drive"],
+            serde_json::json!({
+                "on": true, "amount": 18.0, "character": 60.0, "mix": 40.0, "focus": 98.0,
+                "output": -1.5
+            })
+        );
+        // A drive that is off keeps its settings; one as a new track has it
+        // saves none.
+        assert_eq!(document["lanes"][8]["drive"]["on"], false);
+        assert_eq!(document["lanes"][8]["drive"]["amount"], 6.0);
+        assert!(document["lanes"][4].get("drive").is_none());
         assert!(document["lanes"][4].get("compressor").is_none());
         assert!(document["lanes"][4].get("width").is_none());
         // A lane whose EQ is as a new track has it saves none.
@@ -1615,7 +1668,7 @@ mod tests {
             timestamp(0),
         ))
         .unwrap();
-        assert_eq!(document["formatVersion"], 21);
+        assert_eq!(document["formatVersion"], 22);
         let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
         assert_eq!(reopened.tracks, project.tracks);
         // Version 20 rejects the key, even as an empty list, and opens the
@@ -1680,6 +1733,146 @@ mod tests {
         wrong["lanes"][5]["automation"]["repeat"][1]["tick"] = 256.into();
         let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
         assert!(found.contains("increasing tick order"), "{found}");
+    }
+
+    #[test]
+    fn drive_null_is_not_an_absent_setting_in_any_song_version() {
+        let document = serde_json::to_value(Document::new(
+            &Project::default(),
+            timestamp(0),
+            timestamp(0),
+        ))
+        .unwrap();
+        for version in 8..=FORMAT_VERSION {
+            let mut document = document.clone();
+            document["formatVersion"] = version.into();
+            if version < 11 {
+                document.as_object_mut().unwrap().remove("master");
+            } else if version < 16 {
+                with_earlier_booster_keys(&mut document);
+                if version == 11 {
+                    let board = document["master"].as_object_mut().unwrap();
+                    board.retain(|key, _| {
+                        ["order", "ejayEq", "ejayCompressor", "ejayWide"].contains(&key.as_str())
+                    });
+                    board["order"].as_array_mut().unwrap().truncate(3);
+                }
+            }
+            if version < 13 {
+                document.as_object_mut().unwrap().remove("fxBuses");
+            }
+            for lane in document["lanes"].as_array_mut().unwrap() {
+                let lane = lane.as_object_mut().unwrap();
+                if version < 9 {
+                    lane.remove("polarityInverted");
+                }
+                if version < 10 {
+                    lane.remove("muted");
+                    lane.remove("solo");
+                }
+                if version < 13 {
+                    lane.remove("sends");
+                }
+            }
+            assert!(parse(&serde_json::to_vec(&document).unwrap()).is_ok());
+            document["lanes"][0]["drive"] = serde_json::Value::Null;
+            assert!(
+                parse(&serde_json::to_vec(&document).unwrap()).is_err(),
+                "version {version} accepted a null drive"
+            );
+        }
+    }
+
+    #[test]
+    fn only_version_22_lanes_hold_a_drive() {
+        let project = driven(project());
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        assert_eq!(document["formatVersion"], 22);
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(reopened.tracks, project.tracks);
+        // Version 21 and earlier reject the key, on or off, and open the
+        // same lanes without it with every drive off.
+        for version in [18, 20, 21] {
+            for lane in [5, 8] {
+                let mut earlier = document.clone();
+                earlier["formatVersion"] = version.into();
+                earlier["lanes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(index, _)| *index != lane)
+                    .for_each(|(_, other)| {
+                        other.as_object_mut().unwrap().remove("drive");
+                    });
+                assert_eq!(
+                    parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+                    format!("Version {version} lanes cannot contain drive.")
+                );
+            }
+        }
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 21.into();
+        for lane in earlier["lanes"].as_array_mut().unwrap() {
+            lane.as_object_mut().unwrap().remove("drive");
+        }
+        let mut expected = project.clone();
+        for track in &mut expected.tracks {
+            track.drive = Default::default();
+        }
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap())
+                .unwrap()
+                .tracks,
+            expected.tracks
+        );
+        // Version 22 needs every key, knows no other, and holds each to its
+        // range.
+        for (pointer, value, error) in [
+            (
+                "/lanes/5/drive/amount",
+                serde_json::json!(25),
+                "drive setting",
+            ),
+            ("/lanes/5/drive/mix", serde_json::json!(-1), "drive setting"),
+            (
+                "/lanes/5/drive/focus",
+                serde_json::json!(10),
+                "drive setting",
+            ),
+            (
+                "/lanes/5/drive/output",
+                serde_json::json!(13),
+                "drive setting",
+            ),
+            (
+                "/lanes/5/drive/character",
+                serde_json::json!(101),
+                "drive setting",
+            ),
+            ("/lanes/5/drive/on", serde_json::json!(1), "invalid type"),
+        ] {
+            let mut wrong = document.clone();
+            *wrong.pointer_mut(pointer).unwrap() = value;
+            let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{pointer}: {found}");
+        }
+        let mut missing = document.clone();
+        missing["lanes"][5]["drive"]
+            .as_object_mut()
+            .unwrap()
+            .remove("focus");
+        let found = parse(&serde_json::to_vec(&missing).unwrap()).unwrap_err();
+        assert!(found.contains("missing field `focus`"), "{found}");
+        let mut unknown = document;
+        unknown["lanes"][5]["drive"]["tone"] = 1.into();
+        let found = parse(&serde_json::to_vec(&unknown).unwrap()).unwrap_err();
+        assert!(found.contains("unknown field `tone`"), "{found}");
     }
 
     #[test]
