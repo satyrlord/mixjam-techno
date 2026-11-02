@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 20 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 21 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 19 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 20 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 20 keeps its `createdAt`.
+to 21 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.
@@ -51,13 +51,28 @@ As renames a song whose title is its earlier file name; an imported title stays.
 to 1), and `placements`. Earlier versions use the fields listed in the version
 history below. A lane from version 18 may also hold:
 
-- `automation`, a JSON object with any of `volume`, `sends` (four lists), `filter`, and,
-  from version 20, `pan`: lists of `{"tick", "value"}` points in strictly
-  increasing tick order within the timeline. Volume is from -60 to 6 dB, a send
-  from 0 to 1, the filter from -1 to 1, and the pan from -1 (hard left) through
-  0 (center) to 1 (hard right). A send or pan list with points replaces the
-  lane's send or `pan` for playback and export; the pan uses the same balance
-  law, after the width. Earlier versions reject `pan`, even as an empty list.
+- `automation`, a JSON object with any of `volume`, `sends` (four lists), `filter`,
+  from version 20 `pan`, and from version 21 `repeat`: lists of `{"tick",
+  "value"}` points in strictly increasing tick order within the timeline.
+  Volume is from -60 to 6 dB, a send from 0 to 1, the filter from -1 to 1, and
+  the pan from -1 (hard left) through 0 (center) to 1 (hard right). A send or
+  pan list with points replaces the lane's send or `pan` for playback and
+  export; the pan uses the same balance law, after the width. Earlier versions
+  reject `pan`, even as an empty list.
+  `repeat` is the lane's repeat division: 0 (off), or 4, 8, 16, 32, or 64 for
+  1/4, 1/8, 1/16, 1/32, or 1/64 notes at the song tempo; no other value is
+  valid. Unlike the other lists it steps: the lane is off before its first
+  point and holds each point's value until the next point, with no
+  interpolation. Where the value turns from 0 to a division at tick T, the
+  lane captures its own sound from T, and each division replays the slice
+  that starts at T and is one division long. A later point with another
+  division in the same run keeps T, so a faster division shortens the slice.
+  A point with the value already held changes nothing. At 0 the live sound
+  returns, and the next turn on captures at its own tick. The repeats run on
+  the clips' sound before the EQ, compressor, width, other automation, fader,
+  pan, ducker, and sends. Versions 20 and earlier reject `repeat`, even as an
+  empty list. Repeat can continue past its source clip until the song ends.
+  Automation points do not extend the song's duration.
 - `eq`, the channel EQ: `{"on", "lowCut", "lowHz", "lowDb", "midHz", "midDb",
   "midQ", "highHz", "highDb", "highCut"}`, every key required, and the second
   peak's `peak2Hz`, `peak2Db`, and `peak2Q`, each saved only when it differs
@@ -94,7 +109,7 @@ with `on` and its settings; and, when it is true, `bypass`, which skips the
 whole board, the trim included, for playback and export.
 
 `order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 20 are:
+versions 16 to 21 are:
 
 | Key | Settings |
 |---|---|
@@ -157,7 +172,7 @@ before replacing the destination.
 ## Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 20, which earlier builds cannot open.
+earlier song writes version 21, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -174,6 +189,7 @@ earlier song writes version 20, which earlier builds cannot open.
 | 18 | Adds the EQ's second peak (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. A lane ducker's `threshold` is measured before the master gain; version 17 measured it after. | The second peak flat, every compressor off, every lane at 100% width. Each saved lane `ducker`, on or off, opens with its `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0, so it ducks as it did wherever that range allows; a `masterGain` of 0 leaves it, as the key is silent either way. |
 | 19 | Adds the song's `sections`. | No sections. |
 | 20 | Adds the lane automation `pan`. | No pan automation. |
+| 21 | Adds the lane automation `repeat`. | No repeat automation. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

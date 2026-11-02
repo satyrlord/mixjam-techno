@@ -12603,4 +12603,146 @@ mod tests {
         app.history_step(false);
         assert_eq!(app.session.project().tracks[0].automation.pan.len(), 2);
     }
+
+    #[test]
+    fn the_repeat_lane_snaps_to_its_steps_and_draws_them_as_steps() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.automation_lane = Some(Lane::Repeat);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Automation lane");
+        text_rect(&output, "Repeat");
+        let canvas = app.timeline_rect.unwrap();
+        let row = app.timeline_row_height;
+        // Six even steps from Off at the bottom to 1/64 at the top, 4 points
+        // in from the row's edges. A click between two steps takes the
+        // nearer one.
+        let height = |along: f32| 4.0 + (row - 8.0) * (1.0 - along);
+        for (bar, along, value) in [
+            (1.0, 0.45, 8.0),
+            (1.25, 1.0, 64.0),
+            (1.5, 0.62, 16.0),
+            (2.0, 0.0, 0.0),
+        ] {
+            let pos = Pos2::new(
+                canvas.left() + app.timeline_bar_width * bar,
+                canvas.top() + height(along),
+            );
+            click(&ctx, &mut app, pos, egui::Modifiers::NONE);
+            // Let the double-click time pass before the next click.
+            for _ in 0..20 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            let points = &app.session.project().tracks[0].automation.repeat;
+            let tick = (bar * TICKS_PER_BAR as f32) as u32;
+            let point = points
+                .iter()
+                .find(|point| point.tick == tick)
+                .unwrap_or_else(|| panic!("{points:?}"));
+            assert_eq!(point.value, value, "bar {bar}");
+        }
+        let points = &app.session.project().tracks[0].automation.repeat;
+        assert_eq!(
+            points
+                .iter()
+                .map(|point| Lane::Repeat.format(point.value))
+                .collect::<Vec<_>>(),
+            ["1/8", "1/64", "1/16", "Off"]
+        );
+        // The lane is drawn as steps: off from the left edge, then each value
+        // held flat until the next point, where the line rises or falls
+        // straight up or down.
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let x = |bar: f32| canvas.left() + app.timeline_bar_width * bar;
+        let y = |along: f32| canvas.top() + height(along);
+        let expected = [
+            (canvas.left(), y(0.0)),
+            (x(1.0), y(0.0)),
+            (x(1.0), y(0.4)),
+            (x(1.25), y(0.4)),
+            (x(1.25), y(1.0)),
+            (x(1.5), y(1.0)),
+            (x(1.5), y(0.6)),
+            (x(2.0), y(0.6)),
+            (x(2.0), y(0.0)),
+        ];
+        let drawn = output.shapes.iter().any(|shape| match &shape.shape {
+            egui::Shape::Path(path) => {
+                path.points.len() == expected.len() + 1
+                    && path.points.iter().zip(&expected).all(|(point, (x, y))| {
+                        (point.x - x).abs() < 0.01 && (point.y - y).abs() < 0.01
+                    })
+            }
+            _ => false,
+        });
+        assert!(drawn, "The Repeat lane must be drawn as steps.");
+    }
+
+    #[test]
+    fn agent_automates_the_repeat_lane_and_reports_it_in_the_state() {
+        let (context, mut app, port) = agent_fixture();
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &[
+                "automate",
+                "track=1",
+                "lane=repeat",
+                "points=[[1,8],[1.25,16],[1.375,32],[1.5,0]]",
+            ],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        let points: Vec<(u32, f32)> = app.session.project().tracks[0]
+            .automation
+            .repeat
+            .iter()
+            .map(|point| (point.tick, point.value))
+            .collect();
+        assert_eq!(points, [(0, 8.0), (64, 16.0), (96, 32.0), (128, 0.0)]);
+        let state = agent(&context, &mut app, &port, &["state"]);
+        assert_eq!(
+            state["song"]["tracks"][0]["automation"]["repeat"],
+            serde_json::json!([
+                {"tick": 0, "value": 8.0},
+                {"tick": 64, "value": 16.0},
+                {"tick": 96, "value": 32.0},
+                {"tick": 128, "value": 0.0}
+            ]),
+            "{state}"
+        );
+        // A value that is no division changes nothing.
+        for value in ["12", "128", "-8", "0.5"] {
+            let points = format!("points=[[1,{value}]]");
+            let reply = agent(
+                &context,
+                &mut app,
+                &port,
+                &["automate", "track=1", "lane=repeat", &points],
+            );
+            assert_eq!(reply["ok"], false, "{value}: {reply}");
+        }
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "track=1", "lane=ratchet", "points=[[1,8]]"],
+        );
+        let error = reply["error"].as_str().unwrap_or_default();
+        assert!(error.contains("repeat"), "{reply}");
+        assert_eq!(app.session.project().tracks[0].automation.repeat.len(), 4);
+        // An empty list clears the lane.
+        let reply = agent(
+            &context,
+            &mut app,
+            &port,
+            &["automate", "track=1", "lane=repeat", "points=[]"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        let state = agent(&context, &mut app, &port, &["state"]);
+        let automation = &state["song"]["tracks"][0]["automation"];
+        assert!(automation.get("repeat").is_none(), "{state}");
+    }
 }

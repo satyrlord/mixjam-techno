@@ -32,7 +32,7 @@ pub mod ducker {
 /// Track automation lanes and their values.
 pub mod automation {
     pub use crate::automation::{
-        Automation, Lane, Point, VOLUME_FLOOR_DB, filter_cutoff, value_at,
+        Automation, Lane, Point, REPEAT_STEPS, VOLUME_FLOOR_DB, filter_cutoff, value_at,
     };
 }
 /// The FX buses, their effects, and the controls of both.

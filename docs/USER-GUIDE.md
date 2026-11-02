@@ -117,15 +117,26 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
   Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
   the send knob while the lane has points), Filter (low-pass below the
   middle, high-pass above it, open in the middle; it crosses between the two
-  without a click), or Pan. Click a lane to add a
+  without a click), Pan, or Repeat. Click a lane to add a
   point, drag a point to move it, and double-click or right-click a point to
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
-  points the value moves in a straight line. Choose Off to edit clips again.
+  points the value moves in a straight line, except on the Repeat lane, which
+  steps. Choose Off to edit clips again.
 - The Pan lane moves a track across the stereo field: the top of the row is
   hard right, the bottom hard left, and the middle the center. A point reads
   as L 40, C, or R 100. While the lane has points it replaces the track's pan
   knob, which the Mixer then marks as Pan automated. The pan moves at every
   sample, so a sweep on each 16th note of a ratchet sounds continuous.
+- The Repeat lane chops a track's sound into repeats, for rolls and ratchets.
+  Its row has six steps, Off at the bottom, then 1/4, 1/8, 1/16, 1/32, and
+  1/64 notes, and a point snaps to the nearest one. The lane is off before its
+  first point and holds each point's value until the next, drawn as steps.
+  Where it turns on, it takes the sound from that point and plays one note's
+  length of it again and again; a faster value later in the same run keeps
+  the start and shortens the slice, so 1/8, then 1/16, then 1/32 speeds the
+  repeats up. Off brings the live sound back. Each repeat fades in over a few
+  milliseconds, so it does not click, and the repeats go through the track's
+  EQ, pan, and FX sends.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
 - A song can have sections: named parts such as Intro or Break. Each one is a
   bookmark, a colored line across the lanes with its name on the bar ruler, and

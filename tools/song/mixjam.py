@@ -1,4 +1,4 @@
-"""Write format-20 .mixjam songs from Python.
+"""Write format-21 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -11,7 +11,8 @@ Placement rules:
 
 Automation rules: a lane rests at its neutral value until its first point. A send
 or pan lane's neutral value is its knob, which the lane replaces while it has points.
-Saving rejects a lane that ends away from neutral when a later clip starts on
+The repeat lane's neutral value is 0 (off). It steps: the engine holds each of its
+points until the next one and keeps it off before the first. Saving rejects a lane that ends away from neutral when a later clip starts on
 that track. The engine holds a lane's last value to the end of the song.
 
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
@@ -30,9 +31,11 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 20
+FORMAT_VERSION = 21
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
+# The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
+REPEAT_VALUES = (0, 4, 8, 16, 32, 64)
 
 # Roles whose runs end with a fade when the sound is still loud at its end.
 MELODIC = {'pad', 'lead', 'keys', 'arp', 'fx', 'vocal', 'atmos'}
@@ -356,16 +359,20 @@ class Song:
 
     # Automation, effects, master.
     def automate(self, track, lane, points):
-        """lane: volume, send1..send4, filter, or pan. points: [(bar, value)], bar 1-based, fractions allowed.
+        """lane: volume, send1..send4, filter, pan, or repeat. points: [(bar, value)], bar 1-based,
+        fractions allowed.
 
         Volume is dB over the fader; a send replaces the knob (0-1); filter is -1 (low-pass) to 1
-        (high-pass), 0 open; pan replaces the pan knob, -1 (left) to 1 (right), 0 center. Points add
-        to the lane's earlier points, so each section writes its own moves; a point on a tick that
-        the lane already has is an error.
+        (high-pass), 0 open; pan replaces the pan knob, -1 (left) to 1 (right), 0 center. Repeat is
+        0 (off) or 4, 8, 16, 32, 64 for 1/4 to 1/64 repeats of the slice that starts where the lane
+        turns on; it holds each value until the next point, so [(5, 8), (5.25, 16), (5.375, 32),
+        (5.5, 0)] rolls 1/8, 1/16, 1/32 on the slice from bar 5. Points add to the lane's earlier
+        points, so each section writes its own moves; a point on a tick that the lane already has
+        is an error.
         """
         track = _whole_track(track)
-        if lane not in ('volume', 'filter', 'pan', 'send1', 'send2', 'send3', 'send4'):
-            raise ValueError('The automation lane must be volume, filter, pan, or send1 through send4.')
+        if lane not in ('volume', 'filter', 'pan', 'repeat', 'send1', 'send2', 'send3', 'send4'):
+            raise ValueError('The automation lane must be volume, filter, pan, repeat, or send1 through send4.')
         automation = self.automation[track - 1]
         if lane.startswith('send'):
             entries = list(automation.get('sends', [[], [], [], []])[int(lane[4:]) - 1])
@@ -377,6 +384,8 @@ class Song:
                 raise ValueError(f'Track {track} {lane} has more than one point at bar {bar}.')
             if lane == 'pan' and not -1.0 <= float(value) <= 1.0:
                 raise ValueError(f'Track {track} pan must be from -1 to 1, not {value}.')
+            if lane == 'repeat' and (isinstance(value, bool) or float(value) not in REPEAT_VALUES):
+                raise ValueError(f'Track {track} repeat must be 0 (off), 4, 8, 16, 32, or 64, not {value}.')
             ticks.add(tick(bar))
             entries.append(dict(tick=tick(bar), value=float(value)))
         entries.sort(key=lambda entry: entry['tick'])
@@ -409,7 +418,8 @@ class Song:
             for i, entries in enumerate(lists):
                 neutral = lane['sends'][i] if key == 'sends' else lane['pan'] if key == 'pan' else 0.0
                 name = key if key != 'sends' else f'send{i + 1}'
-                out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}'))
+                out.append(hold(entries, neutral, lane['placements'], f'track {index + 1} {name}',
+                                steps=key == 'repeat'))
             held[key] = out if key == 'sends' else out[0]
         return held
 
@@ -510,15 +520,16 @@ def set_fade(placement, edge, ticks, curve):
     fades[edge] = {'ticks': min(ticks, placement['durationTicks'] - other), 'curve': curve}
 
 
-def hold(entries, neutral, placements, label):
+def hold(entries, neutral, placements, label, steps=False):
     """One automation lane as the engine should play it.
 
     The engine holds a lane's first value back to bar 1 and its last value to the end. The lane
     rests at `neutral` until its first point, and a lane that ends away from neutral while a
-    later clip of the track still plays is an error.
+    later clip of the track still plays is an error. A stepped lane (repeat) is already off
+    before its first point, so it needs no resting points.
     """
     entries = [dict(e) for e in entries]
-    if entries and entries[0]['tick'] > 0 and entries[0]['value'] != neutral:
+    if not steps and entries and entries[0]['tick'] > 0 and entries[0]['value'] != neutral:
         rest = sorted({0, entries[0]['tick'] - 1})
         entries[:0] = [dict(tick=t, value=neutral) for t in rest]
     if entries and entries[-1]['value'] != neutral:

@@ -121,13 +121,25 @@ source once, and makes one copy per clip pitch off the audio thread with
 the processor's cores. The render worker keeps each copy until no clip uses that
 pitch. A track whose channel EQ or compressor is on, whose width is not 100%,
 that has automation, whose ducker is on, or that keys a ducker is a
-`TrackChain`: it mixes its voices into a 128-frame stack buffer, which its EQ
-(`src/eq.rs`), its compressor (`src/compressor.rs`), its width, then its
-filter and volume lanes (`src/automation.rs`), its ducker (`src/ducker.rs`),
-its level, its pan lane, and its send lanes shape before the sum. A track
+`TrackChain`: it mixes its voices into a 128-frame stack buffer, which its
+Repeat lane, its EQ (`src/eq.rs`), its compressor (`src/compressor.rs`), its
+width, then its filter and volume lanes (`src/automation.rs`), its ducker
+(`src/ducker.rs`), its level, its pan lane, and its send lanes shape before
+the sum. A track
 whose pan lane has points leaves its pan knob out of its level, and the lane
 applies the same balance law at each frame, so key levels, sends, and stems
-follow the moving pan. The mix runs the chains chunk by
+follow the moving pan. The Repeat lane (`automation::Repeat`) comes first, on
+the clips' sound, so its repeats go through the EQ, compressor, width,
+filter, volume, fader, pan knob or lane, ducker, and FX sends. It does not
+record what played: it maps each output frame to a frame of the voices, which
+are a pure function of the frame. Where the lane turns on at tick T, every
+retrigger reads the voices again from T, one division long, so the slice
+comes from the clips at T whether or not playback passed T. A retrigger, and
+the switch off, crossfade over `REPEAT_RAMP_FRAMES` (132 frames, 3 ms): the
+outgoing slice plays on under the incoming one. Playback started inside a
+run, export, and stems therefore read the same repeats; the stages after it
+keep their own histories as for any sound. A key track's own chain repeats
+too, so a ducker hears its key's repeats. The mix runs the chains chunk by
 chunk: each key track first renders alone in a chain of its own, with its own
 filter histories, and leaves its peak level per frame in a stack array (at
 most `MAX_KEYS`); then each chain adds its chunk, and a ducked chain
@@ -158,8 +170,8 @@ compressor's curve (`master::dsp::reduction`), so the fader does not change
 how hard it works, and the width scales the side of each frame, on a track
 whose outputs are both on. After them every stage is linear and per channel
 up to the ducker, whose gain follows the separate key, so this order sounds
-as the signal order clips, EQ, compressor, width, automation, fader and pan,
-ducker, sends. A track with none of these mixes its voices straight into the
+as the signal order clips, Repeat lane, EQ, compressor, width, automation,
+fader and pan, ducker, sends. A track with none of these mixes its voices straight into the
 sum, so an EQ or compressor that is off, or a width of 100%, leaves the
 render bit for bit as it was. `src/eq.rs` owns `ChannelEq`, the saved settings, and
 `EqParam`, each control with its range; a mix designs a chain's EQ curve once

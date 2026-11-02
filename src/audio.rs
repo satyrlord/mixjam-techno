@@ -478,11 +478,14 @@ impl SendLevel {
 
 /// A track with its EQ or compressor on, a width other than 100%, with
 /// automation, with its ducker on, or that keys a ducker. Its voices mix
-/// into a short buffer that its EQ, compressor, width, filter, volume,
-/// ducker, level and pan, and sends then shape, in that order.
+/// into a short buffer, through its Repeat lane, that its EQ, compressor,
+/// width, filter, volume, ducker, level and pan, and sends then shape, in
+/// that order.
 struct TrackChain {
     track: usize,
     voices: Vec<Voice>,
+    /// The Repeat lane, which reads the voices at other frames.
+    repeat: Option<crate::automation::Repeat>,
     eq: Option<Curve>,
     compressor: Option<crate::compressor::Run>,
     /// The side's gain: the width as a fraction of 100%.
@@ -506,6 +509,7 @@ impl TrackChain {
         Self {
             track: index,
             voices: Vec::new(),
+            repeat: crate::automation::Repeat::new(&automation.repeat, frames_per_tick),
             eq: Curve::of(&track.eq),
             compressor: track
                 .compressor
@@ -531,10 +535,62 @@ impl TrackChain {
         }
     }
 
+    /// Fill `buffer` with the track's voices, stereo frames from `at`,
+    /// as its Repeat lane reads them.
+    fn sound(&self, at: u64, buffer: &mut [f32]) {
+        buffer.fill(0.0);
+        let Some(repeat) = &self.repeat else {
+            for voice in &self.voices {
+                voice.add(at, buffer, None, &Ramp::UNITY);
+            }
+            return;
+        };
+        let count = buffer.len() / 2;
+        let mut taps = [crate::automation::Tap {
+            main: (0, 0.0),
+            tail: None,
+        }; Self::CHUNK];
+        for (index, tap) in taps[..count].iter_mut().enumerate() {
+            *tap = repeat.tap(at + index as u64);
+        }
+        let taps = &taps[..count];
+        // Each frame reads the voices at its tap. Runs of frames whose taps
+        // keep the same distance from them read one contiguous stretch.
+        type Read = fn(&crate::automation::Tap) -> Option<(u64, f32)>;
+        let reads: [Read; 2] = [|tap| Some(tap.main), |tap| tap.tail];
+        for read in reads {
+            let distance =
+                |index: usize| read(&taps[index]).map(|(from, _)| from as i64 - index as i64);
+            let mut first = 0;
+            while first < count {
+                let Some(offset) = distance(first) else {
+                    first += 1;
+                    continue;
+                };
+                let mut last = first + 1;
+                while last < count && distance(last) == Some(offset) {
+                    last += 1;
+                }
+                let mut stretch = [0.0_f32; Self::CHUNK * 2];
+                let stretch = &mut stretch[..(last - first) * 2];
+                let from = (first as i64 + offset) as u64;
+                for voice in &self.voices {
+                    voice.add(from, stretch, None, &Ramp::UNITY);
+                }
+                for (index, pair) in (first..last).zip(stretch.as_chunks::<2>().0) {
+                    let weight = read(&taps[index]).map_or(0.0, |(_, weight)| weight);
+                    buffer[index * 2] += pair[0] * weight;
+                    buffer[index * 2 + 1] += pair[1] * weight;
+                }
+                first = last;
+            }
+        }
+    }
+
     /// Fill `buffer`, stereo frames from `at`, with the track as it sounds:
-    /// its voices through its EQ, compressor, width, filter, volume, ducker,
-    /// level, and pan lane. `duck` holds the key's level at each frame and
-    /// the ducker's history.
+    /// its voices through its Repeat lane, EQ, compressor, width, filter,
+    /// volume, ducker, level, and pan lane. `duck` holds the key's level at
+    /// each frame and the ducker's history.
     fn shape(
         &self,
         at: u64,
@@ -543,10 +599,7 @@ impl TrackChain {
         level: &Ramp,
         mut duck: Option<(&[f32], &mut crate::ducker::State)>,
     ) {
-        buffer.fill(0.0);
-        for voice in &self.voices {
-            voice.add(at, buffer, None, &Ramp::UNITY);
-        }
+        self.sound(at, buffer);
         if let Some(curve) = &self.eq {
             state.eq.process(buffer, curve);
         }
@@ -1336,11 +1389,20 @@ impl Frames for Mix {
         self.frames
     }
     /// A read that starts the filters from silence and holds the mix to full
-    /// scale, as no board follows it. Playback and export call `read_block`
-    /// with their own `RenderState` instead.
+    /// scale, as no board follows it. Frames past the song's end are silent.
+    /// Playback and export call `read_block` with their own `RenderState`
+    /// and control their tail processing instead.
     fn read(&self, first_frame: u64, out: &mut [f32]) {
-        self.read_block(first_frame, out, None, &mut RenderState::default());
-        hold_to_full_scale(out);
+        let frames = self
+            .frames
+            .saturating_sub(first_frame)
+            .min((out.len() / 2) as u64) as usize;
+        let (sound, silence) = out.split_at_mut(frames * 2);
+        if !sound.is_empty() {
+            self.read_block(first_frame, sound, None, &mut RenderState::default());
+            hold_to_full_scale(sound);
+        }
+        silence.fill(0.0);
     }
     fn read_block(
         &self,
@@ -3064,6 +3126,333 @@ mod tests {
         project.tracks[1].pan = 1.0;
         project.tracks[1].automation.pan[0].value = -1.0;
         assert!((down(&project) + 12.0).abs() < 0.2);
+    }
+
+    /// The frames of one source for the Repeat tests: a four-bar clip on
+    /// track 1 at 140 BPM.
+    const REPEAT_SOURCE_FRAMES: usize = 350_000;
+
+    /// A song with one clip on track 1 over four bars, whose track holds a
+    /// 0 dB volume lane, so that it renders in a chain with or without a
+    /// Repeat lane, and the Repeat lane `repeat`.
+    fn repeat_song(repeat: &[(u32, f32)]) -> Project {
+        use crate::automation::Point;
+        let mut editor = crate::engine::Editor::new(Project::default());
+        editor.place(1, 0, 0, 1024).unwrap();
+        let mut project = editor.project().clone();
+        project.master_gain = 1.0;
+        project.tracks[0].automation.volume = vec![Point {
+            tick: 0,
+            value: 0.0,
+        }];
+        project.tracks[0].automation.repeat = repeat
+            .iter()
+            .map(|&(tick, value)| Point { tick, value })
+            .collect();
+        project
+    }
+
+    /// A source that never repeats itself: a tone in each channel and a
+    /// slow rise, so a frame read from the wrong place shows.
+    fn unique_source() -> HashMap<u32, Pcm> {
+        let rise = |i: usize| 0.2 * i as f32 / REPEAT_SOURCE_FRAMES as f32;
+        let wave =
+            |hz: f32, i: usize| 0.4 * (std::f32::consts::TAU * hz * i as f32 / 44_100.0).sin();
+        HashMap::from([(
+            1,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: (0..REPEAT_SOURCE_FRAMES)
+                    .flat_map(|i| [wave(220.0, i) + rise(i), wave(330.0, i) - rise(i)])
+                    .collect(),
+            },
+        )])
+    }
+
+    /// The whole song as export reads it, without the board.
+    fn whole(project: &Project, samples: &HashMap<u32, Pcm>) -> Vec<f32> {
+        let mix = mix_with_samples(project, samples).unwrap();
+        let mut out = vec![0.0; mix.frames() as usize * 2];
+        mix.read_block(0, &mut out, None, &mut RenderState::default());
+        out
+    }
+
+    /// Check that `out`, from each retrigger tick in `retriggers` plus the
+    /// ramp to the next one, plays the live sound from `capture` onward.
+    fn assert_slices(
+        out: &[f32],
+        live: &[f32],
+        project: &Project,
+        capture: u32,
+        retriggers: &[u32],
+    ) {
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let ramp = crate::automation::REPEAT_RAMP_FRAMES as usize;
+        let at = frame(capture);
+        for pair in retriggers.windows(2) {
+            let (start, next) = (frame(pair[0]), frame(pair[1]));
+            for since in ramp..next - start {
+                for channel in 0..2 {
+                    let (got, want) = (
+                        out[(start + since) * 2 + channel],
+                        live[(at + since) * 2 + channel],
+                    );
+                    assert!(
+                        (got - want).abs() < 1e-6,
+                        "tick {}, {since} frames in: {got} against {want}",
+                        pair[0]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_repeat_lane_that_is_off_passes_the_sound_through_unchanged() {
+        let samples = unique_source();
+        let live = whole(&repeat_song(&[]), &samples);
+        // A lane that never turns on, and one with points that hold off.
+        for points in [&[(0, 0.0)][..], &[(256, 0.0), (512, 0.0)]] {
+            assert_eq!(whole(&repeat_song(points), &samples), live, "{points:?}");
+        }
+        // Around a run, the sound is the live sound to the bit: before it
+        // turns on, and once the ramp after it turns off is over.
+        let project = repeat_song(&[(256, 16.0), (512, 0.0)]);
+        let out = whole(&project, &samples);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: f64| (tick * frames_per_tick).round() as usize;
+        let back = frame(512.0) + crate::automation::REPEAT_RAMP_FRAMES as usize;
+        assert_eq!(out[..frame(256.0) * 2], live[..frame(256.0) * 2]);
+        assert_eq!(out[back * 2..], live[back * 2..]);
+        assert_ne!(
+            out[frame(300.0) * 2..back * 2],
+            live[frame(300.0) * 2..back * 2]
+        );
+        // The same track without a chain differs only by rounding.
+        let mut plain = repeat_song(&[]);
+        plain.tracks[0].automation.volume.clear();
+        let plain = whole(&plain, &samples);
+        assert!(plain.iter().zip(&live).all(|(a, b)| (a - b).abs() < 1e-6));
+    }
+
+    #[test]
+    fn a_held_repeat_is_silent_after_the_mix_ends() {
+        let samples = unique_source();
+        let project = repeat_song(&[(256, 16.0)]);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        for first in [mix.frames(), mix.frames() + 100, u64::MAX] {
+            let mut out = [1.0; 512];
+            mix.read(first, &mut out);
+            assert!(out.iter().all(|value| *value == 0.0), "from {first}");
+        }
+        // A read across the end keeps every available frame and clears
+        // the rest, even when the caller reuses a nonzero buffer.
+        let first = mix.frames() - 128;
+        let mut expected = [0.0; 256];
+        mix.read(first, &mut expected);
+        assert!(expected.iter().any(|value| value.abs() > 0.01));
+        let mut out = [1.0; 512];
+        mix.read(first, &mut out);
+        assert_eq!(out[..256], expected);
+        assert!(out[256..].iter().all(|value| *value == 0.0));
+    }
+
+    #[test]
+    fn a_repeat_lane_replays_the_slice_it_captured_each_sixteenth() {
+        let samples = unique_source();
+        let live = whole(&repeat_song(&[]), &samples);
+        // On from bar 2 to bar 3: sixteen 1/16 notes of 16 ticks.
+        let project = repeat_song(&[(256, 16.0), (512, 0.0)]);
+        let out = whole(&project, &samples);
+        let retriggers: Vec<u32> = (256..=512).step_by(16).collect();
+        assert_slices(&out, &live, &project, 256, &retriggers);
+        // Every repeat is the same slice: the one that starts at bar 2.
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let first = &out[frame(256) * 2..frame(272) * 2];
+        let ramp = crate::automation::REPEAT_RAMP_FRAMES as usize * 2;
+        for tick in (272..512).step_by(16) {
+            let slice = &out[frame(tick) * 2..frame(tick + 16) * 2];
+            let length = first.len().min(slice.len());
+            for (got, want) in slice[ramp..length].iter().zip(&first[ramp..length]) {
+                assert!((got - want).abs() < 1e-6, "tick {tick}");
+            }
+        }
+        // The slice is not what played live there.
+        assert!(
+            (out[(frame(400) + 1000) * 2] - live[(frame(400) + 1000) * 2]).abs() > 0.05,
+            "the repeat must differ from the live sound"
+        );
+    }
+
+    #[test]
+    fn a_faster_division_in_the_same_run_keeps_the_slice_start() {
+        let samples = unique_source();
+        let live = whole(&repeat_song(&[]), &samples);
+        // A roll: 1/8, then 1/16, then 1/32, then off, from bar 2.
+        let project = repeat_song(&[(256, 8.0), (320, 16.0), (352, 32.0), (384, 0.0)]);
+        let out = whole(&project, &samples);
+        let retriggers = [256, 288, 320, 336, 352, 360, 368, 376, 384];
+        assert_slices(&out, &live, &project, 256, &retriggers);
+        // A later run captures again, at its own tick.
+        let project = repeat_song(&[(256, 8.0), (320, 0.0), (640, 32.0), (704, 0.0)]);
+        let out = whole(&project, &samples);
+        assert_slices(&out, &live, &project, 256, &[256, 288, 320]);
+        let retriggers: Vec<u32> = (640..=704).step_by(8).collect();
+        assert_slices(&out, &live, &project, 640, &retriggers);
+        // A 1/4 and a 1/64 division hold their lengths too.
+        let project = repeat_song(&[(256, 4.0), (384, 64.0), (416, 0.0)]);
+        let out = whole(&project, &samples);
+        let mut retriggers = vec![256, 320];
+        retriggers.extend((384..=416).step_by(4));
+        assert_slices(&out, &live, &project, 256, &retriggers);
+    }
+
+    #[test]
+    fn repeats_cross_fade_without_steps_over_the_ramp_bound() {
+        // A sustained tone, which a hard cut would break at each retrigger.
+        let amplitude = 0.5;
+        let hz = 220.0;
+        let wave = |i: usize| amplitude * (std::f32::consts::TAU * hz * i as f32 / 44_100.0).sin();
+        let samples = HashMap::from([(
+            1,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: (0..REPEAT_SOURCE_FRAMES).map(wave).collect(),
+            },
+        )]);
+        let project = repeat_song(&[
+            (256, 8.0),
+            (320, 16.0),
+            (352, 32.0),
+            (368, 64.0),
+            (376, 0.0),
+            (512, 16.0),
+            (520, 32.0),
+            (540, 0.0),
+        ]);
+        let out = whole(&project, &samples);
+        let live = whole(&repeat_song(&[]), &samples);
+        let left = |samples: &[f32]| -> Vec<f32> {
+            samples
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| pair[0])
+                .collect()
+        };
+        let (out, live) = (left(&out), left(&live));
+        let largest = |samples: &[f32]| {
+            samples
+                .windows(2)
+                .map(|pair| (pair[1] - pair[0]).abs())
+                .fold(0.0, f32::max)
+        };
+        // The tone's own largest step as the track plays it, and the most
+        // that an equal-gain crossfade between two copies of it can add: the
+        // gap between them, at most twice the amplitude, times the ramp's
+        // steepest step, pi / (2R).
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        let span = frame(250)..frame(560);
+        let tone = largest(&live[span.clone()]);
+        assert!(tone < 1.1 * amplitude * std::f32::consts::TAU * hz / 44_100.0);
+        let ramp = crate::automation::REPEAT_RAMP_FRAMES as f32;
+        let bound = tone + 2.0 * amplitude * std::f32::consts::PI / (2.0 * ramp);
+        let step = largest(&out[span]);
+        assert!(step <= bound * 1.001, "a step of {step} over {bound}");
+        // Without the ramps the retriggers would jump: a slice ends at
+        // another phase of the tone than the next one starts at.
+        let capture = frame(256);
+        let jump = [256, 288, 320, 336, 352, 360, 368, 372, 376]
+            .windows(2)
+            .map(|pair| {
+                let length = frame(pair[1]) - frame(pair[0]);
+                (live[capture] - live[capture + length - 1]).abs()
+            })
+            .fold(0.0, f32::max);
+        assert!(jump > 4.0 * bound, "{jump}");
+    }
+
+    #[test]
+    fn playback_started_inside_a_repeat_run_plays_what_export_plays() {
+        let samples = unique_source();
+        let project = repeat_song(&[(256, 8.0), (320, 16.0), (352, 32.0), (384, 0.0)]);
+        let export = whole(&project, &samples);
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as u64;
+        let end = frame(512) as usize;
+        // Mid-slice, on a retrigger, inside a crossfade, and in the ramp
+        // back to the live sound: the run's start is behind each.
+        for start in [
+            frame(300),
+            frame(336),
+            frame(336) + 50,
+            frame(364) + 7,
+            frame(384) + 60,
+        ] {
+            let start = start as usize;
+            let mut out = vec![0.0; (end - start) * 2];
+            let mut state = RenderState::default();
+            let mut at = start;
+            for size in [1000, 1, 127, 4096, 333, 129].into_iter().cycle() {
+                if at >= end {
+                    break;
+                }
+                let size = size.min(end - at);
+                mix.read_block(
+                    at as u64,
+                    &mut out[(at - start) * 2..(at - start + size) * 2],
+                    None,
+                    &mut state,
+                );
+                at += size;
+            }
+            assert_eq!(out, export[start * 2..end * 2], "from frame {start}");
+        }
+        // The track's stem is the same audio.
+        let mut stem = vec![0.0; export.len()];
+        mix.mix(0, &mut stem, None, &mut RenderState::default(), Some(0));
+        assert_eq!(stem, export);
+    }
+
+    #[test]
+    fn the_repeats_go_through_the_pan_lane_and_the_sends() {
+        let samples = unique_source();
+        let mut project = repeat_song(&[(256, 8.0), (320, 16.0), (352, 32.0), (384, 0.0)]);
+        let still = whole(&project, &samples);
+        // The pan sweeps from hard left to hard right over the roll.
+        let pan =
+            [(256, -1.0), (384, 1.0)].map(|(tick, value)| crate::automation::Point { tick, value });
+        project.tracks[0].automation.pan = pan.to_vec();
+        project.tracks[0].sends[0] = 1.0;
+        let mix = mix_with_samples(&project, &samples).unwrap();
+        let frames = mix.frames() as usize;
+        let mut out = vec![0.0; frames * 2];
+        let mut feeds = vec![0.0; frames * 2 * BUSES];
+        mix.read_block(0, &mut out, Some(&mut feeds), &mut RenderState::default());
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        for at in frame(256)..frame(384) {
+            let value = crate::automation::value_at(&pan, at as f64 / frames_per_tick).unwrap();
+            let sides = crate::automation::pan_gains(value);
+            for channel in 0..2 {
+                let want = still[at * 2 + channel] * sides[channel];
+                assert!((out[at * 2 + channel] - want).abs() < 1e-3, "frame {at}");
+                // The send takes the repeats after the pan.
+                assert_eq!(feeds[at * 2 * BUSES + channel], out[at * 2 + channel]);
+            }
+        }
+        // The first repeats sound on the left, the last on the right.
+        let energy = |range: std::ops::Range<usize>, channel: usize| -> f32 {
+            range.map(|at| out[at * 2 + channel].powi(2)).sum()
+        };
+        assert!(energy(frame(256)..frame(264), 1) < 0.02 * energy(frame(256)..frame(264), 0));
+        assert!(energy(frame(376)..frame(384), 0) < 0.02 * energy(frame(376)..frame(384), 1));
     }
 
     #[test]

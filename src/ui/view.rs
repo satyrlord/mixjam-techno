@@ -3231,22 +3231,30 @@ impl MixJamApp {
                 ));
                 continue;
             }
+            let markers: Vec<Pos2> = points
+                .iter()
+                .map(|point| Pos2::new(x(point.tick), automation_y(lane, point.value, row)))
+                .collect();
+            // A stepped lane is off before its first point and holds each
+            // value until the next point; the others hold their first value
+            // and move in straight lines.
             let mut line = vec![Pos2::new(
                 rect.left(),
-                automation_y(lane, points[0].value, row),
+                if lane.steps() {
+                    automation_y(lane, 0.0, row)
+                } else {
+                    markers[0].y
+                },
             )];
-            line.extend(
-                points
-                    .iter()
-                    .map(|point| Pos2::new(x(point.tick), automation_y(lane, point.value, row))),
-            );
-            let last = points[points.len() - 1].value;
-            line.push(Pos2::new(rect.right(), automation_y(lane, last, row)));
-            painter.add(egui::Shape::line(
-                line.clone(),
-                Stroke::new(1.6_f32, ACCENT),
-            ));
-            for (index, point) in line[1..line.len() - 1].iter().enumerate() {
+            for marker in &markers {
+                if lane.steps() {
+                    line.push(Pos2::new(marker.x, line[line.len() - 1].y));
+                }
+                line.push(*marker);
+            }
+            line.push(Pos2::new(rect.right(), markers[markers.len() - 1].y));
+            painter.add(egui::Shape::line(line, Stroke::new(1.6_f32, ACCENT)));
+            for (index, point) in markers.iter().enumerate() {
                 let active = self.automation_drag == Some((track, index));
                 let hovered = pointer.is_some_and(|pos| near(*point, pos));
                 if hovered {
@@ -3422,24 +3430,40 @@ impl MixJamApp {
 /// How far from a point, in points, the pointer still takes it.
 const AUTOMATION_REACH: f32 = 7.0;
 
-/// Where a lane value sits in a track row, 4 points in from its edges.
+/// Where a lane value sits in a track row, 4 points in from its edges. The
+/// Repeat lane's values sit at even heights, from Off at the bottom to 1/64
+/// at the top.
 fn automation_y(lane: automation::Lane, value: f32, row: Rect) -> f32 {
-    let (low, high) = lane.range();
     let inner = row.shrink2(Vec2::new(0.0, 4.0));
-    inner.bottom() - (value - low) / (high - low) * inner.height()
+    let along = if lane == automation::Lane::Repeat {
+        let steps = &automation::REPEAT_STEPS;
+        let step = steps.iter().position(|step| *step >= value).unwrap_or(0);
+        step as f32 / (steps.len() - 1) as f32
+    } else {
+        let (low, high) = lane.range();
+        (value - low) / (high - low)
+    };
+    inner.bottom() - along * inner.height()
 }
 
 /// The lane value at a height in a track row, rounded to the lane's steps.
 fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
     let (low, high) = lane.range();
     let inner = row.shrink2(Vec2::new(0.0, 4.0));
-    let value = low + (inner.bottom() - y) / inner.height() * (high - low);
+    let along = (inner.bottom() - y) / inner.height();
+    let value = low + along * (high - low);
     let value = match lane {
         automation::Lane::Volume => (value * 2.0).round() / 2.0,
         automation::Lane::Send(_) => (value * 100.0).round() / 100.0,
         // The middle opens the filter, or centers the pan.
         automation::Lane::Filter | automation::Lane::Pan if value.abs() < 0.04 => 0.0,
         automation::Lane::Filter | automation::Lane::Pan => (value * 100.0).round() / 100.0,
+        // The nearest of the evenly spaced steps.
+        automation::Lane::Repeat => {
+            let steps = &automation::REPEAT_STEPS;
+            let last = (steps.len() - 1) as f32;
+            steps[(along * last).round().clamp(0.0, last) as usize]
+        }
     };
     value.clamp(low, high)
 }

@@ -1039,8 +1039,9 @@ impl MixJamApp {
                 if !(1..=TRACK_COUNT).contains(&track) {
                     return Err(format!("Tracks are 1 to {TRACK_COUNT}."));
                 }
-                let lane = automation::Lane::from_key(&lane)
-                    .ok_or("Lanes are volume, send1, send2, send3, send4, filter, and pan.")?;
+                let lane = automation::Lane::from_key(&lane).ok_or(
+                    "Lanes are volume, send1, send2, send3, send4, filter, pan, and repeat.",
+                )?;
                 let points = points
                     .into_iter()
                     .map(|[bar, value]| {

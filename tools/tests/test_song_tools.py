@@ -23,7 +23,7 @@ import measure  # noqa: E402
 import render  # noqa: E402
 import midinotes  # noqa: E402
 import samples  # noqa: E402
-from audible import heard_share  # noqa: E402
+from audible import heard_share, lane_bars  # noqa: E402
 from fit import fits  # noqa: E402
 from master import album_profile, flag, misses, tonal_indices, THIRDS  # noqa: E402
 from midichords import shift_for  # noqa: E402
@@ -243,7 +243,7 @@ class SongTests(unittest.TestCase):
         # Sixteenths from bar 2: left, right, and back to the knob.
         song.automate(1, 'pan', [(2, -1), (2.0625, 1), (2.125, 0.25)])
         document = song.document()
-        self.assertEqual(document['formatVersion'], 20)
+        self.assertEqual(document['formatVersion'], 21)
         self.assertEqual(document['lanes'][0]['pan'], 0.25)
         # The lane rests at the knob until its first point.
         self.assertEqual(document['lanes'][0]['automation']['pan'],
@@ -260,6 +260,48 @@ class SongTests(unittest.TestCase):
         song.lanes[0]['placements'].append(dict(startTick=5 * 256))
         with self.assertRaises(ValueError):
             song.document()
+
+    def test_repeat_automation_steps_from_off_and_checks_its_values(self):
+        song = mixjam.Song('repeat')
+        song.lane(1, 'cello', 'lead')
+        # A roll from bar 2: 1/8, 1/16, 1/32, then off.
+        song.automate(1, 'repeat', [(2, 8), (2.25, 16), (2.375, 32), (2.5, 0)])
+        song.automate(1, 'repeat', [(4, 4), (4.5, 64), (4.75, 0)])
+        document = song.document()
+        self.assertEqual(document['formatVersion'], 21)
+        # The lane is off before its first point, so no resting points are added.
+        self.assertEqual(document['lanes'][0]['automation']['repeat'],
+                         [dict(tick=256, value=8.0), dict(tick=320, value=16.0),
+                          dict(tick=352, value=32.0), dict(tick=384, value=0.0),
+                          dict(tick=768, value=4.0), dict(tick=896, value=64.0),
+                          dict(tick=960, value=0.0)])
+        before = json.dumps(song.automation)
+        for value in (12, 3, 128, -8, 16.5, 2, float('nan'), True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                song.automate(1, 'repeat', [(6, 16), (7, value)])
+            self.assertEqual(json.dumps(song.automation), before)
+        # A lane that ends on a division while a later clip plays is refused.
+        song.automate(1, 'repeat', [(8, 16)])
+        song.lanes[0]['placements'].append(dict(startTick=9 * 256))
+        with self.assertRaises(ValueError):
+            song.document()
+
+    def test_lane_cache_accepts_format_21_and_keys_the_repeat_lane(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render, 'exe_stamp', return_value='renderer-v1'):
+            root = Path(directory)
+            source = root / 'source.wav'
+            mixjam.write_wav(source, 44100, np.ones((8, 2)))
+            song = mixjam.Song('repeat cache')
+            song.clip(1, source, 0, 96)
+            document = song.document()
+            self.assertEqual(document['formatVersion'], 21)
+            self.assertIsNotNone(render.source_fingerprints(document))
+            key = render.lane_key(document, [1], False)
+            document['lanes'][0]['automation'] = {'repeat': [dict(tick=0, value=16.0), dict(tick=64, value=0.0)]}
+            self.assertNotEqual(render.lane_key(document, [1], False), key)
+            document['formatVersion'] = 22
+            self.assertIsNone(render.source_fingerprints(document))
 
     def test_hold_rests_at_neutral_until_the_first_point(self):
         held = mixjam.hold([{'tick': 1024, 'value': -6.0}, {'tick': 2048, 'value': 0.0}], 0.0, [], 'lane')
@@ -318,7 +360,7 @@ class SongTests(unittest.TestCase):
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 song.eq(4, **settings)
         self.assertNotIn('eq', song.lanes[3])
-        self.assertEqual(song.document()['formatVersion'], 20)
+        self.assertEqual(song.document()['formatVersion'], 21)
 
     def test_compressor_and_width_check_their_ranges(self):
         song = mixjam.Song('dynamics')
@@ -435,6 +477,61 @@ class HarmonyTests(unittest.TestCase):
 
 
 class MeasureTests(unittest.TestCase):
+    def test_isolated_repeat_keeps_song_end_and_cache_duration(self):
+        song = mixjam.Song('repeat duration')
+        document = song.document()
+        document['lanes'][0]['placements'] = [dict(id=1, sampleId=1_000_000, startTick=0, durationTicks=64)]
+        document['lanes'][0]['automation'] = {'repeat': [dict(tick=0, value=16)]}
+        document['lanes'][1]['placements'] = [dict(id=2, sampleId=1_000_000, startTick=192, durationTicks=64)]
+        document['samples'] = [dict(id=1_000_000, name='tone', path='tone.wav', sourceBpm=140)]
+        original = json.dumps(document)
+        part = render.solo(document, [1])
+        self.assertEqual(part['song']['loopRegion'], [0, 256])
+        self.assertFalse(part['lanes'][1]['placements'])
+        self.assertEqual(json.dumps(document), original)
+        with mock.patch.object(render, 'exe_stamp', return_value='renderer'):
+            before = render.lane_key(part, [1], False, {1_000_000: 'tone'})
+            document['lanes'][1]['placements'][0]['startTick'] = 448
+            after = render.lane_key(render.solo(document, [1]), [1], False, {1_000_000: 'tone'})
+            self.assertNotEqual(before, after)
+        document['song']['loopRegion'] = [128, 768]
+        self.assertEqual(render.solo(document, [1])['song']['loopRegion'], [128, 768])
+        document['song']['loopRegion'] = [128, 256]
+        self.assertEqual(render.solo(document, [1])['song']['loopRegion'], [128, 512])
+
+    def test_audibility_includes_repeat_runs_and_excludes_replaced_live_clips(self):
+        document = mixjam.Song('repeat bars').document()
+        lane = document['lanes'][0]
+        lane['placements'] = [dict(startTick=0, durationTicks=64),
+                              dict(startTick=768, durationTicks=64)]
+        document['lanes'][1]['placements'] = [dict(startTick=1024, durationTicks=256)]
+        lane['automation'] = {'repeat': [dict(tick=0, value=16), dict(tick=512, value=16),
+                                         dict(tick=768, value=0)]}
+        self.assertEqual(lane_bars(document, [1]), {0, 1, 2, 3})
+        # A capture in silence replaces the clip at bar 4 with silence too.
+        lane['automation']['repeat'] = [dict(tick=256, value=16)]
+        self.assertEqual(lane_bars(document, [1]), {0})
+        # Off before the first point, then two captures, with a new division.
+        lane['automation']['repeat'] = [dict(tick=32, value=16), dict(tick=256, value=0),
+                                         dict(tick=768, value=16), dict(tick=896, value=32)]
+        self.assertEqual(lane_bars(document, [1]), {0, 1, 3, 4})
+        # Adjacent off/on points take a new capture; the run ends at song end.
+        lane['automation']['repeat'] = [dict(tick=0, value=16), dict(tick=256, value=0),
+                                         dict(tick=257, value=16), dict(tick=1536, value=0)]
+        self.assertEqual(lane_bars(document, [1]), {0, 1})
+
+    def test_audibility_keeps_repeat_crossfades_at_bar_boundaries(self):
+        document = mixjam.Song('repeat tails').document()
+        lane = document['lanes'][0]
+        lane['placements'] = [dict(startTick=0, durationTicks=64)]
+        document['lanes'][1]['placements'] = [dict(startTick=512, durationTicks=256)]
+        lane['automation'] = {'repeat': [dict(tick=0, value=16), dict(tick=256, value=0)]}
+        self.assertEqual(lane_bars(document, [1]), {0, 1})
+        # Only the outgoing crossfade reads this clip, just beyond the slice.
+        lane['placements'] = [dict(startTick=16, durationTicks=1)]
+        lane['automation']['repeat'] = [dict(tick=0, value=16), dict(tick=512, value=0)]
+        self.assertEqual(lane_bars(document, [1]), {0, 1, 2})
+
     def test_keyed_lane_extracts_parts_without_clipping_the_key_into_its_output(self):
         song = mixjam.Song('keyed')
         song.ducker(2, 1)

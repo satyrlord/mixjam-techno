@@ -29,7 +29,7 @@ part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
 whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
-not change since an earlier render comes from the cache. Only format-18 to 20 songs
+not change since an earlier render comes from the cache. Only format-18 to 21 songs
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
@@ -120,6 +120,14 @@ def lane_roles(groups, meta):
     return roles
 
 
+def song_end_tick(document):
+    """The native Project.end_tick bound, including an explicit loop end."""
+    end = max((p['startTick'] + p['durationTicks'] for lane in document['lanes']
+               for p in lane['placements']), default=4 * TICKS_PER_BAR)
+    loop = document['song'].get('loopRegion')
+    return max(end, loop[1] if loop else 0)
+
+
 def solo(document, tracks):
     """The premaster with only `tracks` playing, for a group without external keys."""
     part = board_off(copy(document))
@@ -127,6 +135,15 @@ def solo(document, tracks):
         if index not in tracks:
             lane['placements'] = []
             lane.pop('automation', None)
+    if any(point['value'] for track in tracks
+           for point in part['lanes'][track - 1].get('automation', {}).get('repeat', [])):
+        # Repeat can sound after the lane's final clip. Removing other lanes
+        # must not shorten it. Export uses the loop end as a duration bound;
+        # it does not loop. This bound also enters the lane cache key.
+        end = song_end_tick(document)
+        if song_end_tick(part) < end:
+            loop = part['song'].get('loopRegion')
+            part['song']['loopRegion'] = [loop[0] if loop else 0, end]
     return part
 
 
@@ -219,7 +236,7 @@ def source_fingerprints(document):
     Read each distinct used file once per call. A path alone does not identify
     audio: the owner can replace its contents between rounds.
     """
-    if document.get('formatVersion') not in (18, 19, 20) or any(document.get(field) for field in
+    if document.get('formatVersion') not in (18, 19, 20, 21) or any(document.get(field) for field in
                                                 ('libraries', 'missingSamples', 'sampleConflicts')):
         return None
     if not cacheable_sections(document):

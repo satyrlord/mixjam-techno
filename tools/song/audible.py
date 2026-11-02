@@ -65,12 +65,49 @@ def heard_share(part_cells, rest_cells):
 
 
 def lane_bars(document, tracks):
-    """The 0-based bars where any clip of `tracks` plays."""
+    """The 0-based bars where clips play, through Repeat but without FX tails."""
     bars = set()
+
+    def include(first, last):
+        if first < last:
+            bars.update(range(first // TICKS_PER_BAR, (last - 1) // TICKS_PER_BAR + 1))
+
+    end = render.song_end_tick(document)
     for index in tracks:
-        for p in document['lanes'][index - 1]['placements']:
-            first = p['startTick'] // TICKS_PER_BAR
-            bars.update(range(first, (p['startTick'] + p['durationTicks'] - 1) // TICKS_PER_BAR + 1))
+        lane = document['lanes'][index - 1]
+        clips = [(p['startTick'], p['startTick'] + p['durationTicks']) for p in lane['placements']]
+        start, held, capture = 0, 0, 0
+        points = lane.get('automation', {}).get('repeat', [])
+        for point in [*points, dict(tick=end, value=0)]:
+            stop = min(point['tick'], end)
+            if point['value'] == held and stop < end:
+                continue  # Holding the same division does not retrigger it.
+            if held:
+                division = TICKS_PER_BAR // int(held)
+                slices = [(max(first, capture) - capture, min(last, capture + division) - capture)
+                          for first, last in clips if first < capture + division and last > capture]
+                for trigger in range(start, stop, division):
+                    for first, last in slices:
+                        include(trigger + first, min(trigger + last, stop))
+                    # An outgoing slice continues for the 132-frame ramp.
+                    # At every supported tempo that is less than one tick;
+                    # conservatively include that tick in the bar selection.
+                    if trigger > start and any(first < capture + division + 1 and last > capture + division
+                                               for first, last in clips):
+                        include(trigger, min(trigger + 1, end))
+                if start < stop:
+                    last_trigger = start + (stop - start - 1) // division * division
+                    tail = capture + stop - last_trigger
+                    if any(first < tail + 1 and last > tail for first, last in clips):
+                        include(stop, min(stop + 1, end))
+            else:
+                for first, last in clips:
+                    include(max(first, start), min(last, stop))
+            if stop == end:
+                break
+            if not held and point['value']:
+                capture = point['tick']
+            start, held = point['tick'], point['value']
     return bars
 
 

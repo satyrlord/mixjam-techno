@@ -1,4 +1,4 @@
-//! The application's own `.mixjam` song format, format version 20.
+//! The application's own `.mixjam` song format, format version 21.
 //!
 //! It adapts the preserved version-7 document to this editor. The envelope is
 //! the same: strict camelCase JSON with `formatVersion`, `appVersion`, two UTC
@@ -41,6 +41,8 @@
 //! - Version 19 adds named song sections. Earlier songs have no sections.
 //! - Version 20 adds the pan lane to a lane's `automation`, under `pan`.
 //!   Earlier songs have no pan automation and reject the key.
+//! - Version 21 adds the Repeat lane to a lane's `automation`, under
+//!   `repeat`. Earlier songs have no repeat automation and reject the key.
 //! - A placement names its audio by `sampleId`. Product catalog IDs resolve
 //!   through `libraries`; other IDs resolve through `samples`, which link WAV
 //!   files by path. Placements also keep their trim offset and gain.
@@ -64,7 +66,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const FORMAT_VERSION: u32 = 20;
+pub(super) const FORMAT_VERSION: u32 = 21;
 /// The channel EQ's keys that version 18 added.
 const PEAK2_KEYS: [&str; 3] = ["peak2Hz", "peak2Db", "peak2Q"];
 /// The Booster pedals' keys in a saved board and its `order`: the key of
@@ -365,8 +367,9 @@ struct Lane {
     solo: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sends: Option<[f32; crate::fx::BUSES]>,
-    // Raw until the version is checked, as version 20 added `pan`, which an
-    // earlier song must not hold even as an empty list.
+    // Raw until the version is checked, as version 20 added `pan` and
+    // version 21 `repeat`, which an earlier song must not hold even as an
+    // empty list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     automation: Option<Saved<crate::automation::Automation>>,
     // Raw until the version is checked, as the second peak's keys are
@@ -712,6 +715,12 @@ impl Document {
                     if self.format_version < 20 && record.contains_key("pan") {
                         return Err(format!(
                             "Version {} lanes cannot contain pan automation.",
+                            self.format_version
+                        ));
+                    }
+                    if self.format_version < 21 && record.contains_key("repeat") {
+                        return Err(format!(
+                            "Version {} lanes cannot contain repeat automation.",
                             self.format_version
                         ));
                     }
@@ -1164,6 +1173,15 @@ mod tests {
         project
     }
 
+    /// The test song with a 1/8, 1/16, 1/32 roll on track 6, as version 21
+    /// saves it.
+    fn rolled(mut project: Project) -> Project {
+        project.tracks[5].automation.repeat = [(256, 8.0), (320, 16.0), (384, 32.0), (512, 0.0)]
+            .map(|(tick, value)| crate::automation::Point { tick, value })
+            .to_vec();
+        project
+    }
+
     /// The test song with two sections, as version 19 saves them.
     fn sectioned(project: Project) -> Project {
         Project {
@@ -1274,15 +1292,15 @@ mod tests {
     }
 
     #[test]
-    fn saved_song_is_a_version_20_document_that_reopens_unchanged() {
+    fn saved_song_is_a_version_21_document_that_reopens_unchanged() {
         let root = std::env::temp_dir().join(format!("mixjam-song-format-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let path = root.join("song.mixjam");
-        let project = panned(sectioned(project()));
+        let project = rolled(panned(sectioned(project())));
         save(&project, &path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let mut document: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(document["formatVersion"], 20);
+        assert_eq!(document["formatVersion"], 21);
         assert_eq!(document["appVersion"], crate::APP_VERSION);
         assert_eq!(
             document["song"]["sections"],
@@ -1342,6 +1360,12 @@ mod tests {
                     {"tick": 0, "value": -1.0},
                     {"tick": 64, "value": 1.0},
                     {"tick": 128, "value": 0.0}
+                ],
+                "repeat": [
+                    {"tick": 256, "value": 8.0},
+                    {"tick": 320, "value": 16.0},
+                    {"tick": 384, "value": 32.0},
+                    {"tick": 512, "value": 0.0}
                 ]
             })
         );
@@ -1483,7 +1507,8 @@ mod tests {
     #[test]
     fn automation_records_reject_positional_arrays_in_every_supported_version() {
         // Serde can read a struct from a positional array. Such an array
-        // must not hide version 20's pan lane from an earlier reader.
+        // must not hide version 20's pan lane or version 21's repeat lane
+        // from an earlier reader.
         let document = serde_json::to_value(Document::new(
             &Project::default(),
             timestamp(0),
@@ -1502,6 +1527,8 @@ mod tests {
                 serde_json::json!([[], [[], [], [], []], []]),
                 serde_json::json!([[], [[], [], [], []], [], []]),
                 serde_json::json!([[], [[], [], [], []], [], [{"tick": 0, "value": 1.0}]]),
+                serde_json::json!([[], [[], [], [], []], [], [], []]),
+                serde_json::json!([[], [[], [], [], []], [], [], [{"tick": 0, "value": 16.0}]]),
             ] {
                 document["lanes"][0]["automation"] = automation;
                 assert_eq!(
@@ -1575,6 +1602,82 @@ mod tests {
         }
         let mut wrong = document;
         wrong["lanes"][5]["automation"]["pan"][1]["tick"] = 0.into();
+        let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+        assert!(found.contains("increasing tick order"), "{found}");
+    }
+
+    #[test]
+    fn only_version_21_lanes_hold_repeat_automation() {
+        let project = rolled(panned(project()));
+        let document = serde_json::to_value(Document::new(
+            &project,
+            "2020-01-02T03:04:05Z".into(),
+            timestamp(0),
+        ))
+        .unwrap();
+        assert_eq!(document["formatVersion"], 21);
+        let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(reopened.tracks, project.tracks);
+        // Version 20 rejects the key, even as an empty list, and opens the
+        // same lane without it.
+        for repeat in [
+            document["lanes"][5]["automation"]["repeat"].clone(),
+            serde_json::json!([]),
+        ] {
+            let mut earlier = document.clone();
+            earlier["formatVersion"] = 20.into();
+            earlier["lanes"][5]["automation"]["repeat"] = repeat;
+            assert_eq!(
+                parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+                "Version 20 lanes cannot contain repeat automation."
+            );
+        }
+        let mut earlier = document.clone();
+        earlier["formatVersion"] = 20.into();
+        earlier["lanes"][5]["automation"]
+            .as_object_mut()
+            .unwrap()
+            .remove("repeat");
+        let mut expected = project.clone();
+        expected.tracks[5].automation.repeat.clear();
+        assert_eq!(
+            parse(&serde_json::to_vec(&earlier).unwrap())
+                .unwrap()
+                .tracks,
+            expected.tracks
+        );
+        // Version 21 takes an empty list as no lane, and every division,
+        // 1/4 included, but no value between them.
+        let mut empty = document.clone();
+        empty["lanes"][5]["automation"]["repeat"] = serde_json::json!([]);
+        assert!(
+            parse(&serde_json::to_vec(&empty).unwrap()).unwrap().tracks[5]
+                .automation
+                .repeat
+                .is_empty()
+        );
+        for value in [0.0, 4.0, 8.0, 16.0, 32.0, 64.0] {
+            let mut each = document.clone();
+            each["lanes"][5]["automation"]["repeat"][1]["value"] = value.into();
+            assert!(
+                parse(&serde_json::to_vec(&each).unwrap()).is_ok(),
+                "{value}"
+            );
+        }
+        for (value, error) in [
+            (serde_json::json!(12.0), "Repeat automation values"),
+            (serde_json::json!(128.0), "Repeat automation values"),
+            (serde_json::json!(-8.0), "Repeat automation values"),
+            (serde_json::json!(2.0), "Repeat automation values"),
+            (serde_json::json!(null), "The automation is invalid"),
+        ] {
+            let mut wrong = document.clone();
+            wrong["lanes"][5]["automation"]["repeat"][1]["value"] = value;
+            let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
+            assert!(found.contains(error), "{found}");
+        }
+        let mut wrong = document;
+        wrong["lanes"][5]["automation"]["repeat"][1]["tick"] = 256.into();
         let found = parse(&serde_json::to_vec(&wrong).unwrap()).unwrap_err();
         assert!(found.contains("increasing tick order"), "{found}");
     }

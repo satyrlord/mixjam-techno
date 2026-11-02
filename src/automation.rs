@@ -1,9 +1,12 @@
 //! Track automation: breakpoint lanes that move a track's volume, its FX
-//! sends, its filter, and its pan over the song.
+//! sends, its filter, and its pan over the song, and the Repeat lane that
+//! retriggers its sound.
 //!
 //! A lane is a list of points in tick order. Before its first point a lane
 //! holds the first value, after its last point the last value, and between
-//! two points it moves in a straight line. A lane without points does nothing.
+//! two points it moves in a straight line. The Repeat lane is the exception:
+//! it steps. It is off before its first point and holds each point's value
+//! until the next point. A lane without points does nothing.
 use serde::{Deserialize, Serialize};
 
 /// One automation point: a lane's value at a tick.
@@ -29,14 +32,28 @@ pub enum Lane {
     /// under the mixer's balance law. While this lane has points, it
     /// replaces the track's pan knob.
     Pan,
+    /// The repeat division: 0 is off, and 4, 8, 16, 32, or 64 replays a
+    /// slice of the track's own sound as 1/4 to 1/64 notes at the song
+    /// tempo. Unlike the other lanes it steps: it is off before its first
+    /// point and holds each point's value until the next point. Where it
+    /// turns on at tick T, it captures the track's sound from T, and each
+    /// division replays the slice from T that is one division long, so a
+    /// faster division later in the same run keeps T and shortens the slice.
+    /// It shapes the track's sound before the EQ, so the repeats go through
+    /// the rest of the track's chain. See `Repeat`.
+    Repeat,
 }
 
 /// The lowest volume value, which is silence.
 pub const VOLUME_FLOOR_DB: f32 = -60.0;
 pub const VOLUME_CEILING_DB: f32 = 6.0;
 
+/// The Repeat lane's values from the bottom of its row to the top: off, then
+/// 1/4, 1/8, 1/16, 1/32, and 1/64 notes.
+pub const REPEAT_STEPS: [f32; 6] = [0.0, 4.0, 8.0, 16.0, 32.0, 64.0];
+
 impl Lane {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Volume,
         Self::Send(0),
         Self::Send(1),
@@ -44,6 +61,7 @@ impl Lane {
         Self::Send(3),
         Self::Filter,
         Self::Pan,
+        Self::Repeat,
     ];
 
     pub fn label(self) -> String {
@@ -52,18 +70,26 @@ impl Lane {
             Self::Send(bus) => format!("FX {} send", bus + 1),
             Self::Filter => "Filter".into(),
             Self::Pan => "Pan".into(),
+            Self::Repeat => "Repeat".into(),
         }
     }
 
-    /// The lane's name in agent requests: volume, send1 to send4, filter, or
-    /// pan.
+    /// The lane's name in agent requests: volume, send1 to send4, filter,
+    /// pan, or repeat.
     pub fn key(self) -> String {
         match self {
             Self::Volume => "volume".into(),
             Self::Send(bus) => format!("send{}", bus + 1),
             Self::Filter => "filter".into(),
             Self::Pan => "pan".into(),
+            Self::Repeat => "repeat".into(),
         }
+    }
+
+    /// Whether the lane steps, holding each point's value until the next
+    /// point, instead of moving in a straight line between points.
+    pub fn steps(self) -> bool {
+        self == Self::Repeat
     }
 
     pub fn from_key(key: &str) -> Option<Self> {
@@ -76,6 +102,7 @@ impl Lane {
             Self::Volume => (VOLUME_FLOOR_DB, VOLUME_CEILING_DB),
             Self::Send(_) => (0.0, 1.0),
             Self::Filter | Self::Pan => (-1.0, 1.0),
+            Self::Repeat => (0.0, 64.0),
         }
     }
 
@@ -89,6 +116,8 @@ impl Lane {
             Self::Filter if value < 0.0 => format!("Low-pass {:.0} Hz", filter_cutoff(value)),
             Self::Filter => format!("High-pass {:.0} Hz", filter_cutoff(value)),
             Self::Pan => pan_label(value),
+            Self::Repeat if value == 0.0 => "Off".into(),
+            Self::Repeat => format!("1/{value:.0}"),
         }
     }
 }
@@ -125,6 +154,8 @@ pub struct Automation {
     pub filter: Vec<Point>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pan: Vec<Point>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repeat: Vec<Point>,
 }
 
 fn no_sends(sends: &[Vec<Point>; crate::fx::BUSES]) -> bool {
@@ -137,6 +168,7 @@ impl Automation {
             && no_sends(&self.sends)
             && self.filter.is_empty()
             && self.pan.is_empty()
+            && self.repeat.is_empty()
     }
 
     pub fn lane(&self, lane: Lane) -> &[Point] {
@@ -145,6 +177,7 @@ impl Automation {
             Lane::Send(bus) => &self.sends[bus],
             Lane::Filter => &self.filter,
             Lane::Pan => &self.pan,
+            Lane::Repeat => &self.repeat,
         }
     }
 
@@ -154,6 +187,7 @@ impl Automation {
             Lane::Send(bus) => &mut self.sends[bus],
             Lane::Filter => &mut self.filter,
             Lane::Pan => &mut self.pan,
+            Lane::Repeat => &mut self.repeat,
         }
     }
 
@@ -166,8 +200,15 @@ impl Automation {
 }
 
 /// Points must be in strictly increasing tick order, within the timeline,
-/// and within the lane's range.
+/// and within the lane's range. A Repeat point holds one of `REPEAT_STEPS`.
 pub fn validate_points(lane: Lane, points: &[Point]) -> Result<(), String> {
+    if lane == Lane::Repeat
+        && points
+            .iter()
+            .any(|point| !REPEAT_STEPS.contains(&point.value))
+    {
+        return Err("Repeat automation values must be 0 (off), 4, 8, 16, 32, or 64.".into());
+    }
     let (low, high) = lane.range();
     if points
         .iter()
@@ -187,7 +228,8 @@ pub fn validate_points(lane: Lane, points: &[Point]) -> Result<(), String> {
     Ok(())
 }
 
-/// The value of a lane at a tick, which may fall between ticks.
+/// The value of a lane at a tick, which may fall between ticks. This is the
+/// straight-line rule; the Repeat lane steps instead (`Repeat`).
 pub fn value_at(points: &[Point], tick: f64) -> Option<f32> {
     let after = points.partition_point(|point| f64::from(point.tick) <= tick);
     match (
@@ -256,6 +298,183 @@ impl Envelope {
     /// Whether the lane ever rises above zero.
     pub(crate) fn any_positive(&self) -> bool {
         self.values.iter().any(|value| *value > 0.0)
+    }
+}
+
+/// The crossfade, in frames at the mix rate, at each retrigger of the Repeat
+/// lane and where it turns on or off: 132 frames, 3 ms at 44.1 kHz. A ramp
+/// of 2 ms or more keeps a cut in a sustained sound from clicking, and 3 ms
+/// stays short beside the shortest slice, a 1/64 note at 300 BPM (551
+/// frames), so the repeats keep their attack. It also stays within one tick
+/// at 300 BPM (137.8 frames), and points are at least a tick apart, so a
+/// crossfade always ends before the next point changes the lane.
+pub(crate) const REPEAT_RAMP_FRAMES: u64 = 132;
+
+/// The Repeat lane resolved to output frames.
+///
+/// It is a pure function of the output frame: each frame reads the track's
+/// own sound (its clips, before the EQ) at another frame. A run starts where
+/// the lane turns on, at tick T, and lasts until it turns off. Within a run,
+/// each stretch at one division retriggers on its own first tick and then
+/// every division; a retrigger plays the track's sound from T onward until
+/// the next one, so the slice is one division long. The incoming slice
+/// rises over `REPEAT_RAMP_FRAMES` while the outgoing one plays on and falls,
+/// an equal-gain raised-cosine crossfade. At T the slice is the live sound
+/// itself, so turning on needs no fade; turning off crossfades from the last
+/// slice back to the live sound. Playback that starts inside a run therefore
+/// plays the same repeats as an export: nothing depends on what played
+/// before.
+#[derive(Debug)]
+pub(crate) struct Repeat {
+    frames_per_tick: f64,
+    runs: Vec<Run>,
+}
+
+/// A stretch where the Repeat lane is on.
+#[derive(Debug)]
+struct Run {
+    /// The tick where the lane turned on, T, where it captures.
+    capture: u32,
+    /// Each stretch at one division: its first tick and the division's
+    /// length in ticks. The first starts at `capture`.
+    divisions: Vec<(u32, u32)>,
+    /// The tick where the lane turns off; `None` holds it to the end.
+    end: Option<u32>,
+}
+
+impl Run {
+    /// The last retrigger tick before `tick`, which is after the run's start.
+    fn last_retrigger_before(&self, tick: u32) -> u32 {
+        let &(start, division) = self
+            .divisions
+            .iter()
+            .rev()
+            .find(|(start, _)| *start < tick)
+            .expect("a run's first division starts before its later ticks");
+        start + (tick - start - 1) / division * division
+    }
+}
+
+/// Where one output frame of a Repeat lane reads its track's sound: the
+/// frame to read and its weight, and, during a crossfade, the outgoing
+/// frame and its weight.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Tap {
+    pub(crate) main: (u64, f32),
+    pub(crate) tail: Option<(u64, f32)>,
+}
+
+impl Repeat {
+    /// `None` for a lane that never turns on.
+    pub(crate) fn new(points: &[Point], frames_per_tick: f64) -> Option<Self> {
+        let mut runs: Vec<Run> = Vec::new();
+        let mut held = 0;
+        for point in points {
+            // Values are checked: whole divisions of a bar.
+            let value = point.value as u32;
+            if value == held {
+                continue;
+            }
+            // Off has no division; a division is a whole number of ticks.
+            match crate::engine::TICKS_PER_BAR.checked_div(value) {
+                None => {
+                    if let Some(run) = runs.last_mut() {
+                        run.end = Some(point.tick);
+                    }
+                }
+                Some(division) => {
+                    let division = division.max(1);
+                    if held == 0 {
+                        runs.push(Run {
+                            capture: point.tick,
+                            divisions: vec![(point.tick, division)],
+                            end: None,
+                        });
+                    } else if let Some(run) = runs.last_mut() {
+                        run.divisions.push((point.tick, division));
+                    }
+                }
+            }
+            held = value;
+        }
+        (!runs.is_empty()).then_some(Self {
+            frames_per_tick,
+            runs,
+        })
+    }
+
+    fn frame(&self, tick: u32) -> u64 {
+        (f64::from(tick) * self.frames_per_tick).round() as u64
+    }
+
+    /// The rise of the incoming sound `since` frames into a crossfade.
+    fn rise(since: u64) -> f32 {
+        let along = (since as f32 + 0.5) / REPEAT_RAMP_FRAMES as f32;
+        0.5 - 0.5 * (std::f32::consts::PI * along).cos()
+    }
+
+    /// Where output `frame` reads the track's sound.
+    pub(crate) fn tap(&self, frame: u64) -> Tap {
+        let live = Tap {
+            main: (frame, 1.0),
+            tail: None,
+        };
+        let after = self
+            .runs
+            .partition_point(|run| self.frame(run.capture) <= frame);
+        let Some(run) = after.checked_sub(1).map(|index| &self.runs[index]) else {
+            return live;
+        };
+        let capture = self.frame(run.capture);
+        if let Some(end) = run.end
+            && frame >= self.frame(end)
+        {
+            // Off again: the live sound rises over the last slice's tail.
+            let since = frame - self.frame(end);
+            if since >= REPEAT_RAMP_FRAMES {
+                return live;
+            }
+            let last = self.frame(run.last_retrigger_before(end));
+            let rise = Self::rise(since);
+            return Tap {
+                main: (frame, rise),
+                tail: Some((capture + (frame - last), 1.0 - rise)),
+            };
+        }
+        let at = run
+            .divisions
+            .partition_point(|(start, _)| self.frame(*start) <= frame)
+            - 1;
+        let (start, division) = run.divisions[at];
+        // The retrigger at or before the frame: a first guess from the
+        // tempo, then corrected for the rounding of ticks to frames.
+        let along = (frame as f64 / self.frames_per_tick - f64::from(start)).max(0.0);
+        let mut count = (along / f64::from(division)) as u32;
+        while self.frame(start + (count + 1) * division) <= frame {
+            count += 1;
+        }
+        while count > 0 && self.frame(start + count * division) > frame {
+            count -= 1;
+        }
+        let retrigger = start + count * division;
+        let since = frame - self.frame(retrigger);
+        let main = capture + since;
+        if retrigger == run.capture || since >= REPEAT_RAMP_FRAMES {
+            return Tap {
+                main: (main, 1.0),
+                tail: None,
+            };
+        }
+        let previous = if count > 0 {
+            retrigger - division
+        } else {
+            run.last_retrigger_before(start)
+        };
+        let rise = Self::rise(since);
+        Tap {
+            main: (main, rise),
+            tail: Some((capture + (frame - self.frame(previous)), 1.0 - rise)),
+        }
     }
 }
 
@@ -454,6 +673,12 @@ mod tests {
             (Lane::Pan, points(&[(0, -1.01)])),
             (Lane::Pan, points(&[(0, 1.01)])),
             (Lane::Pan, points(&[(4, 0.0), (4, 1.0)])),
+            (Lane::Repeat, points(&[(0, 12.0)])),
+            (Lane::Repeat, points(&[(0, 16.5)])),
+            (Lane::Repeat, points(&[(0, 128.0)])),
+            (Lane::Repeat, points(&[(0, 2.0)])),
+            (Lane::Repeat, points(&[(0, -16.0)])),
+            (Lane::Repeat, points(&[(8, 16.0), (8, 0.0)])),
         ] {
             let mut changed = automation.clone();
             *changed.lane_mut(lane) = bad;
@@ -464,6 +689,73 @@ mod tests {
         assert_eq!(Lane::from_key("balance"), None);
         assert_eq!(Lane::Pan.key(), "pan");
         assert_eq!(Lane::Pan.label(), "Pan");
+        assert_eq!(Lane::from_key("repeat"), Some(Lane::Repeat));
+        assert_eq!(Lane::Repeat.label(), "Repeat");
+        automation.repeat = points(&[(0, 0.0), (16, 4.0), (32, 8.0), (48, 16.0), (64, 32.0)]);
+        automation.repeat.push(Point {
+            tick: 80,
+            value: 64.0,
+        });
+        automation.validate().unwrap();
+    }
+
+    #[test]
+    fn repeat_values_read_as_off_or_note_divisions_and_step() {
+        let labels: Vec<String> = REPEAT_STEPS
+            .iter()
+            .map(|value| Lane::Repeat.format(*value))
+            .collect();
+        assert_eq!(labels, ["Off", "1/4", "1/8", "1/16", "1/32", "1/64"]);
+        assert!(Lane::Repeat.steps());
+        assert!(
+            Lane::ALL
+                .iter()
+                .all(|lane| lane.steps() == (*lane == Lane::Repeat))
+        );
+    }
+
+    #[test]
+    fn a_repeat_lane_reads_its_slice_from_where_it_turned_on() {
+        let ramp = REPEAT_RAMP_FRAMES;
+        // At 100 frames a tick, 1/16 (16 ticks) is 1600 frames.
+        let lane = points(&[(0, 0.0), (10, 16.0), (26, 16.0), (42, 32.0), (60, 0.0)]);
+        let repeat = Repeat::new(&lane, 100.0).unwrap();
+        let live = |frame| Tap {
+            main: (frame, 1.0),
+            tail: None,
+        };
+        // Off before the run, and the live sound itself at its start.
+        assert_eq!(repeat.tap(999), live(999));
+        assert_eq!(repeat.tap(1000), live(1000));
+        assert_eq!(repeat.tap(2599), live(2599));
+        // A point that holds the same division does not retrigger: the
+        // 1/16 retriggers every 1600 frames from 1000.
+        let tap = repeat.tap(2600 + ramp);
+        assert_eq!(
+            tap,
+            Tap {
+                main: (1000 + ramp, 1.0),
+                tail: None
+            }
+        );
+        assert_eq!(repeat.tap(4200 + ramp + 5).main, (1005 + ramp, 1.0));
+        // In a crossfade the old slice plays on under the new one.
+        let tap = repeat.tap(2600 + 10);
+        assert_eq!(tap.main.0, 1010);
+        assert_eq!(tap.tail.unwrap().0, 1000 + 1600 + 10);
+        assert!((tap.main.1 + tap.tail.unwrap().1 - 1.0).abs() < 1e-6);
+        // At tick 42 the division turns to 1/32, 800 frames, from 1000.
+        assert_eq!(repeat.tap(4200 + 799).main.0, 1000 + 799);
+        assert_eq!(repeat.tap(5000 + ramp).main, (1000 + ramp, 1.0));
+        // Off at tick 60, frame 6000: the live sound rises over the last
+        // slice, which started at 5800.
+        let tap = repeat.tap(6000 + 3);
+        assert_eq!(tap.main.0, 6003);
+        assert_eq!(tap.tail.unwrap().0, 1000 + 203);
+        assert_eq!(repeat.tap(6000 + ramp), live(6000 + ramp));
+        // A lane that never turns on is no Repeat at all.
+        assert!(Repeat::new(&points(&[(0, 0.0), (64, 0.0)]), 100.0).is_none());
+        assert!(Repeat::new(&[], 100.0).is_none());
     }
 
     #[test]

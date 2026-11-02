@@ -29,7 +29,7 @@ A tool that needs a missing key stops and names the key.
 
 | Tool | Usage | What it does |
 |---|---|---|
-| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-20 songs with lanes, sections, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
+| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-21 songs with lanes, sections, clips, loops, phrases, fades, clip pitch, automation, FX buses, channel EQ (two peaks), compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, several at a time, and the master once. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak and rescales the lane files, premaster and stems to it. Eligible unchanged lanes come from the cache described below. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
@@ -57,18 +57,21 @@ does not. Songs with track keys render again after each gain change.
 
 Song-writing methods accept whole track numbers from 1 to 64 and whole FX bus
 numbers from 1 to 4. Invalid destinations fail before changing the song.
-Automation accepts `volume`, `filter`, `pan`, and `send1` through `send4`; a
-rejected batch leaves earlier points unchanged. A `pan` lane, from -1 (left) to
-1 (right), replaces the lane's pan knob while it has points and rests at the
-knob before its first point. Loop ranges must advance in time, and
+Automation accepts `volume`, `filter`, `pan`, `repeat`, and `send1` through
+`send4`; a rejected batch leaves earlier points unchanged. A `pan` lane, from -1
+(left) to 1 (right), replaces the lane's pan knob while it has points and rests
+at the knob before its first point. A `repeat` lane takes 0 (off) or 4, 8, 16,
+32, or 64 for 1/4 to 1/64 repeats, holds each value until its next point, and
+is off before its first; `song.automate(3, 'repeat', [(5, 8), (5.25, 16),
+(5.375, 32), (5.5, 0)])` rolls the slice from bar 5. Loop ranges must advance in time, and
 an explicit tile size must be finite, positive, and at least one tick long.
 Automatic end fades use the energy of both channels. Opposite channel
 polarities do not make an audible ending count as silence.
 
-The song tools expect format 20 (18 and 19 also work). `render.py` does not pass sample folders to
+The song tools expect format 21 (18 to 20 also work). `render.py` does not pass sample folders to
 the application, and `measure.py` checks linked paths from its working
 directory. For an earlier song or a library-relative WAV, use the native
-`convert` command to make a format-20 working copy with the required
+`convert` command to make a format-21 working copy with the required
 `--samples` folders and an isolated `MIXJAM_TECHNO_DATA_DIR`. Copy any
 `.meta.json` beside the new song with the matching name. Check for missing
 sources and unconfirmed conflicts before using its renders. Do not replace the
@@ -81,7 +84,12 @@ Cached audio is copied, so changing an output WAV does not change the cache.
 Missing or damaged entries are rendered again. Use `--no-cache` to render
 every lane.
 
-Caching requires format 18, 19, or 20, directly linked absolute imported WAV paths with
+Repeat lane renders retain the whole song's duration, so captured audio can
+continue after the lane's last clip. Their cache keys include that duration.
+The audibility report follows Repeat captures when it selects the bars to
+measure; FX tails remain outside that selection.
+
+Caching requires format 18 to 21, directly linked absolute imported WAV paths with
 source tempo, and no native, library, missing-source, conflict, or origin
 dependencies. Other songs still render, with no cache reuse. Cache keys include
 source-file content, render settings, global Solo state, master gain, and the
