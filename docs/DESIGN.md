@@ -412,9 +412,12 @@ the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
 The position readout shows elapsed minutes and seconds (`MM : SS`) in Inter
-Medium at 23 points in a fixed 112 by 42-point container; its tooltip adds the
-bar and beat. Changes to digit widths or song length must not move the
-adjacent transport controls. Status text
+Medium at 23 points in a fixed 112 by 42-point container in the header, after
+the MixJam Techno title; its tooltip adds the bar and beat. The song name
+leads the transport in a fixed 112 by 30-point slot at the Headline size,
+followed by a mark when the song has unsaved changes. A long name truncates
+and its tooltip shows the whole name. Changes to digit widths, song length, or
+name length must not move the adjacent controls. Status text
 uses Inter Medium at 12 points. These are local sizes within the same text family.
 
 All floating windows use the same live uppercase Syncopate title and Inter body,

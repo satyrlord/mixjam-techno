@@ -7573,11 +7573,54 @@ mod tests {
             let seconds =
                 (tick as f64 * 240.0 / app.session.project().bpm / TICKS_PER_BAR as f64) as u32;
             let label = format!("{:02} : {:02}", seconds / 60, seconds % 60);
+            // The position readout sits in the 66-point header, in the song
+            // name's former place, clear of the header actions.
             let time = text_rect(&output, &label);
             assert!(
-                time.left() >= 18.0 && time.right() <= 130.0,
+                time.bottom() <= 66.0 && time.right() < size.x - 190.0,
                 "{label}: {time:?}"
             );
+        }
+    }
+
+    #[test]
+    fn song_name_and_position_readout_trade_places() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let size = Vec2::new(960.0, 720.0);
+        let mut controls = None;
+        let long = "Long song name ".repeat(6);
+        for title in ["Song", long.trim_end()] {
+            let mut project = app.session.project().clone();
+            project.title = title.into();
+            app.session = Session::headless(
+                Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+                project,
+            )
+            .unwrap();
+            for _ in 0..2 {
+                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let name = text_rect(&output, &title_text(title));
+            let time = text_rect(&output, "00 : 00");
+            // The header is 66 points high and the transport follows it.
+            assert!(time.bottom() <= 66.0, "The readout is in the header.");
+            assert!(name.top() >= 66.0, "The name is in the transport.");
+            let bpm = effects_control_rect(&output, "Project BPM");
+            assert!(
+                name.left() >= 18.0 && name.left() < bpm.left(),
+                "The song name leads the transport: {name:?}"
+            );
+            // The readout follows the brand, left of the header actions.
+            assert!(time.left() > text_rect(&output, "TECHNO").right());
+            assert!(time.right() < effects_control_rect(&output, "Help").left());
+            // Neither title length nor the swap moves the neighbouring controls.
+            let current = ["BPM", "Zoom", "Follow"].map(|label| text_rect(&output, label));
+            if let Some(expected) = controls {
+                assert_eq!(current, expected);
+            }
+            controls = Some(current);
         }
     }
 

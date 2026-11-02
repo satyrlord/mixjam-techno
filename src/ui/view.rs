@@ -39,6 +39,8 @@ pub(super) const TEXT: Color32 = Color32::from_rgb(233, 237, 238);
 pub(super) const ACCENT: Color32 = Color32::from_rgb(184, 227, 126);
 pub(super) const CORAL: Color32 = Color32::from_rgb(255, 130, 130);
 pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
+/// Width of the song name slot at the left of the transport.
+const TRANSPORT_TITLE_WIDTH: f32 = 112.0;
 const LINE: Color32 = Color32::from_rgb(58, 65, 72);
 pub(super) const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
 const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
@@ -204,16 +206,7 @@ impl MixJamApp {
                     ui.add_space(24.0);
                     ui.separator();
                     ui.add_space(18.0);
-                    let title = if self.session.unsaved() {
-                        format!("{} *", self.session.project().title)
-                    } else {
-                        self.session.project().title.clone()
-                    };
-                    let title_width = (ui.available_width() - 190.0).max(40.0);
-                    ui.add_sized(
-                        [title_width, 30.0],
-                        egui::Label::new(heading(title, 15.0)).truncate(),
-                    );
+                    transport_position(ui, self.session.cursor_tick(), self.session.project().bpm);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if action(ui, RailIcon::Help, "Help").clicked() {
                             self.show_help = !self.show_help;
@@ -463,7 +456,15 @@ impl MixJamApp {
             if compact {
                 ui.spacing_mut().item_spacing.x = 4.0;
             }
-            transport_position(ui, self.session.cursor_tick(), self.session.project().bpm);
+            let title = if self.session.unsaved() {
+                format!("{} *", self.session.project().title)
+            } else {
+                self.session.project().title.clone()
+            };
+            ui.add_sized(
+                [TRANSPORT_TITLE_WIDTH, 30.0],
+                egui::Label::new(heading(title, 15.0)).truncate(),
+            );
             ui.add_space(if compact { 4.0 } else { 12.0 });
             let sections = self.section_bookmarks && !self.session.project().sections.is_empty();
             if transport_button(
