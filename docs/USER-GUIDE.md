@@ -19,9 +19,11 @@
 
 The interface uses a dark graphite workspace, bundled Syncopate in uppercase
 for branding and titles, and Inter Medium for all other application text.
-The header shows the position readout (minutes and seconds); hover it for the bar and beat.
-Transport sits above the arrangement and starts with the song name, marked with an
-asterisk when it has unsaved changes. Sounds, Mixer, Mastering, and Effects share the lower panel;
+The header shows the position readout (minutes and seconds) in its center; hover it for
+the bar and beat. Transport sits above the arrangement and starts with the song name,
+marked with an asterisk when it has unsaved changes. The whole name always shows: a
+long name wraps onto two lines or uses smaller text, and in a narrow window the
+transport buttons get narrower to make room. Sounds, Mixer, Mastering, and Effects share the lower panel;
 use its left-side module selector to switch between them. Sample categories,
 search, and library filters stay together in Sounds; search and filters sit
 beside the selector. Sort sounds in library order, by name, length, BPM, or

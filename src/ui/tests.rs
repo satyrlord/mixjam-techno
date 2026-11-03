@@ -7597,26 +7597,58 @@ mod tests {
         }
     }
 
+    /// Replace the fixture's song with one of the given name.
+    fn retitle(app: &mut MixJamApp, title: &str) {
+        let mut project = app.session.project().clone();
+        project.title = title.into();
+        app.session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            project,
+        )
+        .unwrap();
+    }
+
+    /// The song name's painted text: its bounds and galley.
+    fn song_name_text(output: &egui::FullOutput, title: &str) -> (Rect, Arc<egui::Galley>) {
+        let text = title_text(title);
+        let mut names = output.shapes.iter().filter_map(|shape| match &shape.shape {
+            egui::Shape::Text(shape) if shape.galley.job.text == text => Some((
+                Rect::from_min_size(shape.pos, shape.galley.size()),
+                shape.galley.clone(),
+            )),
+            _ => None,
+        });
+        let name = names
+            .next()
+            .unwrap_or_else(|| panic!("Missing song name: {text}"));
+        assert!(
+            names.next().is_none(),
+            "The song name is painted once: {text}"
+        );
+        name
+    }
+
+    const TRANSPORT_BUTTONS: [&str; 8] = [
+        "Loop the whole song. Drag the bar ruler to loop a range.",
+        "Go to start",
+        "Back one bar",
+        "Stop",
+        "Play / pause (Space)",
+        "Forward one bar",
+        "Go to end",
+        "Record into the armed track",
+    ];
+
     #[test]
     fn song_name_and_position_readout_trade_places() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         let size = Vec2::new(960.0, 720.0);
-        let mut controls = None;
         let long = "Long song name ".repeat(6);
         for title in ["Song", long.trim_end()] {
-            let mut project = app.session.project().clone();
-            project.title = title.into();
-            app.session = Session::headless(
-                Arc::new(Library::fixture(app.session.library().samples.to_vec())),
-                project,
-            )
-            .unwrap();
-            for _ in 0..2 {
-                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            }
+            retitle(&mut app, title);
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            let name = text_rect(&output, &title_text(title));
+            let (name, _) = song_name_text(&output, title);
             let time = text_rect(&output, "00 : 00");
             // The header is 66 points high and the transport follows it.
             assert!(time.bottom() <= 66.0, "The readout is in the header.");
@@ -7626,16 +7658,169 @@ mod tests {
                 name.left() >= 18.0 && name.left() < bpm.left(),
                 "The song name leads the transport: {name:?}"
             );
-            // The readout follows the brand, left of the header actions.
+            // The readout sits between the brand and the header actions.
             assert!(time.left() > text_rect(&output, "TECHNO").right());
-            assert!(time.right() < effects_control_rect(&output, "Help").left());
-            // Neither title length nor the swap moves the neighbouring controls.
-            let current = ["BPM", "Zoom", "Follow"].map(|label| text_rect(&output, label));
-            if let Some(expected) = controls {
-                assert_eq!(current, expected);
-            }
-            controls = Some(current);
+            assert!(time.right() < effects_control_rect(&output, "Undo").left());
         }
+    }
+
+    #[test]
+    fn position_readout_is_centered_in_the_header() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        for width in [960.0, 1024.0, 1280.0, 1440.0, 1920.0] {
+            let size = Vec2::new(width, 900.0);
+            for title in ["Song", "Reality (Vocal Guide, Proposals)"] {
+                retitle(&mut app, title);
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                // The header spans the window, so its center is the window's.
+                let readout = accessible_label(&output, "00 : 00");
+                assert_eq!(readout.size(), Vec2::new(112.0, 42.0));
+                assert!(
+                    (readout.center().x - width / 2.0).abs() <= 0.5,
+                    "{width}: {readout:?}"
+                );
+                assert!((readout.center().y - 33.0).abs() <= 0.5, "{readout:?}");
+                let digits = text_rect(&output, "00 : 00");
+                assert!((digits.center().x - width / 2.0).abs() <= 0.5, "{digits:?}");
+                assert!(readout.left() > text_rect(&output, "TECHNO").right());
+                assert!(readout.right() < effects_control_rect(&output, "Undo").left());
+            }
+        }
+    }
+
+    #[test]
+    fn song_name_is_never_clipped_and_every_transport_button_fits() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let very_long = "A very long working title for the second take of the dawn mix with \
+                         extra strings and a choir";
+        let absurd = "Absurd ".repeat(40);
+        let titles = [
+            "Song",
+            "Reality (Vocal Guide, Proposals)",
+            very_long,
+            absurd.trim_end(),
+        ];
+        for size in [Vec2::new(960.0, 720.0), Vec2::new(1440.0, 1000.0)] {
+            let narrowest = size.x == 960.0;
+            // The transport ends at the tool rail, inside its 18-point margins.
+            let right = size.x - 64.0 - 18.0;
+            for title in titles {
+                retitle(&mut app, title);
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                let (name, galley) = song_name_text(&output, title);
+                let font = galley.job.sections[0].format.font_id.size;
+                let context = format!("{size:?} {title}: {name:?} at {font} points");
+                assert!(!galley.elided, "{context}");
+                // The whole name stays in the 48-point row inside the transport.
+                assert!(name.left() >= 18.0 - 0.5, "{context}");
+                assert!(
+                    name.top() >= 76.0 - 0.5 && name.bottom() <= 124.0 + 0.5,
+                    "{context}"
+                );
+                let buttons = TRANSPORT_BUTTONS.map(|button| effects_control_rect(&output, button));
+                assert!(name.right() <= buttons[0].left() - 4.0, "{context}");
+                for pair in buttons.windows(2) {
+                    assert!(pair[0].right() <= pair[1].left(), "{context}");
+                }
+                // Buttons narrow only in a compact window, and only for a name
+                // that would otherwise lose its full size.
+                let side = buttons[0].width();
+                for button in buttons {
+                    assert_eq!(button.size(), Vec2::splat(side), "{context}");
+                    assert!(
+                        button.left() >= 18.0 && button.right() <= right,
+                        "{context}"
+                    );
+                }
+                if !narrowest || title == "Song" {
+                    assert_eq!(side, 42.0, "{context}");
+                } else {
+                    assert!(side >= 34.0, "{context}");
+                }
+                let bpm = effects_control_rect(&output, "Project BPM");
+                assert!(buttons[7].right() <= bpm.left(), "{context}");
+                for toggle in ["Follow", "Sections"] {
+                    let toggle = effects_control_rect(&output, toggle);
+                    assert!(toggle.right() <= right + 0.5, "{context}: {toggle:?}");
+                }
+                // Real names keep at least the 9-point floor; a short name and
+                // the owner's song keep the full 15-point size where they fit.
+                if title != absurd.trim_end() {
+                    assert!(font >= 9.0, "{context}");
+                }
+                if title == "Song" || (!narrowest && title.len() < 40) {
+                    assert_eq!((font, galley.rows.len()), (15.0, 1), "{context}");
+                }
+                assert!(galley.rows.len() <= 2 || font <= 9.0, "{context}");
+            }
+        }
+    }
+
+    #[test]
+    fn song_name_has_no_tooltip_and_its_mark_does_not_move_the_transport() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
+        let size = Vec2::new(960.0, 720.0);
+        let title = "Reality (Vocal Guide, Proposals)";
+        retitle(&mut app, title);
+        // A tooltip adds text to the frame.
+        let texts = |output: &egui::FullOutput| {
+            output
+                .shapes
+                .iter()
+                .filter(|shape| matches!(shape.shape, egui::Shape::Text(_)))
+                .count()
+        };
+        let hover = |app: &mut MixJamApp, at: Pos2| {
+            frame_at_size(
+                &ctx,
+                app,
+                vec![egui::Event::PointerMoved(at)],
+                egui::Modifiers::NONE,
+                size,
+            );
+            frame_at_size(&ctx, app, vec![], egui::Modifiers::NONE, size)
+        };
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        let (name, _) = song_name_text(&output, title);
+        let resting = texts(&output);
+        // The readout's tooltip shows that hovering opens tooltips here.
+        let readout = accessible_label(&output, "00 : 00");
+        let hovered = hover(&mut app, readout.center());
+        assert!(texts(&hovered) > resting);
+        assert!(hovered.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text.contains("minutes : seconds")
+        )));
+        let output = hover(&mut app, name.center());
+        assert_eq!(
+            texts(&output),
+            resting,
+            "The whole name shows; it needs no tooltip."
+        );
+        song_name_text(&output, title);
+
+        // The slot keeps room for the unsaved mark: the first edit moves nothing.
+        let controls = |output: &egui::FullOutput| {
+            TRANSPORT_BUTTONS
+                .map(|button| effects_control_rect(output, button))
+                .into_iter()
+                .chain(
+                    ["Project BPM", "Follow", "Sections"].map(|c| effects_control_rect(output, c)),
+                )
+                .collect::<Vec<_>>()
+        };
+        let saved = controls(&output);
+        app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+        assert!(app.session.unsaved());
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        let (marked, galley) = song_name_text(&output, &format!("{title} *"));
+        assert!(!galley.elided);
+        assert!(marked.right() <= saved[0].left() - 4.0, "{marked:?}");
+        assert_eq!(controls(&output), saved);
     }
 
     #[test]

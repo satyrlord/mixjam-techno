@@ -105,8 +105,19 @@ pub(super) const TEXT: Color32 = Color32::from_rgb(233, 237, 238);
 pub(super) const ACCENT: Color32 = Color32::from_rgb(184, 227, 126);
 pub(super) const CORAL: Color32 = Color32::from_rgb(255, 130, 130);
 pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
-/// Width of the song name slot at the left of the transport.
-const TRANSPORT_TITLE_WIDTH: f32 = 112.0;
+/// The song name's size at the left of the transport, and the floor that it
+/// shrinks to before an absurdly long name goes below it.
+const TRANSPORT_TITLE_SIZE: f32 = 15.0;
+const TRANSPORT_TITLE_FLOOR: f32 = 9.0;
+/// The transport row inside the panel's 10-point vertical margins.
+const TRANSPORT_ROW_HEIGHT: f32 = 48.0;
+/// Transport buttons are square. In a compact window they narrow when the song
+/// name cannot otherwise keep its full size.
+const TRANSPORT_BUTTON: f32 = 42.0;
+const TRANSPORT_BUTTON_NARROW: f32 = 34.0;
+const TRANSPORT_BUTTON_COUNT: f32 = 8.0;
+/// The position readout's container, centered in the header.
+const POSITION_SIZE: Vec2 = Vec2::new(112.0, 42.0);
 const LINE: Color32 = Color32::from_rgb(58, 65, 72);
 pub(super) const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
 const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
@@ -263,6 +274,9 @@ impl MixJamApp {
                     .inner_margin(egui::Margin::symmetric(22, 10)),
             )
             .show(ctx, |ui| {
+                // The header spans the window and its margins are symmetric,
+                // so its center is the window's center.
+                let center = ui.max_rect().center().x;
                 ui.horizontal_centered(|ui| {
                     if let Some(icons) = &icons {
                         icons.brand_image(ui);
@@ -271,8 +285,16 @@ impl MixJamApp {
                     ui.label(heading("Techno", 14.0).color(MUTED));
                     ui.add_space(24.0);
                     ui.separator();
-                    ui.add_space(18.0);
-                    transport_position(ui, self.session.cursor_tick(), self.session.project().bpm);
+                    let position = Rect::from_center_size(
+                        Pos2::new(center, ui.max_rect().center().y),
+                        POSITION_SIZE,
+                    );
+                    transport_position(
+                        ui,
+                        position,
+                        self.session.cursor_tick(),
+                        self.session.project().bpm,
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if action(ui, RailIcon::Help, "Help").clicked() {
                             self.show_help = !self.show_help;
@@ -525,19 +547,47 @@ impl MixJamApp {
             if compact {
                 ui.spacing_mut().item_spacing.x = 4.0;
             }
-            let title = if self.session.unsaved() {
-                format!("{} *", self.session.project().title)
-            } else {
-                self.session.project().title.clone()
+            // The controls after the name keep their own widths: the name gets
+            // the rest of the row, measured in the previous pass, and is never
+            // clipped. Its slot keeps room for the unsaved mark, so the first
+            // edit does not move the controls.
+            let rest_id = egui::Id::new(("transport-rest-width", compact));
+            let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_id));
+            let available = ui.available_width();
+            let room = |button: f32| {
+                available - rest.unwrap_or_default() - TRANSPORT_BUTTON_COUNT * button
             };
-            ui.add_sized(
-                [TRANSPORT_TITLE_WIDTH, 30.0],
-                egui::Label::new(heading(title, 15.0)).truncate(),
+            let title = &self.session.project().title;
+            let sizing = format!("{title} *");
+            let mut button = TRANSPORT_BUTTON;
+            let mut fit = transport_title_fit(ui, &sizing, room(button));
+            if compact && fit.size < TRANSPORT_TITLE_SIZE {
+                button = TRANSPORT_BUTTON_NARROW;
+                fit = transport_title_fit(ui, &sizing, room(button));
+            }
+            let width = room(button);
+            let slot = transport_title_galley(ui, &sizing, fit, width).size();
+            let shown = if self.session.unsaved() {
+                sizing.clone()
+            } else {
+                title.clone()
+            };
+            let galley = transport_title_galley(ui, &shown, fit, width);
+            let (name, response) =
+                ui.allocate_exact_size(Vec2::new(slot.x, slot.y.max(30.0)), Sense::hover());
+            ui.painter().galley(
+                Pos2::new(name.left(), name.center().y - galley.size().y / 2.0),
+                galley,
+                TEXT,
             );
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title_text(&shown))
+            });
             ui.add_space(if compact { 4.0 } else { 12.0 });
             let sections = self.section_bookmarks && !self.session.project().sections.is_empty();
             if transport_button(
                 ui,
+                button,
                 TransportIcon::Loop,
                 self.session.project().loop_region.is_some(),
                 if sections {
@@ -559,17 +609,18 @@ impl MixJamApp {
                 let result = self.session.edit(EditCommand::SetLoop(region));
                 self.apply(result);
             }
-            if transport_button(ui, TransportIcon::Start, false, "Go to start").clicked() {
+            if transport_button(ui, button, TransportIcon::Start, false, "Go to start").clicked() {
                 self.seek(0);
             }
-            if transport_button(ui, TransportIcon::Back, false, "Back one bar").clicked() {
+            if transport_button(ui, button, TransportIcon::Back, false, "Back one bar").clicked() {
                 self.seek(self.session.cursor_tick().saturating_sub(TICKS_PER_BAR));
             }
-            if transport_button(ui, TransportIcon::Stop, false, "Stop").clicked() {
+            if transport_button(ui, button, TransportIcon::Stop, false, "Stop").clicked() {
                 self.stop();
             }
             let play = transport_button(
                 ui,
+                button,
                 if self.session.wants_playback() {
                     TransportIcon::Pause
                 } else {
@@ -592,14 +643,17 @@ impl MixJamApp {
                     self.start_playback();
                 }
             }
-            if transport_button(ui, TransportIcon::Forward, false, "Forward one bar").clicked() {
+            if transport_button(ui, button, TransportIcon::Forward, false, "Forward one bar")
+                .clicked()
+            {
                 self.seek(self.session.cursor_tick().saturating_add(TICKS_PER_BAR));
             }
-            if transport_button(ui, TransportIcon::End, false, "Go to end").clicked() {
+            if transport_button(ui, button, TransportIcon::End, false, "Go to end").clicked() {
                 self.seek(self.session.project().end_tick());
             }
             if transport_button(
                 ui,
+                button,
                 TransportIcon::Record,
                 self.session.is_recording(),
                 "Record into the armed track",
@@ -663,6 +717,14 @@ impl MixJamApp {
             {
                 self.section_bookmarks = self.session.options().show_section_bookmarks;
                 self.error(error);
+            }
+            // Remember what follows the name, less the transport buttons. A
+            // changed width redoes this pass before it is shown.
+            let measured = ui.min_rect().right() - name.right() - TRANSPORT_BUTTON_COUNT * button;
+            if rest.is_none_or(|rest| (rest - measured).abs() > 0.5) {
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(rest_id, measured));
+                ui.ctx().request_discard("The transport layout changed.");
             }
         });
     }
@@ -2543,12 +2605,12 @@ fn follow_offset(
     ((next - offset).abs() > 0.5).then_some(next)
 }
 
-fn transport_position(ui: &mut egui::Ui, tick: u32, bpm: f64) -> Response {
+fn transport_position(ui: &mut egui::Ui, rect: Rect, tick: u32, bpm: f64) -> Response {
     let bars = tick / TICKS_PER_BAR + 1;
     let beat = (tick % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
     let seconds = (tick as f64 * 240.0 / bpm / TICKS_PER_BAR as f64) as u64;
     let text = format!("{:02} : {:02}", seconds / 60, seconds % 60);
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 42.0), Sense::hover());
+    let response = ui.allocate_rect(rect, Sense::hover());
     ui.painter().rect_filled(rect, 6.0, CANVAS);
     ui.painter()
         .with_clip_rect(rect.intersect(ui.clip_rect()))
@@ -2563,6 +2625,100 @@ fn transport_position(ui: &mut egui::Ui, tick: u32, bpm: f64) -> Response {
     response.hover_hint(format!(
         "{text} (minutes : seconds). Bar {bars}, beat {beat}"
     ))
+}
+
+/// How the song name is laid out at the left of the transport.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TitleFit {
+    size: f32,
+    rows: usize,
+    break_anywhere: bool,
+}
+
+fn transport_title_galley(
+    ui: &egui::Ui,
+    text: &str,
+    fit: TitleFit,
+    width: f32,
+) -> Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple(
+        title_text(text),
+        transport_title_font(fit.size),
+        TEXT,
+        width.max(1.0),
+    );
+    job.wrap.max_rows = fit.rows;
+    job.wrap.break_anywhere = fit.break_anywhere;
+    ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+fn transport_title_font(size: f32) -> FontId {
+    FontId::new(size, egui::FontFamily::Name("Syncopate Bold".into()))
+}
+
+/// The largest layout that shows the whole song name within `width`: from 15
+/// points down to the 9-point floor, on one line or two lines wrapped between
+/// words, then at the floor in as many lines as the row holds. Only a name too
+/// long for that goes below the floor, breaking words if it must, so the name
+/// is never clipped.
+fn transport_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
+    let fits = |fit: TitleFit| {
+        let galley = transport_title_galley(ui, text, fit, width);
+        !galley.elided && galley.size().x <= width + 0.5 && galley.size().y <= TRANSPORT_ROW_HEIGHT
+    };
+    let rows = |size: f32| {
+        let row = ui.fonts_mut(|fonts| fonts.row_height(&transport_title_font(size)));
+        ((TRANSPORT_ROW_HEIGHT / row).floor() as usize).max(1)
+    };
+    let upper = title_text(text);
+    // Shrink the name rather than break one of its words.
+    let words = |size: f32| {
+        upper.split_whitespace().all(|word| {
+            let galley = ui.fonts_mut(|fonts| {
+                fonts.layout_no_wrap(word.into(), transport_title_font(size), TEXT)
+            });
+            galley.size().x <= width + 0.5
+        })
+    };
+    let mut size = TRANSPORT_TITLE_SIZE;
+    while size >= TRANSPORT_TITLE_FLOOR {
+        let fit = TitleFit {
+            size,
+            rows: 2,
+            break_anywhere: false,
+        };
+        if words(size) && fits(fit) {
+            return fit;
+        }
+        size -= 1.0;
+    }
+    // At the floor, a very long name takes as many lines as the row holds.
+    size = TRANSPORT_TITLE_FLOOR;
+    let fit = TitleFit {
+        size,
+        rows: rows(size),
+        break_anywhere: false,
+    };
+    if words(size) && fits(fit) {
+        return fit;
+    }
+    loop {
+        size -= 0.5;
+        let fit = TitleFit {
+            size,
+            rows: rows(size),
+            break_anywhere: true,
+        };
+        if size <= 1.0 {
+            return TitleFit {
+                rows: usize::MAX,
+                ..fit
+            };
+        }
+        if fits(fit) {
+            return fit;
+        }
+    }
 }
 
 pub(super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
@@ -4351,11 +4507,12 @@ pub(super) enum TransportIcon {
 
 pub(super) fn transport_button(
     ui: &mut egui::Ui,
+    size: f32,
     icon: TransportIcon,
     active: bool,
     tooltip: &str,
 ) -> Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(42.0, 42.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
     let primary = matches!(icon, TransportIcon::Play | TransportIcon::Pause);
     let fill = if primary {
         ACCENT

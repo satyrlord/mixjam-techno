@@ -412,12 +412,25 @@ the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
 The position readout shows elapsed minutes and seconds (`MM : SS`) in Inter
-Medium at 23 points in a fixed 112 by 42-point container in the header, after
-the MixJam Techno title; its tooltip adds the bar and beat. The song name
-leads the transport in a fixed 112 by 30-point slot at the Headline size,
-followed by a mark when the song has unsaved changes. A long name truncates
-and its tooltip shows the whole name. Changes to digit widths, song length, or
-name length must not move the adjacent controls. Status text
+Medium at 23 points in a fixed 112 by 42-point container centered on the
+header's width, whatever the widths of the title before it and the actions
+after it; its tooltip adds the bar and beat. Changes to digit widths or song
+length must not move the adjacent controls.
+
+The song name leads the transport at the Headline size (15 points), followed by
+a mark when the song has unsaved changes. The name is never clipped, so it has
+no tooltip. Its slot is sized to the name and always keeps room for the mark,
+so the first edit does not move the transport controls; a longer name pushes
+the controls to the right. The controls after the name keep their widths, and
+the name takes the rest of the row. When it does not fit, it wraps between words
+onto two lines, then shrinks in 1-point steps to a 9-point floor. At the floor,
+a very long name takes as many lines as the 48-point row holds. Only an
+absurdly long name, beyond about 110 characters at the minimum window or 300
+at the starting size, goes below
+the floor, breaking words if it must. In a compact window (a transport narrower
+than 1000 points) the eight transport buttons narrow from 42 to 34 points when
+the name would otherwise lose its full size. No transport control is dropped
+or hidden, and all of them stay on screen at the minimum window size. Status text
 uses Inter Medium at 12 points. These are local sizes within the same text family.
 
 All floating windows use the same live uppercase Syncopate title and Inter body,
