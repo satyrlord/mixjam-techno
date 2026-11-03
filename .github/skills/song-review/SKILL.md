@@ -2,8 +2,8 @@
 name: song-review
 description: >
   Review, rate, or master a song made with MixJam Techno. Use to run the song
-  critique loop, to brief a composition critic, mix critic, blind rater, or
-  mastering engineer, or to act as one of these roles.
+  critique loop, to brief a composition critic, mix critic, rhythm critic,
+  blind rater, or mastering engineer, or to act as one of these roles.
 ---
 
 # Review a song
@@ -21,7 +21,8 @@ round log format, and the generic targets.
 1. If you are a critic, the rater, or the mastering engineer, read your role
    file and do only that role:
    [COMPOSITION-CRITIC.md](COMPOSITION-CRITIC.md), [MIX-CRITIC.md](MIX-CRITIC.md),
-   [RATER.md](RATER.md), or [MASTERING-ENGINEER.md](MASTERING-ENGINEER.md).
+   [RHYTHM-CRITIC.md](RHYTHM-CRITIC.md), [RATER.md](RATER.md), or
+   [MASTERING-ENGINEER.md](MASTERING-ENGINEER.md).
    Completion criterion: Your output follows the format in your role file.
 2. If the user asks only for feedback or a rating, select the evaluation branch.
    Completion criterion: The requested feedback or rating is reported with its limits.
@@ -150,6 +151,13 @@ Each repair round costs render time and agent turns. To keep rounds short:
 3. Check each critique against its role file.
    Completion criterion: Each has at most 8 findings with bars, tracks,
    evidence, a fix, and a severity, at most 5 things to keep, and no score.
+4. If the song has drums, glitches, or ratchets and the user asks for a rhythm
+   review, or the artist profile asks for one, also launch the rhythm critic as
+   a fresh agent: `song-rhythm-critic`. It runs beside the other two and
+   returns findings, a verdict for every glitch and ratchet, and an audition
+   plan. The owner chooses which of its fixes and auditions to run.
+   Completion criterion: Its output follows `RHYTHM-CRITIC.md`, and none of
+   its proposals is applied without the owner's choice.
 
 The agents are in `.claude/agents/` for Claude Code and in `.codex/agents/` for
 Codex, where the names use underscores (`song_composition_critic`). If the

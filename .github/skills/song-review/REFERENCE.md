@@ -72,7 +72,7 @@ the song, the renders, or another role's output.
 
 ## Finding format
 
-Both critics use this format. Number the findings in order of importance, most
+Every critic uses this format. Number the findings in order of importance, most
 important first.
 
 ```markdown
