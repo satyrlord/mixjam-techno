@@ -9,6 +9,8 @@ pub(super) const PANEL: Color32 = Color32::from_rgb(60, 65, 64);
 pub(super) const CREAM: Color32 = Color32::from_rgb(249, 242, 220);
 pub(super) const ACCENT: Color32 = Color32::from_rgb(231, 147, 49);
 pub(super) const FACE: Color32 = Color32::from_rgb(35, 38, 36);
+/// Secondary explanation under a control: cream, quieter than its label.
+pub(super) const HELP: Color32 = Color32::from_rgb(190, 185, 166);
 const PRIMARY: Color32 = Color32::from_rgb(212, 205, 182);
 const DISABLED_FACE: Color32 = Color32::from_rgb(61, 64, 60);
 const DISABLED_TEXT: Color32 = Color32::from_rgb(201, 203, 192);
@@ -111,6 +113,8 @@ pub(super) enum ButtonRole {
     Secondary,
     Primary,
     Danger,
+    /// A rare, reversible action: underlined text that gains a face on hover.
+    Tertiary,
 }
 
 #[derive(Clone, Copy)]
@@ -548,7 +552,7 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     let rect = response.rect;
     let down = response.is_pointer_button_down_on();
     let base = match role {
-        ButtonRole::Secondary => FACE,
+        ButtonRole::Secondary | ButtonRole::Tertiary => FACE,
         ButtonRole::Primary => PRIMARY,
         ButtonRole::Danger => DANGER,
     };
@@ -562,11 +566,17 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
         base
     };
     let painter = ui.painter();
-    painter.rect_filled(rect, 5.0, INK);
+    let quiet = matches!(role, ButtonRole::Tertiary);
+    let raised = !quiet || (response.enabled() && (response.hovered() || down));
+    if raised {
+        painter.rect_filled(rect, 5.0, INK);
+    }
     let face = rect
         .shrink(2.0)
         .translate(Vec2::new(0.0, if down { 1.0 } else { -1.0 }));
-    painter.rect_filled(face, 3.0, base);
+    if raised {
+        painter.rect_filled(face, 3.0, base);
+    }
     if matches!(role, ButtonRole::Primary) && response.enabled() {
         let art = artwork(ui.ctx(), Palette::of(ui));
         let size = art.primary.size_vec2() / ui.ctx().pixels_per_point();
@@ -583,13 +593,15 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
             painter.rect_filled(face.shrink(2.0), 2.0, Color32::from_black_alpha(25));
         }
     }
-    painter.line_segment(
-        [
-            face.left_top() + Vec2::new(3.0, 1.0),
-            face.right_top() + Vec2::new(-3.0, 1.0),
-        ],
-        Stroke::new(1.0_f32, Color32::from_white_alpha(55)),
-    );
+    if raised {
+        painter.line_segment(
+            [
+                face.left_top() + Vec2::new(3.0, 1.0),
+                face.right_top() + Vec2::new(-3.0, 1.0),
+            ],
+            Stroke::new(1.0_f32, Color32::from_white_alpha(55)),
+        );
+    }
     let color = match role {
         ButtonRole::Primary => INK,
         _ => CREAM,
@@ -599,12 +611,13 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     } else {
         DISABLED_TEXT
     };
-    let galley = egui::WidgetText::from(
-        egui::RichText::new(label)
-            .font(FontId::proportional(13.0))
-            .color(color),
-    )
-    .into_galley(
+    let mut text = egui::RichText::new(label)
+        .font(FontId::proportional(13.0))
+        .color(color);
+    if quiet && !raised {
+        text = text.underline();
+    }
+    let galley = egui::WidgetText::from(text).into_galley(
         ui,
         Some(egui::TextWrapMode::Truncate),
         (face.width() - 12.0).max(0.0),
@@ -1594,6 +1607,7 @@ mod tests {
             ("olive selection", INK, Palette::Olive.accent()),
             ("indigo selection", INK, Palette::Indigo.accent()),
             ("value and button labels", CREAM, FACE),
+            ("help text", HELP, FACE),
             ("disabled labels", DISABLED_TEXT, DISABLED_FACE),
         ] {
             let ratio = contrast(text, background);

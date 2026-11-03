@@ -8,6 +8,7 @@ use crate::{
 };
 use rodio::{Sink, Source};
 mod output;
+mod resample;
 pub use output::OutputConfiguration;
 use std::{
     collections::HashMap,
@@ -421,9 +422,31 @@ struct Voice {
     reverse: bool,
     /// The track's Pitch lane, which moves the read at its own speed.
     varispeed: Option<Arc<crate::automation::Varispeed>>,
+    /// Read the source through the band-limited kernel (`resample`) rather
+    /// than in a straight line between two frames. Only a clip that plays
+    /// at its source's own rate and tempo, without a Pitch lane, reads
+    /// whole frames and needs neither.
+    band_limited: bool,
 }
 
 impl Voice {
+    /// The frames on each side of a frame over which a Pitch lane's speed is
+    /// averaged to set the band-limited kernel's cutoff there. A jump in the
+    /// lane's speed then moves the cutoff over 64 frames rather than at one,
+    /// and the cutoff stays a function of the frame alone, so playback from
+    /// any frame and in any block size reads what export reads.
+    const SPEED_SPAN: u64 = 32;
+
+    /// The kernel's scale at `frame` under the Pitch lane `clock`.
+    fn scale_at(clock: &crate::automation::Varispeed, step: f64, frame: u64) -> f32 {
+        let (low, high) = (
+            frame.saturating_sub(Self::SPEED_SPAN),
+            frame + Self::SPEED_SPAN,
+        );
+        let speed = (clock.at(high) - clock.at(low)) / (high - low) as f64;
+        resample::scale(step * speed)
+    }
+
     /// Add the voice at `level` to `out`, stereo frames from `first_frame`,
     /// and to `sends` when given.
     fn add(&self, first_frame: u64, out: &mut [f32], mut sends: Option<&mut [f32]>, level: &Ramp) {
@@ -437,6 +460,11 @@ impl Voice {
         let source_frames = source.frames() as usize;
         let source_channels = source.channels as usize;
         let sending = sends.is_some() && self.sends.iter().any(|send| *send > 0.0);
+        let fixed_scale = resample::scale(self.step);
+        // The band-limited read hears only the clip's slice of its source,
+        // as the straight-line read does: a trim cuts the sound before it.
+        let slice = &source.samples
+            [(self.offset_frames as usize * source_channels).min(source.samples.len())..];
         // Under a Pitch lane, the read moves by the lane's clock instead of
         // the frames. Reversed, it reaches the clip's offset at its end.
         let origin = self.varispeed.as_ref().map(|clock| {
@@ -462,8 +490,22 @@ impl Voice {
                 }
                 break;
             }
-            let next = (index + 1).min(source_frames - 1);
-            let fraction = (pos - index as f64) as f32;
+            let read = if self.band_limited {
+                let scale = match &self.varispeed {
+                    Some(clock) => Self::scale_at(clock, self.step, frame),
+                    None => fixed_scale,
+                };
+                resample::read(slice, source_channels, along * self.step, scale)
+            } else {
+                let next = (index + 1).min(source_frames - 1);
+                let fraction = (pos - index as f64) as f32;
+                std::array::from_fn(|ch| {
+                    let ch = ch.min(source_channels - 1);
+                    let a = source.samples[index * source_channels + ch];
+                    let b = source.samples[next * source_channels + ch];
+                    a + (b - a) * fraction
+                })
+            };
             let at = (frame - first_frame) as usize;
             let fade = self.fade(frame);
             for (channel, channel_gain) in self.channel_gains.iter().enumerate() {
@@ -471,10 +513,7 @@ impl Voice {
                     continue;
                 };
                 let ch = if source_channels == 1 { 0 } else { channel };
-                let a = source.samples[index * source_channels + ch];
-                let b = source.samples[next * source_channels + ch];
-                let value =
-                    (a + (b - a) * fraction) * channel_gain * fade * level.at(frame, channel);
+                let value = read[ch] * channel_gain * fade * level.at(frame, channel);
                 out[at * 2 + channel] += value;
                 if sending && let Some(sends) = sends.as_deref_mut() {
                     for (bus, send) in self.sends.iter().enumerate() {
@@ -941,8 +980,27 @@ impl Mix {
             // has run its length, so the fade out ends there.
             let source_end = match &varispeed {
                 Some(clock) => clock.reach(start, source_left, end),
-                None => start + source_left.ceil() as u64,
+                None => start.saturating_add(source_left.ceil() as u64).min(end),
             };
+            let band_limited = quality.samples == crate::playback_quality::SampleQuality::High
+                && (step != 1.0 || varispeed.is_some());
+            if band_limited {
+                let maximum_cents = track
+                    .automation
+                    .pitch
+                    .iter()
+                    .map(|point| point.value)
+                    .fold(0.0_f32, f32::max);
+                let maximum_speed = step * (f64::from(maximum_cents) / 1200.0).exp2();
+                if !resample::supports_speed(maximum_speed) {
+                    return Err(format!(
+                        "Sample {} cannot be read at this speed with High sample quality.",
+                        clip.sample_id
+                    ));
+                }
+                // The kernel's table is ready before playback reads it.
+                resample::prepare();
+            }
             // Channel enables depend only on the track: resolve them once per clip.
             let voice = Voice {
                 track: clip.track,
@@ -968,6 +1026,7 @@ impl Mix {
                 },
                 reverse: clip.reverse,
                 varispeed,
+                band_limited,
             };
             let keyed = keys.iter().position(|chain| chain.track == clip.track);
             if let Some(slot) = keyed {
@@ -1051,7 +1110,7 @@ impl Mix {
 
     fn check_export_quality(&self) -> Result<(), String> {
         if self.quality != crate::playback_quality::PlaybackQuality::FULL {
-            return Err("Prepare the song at 4x quality before export.".into());
+            return Err("Prepare the song at full quality before export.".into());
         }
         Ok(())
     }
@@ -3440,7 +3499,10 @@ mod tests {
                 .windows(2)
                 .map(|pair| (pair[1] - pair[0]).abs())
                 .fold(0.0, f32::max);
-            assert!(step <= slope * 1.01 + 1e-6, "{name} steps by {step}");
+            // The clip reads 1.29 times fast, through the band-limited
+            // kernel, whose gain on a steady sound ripples within 3e-5 of
+            // one with the read's phase: 1.5e-5 on this 0.5.
+            assert!(step <= slope * 1.01 + 2e-5, "{name} steps by {step}");
             // It swings the whole way.
             let high = side.iter().copied().fold(0.0, f32::max);
             let low = side.iter().copied().fold(1.0, f32::min);
@@ -4193,8 +4255,14 @@ mod tests {
         let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
         let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
         let (start, fall, end) = (frame(256), frame(384), frame(640));
-        // To the first point the sound is the plain clip to the bit.
-        assert_eq!(out[..fall * 2], plain[..fall * 2]);
+        // To the first point the sound is the plain clip. A clip under a
+        // Pitch lane always reads through the band-limited kernel, which
+        // copies a steady ramp to within its DC accuracy, where the plain
+        // clip at its own tempo copies the frames.
+        let worst = (0..fall * 2)
+            .map(|at| (out[at] - plain[at]).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(worst < 1e-5, "{worst}");
         let points = project.tracks[0].automation.pitch.clone();
         let clock = crate::automation::Varispeed::new(&points, frames_per_tick).unwrap();
         // After it, each frame reads where the clock has come to: the plain
@@ -4210,13 +4278,23 @@ mod tests {
         let ratio = slope(&out, late) / slope(&plain, late);
         assert!((ratio - 0.25).abs() < 1e-3, "{ratio}");
         // The read never jumps: no frame moves further than at normal
-        // speed, beyond the rounding of the samples.
+        // speed, beyond the rounding of the samples. The straight-line read
+        // copies the ramp exactly, so it shows the clock alone; the
+        // band-limited kernel's gain ripples with the read's phase by more
+        // than this ramp's step (see the kernel's own click test).
+        let low = crate::playback_quality::PlaybackQuality {
+            samples: crate::playback_quality::SampleQuality::Low,
+            ..crate::playback_quality::PlaybackQuality::FULL
+        };
         let largest = |samples: &[f32]| {
             (start + 1..end)
                 .map(|at| (samples[at * 2] - samples[(at - 1) * 2]).abs())
                 .fold(0.0_f32, f32::max)
         };
-        let (moved, normal) = (largest(&out), largest(&plain));
+        let (moved, normal) = (
+            largest(&whole_quality(&project, &samples, low)),
+            largest(&plain),
+        );
         assert!(moved <= normal * 1.01, "{moved} against {normal}");
     }
 
@@ -4247,6 +4325,312 @@ mod tests {
         let out = whole(&stopped, &samples);
         assert!(out[(end - 1) * 2] > 0.0);
         assert!(out[end * 2..].iter().all(|value| *value == 0.0));
+    }
+
+    /// A bright stereo source: a 13.3 kHz tone over a low one on the left,
+    /// and a 9 kHz tone on the right.
+    fn bright_source(frames: usize, channels: u16) -> Pcm {
+        let left = |i: usize| 0.4 * (i as f32 * 1.9).sin() + 0.3 * (i as f32 * 0.05).sin();
+        let right = |i: usize| 0.5 * (i as f32 * 1.3).cos();
+        Pcm {
+            sample_rate: 44_100,
+            channels,
+            samples: (0..frames)
+                .flat_map(|i| {
+                    if channels == 1 {
+                        vec![left(i)]
+                    } else {
+                        vec![left(i), right(i)]
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    /// A voice of `source` from output frame 100 to 1100, from `offset`, at
+    /// `step`, with every gain at one.
+    fn plain_voice(
+        source: Pcm,
+        offset: u32,
+        step: f64,
+        reverse: bool,
+        band_limited: bool,
+    ) -> Voice {
+        Voice {
+            track: 0,
+            source: Arc::new(source),
+            start: 100,
+            end: 1100,
+            offset_frames: offset,
+            step,
+            channel_gains: [Some(1.0); 2],
+            sends: [0.0; BUSES],
+            fade_in: 0,
+            fade_out: 0,
+            curves: [FadeCurve::Linear; 2],
+            sound_end: 1100,
+            reverse,
+            varispeed: None,
+            band_limited,
+        }
+    }
+
+    fn voice_out(voice: &Voice) -> Vec<f32> {
+        let mut out = vec![0.0; 1200 * 2];
+        voice.add(0, &mut out, None, &Ramp::UNITY);
+        out
+    }
+
+    #[test]
+    fn an_off_tempo_voice_reads_band_limited_on_the_straight_line_reads_frames() {
+        resample::prepare();
+        for channels in [1, 2] {
+            let source = bright_source(4_000, channels);
+            let ch = usize::from(channels);
+            let step = 147.0 / 140.0;
+            let high = voice_out(&plain_voice(source.clone(), 1_000, step, false, true));
+            let low = voice_out(&plain_voice(source.clone(), 1_000, step, false, false));
+            // Silence before the clip and after it, on both reads.
+            for out in [&high, &low] {
+                assert!(out[..200].iter().all(|value| *value == 0.0));
+                assert!(out[2200..].iter().all(|value| *value == 0.0));
+            }
+            let slice = &source.samples[1_000 * ch..];
+            for frame in 100..1100 {
+                let position = (frame - 100) as f64 * step;
+                // High reads the clip's slice through the kernel at each
+                // frame's own position, from the clip's first frame.
+                let want = resample::read(slice, ch, position, resample::scale(step));
+                // Low is the straight-line read as it always was.
+                let index = 1_000 + position.floor() as usize;
+                let fraction = (1_000.0 + position - index as f64) as f32;
+                for channel in 0..2 {
+                    let source_channel = channel.min(ch - 1);
+                    assert_eq!(high[frame * 2 + channel], want[source_channel]);
+                    let a = source.samples[index * ch + source_channel];
+                    let b = source.samples[(index + 1) * ch + source_channel];
+                    assert_eq!(low[frame * 2 + channel], a + (b - a) * fraction);
+                }
+            }
+            // The clip sounds from its first frame, which reads its offset's
+            // frame, on either read.
+            for channel in 0..2 {
+                let first = source.samples[1_000 * ch + channel.min(ch - 1)];
+                assert_eq!(low[200 + channel], first);
+                assert_ne!(high[200 + channel], 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_band_limited_voice_ends_with_its_source_and_mirrors_when_reversed() {
+        resample::prepare();
+        // 900 frames from offset 100 run out at output frame 100 + 800 / 1.25.
+        let source = bright_source(900, 2);
+        let step = 1.25;
+        let high = voice_out(&plain_voice(source.clone(), 100, step, false, true));
+        let low = voice_out(&plain_voice(source.clone(), 100, step, false, false));
+        let last = |out: &[f32]| {
+            out.chunks(2)
+                .rposition(|frame| frame != [0.0, 0.0])
+                .unwrap()
+        };
+        assert_eq!(last(&high), 100 + 640 - 1);
+        assert_eq!(last(&high), last(&low));
+        // Near the end the read holds the last frame instead of reaching past it.
+        assert!(
+            high.iter()
+                .all(|value| value.is_finite() && value.abs() < 1.0)
+        );
+        // Reversed, each frame plays what the forward frame at its mirror
+        // plays, so the sound is a pure function of the source.
+        let reversed = voice_out(&plain_voice(source, 100, step, true, true));
+        for frame in 100..1100 {
+            let mirror = 100 + 1100 - 1 - frame;
+            for channel in 0..2 {
+                assert_eq!(
+                    reversed[frame * 2 + channel],
+                    high[mirror * 2 + channel],
+                    "{frame}"
+                );
+            }
+        }
+    }
+
+    fn whole_quality(
+        project: &Project,
+        samples: &HashMap<u32, Pcm>,
+        quality: crate::playback_quality::PlaybackQuality,
+    ) -> Vec<f32> {
+        let mix = mix_with_samples_quality(project, samples, quality).unwrap();
+        let mut out = vec![0.0; mix.frames() as usize * 2];
+        mix.read_block(0, &mut out, None, &mut RenderState::default());
+        out
+    }
+
+    #[test]
+    fn sample_quality_low_reads_off_tempo_clips_in_straight_lines_and_cannot_export() {
+        use crate::playback_quality::{PlaybackQuality, SampleQuality};
+        let samples = HashMap::from([(1, bright_source(200_000, 2))]);
+        let mut project = reversed_song(500, 256, false);
+        let low = PlaybackQuality {
+            samples: SampleQuality::Low,
+            ..PlaybackQuality::FULL
+        };
+        // At the source's own tempo both reads copy the frames.
+        assert_eq!(
+            whole_quality(&project, &samples, low),
+            whole(&project, &samples)
+        );
+        project.bpm = 160.0;
+        let (high_out, low_out) = (
+            whole(&project, &samples),
+            whole_quality(&project, &samples, low),
+        );
+        assert_ne!(high_out, low_out);
+        let frames_per_tick = project.frames_per_tick(Mix::SAMPLE_RATE);
+        let start = (256.0 * frames_per_tick).round() as usize;
+        // Both start on the clip's first frame.
+        for out in [&high_out, &low_out] {
+            assert!(out[..start * 2].iter().all(|value| *value == 0.0));
+            assert!(out[start * 2] != 0.0);
+        }
+        // Only full quality exports.
+        let prepared = mix_with_samples_quality(&project, &samples, low).unwrap();
+        assert_eq!(prepared.quality(), low);
+        assert!(prepared.to_pcm(&project.master, &project.fx).is_err());
+        assert!(
+            mix_with_samples(&project, &samples)
+                .unwrap()
+                .to_pcm(&project.master, &project.fx)
+                .is_ok()
+        );
+    }
+
+    /// The cost of one voice, by read. Run it in release on a quiet machine:
+    /// `cargo test --release --lib sample_read_cost -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "release benchmark; use a quiet machine"]
+    fn sample_read_cost() {
+        resample::prepare();
+        let seconds = 20;
+        let frames = 44_100 * seconds;
+        let lane = Arc::new(
+            crate::automation::Varispeed::new(
+                &[
+                    crate::automation::Point {
+                        tick: 0,
+                        value: -300.0,
+                    },
+                    crate::automation::Point {
+                        tick: 4096,
+                        value: 300.0,
+                    },
+                ],
+                300.0,
+            )
+            .unwrap(),
+        );
+        for channels in [2, 1] {
+            let source = bright_source(frames * 2, channels);
+            for (name, step, varispeed) in [
+                ("172 to 180 BPM", 180.0 / 172.0, false),
+                ("48 kHz source", 48_000.0 / 44_100.0, false),
+                ("165 BPM from 180", 165.0 / 180.0, false),
+                ("Pitch lane, -3 to +3 semitones", 1.047, true),
+            ] {
+                let mut costs = [0.0; 2];
+                for (cost, band_limited) in costs.iter_mut().zip([true, false]) {
+                    let mut voice = plain_voice(source.clone(), 0, step, false, band_limited);
+                    voice.end = frames as u64;
+                    voice.sound_end = frames as u64;
+                    voice.start = 0;
+                    voice.varispeed = varispeed.then(|| lane.clone());
+                    let mut out = vec![0.0; 512 * 2];
+                    let started = std::time::Instant::now();
+                    for block in 0..frames / 512 {
+                        out.fill(0.0);
+                        voice.add((block * 512) as u64, &mut out, None, &Ramp::UNITY);
+                        std::hint::black_box(&out);
+                    }
+                    *cost = started.elapsed().as_secs_f64() * 1e9 / frames as f64;
+                }
+                println!(
+                    "{channels} ch, {name}: High {:.1} ns a frame ({:.2}% of a core at 44.1 kHz), \
+                     Low {:.1} ns a frame ({:.2}%)",
+                    costs[0],
+                    costs[0] * 44_100.0 / 1e7,
+                    costs[1],
+                    costs[1] * 44_100.0 / 1e7,
+                );
+            }
+        }
+    }
+
+    /// The largest step between neighbouring left frames in `range`.
+    fn largest_step(out: &[f32], range: Range<usize>) -> f32 {
+        range
+            .map(|at| (out[at * 2] - out[(at - 1) * 2]).abs())
+            .fold(0.0_f32, f32::max)
+    }
+
+    #[test]
+    fn a_pitch_lane_moves_the_kernel_without_a_click_and_removes_its_aliases() {
+        use crate::playback_quality::{PlaybackQuality, SampleQuality};
+        let tone = |radians: f32| {
+            HashMap::from([(
+                1,
+                Pcm {
+                    sample_rate: 44_100,
+                    channels: 1,
+                    samples: (0..400_000)
+                        .map(|i| 0.5 * (i as f32 * radians).sin())
+                        .collect(),
+                },
+            )])
+        };
+        let frames_per_tick = reversed_song(0, 512, false).frames_per_tick(Mix::SAMPLE_RATE);
+        let frame = |tick: u32| (f64::from(tick) * frames_per_tick).round() as usize;
+        // A 2 kHz tone jumps an octave at bar 2.5, at once, and the kernel's
+        // cutoff halves. It plays at 4 kHz after, still in the pass band, so
+        // no frame may step further than a 4 kHz sine of its level can.
+        let two_khz = 2.0 * std::f32::consts::PI * 2_000.0 / 44_100.0;
+        let jump = pitched_song(512, &[(384, 1200.0)]);
+        let out = whole(&jump, &tone(two_khz));
+        let at = frame(384);
+        let level = out[(at - 2000) * 2..at * 2]
+            .iter()
+            .step_by(2)
+            .fold(0.0_f32, |high, value| high.max(value.abs()));
+        let bound = 2.0 * std::f32::consts::PI * 4_000.0 / 44_100.0 * level;
+        let step = largest_step(&out, at - 500..at + 2_000);
+        assert!(step <= bound * 1.02, "a step of {step} over {bound}");
+        // An 8 kHz tone sped up two octaves would read at 32 kHz and fold to
+        // 12.1 kHz. After the cutoff's 64-frame glide the band-limited read
+        // has removed it; the straight-line read leaves it loud.
+        let eight_khz = 2.0 * std::f32::consts::PI * 8_000.0 / 44_100.0;
+        let fast = pitched_song(512, &[(384, 2400.0)]);
+        let rms = |out: &[f32], range: Range<usize>| {
+            let count = range.len() as f32;
+            (range.map(|at| out[at * 2].powi(2)).sum::<f32>() / count).sqrt()
+        };
+        let high = whole(&fast, &tone(eight_khz));
+        let low = whole_quality(
+            &fast,
+            &tone(eight_khz),
+            PlaybackQuality {
+                samples: SampleQuality::Low,
+                ..PlaybackQuality::FULL
+            },
+        );
+        let before = rms(&high, at - 2_000..at - 100);
+        let after = at + 100..at + 4_000;
+        assert!(
+            rms(&high, after.clone()) < before * 1e-3,
+            "{}",
+            rms(&high, after)
+        );
+        assert!(rms(&low, after.clone()) > before * 0.3);
     }
 
     #[test]
@@ -4971,6 +5355,105 @@ mod tests {
         );
     }
     #[test]
+    fn exact_source_tempos_reject_unrepresentable_band_limited_reads_before_playback() {
+        use crate::playback_quality::{PlaybackQuality, SampleQuality};
+        let mut project = song();
+        project.clips[0].sample_id = 1_000_000;
+        project.clips[0].start_tick = 0;
+        project.clips[0].offset_frames = 0;
+        project
+            .imported_samples
+            .push(crate::engine::ImportedSample {
+                id: 1_000_000,
+                name: "Exact source".into(),
+                group_name: "MixJam".into(),
+                path: "source.wav".into(),
+                source_bpm: project.bpm / 1_000_000_000.0,
+                source_sample_rate: Some(44_100),
+                origin: None,
+            });
+        project
+            .source_notices
+            .push("MixJam v7 source controls: {}".into());
+        project.validate().unwrap();
+        let samples = HashMap::from([(
+            1_000_000,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 64],
+            },
+        )]);
+        assert!(mix_with_samples(&project, &samples).is_err());
+        let low = PlaybackQuality {
+            samples: SampleQuality::Low,
+            ..PlaybackQuality::FULL
+        };
+        assert!(mix_with_samples_quality(&project, &samples, low).is_ok());
+
+        // This base speed fits the kernel's fixed-point spacing. Only a
+        // positive Pitch value can move it beyond that numeric limit.
+        project.imported_samples[0].source_bpm = project.bpm / 5_000_000.0;
+        assert!(mix_with_samples(&project, &samples).is_ok());
+        for cents in [0.0, -4800.0, 2400.0] {
+            project.tracks[0].automation.pitch = vec![crate::automation::Point {
+                tick: 0,
+                value: cents,
+            }];
+            assert_eq!(mix_with_samples(&project, &samples).is_err(), cents > 0.0);
+        }
+    }
+
+    #[test]
+    fn an_extremely_slow_exact_source_keeps_the_clip_end_and_fade() {
+        use crate::playback_quality::{PlaybackQuality, SampleQuality};
+        let mut project = song();
+        project.clips[0].sample_id = 1_000_000;
+        project.clips[0].offset_frames = 0;
+        project.clips[0].fades.fade_out.ticks = 128;
+        project
+            .imported_samples
+            .push(crate::engine::ImportedSample {
+                id: 1_000_000,
+                name: "Slow exact source".into(),
+                group_name: "MixJam".into(),
+                path: "source.wav".into(),
+                source_bpm: 1e100,
+                source_sample_rate: Some(44_100),
+                origin: None,
+            });
+        project
+            .source_notices
+            .push("MixJam v7 source controls: {}".into());
+        project.validate().unwrap();
+        let samples = HashMap::from([(
+            1_000_000,
+            Pcm {
+                sample_rate: 44_100,
+                channels: 1,
+                samples: vec![0.25; 64],
+            },
+        )]);
+        for samples_quality in [SampleQuality::High, SampleQuality::Low] {
+            let mix = mix_with_samples_quality(
+                &project,
+                &samples,
+                PlaybackQuality {
+                    samples: samples_quality,
+                    ..PlaybackQuality::FULL
+                },
+            )
+            .unwrap();
+            let voice = &mix.voices[0];
+            assert!(voice.start > 0);
+            assert_eq!(voice.sound_end, voice.end);
+            assert_eq!(voice.fade(voice.start), 1.0);
+            let last_gain = voice.fade(voice.end - 1);
+            assert!(last_gain > 0.0 && last_gain < 1.0);
+        }
+    }
+
+    #[test]
     fn factual_source_tempos_do_not_change_the_discrete_project_clock() {
         for bpm in [0.001, 2000.0] {
             let mut project = song();
@@ -5422,7 +5905,11 @@ mod tests {
             .unwrap();
         for drive in [Oversampling::FourX, Oversampling::Off] {
             for master in [Oversampling::FourX, Oversampling::Off] {
-                let quality = PlaybackQuality { drive, master };
+                let quality = PlaybackQuality {
+                    drive,
+                    master,
+                    samples: crate::playback_quality::SampleQuality::High,
+                };
                 for mix_value in [0.0, 100.0] {
                     project.tracks[0].drive = crate::drive::Drive {
                         on: true,

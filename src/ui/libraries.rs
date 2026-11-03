@@ -2,6 +2,9 @@
 //! immediately and are independent of the editable options draft.
 use super::*;
 
+/// The tempo for WAVs whose own tempo cannot be recognized.
+const FALLBACK_TEMPO: &str = "Tempo for files without one";
+
 fn library_button(
     ui: &mut egui::Ui,
     label: &str,
@@ -19,22 +22,24 @@ fn library_button(
     response
 }
 
+/// A focused Remove action also announces the folder it removes. A disabled
+/// one keeps its reason instead.
+fn describe_path(response: &Response, path: &str) {
+    if response.enabled() {
+        response
+            .ctx
+            .accesskit_node_builder(response.id, |node| node.set_description(path));
+    }
+}
+
 impl MixJamApp {
     pub(super) fn sample_libraries_page(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Sample libraries");
-        ui.label(
-            "Folder and provider actions apply separately. Apply and \
-             Cancel affect options only.",
-        );
+        options::section(ui, "Sample libraries");
+        options::help(ui, "Changes here take effect right away.");
         let scan = self.session.wave_scan();
         let folders = self.session.library().wav_roots().to_vec();
         if scan.is_none() && folders.is_empty() {
-            ui.label(format!(
-                "Add a folder of WAV files to fill the Sounds panel. \
-        Subfolders are included. Up to {MAX_LIBRARY_FOLDERS} library \
-        folders share the browser. Fallback BPM applies only to \
-        sounds whose tempo cannot be recognized."
-            ));
+            ui.label("Add a folder of WAV files to fill the Sounds panel.");
         }
         let idle = !self.session.is_recording() && scan.is_none();
         let busy = if scan.is_some() {
@@ -43,17 +48,6 @@ impl MixJamApp {
             "Stop recording before you change the library folders."
         };
         ui.horizontal_wrapped(|ui| {
-            ui.label("Fallback BPM");
-            let fallback =
-                controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, "Fallback BPM")
-                    .hover_hint(
-                        "Recognized product audio keeps its original tempo. Folders \
-        use matching original audio when enough sources agree, then \
-        loop lengths, then this fallback. Unresolved half/double \
-        matches prefer 88–176 BPM unless the fallback selects the \
-        other tempo.",
-                    );
-            options::remember_focus(&fallback);
             let room = folders.len() < MAX_LIBRARY_FOLDERS;
             let full = format!(
                 "The browser holds up to {MAX_LIBRARY_FOLDERS} library \
@@ -78,7 +72,25 @@ impl MixJamApp {
                 self.scan_library_folders(folders.clone());
             }
         });
-        ui.small("Used by Add library folder and Scan again.");
+        options::help(
+            ui,
+            format!("Subfolders are included, up to {MAX_LIBRARY_FOLDERS} folders."),
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(FALLBACK_TEMPO);
+            let fallback =
+                controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, FALLBACK_TEMPO)
+                    .hover_hint(
+                        "Recognized product audio keeps its original tempo. Folders \
+        use matching original audio when enough sources agree, then \
+        loop lengths, then this tempo. Unresolved half/double \
+        matches prefer 88–176 BPM unless this tempo selects the \
+        other one.",
+                    );
+            options::remember_focus(&fallback);
+            ui.label("BPM");
+        });
+        options::help(ui, "Applies to the next Add library folder or Scan again.");
         if let Some(scan) = &scan {
             ui.horizontal_wrapped(|ui| {
                 let (text, fraction) = if scan.files_total == 0 {
@@ -103,6 +115,7 @@ impl MixJamApp {
         let library = self.session.library();
         let mut remove = None;
         for (index, folder) in folders.iter().enumerate() {
+            let path = display_paths(&folder.to_string_lossy());
             ui.horizontal_wrapped(|ui| {
                 ui.label(format!("Library {}", index + 1));
                 let reason = if folders.len() > 1 {
@@ -110,20 +123,20 @@ impl MixJamApp {
                 } else {
                     "Add another library folder before you remove this one."
                 };
-                if library_button(
+                let response = library_button(
                     ui,
                     "Remove",
                     &format!("Remove library {}", index + 1),
                     idle && folders.len() > 1,
                     reason,
-                )
-                .clicked()
-                {
+                );
+                describe_path(&response, &path);
+                if response.clicked() {
                     remove = Some(index);
                 }
             });
-            let path = display_paths(&folder.to_string_lossy());
-            ui.add(egui::Label::new(&path).truncate()).hover_hint(&path);
+            // Paths wrap in full; nothing depends on a hover.
+            ui.add(egui::Label::new(&path).wrap());
             if let Some((_, error)) = library
                 .unloaded_roots()
                 .iter()
@@ -188,22 +201,22 @@ impl MixJamApp {
                     ui.label("No providers");
                 }
                 for binding in bindings {
+                    let path = display_paths(&binding.root.to_string_lossy());
                     ui.horizontal_wrapped(|ui| {
                         ui.label(binding.product.label());
-                        if library_button(
+                        let response = library_button(
                             ui,
                             "Remove",
                             &format!("Remove {} provider", binding.product.label()),
                             idle,
                             busy,
-                        )
-                        .clicked()
-                        {
+                        );
+                        describe_path(&response, &path);
+                        if response.clicked() {
                             self.remove_library(binding.product);
                         }
                     });
-                    let path = display_paths(&binding.root.to_string_lossy());
-                    ui.add(egui::Label::new(&path).truncate()).hover_hint(&path);
+                    ui.add(egui::Label::new(&path).wrap());
                     ui.add_space(6.0);
                 }
             });

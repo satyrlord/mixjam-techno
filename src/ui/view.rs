@@ -467,7 +467,10 @@ impl MixJamApp {
                         }
                         let color = if self.status_error { CORAL } else { MUTED };
                         if self.session.options().quality_reduced() {
-                            ui.colored_label(WARNING, "Playback quality reduced; exports use 4x");
+                            ui.colored_label(
+                                WARNING,
+                                "Playback quality reduced; exports use full quality",
+                            );
                         }
                         // The idle text would contradict a missing-sound notice.
                         let status = if self.status == DEFAULT_STATUS

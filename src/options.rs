@@ -1,6 +1,6 @@
 //! Application preferences. These values are independent of songs and exports.
-pub use crate::playback_quality::Oversampling;
 use crate::playback_quality::PlaybackQuality;
+pub use crate::playback_quality::{Oversampling, SampleQuality};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -53,6 +53,9 @@ pub struct AppOptions {
     pub schema_version: u32,
     pub drive_playback_oversampling: Oversampling,
     pub master_playback_oversampling: Oversampling,
+    /// Added after schema 1 was released, so a file without it loads at High.
+    #[serde(default)]
+    pub sample_playback_quality: SampleQuality,
     pub preview_level_db: f64,
     pub preview_muted: bool,
     pub playback_buffer_target: PlaybackBufferTarget,
@@ -71,6 +74,7 @@ impl Default for AppOptions {
             schema_version: SCHEMA_VERSION,
             drive_playback_oversampling: Oversampling::FourX,
             master_playback_oversampling: Oversampling::FourX,
+            sample_playback_quality: SampleQuality::High,
             preview_level_db: 0.0,
             preview_muted: false,
             playback_buffer_target: PlaybackBufferTarget::Ms40,
@@ -90,12 +94,12 @@ impl AppOptions {
         PlaybackQuality {
             drive: self.drive_playback_oversampling,
             master: self.master_playback_oversampling,
+            samples: self.sample_playback_quality,
         }
     }
 
     pub fn quality_reduced(&self) -> bool {
-        self.drive_playback_oversampling == Oversampling::Off
-            || self.master_playback_oversampling == Oversampling::Off
+        self.playback_quality() != PlaybackQuality::FULL
     }
 
     pub fn preview_gain(&self) -> f32 {
@@ -260,6 +264,34 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn sample_playback_quality_persists_and_older_files_load_at_high() {
+        let root = root();
+        let low = AppOptions {
+            sample_playback_quality: SampleQuality::Low,
+            ..AppOptions::default()
+        };
+        save(&root, &low).unwrap();
+        let loaded = load(&root);
+        assert_eq!(loaded.values, low);
+        assert!(loaded.values.quality_reduced());
+        assert_eq!(loaded.values.playback_quality().samples, SampleQuality::Low);
+        // A schema 1 file saved before the setting existed.
+        let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+        raw.as_object_mut()
+            .unwrap()
+            .remove("samplePlaybackQuality")
+            .unwrap();
+        fs::write(root.join("options.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+        let loaded = load(&root);
+        assert!(loaded.error.is_none());
+        assert_eq!(loaded.values, AppOptions::default());
+        assert_eq!(loaded.values.sample_playback_quality, SampleQuality::High);
+        assert!(!loaded.values.quality_reduced());
+        assert!(AppOptions::default().audio_changed(&low));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn corrupt_and_future_files_remain_intact() {
         let root = root();
         for bytes in [
@@ -284,6 +316,7 @@ mod tests {
             ("previewLevelDb", serde_json::json!(1)),
             ("previewMuted", serde_json::json!("false")),
             ("drivePlaybackOversampling", serde_json::json!("8x")),
+            ("samplePlaybackQuality", serde_json::json!("medium")),
             ("schemaVersion", serde_json::json!(0)),
         ] {
             let mut raw = serde_json::to_value(AppOptions::default()).unwrap();

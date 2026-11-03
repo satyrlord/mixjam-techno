@@ -24,8 +24,8 @@ pub mod eq {
 /// Validated application preferences, independent of the song model.
 pub mod options {
     pub use crate::options::{
-        AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SongFolderMode,
-        StartingModule,
+        AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
+        SongFolderMode, StartingModule,
     };
 }
 /// The drive of each track and its controls.
@@ -1078,6 +1078,10 @@ impl Session {
     }
     pub fn options_error(&self) -> Option<&str> {
         self.options_error.as_deref()
+    }
+    /// The loaded options file was invalid; a restored draft may replace it.
+    pub fn options_invalid(&self) -> bool {
+        self.options_invalid
     }
 
     pub fn audio_options_blocked_reason(&self) -> Option<&'static str> {

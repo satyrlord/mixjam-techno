@@ -21,9 +21,9 @@ In scope: the controls below, preference persistence, safe application of
 changes, existing-control synchronization, agent access, and verification.
 Out of scope: device selection, ASIO or exclusive audio, sample-rate changes,
 plugins, autosave, theme editing, arbitrary UI
-scaling, new song DSP parameters, and a change to song format 23. Do not expose
+scaling, new song DSP parameters, and a change to song format 24. Do not expose
 an internal processing block size as a device latency control. The current
-song format is 23; options use their own schema.
+song format is 24; options use their own schema.
 
 ## Current evidence
 
@@ -68,14 +68,16 @@ request is already implemented; this proposal adds user control over it.
 |---|---|---|
 | Drive playback oversampling | `4x` (default), `Off` | Applies to all track Drives during song playback, including separate sidechain-key chains. Does not switch the Drives off or change their saved knobs. |
 | Master playback oversampling | `4x` (default), `Off` | Applies only to Soft clip, Tube, Maximizer, and Tape during playback. Does not disable limiter lookahead, true-peak detection, metering filters, or other processors. |
+| Sample playback quality | `High` (default), `Low` | High uses band-limited sample reads. Low uses linear interpolation during playback. Exports always use High. This preference does not change source identity, song timing, or saved song data. |
 | Playback buffer target | `Automatic`, `20 ms`, `40 ms` (default where supported) | Request a supported output-buffer configuration. Larger buffers can absorb processing bursts and increase control-to-sound delay. Show the actual negotiated buffer or measured callback period separately; never relabel a 10 ms callback as 20 or 40 ms. |
 | Preview level | -30 to 0 dB; default 0 dB, plus `Mute previews` off by default | Attenuates sound-browser, clip, tool, and recorded-take previews at the preview output. Does not change source PCM, saved tool output, song gains, recording input, or exports. |
 | Meter display rate | `Normal` (default), `Reduced` | Reduced draws meter values at most 15 times per second. It does not reduce audio analysis, change meter integration windows, or miss peaks and latched OVER events. Do not promise a DSP saving from a display-only option. |
 
-Show this short explanation beside the oversampling controls:
-
-> 4x reduces unwanted high-frequency tones from saturation. Off uses less CPU
-> but can sound harsher. Exports use 4x in both cases.
+Show one short help line under each quality control, and one under the
+section title: "Lower settings use less CPU during playback. Exports always
+use full quality." (2026-11-03, after the Options critique). Show the buffer
+request and the measured callback inside a closed **Device details**
+disclosure under the buffer target.
 
 The two switches must remain separate. A user may need cheaper track Drives
 while keeping the master at full quality. Do not offer a single global
@@ -108,8 +110,9 @@ buffer change and verified backend behavior; revalidate it before implementation
 quality preferences. Preview attenuation and display preferences also have no
 effect on export. Headless rendering must remain independent of the user's
 settings folder. A future explicit draft-export mode is outside this version.
-Show `Playback quality reduced; exports use 4x` in Options and as an accessible
-workspace status when either playback switch is Off.
+Show `Playback quality reduced; exports use full quality` in Options and as an
+accessible workspace status when either playback switch is Off or Sample
+playback quality is Low. Exports always read samples at High.
 
 ### Workspace
 
@@ -125,8 +128,7 @@ workspace status when either playback switch is Off.
 | Control | Default | Required behavior |
 |---|---|---|
 | Song dialog folder | Last used | Choices: Last used, Fixed folder. Last used keeps current behavior. Fixed folder uses a user-selected absolute folder as the initial location for song Open and Save as. |
-| Fixed song folder | None | Enabled only with Fixed folder selected. Validate an existing directory when applying. If it later becomes unavailable, keep the configured path, show a useful message, and fall back to the current last-used/default-folder behavior. Never relocate existing songs. |
-| Go to sample libraries | Navigation, not a preference | Selects Sample libraries in this Options window. Display the configured folder count here. |
+| Fixed song folder | None | Visible only with Fixed folder selected. Validate an existing directory when applying. If it later becomes unavailable, keep the configured path, show a useful message, and fall back to the current last-used/default-folder behavior. Never relocate existing songs. |
 
 Choosing a path does not commit a preference. Cancelling the picker leaves the
 draft unchanged. Library management uses the Sample libraries page in this same window. Its
@@ -143,7 +145,8 @@ fallback BPM, individual folder-tempo reports, skipped WAV and unreadable-folder
 messages, and optional product-provider management. Use `Cancel library scan` to
 distinguish scan cancellation from Options Cancel. Retire the standalone window
 and its rail action. The Options rail entry is a gear with prepared PNG variants.
-Show `Folder and provider actions apply separately. Apply and Cancel affect options only.`
+Show `Changes here take effect right away.` Use a single Done action on this
+page. Done follows the same draft-close rules as Cancel on the other pages.
 Keep the options preference draft intact while navigating to this page.
 
 ## Interaction and application rules
@@ -153,8 +156,12 @@ Keep the options preference draft intact while navigating to this page.
    variants; do not add SVG. A second activation focuses the existing window.
 2. Use one draft per open window, with Apply, Cancel, and Restore defaults.
    Apply validates and saves, updates active preferences, and keeps the window
-   open. Cancel, Escape, or the close button discards edits since the last
-   successful Apply. Restore defaults changes the draft only. Label it
+   open. Disable Apply when the draft has no pending changes. Cancel, Escape,
+   or the close button closes a clean draft immediately. With pending changes,
+   show Discard changes? with Apply changes, Discard changes, and Keep editing.
+   Apply changes uses the same validation as Apply and closes only on success.
+   Escape or close on the confirmation keeps editing. Restore defaults changes
+   the draft only. Label it
    `Restore options defaults`; it does not reset songs, libraries, or caches.
 3. Audio changes may be drafted during playback, preview, or recording, but
    cannot be applied until all three stop. Show `Stop playback, previews, and
@@ -237,7 +244,8 @@ Changing quality while stopped avoids a new live quality-crossfade feature.
   manual sources, sample caches, library registrations, or preservation data.
 
 Stored fields: `schemaVersion`, `drivePlaybackOversampling`,
-`masterPlaybackOversampling`, `previewLevelDb`, `previewMuted`,
+`masterPlaybackOversampling`, `samplePlaybackQuality` (`high` or `low`; a
+schema 1 file without it loads at `high`), `previewLevelDb`, `previewMuted`,
 `playbackBufferTarget`, `meterDisplayRate`, `followOnStartup`, `showSectionBookmarks`, `startingModule`,
 `showTooltips`, `songFolderMode`, and `fixedSongFolder`. Do not store transient
 drafts or current playback state. Add migration tests before changing this

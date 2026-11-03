@@ -615,7 +615,7 @@ impl MixJamApp {
                 } else {
                     options::Page::from_capture(&capture_view)
                 };
-                options::OptionsDraft::new(&session, page)
+                options::OptionsDraft::new(&session, page).for_capture(&capture_view)
             });
         // Select the clip whose fades the capture demonstrates.
         let capture_clip = (capture_view == "clip-fades")
@@ -1829,6 +1829,14 @@ impl MixJamApp {
         }
         if self.import_path.is_some() && !dialog::is_collapsed(ctx, "Import sound") {
             return Some("Import sound");
+        }
+        if self
+            .options
+            .as_ref()
+            .is_some_and(|draft| draft.confirm_discard)
+            && !dialog::is_collapsed(ctx, options::DISCARD)
+        {
+            return Some(options::DISCARD);
         }
         None
     }

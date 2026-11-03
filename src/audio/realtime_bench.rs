@@ -14,13 +14,14 @@
 //! song (120 and 60 seconds by default), and `MIXJAM_BENCH_REPLACES` the
 //! number of replaced mixes (5 by default). Both measured stretches must
 //! fit within the song; each replacement measures 2.2 seconds.
-//! `MIXJAM_BENCH_DRIVE=off` and `MIXJAM_BENCH_MASTER=off` select reduced
-//! playback independently. They never change export construction.
+//! `MIXJAM_BENCH_DRIVE=off`, `MIXJAM_BENCH_MASTER=off`, and
+//! `MIXJAM_BENCH_SAMPLES=low` select reduced playback independently. They
+//! never change export construction.
 //! `MIXJAM_BENCH_CONTINUOUS=1` plays from the song's start through the
 //! unmeasured stretch before `MIXJAM_BENCH_START`, then measures the selected
 //! stretch at both rates. Replacement measurements stay in the default mode.
 use super::*;
-use crate::playback_quality::{Oversampling, PlaybackQuality};
+use crate::playback_quality::{Oversampling, PlaybackQuality, SampleQuality};
 use rodio::{Sink, dynamic_mixer};
 use std::time::Instant;
 
@@ -286,7 +287,11 @@ fn realtime_options_bench() {
         let (project, samples) = options_fixture(tracks, drives, master_heavy);
         for drive in [Oversampling::FourX, Oversampling::Off] {
             for master in [Oversampling::FourX, Oversampling::Off] {
-                let quality = PlaybackQuality { drive, master };
+                let quality = PlaybackQuality {
+                    drive,
+                    master,
+                    samples: SampleQuality::High,
+                };
                 let mix: Arc<dyn Frames> =
                     Arc::new(mix_with_samples_quality(&project, &samples, quality).unwrap());
                 for (rate, frames) in [(48_000, 480), (44_100, 441)] {
@@ -373,6 +378,11 @@ fn realtime_bench() {
     let quality = PlaybackQuality {
         drive: oversampling("MIXJAM_BENCH_DRIVE"),
         master: oversampling("MIXJAM_BENCH_MASTER"),
+        samples: match std::env::var("MIXJAM_BENCH_SAMPLES").as_deref() {
+            Ok("low") => SampleQuality::Low,
+            Ok("high") | Err(_) => SampleQuality::High,
+            _ => panic!("Use low or high for MIXJAM_BENCH_SAMPLES"),
+        },
     };
     let continuous = match std::env::var("MIXJAM_BENCH_CONTINUOUS").as_deref() {
         Ok("1") => true,

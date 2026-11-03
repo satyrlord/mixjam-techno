@@ -84,10 +84,10 @@ A pack's `BPM.INF` can correct that estimate. A tempo and key in a file name,
 such as `HARDCORE_BASS001_180_C_SL3.WAV`, can set the tempo for that file.
 An authenticated folder tempo takes precedence over these estimates and names.
 An identified product sample keeps its catalog tempo.
-If the application cannot find a tempo, it uses the fallback BPM from the Sample libraries page
-(140 by default). A loop length can fit half or double its actual tempo. The
-application then prefers 88 to 176 BPM unless the fallback names the other
-tempo. Set the fallback to 180 before you scan a 180 BPM pack when neither a
+If the application cannot find a tempo, it uses **Tempo for files without one** from the
+Sample libraries page (140 BPM by default). A loop length can fit half or double its actual
+tempo. The application then prefers 88 to 176 BPM unless that tempo names the other
+one. Set it to 180 before you scan a 180 BPM pack when neither a
 stated tempo nor enough agreeing authenticated audio establishes its tempo.
 
 A song plays each sound in the octave of its tempo nearest the song tempo, so no
@@ -103,10 +103,15 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 ## Options
 
 Select the **Options** gear in the tool rail's utility group, or press **Ctrl+,**.
-The window has Audio, Workspace, Files, and Sample libraries pages. **Apply**
-saves preference changes and
-keeps the window open. **Cancel**, Escape, or close discards changes since the
-last Apply. **Restore options defaults** changes the draft; select Apply to save
+The window has Audio, Workspace, Files, and Sample libraries pages. It fits the
+current page, up to the screen height; a longer page scrolls. **Apply** saves
+preference changes and keeps the window open. It is available only when
+something has changed. A dot marks each page that has unapplied changes, and
+the footer shows how many there are. **Cancel**, Escape, or close with
+unapplied changes asks **Discard changes?**: **Apply changes** applies them and
+closes the window, **Discard changes** closes it without them, and **Keep
+editing** returns to the window. Without changes, these close the window at
+once. **Restore options defaults** changes the draft; select Apply to save
 it. These actions do not change the song, undo history, libraries, or caches.
 If another control changes a preference while Options is open, select **Reload active options**
 before Apply. Reload replaces the draft with the active preferences.
@@ -118,11 +123,23 @@ On **Audio**:
   runs saturation, which can sound harsher. The master switch affects Soft
   clip, Tube, Maximizer, and Tape only. Normal exports, track exports, and
   song-tool renders always use 4x.
+- **Sample playback quality** defaults to **High**. A sound that plays off its
+  own tempo or sample rate, or under a Pitch lane, is read between its
+  samples. High reads it through a filter that reduces aliasing: harsh,
+  unrelated tones in the top end. **Low** reads it in straight lines between
+  samples, which uses less CPU but adds that aliasing and dulls the highest
+  frequencies. A sound at its own tempo and sample rate without a Pitch lane
+  sounds the same in both. Tones near the source's highest frequency can
+  still lose level or produce unwanted tones when slowed. Normal exports,
+  track exports, and song-tool renders always use High.
+- Options and the status line show **Playback quality reduced; exports use
+  full quality** while any of these three is lowered.
 - **Playback buffer target** offers **Automatic**, **20 ms**, and **40 ms**.
   The default is 40 ms where supported. A larger buffer can absorb processing
   bursts and increase the delay between an action and its sound. The target
-  is a request, not a measured callback interval. The output status shows the
-  request and observed callback separately. Negotiated capacity is unavailable.
+  is a request, not a measured callback interval. Open **Device details** under
+  it to see the request and the observed callback separately. Negotiated
+  capacity is unavailable.
   If a target cannot open, Apply keeps the working output and reports the error.
   At startup, an unavailable target can use the system default with a warning.
 - **Preview level** attenuates previews from -30 to 0 dB; **Mute previews**
@@ -143,17 +160,20 @@ Turning tooltips off keeps control names, keyboard focus, errors, and visible
 instructions available.
 
 On **Files**, **Song dialog folder → Last used** keeps the current Open and
-Save as behavior. Select **Fixed folder**, then choose or enter an existing
-absolute folder and Apply to use it as the initial location. Cancelling the
+Save as behavior. Select **Fixed folder** to show the folder field, then choose
+or enter an existing absolute folder and Apply to use it as the initial
+location. Cancelling the
 picker leaves the draft unchanged. If the folder later becomes unavailable,
 the app keeps its configured path, reports the problem, and uses the last-used
-or default location. Existing songs stay in place. **Go to sample libraries**
-opens the Sample libraries page in the same Options window. Library folder,
-scan, and provider actions run separately through their existing services.
-Folder changes take effect after a successful scan. Fallback BPM is used by
-Add library folder and Scan again.
-Options Apply saves preference drafts only; Options Cancel does not stop or
-roll back a library scan. Use **Cancel library scan** to cancel a scan.
+or default location. Existing songs stay in place.
+
+On **Sample libraries**, library folder, scan, and provider actions take effect
+right away, so the page has a single **Done** button instead of Apply and
+Cancel. Done closes the window, and asks first if other pages have unapplied
+changes. Folder changes take effect after a successful scan. **Tempo for files
+without one** is used by the next Add library folder or Scan again. Closing
+Options does not stop or roll back a library scan. Use **Cancel library scan**
+to cancel a scan.
 
 Options are stored in `options.json` in the settings folder. Invalid settings
 use safe defaults with an error; Restore options defaults and Apply can replace

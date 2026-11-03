@@ -59,8 +59,9 @@ validation, and persistence in `options.json` under `project_io::data_root()`.
 `src/ui/options.rs` owns one editable window draft and page selection. Apply
 checks the revision, validates the complete draft, and prepares a replacement
 output when needed before one atomic file replacement. Active values change
-only after the write succeeds. Cancel and close discard the draft; Restore
-options defaults changes the draft only. No-op Apply performs no write or
+only after the write succeeds. Cancel and close ask before discarding pending
+changes; a clean draft closes immediately. Restore options defaults changes
+the draft only. No-op Apply performs no write or
 audio rebuild. Options do not enter song history or modify song data.
 
 Missing options import only the existing section-bookmark visibility. The old
@@ -84,9 +85,10 @@ Audio preferences require playback, pending playback, previews, and recording
 to stop before Apply. Workspace and Files changes do not require a stopped
 transport. A playback-quality change invalidates prepared mixes and advances
 the render revision, so older worker results cannot replace the new quality.
-`src/playback_quality.rs` supplies explicit independent Drive and master
-saturation quality outside `Project` and `MasterChain`. Exports prepare full
-quality explicitly, including when a reduced-quality playback mix exists.
+`src/playback_quality.rs` supplies explicit independent Drive, master
+saturation, and sample read quality outside `Project` and `MasterChain`.
+Exports prepare full quality explicitly, including when a reduced-quality
+playback mix exists, and a mix prepared at reduced quality refuses to export.
 Preview gain applies at the preview sink only. Meter display throttling retains
 peaks between displayed readings and does not change audio analysis.
 
@@ -180,7 +182,57 @@ is still a pure function of the frame. Preparation finds where the clock
 has run through the source, to end the clip's sound and its fade out there.
 The lane scales the read rate of the clip's pitched copy, so clip pitch and
 lane add in cents, and it comes before the Repeat lane, which replays the
-slowed sound. `prepare_project` decodes and checks each
+slowed sound.
+
+A voice that plays off its source's own sample rate or tempo, or under a
+Pitch lane, reads its source between frames. `src/audio/resample.rs` reads it
+there band-limited, with a Kaiser-windowed sinc kernel (beta 8.5, cutoff 0.49
+of the source rate, 48 taps at speeds up to 1). The kernel is one table of 128
+points per source frame from its centre to its edge, each with the step to the
+next point, so a tap is a straight-line read of the kernel. Each tap's table
+position steps outwards from the read in fixed point. At a speed above 1
+the cutoff falls by the speed and the span widens by the same factor, so the
+content above the output's Nyquist frequency goes before it can fold back.
+The gain uses that same rounded tap spacing, and tap sums use double
+precision to retain steady levels during long reads. Preparation rejects a
+speed when its tap spacing rounds to zero, including the maximum saved Pitch
+value. Very high representable speeds can still require substantial CPU;
+the ordinary-rate spectral and cost measurements do not cover those workloads.
+The spectral tests cover 44.1 and 48 kHz sources at steps 1.047, 1.088,
+0.9, and 1.14. For the tested tones within the kernel's pass band, residual
+images and aliases stay at least 80 dB down and gain is within 0.01 dB to
+17 kHz. These bounds do not cover the transition band near source Nyquist,
+all source rates, or every playback speed. Slowing near-Nyquist content can
+move both its attenuation and its residual images into the audible band;
+low-rate WAVs can expose this at lower frequencies. The kernel is symmetric
+and centred on the read, so it adds
+no delay: each frame reads the position that the straight-line read did, and a
+clip that starts at frame N sounds at N. The read hears only the clip's slice
+of the source, from its offset. It holds the slice's first frame before the
+slice and the source's last frame after the source, as the straight-line read
+held its last frame. The clip's start, trim, end, and fades keep their frames,
+and no read reaches past the source. Under a Pitch lane the cutoff follows the
+lane's mean speed over the 32 frames on each side of the frame. That mean is a
+function of the frame alone, so a jump in speed moves the cutoff over 64 frames
+instead of at once, and playback from any frame and in any block size reads
+what export reads. A reversed voice reads the same positions backwards, so it
+remains a pure function of the source. A voice at its source's own rate and
+tempo without a Pitch lane reads whole frames and copies them. `Mix::new`
+builds the table with `resample::prepare` before playback reaches the audio
+thread, and the audio thread only reads it. On 2026-11-03, the optimized
+`sample_read_cost` test measured 172 to 189 ns per frame with the kernel and
+21 ns with the straight-line read. Under a Pitch lane, which also reads the
+lane's clock three times per frame, it measured 306 to 307 ns against 66 to
+67 ns. The test used Windows, an Intel Core i7-11700, mono and stereo bright
+sources, 44.1 kHz output, three fixed rate/tempo ratios, and a -3 to +3
+semitone Pitch lane. Each case read 20 seconds in 512-frame blocks. These
+voice costs do not establish a full-song or physical-device deadline.
+Live playback can choose the straight-line
+read with the Sample playback quality option, Low. Exports, track exports,
+and song-tool renders prepare at `PlaybackQuality::FULL` and always read
+band-limited.
+
+`prepare_project` decodes and checks each
 source once, and makes one copy per clip pitch off the audio thread with
 `sample_edit::repitch`; both steps share the sources out among all but one of
 the processor's cores. The render worker keeps each copy until no clip uses that

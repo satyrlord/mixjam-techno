@@ -69,14 +69,18 @@ port.
 - Click `Options`, or send Ctrl+, through `key`, to open or focus its Utility
   window. Its named `Audio`, `Workspace`, `Files`, and `Sample libraries` selectors expose the
   controls on each page. Use `set` with labels such as `Drive playback
-  oversampling` (`4x` or `Off`), `Playback buffer target` (`Automatic`, `20 ms`,
+  oversampling` (`4x` or `Off`), `Sample playback quality` (`High` or `Low`),
+  `Playback buffer target` (`Automatic`, `20 ms`,
   `40 ms`), `Preview level` (dB), `Mute previews`, `Starting module`, and
   `Song dialog folder`. Click `Apply`, `Cancel`, `Restore options defaults`, or
   `Reload active options` in `window="Options"`. Apply uses the same validation, stopped-audio
   requirement, stale-draft check, persistence, and errors as a person does.
-  `Go to sample libraries` on Files selects the Sample libraries page in the same
-  window. Library actions run separately and do not use Apply or Cancel. Fallback
-  BPM is used by Add library folder and Scan again. Use
+  Select `Sample libraries` directly to manage folders and providers. Its Done
+  action closes a clean draft. Cancel, Done, Escape, or close with pending
+  changes opens `window="Discard changes?"`, with `Apply changes`,
+  `Discard changes`, and `Keep editing`. Library actions run separately and do
+  not use Apply or Cancel. `Tempo for files without one` is used by Add library
+  folder and Scan again. Use
   `Cancel library scan` for scan cancellation. The provider picker is
   `Choose provider folder`; its path choice remains a modal.
   `state` lists active preferences under `options`, separate from `song`, with

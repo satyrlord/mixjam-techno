@@ -17,6 +17,11 @@ pub(super) fn is_collapsed(ctx: &egui::Context, identity: &str) -> bool {
 pub(super) fn expand(ctx: &egui::Context, identity: &str) {
     set_collapsed(ctx, identity, false);
 }
+/// The user resized the window, so it no longer follows its content.
+pub(super) fn user_resized(ctx: &egui::Context, identity: &str) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(identity).with("hardware-resized")))
+        .unwrap_or(false)
+}
 pub(super) fn top_window(ctx: &egui::Context, identity: &str) -> bool {
     let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new(identity));
     ctx.memory(|memory| {
@@ -474,6 +479,7 @@ pub(super) struct Window<'a> {
     max_height: f32,
     viewport: Option<Rect>,
     scroll: bool,
+    fit: bool,
     focus_controls: Option<fn(&Response)>,
 }
 pub(super) fn window(title: &str) -> Window<'_> {
@@ -484,6 +490,7 @@ pub(super) fn window(title: &str) -> Window<'_> {
         max_height: f32::INFINITY,
         viewport: None,
         scroll: true,
+        fit: false,
         focus_controls: None,
     }
 }
@@ -495,6 +502,11 @@ impl<'a> Window<'a> {
     /// Let a surface provide its own scrolling body and fixed action row.
     pub(super) fn scroll(mut self, enabled: bool) -> Self {
         self.scroll = enabled;
+        self
+    }
+    /// Follow the height of the content until the user resizes the window.
+    pub(super) fn fit(mut self, enabled: bool) -> Self {
+        self.fit = enabled;
         self
     }
     pub(super) fn open(mut self, open: &'a mut bool) -> Self {
@@ -542,7 +554,7 @@ impl<'a> Window<'a> {
                     _ => controls::Palette::Utility,
                 },
                 inset_body: true,
-                fit: self.title == "Recorded take",
+                fit: self.fit || self.title == "Recorded take",
                 scroll: self.scroll,
                 focus_controls: self.focus_controls,
             },
