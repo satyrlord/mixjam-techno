@@ -124,6 +124,9 @@ pub(super) fn section_color(index: usize) -> Color32 {
 /// The height of an arrangement row. It stays the same at any window or panel
 /// size: more room shows more rows.
 const ROW_HEIGHT: f32 = 36.0;
+/// The timeline zoom: the Zoom slider's range and the factor of one wheel step.
+const ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.55..=2.0;
+const ZOOM_WHEEL_STEP: f32 = 1.1;
 /// A clip gain at or below this level is silence.
 const CLIP_SILENCE_DB: f32 = -60.0;
 
@@ -691,14 +694,21 @@ impl MixJamApp {
             ui.label(egui::RichText::new("Zoom").color(roles().muted));
             // A shorter zoom rail leaves room for the stepped tempo slider.
             ui.spacing_mut().slider_width = if compact { 48.0 } else { 64.0 };
-            name_control(
+            let zoom = name_control(
                 ui.add(
-                    egui::Slider::new(&mut self.zoom, 0.55..=2.0)
+                    egui::Slider::new(&mut self.zoom, ZOOM_RANGE)
                         .show_value(false)
                         .clamping(egui::SliderClamping::Always),
                 ),
                 "Zoom",
             );
+            // An egui slider ignores the wheel; each notch scales the zoom by
+            // a tenth, as the other wheel-driven controls take one step.
+            let turn = controls::wheel(ui, &zoom);
+            if turn != 0.0 {
+                self.zoom = (self.zoom * ZOOM_WHEEL_STEP.powf(turn))
+                    .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
+            }
             if ui
                 .toggle_value(&mut self.follow_playhead, "Follow")
                 .hover_hint("Keep the playhead in view during playback and seeking.")

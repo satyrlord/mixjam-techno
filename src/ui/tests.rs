@@ -2463,6 +2463,57 @@ mod tests {
     }
 
     #[test]
+    fn mouse_wheel_over_the_zoom_slider_steps_the_zoom_within_its_range() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let bounds = accessible_node(&output, "Zoom").1.bounds().unwrap();
+        let position = Pos2::new(
+            (bounds.x0 + bounds.x1) as f32 / 2.0,
+            (bounds.y0 + bounds.y1) as f32 / 2.0,
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(position)],
+            egui::Modifiers::NONE,
+        );
+        let wheel = |ctx: &egui::Context, app: &mut MixJamApp, y: f32| {
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, y),
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                egui::Modifiers::NONE,
+            );
+        };
+        let before = app.zoom;
+        wheel(&ctx, &mut app, 20.0);
+        assert!(
+            (app.zoom - before * 1.1).abs() < 1e-4,
+            "One wheel step up must zoom in by a tenth."
+        );
+        for _ in 0..5 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert!((app.zoom - before * 1.1).abs() < 1e-4, "A wheel event acts once.");
+        wheel(&ctx, &mut app, -20.0);
+        assert!((app.zoom - before).abs() < 1e-4, "One step down undoes it.");
+        for _ in 0..40 {
+            wheel(&ctx, &mut app, 20.0);
+        }
+        assert_eq!(app.zoom, 2.0, "The wheel stops at the slider's maximum.");
+        for _ in 0..40 {
+            wheel(&ctx, &mut app, -20.0);
+        }
+        assert_eq!(app.zoom, 0.55, "The wheel stops at the slider's minimum.");
+    }
+
+    #[test]
     fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
         for density in [1.0, 1.5, 2.0] {
             let (ctx, mut app) = fixture();

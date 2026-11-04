@@ -280,6 +280,7 @@ by this build.
   and right-click a name to rename or delete it. Turn Sections beside Follow
   off to hide the bookmarks. The application keeps that choice. Sections are
   saved with the song; agents set them with `set_sections`.
+- Drag Zoom, or turn the mouse wheel over it, to zoom the timeline in or out.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
 - Drag the divider above the lower panel to give it more or less room.
