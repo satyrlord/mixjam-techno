@@ -277,7 +277,7 @@ pub(super) fn show(
                     Align2::CENTER_CENTER,
                     "Saved",
                     FontId::proportional(12.0),
-                    controls::CREAM,
+                    roles().legend,
                 );
             }
             let footer_rect = rect(16.0, 280.0, 608.0, 64.0);

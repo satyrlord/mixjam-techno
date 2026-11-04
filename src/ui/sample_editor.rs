@@ -1,7 +1,5 @@
 //! Sample Editor body. Session owns sample processing and saving.
-use super::controls::CREAM;
 use super::*;
-const EDGE: Color32 = Color32::from_rgb(102, 110, 110);
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub frames: u64,
@@ -44,8 +42,12 @@ pub(super) fn show(
             controls::inset(&panel, rect(16.0, 96.0, 608.0, 146.0));
             let name = panel.put(
                 rect(32.0, 64.0, 576.0, 26.0),
-                egui::Label::new(egui::RichText::new(source.name).size(13.0).color(CREAM))
-                    .truncate(),
+                egui::Label::new(
+                    egui::RichText::new(source.name)
+                        .size(13.0)
+                        .color(roles().legend),
+                )
+                .truncate(),
             );
             name_control(name.clone(), "Source sound");
             ctx.accesskit_node_builder(name.id, |node| node.set_value(source.name));
@@ -135,17 +137,26 @@ pub(super) fn show(
             panel.painter().rect_stroke(
                 rect(8.0, 326.0, 624.0, 36.0),
                 4.0,
-                Stroke::new(1.0_f32, if reason.is_some() { CORAL } else { EDGE }),
+                Stroke::new(
+                    1.0_f32,
+                    if reason.is_some() {
+                        roles().coral
+                    } else {
+                        roles().tool_edge
+                    },
+                ),
                 egui::StrokeKind::Inside,
             );
             let width = if source.missing { 460.0 } else { 592.0 };
             let status = panel.put(
                 rect(24.0, 326.0, width, 36.0),
-                egui::Label::new(
-                    egui::RichText::new(&summary)
-                        .size(12.5)
-                        .color(if reason.is_some() { CORAL } else { CREAM }),
-                )
+                egui::Label::new(egui::RichText::new(&summary).size(12.5).color(
+                    if reason.is_some() {
+                        roles().coral
+                    } else {
+                        roles().legend
+                    },
+                ))
                 .wrap(),
             );
             name_control(status.clone(), "Sample editor status");
@@ -179,7 +190,7 @@ fn label(ui: &egui::Ui, at: Pos2, value: &str, size: f32) {
         Align2::LEFT_CENTER,
         value,
         FontId::proportional(size),
-        CREAM,
+        roles().legend,
     );
 }
 fn action_button(

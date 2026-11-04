@@ -1,5 +1,4 @@
 //! Effect Studio body. Shared hardware controls and shell own presentation.
-use super::controls::CREAM;
 use super::*;
 pub(super) struct Source<'a> {
     pub name: &'a str,
@@ -62,7 +61,7 @@ pub(super) fn show(
             panel.scope(|ui| {
                 let text = egui::RichText::new(source.name)
                     .font(FontId::proportional(13.0))
-                    .color(CREAM);
+                    .color(roles().legend);
                 let label = ui.put(
                     rect(27.0, 49.0, 586.0, 22.0),
                     egui::Label::new(text).truncate(),
@@ -378,7 +377,7 @@ fn control(
         Align2::CENTER_CENTER,
         spec.name,
         FontId::proportional(12.0),
-        CREAM,
+        roles().legend,
     );
     controls::well(ui, Rect::from_center_size(well, Vec2::new(60.0, 20.0)));
     ui.add_enabled_ui(enabled, |ui| {
@@ -444,9 +443,9 @@ fn status_footer(ui: &mut egui::Ui, rect: Rect, text: &str, error: bool, missing
         Stroke::new(
             1.0_f32,
             if error {
-                CORAL
+                roles().coral
             } else {
-                controls::FACE.lerp_to_gamma(CREAM, 0.3)
+                roles().face.lerp_to_gamma(roles().legend, 0.3)
             },
         ),
         egui::StrokeKind::Inside,

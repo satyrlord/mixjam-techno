@@ -1,24 +1,10 @@
-//! Shared Folded Metal controls. Tools own values and actions; this module owns
-//! their appearance, pointer and keyboard interaction, and accessibility.
+//! Shared tool controls. Tools own values and actions; this module owns their
+//! appearance in the current theme, pointer and keyboard interaction, and
+//! accessibility. Interaction never depends on the theme.
 use super::HoverHints;
+use super::theme::{self, Material, roles};
 use eframe::egui::{self, Color32, FontId, Pos2, Rect, Response, Sense, Stroke, Vec2};
 use std::{ops::RangeInclusive, sync::Arc};
-
-pub(super) const INK: Color32 = Color32::from_rgb(18, 20, 18);
-pub(super) const PANEL: Color32 = Color32::from_rgb(60, 65, 64);
-pub(super) const CREAM: Color32 = Color32::from_rgb(249, 242, 220);
-pub(super) const ACCENT: Color32 = Color32::from_rgb(231, 147, 49);
-pub(super) const FACE: Color32 = Color32::from_rgb(35, 38, 36);
-/// Secondary explanation under a control: cream, quieter than its label.
-pub(super) const HELP: Color32 = Color32::from_rgb(190, 185, 166);
-const PRIMARY: Color32 = Color32::from_rgb(212, 205, 182);
-const DISABLED_FACE: Color32 = Color32::from_rgb(61, 64, 60);
-const DISABLED_TEXT: Color32 = Color32::from_rgb(201, 203, 192);
-const CAP: Color32 = Color32::from_rgb(190, 190, 185);
-const DANGER: Color32 = Color32::from_rgb(131, 54, 39);
-/// Hairlines around dark bays, value wells, and native widgets.
-const BAY_EDGE: Color32 = Color32::from_rgb(70, 72, 64);
-const WELL_EDGE: Color32 = Color32::from_rgb(131, 134, 126);
 
 /// Record the focused dial or fader. These controls use only arrows, Home,
 /// and End, so the workspace keeps its transport key while one has focus.
@@ -57,25 +43,12 @@ pub(super) enum Palette {
 }
 
 impl Palette {
-    fn body(self) -> Color32 {
-        match self {
-            Self::Utility => PANEL,
-            Self::Marine => Color32::from_rgb(32, 83, 91),
-            Self::Granite => Color32::from_rgb(52, 57, 60),
-            Self::Red => Color32::from_rgb(154, 45, 39),
-            Self::Olive => Color32::from_rgb(60, 68, 40),
-            Self::Indigo => Color32::from_rgb(46, 54, 96),
-        }
+    /// The palette's chassis body in the current theme.
+    pub(super) fn body(self) -> Color32 {
+        roles().tools[self as usize].0
     }
-    fn accent(self) -> Color32 {
-        match self {
-            Self::Utility => ACCENT,
-            Self::Marine => Color32::from_rgb(85, 174, 183),
-            Self::Granite => Color32::from_rgb(173, 186, 189),
-            Self::Red => Color32::from_rgb(235, 116, 104),
-            Self::Olive => Color32::from_rgb(157, 178, 94),
-            Self::Indigo => Color32::from_rgb(150, 166, 236),
-        }
+    pub(super) fn accent(self) -> Color32 {
+        roles().tools[self as usize].1
     }
     /// The keyboard focus ring. A ring crosses the chassis, so an accent
     /// below 3:1 against it gives way to cream.
@@ -83,7 +56,7 @@ impl Palette {
         if contrast(self.accent(), self.body()) >= 3.0 {
             self.accent()
         } else {
-            CREAM
+            roles().legend
         }
     }
     fn of(ui: &egui::Ui) -> Self {
@@ -104,7 +77,7 @@ pub(super) fn apply_palette(ui: &mut egui::Ui, palette: Palette) {
     let visuals = ui.visuals_mut();
     visuals.panel_fill = palette.body();
     visuals.selection.bg_fill = palette.accent();
-    visuals.selection.stroke = Stroke::new(1.0_f32, INK);
+    visuals.selection.stroke = Stroke::new(1.0_f32, roles().ink);
     visuals.override_text_color = None;
 }
 
@@ -349,13 +322,46 @@ fn paint_grain(ui: &egui::Ui, texture: &egui::TextureHandle, rect: Rect) {
     }
 }
 
-/// Material slices use one image pixel per physical pixel. Edge tiles are
-/// repeated and clipped; all boundaries fade into the solid chassis. Native
-/// rounded geometry owns the smooth outer silhouette and uninterrupted bevel.
+/// A tool chassis in the current theme: a flat software panel with its
+/// palette's accent along the top on Studio, molded plastic on Aero, and the
+/// Folded Metal artwork on Vintage.
 pub(super) fn panel(ui: &egui::Ui, rect: Rect) {
     let palette = Palette::of(ui);
     let p = ui.painter();
-    p.rect_filled(rect, 8.0, INK);
+    match roles().material {
+        Material::Flat => {
+            p.rect_filled(rect, 6.0, palette.body());
+            p.rect_stroke(
+                rect,
+                6.0,
+                Stroke::new(1.0_f32, roles().ink),
+                egui::StrokeKind::Inside,
+            );
+            p.rect_stroke(
+                rect.shrink(1.0),
+                5.0,
+                Stroke::new(1.0_f32, palette.body().lerp_to_gamma(roles().legend, 0.1)),
+                egui::StrokeKind::Inside,
+            );
+            p.line_segment(
+                [
+                    rect.left_top() + Vec2::new(8.0, 2.0),
+                    rect.right_top() + Vec2::new(-8.0, 2.0),
+                ],
+                Stroke::new(2.0_f32, palette.accent()),
+            );
+        }
+        Material::Plastic => theme::plastic(p, rect, 14.0, palette.body()),
+        Material::Metal => metal_panel(ui, rect, palette),
+    }
+}
+
+/// Material slices use one image pixel per physical pixel. Edge tiles are
+/// repeated and clipped; all boundaries fade into the solid chassis. Native
+/// rounded geometry owns the smooth outer silhouette and uninterrupted bevel.
+fn metal_panel(ui: &egui::Ui, rect: Rect, palette: Palette) {
+    let p = ui.painter();
+    p.rect_filled(rect, 8.0, roles().ink);
     p.rect_filled(rect.shrink(1.5), 7.0, palette.body());
     let art = artwork(ui.ctx(), palette);
     paint_grain(ui, &art.grain, rect);
@@ -412,13 +418,13 @@ pub(super) fn panel(ui: &egui::Ui, rect: Rect) {
     p.rect_stroke(
         rect.shrink(0.75),
         8.0,
-        Stroke::new(1.5_f32, INK),
+        Stroke::new(1.5_f32, roles().ink),
         egui::StrokeKind::Inside,
     );
     p.rect_stroke(
         rect.shrink(2.0),
         6.5,
-        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(CREAM, 0.24)),
+        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(roles().legend, 0.24)),
         egui::StrokeKind::Inside,
     );
     p.rect_stroke(
@@ -434,6 +440,23 @@ pub(super) fn panel(ui: &egui::Ui, rect: Rect) {
 pub(super) fn rail_panel(ui: &egui::Ui, rect: Rect) {
     let palette = Palette::of(ui);
     let p = ui.painter();
+    match roles().material {
+        Material::Flat => {
+            p.rect_filled(rect, 4.0, palette.body());
+            p.rect_stroke(
+                rect,
+                4.0,
+                Stroke::new(1.0_f32, roles().ink),
+                egui::StrokeKind::Inside,
+            );
+            return;
+        }
+        Material::Plastic => {
+            theme::plastic(p, rect, 10.0, palette.body());
+            return;
+        }
+        Material::Metal => {}
+    }
     p.rect_filled(rect, 5.0, palette.body());
     let art = artwork(ui.ctx(), palette);
     paint_grain(ui, &art.grain, rect);
@@ -454,13 +477,13 @@ pub(super) fn rail_panel(ui: &egui::Ui, rect: Rect) {
     p.rect_stroke(
         rect,
         5.0,
-        Stroke::new(1.0_f32, INK),
+        Stroke::new(1.0_f32, roles().ink),
         egui::StrokeKind::Inside,
     );
     p.rect_stroke(
         rect.shrink(1.0),
         4.0,
-        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(CREAM, 0.20)),
+        Stroke::new(1.0_f32, palette.body().lerp_to_gamma(roles().legend, 0.20)),
         egui::StrokeKind::Inside,
     );
 }
@@ -470,7 +493,7 @@ pub(super) fn rail_separator(ui: &mut egui::Ui) {
     let left = rect.left_center() + Vec2::new(3.0, 0.0);
     let right = rect.right_center() - Vec2::new(3.0, 0.0);
     ui.painter()
-        .line_segment([left, right], Stroke::new(1.0_f32, INK));
+        .line_segment([left, right], Stroke::new(1.0_f32, roles().ink));
     ui.painter().line_segment(
         [left + Vec2::Y, right + Vec2::Y],
         Stroke::new(1.0_f32, Color32::from_white_alpha(45)),
@@ -494,32 +517,66 @@ pub(super) fn print_color(ui: &egui::Ui) -> Color32 {
     ui.visuals().selection.bg_fill
 }
 
+/// A recessed bay: a flat well on Studio, a luminous inset display on Aero,
+/// and a pressed bay on Vintage.
 pub(super) fn inset(ui: &egui::Ui, rect: Rect) {
+    let painter = ui.painter();
+    match roles().material {
+        Material::Flat => {
+            painter.rect_filled(rect, 3.0, roles().face);
+            painter.rect_stroke(
+                rect,
+                3.0,
+                Stroke::new(1.0_f32, roles().bay_edge),
+                egui::StrokeKind::Inside,
+            );
+            return;
+        }
+        Material::Plastic => {
+            painter.rect_filled(rect, 10.0, roles().ink);
+            theme::gradient(
+                painter,
+                rect.shrink(1.5),
+                8.5,
+                roles().face.lerp_to_gamma(Color32::BLACK, 0.25),
+                roles().face.lerp_to_gamma(roles().bay_edge, 0.35),
+            );
+            painter.rect_stroke(
+                rect,
+                10.0,
+                Stroke::new(1.0_f32, roles().bay_edge),
+                egui::StrokeKind::Inside,
+            );
+            return;
+        }
+        Material::Metal => {}
+    }
     ui.painter().rect_filled(
         rect.translate(Vec2::new(0.0, 1.0)),
         6.0,
         Color32::from_white_alpha(48),
     );
-    ui.painter().rect_filled(rect, 6.0, INK);
-    ui.painter().rect_filled(rect.shrink(2.0), 4.0, FACE);
+    ui.painter().rect_filled(rect, 6.0, roles().ink);
+    ui.painter()
+        .rect_filled(rect.shrink(2.0), 4.0, roles().face);
     ui.painter().rect_stroke(
         rect.shrink(2.0),
         4.0,
-        Stroke::new(1.0_f32, BAY_EDGE),
+        Stroke::new(1.0_f32, roles().bay_edge),
         egui::StrokeKind::Inside,
     );
 }
 
 pub(super) fn section(ui: &egui::Ui, rect: Rect, label: &str) {
-    ui.painter().rect_filled(rect, 3.0, FACE);
-    let galley = ui
-        .painter()
-        .layout_no_wrap(label.into(), FontId::proportional(13.0), CREAM);
+    ui.painter().rect_filled(rect, 3.0, roles().face);
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.into(), FontId::proportional(13.0), roles().legend);
     let width = galley.size().x;
     ui.painter().galley(
         rect.left_center() + Vec2::new(8.0, -galley.size().y / 2.0),
         galley,
-        CREAM,
+        roles().legend,
     );
     let left = (rect.left() + width + 20.0).min(rect.right() - 8.0);
     if !label.is_empty() && left < rect.right() - 8.0 {
@@ -528,7 +585,7 @@ pub(super) fn section(ui: &egui::Ui, rect: Rect, label: &str) {
                 Pos2::new(left, rect.center().y),
                 rect.right_center() - Vec2::new(8.0, 0.0),
             ],
-            Stroke::new(1.0_f32, CREAM.gamma_multiply(0.45)),
+            Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.45)),
         );
     }
 }
@@ -552,12 +609,12 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     let rect = response.rect;
     let down = response.is_pointer_button_down_on();
     let base = match role {
-        ButtonRole::Secondary | ButtonRole::Tertiary => FACE,
-        ButtonRole::Primary => PRIMARY,
-        ButtonRole::Danger => DANGER,
+        ButtonRole::Secondary | ButtonRole::Tertiary => roles().face,
+        ButtonRole::Primary => roles().primary,
+        ButtonRole::Danger => roles().danger,
     };
     let base = if !response.enabled() {
-        DISABLED_FACE
+        roles().disabled_face
     } else if down {
         base.gamma_multiply(0.8)
     } else if response.hovered() {
@@ -568,16 +625,44 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
     let painter = ui.painter();
     let quiet = matches!(role, ButtonRole::Tertiary);
     let raised = !quiet || (response.enabled() && (response.hovered() || down));
-    if raised {
-        painter.rect_filled(rect, 5.0, INK);
-    }
+    let material = roles().material;
+    // Every theme's key face, and so its label, sits in the same place.
     let face = rect
         .shrink(2.0)
         .translate(Vec2::new(0.0, if down { 1.0 } else { -1.0 }));
     if raised {
-        painter.rect_filled(face, 3.0, base);
+        match material {
+            Material::Flat => {
+                painter.rect_filled(face, 3.0, base);
+                painter.rect_stroke(
+                    face,
+                    3.0,
+                    Stroke::new(
+                        1.0_f32,
+                        if matches!(role, ButtonRole::Secondary | ButtonRole::Tertiary) {
+                            roles().widget_edge
+                        } else {
+                            base.lerp_to_gamma(roles().ink, 0.35)
+                        },
+                    ),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            Material::Plastic => {
+                painter.rect_filled(
+                    rect.translate(Vec2::new(0.0, 1.0)),
+                    9.0,
+                    Color32::from_black_alpha(60),
+                );
+                theme::plastic(painter, face, 8.0, base);
+            }
+            Material::Metal => {
+                painter.rect_filled(rect, 5.0, roles().ink);
+                painter.rect_filled(face, 3.0, base);
+            }
+        }
     }
-    if matches!(role, ButtonRole::Primary) && response.enabled() {
+    if material == Material::Metal && matches!(role, ButtonRole::Primary) && response.enabled() {
         let art = artwork(ui.ctx(), Palette::of(ui));
         let size = art.primary.size_vec2() / ui.ctx().pixels_per_point();
         let mut y = face.top();
@@ -593,7 +678,7 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
             painter.rect_filled(face.shrink(2.0), 2.0, Color32::from_black_alpha(25));
         }
     }
-    if raised {
+    if raised && material == Material::Metal {
         painter.line_segment(
             [
                 face.left_top() + Vec2::new(3.0, 1.0),
@@ -603,13 +688,13 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
         );
     }
     let color = match role {
-        ButtonRole::Primary => INK,
-        _ => CREAM,
+        ButtonRole::Primary => roles().ink,
+        _ => roles().legend,
     };
     let color = if response.enabled() {
         color
     } else {
-        DISABLED_TEXT
+        roles().disabled_text
     };
     let mut text = egui::RichText::new(label)
         .font(FontId::proportional(13.0))
@@ -632,7 +717,7 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
 pub(super) fn button(ui: &mut egui::Ui, label: &str, role: ButtonRole) -> Response {
     let width = ui
         .painter()
-        .layout_no_wrap(label.into(), FontId::proportional(13.0), INK)
+        .layout_no_wrap(label.into(), FontId::proportional(13.0), roles().ink)
         .size()
         .x
         + 26.0;
@@ -693,14 +778,14 @@ pub(super) fn header_button(
             }),
         );
     }
-    let pen = Stroke::new(1.8_f32, CREAM);
+    let pen = Stroke::new(1.8_f32, roles().legend);
     match icon {
         HeaderIcon::Close => {
-            ui.painter().rect_filled(rect.shrink(2.0), 4.0, INK);
+            ui.painter().rect_filled(rect.shrink(2.0), 4.0, roles().ink);
             ui.painter().rect_stroke(
                 rect.shrink(3.0),
                 3.0,
-                Stroke::new(1.0_f32, CREAM.gamma_multiply(0.35)),
+                Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.35)),
                 egui::StrokeKind::Inside,
             );
             ui.painter().line_segment(
@@ -726,22 +811,25 @@ pub(super) fn header_button(
                     center + Vec2::new(5.0, 0.0),
                 ]
             };
-            ui.painter()
-                .add(egui::Shape::convex_polygon(vertices, CREAM, Stroke::NONE));
+            ui.painter().add(egui::Shape::convex_polygon(
+                vertices,
+                roles().legend,
+                Stroke::NONE,
+            ));
         }
         HeaderIcon::Help => {
-            ui.painter().circle_filled(center, 11.0, INK);
+            ui.painter().circle_filled(center, 11.0, roles().ink);
             ui.painter().circle_stroke(
                 center,
                 10.0,
-                Stroke::new(1.0_f32, CREAM.gamma_multiply(0.4)),
+                Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.4)),
             );
             ui.painter().text(
                 center,
                 egui::Align2::CENTER_CENTER,
                 "?",
                 FontId::proportional(15.0),
-                CREAM,
+                roles().legend,
             );
         }
     }
@@ -768,19 +856,19 @@ pub(super) fn toggle_at(
     ui.painter().rect_filled(
         Rect::from_center_size(center, Vec2::new(26.0, 14.0)),
         7.0,
-        INK,
+        roles().ink,
     );
     ui.painter().circle_filled(
         center + Vec2::new(if *value { 6.0 } else { -6.0 }, -0.5),
         5.5,
-        if *value { print_color(ui) } else { CAP },
+        if *value { print_color(ui) } else { roles().cap },
     );
     ui.painter().text(
         Pos2::new(rect.left() + 34.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
         label,
         FontId::proportional(13.0),
-        CREAM,
+        roles().legend,
     );
     response.widget_info(|| {
         egui::WidgetInfo::selected(
@@ -795,11 +883,11 @@ pub(super) fn toggle_at(
 }
 
 pub(super) fn well(ui: &egui::Ui, rect: Rect) {
-    ui.painter().rect_filled(rect, 3.0, INK);
+    ui.painter().rect_filled(rect, 3.0, roles().ink);
     ui.painter().rect_stroke(
         rect,
         3.0,
-        Stroke::new(1.0_f32, WELL_EDGE),
+        Stroke::new(1.0_f32, roles().well_edge),
         egui::StrokeKind::Inside,
     );
 }
@@ -836,7 +924,7 @@ pub(super) fn status_text(
         scroll = scroll.vertical_scroll_offset(0.0);
     }
     scroll.show(&mut child, |ui| {
-        let color = if error { super::view::CORAL } else { CREAM };
+        let color = if error { roles().coral } else { roles().legend };
         let mut job = egui::text::LayoutJob::simple(
             text.into(),
             FontId::proportional(size),
@@ -880,15 +968,15 @@ pub(super) fn status_text(
 /// No numeric value is reported until the total amount of work is known.
 pub(super) fn progress(ui: &mut egui::Ui, label: &str, fraction: Option<f32>, width: f32) {
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::hover());
-    let text = ui
-        .painter()
-        .layout_no_wrap(label.into(), FontId::proportional(13.0), CREAM);
+    let text =
+        ui.painter()
+            .layout_no_wrap(label.into(), FontId::proportional(13.0), roles().legend);
     ui.painter()
         .with_clip_rect(rect.intersect(ui.clip_rect()))
         .galley(
             Pos2::new(rect.center().x - text.size().x / 2.0, rect.top()),
             text,
-            CREAM,
+            roles().legend,
         );
     let rail = Rect::from_min_max(
         rect.left_bottom() - Vec2::new(0.0, 10.0),
@@ -930,8 +1018,8 @@ pub(super) fn value_style(ui: &mut egui::Ui) {
     // grows the invisible value button below that rectangle and shifts its text.
     style.spacing.interact_size.y = 18.0;
     style.wrap_mode = Some(egui::TextWrapMode::Extend);
-    style.visuals.override_text_color = Some(CREAM);
-    style.visuals.extreme_bg_color = INK;
+    style.visuals.override_text_color = Some(roles().legend);
+    style.visuals.extreme_bg_color = roles().ink;
     for widget in [
         &mut style.visuals.widgets.inactive,
         &mut style.visuals.widgets.hovered,
@@ -940,11 +1028,11 @@ pub(super) fn value_style(ui: &mut egui::Ui) {
         widget.bg_fill = Color32::TRANSPARENT;
         widget.weak_bg_fill = Color32::TRANSPARENT;
         widget.bg_stroke = Stroke::NONE;
-        widget.fg_stroke.color = CREAM;
+        widget.fg_stroke.color = roles().legend;
     }
     // egui paints a focused or dragged value with these visuals. The edge
     // shows keyboard focus on a field that is not yet being typed in.
-    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, CREAM);
+    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, roles().legend);
 }
 
 /// Compact editable value for ordinary dialog forms.
@@ -972,13 +1060,13 @@ pub(super) fn number(
 }
 
 pub(super) fn disclosure(label: impl Into<String>) -> egui::CollapsingHeader {
-    egui::CollapsingHeader::new(egui::RichText::new(label.into()).color(CREAM))
+    egui::CollapsingHeader::new(egui::RichText::new(label.into()).color(roles().legend))
 }
 
 pub(super) fn radio(ui: &mut egui::Ui, selected: bool, label: &str) -> Response {
     ui.add(egui::RadioButton::new(
         selected,
-        egui::RichText::new(label).color(CREAM),
+        egui::RichText::new(label).color(roles().legend),
     ))
 }
 
@@ -993,17 +1081,17 @@ pub(super) fn slider(
         // egui uses inactive.bg_fill for both the rail and idle handle. Keep
         // its native rail and interaction, then paint the shared silver cap.
         let widgets = &mut ui.visuals_mut().widgets;
-        widgets.inactive.bg_fill = INK;
+        widgets.inactive.bg_fill = roles().ink;
         for visual in [
             &mut widgets.inactive,
             &mut widgets.hovered,
             &mut widgets.active,
         ] {
-            visual.bg_stroke = Stroke::new(1.0_f32, INK);
-            visual.fg_stroke = Stroke::new(1.0_f32, INK);
+            visual.bg_stroke = Stroke::new(1.0_f32, roles().ink);
+            visual.fg_stroke = Stroke::new(1.0_f32, roles().ink);
         }
-        widgets.hovered.bg_fill = CAP;
-        widgets.active.bg_fill = CAP;
+        widgets.hovered.bg_fill = roles().cap;
+        widgets.active.bg_fill = roles().cap;
         let response = ui.add(
             egui::Slider::new(value, range)
                 .show_value(false)
@@ -1019,9 +1107,9 @@ pub(super) fn slider(
             ),
             response.rect.center().y,
         );
-        ui.painter().circle_filled(center, radius, CAP);
+        ui.painter().circle_filled(center, radius, roles().cap);
         ui.painter()
-            .circle_stroke(center, radius, Stroke::new(1.5_f32, INK));
+            .circle_stroke(center, radius, Stroke::new(1.5_f32, roles().ink));
         if response.has_focus() {
             ui.painter()
                 .circle_stroke(center, radius + 2.0, Stroke::new(2.0_f32, focus_color(ui)));
@@ -1146,7 +1234,11 @@ pub(super) fn stepped_slider(
 
     // Sliders sit on dark panels; a caller marks a light surface by turning
     // `dark_mode` off, and the scale then uses ink, as dials do.
-    let mark = if ui.visuals().dark_mode { CREAM } else { INK };
+    let mark = if ui.visuals().dark_mode {
+        roles().legend
+    } else {
+        roles().ink
+    };
     let painter = ui.painter();
     // The rail is a dark slot with a well edge, so it reads on dark panels.
     painter.rect(
@@ -1155,8 +1247,8 @@ pub(super) fn stepped_slider(
             Pos2::new(right + 3.0, rail_y + 2.5),
         ),
         2.5,
-        INK,
-        Stroke::new(1.0_f32, WELL_EDGE),
+        roles().ink,
+        Stroke::new(1.0_f32, roles().well_edge),
         egui::StrokeKind::Outside,
     );
     let current = nearest(*value);
@@ -1190,8 +1282,8 @@ pub(super) fn stepped_slider(
         );
     }
     let cap = Pos2::new(x_of(current), rail_y);
-    painter.circle_filled(cap, radius, CAP);
-    painter.circle_stroke(cap, radius, Stroke::new(1.5_f32, INK));
+    painter.circle_filled(cap, radius, roles().cap);
+    painter.circle_stroke(cap, radius, Stroke::new(1.5_f32, roles().ink));
     if !response.enabled() {
         painter.rect_filled(rect, 2.0, Color32::from_black_alpha(100));
     } else if response.has_focus() {
@@ -1426,38 +1518,61 @@ pub(super) fn rotary(
         response.mark_changed();
     }
     let center = rect.center();
-    let art = artwork(ui.ctx(), Palette::of(ui));
-    let ppp = ui.ctx().pixels_per_point();
-    let size = art.knob.size_vec2() / ppp;
-    let min = ((center - size / 2.0).to_vec2() * ppp).round().to_pos2() / ppp;
-    let radius = size.x / 2.0;
+    // Every theme's knob has the 18-point face of the bitmap knob.
+    let radius = 18.0;
     // Dials sit in dark bays. On a light painted surface, which a caller marks
     // by turning `dark_mode` off, the scale and focus ring use ink instead.
     let on_light = !ui.visuals().dark_mode;
-    for index in 0..=18 {
-        let vector = Vec2::angled((-225.0 + index as f32 * 15.0).to_radians());
+    let fraction = spec.fraction(*value) as f32;
+    // Studio's value arc replaces the printed scale.
+    if roles().material != Material::Flat {
+        for index in 0..=18 {
+            let vector = Vec2::angled((-225.0 + index as f32 * 15.0).to_radians());
+            ui.painter().line_segment(
+                [
+                    center + vector * (radius + 2.0),
+                    center + vector * (radius + if index % 3 == 0 { 6.0 } else { 4.0 }),
+                ],
+                Stroke::new(
+                    1.0_f32,
+                    if on_light {
+                        roles().ink
+                    } else {
+                        roles().legend
+                    },
+                ),
+            );
+        }
+    }
+    if roles().material == Material::Metal {
+        let art = artwork(ui.ctx(), Palette::of(ui));
+        let ppp = ui.ctx().pixels_per_point();
+        let size = art.knob.size_vec2() / ppp;
+        let min = ((center - size / 2.0).to_vec2() * ppp).round().to_pos2() / ppp;
+        ui.painter().image(
+            art.knob.id(),
+            Rect::from_min_size(min, size),
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        let vector = Vec2::angled((-225.0 + fraction * 270.0).to_radians());
         ui.painter().line_segment(
             [
-                center + vector * (radius + 2.0),
-                center + vector * (radius + if index % 3 == 0 { 6.0 } else { 4.0 }),
+                center + vector * radius * 0.2,
+                center + vector * radius * 0.62,
             ],
-            Stroke::new(1.0_f32, if on_light { INK } else { CREAM }),
+            Stroke::new(2.0_f32, roles().ink),
+        );
+    } else {
+        theme::dial(
+            ui.painter(),
+            center,
+            radius,
+            fraction,
+            print_color(ui),
+            on_light,
         );
     }
-    ui.painter().image(
-        art.knob.id(),
-        Rect::from_min_size(min, size),
-        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-        Color32::WHITE,
-    );
-    let vector = Vec2::angled((-225.0 + spec.fraction(*value) as f32 * 270.0).to_radians());
-    ui.painter().line_segment(
-        [
-            center + vector * radius * 0.2,
-            center + vector * radius * 0.62,
-        ],
-        Stroke::new(2.0_f32, INK),
-    );
     if !response.enabled() {
         ui.painter()
             .circle_filled(center, radius + 1.0, Color32::from_black_alpha(100));
@@ -1472,7 +1587,11 @@ pub(super) fn rotary(
                     1.0_f32
                 },
                 // In a dark bay every accent is legible; on paint, ink is.
-                if on_light { INK } else { print_color(ui) },
+                if on_light {
+                    roles().ink
+                } else {
+                    print_color(ui)
+                },
             ),
         );
     }
@@ -1503,6 +1622,68 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hovered_destructive_buttons_keep_text_contrast() {
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
+            let ctx = egui::Context::default();
+            super::super::configure_style(&ctx);
+            let rect = Rect::from_min_size(Pos2::new(40.0, 40.0), Vec2::new(180.0, 30.0));
+            let face = rect.shrink(2.0).translate(-Vec2::Y);
+            let mut output = egui::FullOutput::default();
+            let mut hovered = false;
+            for _ in 0..2 {
+                output = ctx.run(
+                    egui::RawInput {
+                        events: vec![egui::Event::PointerMoved(rect.center())],
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let response = button_at(
+                                ui,
+                                rect,
+                                "discard",
+                                "Discard changes",
+                                ButtonRole::Danger,
+                                true,
+                            );
+                            hovered = response.hovered();
+                        });
+                    },
+                );
+            }
+            assert!(hovered);
+            let mut colors = Vec::new();
+            let mut gloss = Color32::TRANSPARENT;
+            for shape in &output.shapes {
+                match &shape.shape {
+                    egui::Shape::Rect(paint) if paint.rect == face => colors.push(paint.fill),
+                    egui::Shape::Mesh(mesh) if mesh.calc_bounds() == face => {
+                        colors.extend(mesh.vertices.iter().map(|vertex| vertex.color));
+                    }
+                    egui::Shape::Rect(paint)
+                        if face.contains_rect(paint.rect)
+                            && paint.fill.a() == theme::PLASTIC_GLOSS =>
+                    {
+                        gloss = paint.fill;
+                    }
+                    _ => {}
+                }
+            }
+            assert!(!colors.is_empty(), "The button must paint its face.");
+            for color in colors {
+                let ratio = contrast(roles().legend, color.blend(gloss));
+                assert!(
+                    ratio >= 4.5,
+                    "{} hovered danger: {ratio:.2}:1",
+                    theme.label()
+                );
+            }
+        }
+        theme::paint_as(theme::Theme::Studio);
+    }
+
+    #[test]
     fn loading_status_keeps_text_above_visible_rail() {
         for fraction in [None, Some(0.0), Some(0.5), Some(1.0)] {
             let ctx = egui::Context::default();
@@ -1527,15 +1708,17 @@ mod tests {
                 .shapes
                 .iter()
                 .find_map(|shape| match &shape.shape {
-                    egui::Shape::Rect(rect) if rect.fill == INK && rect.rect.height() == 10.0 => {
+                    egui::Shape::Rect(rect)
+                        if rect.fill == roles().ink && rect.rect.height() == 10.0 =>
+                    {
                         Some(rect.rect)
                     }
                     _ => None,
                 })
                 .expect("An empty loader still needs its full recessed track");
             assert!(text.pos.y + text.galley.size().y <= rail.top());
-            assert_eq!(text.galley.job.sections[0].format.color, CREAM);
-            assert!(contrast(CREAM, Palette::Utility.body()) >= 4.5);
+            assert_eq!(text.galley.job.sections[0].format.color, roles().legend);
+            assert!(contrast(roles().legend, Palette::Utility.body()) >= 4.5);
             let update = output.platform_output.accesskit_update.unwrap();
             let node = update
                 .nodes
@@ -1551,7 +1734,13 @@ mod tests {
 
     #[test]
     fn numeric_text_fits_and_centers_in_its_own_container() {
-        for density in [1.0, 1.5, 2.0] {
+        let themes = theme::Theme::ALL.into_iter().flat_map(|theme| {
+            [1.0, 1.5, 2.0].map(move |density| {
+                theme::paint_as(theme);
+                density
+            })
+        });
+        for density in themes {
             for height in [18.0, 20.0, 24.0, 28.0] {
                 let ctx = egui::Context::default();
                 super::super::configure_style(&ctx);
@@ -1592,50 +1781,69 @@ mod tests {
 
     #[test]
     fn folded_text_colors_stay_readable_on_their_actual_surfaces() {
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
+            text_colors_stay_readable(theme.label());
+        }
+        theme::paint_as(theme::Theme::Studio);
+    }
+
+    fn text_colors_stay_readable(theme: &str) {
         for (role, text, background) in [
-            ("utility labels", CREAM, Palette::Utility.body()),
-            ("marine labels", CREAM, Palette::Marine.body()),
-            ("granite labels", CREAM, Palette::Granite.body()),
-            ("red labels", CREAM, Palette::Red.body()),
-            ("olive labels", CREAM, Palette::Olive.body()),
-            ("indigo labels", CREAM, Palette::Indigo.body()),
-            ("primary labels", INK, PRIMARY),
-            ("utility selection", INK, Palette::Utility.accent()),
-            ("marine selection", INK, Palette::Marine.accent()),
-            ("granite selection", INK, Palette::Granite.accent()),
-            ("red selection", INK, Palette::Red.accent()),
-            ("olive selection", INK, Palette::Olive.accent()),
-            ("indigo selection", INK, Palette::Indigo.accent()),
-            ("value and button labels", CREAM, FACE),
-            ("help text", HELP, FACE),
-            ("disabled labels", DISABLED_TEXT, DISABLED_FACE),
+            ("utility labels", roles().legend, Palette::Utility.body()),
+            ("marine labels", roles().legend, Palette::Marine.body()),
+            ("granite labels", roles().legend, Palette::Granite.body()),
+            ("red labels", roles().legend, Palette::Red.body()),
+            ("olive labels", roles().legend, Palette::Olive.body()),
+            ("indigo labels", roles().legend, Palette::Indigo.body()),
+            ("primary labels", roles().ink, roles().primary),
+            ("utility selection", roles().ink, Palette::Utility.accent()),
+            ("marine selection", roles().ink, Palette::Marine.accent()),
+            ("granite selection", roles().ink, Palette::Granite.accent()),
+            ("red selection", roles().ink, Palette::Red.accent()),
+            ("olive selection", roles().ink, Palette::Olive.accent()),
+            ("indigo selection", roles().ink, Palette::Indigo.accent()),
+            ("value and button labels", roles().legend, roles().face),
+            ("help text", roles().help, roles().face),
+            (
+                "disabled labels",
+                roles().disabled_text,
+                roles().disabled_face,
+            ),
         ] {
             let ratio = contrast(text, background);
             assert!(
                 ratio >= 4.5,
-                "{role} contrast {ratio:.2}:1 must be at least 4.5:1"
+                "{theme} {role} contrast {ratio:.2}:1 must be at least 4.5:1"
             );
         }
     }
 
     #[test]
     fn focus_rings_stay_visible_against_every_chassis() {
-        for palette in [
-            Palette::Utility,
-            Palette::Marine,
-            Palette::Granite,
-            Palette::Red,
-            Palette::Olive,
-            Palette::Indigo,
-        ] {
-            let ratio = contrast(palette.focus(), palette.body());
-            assert!(
-                ratio >= 3.0,
-                "{palette:?} focus ring contrast {ratio:.2}:1 must be at least 3:1"
-            );
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
+            for palette in [
+                Palette::Utility,
+                Palette::Marine,
+                Palette::Granite,
+                Palette::Red,
+                Palette::Olive,
+                Palette::Indigo,
+            ] {
+                let ratio = contrast(palette.focus(), palette.body());
+                assert!(
+                    ratio >= 3.0,
+                    "{} {palette:?} focus ring contrast {ratio:.2}:1 must be at least 3:1",
+                    theme.label()
+                );
+            }
         }
-        assert_eq!(Palette::Red.focus(), CREAM);
+        // Vintage's red enamel is too close to its accent, so its ring is cream.
+        theme::paint_as(theme::Theme::Vintage);
+        assert_eq!(Palette::Red.focus(), roles().legend);
         assert_eq!(Palette::Marine.focus(), Palette::Marine.accent());
+        theme::paint_as(theme::Theme::Studio);
     }
 
     fn spec() -> RotarySpec<'static> {
@@ -1788,6 +1996,8 @@ mod tests {
 
     #[test]
     fn paint_grain_preserves_palette_mean_and_monochrome_gaussian_statistics() {
+        // The grain artwork belongs to Vintage's painted metal.
+        theme::paint_as(theme::Theme::Vintage);
         for (palette, variants) in [
             (Palette::Utility, material!("utility", "paint-grain")),
             (Palette::Marine, material!("marine", "paint-grain")),

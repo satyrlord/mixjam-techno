@@ -34,17 +34,116 @@ mod tests {
             false,
         );
         app.capture_path = None;
+        // The fixture paints in the thread's theme; see `each_theme`.
+        app.session.set_theme_fixture(theme::current());
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         (context, app)
     }
 
+    /// Run `body` once in each theme, then return the thread to Studio. The
+    /// body's fixtures carry the theme into their options, so their frames
+    /// keep painting it.
+    fn each_theme(mut body: impl FnMut(theme::Theme)) {
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
+            body(theme);
+            assert_eq!(
+                theme::current(),
+                theme,
+                "the body's frames changed the theme"
+            );
+        }
+        theme::paint_as(theme::Theme::Studio);
+    }
+
+    /// Each supported density in each theme. Taking a density sets its theme
+    /// on this test's thread, and the loop body's fixture then adopts it.
+    /// Each new item, and the end of the loop, first checks that the previous
+    /// body's frames kept its theme, as `each_theme` does. The end returns the
+    /// thread to Studio.
+    fn themed_densities() -> impl Iterator<Item = f32> {
+        let previous = std::rc::Rc::new(std::cell::Cell::new(None));
+        let check = {
+            let previous = previous.clone();
+            move || {
+                if let Some(earlier) = previous.get() {
+                    assert_eq!(
+                        theme::current(),
+                        earlier,
+                        "the body's frames changed the theme"
+                    );
+                }
+            }
+        };
+        let end = check.clone();
+        theme::Theme::ALL
+            .into_iter()
+            .flat_map(|theme| [1.0, 1.5, 2.0].map(move |density| (theme, density)))
+            .map(move |(theme, density)| {
+                check();
+                previous.set(Some(theme));
+                theme::paint_as(theme);
+                density
+            })
+            .chain(std::iter::from_fn(move || {
+                end();
+                theme::paint_as(theme::Theme::Studio);
+                None
+            }))
+    }
+
+    /// Vintage paints the prepared Folded Metal artwork at one texel per
+    /// physical pixel. Studio and Aero paint their chassis in code and load
+    /// none of it.
     fn assert_folded_assets(
         ctx: &egui::Context,
         output: &egui::FullOutput,
         density: f32,
         palette: &str,
     ) {
+        let body = match palette {
+            "Marine" => controls::Palette::Marine,
+            "Granite" => controls::Palette::Granite,
+            "Red" => controls::Palette::Red,
+            "Olive" => controls::Palette::Olive,
+            "Utility" => controls::Palette::Utility,
+            "Indigo" => controls::Palette::Indigo,
+            _ => panic!("Unknown chassis palette"),
+        }
+        .body();
+        let large = |rect: Rect| rect.width() > 300.0 && rect.height() > 100.0;
+        match roles().material {
+            theme::Material::Metal => {}
+            material => {
+                assert!(
+                    !ctx.tex_manager()
+                        .read()
+                        .allocated()
+                        .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
+                    "{} paints its chassis in code.",
+                    theme::current().label()
+                );
+                assert!(
+                    output.shapes.iter().any(|shape| match &shape.shape {
+                        egui::Shape::Rect(rect) => {
+                            material == theme::Material::Flat
+                                && rect.fill == body
+                                && large(rect.rect)
+                        }
+                        egui::Shape::Mesh(mesh) => {
+                            material == theme::Material::Plastic
+                                && mesh.texture_id == egui::TextureId::default()
+                                && large(mesh.calc_bounds())
+                        }
+                        _ => false,
+                    }),
+                    "The {palette} chassis must paint its {} body.",
+                    theme::current().label()
+                );
+                return;
+            }
+        }
         let density_index = [1.0_f32, 1.5, 2.0]
             .iter()
             .position(|prepared| *prepared == density)
@@ -105,15 +204,6 @@ mod tests {
             ),
             "The chassis must paint its prepared grain tile."
         );
-        let body = match palette {
-            "Marine" => Color32::from_rgb(32, 83, 91),
-            "Granite" => Color32::from_rgb(52, 57, 60),
-            "Red" => Color32::from_rgb(154, 45, 39),
-            "Olive" => Color32::from_rgb(60, 68, 40),
-            "Utility" => Color32::from_rgb(60, 65, 64),
-            "Indigo" => Color32::from_rgb(46, 54, 96),
-            _ => panic!("Unknown chassis palette"),
-        };
         assert!(
             output.shapes.iter().any(|shape| matches!(
                 &shape.shape,
@@ -442,7 +532,7 @@ mod tests {
 
     #[test]
     fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_settings() {
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
@@ -570,23 +660,33 @@ mod tests {
                 let heading = effects_text_mesh_bounds(&output, section);
                 for name in controls {
                     let knob = effects_control_rect(&output, name).expand(1.0);
-                    let mut ticks = 0;
+                    // Aero and Vintage print tick marks; Studio draws a
+                    // value arc.
+                    let mut marks = 0;
                     for shape in &output.shapes {
-                        if let egui::Shape::LineSegment { points, stroke } = &shape.shape
-                            && stroke.width <= 1.1
-                            && points[0].distance(points[1]) <= 4.0
-                            && points.iter().all(|point| knob.contains(*point))
-                        {
-                            ticks += 1;
-                            let bounds =
-                                Rect::from_two_pos(points[0], points[1]).expand(stroke.width / 2.0);
-                            assert!(
-                                !heading.intersects(bounds),
-                                "{section} heading glyphs must not touch {name} tick marks at {density}x: heading={heading:?}, tick={bounds:?}."
-                            );
-                        }
+                        let bounds = match &shape.shape {
+                            egui::Shape::LineSegment { points, stroke }
+                                if stroke.width <= 1.1
+                                    && points[0].distance(points[1]) <= 4.0
+                                    && points.iter().all(|point| knob.contains(*point)) =>
+                            {
+                                Rect::from_two_pos(points[0], points[1]).expand(stroke.width / 2.0)
+                            }
+                            egui::Shape::Path(path)
+                                if path.points.len() > 2
+                                    && path.points.iter().all(|point| knob.contains(*point)) =>
+                            {
+                                path.visual_bounding_rect()
+                            }
+                            _ => continue,
+                        };
+                        marks += 1;
+                        assert!(
+                            !heading.intersects(bounds),
+                            "{section} heading glyphs must not touch {name} scale marks at {density}x: heading={heading:?}, mark={bounds:?}."
+                        );
                     }
-                    assert!(ticks > 0, "{name} must have native tick marks to check.");
+                    assert!(marks > 0, "{name} must have a native scale to check.");
                 }
             }
             assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
@@ -928,7 +1028,7 @@ mod tests {
             "Booster compressor gain",
             "Booster width",
         ];
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
@@ -2507,7 +2607,7 @@ mod tests {
 
     #[test]
     fn stretch_artwork_uses_one_texel_per_physical_pixel_at_all_prepared_densities() {
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             app.show_stretch = true;
@@ -3822,7 +3922,7 @@ mod tests {
                             .job
                             .sections
                             .iter()
-                            .all(|section| section.format.color == ACCENT)
+                            .all(|section| section.format.color == roles().accent)
                     );
                     Some(text.galley.rect.translate(text.pos.to_vec2()))
                 }
@@ -3861,7 +3961,7 @@ mod tests {
     }
 
     #[test]
-    fn syncopate_titles_are_uppercase_without_changing_saved_text_or_body_font() {
+    fn titles_are_uppercase_without_changing_saved_text_or_body_font() {
         let (context, mut app) = fixture();
         let mut project = app.session.project().clone();
         project.title = "Știință și ritm".into();
@@ -3876,13 +3976,15 @@ mod tests {
         ));
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-        for label in [
-            "MIXJAM",
-            "TECHNO",
-            "STIINTA SI RITM",
-            "ARRANGEMENT",
-            "SOUNDS",
-            "OPTIONS",
+        // The product name keeps its brand face in every theme; other titles
+        // take the theme's heading face.
+        for (label, family) in [
+            ("MIXJAM", theme::brand_family()),
+            ("TECHNO", theme::brand_family()),
+            ("STIINTA SI RITM", theme::heading_family()),
+            ("ARRANGEMENT", theme::heading_family()),
+            ("SOUNDS", theme::heading_family()),
+            ("OPTIONS", theme::heading_family()),
         ] {
             let text = output
                 .shapes
@@ -3892,9 +3994,13 @@ mod tests {
                     _ => None,
                 })
                 .unwrap_or_else(|| panic!("Missing title: {label}"));
-            assert!(text.galley.job.sections.iter().all(|section| {
-                section.format.font_id.family == egui::FontFamily::Name("Syncopate Bold".into())
-            }));
+            assert!(
+                text.galley
+                    .job
+                    .sections
+                    .iter()
+                    .all(|section| section.format.font_id.family == family)
+            );
         }
         let body = output
             .shapes
@@ -4527,7 +4633,7 @@ mod tests {
     fn sample_editor_compact_layout_uses_complete_density_assets_and_preserves_collapsed_edits() {
         let size = Vec2::new(960.0, 720.0);
         let viewport = Rect::from_min_size(Pos2::ZERO, size);
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
             ctx.set_pixels_per_point(density);
@@ -5529,7 +5635,7 @@ mod tests {
 
     #[test]
     fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable() {
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
@@ -5648,7 +5754,7 @@ mod tests {
                 output.shapes.iter().any(|shape| matches!(
                     &shape.shape,
                     egui::Shape::Circle(circle) if echo.contains(circle.center)
-                        && circle.fill == Color32::from_rgb(157, 178, 94)
+                        && circle.fill == controls::Palette::Olive.accent()
                 )),
                 "Enabled sequence effects must retain the same olive accent as Active bars."
             );
@@ -6282,7 +6388,11 @@ mod tests {
                         .unwrap_or_else(|| panic!("Missing painted state for {label}"));
                     assert_eq!(
                         painted.galley.job.sections[0].format.color,
-                        if enabled { ACCENT } else { MUTED },
+                        if enabled {
+                            roles().accent
+                        } else {
+                            roles().muted
+                        },
                         "{label}"
                     );
                 }
@@ -6442,10 +6552,10 @@ mod tests {
         .unwrap();
         ctx.enable_accesskit();
         for (track, switch, expected) in [
-            (0, TrackSwitch::Mute, [MUTED, TEXT]),
-            (1, TrackSwitch::Solo, [MUTED, TEXT]),
-            (0, TrackSwitch::Mute, [MUTED, TEXT]),
-            (1, TrackSwitch::Solo, [TEXT, TEXT]),
+            (0, TrackSwitch::Mute, [roles().muted, roles().text]),
+            (1, TrackSwitch::Solo, [roles().muted, roles().text]),
+            (0, TrackSwitch::Mute, [roles().muted, roles().text]),
+            (1, TrackSwitch::Solo, [roles().text, roles().text]),
         ] {
             let on = !switch.get(&app.session.project().tracks[track]);
             app.session
@@ -6462,21 +6572,29 @@ mod tests {
 
     #[test]
     fn mixer_yields_its_extra_height_only_in_a_short_window() {
-        for (size, minimum) in [
-            (Vec2::new(1440.0, 1000.0), 400.0),
-            (Vec2::new(960.0, 720.0), 372.0),
-        ] {
-            let (ctx, mut app) = fixture();
-            app.bottom_module = BottomModule::Mixer;
-            for _ in 0..3 {
-                frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        // The shared layout gives the same heights in every theme.
+        each_theme(|theme| {
+            for (size, minimum) in [
+                (Vec2::new(1440.0, 1000.0), 400.0),
+                (Vec2::new(960.0, 720.0), 372.0),
+            ] {
+                let (ctx, mut app) = fixture();
+                app.bottom_module = BottomModule::Mixer;
+                for _ in 0..3 {
+                    frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                }
+                let panel =
+                    egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
+                        .unwrap()
+                        .rect;
+                assert!(
+                    panel.height() >= minimum - 0.5,
+                    "{theme:?} {size:?}: {panel:?}"
+                );
+                let lanes = app.timeline_drop_rect.unwrap().height();
+                assert!(lanes >= 80.0, "{theme:?} {size:?}: {lanes}");
             }
-            let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
-                .unwrap()
-                .rect;
-            assert!(panel.height() >= minimum - 0.5, "{size:?}: {panel:?}");
-            assert!(app.timeline_drop_rect.unwrap().height() >= 80.0, "{size:?}");
-        }
+        });
     }
 
     #[test]
@@ -7067,7 +7185,7 @@ mod tests {
 
     #[test]
     fn mixer_compact_rails_and_inline_resets_fit_supported_densities() {
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
@@ -7079,6 +7197,7 @@ mod tests {
                 project,
             )
             .unwrap();
+            app.session.set_theme_fixture(theme::current());
             app.bottom_module = BottomModule::Mixer;
             let size = Vec2::new(960.0, 720.0);
             let viewport = Rect::from_min_size(Pos2::ZERO, size);
@@ -7109,21 +7228,34 @@ mod tests {
                     value.bottom() <= gain.top(),
                     "The dB readout must have room above its rail."
                 );
+                // Vintage's bitmap cap, Aero's molded cap, and Studio's flat
+                // cap all sit inside the same 24 by 32 point envelope.
+                let height = match roles().material {
+                    theme::Material::Metal => 32.0,
+                    theme::Material::Plastic => 24.0,
+                    theme::Material::Flat => 16.0,
+                };
                 let cap = output
                     .shapes
                     .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Mesh(mesh) => {
-                            let bounds = mesh.calc_bounds();
-                            ((bounds.width() - 24.0).abs() <= 1.0 / density
-                                && (bounds.height() - 32.0).abs() <= 1.0 / density
-                                && (bounds.center().x - gain.center().x).abs() <= 1.0 / density
-                                && gain.expand(1.0 / density).contains(bounds.center()))
-                            .then_some(bounds)
-                        }
-                        _ => None,
+                    .find_map(|shape| {
+                        let bounds = match &shape.shape {
+                            egui::Shape::Mesh(mesh) => mesh.calc_bounds(),
+                            egui::Shape::Rect(rect) if rect.fill == roles().cap => rect.rect,
+                            _ => return None,
+                        };
+                        ((bounds.width() - 24.0).abs() <= 1.0 / density
+                            && (bounds.height() - height).abs() <= 1.0 / density
+                            && (bounds.center().x - gain.center().x).abs() <= 1.0 / density
+                            && gain.expand(1.0 / density).contains(bounds.center()))
+                        .then_some(bounds)
                     })
-                    .unwrap_or_else(|| panic!("Missing {track} fader cap at {density}x."));
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Missing {track} fader cap at {density}x in {}.",
+                            theme::current().label()
+                        )
+                    });
                 assert!(
                     cap.top() - value.bottom() >= 4.0 - 1.0 / density,
                     "The fader cap must clear the dB readout even at +12 dB."
@@ -7465,16 +7597,10 @@ mod tests {
                         _ => None,
                     })
                     .expect("The module selector must paint its selected name.");
-                assert!(
-                    painted
-                        .galley
-                        .job
-                        .sections
-                        .iter()
-                        .all(|section| section.format.font_id.family
-                            == egui::FontFamily::Name("Syncopate Bold".into())
-                            && section.format.font_id.size == 16.0)
-                );
+                assert!(painted.galley.job.sections.iter().all(|section| {
+                    section.format.font_id.family == theme::heading_family()
+                        && section.format.font_id.size == 16.0
+                }));
                 assert!(
                     !painted.galley.elided,
                     "The selector must show the whole name {title}."
@@ -8155,7 +8281,7 @@ mod tests {
         configure_style(&ctx);
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             let rows = |text: &str, width: f32, size: f32, height: f32| {
-                let job = elided(text, size, TEXT, width, clip_label_rows(height));
+                let job = elided(text, size, roles().text, width, clip_label_rows(height));
                 ctx.fonts_mut(|fonts| fonts.layout_job(job))
                     .rows
                     .iter()
@@ -9111,7 +9237,7 @@ mod tests {
 
     #[test]
     fn rail_groups_remain_ordered_separated_and_visible_at_supported_densities() {
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             let (ctx, mut app) = fixture();
             ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
@@ -9247,60 +9373,63 @@ mod tests {
                 .iter()
                 .position(|value| *value == density)
                 .unwrap();
-            for (part, expected) in [
-                ("grain", [256, 256]),
-                ("part-6", [12, 96]),
-                ("part-7", [12, 96]),
-            ] {
-                let name = format!("folded-metal-Utility-{part}-{density_index}");
-                let (texture, pixels) = ctx
-                    .tex_manager()
-                    .read()
-                    .allocated()
-                    .find(|(_, meta)| meta.name == name)
-                    .map(|(id, meta)| (*id, meta.size))
-                    .expect("The rail must load its shared material finish.");
-                assert_eq!(
-                    pixels,
-                    expected.map(|side| (side as f32 * density) as usize),
-                    "The rail must load the prepared material density."
-                );
-                let mut painted = false;
-                for shape in &output.shapes {
-                    let egui::Shape::Mesh(mesh) = &shape.shape else {
-                        continue;
-                    };
-                    if mesh.texture_id != texture {
-                        continue;
-                    }
-                    painted = true;
-                    for vertex in &mesh.vertices {
-                        for coordinate in [vertex.pos.x, vertex.pos.y] {
-                            assert!(
-                                (coordinate * density - (coordinate * density).round()).abs()
-                                    < 0.001,
-                                "Rail material must align to physical pixels."
-                            );
+            // Studio and Aero paint the rail in code; Vintage crops its artwork.
+            if roles().material == theme::Material::Metal {
+                for (part, expected) in [
+                    ("grain", [256, 256]),
+                    ("part-6", [12, 96]),
+                    ("part-7", [12, 96]),
+                ] {
+                    let name = format!("folded-metal-Utility-{part}-{density_index}");
+                    let (texture, pixels) = ctx
+                        .tex_manager()
+                        .read()
+                        .allocated()
+                        .find(|(_, meta)| meta.name == name)
+                        .map(|(id, meta)| (*id, meta.size))
+                        .expect("The rail must load its shared material finish.");
+                    assert_eq!(
+                        pixels,
+                        expected.map(|side| (side as f32 * density) as usize),
+                        "The rail must load the prepared material density."
+                    );
+                    let mut painted = false;
+                    for shape in &output.shapes {
+                        let egui::Shape::Mesh(mesh) = &shape.shape else {
+                            continue;
+                        };
+                        if mesh.texture_id != texture {
+                            continue;
+                        }
+                        painted = true;
+                        for vertex in &mesh.vertices {
+                            for coordinate in [vertex.pos.x, vertex.pos.y] {
+                                assert!(
+                                    (coordinate * density - (coordinate * density).round()).abs()
+                                        < 0.001,
+                                    "Rail material must align to physical pixels."
+                                );
+                            }
+                        }
+                        for triangle in mesh.indices.as_chunks::<3>().0 {
+                            for edge in 0..3 {
+                                let a = mesh.vertices[triangle[edge] as usize];
+                                let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
+                                let destination = (b.pos - a.pos).abs() * density;
+                                let source = (b.uv - a.uv).abs()
+                                    * Vec2::new(pixels[0] as f32, pixels[1] as f32);
+                                assert!(
+                                    (destination - source).abs().max_elem() < 0.001,
+                                    "The narrow rail must crop its material without stretching texels."
+                                );
+                            }
                         }
                     }
-                    for triangle in mesh.indices.as_chunks::<3>().0 {
-                        for edge in 0..3 {
-                            let a = mesh.vertices[triangle[edge] as usize];
-                            let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                            let destination = (b.pos - a.pos).abs() * density;
-                            let source =
-                                (b.uv - a.uv).abs() * Vec2::new(pixels[0] as f32, pixels[1] as f32);
-                            assert!(
-                                (destination - source).abs().max_elem() < 0.001,
-                                "The narrow rail must crop its material without stretching texels."
-                            );
-                        }
-                    }
+                    assert!(
+                        painted,
+                        "The rail must paint its {part} material at {density}x."
+                    );
                 }
-                assert!(
-                    painted,
-                    "The rail must paint its {part} material at {density}x."
-                );
             }
         }
     }
@@ -9352,9 +9481,9 @@ mod tests {
                 assert_eq!(
                     tint,
                     if active {
-                        controls::ACCENT
+                        roles().tools[0].1
                     } else {
-                        controls::CREAM
+                        roles().legend
                     }
                 );
             };
@@ -10671,7 +10800,7 @@ mod tests {
             );
             let horizontal_bar = output.shapes.iter().any(|shape| {
                 matches!(&shape.shape, egui::Shape::Rect(rect)
-                    if rect.fill == controls::CREAM
+                    if rect.fill == roles().legend
                         && rect.rect.width() > 100.0
                         && rect.rect.height() < 16.0
                         && rect.rect.top() > curve.bottom()
@@ -11272,7 +11401,7 @@ mod tests {
     fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_at_all_densities() {
         let size = Vec2::new(960.0, 720.0);
         let viewport = Rect::from_min_size(Pos2::ZERO, size);
-        for density in [1.0, 1.5, 2.0] {
+        for density in themed_densities() {
             for tall in [false, true] {
                 let ctx = egui::Context::default();
                 configure_style(&ctx);
@@ -11647,7 +11776,7 @@ mod tests {
         let width = app.clip_rect(&clip, app.timeline_rect.unwrap()).width();
         assert!(
             output.shapes.iter().any(|shape| matches!(&shape.shape,
-                egui::Shape::Rect(rect) if rect.stroke.color == TEXT
+                egui::Shape::Rect(rect) if rect.stroke.color == roles().text
                     && (rect.rect.width() - (width - 1.0)).abs() < 0.01)),
             "The outline must show the length of the clip that a click places."
         );

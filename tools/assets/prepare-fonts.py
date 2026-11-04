@@ -16,6 +16,19 @@ ROOT = Path(__file__).resolve().parents[2]
 DESTINATION = ROOT / "assets/fonts"
 ASCII = set(range(32, 127))
 SYNCOPATE_SOURCE = "https://raw.githubusercontent.com/google/fonts/bd8f81ddb5c74d5c8897b36ad88b440266245103/apache/syncopate/"
+GOOGLE_FONTS = "https://raw.githubusercontent.com/google/fonts/2fe1e8c6b137fb13041a7cfca6fdcd8a910ea4dc/ofl/"
+PLEX_RELEASE = "https://github.com/IBM/plex/releases/download/%40ibm%2Fplex-sans%401.1.0/ibm-plex-sans.zip"
+PLEX_LICENSE = {
+    "license": "LICENSE-IBMPlexSans.txt",
+    "license_sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+    "license_archive_path": "ibm-plex-sans/LICENSE.txt",
+}
+BARLOW_LICENSE = {
+    "license": "LICENSE-Barlow.txt",
+    "license_sha256": "186d750eb496a4c17a76385f82be6aea2ac1cf2de074a811d63786cf374ea73f",
+}
+# Romanian letters that body text must draw in every theme.
+ROMANIAN = {ord(c) for c in "ĂăÂâÎîȘșȚț"}
 FONTS = (
     {
         "file": "Syncopate-Bold.ttf",
@@ -26,6 +39,7 @@ FONTS = (
         "license": "LICENSE-Syncopate.txt",
         "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
         "license_source": SYNCOPATE_SOURCE + "LICENSE.txt",
+        "role": "product name in every theme",
     },
     {
         "file": "Inter-Medium.ttf",
@@ -37,8 +51,63 @@ FONTS = (
         "license": "LICENSE-Inter.txt",
         "license_sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
         "license_archive_path": "LICENSE.txt",
+        "role": "Studio text and the symbol fallback of every theme",
+    },
+    {
+        "file": "IBMPlexSans-SemiBold.ttf",
+        "family": "IBM Plex Sans SmBld",
+        "weight": 600,
+        "role": "Studio headings",
+        "sha256": "a20caf8286023a6a7a85e40b1d2a4ae9fc3e3b1f9eda8f4c542dd4986af67bb1",
+        "source": PLEX_RELEASE,
+        "archive_path": "ibm-plex-sans/fonts/complete/ttf/IBMPlexSans-SemiBold.ttf",
+        **PLEX_LICENSE,
+    },
+    {
+        "file": "FiraSans-Medium.ttf",
+        "family": "Fira Sans Medium",
+        "weight": 500,
+        "role": "Aero text",
+        "sha256": "cbc1842cbed8c1d1146ba7c9db97d8f28c9bedfd25f41c5b0e1259ca48622328",
+        "source": GOOGLE_FONTS + "firasans/FiraSans-Medium.ttf",
+        "license": "LICENSE-FiraSans.txt",
+        "license_sha256": "8f24842e9174beda18a556c2ae7d54f5dc444340c19a3a9ef77e23bca366adbd",
+        "license_source": GOOGLE_FONTS + "firasans/OFL.txt",
+    },
+    {
+        "file": "Michroma-Regular.ttf",
+        "family": "Michroma",
+        "weight": 400,
+        "role": "Aero headings",
+        "sha256": "b62301163788bc5b7f8fcac0b74b184e34e1827e577b499ecb724da065098f87",
+        "source": GOOGLE_FONTS + "michroma/Michroma-Regular.ttf",
+        "license": "LICENSE-Michroma.txt",
+        "license_sha256": "33c39ce59a45bfb0dae3280e98bdb46be59d6d68efc62d4dc5fae90a26d2f393",
+        "license_source": GOOGLE_FONTS + "michroma/OFL.txt",
+    },
+    {
+        "file": "Barlow-Medium.ttf",
+        "family": "Barlow Medium",
+        "weight": 500,
+        "role": "Vintage text",
+        "sha256": "f8906f762cb73dca441da034bc363b2d8e2e68bc10d5c05e58717646c20cc4b4",
+        "source": GOOGLE_FONTS + "barlow/Barlow-Medium.ttf",
+        "license_source": GOOGLE_FONTS + "barlow/OFL.txt",
+        **BARLOW_LICENSE,
+    },
+    {
+        "file": "BarlowCondensed-SemiBold.ttf",
+        "family": "Barlow Condensed SemiBold",
+        "weight": 600,
+        "role": "Vintage headings",
+        "sha256": "7b619d14bc2327509a9ef32b0890f709626f7ecc9ff61191c2a4314c5499d2d9",
+        "source": GOOGLE_FONTS + "barlowcondensed/BarlowCondensed-SemiBold.ttf",
+        "license_source": GOOGLE_FONTS + "barlowcondensed/OFL.txt",
+        **BARLOW_LICENSE,
     },
 )
+# Text faces draw saved names, so they must cover Romanian as well as ASCII.
+TEXT_FACES = {"Inter Medium", "Fira Sans Medium", "Barlow Medium"}
 
 
 def main() -> None:
@@ -59,14 +128,20 @@ def main() -> None:
                 raise SystemExit(f"Unexpected native font weight: {record['file']}")
             if font["name"].getDebugName(1) != record["family"]:
                 raise SystemExit(f"Unexpected native font family: {record['file']}")
+            # 0 is installable embedding; bits 1 and 2 forbid or limit it.
+            if font["OS/2"].fsType & 0x6:
+                raise SystemExit(f"Embedding is restricted: {record['file']}")
             coverage[record["family"]] = set(font.getBestCmap())
         if not ASCII <= coverage[record["family"]]:
             raise SystemExit(f"Missing ASCII characters: {record['file']}")
+        if record["family"] in TEXT_FACES and not ROMANIAN <= coverage[record["family"]]:
+            raise SystemExit(f"Missing Romanian letters: {record['file']}")
         records.append(dict(record, bytes=path.stat().st_size))
     data = {
         "files": records,
         "title_case": "Latin transliteration and uppercase presentation; saved text retains its original spelling",
         "title_fallback": "egui proportional fallbacks for symbols; title letters use Latin counterparts",
+        "theme_fallback": "each theme face falls back to Inter Medium, then to egui's proportional fonts",
     }
     encoded = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode()
     manifest = DESTINATION / "manifest.json"
@@ -75,7 +150,10 @@ def main() -> None:
             raise SystemExit("Native font manifest differs: assets/fonts/manifest.json")
     else:
         manifest.write_bytes(encoded)
-    print("Verified Syncopate Bold 700 and Inter Medium 500, licenses and ASCII title coverage.")
+    print(
+        "Verified the brand, fallback, and theme fonts: weights, families, licenses, "
+        "embedding permission, ASCII coverage, and Romanian text coverage."
+    )
 
 
 if __name__ == "__main__":

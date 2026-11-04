@@ -1,4 +1,4 @@
-//! Shared Folded Metal chassis and window lifecycle for every in-app surface.
+//! The shared tool chassis, in the current theme, and window lifecycle for every in-app surface.
 use super::*;
 
 const HEADER: f32 = 44.0;
@@ -54,7 +54,7 @@ pub(super) fn hardware_style(ui: &mut egui::Ui, palette: controls::Palette) {
         .insert(egui::TextStyle::Small, FontId::proportional(11.0));
     s.text_styles.insert(
         egui::TextStyle::Heading,
-        FontId::new(18.0, egui::FontFamily::Name("Syncopate Bold".into())),
+        FontId::new(18.0, theme::heading_family()),
     );
     s.spacing.item_spacing = Vec2::new(10.0, 10.0);
     s.spacing.button_padding = Vec2::new(12.0, 6.0);
@@ -63,24 +63,24 @@ pub(super) fn hardware_style(ui: &mut egui::Ui, palette: controls::Palette) {
     // Components communicate disabled state with their face/indicator. Keep
     // labels readable instead of applying a second opacity fade to the text.
     s.visuals.disabled_alpha = 1.0;
-    s.visuals.extreme_bg_color = controls::FACE;
+    s.visuals.extreme_bg_color = roles().face;
     s.visuals.faint_bg_color = Color32::from_black_alpha(12);
-    s.visuals.widgets.noninteractive.fg_stroke.color = controls::CREAM;
+    s.visuals.widgets.noninteractive.fg_stroke.color = roles().legend;
     s.visuals.widgets.noninteractive.bg_stroke.color = Color32::from_black_alpha(70);
     for w in [
         &mut s.visuals.widgets.inactive,
         &mut s.visuals.widgets.hovered,
         &mut s.visuals.widgets.active,
     ] {
-        w.bg_fill = controls::FACE;
-        w.weak_bg_fill = controls::FACE;
-        w.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(93, 91, 82));
-        w.fg_stroke = Stroke::new(1.0_f32, controls::CREAM);
-        w.corner_radius = egui::CornerRadius::same(3);
+        w.bg_fill = roles().face;
+        w.weak_bg_fill = roles().face;
+        w.bg_stroke = Stroke::new(1.0_f32, roles().widget_edge);
+        w.fg_stroke = Stroke::new(1.0_f32, roles().legend);
+        w.corner_radius = egui::CornerRadius::same(roles().corner(3.0) as u8);
     }
-    s.visuals.widgets.hovered.bg_fill = Color32::from_rgb(58, 59, 55);
+    s.visuals.widgets.hovered.bg_fill = roles().widget_hover;
     s.visuals.widgets.hovered.weak_bg_fill = s.visuals.widgets.hovered.bg_fill;
-    s.visuals.widgets.active.bg_stroke.color = controls::ACCENT;
+    s.visuals.widgets.active.bg_stroke.color = roles().tools[0].1;
     controls::apply_palette(ui, palette);
 }
 
@@ -216,7 +216,7 @@ fn show_shell<R>(
                     spread: 0,
                     color: Color32::from_black_alpha(85),
                 }
-                .as_shape(bounds, egui::CornerRadius::same(9)),
+                .as_shape(bounds, egui::CornerRadius::same(roles().corner(9.0) as u8)),
             );
             controls::panel(ui, bounds);
             let header = Rect::from_min_size(bounds.min, Vec2::new(bounds.width(), HEADER));
@@ -258,17 +258,20 @@ fn show_shell<R>(
                 header.min + Vec2::new(48.0, 0.0),
                 header.max - Vec2::new(88.0, 0.0),
             );
-            let font = FontId::new(18.0, egui::FontFamily::Name("Syncopate Bold".into()));
-            let galley = ui
-                .painter()
-                .layout_no_wrap(display_title, font, controls::CREAM);
+            let mut title = egui::text::LayoutJob::simple_singleline(
+                display_title,
+                FontId::new(18.0, theme::heading_family()),
+                roles().legend,
+            );
+            title.sections[0].format.line_height = Some(18.0 * theme::HEADING_LINE);
+            let galley = ui.painter().layout_job(title);
             ui.painter().with_clip_rect(title_rect).galley(
                 Pos2::new(
                     (header.center().x - galley.size().x / 2.0).max(title_rect.left()),
                     header.center().y - galley.size().y / 2.0,
                 ),
                 galley,
-                controls::CREAM,
+                roles().legend,
             );
             if spec.help {
                 let rect = Rect::from_center_size(
@@ -467,7 +470,7 @@ fn resize_handles(ui: &mut egui::Ui, rect: Rect, g: &mut Geometry, min: Vec2) {
                 rect.right_bottom() - Vec2::new(7.0 + offset, 7.0),
                 rect.right_bottom() - Vec2::new(7.0, 7.0 + offset),
             ],
-            Stroke::new(1.0_f32, controls::CREAM),
+            Stroke::new(1.0_f32, roles().legend),
         );
     }
 }
@@ -842,7 +845,7 @@ mod tests {
                 );
                 visible_bar = output.shapes.iter().any(|shape| {
                     matches!(&shape.shape, egui::Shape::Rect(rect)
-                        if rect.fill == controls::CREAM
+                        if rect.fill == roles().legend
                             && rect.rect.width() > 100.0
                             && rect.rect.height() < 16.0
                             && rect.rect.top() >= content.bottom()

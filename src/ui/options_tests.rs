@@ -179,6 +179,22 @@ fn options_keyboard_edits_applies_restores_and_cancels() {
             .and_then(|(_, node)| node.label()),
         Some("Sample libraries")
     );
+    // The page starts with the theme, then the startup switches.
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![key(egui::Key::Tab, egui::Modifiers::NONE)],
+    );
+    let output = frame(&ctx, &mut app, size, vec![]);
+    let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+    assert_eq!(
+        tree.nodes
+            .iter()
+            .find(|(id, _)| *id == tree.focus)
+            .and_then(|(_, node)| node.label()),
+        Some("Theme")
+    );
     frame(
         &ctx,
         &mut app,
@@ -1147,6 +1163,50 @@ fn sample_playback_quality_applies_restores_cancels_and_flags_reduced_playback()
     let output = frame(&ctx, &mut app, size, vec![]);
     assert!(!shows(&output, REDUCED));
     assert!(!app.session.has_history_step(false));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn theme_applies_at_once_restores_and_cancels_without_touching_the_song() {
+    use mixjam_techno::application::options::Theme;
+    let (ctx, mut app, root) = fixture();
+    let size = Vec2::new(1024.0, 768.0);
+    let project = app.session.project().clone();
+    app.open_options(&ctx);
+    click(&ctx, &mut app, "Workspace");
+    let output = frame(&ctx, &mut app, size, vec![]);
+    assert_eq!(node(&output, "Theme").value(), Some("Studio"));
+    assert_eq!(theme::current(), Theme::Studio);
+    choose(&ctx, &mut app, "Theme", "Aero");
+    // A draft does not repaint the application.
+    frame(&ctx, &mut app, size, vec![]);
+    assert_eq!(theme::current(), Theme::Studio);
+    assert_eq!(
+        ctx.style().visuals.panel_fill,
+        theme::of(Theme::Studio).canvas
+    );
+    click(&ctx, &mut app, "Apply");
+    frame(&ctx, &mut app, size, vec![]);
+    assert_eq!(app.session.options().theme, Theme::Aero);
+    assert_eq!(theme::current(), Theme::Aero);
+    assert_eq!(
+        ctx.style().visuals.panel_fill,
+        theme::of(Theme::Aero).canvas
+    );
+    let saved = std::fs::read_to_string(root.join("options.json")).unwrap();
+    assert!(saved.contains("\"theme\": \"aero\""), "{saved}");
+    // Restore puts Studio in the draft; Cancel discards it and Aero stays.
+    click(&ctx, &mut app, "Restore options defaults");
+    assert_eq!(app.options.as_ref().unwrap().values.theme, Theme::Studio);
+    click(&ctx, &mut app, "Cancel");
+    click(&ctx, &mut app, "Discard changes");
+    frame(&ctx, &mut app, size, vec![]);
+    assert!(app.options.is_none());
+    assert_eq!(theme::current(), Theme::Aero);
+    assert_eq!(app.session.project(), &project);
+    assert!(!app.session.unsaved());
+    assert!(!app.session.has_history_step(false));
+    theme::paint_as(Theme::Studio);
     std::fs::remove_dir_all(root).unwrap();
 }
 

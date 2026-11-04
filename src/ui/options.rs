@@ -7,7 +7,7 @@ const RELOAD_ACTION: &str = "Reload active options";
 pub(super) const DISCARD: &str = "Discard changes?";
 use mixjam_techno::application::options::{
     AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
-    SongFolderMode, StartingModule,
+    SongFolderMode, StartingModule, Theme,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -83,6 +83,7 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 4] {
         show_section_bookmarks,
         starting_module,
         show_tooltips,
+        theme,
         song_folder_mode,
         fixed_song_folder,
     } = draft;
@@ -102,6 +103,7 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 4] {
             *show_section_bookmarks != active.show_section_bookmarks,
             *starting_module != active.starting_module,
             *show_tooltips != active.show_tooltips,
+            *theme != active.theme,
         ]),
         count(&[
             *song_folder_mode != active.song_folder_mode,
@@ -279,13 +281,13 @@ fn choice<T: Copy + PartialEq>(
 pub(super) fn section(ui: &mut egui::Ui, title: &str) {
     let first = ui.cursor().top() <= ui.min_rect().top() + 0.5;
     ui.add_space(if first { 4.0 } else { 8.0 });
-    ui.label(heading(title, 15.0).color(controls::CREAM));
+    ui.label(heading(title, 15.0).color(roles().legend));
 }
 
 /// One short line of explanation that belongs to the control above it.
 pub(super) fn help(ui: &mut egui::Ui, text: impl Into<String>) {
     ui.add_space(-4.0);
-    ui.label(egui::RichText::new(text).size(12.0).color(controls::HELP));
+    ui.label(egui::RichText::new(text).size(12.0).color(roles().help));
     // Keep the next control's group apart from this one.
     ui.add_space(4.0);
 }
@@ -294,7 +296,7 @@ pub(super) fn help(ui: &mut egui::Ui, text: impl Into<String>) {
 fn switch(ui: &mut egui::Ui, name: &str, value: &mut bool) {
     let label =
         ui.painter()
-            .layout_no_wrap(name.into(), FontId::proportional(13.0), controls::CREAM);
+            .layout_no_wrap(name.into(), FontId::proportional(13.0), roles().legend);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(label.size().x + 36.0, 24.0), Sense::hover());
     remember_focus(&controls::toggle_at(ui, rect, name, name, value));
 }
@@ -418,9 +420,9 @@ impl MixJamApp {
                                         ),
                                         3.5,
                                         if draft.page == page {
-                                            controls::INK
+                                            roles().ink
                                         } else {
-                                            controls::ACCENT
+                                            roles().tools[0].1
                                         },
                                     );
                                 }
@@ -480,7 +482,7 @@ impl MixJamApp {
                                 .show(ui, |ui| {
                                     ui.set_width(width - ui.spacing().scroll.allocated_width());
                                     if stale {
-                                        ui.colored_label(controls::ACCENT, STALE_DRAFT);
+                                        ui.colored_label(roles().tools[0].1, STALE_DRAFT);
                                         let reload = controls::button(
                                             ui,
                                             RELOAD_ACTION,
@@ -493,13 +495,13 @@ impl MixJamApp {
                                         ui.separator();
                                     }
                                     if let Some(error) = self.session.options_error() {
-                                        ui.colored_label(CORAL, error);
+                                        ui.colored_label(roles().coral, error);
                                     }
                                     if let Some(error) = &draft.error {
-                                        ui.colored_label(CORAL, error);
+                                        ui.colored_label(roles().coral, error);
                                     }
                                     if let Some(reason) = &audio_blocked {
-                                        ui.colored_label(controls::ACCENT, reason);
+                                        ui.colored_label(roles().tools[0].1, reason);
                                     }
                                     match draft.page {
                                         Page::Audio => self.audio_options(ui, &mut draft.values),
@@ -561,9 +563,9 @@ impl MixJamApp {
                     if !status.is_empty() {
                         let label = ui.add(
                             egui::Label::new(egui::RichText::new(&status).color(if pending {
-                                controls::ACCENT
+                                roles().tools[0].1
                             } else {
-                                controls::CREAM
+                                roles().legend
                             }))
                             .truncate(),
                         );
@@ -687,7 +689,7 @@ impl MixJamApp {
         );
         if values.quality_reduced() {
             ui.colored_label(
-                controls::ACCENT,
+                roles().tools[0].1,
                 "Playback quality reduced; exports use full quality",
             );
         }
@@ -734,7 +736,7 @@ impl MixJamApp {
             .session
             .buffer_target_error(values.playback_buffer_target)
         {
-            ui.colored_label(CORAL, reason);
+            ui.colored_label(roles().coral, reason);
         }
         help(
             ui,
@@ -748,7 +750,7 @@ impl MixJamApp {
                 ui.label(
                     egui::RichText::new(self.session.buffer_status())
                         .size(12.0)
-                        .color(controls::HELP),
+                        .color(roles().help),
                 );
             });
         remember_focus(&details.header_response);
@@ -825,7 +827,7 @@ impl MixJamApp {
             help(ui, "An existing folder, chosen or typed as a full path.");
         }
         if let Some(warning) = self.session.song_folder_warning() {
-            ui.colored_label(CORAL, warning);
+            ui.colored_label(roles().coral, warning);
         }
         choose
     }
@@ -833,6 +835,18 @@ impl MixJamApp {
 
 fn workspace_options(ui: &mut egui::Ui, values: &mut AppOptions) {
     section(ui, "Workspace");
+    choice(
+        ui,
+        "Theme",
+        &mut values.theme,
+        &Theme::ALL.map(|theme| (theme, theme.label())),
+    );
+    help(
+        ui,
+        "Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted \
+         metal. Layout and controls stay the same. Apply changes it at once, even while a \
+         song plays.",
+    );
     switch(
         ui,
         "Follow playhead on startup",

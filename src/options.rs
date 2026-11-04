@@ -39,6 +39,29 @@ pub enum StartingModule {
     Effects,
 }
 
+/// The application's visual theme. Every theme keeps the same layout,
+/// controls, and features; only appearance and typography change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Theme {
+    #[default]
+    Studio,
+    Aero,
+    Vintage,
+}
+
+impl Theme {
+    pub const ALL: [Self; 3] = [Self::Studio, Self::Aero, Self::Vintage];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Studio => "Studio",
+            Self::Aero => "Aero",
+            Self::Vintage => "Vintage",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SongFolderMode {
@@ -64,6 +87,9 @@ pub struct AppOptions {
     pub show_section_bookmarks: bool,
     pub starting_module: StartingModule,
     pub show_tooltips: bool,
+    /// Added after schema 1 was released, so a file without it loads Studio.
+    #[serde(default)]
+    pub theme: Theme,
     pub song_folder_mode: SongFolderMode,
     pub fixed_song_folder: Option<PathBuf>,
 }
@@ -83,6 +109,7 @@ impl Default for AppOptions {
             show_section_bookmarks: true,
             starting_module: StartingModule::Sounds,
             show_tooltips: true,
+            theme: Theme::Studio,
             song_folder_mode: SongFolderMode::LastUsed,
             fixed_song_folder: None,
         }
@@ -288,6 +315,51 @@ mod tests {
         assert_eq!(loaded.values.sample_playback_quality, SampleQuality::High);
         assert!(!loaded.values.quality_reduced());
         assert!(AppOptions::default().audio_changed(&low));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn theme_persists_older_files_load_studio_and_it_is_not_an_audio_change() {
+        let root = root();
+        assert_eq!(AppOptions::default().theme, Theme::Studio);
+        // A schema 1 file saved before the setting existed.
+        let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+        raw.as_object_mut().unwrap().remove("theme").unwrap();
+        fs::write(root.join("options.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+        let loaded = load(&root);
+        assert!(loaded.error.is_none() && !loaded.invalid && !loaded.future);
+        assert_eq!(loaded.values.theme, Theme::Studio);
+        for theme in Theme::ALL {
+            let values = AppOptions {
+                theme,
+                ..AppOptions::default()
+            };
+            save(&root, &values).unwrap();
+            let loaded = load(&root);
+            assert!(loaded.error.is_none());
+            assert_eq!(loaded.values, values);
+            assert!(!AppOptions::default().audio_changed(&values));
+        }
+        let text = String::from_utf8(fs::read(root.join("options.json")).unwrap()).unwrap();
+        assert!(text.contains("\"theme\": \"vintage\""));
+        for value in [serde_json::json!("Aero"), serde_json::json!(1)] {
+            let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+            raw["theme"] = value;
+            fs::write(root.join("options.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+            let loaded = load(&root);
+            assert!(loaded.invalid);
+            assert_eq!(loaded.values, AppOptions::default());
+        }
+        // A future schema stays blocked even with a theme this version knows.
+        let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+        raw["schemaVersion"] = serde_json::json!(2);
+        raw["theme"] = serde_json::json!("aero");
+        let bytes = serde_json::to_vec(&raw).unwrap();
+        fs::write(root.join("options.json"), &bytes).unwrap();
+        let loaded = load(&root);
+        assert!(loaded.future);
+        assert_eq!(loaded.values.theme, Theme::Studio);
+        assert_eq!(fs::read(root.join("options.json")).unwrap(), bytes);
         fs::remove_dir_all(root).unwrap();
     }
 

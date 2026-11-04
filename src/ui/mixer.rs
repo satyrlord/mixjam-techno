@@ -20,14 +20,6 @@ pub(super) struct Changes {
     pub eq: Option<usize>,
 }
 
-const INK: Color32 = Color32::from_rgb(28, 29, 26);
-const CREAM: Color32 = Color32::from_rgb(245, 232, 205);
-const METAL: Color32 = Color32::from_rgb(201, 194, 175);
-const EDGE: Color32 = Color32::from_rgb(108, 106, 97);
-const FACE: Color32 = Color32::from_rgb(29, 33, 34);
-const AMBER: Color32 = Color32::from_rgb(245, 193, 86);
-/// The fader slot and the resting edge of dark buttons.
-const SLOT: Color32 = Color32::from_rgb(11, 14, 14);
 const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
 const SILENCE_DB: f32 = -96.0;
 // The useful -24..+12 dB interval occupies 72% of the travel. The short
@@ -184,21 +176,33 @@ pub(super) fn show(
     fx: &mut FxBuses,
     bypass: &mut bool,
 ) -> Changes {
-    let art = Artwork::load(ui.ctx());
+    // Vintage reuses the ivory and graphite artwork; the other themes paint
+    // their strips in code.
+    let art = (roles().material == theme::Material::Metal).then(|| Artwork::load(ui.ctx()));
     let art = match &art {
-        Ok(art) => Some(art.as_ref()),
-        Err(error) => {
-            ui.colored_label(CORAL, error);
+        Some(Ok(art)) => Some(art.as_ref()),
+        Some(Err(error)) => {
+            ui.colored_label(roles().coral, error);
             None
         }
+        None => None,
     };
-    let scale = art.map_or(1.0, |art| {
+    // Strips are measured in whole physical pixels at each supported density,
+    // so every theme keeps the same layout.
+    let ppp = ui.ctx().pixels_per_point();
+    let density = [1.0_f32, 1.5, 2.0]
+        .into_iter()
+        .min_by(|a, b| (a - ppp).abs().total_cmp(&(b - ppp).abs()))
+        .unwrap_or(1.0);
+    let scale = art.map_or(density / ppp, |art| {
         [1.0, 1.5, 2.0][art.density] / ui.ctx().pixels_per_point()
     });
     let width = 108.0 * scale;
     let whole = ui.available_rect_before_wrap();
     if let Some(art) = art {
         art.tile(ui, 1, whole);
+    } else {
+        ui.painter().rect_filled(whole, 0.0, roles().mixer_floor);
     }
     // A 400-point panel gives the physical gain rail 96 points. A short
     // window can reduce the panel to 370 points and the rail to 68. Its
@@ -379,20 +383,25 @@ fn strip(
     if let Some(art) = art {
         art.tile(ui, 0, rect);
     } else {
-        ui.painter().rect_filled(rect, 2.0, METAL);
+        theme::surface(ui.painter(), rect, roles().corner(3.0), roles().strip);
     }
     ui.painter().rect_stroke(
         rect.shrink(0.5 * scale),
         3.0,
-        Stroke::new(1.0 * scale, EDGE),
+        Stroke::new(1.0 * scale, roles().strip_edge),
         egui::StrokeKind::Inside,
     );
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
-    text(ui, at(54.0, 14.0), name, 13.0 * scale, INK);
+    text(ui, at(54.0, 14.0), name, 13.0 * scale, roles().strip_text);
     let summary_rect = Rect::from_min_size(at(6.0, 23.0), Vec2::new(96.0, 16.0) * scale);
     ui.put(
         summary_rect,
-        egui::Label::new(egui::RichText::new(summary).size(11.0 * scale).color(INK)).truncate(),
+        egui::Label::new(
+            egui::RichText::new(summary)
+                .size(11.0 * scale)
+                .color(roles().strip_text),
+        )
+        .truncate(),
     )
     .hover_hint(detail);
     let value_rect = Rect::from_min_size(at(8.0, 42.0), Vec2::new(92.0, 22.0) * scale);
@@ -417,7 +426,7 @@ fn strip(
                 Pos2::new(rail.right() + 2.0 * scale, y),
                 Pos2::new(rail.right() + 6.0 * scale, y),
             ],
-            Stroke::new(1.0 * scale, INK),
+            Stroke::new(1.0 * scale, roles().strip_text),
         );
         // A short rail keeps the tick but drops a label that would touch -inf.
         if rail.bottom() - y >= 12.0 * scale {
@@ -426,7 +435,7 @@ fn strip(
                 Align2::LEFT_CENTER,
                 label,
                 FontId::proportional(10.0 * scale),
-                INK,
+                roles().strip_text,
             );
         }
     }
@@ -435,14 +444,14 @@ fn strip(
         Align2::LEFT_CENTER,
         "-inf",
         FontId::proportional(10.0 * scale),
-        INK,
+        roles().strip_text,
     );
     ui.painter().text(
         Pos2::new(rail.left() - 4.0 * scale, zero_y),
         Align2::RIGHT_CENTER,
         "0",
         FontId::proportional(10.0 * scale),
-        INK,
+        roles().strip_text,
     );
     let unity = button(
         ui,
@@ -498,6 +507,15 @@ fn strip(
         ui.scope_builder(egui::UiBuilder::new().max_rect(pan_rect), |ui| {
             ui.spacing_mut().slider_width = pan_rect.width();
             ui.spacing_mut().interact_size.y = 16.0 * scale;
+            // The rail is a dark slot on every theme's strip, and the idle
+            // handle keeps a cap-colored edge on it.
+            let widgets = &mut ui.visuals_mut().widgets;
+            widgets.inactive.bg_fill = roles().strip_slot;
+            widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, roles().cap);
+            for state in [&mut widgets.hovered, &mut widgets.active] {
+                state.bg_fill = roles().cap;
+                state.fg_stroke = Stroke::new(1.5 * scale, roles().strip_slot);
+            }
             let response = pan_control(ui, index, pan, pan_automated);
             changed |= response.changed();
             focus_ring(ui, &response, pan_rect, scale);
@@ -536,7 +554,7 @@ fn strip(
                 pan_description(*pan)
             },
             11.0 * scale,
-            INK,
+            roles().strip_text,
         );
         // The EQ button completes the row of Mute and Solo, above polarity.
         let eq_name = format!("{name} EQ");
@@ -597,7 +615,11 @@ fn strip(
             *inverted,
         );
         let center = invert_rect.center();
-        let color = if *inverted { INK } else { CREAM };
+        let color = if *inverted {
+            roles().ink
+        } else {
+            roles().legend
+        };
         ui.painter()
             .circle_stroke(center, 6.0 * scale, Stroke::new(1.5 * scale, color));
         ui.painter().line_segment(
@@ -645,14 +667,14 @@ fn strip(
             at(54.0, height / scale - 93.0),
             "Main output",
             11.0 * scale,
-            INK,
+            roles().strip_text,
         );
         text(
             ui,
             at(54.0, height / scale - 75.0),
             "L + R",
             11.0 * scale,
-            INK,
+            roles().strip_text,
         );
     }
     changed
@@ -730,11 +752,19 @@ fn send_knob(
     *value = (*value).clamp(0.0, 1.0);
     let center = rect.center();
     let radius = rect.width() / 2.0;
-    ui.painter().circle_filled(center, radius, FACE);
+    ui.painter()
+        .circle_filled(center, radius, roles().strip_face);
     ui.painter().circle_stroke(
         center,
         radius,
-        Stroke::new(1.0 * scale, if response.has_focus() { AMBER } else { SLOT }),
+        Stroke::new(
+            1.0 * scale,
+            if response.has_focus() {
+                roles().strip_lit
+            } else {
+                roles().strip_slot
+            },
+        ),
     );
     if *value > 0.0 {
         let arc: Vec<Pos2> = (0..=24)
@@ -743,19 +773,21 @@ fn send_knob(
                 center + Vec2::angled(angle) * (radius - 2.0 * scale)
             })
             .collect();
-        ui.painter()
-            .add(egui::Shape::line(arc, Stroke::new(2.0 * scale, AMBER)));
+        ui.painter().add(egui::Shape::line(
+            arc,
+            Stroke::new(2.0 * scale, roles().strip_lit),
+        ));
     }
     let pointer = Vec2::angled((-225.0 + 270.0 * *value).to_radians());
     ui.painter().line_segment(
         [center, center + pointer * (radius - 3.0 * scale)],
-        Stroke::new(1.5 * scale, CREAM),
+        Stroke::new(1.5 * scale, roles().legend),
     );
     if automated {
         ui.painter().circle_stroke(
             center,
             radius + 2.0 * scale,
-            Stroke::new(1.0 * scale, CREAM),
+            Stroke::new(1.0 * scale, roles().legend),
         );
     }
     focus_ring(ui, &response, rect, scale);
@@ -801,17 +833,28 @@ fn return_strip(
     if let Some(art) = art {
         art.tile(ui, 1, rect);
     } else {
-        ui.painter().rect_filled(rect, 2.0, FACE);
+        theme::surface(
+            ui.painter(),
+            rect,
+            roles().corner(3.0),
+            roles().return_strip,
+        );
     }
     ui.painter().rect_stroke(
         rect.shrink(0.5 * scale),
         3.0,
-        Stroke::new(1.0 * scale, EDGE),
+        Stroke::new(1.0 * scale, roles().strip_edge),
         egui::StrokeKind::Inside,
     );
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
-    text(ui, at(54.0, 14.0), &name, 13.0 * scale, CREAM);
-    text(ui, at(54.0, 31.0), bus.module.label(), 11.0 * scale, CREAM);
+    text(ui, at(54.0, 14.0), &name, 13.0 * scale, roles().legend);
+    text(
+        ui,
+        at(54.0, 31.0),
+        bus.module.label(),
+        11.0 * scale,
+        roles().legend,
+    );
     let before = *bus;
     let mut level = bus.return_level;
     send_knob(
@@ -832,7 +875,7 @@ fn return_strip(
             format!("Return {:.0}%", bus.return_level * 100.0)
         },
         11.0 * scale,
-        CREAM,
+        roles().legend,
     );
     for (y, label, key, on, hint) in [
         (
@@ -906,17 +949,24 @@ fn button(
 ) -> Response {
     let response = ui.interact(rect, ui.id().with(name), Sense::click());
     let fill = if selected {
-        AMBER
+        roles().strip_lit
     } else if response.hovered() {
-        RAISED
+        roles().raised
     } else {
-        FACE
+        roles().strip_face
     };
     ui.painter().rect_filled(rect, 2.0, fill);
     ui.painter().rect_stroke(
         rect,
         2.0,
-        Stroke::new(1.0 * scale, if response.has_focus() { AMBER } else { SLOT }),
+        Stroke::new(
+            1.0 * scale,
+            if response.has_focus() {
+                roles().strip_lit
+            } else {
+                roles().strip_slot
+            },
+        ),
         egui::StrokeKind::Inside,
     );
     focus_ring(ui, &response, rect, scale);
@@ -925,7 +975,11 @@ fn button(
         rect.center(),
         label,
         10.0 * scale,
-        if selected { INK } else { CREAM },
+        if selected {
+            roles().ink
+        } else {
+            roles().legend
+        },
     );
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
@@ -933,14 +987,14 @@ fn button(
     response
 }
 
-/// Amber is illegible on ivory. An ink ring around the control carries
-/// keyboard focus there; amber remains the inner edge on dark faces.
+/// Amber is illegible on Vintage's ivory, so each theme names the ring color
+/// that reads on its strips; amber remains the inner edge on dark faces.
 fn focus_ring(ui: &egui::Ui, response: &Response, rect: Rect, scale: f32) {
     if response.has_focus() {
         ui.painter().rect_stroke(
             rect.expand(1.0 * scale),
             3.0,
-            Stroke::new(2.0 * scale, INK),
+            Stroke::new(2.0 * scale, roles().strip_focus),
             egui::StrokeKind::Outside,
         );
     }
@@ -962,14 +1016,22 @@ fn switch_button(
             Vec2::new(12.0, 2.0) * scale,
         ),
         1.0,
-        if *enabled { ACCENT } else { MUTED },
+        if *enabled {
+            roles().accent
+        } else {
+            roles().muted
+        },
     );
     text(
         ui,
         rect.center() + Vec2::new(0.0, 3.0) * scale,
         switch.letter(),
         11.0 * scale,
-        if *enabled { ACCENT } else { MUTED },
+        if *enabled {
+            roles().accent
+        } else {
+            roles().muted
+        },
     );
     response.widget_info(|| {
         egui::WidgetInfo::selected(
@@ -989,7 +1051,7 @@ fn switch_button(
 }
 
 fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut f32) -> bool {
-    ui.painter().rect_filled(rect, 3.0, FACE);
+    ui.painter().rect_filled(rect, 3.0, roles().strip_face);
     let before = *gain;
     let db = amplitude_to_db(before);
     ui.scope_builder(
@@ -1012,10 +1074,10 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
                 widget.bg_fill = Color32::TRANSPARENT;
                 widget.weak_bg_fill = Color32::TRANSPARENT;
                 widget.bg_stroke = Stroke::NONE;
-                widget.fg_stroke.color = CREAM;
+                widget.fg_stroke.color = roles().legend;
             }
             // A focused value shows an edge before it is typed in.
-            widgets.active.bg_stroke = Stroke::new(1.0 * scale, CREAM);
+            widgets.active.bg_stroke = Stroke::new(1.0 * scale, roles().legend);
             let id = ui.next_auto_id();
             let context = ui.ctx().clone();
             // DragValue needs a finite origin for relative edits. Keep silence's
@@ -1108,11 +1170,11 @@ fn gain_rail(
         rect.center(),
         Vec2::new(8.0 * scale, rect.height() + 4.0 * scale),
     );
-    ui.painter().rect_filled(slot, 4.0, SLOT);
+    ui.painter().rect_filled(slot, 4.0, roles().strip_slot);
     ui.painter().rect_stroke(
         slot.expand(1.0 * scale),
         4.0,
-        Stroke::new(1.0 * scale, EDGE),
+        Stroke::new(1.0 * scale, roles().strip_edge),
         egui::StrokeKind::Outside,
     );
     // A pointer edit leaves keyboard focus unchanged. Tab focuses the rail
@@ -1209,11 +1271,14 @@ fn gain_rail(
     if let Some(art) = art {
         art.fader(ui, cap);
     } else {
-        ui.painter().rect_filled(
-            Rect::from_center_size(cap, Vec2::new(24.0, 32.0) * scale),
-            2.0,
-            FACE,
-        );
+        // A flat software cap on Studio, a molded one on Aero; both stay
+        // inside the bitmap cap's 24 by 32 points.
+        let size = if roles().material == theme::Material::Flat {
+            Vec2::new(24.0, 16.0)
+        } else {
+            Vec2::new(24.0, 24.0)
+        };
+        theme::fader_cap(ui.painter(), cap, size * scale);
     }
     focus_ring(ui, &response, rect, scale);
     let db = amplitude_to_db(*gain);

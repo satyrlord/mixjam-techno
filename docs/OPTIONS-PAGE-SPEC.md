@@ -14,13 +14,13 @@ Keep the current sound and behavior as the default. Offer a lower CPU mode
 when a project cannot play reliably on the user's computer.
 
 Use a native Options window containing Audio, Workspace, Files, and Sample libraries pages.
-Use the existing Folded Metal Utility shell and controls. This is not a web
+Use the shared Utility shell and controls in the current theme. This is not a web
 page, a replacement for the Mixer, or a new song editor.
 
 In scope: the controls below, preference persistence, safe application of
 changes, existing-control synchronization, agent access, and verification.
 Out of scope: device selection, ASIO or exclusive audio, sample-rate changes,
-plugins, autosave, theme editing, arbitrary UI
+plugins, autosave, theme editing or custom themes, arbitrary UI
 scaling, new song DSP parameters, and a change to song format 24. Do not expose
 an internal processing block size as a device latency control. The current
 song format is 24; options use their own schema.
@@ -121,6 +121,7 @@ playback quality is Low. Exports always read samples at High.
 | Follow playhead on startup | On | Sets the initial Follow state on the next app launch. The existing toolbar toggle still controls the current session. Do not silently turn Follow back on after a user turns it off. |
 | Show section bookmarks | Existing saved value, otherwise On | Shares one current value with the Sections toolbar toggle. Both update the same preference; neither edits the song or its section data. |
 | Starting module | Sounds | Choices: Sounds, Mixer, Mastering, Effects. Applies on the next launch, not when a project opens. Capture and verification modes retain their explicit view overrides. |
+| Theme | Studio | Choices: Studio, Aero, Vintage; the first control on the page. Apply repaints the whole application at once, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data, undo history, renders, the audio device, or parameter ranges. Every theme keeps the same layout, controls, and features. |
 | Show tooltips | On | Controls hover hints. Never removes accessible names, descriptions, focus indication, errors, or essential visible instructions. |
 
 ### Files
@@ -247,9 +248,19 @@ Stored fields: `schemaVersion`, `drivePlaybackOversampling`,
 `masterPlaybackOversampling`, `samplePlaybackQuality` (`high` or `low`; a
 schema 1 file without it loads at `high`), `previewLevelDb`, `previewMuted`,
 `playbackBufferTarget`, `meterDisplayRate`, `followOnStartup`, `showSectionBookmarks`, `startingModule`,
-`showTooltips`, `songFolderMode`, and `fixedSongFolder`. Do not store transient
-drafts or current playback state. Add migration tests before changing this
-schema later.
+`showTooltips`, `theme` (`studio`, `aero`, or `vintage`; a schema 1 file
+without it loads `studio`), `songFolderMode`, and `fixedSongFolder`. Do not
+store transient drafts or current playback state. Add migration tests before
+changing this schema later.
+
+Schema policy: a field added to schema 1 is optional with a defined default,
+so every older valid schema 1 file still loads and keeps its explicit values.
+Every present field stays strictly typed, unknown fields are still rejected,
+and a file with a newer schema stays intact and blocks persistent writes. A
+change that cannot follow this rule needs schema 2 and a migration. The
+cost falls on downgrades: a build older than a field rejects a file that holds
+it as an unknown field, so that build runs on defaults and treats the file as
+invalid until Restore options defaults replaces it.
 
 ## Agent and accessibility contract
 

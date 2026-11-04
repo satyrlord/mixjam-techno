@@ -5,7 +5,6 @@
 //! meter. A strip below the board names every pedal in signal order and
 //! brings the one chosen into view. Shared hardware controls and shell own
 //! presentation; the caller turns a changed chain into an edit.
-use super::controls::{CREAM, INK};
 use super::*;
 use mixjam_techno::application::{Knob, KnobRange, MeterReading, OVER_DBTP, presets};
 
@@ -55,11 +54,6 @@ const BOARD_HEIGHT: f32 = ROW_HEIGHT + STRIP_HEIGHT;
 /// The gain-reduction lamps above a dynamics pedal's knobs.
 const LAMP_ROW: f32 = 28.0;
 const WELL: Vec2 = Vec2::new(56.0, 20.0);
-const LIME: Color32 = Color32::from_rgb(184, 227, 126);
-const AMBER: Color32 = Color32::from_rgb(246, 178, 64);
-const RED: Color32 = Color32::from_rgb(232, 72, 56);
-const GREEN: Color32 = Color32::from_rgb(110, 196, 112);
-const DARK_LAMP: Color32 = Color32::from_rgb(44, 48, 42);
 
 fn name(kind: PedalKind) -> &'static str {
     match kind {
@@ -909,7 +903,7 @@ fn input_unit(
     lamps: &mut Lamps,
 ) {
     controls::inset(ui, rect);
-    heading(ui, rect, "Input", "From the mixer", CREAM);
+    heading(ui, rect, "Input", "From the mixer", roles().legend);
     let now = ui.input(|input| input.time);
     let reading = &metering.reading;
     let live = metering.playing && reading.run > 0;
@@ -940,13 +934,13 @@ fn input_unit(
             meter.center().x - 22.0 + 44.0 * side as f32,
             meter.bottom() + 16.0,
         );
-        led(ui, center, 4.5, lit[side], RED);
+        led(ui, center, 4.5, lit[side], roles().lamp_peak);
         ui.painter().text(
             center + Vec2::new(if side == 0 { -12.0 } else { 12.0 }, 0.0),
             Align2::CENTER_CENTER,
             label,
             FontId::proportional(11.0),
-            CREAM,
+            roles().legend,
         );
     }
     ui.painter().text(
@@ -954,7 +948,7 @@ fn input_unit(
         Align2::CENTER_CENTER,
         "PEAK",
         FontId::proportional(9.5),
-        CREAM.gamma_multiply(0.75),
+        roles().legend.gamma_multiply(0.75),
     );
     let level = ui.interact(
         meter.union(Rect::from_center_size(
@@ -1018,7 +1012,7 @@ fn input_unit(
 /// -1 dBTP line, and the OVER lamp, which latches until it is clicked.
 fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut Lamps) {
     controls::inset(ui, rect);
-    heading(ui, rect, "Output", "To playback and export", CREAM);
+    heading(ui, rect, "Output", "To playback and export", roles().legend);
     let reading = &metering.reading;
     let live = metering.playing && reading.run > 0;
     if reading.run != lamps.run {
@@ -1042,14 +1036,14 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
         over.left_center() + Vec2::new(10.0, 0.0),
         5.5,
         lamps.over,
-        RED,
+        roles().lamp_peak,
     );
     ui.painter().text(
         over.left_center() + Vec2::new(22.0, 0.0),
         Align2::LEFT_CENTER,
         "OVER",
         FontId::proportional(11.0),
-        CREAM,
+        roles().legend,
     );
     if response.has_focus() {
         ui.painter().rect_stroke(
@@ -1101,7 +1095,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
             Align2::LEFT_CENTER,
             *label,
             FontId::proportional(11.5),
-            CREAM,
+            roles().legend,
         );
         let well = Rect::from_center_size(Pos2::new(rect.right() - 42.0, y), WELL);
         controls::well(ui, well);
@@ -1111,7 +1105,11 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
             Align2::CENTER_CENTER,
             show_level(*value),
             FontId::proportional(13.0),
-            if hot { RED } else { CREAM },
+            if hot {
+                roles().lamp_peak
+            } else {
+                roles().legend
+            },
         );
     }
     let summary = rows
@@ -1160,7 +1158,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
             ),
         );
         ui.painter()
-            .rect_filled(fill, 1.0, CREAM.gamma_multiply(0.85));
+            .rect_filled(fill, 1.0, roles().legend.gamma_multiply(0.85));
     }
     // The delivery band stays visible over the fill.
     let band = Rect::from_x_y_ranges(
@@ -1168,11 +1166,11 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
         loudness.y_range(),
     );
     ui.painter()
-        .rect_filled(band, 1.0, GREEN.gamma_multiply(0.55));
+        .rect_filled(band, 1.0, roles().lamp_good.gamma_multiply(0.55));
     ui.painter().rect_stroke(
         band,
         1.0,
-        Stroke::new(1.0_f32, GREEN),
+        Stroke::new(1.0_f32, roles().lamp_good),
         egui::StrokeKind::Inside,
     );
     if live && reading.short_term.is_finite() {
@@ -1210,7 +1208,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
             Pos2::new(at(peak, -24.0, reading.true_peak), peak.bottom() - 2.5),
         );
         ui.painter()
-            .rect_filled(fill, 1.0, CREAM.gamma_multiply(0.85));
+            .rect_filled(fill, 1.0, roles().legend.gamma_multiply(0.85));
     }
     if reading.true_peak_max.is_finite() {
         let x = at(peak, -24.0, reading.true_peak_max);
@@ -1219,7 +1217,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
                 Pos2::new(x, peak.top() + 1.0),
                 Pos2::new(x, peak.bottom() - 1.0),
             ],
-            Stroke::new(2.0_f32, CREAM),
+            Stroke::new(2.0_f32, roles().legend),
         );
     }
     let line = at(peak, -24.0, OVER_DBTP);
@@ -1228,7 +1226,7 @@ fn output_unit(ui: &mut egui::Ui, rect: Rect, metering: &Metering, lamps: &mut L
             Pos2::new(line, peak.top() - 3.0),
             Pos2::new(line, peak.bottom() + 3.0),
         ],
-        Stroke::new(2.0_f32, RED),
+        Stroke::new(2.0_f32, roles().lamp_peak),
     );
     scale(
         ui,
@@ -1276,11 +1274,11 @@ pub(super) fn heading(ui: &egui::Ui, rect: Rect, title: &str, line: &str, color:
 
 /// A meter's dark track.
 fn bar(ui: &egui::Ui, rect: Rect) {
-    ui.painter().rect_filled(rect, 2.0, INK);
+    ui.painter().rect_filled(rect, 2.0, roles().ink);
     ui.painter().rect_stroke(
         rect,
         2.0,
-        Stroke::new(1.0_f32, CREAM.gamma_multiply(0.25)),
+        Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.25)),
         egui::StrokeKind::Inside,
     );
 }
@@ -1294,7 +1292,7 @@ fn scale(ui: &egui::Ui, bar: Rect, marks: &[(f32, &str)], low: f32) {
                 Pos2::new(x, bar.bottom() + 1.0),
                 Pos2::new(x, bar.bottom() + 4.0),
             ],
-            Stroke::new(1.0_f32, CREAM.gamma_multiply(0.6)),
+            Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.6)),
         );
         let align = if *value == low {
             Align2::LEFT_TOP
@@ -1315,7 +1313,7 @@ fn scale(ui: &egui::Ui, bar: Rect, marks: &[(f32, &str)], low: f32) {
             align,
             *label,
             FontId::proportional(9.5),
-            CREAM.gamma_multiply(0.75),
+            roles().legend.gamma_multiply(0.75),
         );
     }
 }
@@ -1340,9 +1338,8 @@ fn vu_position(vu: f32) -> f32 {
 
 /// An ivory VU face with its scale, red zone, and needle.
 fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
-    const IVORY: Color32 = Color32::from_rgb(240, 228, 190);
     let painter = ui.painter().with_clip_rect(face.intersect(ui.clip_rect()));
-    painter.rect_filled(face, 4.0, IVORY);
+    painter.rect_filled(face, 4.0, roles().meter_face);
     let pivot = Pos2::new(face.center().x, face.bottom() + 22.0);
     let radius = face.height() + 4.0;
     let point = |position: f32, reach: f32| {
@@ -1378,7 +1375,7 @@ fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
                 point(position, radius - if long { 10.0 } else { 7.0 }),
                 point(position, radius - 2.0),
             ],
-            Stroke::new(1.0_f32, INK),
+            Stroke::new(1.0_f32, roles().ink),
         );
         if let Some(label) = label {
             painter.text(
@@ -1386,7 +1383,7 @@ fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
                 Align2::CENTER_CENTER,
                 label,
                 FontId::proportional(9.5),
-                INK,
+                roles().ink,
             );
         }
     }
@@ -1395,22 +1392,28 @@ fn vu_meter(ui: &egui::Ui, face: Rect, position: f32) {
         Align2::CENTER_CENTER,
         "VU",
         FontId::proportional(11.0),
-        INK,
+        roles().ink,
     );
-    painter.line_segment([pivot, point(position, radius)], Stroke::new(1.5_f32, INK));
+    painter.line_segment(
+        [pivot, point(position, radius)],
+        Stroke::new(1.5_f32, roles().ink),
+    );
     ui.painter().rect_stroke(
         face,
         4.0,
-        Stroke::new(1.5_f32, INK),
+        Stroke::new(1.5_f32, roles().ink),
         egui::StrokeKind::Outside,
     );
 }
 
 /// A socket for a patch cable.
 fn jack(ui: &egui::Ui, center: Pos2) {
-    ui.painter().circle_filled(center, 9.0, INK);
-    ui.painter()
-        .circle_stroke(center, 9.0, Stroke::new(2.0_f32, CREAM.gamma_multiply(0.6)));
+    ui.painter().circle_filled(center, 9.0, roles().ink);
+    ui.painter().circle_stroke(
+        center,
+        9.0,
+        Stroke::new(2.0_f32, roles().legend.gamma_multiply(0.6)),
+    );
     ui.painter().circle_filled(center, 3.5, Color32::BLACK);
 }
 
@@ -1424,11 +1427,11 @@ fn cable(ui: &egui::Ui, from: f32, to: f32, y: f32, plugs: [bool; 2]) {
     );
     painter.line_segment(
         [Pos2::new(from, y), Pos2::new(to, y)],
-        Stroke::new(4.0_f32, INK),
+        Stroke::new(4.0_f32, roles().ink),
     );
     painter.line_segment(
         [Pos2::new(from, y - 1.0), Pos2::new(to, y - 1.0)],
-        Stroke::new(1.0_f32, CREAM.gamma_multiply(0.25)),
+        Stroke::new(1.0_f32, roles().legend.gamma_multiply(0.25)),
     );
     for (left, right) in [(from, from + 8.0), (to - 8.0, to)]
         .into_iter()
@@ -1436,11 +1439,11 @@ fn cable(ui: &egui::Ui, from: f32, to: f32, y: f32, plugs: [bool; 2]) {
         .filter_map(|(ends, plug)| plug.then_some(ends))
     {
         let plug = Rect::from_min_max(Pos2::new(left, y - 4.5), Pos2::new(right, y + 4.5));
-        painter.rect_filled(plug, 1.5, Color32::from_rgb(198, 194, 180));
+        painter.rect_filled(plug, 1.5, roles().cap);
         painter.rect_stroke(
             plug,
             1.5,
-            Stroke::new(1.0_f32, INK),
+            Stroke::new(1.0_f32, roles().ink),
             egui::StrokeKind::Inside,
         );
         painter.line_segment(
@@ -1459,7 +1462,7 @@ fn cable(ui: &egui::Ui, from: f32, to: f32, y: f32, plugs: [bool; 2]) {
                 tip + Vec2::new(1.0, 0.0),
                 tip + Vec2::new(-7.0, 4.0),
             ],
-            CREAM.gamma_multiply(0.7),
+            roles().legend.gamma_multiply(0.7),
             Stroke::NONE,
         ));
     }
@@ -1479,12 +1482,12 @@ fn pedal(
     let at = |x: f32, y: f32| rect.min + Vec2::new(x, y);
     let on = chain.is_on(kind);
     enclosure(ui, rect, kind, on);
-    heading(ui, rect, title(kind), family(kind), INK);
+    heading(ui, rect, title(kind), family(kind), roles().ink);
     lamp(ui, at(rect.width() - 18.0, 19.0), on);
     for y in [HEADER + 2.0, FOOTER_TOP - 2.0] {
         ui.painter().line_segment(
             [at(10.0, y), at(rect.width() - 10.0, y)],
-            Stroke::new(1.0_f32, INK.gamma_multiply(0.35)),
+            Stroke::new(1.0_f32, roles().ink.gamma_multiply(0.35)),
         );
     }
 
@@ -1702,7 +1705,7 @@ fn reduction_meter(ui: &egui::Ui, center: Pos2, pedal: &str, reduction: f32, ste
         Align2::CENTER_CENTER,
         "GR",
         FontId::proportional(10.5),
-        INK,
+        roles().ink,
     );
     for (index, step) in steps.iter().enumerate() {
         led(
@@ -1710,7 +1713,7 @@ fn reduction_meter(ui: &egui::Ui, center: Pos2, pedal: &str, reduction: f32, ste
             Pos2::new(first + index as f32 * 14.0, center.y),
             4.0,
             reduction >= *step,
-            AMBER,
+            roles().lamp_warn,
         );
     }
     let response = ui.interact(
@@ -1735,8 +1738,8 @@ fn led(ui: &egui::Ui, center: Pos2, radius: f32, lit: bool, color: Color32) {
     if lit {
         painter.circle_filled(center, radius + 4.0, color.gamma_multiply(0.18));
     }
-    painter.circle_filled(center, radius + 1.5, INK);
-    painter.circle_filled(center, radius, if lit { color } else { DARK_LAMP });
+    painter.circle_filled(center, radius + 1.5, roles().ink);
+    painter.circle_filled(center, radius, if lit { color } else { roles().lamp_off });
     if lit {
         painter.circle_filled(
             center + Vec2::new(-1.2, -1.2),
@@ -1767,7 +1770,7 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
             align,
             text,
             FontId::proportional(11.5),
-            CREAM.gamma_multiply(0.8),
+            roles().legend.gamma_multiply(0.8),
         );
     }
     let (lefts, end) = row_layout(&chain.order);
@@ -1789,7 +1792,7 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
         ui.painter().rect_stroke(
             chip,
             4.0,
-            Stroke::new(1.0_f32, INK),
+            Stroke::new(1.0_f32, roles().ink),
             egui::StrokeKind::Inside,
         );
         ui.painter().text(
@@ -1797,7 +1800,7 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
             Align2::CENTER_CENTER,
             short_name(*kind),
             FontId::proportional(11.0),
-            INK,
+            roles().ink,
         );
         if response.has_focus() {
             ui.painter().rect_stroke(
@@ -1829,7 +1832,7 @@ fn strip(ui: &mut egui::Ui, rect: Rect, chain: &MasterChain, visible: [f32; 2]) 
         ui.painter().rect_stroke(
             seen.expand(3.0),
             6.0,
-            Stroke::new(1.5_f32, CREAM),
+            Stroke::new(1.5_f32, roles().legend),
             egui::StrokeKind::Outside,
         );
     }
@@ -1920,6 +1923,19 @@ fn enamel(kind: PedalKind, on: bool) -> Color32 {
 
 /// An enamel colour, lit when its unit is on, greyed and darkened when off.
 pub(super) fn enamel_of([red, green, blue]: [u8; 3], on: bool) -> Color32 {
+    let color = enamel_finish(red, green, blue, on);
+    match roles().material {
+        // Studio's software modules keep each hue but settle it toward a
+        // matte light gray.
+        theme::Material::Flat => color.lerp_to_gamma(Color32::from_rgb(218, 221, 224), 0.35),
+        // Unlit plastic stays a little lighter than unlit enamel, so ink
+        // keeps its contrast down to the molded foot.
+        theme::Material::Plastic if !on => color.lerp_to_gamma(Color32::WHITE, 0.12),
+        _ => color,
+    }
+}
+
+fn enamel_finish(red: u8, green: u8, blue: u8, on: bool) -> Color32 {
     if on {
         return Color32::from_rgb(red, green, blue);
     }
@@ -1972,6 +1988,34 @@ fn enclosure(ui: &egui::Ui, rect: Rect, kind: PedalKind, on: bool) {
 /// scratches, so units side by side differ.
 pub(super) fn enclosure_of(ui: &egui::Ui, rect: Rect, enamel: Color32, on: bool, seed: u64) {
     let painter = ui.painter();
+    match roles().material {
+        // A software module: a flat face and a hairline edge.
+        theme::Material::Flat => {
+            painter.rect_filled(rect, 4.0, enamel);
+            painter.rect_stroke(
+                rect,
+                4.0,
+                Stroke::new(1.5_f32, roles().ink),
+                egui::StrokeKind::Inside,
+            );
+            return;
+        }
+        // A molded plastic case on a soft shadow.
+        theme::Material::Plastic => {
+            painter.add(
+                egui::epaint::Shadow {
+                    offset: [0, 4],
+                    blur: 10,
+                    spread: 0,
+                    color: Color32::from_black_alpha(110),
+                }
+                .as_shape(rect, egui::CornerRadius::same(14)),
+            );
+            theme::plastic(painter, rect, 14.0, enamel);
+            return;
+        }
+        theme::Material::Metal => {}
+    }
     let radius = egui::CornerRadius::same(CORNER as u8);
     let body = Rect::from_min_max(rect.min, rect.max + Vec2::splat(DEPTH));
     // A wide soft shadow, and a close dark one where the body meets the board.
@@ -2035,7 +2079,10 @@ pub(super) fn enclosure_of(ui: &egui::Ui, rect: Rect, enamel: Color32, on: bool,
     } else {
         painter.add(face);
     }
-    painter.add(egui::Shape::closed_line(outline, Stroke::new(1.5_f32, INK)));
+    painter.add(egui::Shape::closed_line(
+        outline,
+        Stroke::new(1.5_f32, roles().ink),
+    ));
 }
 
 /// The metal finish shared by every pedal that is on.
@@ -2212,7 +2259,7 @@ fn scratch(
         let shadow = TO_LIGHT * 0.6;
         painter.line_segment(
             [from + shadow, to + shadow],
-            Stroke::new(0.8_f32, INK.gamma_multiply(0.35 * fade)),
+            Stroke::new(0.8_f32, roles().ink.gamma_multiply(0.35 * fade)),
         );
         painter.line_segment(
             [from - TO_LIGHT * 0.2, to - TO_LIGHT * 0.2],
@@ -2313,7 +2360,11 @@ fn contour(rect: Rect, inset: f32) -> Vec<(Pos2, Vec2)> {
 /// The enamel as the light finds it: a positive amount lightens it toward
 /// cream, a negative one darkens it.
 fn lit(enamel: Color32, amount: f32) -> Color32 {
-    let toward = if amount > 0.0 { CREAM } else { Color32::BLACK };
+    let toward = if amount > 0.0 {
+        roles().legend
+    } else {
+        Color32::BLACK
+    };
     let mix = |from: u8, to: u8| {
         (f32::from(from) + (f32::from(to) - f32::from(from)) * amount.abs().min(1.0)).round() as u8
     };
@@ -2329,11 +2380,23 @@ pub(super) fn lamp(ui: &egui::Ui, center: Pos2, on: bool) {
     let painter = ui.painter();
     if on {
         for (radius, alpha) in [(12.0, 28), (9.0, 54)] {
-            painter.circle_filled(center, radius, LIME.gamma_multiply(alpha as f32 / 255.0));
+            painter.circle_filled(
+                center,
+                radius,
+                roles().lamp_on.gamma_multiply(alpha as f32 / 255.0),
+            );
         }
     }
-    painter.circle_filled(center, 6.5, INK);
-    painter.circle_filled(center, 4.5, if on { LIME } else { DARK_LAMP });
+    painter.circle_filled(center, 6.5, roles().ink);
+    painter.circle_filled(
+        center,
+        4.5,
+        if on {
+            roles().lamp_on
+        } else {
+            roles().lamp_off
+        },
+    );
     if on {
         painter.circle_filled(
             center + Vec2::new(-1.5, -1.5),
@@ -2346,9 +2409,9 @@ pub(super) fn lamp(ui: &egui::Ui, center: Pos2, on: bool) {
 /// A drawn arrow for the move buttons.
 fn arrow(ui: &egui::Ui, center: Pos2, direction: f32, enabled: bool) {
     let color = if enabled {
-        CREAM
+        roles().legend
     } else {
-        CREAM.gamma_multiply(0.35)
+        roles().legend.gamma_multiply(0.35)
     };
     let stroke = Stroke::new(1.8_f32, color);
     let tip = center + Vec2::new(5.0 * direction, 0.0);
@@ -2396,7 +2459,11 @@ pub(super) fn dial(
         Align2::CENTER_CENTER,
         spec.label,
         FontId::proportional(11.5),
-        if ui.visuals().dark_mode { CREAM } else { INK },
+        if ui.visuals().dark_mode {
+            roles().legend
+        } else {
+            roles().ink
+        },
     );
     controls::well(ui, Rect::from_center_size(well, WELL));
     let (low, high) = (decimal(range.low), decimal(range.high));
@@ -2485,18 +2552,32 @@ mod tests {
 
     #[test]
     fn ink_stays_legible_on_every_enamel_lit_or_off() {
-        for kind in PedalKind::ALL {
-            for on in [true, false] {
-                // A pedal that is on is checked where its finish is darkest.
-                let darkest = if on {
-                    lit(enamel(kind, on), -(GRAIN_DIP + SHEEN_DIP))
-                } else {
-                    enamel(kind, on)
-                };
-                let ratio = controls::contrast(darkest, INK);
-                assert!(ratio >= 5.0, "{} ({on}) gives {ratio:.2}:1", name(kind));
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
+            for kind in PedalKind::ALL {
+                for on in [true, false] {
+                    // A metal pedal that is on is checked where its finish is
+                    // darkest, a plastic one where its shading is.
+                    let darkest = match roles().material {
+                        theme::Material::Metal if on => {
+                            lit(enamel(kind, on), -(GRAIN_DIP + SHEEN_DIP))
+                        }
+                        theme::Material::Plastic => {
+                            enamel(kind, on).lerp_to_gamma(Color32::BLACK, theme::PLASTIC_SHADE)
+                        }
+                        _ => enamel(kind, on),
+                    };
+                    let ratio = controls::contrast(darkest, roles().ink);
+                    assert!(
+                        ratio >= 5.0,
+                        "{} {} ({on}) gives {ratio:.2}:1",
+                        theme.label(),
+                        name(kind)
+                    );
+                }
             }
         }
+        theme::paint_as(theme::Theme::Studio);
     }
 
     #[test]

@@ -32,6 +32,9 @@ mod sample_editor;
 mod step_synth;
 #[path = "ui/stretch.rs"]
 mod stretch;
+#[path = "ui/theme.rs"]
+mod theme;
+use theme::roles;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -63,6 +66,18 @@ struct PaletteKey {
     product: Option<Product>,
     sort: PaletteSort,
     descending: bool,
+}
+
+/// An interface capture's extra display scale, from 1 to 2: the value of
+/// `MIXJAM_TECHNO_CAPTURE_ZOOM`, read only when `MIXJAM_TECHNO_CAPTURE_TO` is
+/// set. It multiplies the operating system's scale, so a capture on a 100%
+/// display paints the 150% and 200% layouts and artwork. Otherwise it is 1.
+pub(crate) fn capture_zoom() -> f32 {
+    std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO")
+        .and_then(|_| std::env::var("MIXJAM_TECHNO_CAPTURE_ZOOM").ok())
+        .and_then(|value| value.parse::<f32>().ok())
+        .filter(|zoom| (1.0..=2.0).contains(zoom))
+        .unwrap_or(1.0)
 }
 
 /// Available modules in the shared bottom section. The selector owns navigation.
@@ -463,7 +478,8 @@ fn startup_status(session: &mut Session) -> (String, bool) {
 impl MixJamApp {
     #[cfg_attr(test, allow(dead_code))]
     pub fn new(cc: &eframe::CreationContext<'_>, mut session: Session) -> Self {
-        configure_style(&cc.egui_ctx);
+        cc.egui_ctx.set_zoom_factor(capture_zoom());
+        theme::adopt(&cc.egui_ctx, session.options().theme);
         let (status, status_error) = startup_status(&mut session);
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
@@ -1805,13 +1821,13 @@ fn drag_label(ctx: &egui::Context, pos: Pos2, label: &str) {
         egui::Id::new("drag_label"),
     ));
     let rect = Rect::from_min_size(pos + Vec2::new(14.0, 14.0), Vec2::new(150.0, 30.0));
-    painter.rect_filled(rect, 4.0, DRAG_LABEL);
+    painter.rect_filled(rect, 4.0, roles().drag_label);
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
         label,
         FontId::proportional(12.0),
-        CANVAS,
+        roles().on_light,
     );
 }
 
@@ -2120,7 +2136,7 @@ impl MixJamApp {
                                     "{instances} instances · {} matches",
                                     conflict.candidates.len()
                                 ))
-                                .color(controls::CREAM),
+                                .color(roles().legend),
                             );
                             ui.add_enabled_ui(!recording, |ui| {
                                 for (candidate_index, path) in
@@ -2149,7 +2165,7 @@ impl MixJamApp {
             ui.add_space(10.0);
             if recording {
                 ui.colored_label(
-                    CORAL,
+                    roles().coral,
                     "Stop recording before changing or confirming sample choices.",
                 );
                 if controls::button(ui, "Stop recording", controls::ButtonRole::Secondary).clicked()
@@ -2158,7 +2174,7 @@ impl MixJamApp {
                 }
             }
             if let Some(error) = &self.sample_conflict_error {
-                ui.colored_label(CORAL, display_paths(error));
+                ui.colored_label(roles().coral, display_paths(error));
             }
             ui.horizontal(|ui| {
                 if ui
@@ -2715,12 +2731,12 @@ impl MixJamApp {
                     .collect();
                 ui.label(
                     egui::RichText::new(format!("{name}: {}", extensions.join(", ")))
-                        .color(controls::CREAM),
+                        .color(roles().legend),
                 );
             }
             if let Some(name) = &spec.file_name {
                 ui.label(
-                    egui::RichText::new(format!("Suggested name: {name}")).color(controls::CREAM),
+                    egui::RichText::new(format!("Suggested name: {name}")).color(roles().legend),
                 );
             }
             let path = name_control(
@@ -2737,7 +2753,7 @@ impl MixJamApp {
             }
             confirm = path.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if let Some(error) = &prompt.error {
-                ui.colored_label(CORAL, error);
+                ui.colored_label(roles().coral, error);
             }
             ui.horizontal(|ui| {
                 confirm |= dialog::primary(ui, "Confirm path").clicked();
@@ -2793,7 +2809,7 @@ impl MixJamApp {
                 .constrain_to(ctx.viewport_rect().shrink(12.0))
                 .show(ctx, |ui| {
                     if !self.session.missing_samples().is_empty() {
-                        ui.heading("MISSING SAMPLES");
+                        ui.label(heading("Missing samples", 20.0));
                         ui.label("Missing samples play silence. Select details to copy.");
                         let mut resolve = None;
                         for missing in self.session.missing_samples() {
@@ -3195,7 +3211,7 @@ impl MixJamApp {
                     ui.label("Unsaved take: stored in memory.");
                     if self.discard_take_armed {
                         ui.colored_label(
-                            CORAL,
+                            roles().coral,
                             "Discarding erases this recording. It cannot be undone.",
                         );
                     }

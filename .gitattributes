@@ -1,0 +1,4 @@
+# Preserve upstream license bytes, including IBM Plex's CRLF line endings.
+/assets/fonts/LICENSE-*.txt -text
+# The font verifier compares this generated file with LF-encoded JSON.
+/assets/fonts/manifest.json text eol=lf

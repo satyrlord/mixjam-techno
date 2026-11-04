@@ -98,13 +98,8 @@ pub(super) fn display_paths(text: &str) -> String {
     display
 }
 
-// Shared visual tokens. Application state and rules live outside this module.
-pub(super) const CANVAS: Color32 = Color32::from_rgb(20, 23, 27);
-pub(super) const PANEL: Color32 = Color32::from_rgb(28, 32, 37);
-pub(super) const TEXT: Color32 = Color32::from_rgb(233, 237, 238);
-pub(super) const ACCENT: Color32 = Color32::from_rgb(184, 227, 126);
-pub(super) const CORAL: Color32 = Color32::from_rgb(255, 130, 130);
-pub(super) const MUTED: Color32 = Color32::from_rgb(164, 174, 182);
+// Colors come from the theme roles in `theme.rs`. Application state and rules
+// live outside this module.
 /// The song name's size at the left of the transport, and the floor that it
 /// shrinks to before an absurdly long name goes below it.
 const TRANSPORT_TITLE_SIZE: f32 = 15.0;
@@ -118,29 +113,12 @@ const TRANSPORT_BUTTON_NARROW: f32 = 34.0;
 const TRANSPORT_BUTTON_COUNT: f32 = 8.0;
 /// The position readout's container, centered in the header.
 const POSITION_SIZE: Vec2 = Vec2::new(112.0, 42.0);
-const LINE: Color32 = Color32::from_rgb(58, 65, 72);
-pub(super) const RAISED: Color32 = Color32::from_rgb(39, 45, 51);
-const HOVER: Color32 = Color32::from_rgb(51, 59, 66);
-const SELECTION: Color32 = Color32::from_rgb(65, 85, 50);
-const WARNING: Color32 = Color32::from_rgb(232, 197, 133);
-/// The label that follows the pointer while a sound or clip is dragged.
-pub(super) const DRAG_LABEL: Color32 = Color32::from_rgb(245, 220, 146);
-/// Alternate arrangement rows and the bar lines between four-bar marks.
-const ROW_ALTERNATE: Color32 = Color32::from_rgb(24, 28, 32);
-const BAR_LINE: Color32 = Color32::from_rgb(35, 40, 46);
+
 /// Section bookmark colors, in section order; a song with more sections
 /// repeats them.
-const SECTION_COLORS: [Color32; 6] = [
-    Color32::from_rgb(242, 190, 92),
-    Color32::from_rgb(110, 205, 214),
-    Color32::from_rgb(196, 150, 245),
-    Color32::from_rgb(240, 132, 180),
-    Color32::from_rgb(130, 176, 250),
-    Color32::from_rgb(236, 150, 104),
-];
-
 pub(super) fn section_color(index: usize) -> Color32 {
-    SECTION_COLORS[index % SECTION_COLORS.len()]
+    let sections = &roles().sections;
+    sections[index % sections.len()]
 }
 
 /// The height of an arrangement row. It stays the same at any window or panel
@@ -167,9 +145,20 @@ pub(super) fn clip_gain_from_db(db: f32) -> f32 {
     }
 }
 pub(super) const DEFAULT_STATUS: &str = "Ready";
-/// Fits the longest module name, MASTERING, in 16-point Syncopate Bold
-/// beside the combo arrow.
+/// Fits the longest module name, MASTERING, in each theme's 16-point heading
+/// face beside the combo arrow.
 pub(super) const BOTTOM_MODULE_WIDTH: f32 = 168.0;
+/// The lower panel's margins. The bottom margin is smaller than the top one
+/// because the boards end in their own scroll bar or inset.
+const BOTTOM_PANEL_MARGIN: egui::Margin = egui::Margin {
+    left: 18,
+    right: 18,
+    top: 10,
+    bottom: 6,
+};
+/// The space between the module toolbar and a board (Mixer, Mastering, or
+/// Effects). The margins give it up, so a board keeps its height.
+const BOARD_GAP: f32 = 8.0;
 const GROUPS: [&str; 10] = [
     "Loop",
     "Drum",
@@ -189,11 +178,16 @@ pub(super) fn title_text(text: &str) -> String {
 
 pub(super) fn heading(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(title_text(&text.into()))
-        .font(FontId::new(
-            size,
-            egui::FontFamily::Name("Syncopate Bold".into()),
-        ))
-        .color(TEXT)
+        .font(FontId::new(size, theme::heading_family()))
+        .line_height(Some(size * theme::HEADING_LINE))
+        .color(roles().text)
+}
+
+/// The product name, in the brand face of every theme.
+pub(super) fn brand(text: &str, size: f32) -> egui::RichText {
+    egui::RichText::new(title_text(text))
+        .font(FontId::new(size, theme::brand_family()))
+        .color(roles().text)
 }
 
 /// Name a control whose visible label is separate text, for assistive
@@ -270,7 +264,7 @@ impl MixJamApp {
             .exact_height(66.0)
             .frame(
                 egui::Frame::new()
-                    .fill(CANVAS)
+                    .fill(roles().canvas)
                     .inner_margin(egui::Margin::symmetric(22, 10)),
             )
             .show(ctx, |ui| {
@@ -281,8 +275,8 @@ impl MixJamApp {
                     if let Some(icons) = &icons {
                         icons.brand_image(ui);
                     }
-                    ui.label(heading("MixJam", 27.0));
-                    ui.label(heading("Techno", 14.0).color(MUTED));
+                    ui.label(brand("MixJam", 27.0));
+                    ui.label(brand("Techno", 14.0).color(roles().muted));
                     ui.add_space(24.0);
                     ui.separator();
                     let position = Rect::from_center_size(
@@ -318,7 +312,7 @@ impl MixJamApp {
         egui::SidePanel::right("tools")
             .exact_width(64.0)
             .resizable(false)
-            .frame(egui::Frame::new().fill(CANVAS).inner_margin(6))
+            .frame(egui::Frame::new().fill(roles().canvas).inner_margin(6))
             .show(ctx, |ui| {
                 controls::apply_palette(ui, controls::Palette::Utility);
                 controls::rail_panel(ui, ui.max_rect().expand(4.0));
@@ -412,7 +406,7 @@ impl MixJamApp {
             .exact_height(30.0)
             .frame(
                 egui::Frame::new()
-                    .fill(CANVAS)
+                    .fill(roles().canvas)
                     .inner_margin(egui::Margin::symmetric(18, 3)),
             )
             .show(ctx, |ui| {
@@ -430,7 +424,7 @@ impl MixJamApp {
                                 mixjam_techno::application::APP_VERSION
                             ))
                             .size(12.0)
-                            .color(ACCENT),
+                            .color(roles().accent),
                             "https://github.com/satyrlord/mixjam-techno",
                         )
                         .open_in_new_tab(true),
@@ -458,17 +452,21 @@ impl MixJamApp {
                                     self.session.missing_samples().len()
                                 ))
                                 .size(12.0)
-                                .color(CORAL),
+                                .color(roles().coral),
                             )
                             .hover_hint(
                                 "Missing samples play silence. Open Import details to see their \
                                  saved references.",
                             );
                         }
-                        let color = if self.status_error { CORAL } else { MUTED };
+                        let color = if self.status_error {
+                            roles().coral
+                        } else {
+                            roles().muted
+                        };
                         if self.session.options().quality_reduced() {
                             ui.colored_label(
-                                WARNING,
+                                roles().warning,
                                 "Playback quality reduced; exports use full quality",
                             );
                         }
@@ -508,8 +506,8 @@ impl MixJamApp {
             .resizable(true)
             .frame(
                 egui::Frame::new()
-                    .fill(PANEL)
-                    .inner_margin(egui::Margin::symmetric(18, 12)),
+                    .fill(roles().panel)
+                    .inner_margin(BOTTOM_PANEL_MARGIN),
             )
             .show(ctx, |ui| {
                 ui.set_min_height(ui.available_height());
@@ -517,6 +515,9 @@ impl MixJamApp {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 self.bottom_toolbar(ui);
                 ui.spacing_mut().item_spacing.y = row_spacing;
+                if self.bottom_module != BottomModule::Sounds {
+                    ui.add_space(BOARD_GAP);
+                }
                 match self.bottom_module {
                     BottomModule::Mixer => self.mixer(ui),
                     BottomModule::Mastering => self.mastering(ui),
@@ -532,12 +533,12 @@ impl MixJamApp {
             Vec2::new(48.0, 3.0),
         );
         ctx.layer_painter(egui::LayerId::background())
-            .rect_filled(grip, 2.0, MUTED);
+            .rect_filled(grip, 2.0, roles().muted);
         egui::TopBottomPanel::top("transport")
             .exact_height(68.0)
             .frame(
                 egui::Frame::new()
-                    .fill(PANEL)
+                    .fill(roles().panel)
                     .inner_margin(egui::Margin::symmetric(18, 10)),
             )
             .show(ctx, |ui| self.transport(ui));
@@ -581,7 +582,7 @@ impl MixJamApp {
             ui.painter().galley(
                 Pos2::new(name.left(), name.center().y - galley.size().y / 2.0),
                 galley,
-                TEXT,
+                roles().text,
             );
             response.widget_info(|| {
                 egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title_text(&shown))
@@ -670,7 +671,7 @@ impl MixJamApp {
                 }
             }
             ui.add_space(if compact { 4.0 } else { 12.0 });
-            ui.label(egui::RichText::new("BPM").color(MUTED));
+            ui.label(egui::RichText::new("BPM").color(roles().muted));
             let mut bpm = self.session.project().bpm;
             if name_control(
                 bpm_picker(
@@ -687,7 +688,7 @@ impl MixJamApp {
                 self.apply(result);
             }
             ui.add_space(if compact { 4.0 } else { 10.0 });
-            ui.label(egui::RichText::new("Zoom").color(MUTED));
+            ui.label(egui::RichText::new("Zoom").color(roles().muted));
             // A shorter zoom rail leaves room for the stepped tempo slider.
             ui.spacing_mut().slider_width = if compact { 48.0 } else { 64.0 };
             name_control(
@@ -808,7 +809,7 @@ impl MixJamApp {
             ui.add(
                 egui::TextEdit::singleline(&mut self.search)
                     // The workspace overrides text color; a hint needs its own.
-                    .hint_text(egui::RichText::new("Find a sound").color(MUTED))
+                    .hint_text(egui::RichText::new("Find a sound").color(roles().muted))
                     .desired_width(170.0),
             ),
             "Find a sound",
@@ -881,7 +882,7 @@ impl MixJamApp {
             ui.label(
                 egui::RichText::new(format!("{} sounds", samples.len()))
                     .size(12.0)
-                    .color(MUTED),
+                    .color(roles().muted),
             );
         });
     }
@@ -1489,7 +1490,7 @@ impl MixJamApp {
                     self.session.project().clips.len()
                 ))
                 .size(12.0)
-                .color(MUTED),
+                .color(roles().muted),
             );
             ui.add_space(16.0);
             self.automation_selector(ui);
@@ -1615,7 +1616,7 @@ impl MixJamApp {
                     }
                     self.timeline_drop_rect = Some(rect.intersect(ui.clip_rect()));
                     let painter = ui.painter_at(rect).with_clip_rect(canvas_clip);
-                    painter.rect_filled(rect, 0.0, CANVAS);
+                    painter.rect_filled(rect, 0.0, roles().canvas);
                     for track in 0..occupied_count {
                         let row = Rect::from_min_size(
                             Pos2::new(rect.left(), rect.top() + track as f32 * row_height),
@@ -1625,14 +1626,14 @@ impl MixJamApp {
                             row,
                             0.0,
                             if track % 2 == 0 {
-                                CANVAS
+                                roles().canvas
                             } else {
-                                ROW_ALTERNATE
+                                roles().row_alternate
                             },
                         );
                         painter.line_segment(
                             [row.left_bottom(), row.right_bottom()],
-                            Stroke::new(1.0_f32, LINE.gamma_multiply(0.6)),
+                            Stroke::new(1.0_f32, roles().line.gamma_multiply(0.6)),
                         );
                     }
                     let visible = ui.clip_rect().intersect(rect);
@@ -1646,7 +1647,14 @@ impl MixJamApp {
                         let x = rect.left() + bar as f32 * bar_width;
                         painter.line_segment(
                             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-                            Stroke::new(1.0_f32, if bar % 4 == 0 { LINE } else { BAR_LINE }),
+                            Stroke::new(
+                                1.0_f32,
+                                if bar % 4 == 0 {
+                                    roles().line
+                                } else {
+                                    roles().bar_line
+                                },
+                            ),
                         );
                     }
                     if add_track.is_some() {
@@ -1660,11 +1668,15 @@ impl MixJamApp {
                             let hint = painter.layout_no_wrap(
                                 "Drop a sound here".into(),
                                 FontId::proportional(13.0),
-                                MUTED,
+                                roles().muted,
                             );
                             let area = Rect::from_center_size(target.center(), hint.size());
-                            painter.rect_filled(area.expand2(Vec2::new(6.0, 1.0)), 0.0, CANVAS);
-                            painter.galley(area.min, hint, MUTED);
+                            painter.rect_filled(
+                                area.expand2(Vec2::new(6.0, 1.0)),
+                                0.0,
+                                roles().canvas,
+                            );
+                            painter.galley(area.min, hint, roles().muted);
                         }
                     }
                     let pointer = ui.input(|i| i.pointer.latest_pos());
@@ -1745,7 +1757,7 @@ impl MixJamApp {
                                     Vec2::new(width, row_height),
                                 ),
                                 0.0,
-                                CANVAS.gamma_multiply(0.6),
+                                roles().canvas.gamma_multiply(0.6),
                             );
                         }
                     }
@@ -1797,7 +1809,7 @@ impl MixJamApp {
                         painter.rect_stroke(
                             ghost.shrink(0.5),
                             3.0,
-                            Stroke::new(1.0_f32, TEXT),
+                            Stroke::new(1.0_f32, roles().text),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -1805,7 +1817,7 @@ impl MixJamApp {
                         painter.rect_stroke(
                             visible.shrink(1.0),
                             0.0,
-                            Stroke::new(1.0_f32, ACCENT),
+                            Stroke::new(1.0_f32, roles().accent),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -1826,7 +1838,7 @@ impl MixJamApp {
                             Pos2::new(play_x, rect.top()),
                             Pos2::new(play_x, rect.bottom()),
                         ],
-                        Stroke::new(1.7_f32, ACCENT),
+                        Stroke::new(1.7_f32, roles().accent),
                     );
                     if let Some(lane) = self.automation_lane {
                         let rows = &visible_tracks[..occupied_count];
@@ -1987,8 +1999,8 @@ impl MixJamApp {
                     if let Some(origin) = self.selection_origin {
                         if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
                             let selection = Rect::from_two_pos(origin, pos).intersect(rect);
-                            painter.rect_filled(selection, 0.0, TEXT.gamma_multiply(0.12));
-                            outline(&painter, selection, TEXT, 1.0);
+                            painter.rect_filled(selection, 0.0, roles().text.gamma_multiply(0.12));
+                            outline(&painter, selection, roles().text, 1.0);
                             self.selected_clips = self.selection_base.clone();
                             let hits: Vec<_> = self
                                 .session
@@ -2029,7 +2041,7 @@ impl MixJamApp {
                                 Align2::CENTER_CENTER,
                                 format!("Add {}", index + 1),
                                 FontId::proportional(13.0),
-                                TEXT,
+                                roles().text,
                             );
                             let response = ui.interact(
                                 rect,
@@ -2051,7 +2063,7 @@ impl MixJamApp {
                                 ui.painter().rect_stroke(
                                     rect.shrink(1.0),
                                     4.0,
-                                    Stroke::new(1.0_f32, ACCENT),
+                                    Stroke::new(1.0_f32, roles().accent),
                                     egui::StrokeKind::Inside,
                                 );
                             }
@@ -2059,7 +2071,8 @@ impl MixJamApp {
                                 .hover_hint("Drop a sound on this row or select it for recording.");
                             continue;
                         }
-                        ui.painter().rect_filled(rect.shrink(1.0), 4.0, PANEL);
+                        ui.painter()
+                            .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
                         let project = self.session.project();
                         let silenced = !project.tracks[index].audible(project.any_solo());
                         // From the left: M, S, L, the track number, and R.
@@ -2067,14 +2080,18 @@ impl MixJamApp {
                         ui.painter().rect_filled(
                             Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
                             0.0,
-                            PANEL,
+                            roles().panel,
                         );
                         ui.painter().text(
                             number + Vec2::new(0.0, -1.0),
                             Align2::CENTER_CENTER,
                             format!("{}", index + 1),
                             FontId::proportional(14.0),
-                            if silenced { MUTED } else { TEXT },
+                            if silenced {
+                                roles().muted
+                            } else {
+                                roles().text
+                            },
                         );
                         let arm = ui.interact(
                             Rect::from_center_size(number, Vec2::new(26.0, row_height)),
@@ -2090,14 +2107,17 @@ impl MixJamApp {
                             )
                         });
                         if self.armed_track == index {
-                            ui.painter()
-                                .circle_filled(number + Vec2::new(0.0, 9.0), 2.0, CORAL);
+                            ui.painter().circle_filled(
+                                number + Vec2::new(0.0, 9.0),
+                                2.0,
+                                roles().coral,
+                            );
                         }
                         if arm.has_focus() {
                             ui.painter().rect_stroke(
                                 arm.rect.shrink2(Vec2::new(0.0, 2.0)),
                                 3.0,
-                                Stroke::new(1.0_f32, ACCENT),
+                                Stroke::new(1.0_f32, roles().accent),
                                 egui::StrokeKind::Inside,
                             );
                         }
@@ -2140,7 +2160,7 @@ impl MixJamApp {
                                 ui.painter().rect_stroke(
                                     button.shrink(1.0),
                                     2.0,
-                                    Stroke::new(1.0_f32, ACCENT),
+                                    Stroke::new(1.0_f32, roles().accent),
                                     egui::StrokeKind::Inside,
                                 );
                             }
@@ -2168,7 +2188,7 @@ impl MixJamApp {
             "Bar ruler",
         );
         let ruler_painter = ui.painter().with_clip_rect(ruler_clip);
-        ruler_painter.rect_filled(ruler, 0.0, PANEL);
+        ruler_painter.rect_filled(ruler, 0.0, roles().panel);
         if let Some([start, end]) = self.session.project().loop_region {
             let rect = Rect::from_min_max(
                 Pos2::new(
@@ -2180,7 +2200,7 @@ impl MixJamApp {
                     ruler.bottom(),
                 ),
             );
-            ruler_painter.rect_filled(rect, 0.0, ACCENT.gamma_multiply(0.14));
+            ruler_painter.rect_filled(rect, 0.0, roles().accent.gamma_multiply(0.14));
         }
         let tags = if self.section_bookmarks {
             section_tags(
@@ -2214,9 +2234,9 @@ impl MixJamApp {
                 format!("{}", bar + 1),
                 FontId::proportional(13.0),
                 if bar == self.session.cursor_tick() / TICKS_PER_BAR {
-                    CORAL
+                    roles().coral
                 } else {
-                    TEXT
+                    roles().text
                 },
             );
         }
@@ -2334,6 +2354,9 @@ impl MixJamApp {
 
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
         self.poll_application(ctx);
+        // An applied theme repaints the next frame; songs, history, and audio
+        // are untouched.
+        theme::adopt(ctx, self.session.options().theme);
         self.section_bookmarks = self.session.options().show_section_bookmarks;
         ctx.data_mut(|data| {
             data.insert_temp(
@@ -2359,7 +2382,7 @@ impl MixJamApp {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
-                    .fill(CANVAS)
+                    .fill(roles().canvas)
                     .inner_margin(egui::Margin::symmetric(18, 14)),
             )
             .show(ctx, |ui| self.timeline(ui));
@@ -2394,9 +2417,11 @@ fn section_tags(
             [Pos2::new(x, ruler.top()), Pos2::new(x, ruler.bottom())],
             Stroke::new(2.0_f32, color),
         );
-        let galley =
-            ui.painter()
-                .layout_no_wrap(section.name.clone(), FontId::proportional(11.0), CANVAS);
+        let galley = ui.painter().layout_no_wrap(
+            section.name.clone(),
+            FontId::proportional(11.0),
+            roles().on_light,
+        );
         let chip = Rect::from_min_size(
             Pos2::new(x, ruler.top() + 4.0),
             Vec2::new(galley.size().x + 10.0, ruler.height() - 8.0),
@@ -2420,7 +2445,7 @@ fn section_tags(
         chip_painter.galley(
             Pos2::new(chip.left() + 5.0, chip.center().y - galley.size().y / 2.0),
             galley,
-            CANVAS,
+            roles().on_light,
         );
         chips.push((section.start_tick, visible));
     }
@@ -2614,7 +2639,21 @@ fn transport_position(ui: &mut egui::Ui, rect: Rect, tick: u32, bpm: f64) -> Res
     let seconds = (tick as f64 * 240.0 / bpm / TICKS_PER_BAR as f64) as u64;
     let text = format!("{:02} : {:02}", seconds / 60, seconds % 60);
     let response = ui.allocate_rect(rect, Sense::hover());
-    ui.painter().rect_filled(rect, 6.0, CANVAS);
+    // Vintage reads time from an amber display window; the other themes from
+    // the header itself.
+    let display = roles().material == theme::Material::Metal;
+    if display {
+        ui.painter().rect_filled(rect.shrink(2.0), 4.0, roles().ink);
+        ui.painter().rect_stroke(
+            rect.shrink(2.0),
+            4.0,
+            Stroke::new(1.0_f32, roles().line),
+            egui::StrokeKind::Inside,
+        );
+    } else {
+        ui.painter()
+            .rect_filled(rect, roles().corner(6.0), roles().canvas);
+    }
     ui.painter()
         .with_clip_rect(rect.intersect(ui.clip_rect()))
         .text(
@@ -2622,7 +2661,11 @@ fn transport_position(ui: &mut egui::Ui, rect: Rect, tick: u32, bpm: f64) -> Res
             Align2::CENTER_CENTER,
             &text,
             FontId::proportional(23.0),
-            TEXT,
+            if display {
+                roles().accent
+            } else {
+                roles().text
+            },
         );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
     response.hover_hint(format!(
@@ -2647,16 +2690,19 @@ fn transport_title_galley(
     let mut job = egui::text::LayoutJob::simple(
         title_text(text),
         transport_title_font(fit.size),
-        TEXT,
+        roles().text,
         width.max(1.0),
     );
     job.wrap.max_rows = fit.rows;
     job.wrap.break_anywhere = fit.break_anywhere;
+    for section in &mut job.sections {
+        section.format.line_height = Some(fit.size * theme::HEADING_LINE);
+    }
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
 fn transport_title_font(size: f32) -> FontId {
-    FontId::new(size, egui::FontFamily::Name("Syncopate Bold".into()))
+    FontId::new(size, theme::heading_family())
 }
 
 /// The largest layout that shows the whole song name within `width`: from 15
@@ -2670,7 +2716,7 @@ fn transport_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
         !galley.elided && galley.size().x <= width + 0.5 && galley.size().y <= TRANSPORT_ROW_HEIGHT
     };
     let rows = |size: f32| {
-        let row = ui.fonts_mut(|fonts| fonts.row_height(&transport_title_font(size)));
+        let row = size * theme::HEADING_LINE;
         ((TRANSPORT_ROW_HEIGHT / row).floor() as usize).max(1)
     };
     let upper = title_text(text);
@@ -2678,7 +2724,7 @@ fn transport_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
     let words = |size: f32| {
         upper.split_whitespace().all(|word| {
             let galley = ui.fonts_mut(|fonts| {
-                fonts.layout_no_wrap(word.into(), transport_title_font(size), TEXT)
+                fonts.layout_no_wrap(word.into(), transport_title_font(size), roles().text)
             });
             galley.size().x <= width + 0.5
         })
@@ -2725,8 +2771,8 @@ fn transport_title_fit(ui: &egui::Ui, text: &str, width: f32) -> TitleFit {
 }
 
 pub(super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
-    egui::Frame::new().fill(controls::FACE).show(ui, |ui| {
-        ui.visuals_mut().override_text_color = Some(controls::CREAM);
+    egui::Frame::new().fill(roles().face).show(ui, |ui| {
+        ui.visuals_mut().override_text_color = Some(roles().legend);
         ui.vertical(|ui| {
             let mut enabled = state.filter.is_some();
             if embedded_effect_group(ui, "Filter", &mut enabled) {
@@ -2940,7 +2986,7 @@ fn embedded_effect_dial(
         Align2::CENTER_CENTER,
         name,
         FontId::proportional(13.0),
-        controls::CREAM,
+        roles().legend,
     );
 }
 
@@ -3061,22 +3107,30 @@ pub(super) fn recording_destination(
         .hover_hint("Choose a track for recording. Unused tracks appear only when you add a sound.")
 }
 
+/// The workspace style, menus, tooltips, and fonts of the current theme.
 pub(super) fn configure_style(ctx: &egui::Context) {
-    configure_fonts(ctx);
+    theme::configure_fonts(ctx);
+    let roles = roles();
     let mut style = (*ctx.style()).clone();
     style.visuals = egui::Visuals::dark();
-    style.visuals.override_text_color = Some(TEXT);
-    style.visuals.panel_fill = CANVAS;
-    style.visuals.window_fill = PANEL;
-    style.visuals.window_stroke = Stroke::new(1.0_f32, LINE);
-    style.visuals.window_corner_radius = egui::CornerRadius::same(10);
-    style.visuals.faint_bg_color = RAISED;
-    style.visuals.extreme_bg_color = CANVAS;
-    style.visuals.selection.bg_fill = SELECTION;
-    style.visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
-    style.visuals.hyperlink_color = ACCENT;
-    style.visuals.warn_fg_color = WARNING;
-    style.visuals.error_fg_color = CORAL;
+    style.visuals.override_text_color = Some(roles.text);
+    style.visuals.panel_fill = roles.canvas;
+    style.visuals.window_fill = roles.panel;
+    style.visuals.window_stroke = Stroke::new(1.0_f32, roles.line);
+    style.visuals.window_corner_radius = egui::CornerRadius::same(roles.corner(10.0) as u8);
+    style.visuals.menu_corner_radius = egui::CornerRadius::same(roles.corner(6.0) as u8);
+    style.visuals.faint_bg_color = roles.raised;
+    style.visuals.extreme_bg_color = roles.canvas;
+    style.visuals.selection.bg_fill = roles.selection;
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, roles.accent);
+    style.visuals.hyperlink_color = roles.accent;
+    style.visuals.warn_fg_color = roles.warning;
+    style.visuals.error_fg_color = roles.coral;
+    if roles.material == theme::Material::Flat {
+        // Studio keeps menus and tooltips flat: an edge, no cast shadow.
+        style.visuals.window_shadow = egui::epaint::Shadow::NONE;
+        style.visuals.popup_shadow = egui::epaint::Shadow::NONE;
+    }
     for widget in [
         &mut style.visuals.widgets.noninteractive,
         &mut style.visuals.widgets.inactive,
@@ -3084,19 +3138,19 @@ pub(super) fn configure_style(ctx: &egui::Context) {
         &mut style.visuals.widgets.active,
         &mut style.visuals.widgets.open,
     ] {
-        widget.corner_radius = egui::CornerRadius::same(5);
-        widget.fg_stroke = Stroke::new(1.0_f32, TEXT);
-        widget.bg_stroke = Stroke::new(1.0_f32, LINE);
-        widget.bg_fill = RAISED;
-        widget.weak_bg_fill = RAISED;
+        widget.corner_radius = egui::CornerRadius::same(roles.corner(5.0) as u8);
+        widget.fg_stroke = Stroke::new(1.0_f32, roles.text);
+        widget.bg_stroke = Stroke::new(1.0_f32, roles.line);
+        widget.bg_fill = roles.raised;
+        widget.weak_bg_fill = roles.raised;
     }
-    style.visuals.widgets.hovered.bg_fill = HOVER;
-    style.visuals.widgets.hovered.weak_bg_fill = HOVER;
-    style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, MUTED);
-    style.visuals.widgets.active.bg_fill = HOVER;
-    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, ACCENT);
-    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, LINE);
-    style.visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, MUTED);
+    style.visuals.widgets.hovered.bg_fill = roles.hover;
+    style.visuals.widgets.hovered.weak_bg_fill = roles.hover;
+    style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, roles.muted);
+    style.visuals.widgets.active.bg_fill = roles.hover;
+    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, roles.accent);
+    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, roles.line);
+    style.visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, roles.muted);
     style.spacing.item_spacing = Vec2::new(8.0, 6.0);
     style.spacing.button_padding = Vec2::new(10.0, 6.0);
     style.spacing.interact_size = Vec2::new(32.0, 28.0);
@@ -3115,7 +3169,7 @@ pub(super) fn configure_style(ctx: &egui::Context) {
         .insert(egui::TextStyle::Monospace, FontId::proportional(13.0));
     style.text_styles.insert(
         egui::TextStyle::Heading,
-        FontId::new(20.0, egui::FontFamily::Name("Syncopate Bold".into())),
+        FontId::new(20.0, theme::heading_family()),
     );
     ctx.set_style(style);
 }
@@ -3142,12 +3196,28 @@ fn focus_outline(ui: &egui::Ui, response: &Response, color: Color32) {
 
 pub(super) fn action_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
     let response = ui.add(
-        egui::Button::new(egui::RichText::new(label).color(if active { CANVAS } else { TEXT }))
-            .fill(if active { ACCENT } else { RAISED })
-            .stroke(Stroke::NONE)
-            .min_size(Vec2::new(48.0, 30.0)),
+        egui::Button::new(egui::RichText::new(label).color(if active {
+            roles().on_light
+        } else {
+            roles().text
+        }))
+        .fill(if active {
+            roles().accent
+        } else {
+            roles().raised
+        })
+        .stroke(Stroke::NONE)
+        .min_size(Vec2::new(48.0, 30.0)),
     );
-    focus_outline(ui, &response, if active { CANVAS } else { ACCENT });
+    focus_outline(
+        ui,
+        &response,
+        if active {
+            roles().on_light
+        } else {
+            roles().accent
+        },
+    );
     response
 }
 
@@ -3162,7 +3232,7 @@ fn action_icon_button(
     let response = ui.add_enabled(
         enabled,
         egui::Button::new("")
-            .fill(RAISED)
+            .fill(roles().raised)
             .stroke(Stroke::NONE)
             .min_size(Vec2::new(48.0, 30.0)),
     );
@@ -3171,12 +3241,12 @@ fn action_icon_button(
         icons.icon_rect(ui.ctx(), response.rect.center()),
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
         if enabled {
-            TEXT
+            roles().text
         } else {
-            MUTED.gamma_multiply(0.5)
+            roles().muted.gamma_multiply(0.5)
         },
     );
-    focus_outline(ui, &response, ACCENT);
+    focus_outline(ui, &response, roles().accent);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
     response
         .hover_hint(hint)
@@ -3193,11 +3263,11 @@ pub(super) fn rail_button(
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::click());
     controls::icon_button_surface(ui, &response, active);
     let color = if !ui.is_enabled() {
-        MUTED.gamma_multiply(0.5)
+        roles().muted.gamma_multiply(0.5)
     } else if active {
-        controls::ACCENT
+        roles().tools[0].1
     } else {
-        controls::CREAM
+        roles().legend
     };
     ui.painter().image(
         icons.texture_id(icon),
@@ -3226,7 +3296,7 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
         icons.texture_id(icon),
         icons.icon_rect(ui.ctx(), rect.center()),
         Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-        MUTED,
+        roles().muted,
     );
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), icon.label())
@@ -3238,12 +3308,19 @@ pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> R
     // A category can have the name of a tool, such as Step synth.
     let action = format!("Show {label} sounds");
     let response = ui.add(
-        egui::Button::new(egui::RichText::new(label).color(if active { TEXT } else { MUTED }))
-            .fill(if active { HOVER } else { PANEL })
-            .stroke(Stroke::new(1.0_f32, if active { MUTED } else { PANEL }))
-            .min_size(Vec2::new(40.0, 26.0)),
+        egui::Button::new(egui::RichText::new(label).color(if active {
+            roles().text
+        } else {
+            roles().muted
+        }))
+        .fill(if active { roles().hover } else { roles().panel })
+        .stroke(Stroke::new(
+            1.0_f32,
+            if active { roles().muted } else { roles().panel },
+        ))
+        .min_size(Vec2::new(40.0, 26.0)),
     );
-    focus_outline(ui, &response, ACCENT);
+    focus_outline(ui, &response, roles().accent);
     name_control(response, &action).hover_hint(action)
 }
 
@@ -3259,6 +3336,13 @@ pub(super) fn group_color(group: &str) -> Color32 {
         _ => Color32::from_rgb(187, 179, 159),
     }
 }
+
+/// A sound tile's category tint over its fill.
+pub(super) fn tile_tint(category: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(category.r(), category.g(), category.b(), 51)
+}
+/// The opacity of a sound tile's category and length line.
+pub(super) const TILE_DETAIL_ALPHA: f32 = 0.9;
 
 /// Width of a one-bar sound tile and the gap between tiles.
 pub(super) const TILE_BAR: f32 = 96.0;
@@ -3294,38 +3378,42 @@ pub(super) fn sample_button(
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click_and_drag());
     let color = group_color(&sample.group_name);
     let painter = ui.painter_at(rect);
-    painter.rect_filled(
+    let radius = roles().corner(5.0);
+    theme::surface(
+        &painter,
         rect,
-        5.0,
+        radius,
         if response.hovered() || selected {
-            HOVER
+            roles().tile_hover
         } else {
-            RAISED
+            roles().tile
         },
     );
-    painter.rect_filled(
-        rect,
-        5.0,
-        Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 51),
-    );
+    painter.rect_filled(rect, radius, tile_tint(color));
     if selected || response.has_focus() {
         painter.rect_stroke(
             rect.shrink(0.5),
-            5.0,
+            radius,
             Stroke::new(1.0_f32, color),
             egui::StrokeKind::Inside,
         );
     }
-    let text = painter.layout_job(elided(&sample.name, 12.0, TEXT, rect.width() - 16.0, 1));
+    let text = painter.layout_job(elided(
+        &sample.name,
+        12.0,
+        roles().text,
+        rect.width() - 16.0,
+        1,
+    ));
     let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(8.0, 3.0)));
-    clip.galley(rect.min + Vec2::new(8.0, 5.0), text, TEXT);
+    clip.galley(rect.min + Vec2::new(8.0, 5.0), text, roles().text);
     let bars = format!(
         "{} bar{}",
         sample.bars,
         if sample.bars == 1 { "" } else { "s" }
     );
     let font = FontId::proportional(10.0);
-    let muted = TEXT.gamma_multiply(0.8);
+    let muted = roles().text.gamma_multiply(TILE_DETAIL_ALPHA);
     let mut metadata = painter.layout_no_wrap(
         format!("{}  /  {bars}", sample.group_name),
         font.clone(),
@@ -3394,7 +3482,11 @@ impl MixJamApp {
     /// The arrangement's automation lane: Off, or the lane that the track
     /// rows show and edit.
     fn automation_selector(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("Automation").size(12.0).color(MUTED));
+        ui.label(
+            egui::RichText::new("Automation")
+                .size(12.0)
+                .color(roles().muted),
+        );
         let current = match (self.automation_lane, self.return_lane) {
             (_, Some(bus)) => return_lane_label(bus),
             (Some(lane), None) => lane.label(),
@@ -3463,7 +3555,7 @@ impl MixJamApp {
         visible: Rect,
         bus: usize,
     ) {
-        painter.rect_filled(rect, 0.0, CANVAS.gamma_multiply(0.45));
+        painter.rect_filled(rect, 0.0, roles().canvas.gamma_multiply(0.45));
         let row = return_row(rect, visible);
         let bar_width = self.timeline_bar_width;
         let x = |tick: u32| rect.left() + tick as f32 / TICKS_PER_BAR as f32 * bar_width;
@@ -3474,12 +3566,12 @@ impl MixJamApp {
             Align2::LEFT_TOP,
             format!("{} (100% dashed)", return_lane_label(bus)),
             FontId::proportional(12.0),
-            MUTED,
+            roles().muted,
         );
         let full = return_y(1.0, row);
         painter.add(egui::Shape::dashed_line(
             &[Pos2::new(rect.left(), full), Pos2::new(rect.right(), full)],
-            Stroke::new(1.0_f32, LINE),
+            Stroke::new(1.0_f32, roles().line),
             3.0,
             6.0,
         ));
@@ -3490,7 +3582,7 @@ impl MixJamApp {
             let y = return_y(knob, row);
             painter.add(egui::Shape::dashed_line(
                 &[Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
-                Stroke::new(1.0_f32, MUTED.gamma_multiply(0.6)),
+                Stroke::new(1.0_f32, roles().muted.gamma_multiply(0.6)),
                 6.0,
                 5.0,
             ));
@@ -3502,7 +3594,10 @@ impl MixJamApp {
             let mut line = vec![Pos2::new(rect.left(), markers[0].y)];
             line.extend(markers.iter().copied());
             line.push(Pos2::new(rect.right(), markers[markers.len() - 1].y));
-            painter.add(egui::Shape::line(line, Stroke::new(1.6_f32, ACCENT)));
+            painter.add(egui::Shape::line(
+                line,
+                Stroke::new(1.6_f32, roles().accent),
+            ));
             for (index, point) in markers.iter().enumerate() {
                 let active = self.automation_drag == Some((bus, index));
                 let hovered = pointer.is_some_and(|pos| point.distance(pos) <= AUTOMATION_REACH);
@@ -3512,8 +3607,8 @@ impl MixJamApp {
                 painter.circle(
                     *point,
                     if active || hovered { 4.5 } else { 3.5 },
-                    if active { TEXT } else { ACCENT },
-                    Stroke::new(1.0_f32, CANVAS),
+                    if active { roles().text } else { roles().accent },
+                    Stroke::new(1.0_f32, roles().canvas),
                 );
             }
         }
@@ -3666,7 +3761,7 @@ impl MixJamApp {
         tracks: &[usize],
     ) {
         // Dim the clips so the lines stand out.
-        painter.rect_filled(rect, 0.0, CANVAS.gamma_multiply(0.45));
+        painter.rect_filled(rect, 0.0, roles().canvas.gamma_multiply(0.45));
         let project = self.session.project();
         let mut hit = None;
         let pointer = ui.input(|i| i.pointer.latest_pos());
@@ -3689,7 +3784,7 @@ impl MixJamApp {
                 let y = automation_y(lane, value, row);
                 painter.add(egui::Shape::dashed_line(
                     &[Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
-                    Stroke::new(1.0_f32, MUTED.gamma_multiply(0.6)),
+                    Stroke::new(1.0_f32, roles().muted.gamma_multiply(0.6)),
                     6.0,
                     5.0,
                 ));
@@ -3719,7 +3814,10 @@ impl MixJamApp {
                 line.push(*marker);
             }
             line.push(Pos2::new(rect.right(), markers[markers.len() - 1].y));
-            painter.add(egui::Shape::line(line, Stroke::new(1.6_f32, ACCENT)));
+            painter.add(egui::Shape::line(
+                line,
+                Stroke::new(1.6_f32, roles().accent),
+            ));
             for (index, point) in markers.iter().enumerate() {
                 let active = self.automation_drag == Some((track, index));
                 let hovered = pointer.is_some_and(|pos| near(*point, pos));
@@ -3729,8 +3827,8 @@ impl MixJamApp {
                 painter.circle(
                     *point,
                     if active || hovered { 4.5 } else { 3.5 },
-                    if active { TEXT } else { ACCENT },
-                    Stroke::new(1.0_f32, CANVAS),
+                    if active { roles().text } else { roles().accent },
+                    Stroke::new(1.0_f32, roles().canvas),
                 );
             }
         }
@@ -3982,7 +4080,7 @@ fn draw_reverse_mark(painter: &egui::Painter, rect: Rect) {
             Align2::RIGHT_BOTTOM,
             "rev",
             FontId::proportional(10.0),
-            CANVAS,
+            roles().on_light,
         );
 }
 
@@ -4165,11 +4263,11 @@ fn draw_gain_handle(painter: &egui::Painter, rect: Rect, visible: Rect, gain: f3
         return;
     }
     let handle = Rect::from_center_size(gain_handle(rect, visible, gain), GAIN_HANDLE);
-    painter.rect_filled(handle, 2.0, CANVAS);
+    painter.rect_filled(handle, 2.0, roles().on_light);
     painter.rect_stroke(
         handle,
         2.0,
-        Stroke::new(1.0_f32, TEXT),
+        Stroke::new(1.0_f32, roles().text),
         egui::StrokeKind::Inside,
     );
 }
@@ -4188,11 +4286,11 @@ fn draw_fade_handles(
     // A light rim keeps the dark squares visible on fills and fade shading.
     for center in fade_handles(rect, clip, sample, bar_width, bpm) {
         let square = Rect::from_center_size(center, Vec2::splat(FADE_HANDLE));
-        painter.rect_filled(square, 1.5, CANVAS);
+        painter.rect_filled(square, 1.5, roles().on_light);
         painter.rect_stroke(
             square,
             1.5,
-            Stroke::new(1.0_f32, TEXT),
+            Stroke::new(1.0_f32, roles().text),
             egui::StrokeKind::Inside,
         );
     }
@@ -4319,27 +4417,37 @@ pub(super) fn draw_clip(
     selected: bool,
 ) {
     let color = if missing.is_some() {
-        RAISED
+        roles().raised
     } else {
-        sample.map(|s| group_color(&s.group_name)).unwrap_or(MUTED)
+        sample
+            .map(|s| group_color(&s.group_name))
+            .unwrap_or(roles().muted)
     };
-    painter.rect_filled(rect, 3.0, color);
+    // The clip's silhouette: a tight tab on Studio, a rounded bubble on Aero,
+    // and a painted label on Vintage. Category colors stay the same.
+    let radius = clip_radius(rect);
+    theme::surface(painter, rect, radius, color);
     if missing.is_some() {
-        outline(painter, rect.shrink(0.5), CORAL, 1.0);
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            radius,
+            Stroke::new(1.0_f32, roles().coral),
+            egui::StrokeKind::Inside,
+        );
     }
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)));
     if selected {
         painter.rect_stroke(
             rect.shrink(0.5),
-            3.0,
-            Stroke::new(2.0_f32, TEXT),
+            radius,
+            Stroke::new(2.0_f32, roles().text),
             egui::StrokeKind::Inside,
         );
         // A dark inner line keeps the selection visible on every category fill.
         painter.rect_stroke(
             rect.shrink(2.5),
-            2.0,
-            Stroke::new(1.0_f32, CANVAS),
+            (radius - 1.0).max(1.0),
+            Stroke::new(1.0_f32, roles().on_light),
             egui::StrokeKind::Inside,
         );
     }
@@ -4347,7 +4455,11 @@ pub(super) fn draw_clip(
         .map(|missing| format!("Missing: {}", missing.name))
         .or_else(|| sample.map(|sample| sample.name.clone()));
     if let Some(label) = label {
-        let text_color = if missing.is_some() { TEXT } else { CANVAS };
+        let text_color = if missing.is_some() {
+            roles().text
+        } else {
+            roles().on_light
+        };
         let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
         let text = clipped.layout_job(elided(
             &label,
@@ -4357,6 +4469,16 @@ pub(super) fn draw_clip(
             clip_label_rows(rect.height()),
         ));
         clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, text_color);
+    }
+}
+
+/// The corner radius of a clip in the current theme. Aero's bubble stays
+/// small enough that a clip's label clears its curve.
+pub(super) fn clip_radius(rect: Rect) -> f32 {
+    match roles().material {
+        theme::Material::Flat => 2.0,
+        theme::Material::Plastic => (rect.height() / 2.0).min(8.0),
+        theme::Material::Metal => 3.0,
     }
 }
 
@@ -4474,7 +4596,11 @@ pub(super) fn switch_hint(label: &str, switch: TrackSwitch, on: bool) -> String 
 }
 
 fn route_color(active: bool) -> Color32 {
-    if active { ACCENT } else { MUTED }
+    if active {
+        roles().accent
+    } else {
+        roles().muted
+    }
 }
 
 fn switch_letter(painter: &egui::Painter, rect: Rect, on: bool, switch: TrackSwitch) {
@@ -4483,7 +4609,7 @@ fn switch_letter(painter: &egui::Painter, rect: Rect, on: bool, switch: TrackSwi
         painter.rect_filled(
             Rect::from_center_size(rect.center() + Vec2::new(0.0, 9.0), Vec2::new(9.0, 2.0)),
             1.0,
-            ACCENT,
+            roles().accent,
         );
     }
     painter.text(
@@ -4518,21 +4644,21 @@ pub(super) fn transport_button(
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
     let primary = matches!(icon, TransportIcon::Play | TransportIcon::Pause);
     let fill = if primary {
-        ACCENT
+        roles().accent
     } else if response.hovered() {
-        HOVER
+        roles().hover
     } else {
-        RAISED
+        roles().raised
     };
-    ui.painter().rect_filled(rect, 6.0, fill);
+    theme::surface(ui.painter(), rect, roles().corner(6.0), fill);
     let center = rect.center();
     let painter = ui.painter();
     let color = if primary {
-        CANVAS
+        roles().on_light
     } else if active {
-        ACCENT
+        roles().accent
     } else {
-        TEXT
+        roles().text
     };
     let triangle = |x: f32, direction: f32| {
         painter.add(egui::Shape::convex_polygon(
@@ -4564,9 +4690,9 @@ pub(super) fn transport_button(
             );
         }
         TransportIcon::Record => {
-            painter.circle_filled(center, 10.0, CORAL);
+            painter.circle_filled(center, 10.0, roles().coral);
             if active {
-                painter.circle_stroke(center, 13.0, Stroke::new(1.0_f32, TEXT));
+                painter.circle_stroke(center, 13.0, Stroke::new(1.0_f32, roles().text));
             }
         }
         TransportIcon::Back => {
@@ -4622,7 +4748,7 @@ pub(super) fn transport_button(
         painter.rect_stroke(
             rect.shrink(0.5),
             6.0,
-            Stroke::new(1.0_f32, ACCENT),
+            Stroke::new(1.0_f32, roles().accent),
             egui::StrokeKind::Inside,
         );
     }
@@ -4630,7 +4756,14 @@ pub(super) fn transport_button(
         painter.rect_stroke(
             rect.shrink(2.0),
             6.0,
-            Stroke::new(2.0_f32, if primary { CANVAS } else { ACCENT }),
+            Stroke::new(
+                2.0_f32,
+                if primary {
+                    roles().on_light
+                } else {
+                    roles().accent
+                },
+            ),
             egui::StrokeKind::Inside,
         );
     }
@@ -4642,40 +4775,4 @@ pub(super) fn transport_button(
         }
     });
     response.hover_hint(tooltip)
-}
-
-fn configure_fonts(ctx: &egui::Context) {
-    let mut fonts = egui::FontDefinitions::default();
-    let fallback = fonts.families[&egui::FontFamily::Proportional].clone();
-    let families: [(&str, &[&[u8]]); 2] = [
-        (
-            "Inter Medium",
-            &[include_bytes!("../../assets/fonts/Inter-Medium.ttf")],
-        ),
-        (
-            "Syncopate Bold",
-            &[include_bytes!("../../assets/fonts/Syncopate-Bold.ttf")],
-        ),
-    ];
-    for (family, subsets) in families {
-        let mut names = Vec::new();
-        for (index, &bytes) in subsets.iter().enumerate() {
-            let name = format!("{family}-{index}");
-            fonts
-                .font_data
-                .insert(name.clone(), egui::FontData::from_static(bytes).into());
-            names.push(name);
-        }
-        names.extend(fallback.clone());
-        fonts
-            .families
-            .insert(egui::FontFamily::Name(family.into()), names.clone());
-        if family == "Inter Medium" {
-            fonts
-                .families
-                .insert(egui::FontFamily::Proportional, names.clone());
-            fonts.families.insert(egui::FontFamily::Monospace, names);
-        }
-    }
-    ctx.set_fonts(fonts);
 }

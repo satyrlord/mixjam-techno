@@ -2,8 +2,12 @@
 param(
     [string]$Executable = '',
     [string]$OutputDirectory = '',
+    [ValidateSet('studio', 'aero', 'vintage')]
+    [string[]]$Themes = @('studio', 'aero', 'vintage'),
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
+    [ValidateSet('1', '1.5', '1.75', '2')]
+    [string[]]$Scales = @('1'),
     [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard')]
     [string[]]$Views = @('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard')
 )
@@ -40,6 +44,15 @@ exe = Path(sys.argv[1]).resolve()
 base = Path(sys.argv[2]).resolve()
 sizes = sys.argv[3].split(',')
 views = sys.argv[4].split(',')
+themes = sys.argv[5].split(',')
+scales = sys.argv[6].split(',')
+# A scaled window must fit on the screen; the capture is of the whole window.
+import ctypes
+screen = (ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1))
+too_big = [f'{size}@{scale}x' for size in sizes for scale in scales
+           if any(int(side) * float(scale) > limit for side, limit in zip(size.split('x'), screen))]
+if too_big:
+    raise SystemExit(f'These scaled sizes do not fit the {screen[0]}x{screen[1]} screen: {", ".join(too_big)}')
 root = base / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
 root.mkdir(parents=True, exist_ok=False)
 sounds = root / 'samples'
@@ -234,19 +247,33 @@ report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).he
               gaps=['Visual content requires image review', 'No microphone or physical listening check',
                     'Recorded-take capture checks presentation only; it does not simulate microphone input',
                     'No native file-picker or screen-reader interaction',
-                    'No high-DPI or clean Windows VM check'])
+                    'Scaled captures zoom the interface; they do not change the Windows display scale',
+                    'No clean Windows VM check'])
 
-for size in sizes:
-    for view in views:
-        name = f'{view}-{size}'
+def options_with(theme):
+    # Every other field keeps its default; Studio runs without a file, which
+    # is the fresh-start default.
+    return dict(schemaVersion=1, drivePlaybackOversampling='4x', masterPlaybackOversampling='4x',
+                samplePlaybackQuality='high', previewLevelDb=0.0, previewMuted=False,
+                playbackBufferTarget='40ms', meterDisplayRate='normal', followOnStartup=True,
+                showSectionBookmarks=True, startingModule='sounds', showTooltips=True,
+                theme=theme, songFolderMode='lastUsed', fixedSongFolder=None)
+
+for theme, scale, size, view in ((t, z, s, v) for t in themes for z in scales for s in sizes for v in views):
+        name = f'{theme}-{view}-{size}' + ('' if scale == '1' else f'@{scale}x')
         capture = root / f'{name}.bmp'
         env = os.environ.copy()
         for key in ('MIXJAM_TECHNO_CAPTURE_TO', 'MIXJAM_TECHNO_CAPTURE_VIEW', 'MIXJAM_TECHNO_WINDOW_SIZE',
-                    'MIXJAM_TECHNO_REFERENCE_SAMPLES'):
+                    'MIXJAM_TECHNO_CAPTURE_ZOOM', 'MIXJAM_TECHNO_REFERENCE_SAMPLES'):
             env.pop(key, None)
         env.update(MIXJAM_TECHNO_CAPTURE_TO=str(capture), MIXJAM_TECHNO_WINDOW_SIZE=size,
                    MIXJAM_TECHNO_CAPTURE_VIEW='' if view in ('arrangement', 'sparse', 'first-run') else view,
+                   MIXJAM_TECHNO_CAPTURE_ZOOM=scale,
                    MIXJAM_TECHNO_DATA_DIR=str(root / 'user-data' / name))
+        if theme != 'studio':
+            data = root / 'user-data' / name
+            data.mkdir(parents=True, exist_ok=True)
+            (data / 'options.json').write_text(json.dumps(options_with(theme), indent=2), encoding='utf-8')
         command = [str(exe), 'gui']
         if view != 'first-run':
             fixture = {
@@ -265,7 +292,8 @@ for size in sizes:
             if view != 'options-library-tempos':
                 command += ['--mix', str(fixture)]
         started = time.monotonic()
-        entry = dict(name=name, view=view, requested_size=size, path=str(capture), command=command)
+        entry = dict(name=name, theme=theme, scale=float(scale), view=view, requested_size=size,
+                     path=str(capture), command=command)
         try:
             result = subprocess.run(command, cwd=root, env=env, capture_output=True, timeout=45,
                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -279,7 +307,8 @@ for size in sizes:
             width, height = struct.unpack_from('<ii', data, 18)
             entry['dimensions'] = [width, abs(height)]
             entry['sha256'] = sha256(data).hexdigest()
-            assert entry['dimensions'] == list(map(int, size.split('x'))), 'Capture dimensions differ'
+            expected = [round(int(side) * float(scale)) for side in size.split('x')]
+            assert entry['dimensions'] == expected, 'Capture dimensions differ'
             entry['passed'] = True
         except (AssertionError, subprocess.TimeoutExpired) as error:
             entry.update(passed=False, error=str(error))
@@ -292,5 +321,5 @@ report['passed'] = all(capture['passed'] for capture in report['captures'])
 (root / 'captures.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
 print(f"Report: {root / 'captures.json'}")
 raise SystemExit(0 if report['passed'] else 1)
-'@ | & python - $Executable $OutputDirectory ($Sizes -join ',') ($Views -join ',')
+'@ | & python - $Executable $OutputDirectory ($Sizes -join ',') ($Views -join ',') ($Themes -join ',') ($Scales -join ',')
 if ($LASTEXITCODE -ne 0) { throw 'Native UI capture verification failed. Inspect captures.json.' }

@@ -142,7 +142,7 @@ impl MixJamApp {
                 .iter()
                 .find(|(root, _)| root == folder)
             {
-                ui.colored_label(CORAL, format!("Not loaded: {error}"));
+                ui.colored_label(roles().coral, format!("Not loaded: {error}"));
             }
             ui.add_space(4.0);
         }

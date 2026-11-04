@@ -63,7 +63,8 @@ its own and reports each region that rustfmt skips. Split a long literal with
 
 The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`
-(offline), and the `.mixjam` projection used by artifact
+(offline), byte preservation of pinned font assets through Git line-ending
+conversion, and the `.mixjam` projection used by artifact
 verification. The projection reads formats 8 through 24 and preserves sections, the
 master pedalboard and its bypass, FX buses and their return lanes, sends, automation,
 channel EQs, clip fades, pitch, and reverse, lane duckers, drives, compressors, and
@@ -95,7 +96,8 @@ build for CPU claims; record workload, rate, cadence, mean, p99, maximum, and
 missed deadlines. An accepted larger buffer request does not establish a
 longer processing deadline. Physical listening, microphone operation, native
 pickers, screen readers, high DPI, and minimum-machine capacity need separate
-results. Automated tests and screenshots do not establish those results.
+results. Automated tests and screenshots do not establish those results;
+scaled captures cover high-DPI painting only.
 
 The ignored `realtime_options_bench` test covers sparse, dense Drive,
 master-heavy, and 64-track synthetic arrangements, with all four quality
@@ -119,7 +121,18 @@ shows its Discard changes? prompt. Inspect each at 960x720, 1024x768, and 1440x1
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.
-`-Executable PATH` selects another build and `-Views` a subset of the cases.
+`-Executable PATH` selects another build, `-Views` a subset of the cases, and
+`-Themes` a subset of `studio`, `aero`, and `vintage` (all three by default).
+Each Aero and Vintage case starts from an options file with that theme; Studio
+cases start without one, which checks the fresh-start default. Captures are
+named `theme-view-size`. `-Scales` adds display scales (`1.5`, `1.75`, `2`):
+each scaled case sets `MIXJAM_TECHNO_CAPTURE_ZOOM`, which the application reads
+only during a capture. It multiplies egui's pixels per point and the window
+size, so the capture keeps the case's size in points, paints with the matching
+artwork density, and is named `theme-view-size@scalex`. On a 3440x1440 display
+at 100%, 1024x768 fits at 1.75 and 960x720 at 2. A scaled capture does not
+change the Windows display scale, so it does not test the operating system's
+DPI messages or a monitor change.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.
 The capture set also covers Help, Sample libraries, Import sound, Import details,
@@ -129,23 +142,21 @@ effects and provider settings and missing-source processing states. It has no
 case for the tool Help windows or Choose path. Recorded-take captures
 check the window layout with a synthetic presentation state; they do not record audio.
 
-Every in-app tool window and modal uses Folded Metal: subtly aged painted metal,
-dark inset control bays, cream text, polished silver knobs, and pale metal primary
-buttons. Time Stretcher stays dark marine cyan, Sample Editor dark granite gray,
-Effect Studio synth red, and Step synth dark olive. Utility dialogs use neutral
-metal with orange-yellow accents. The chassis has no decorative screws; a smooth
-folded lip, texture, and light wear provide its hardware character.
-`src/ui/dialog.rs` owns the shared resizable shell; `src/ui/controls.rs` owns
-reusable buttons, header icons, rotaries, sliders, value fields, and switches.
+Every in-app tool window, modal, board, and the Mixer use the current theme.
+Studio paints flat software panels, Aero molded plastic, and Vintage the Folded
+Metal artwork. Each tool keeps its palette in every theme: Time Stretcher
+marine, Sample Editor granite, Effect Studio red, Step synth olive, Mastering
+indigo, and neutral Utility dialogs. `src/ui/theme.rs` owns the roles, materials,
+and fonts; `src/ui/dialog.rs` owns the shared resizable shell; `src/ui/controls.rs`
+owns reusable buttons, header icons, rotaries, sliders, value fields, and switches.
 Collapse keeps a window in place and preserves its expanded size and edits.
 Collapsing a blocking dialog releases the workspace and pauses its pending action.
-The main graphite workspace, Mixer, and native operating-system file pickers
-retain their existing presentation.
+Native operating-system file pickers retain their system presentation.
 
 A body that overflows its window shows a scroll bar, and short blocking dialogs
-follow the height of their content. The captures do not verify high-DPI
-scaling, screen readers or other accessibility, physical audio, or native file
-pickers.
+follow the height of their content. Scaled captures verify high-DPI painting,
+not Windows display-scale changes. The captures do not verify screen readers or
+other accessibility, physical audio, or native file pickers.
 
 ## Visual assets
 

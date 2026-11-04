@@ -25,7 +25,7 @@ pub mod eq {
 pub mod options {
     pub use crate::options::{
         AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
-        SongFolderMode, StartingModule,
+        SongFolderMode, StartingModule, Theme,
     };
 }
 /// The drive of each track and its controls.
@@ -693,6 +693,12 @@ impl Session {
         self.settings_root = root;
         self.load_options();
         self
+    }
+    /// Give UI tests a theme without an options file. `draw` adopts the
+    /// session's theme, so a fixture must carry the theme it paints.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn set_theme_fixture(&mut self, theme: crate::options::Theme) {
+        self.options.theme = theme;
     }
     /// Let a gesture continue through any pause. Gestures end after a pause in
     /// wall-clock time, and test frames under load can take longer than one.
@@ -3400,6 +3406,42 @@ mod tests {
     }
 
     #[test]
+    fn a_theme_applies_during_playback_without_touching_song_history_or_render() {
+        let root = manual_fixture_dir();
+        let mut session = fixture().with_settings_root(root.clone());
+        session.render_dirty = false;
+        session.wants_playback = true;
+        let (project, revision, unsaved, rendered) = (
+            session.project().clone(),
+            session.revision,
+            session.unsaved(),
+            session.render.is_some(),
+        );
+        for theme in [
+            crate::options::Theme::Vintage,
+            crate::options::Theme::Aero,
+            crate::options::Theme::Studio,
+        ] {
+            let mut draft = session.options().clone();
+            draft.theme = theme;
+            let expected = session.options_revision();
+            assert!(session.apply_options(draft, expected, false).unwrap());
+            assert_eq!(session.options().theme, theme);
+            assert!(session.wants_playback);
+            assert_eq!(session.project(), &project);
+            assert_eq!(session.revision, revision);
+            assert!(!session.render_dirty);
+            assert_eq!(session.render.is_some(), rendered);
+            assert_eq!(session.unsaved(), unsaved);
+            assert!(!session.has_history_step(false));
+            let saved = crate::options::load(&root);
+            assert!(saved.error.is_none());
+            assert_eq!(saved.values.theme, theme);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn quality_apply_rejects_old_preparation_and_exports_use_full_quality() {
         let root = manual_fixture_dir();
         let wave = root.join("source.wav");
@@ -5745,6 +5787,7 @@ mod boundary_tests {
             ("ui/album_review.rs", include_str!("ui/album_review.rs")),
             ("ui/options.rs", include_str!("ui/options.rs")),
             ("ui/libraries.rs", include_str!("ui/libraries.rs")),
+            ("ui/theme.rs", include_str!("ui/theme.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
         ];

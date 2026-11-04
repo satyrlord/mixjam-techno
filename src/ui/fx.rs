@@ -3,7 +3,6 @@
 //! the effect's preset and settings, the bus's input switch and return level,
 //! its safety limiter, and Clear Tail. The caller turns changed buses into an
 //! edit and a Clear Tail request into a session call.
-use super::controls::INK;
 use super::master::{Dial, Format, dial, enamel_of, enclosure_of, heading, lamp};
 use super::*;
 use mixjam_techno::application::KnobRange;
@@ -397,7 +396,7 @@ fn switch(
         Align2::LEFT_CENTER,
         label,
         FontId::proportional(11.5),
-        INK,
+        roles().ink,
     );
     response.hover_hint(format!(
         "{name}: {}. {hint}",
@@ -448,7 +447,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
         sounding,
         index as u64 + 21,
     );
-    heading(ui, rect, &bus_name, bus.module.label(), INK);
+    heading(ui, rect, &bus_name, bus.module.label(), roles().ink);
     lamp(ui, at(rect.width() - 18.0, 19.0), sounding);
     let mut cleared = false;
     ui.scope(|ui| {
@@ -550,7 +549,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                     Align2::CENTER_CENTER,
                     "Choose an effect for this bus.",
                     FontId::proportional(13.0),
-                    INK,
+                    roles().ink,
                 );
             }
             Module::EchoformDelay(delay) => {
@@ -833,7 +832,7 @@ mod tests {
     fn ink_stays_legible_on_every_unit_lit_or_off() {
         for colour in [DELAY_ENAMEL, REVERB_ENAMEL, EMPTY_ENAMEL] {
             for on in [true, false] {
-                let ratio = controls::contrast(enamel_of(colour, on), INK);
+                let ratio = controls::contrast(enamel_of(colour, on), roles().ink);
                 assert!(ratio >= 5.0, "{colour:?} ({on}) gives {ratio:.2}:1");
             }
         }

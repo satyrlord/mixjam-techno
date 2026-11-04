@@ -2,16 +2,18 @@
 name: MixJam Techno
 description: A modern native studio for arranging, mixing, and shaping classic sounds.
 colors:
-  canvas: "#14171b"
-  panel: "#1c2025"
-  text: "#e9edee"
-  accent: "#b8e37e"
+  # Workspace values are Studio's, the default theme. The mixer-, folded-,
+  # and mastering- values are Vintage's. src/ui/theme.rs holds all three themes.
+  canvas: "#15171a"
+  panel: "#1c1f23"
+  text: "#eceff1"
+  accent: "#bee860"
   coral: "#ff8282"
   muted: "#a4aeb6"
-  line: "#3a4148"
-  raised: "#272d33"
-  hover: "#333b42"
-  selection: "#415532"
+  line: "#3c4249"
+  raised: "#282c31"
+  hover: "#34393f"
+  selection: "#3e5228"
   warning: "#e8c585"
   loop: "#d4c182"
   drum: "#d99d78"
@@ -53,26 +55,27 @@ colors:
   mastering-amber: "#f6b240"
   mastering-red: "#e84838"
 typography:
+  # Studio's faces; the Themes section gives Aero's and Vintage's.
   display:
     fontFamily: "Syncopate"
     textTransform: "uppercase"
     fontSize: "27px"
     fontWeight: 700
   headline:
-    fontFamily: "Syncopate"
+    fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
     fontSize: "20px"
-    fontWeight: 700
+    fontWeight: 600
   section:
-    fontFamily: "Syncopate"
+    fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
     fontSize: "18px"
-    fontWeight: 700
+    fontWeight: 600
   title:
-    fontFamily: "Syncopate"
+    fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
     fontSize: "15px"
-    fontWeight: 700
+    fontWeight: 600
   body:
     fontFamily: "Inter"
     fontSize: "13px"
@@ -94,22 +97,23 @@ typography:
     fontSize: "10px"
     fontWeight: 500
   bottom-module:
-    fontFamily: "Syncopate"
+    fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
     fontSize: "16px"
-    fontWeight: 700
+    fontWeight: 600
   folded-title:
-    fontFamily: "Syncopate"
+    fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
     fontSize: "18px"
-    fontWeight: 700
+    fontWeight: 600
 rounded:
-  clip: "3px"
-  control: "5px"
-  transport: "6px"
-  window: "10px"
+  # Studio's radii; theme.rs Roles::corner gives Aero's and Vintage's.
+  clip: "2px"
+  control: "2.5px"
+  transport: "3px"
+  window: "4px"
   mixer-control: "2px"
-  mixer-strip: "3px"
+  mixer-strip: "1.5px"
 spacing:
   item-horizontal: "8px"
   item-vertical: "6px"
@@ -231,20 +235,33 @@ The arrangement is the main work area. Graphite surfaces separate clip names,
 track numbers, and playback controls. Lime marks primary actions. Category
 colors identify the same sounds in the browser and arrangement.
 
-The owner selected this design for the classic loop sequencer. It uses imported
-Syncopate branding and titles, Inter Medium interface text, flat controls,
-and consistent spacing.
-Every in-app window and modal uses concept 1, Folded Metal: subtly aged folded
-painted metal, dark inset control bays, cream text, polished silver knobs, and
-pale metal primary buttons. Fine grain, minor scratches, and restrained edge wear
-suggest a well-maintained early-2000s synth. Keep the original tool palettes:
-dark marine cyan for Time Stretcher, dark granite gray for Sample Editor, synth
-red for Effect Studio, dark olive for Step synth, and dark indigo for the
-Mastering board and its help. Utility dialogs use neutral
-metal with an optional orange-yellow accent. The common orange-yellow mock color
+The application has three complete themes that the owner selected: Studio,
+the default; Aero / Y2K; and Vintage. Each theme covers every surface, from
+the arrangement, browser, and Mixer to the boards, tools, menus, tooltips,
+confirmations, and feedback. See [Themes](#themes). The rest of this document
+describes the shared layout and behavior, which no theme changes. Where it
+names Folded Metal, ivory strips, or enamel finishes, it describes Vintage,
+which keeps the original artwork; Studio and Aero paint the same surfaces in
+code with their own materials.
+
+The original design for the classic loop sequencer, whose artwork Vintage
+keeps, used imported Syncopate branding and titles, Inter Medium interface
+text, flat controls, and consistent spacing.
+In Vintage, every in-app window and modal uses concept 1, Folded Metal: subtly
+aged folded painted metal, dark inset control bays, cream text, polished silver
+knobs, and pale metal primary buttons. Fine grain, minor scratches, and
+restrained edge wear suggest a well-maintained early-2000s synth. Studio paints
+the same shells as flat software panels and Aero as molded plastic. Every theme
+keeps the original tool palette identities, in its own shades:
+marine cyan for Time Stretcher, granite gray for Sample Editor, synth
+red for Effect Studio, olive for Step synth, and indigo for the
+Mastering board and its help. Utility dialogs use the theme's neutral body:
+graphite in Studio, cobalt in Aero, and neutral metal in Vintage, with an
+optional orange-yellow accent. The common orange-yellow mock color
 does not replace these identities.
-One shell and control family covers musical tools and utility tasks. The main
-graphite workspace and Mixer's graphite and ivory strips keep their current design.
+One shell and control family covers musical tools and utility tasks. Vintage
+keeps the warm graphite workspace and Mixer's graphite and ivory strips; Studio
+and Aero paint the workspace and strips in their own materials.
 Native operating-system windows and file pickers retain their OS presentation.
 
 RaveFold supplies artistic references only. It does not govern product
@@ -253,8 +270,10 @@ behavior; if `local-data/research/PRODUCT.md` and
 
 **Key Characteristics:**
 
-- Graphite surfaces with off-white text and restrained borders.
-- Syncopate branding and titles in uppercase; Inter Medium for all other text.
+- Dark surfaces with off-white text and restrained borders, in each theme's
+  material.
+- Syncopate for the product name; uppercase titles in the theme's heading
+  face; the theme's text face for all other text.
 - A wide arrangement with transport above and sound discovery below.
 - Lime primary actions, category-colored clips, and coral recording signals.
 
@@ -267,6 +286,89 @@ remain in `src/ui/stretch.rs`, `src/ui/effects.rs`, `src/ui/step_synth.rs`, and
 and behavior live in `src/application.rs`. Sizes here use portable `px` labels for
 egui logical points. The sidecar records native component metadata; it does not
 define browser components or application behavior.
+
+## Themes
+
+The theme is an application preference on the Options Workspace page. Studio
+is the default. Apply changes the theme at once, even during playback; it never
+changes songs, history, audio, or renders. All three themes share one layout:
+the same control positions, sizes, ranges, keyboard order, accessible names,
+and features. A theme changes only color, material, silhouette, and type.
+Fixed slots, rows, strips, boards, and window geometry are identical in every
+theme. A control sized to its label, such as a toolbar button, follows the
+label's width in the theme's text face: Fira Sans runs about 6% and Barlow
+about 9% narrower than Inter, so such a control and the controls after it in
+its row can sit a few points to the left.
+
+`src/ui/theme.rs` owns one set of theme roles: workspace colors, chassis and
+control colors, tool palettes, Mixer strip colors, lamps and meters, and grid
+colors. It also owns each theme's material, its corner radii, and its fonts.
+Renderers ask for a role and, where shape differs, branch on the material in
+the shared painters (`controls.rs`, `mixer.rs`, `master.rs`, and the clip and
+transport painters in `view.rs`). Tool bodies never name a theme. Interaction
+code is the same for every material.
+
+| Theme | Material | Workspace | Tools and boards | Accent |
+| --- | --- | --- | --- | --- |
+| Studio | Flat matte paint | Graphite `#15171a` / `#1c1f23` | Neutral panels tinted by tool, with the tool's accent along the top edge | Lime `#bee860` |
+| Aero / Y2K | Molded plastic, softer gloss | Cobalt `#144084` and navy `#0b2450` | Colored plastic per tool: cobalt, teal, slate, red, green, indigo | Lime `#96ec5a` |
+| Vintage | Worn painted metal | Warm dark `#181715` / `#1f1e1b` | The Folded Metal artwork, enamel pedals, and ivory Mixer strips | Amber `#f2aa3e` |
+
+**Studio.** Flat fills with hairline edges, radii of half the shared values
+up to 4 points, and no cast
+shadow on menus or tooltips. Dials are flat: a dark face, a pointer, and a
+270-degree value arc in the tool's accent (ink on light surfaces) in place of
+tick marks. Faders have a flat 24 by 16-point cap. Pedals and FX units are flat
+modules: each enamel settles 35% toward a matte light gray and keeps a hairline
+ink edge. Clips are tight tabs.
+
+**Aero / Y2K.** Every raised surface is molded plastic: a vertical shade from
+6% lighter at the top to 10% darker at the foot, a quiet white highlight (alpha
+10) across the upper 45%, and a restrained rim. These soften the owner's chosen
+gloss further, so that text on plastic keeps its contrast; they are not the
+superseded high-gloss study. Sound tiles use a darker cobalt than other raised
+surfaces, because they carry small text under a category tint.
+`text_on_painted_surfaces_keeps_its_contrast` checks text against the lightest
+and darkest points that each material paints. Radii are 1.6 times the shared values, up to 14
+points. Knobs are colored molded caps in the tool's accent with tick marks.
+Faders have a 24 by 24-point molded cap. Inset bays are luminous navy displays.
+Clips are rounded bubbles, up to 8-point radius so their names clear the curve.
+Unlit plastic stays 12% lighter than unlit enamel so ink keeps 5:1 at the foot.
+
+**Vintage.** The original Folded Metal chassis, knob, and primary-button
+artwork, the ivory and graphite Mixer artwork, and the enamel pedals with
+brushed grain, sheen, and seeded scratches. Wear stays on chassis folds and
+pedal faces; dense working areas (arrangement, browser, value wells) carry no
+added wear. The position readout is an amber display window. Indicators are
+warm amber.
+
+**Category colors** for sounds and **section colors** are the same in every
+theme, and states keep their non-color cues (outlines, bars, names, and
+selected states) in every theme.
+
+**Typography.** Every theme keeps Syncopate Bold for the MIXJAM TECHNO product
+name. Headings and window titles use the theme's heading face in uppercase.
+Their rows are pinned to 1.041 em, Syncopate's line box, which the shared
+layout was measured with. Each face is raised by its measured offset, so its
+capitals center in that row. Text faces have line boxes close to Inter's
+1.21 em, so text-driven heights stay the same. Inter covers symbols that a
+theme face lacks.
+
+| Theme | Headings | Text |
+| --- | --- | --- |
+| Studio | IBM Plex Sans SemiBold, raised 0.155 em | Inter Medium |
+| Aero | Michroma at 86%, raised 0.176 em | Fira Sans Medium |
+| Vintage | Barlow Condensed SemiBold at 120%, raised 0.216 em | Barlow Medium, raised 0.05 em |
+
+Every font file is unchanged from its pinned source, carries its license, and
+permits installable embedding; `tools/assets/prepare-fonts.py` checks this. The
+application embeds only the current theme's faces with the brand face and Inter.
+
+**Code-only rendering.** Studio and Aero load no material bitmaps. All of their
+surfaces, dials, caps, bevels, and highlights are bounded painter geometry
+drawn each frame, with no texture creation and no continuous repaint. Changing
+the theme rebuilds the style and fonts once. Do not generate images or bitmap
+skins for a theme. Existing approved PNG brand, rail, and Vintage artwork stays.
 
 ## Colors
 
@@ -387,33 +489,34 @@ ivory grain come from prepared material tiles. These tokens are local to Mixer.
 
 ## Typography
 
-The native build embeds Syncopate Bold 700 for branding and titles, and
-Inter Medium 500 for all other application text. Render branding and every
+[Themes](#themes) names each theme's heading and text faces. Below, "heading
+face" and "text face" mean the current theme's; the sizes, uppercase titles,
+transliteration, and fitting rules apply to every theme. Syncopate Bold 700 is
+the product name's face in every theme. Render branding and every
 project, section, window, modal, and empty-state title in uppercase Latin text.
 Transliterate special letters to their Latin counterparts before uppercase
 layout, including Ș/Ş to S, Ț/Ţ to T, Â/Ă to A, and Î to I. Keep stored
 project titles and other user data in their original case. Window IDs retain
 their original identity independently of visible title formatting.
 
-Syncopate is unchanged from the pinned Google Fonts source. Title letters use
-their Latin counterparts instead of a Romanian fallback face. Inter is the
-unchanged static text face from the official 4.1 release. Both families include
-ASCII.
-Egui's bundled proportional fonts follow the primary families for remaining
-missing glyphs. Keep Syncopate's Apache 2.0 license, Inter's OFL license, and
-provenance with the application; see `assets/fonts/README.md`.
+Every face is unchanged from its pinned source and includes ASCII; every text
+face also covers the Romanian letters. Title letters use their Latin
+counterparts instead of a Romanian fallback face. Inter follows each theme's
+faces for symbols they lack, and egui's bundled proportional fonts follow it.
+Keep every font's license and provenance with the application; see
+`assets/fonts/README.md`.
 
 Display is the MixJam name; Techno follows it in 14-point Syncopate and Muted.
 Headline is the standard native heading. Section
 labels identify Arrangement. Bottom Module supplies the lower panel's module
-selector its 16-point Syncopate text. Title names the project. Body
+selector its 16-point heading-face text. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
-use Inter Medium 500. Track labels and numeric controls also use Inter. Clip labels use
+use the text face. Track labels and numeric controls also use it. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
-The position readout shows elapsed minutes and seconds (`MM : SS`) in Inter
-Medium at 23 points in a fixed 112 by 42-point container centered on the
+The position readout shows elapsed minutes and seconds (`MM : SS`) in the text
+face at 23 points in a fixed 112 by 42-point container centered on the
 header's width, whatever the widths of the title before it and the actions
 after it; its tooltip adds the bar and beat. Changes to digit widths or song
 length must not move the adjacent controls.
@@ -432,10 +535,10 @@ the floor, breaking words if it must. In a compact window (a transport narrower
 than 1000 points) the eight transport buttons narrow from 42 to 34 points when
 the name would otherwise lose its full size. No transport control is dropped
 or hidden, and all of them stay on screen at the minimum window size. Status text
-uses Inter Medium at 12 points. These are local sizes within the same text family.
+uses the text face at 12 points. These are local sizes within the same text family.
 
-All floating windows use the same live uppercase Syncopate title and Inter body,
-button, value, and status text. The shared shell uses 18-point titles, 13-point
+All floating windows use the same live uppercase title in the theme's heading
+face, and the theme's text face for body, button, value, and status text. The shared shell uses 18-point titles, 13-point
 body and button text, and 11-point small text. Content can use the shared compact
 text roles where needed, without inventing per-tool typography. Keep labels separate
 from controls and check rendered glyph bounds. Resizing never scales text.
@@ -443,7 +546,7 @@ Center value text and button captions inside their own visible faces. Native
 widget minimums must fit the readout rectangle; they must not shift text below
 the well. Check the visible glyph center at all three prepared display densities.
 
-Mixer uses the shared Inter sizes without a local title. Track names use Body,
+Mixer uses the shared text-face sizes without a local title. Track names use Body,
 gain values use Clip, sound summaries and pan or Muted text use Small, and
 rail marks and button lettering use Metadata. These sizes follow the selected
 artwork density with the strip.
@@ -473,8 +576,8 @@ When space permits, the maximum panel height leaves 220 points for the
 arrangement plus 68 points for transport. At the minimum client height,
 Mixer's minimum can reduce that arrangement reserve. Status
 occupies 30 points below it. Its application version, prefixed with `v`, stays at the right inner
-margin, with space reserved before status text is truncated. Use 12-point Inter
-Medium and the theme's hyperlink color. Hover and keyboard focus show the link
+margin, with space reserved before status text is truncated. Use the 12-point text face
+and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
 Sounds, Mixer, Mastering, and Effects share this panel size. Switching modules
 preserves the resized height; opening Mixer, Mastering, or Effects first raises
@@ -482,9 +585,15 @@ a panel below its minimum. Mastering's minimum shows its whole 368-point board u
 the header row; a short window lowers it to 370 points, the same floor as
 Mixer, and the board then scrolls its chip strip below the pedals.
 
+The lower panel has 18-point side margins, 10 points above the header row, and 6
+below its content. Mixer, Mastering, and Effects boards start 8 points under the
+header row, so a board never touches the selector; the margins give up that
+space, so the boards keep their height. Sounds keeps its own category spacing
+and gains the 8 points the margins gave up.
+
 A single Bottom module selector occupies the fixed left slot in the lower
 panel's 28-point header row. Its width is 168 points, enough for the full name
-of every module, and its selected module uses 16-point bold Syncopate. The
+of every module, and its selected module uses the theme's 16-point heading face. The
 selector keeps the same horizontal anchor and control identity for Sounds,
 Mixer, Mastering, and Effects. A long selected name
 truncates within this width; the popup and accessible value retain its full name.
@@ -604,8 +713,9 @@ disable when no step is available. An engaged Loop keeps a
 one-point Accent outline. Window edges, title bars, and the bar ruler
 are pointer surfaces and take no Tab stop.
 Folded Metal windows share rounded chassis edges and the same control geometry.
-The painted chassis uses 8-point corners; the 10-point window radius applies to
-native popups and menus.
+The painted chassis uses 8-point corners. Native windows and popups use a
+10-point base radius and menus a 6-point one, each in the theme's shape
+language (`Roles::corner`).
 Paint the perimeter and bevel as continuous antialiased native geometry. Fade
 raster material before the outer outline and at strip ends so joints stay smooth.
 Prepare knob edges at 8x resolution, then reduce once with premultiplied-alpha
@@ -840,9 +950,11 @@ and dark ink. Destructive actions have explicit names and the rust-red Danger fa
 Tertiary buttons, for rare reversible actions such as Restore options defaults,
 show underlined cream text and gain the dark face only on hover or press. All roles use
 the same padding, label alignment, focus, hover, pressed, and disabled behavior.
-Help lines under a control use 12-point Inter in the cream-tinted Folded help
-colour, quieter than the 13-point cream label, with 4 points to their control
+Help lines under a control use the 12-point text face in the theme's help
+colour, quieter than the 13-point label, with 4 points to their control
 and more space before the next group.
+Enabled button labels retain at least 4.5:1 contrast in their resting, hovered,
+and pressed states, including the material's highlights and shading.
 Disabled controls explain why they are unavailable. Preserve accessible names,
 numeric values, ranges, selected states, and keyboard actions.
 
@@ -1014,7 +1126,7 @@ primary Done instead, because its actions take effect at once. Page selection an
 scroll position survive collapse and navigation while the window is open.
 At 960x720, 1024x768, and 1440x1000, controls and actions must remain reachable
 without horizontal scrolling. Ctrl+, opens or focuses this window. Section
-titles use 15-point uppercase Syncopate, 4 points below the bay edge and 8
+titles use the 15-point uppercase heading face, 4 points below the bay edge and 8
 points after an earlier section. On Workspace, Files, and Sample libraries,
 each control has at most one help line.
 Workspace and Mute previews use the shared switch.
@@ -1121,8 +1233,8 @@ display formatting must not change file access, project data, or settings.
 
 ### Use
 
-- Preserve graphite surfaces, Syncopate branding and titles, Inter Medium
-  interface text, and lime primary actions.
+- Give every surface the current theme's roles and material. Keep Syncopate
+  for the product name in every theme.
 - Use the same category and sample names across views.
 - Keep track numbers stable and give actions accessible names.
 - Check native layouts at the supported minimum size after changes.
@@ -1145,8 +1257,12 @@ defects.
 
 ### Avoid
 
-- Keep Folded Metal styling on in-app floating windows and modals. Preserve the
-  main graphite workspace and Mixer. Do not add repeated waveform traces.
+- Do not keep one theme's material inside another theme: no metal chassis or
+  ivory strips in Studio or Aero, and no plastic gloss in Studio. Do not add
+  repeated waveform traces.
+- Do not branch on a theme in tool bodies or interaction code. Add a role or
+  extend a shared painter instead.
+- Do not move or resize a control for one theme.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.
 - Do not use a screenshot as evidence for audio parity, device behavior, or

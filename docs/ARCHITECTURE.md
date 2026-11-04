@@ -559,7 +559,15 @@ Replacing a song or adopting scanned folders invalidates held control gestures
 in Mixer, Mastering, Effects, and the channel EQ. Movement from an earlier
 gesture cannot edit the replacement song.
 
-`src/ui/dialog.rs` owns the shared Folded Metal shell and lifecycle for all
+`src/ui/theme.rs` owns the three application themes: each theme's color roles,
+its material (flat, plastic, or metal), corner radii, and fonts, and the code
+painters for plastic surfaces, gradients, flat and molded dials, and fader
+caps. Each frame sets a thread-local current theme from the option;
+`theme::adopt` rebuilds the egui style and fonts only when the theme changes.
+Renderers read roles, and only shared painters branch on the material;
+interaction and parameter code never depend on the theme.
+
+`src/ui/dialog.rs` owns the shared tool shell and lifecycle for all
 in-app tools, utility windows, and blocking dialogs. It owns header layout,
 position, edge resizing, open/collapsed geometry, focus layers, stable identities,
 and accessible modal naming. The caller owns the task and decides what an action
@@ -653,7 +661,9 @@ preview, transport change, or stop cannot inherit its active indicator.
 Save completion updates the local feedback and the selected output's source
 tempo; cancelling a file choice does not report success.
 
-`src/ui/mixer.rs` owns Mixer's compact graphite and ivory hardware presentation.
+`src/ui/mixer.rs` owns Mixer's compact strip presentation in the current theme.
+Vintage tiles the graphite and ivory artwork; Studio and Aero paint the strips
+and fader caps in code at the same density scale.
 Each strip is 108 logical points wide. Master remains outside the horizontally
 scrolling occupied-track bank. Each track strip's EQ button starts the row of
 Mute and Solo, above polarity, and the Master strip's Bypass sits under its
@@ -685,7 +695,7 @@ button selects the module and brings that bus into view.
 The frontend's `BottomModule` enum selects Sounds, Mixer, Mastering, or Effects. `src/ui/view.rs`
 owns their shared 28-point header and fixed left-side `Bottom module` combo.
 Its width, `BOTTOM_MODULE_WIDTH`, is 168 points, which shows every module name
-in full; the selected module uses 16-point bold Syncopate.
+in full; the selected module uses the theme's 16-point heading face.
 The combo has bounded layout space and truncates long selected text; its
 accessible value and popup retain the full name.
 The combo keeps its control ID and horizontal anchor across module changes.
@@ -977,10 +987,15 @@ states. Native egui tests check
 control input and emitted accessibility semantics. They do not replace a screen
 reader check of the built executable.
 
-Syncopate Bold 700 is bundled unchanged from a pinned Google Fonts commit.
-The frontend transliterates branding and title letters to Latin counterparts
-and formats them in uppercase without changing saved project names or paths.
-Inter Medium 500 serves all other text. Window IDs remain independent of visible
-title formatting.
-Run `python tools/assets/prepare-fonts.py --check` to verify both font and license
-hashes, static weights, and ASCII title coverage.
+Syncopate Bold 700 sets the product name in every theme. Each theme adds a
+heading face and a text face (see `docs/DESIGN.md`): IBM Plex Sans SemiBold
+with Inter Medium for Studio, Michroma with Fira Sans Medium for Aero, and
+Barlow Condensed SemiBold with Barlow Medium for Vintage. Inter is every
+theme's symbol fallback. All files are unchanged from pinned sources. The
+frontend transliterates branding and title letters to Latin counterparts and
+formats them in uppercase without changing saved project names or paths.
+Heading rows are pinned to one line height in every theme, so the layout does
+not move. Window IDs remain independent of visible title formatting.
+Run `python tools/assets/prepare-fonts.py --check` to verify font and license
+hashes, static weights, families, embedding permission, ASCII coverage, and
+Romanian coverage of text faces.

@@ -1,12 +1,5 @@
 //! Step synth body. Shared hardware shell and controls own presentation.
-use super::controls::{CREAM, FACE};
 use super::*;
-const EDGE: Color32 = Color32::from_rgb(100, 105, 101);
-/// Beat-group lines, idle cell edges, and the alternate pitch rows of the grid.
-const GRID_LINE: Color32 = Color32::from_rgb(120, 128, 108);
-const CELL_EDGE: Color32 = Color32::from_rgb(108, 116, 98);
-const CELL_HOVER: Color32 = Color32::from_rgb(62, 68, 53);
-const CELL_ALTERNATE: Color32 = Color32::from_rgb(29, 33, 28);
 pub(super) struct Source<'a> {
     pub name: &'a str,
     pub available: bool,
@@ -64,7 +57,7 @@ pub(super) fn show(
                 egui::Label::new(
                     egui::RichText::new(source.name)
                         .font(FontId::proportional(12.5))
-                        .color(CREAM),
+                        .color(roles().legend),
                 )
                 .truncate(),
             );
@@ -91,9 +84,9 @@ pub(super) fn show(
                     "Palette sound"
                 },
                 12.0,
-                CREAM,
+                roles().legend,
             );
-            left_text(&panel, point(20.0, 100.0), "View bar", 13.0, CREAM);
+            left_text(&panel, point(20.0, 100.0), "View bar", 13.0, roles().legend);
             for bar in 0..4 {
                 let selected = *view_bar == bar;
                 let response = select_button(
@@ -128,7 +121,7 @@ pub(super) fn show(
                 "Loop source",
                 &mut state.loop_source,
             );
-            left_text(&panel, point(300.0, 134.0), "BPM", 13.0, CREAM);
+            left_text(&panel, point(300.0, 134.0), "BPM", 13.0, roles().legend);
             panel.scope_builder(
                 egui::UiBuilder::new().max_rect(rect(336.0, 120.0, 112.0, 28.0)),
                 |ui| {
@@ -157,7 +150,13 @@ pub(super) fn show(
             let main_rect = rect(16.0, 160.0, 788.0, 344.0);
             controls::inset(&panel, main_rect);
             if *show_effects {
-                left_text(&panel, point(30.0, 177.0), "Sequence effects", 13.0, CREAM);
+                left_text(
+                    &panel,
+                    point(30.0, 177.0),
+                    "Sequence effects",
+                    13.0,
+                    roles().legend,
+                );
                 let effects_rect = rect(28.0, 198.0, 764.0, 294.0);
                 let mut form = panel.new_child(
                     egui::UiBuilder::new()
@@ -183,10 +182,10 @@ pub(super) fn show(
                         point(83.0 + step as f32 * 46.0, 174.0),
                         &format!("{}", step + 1),
                         12.0,
-                        CREAM,
+                        roles().legend,
                     );
                 }
-                left_text(&panel, point(25.0, 174.0), "Pitch", 11.0, CREAM);
+                left_text(&panel, point(25.0, 174.0), "Pitch", 11.0, roles().legend);
                 note_grid(
                     &mut panel,
                     rect(20.0, 190.0, 784.0, 306.0),
@@ -332,7 +331,7 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                 let x = content.left() + (40.0 + group as f32 * 184.0);
                 ui.painter().line_segment(
                     [Pos2::new(x, content.top()), Pos2::new(x, content.bottom())],
-                    Stroke::new(1.0_f32, GRID_LINE),
+                    Stroke::new(1.0_f32, roles().grid_line),
                 );
             }
             // The grid is one Tab stop. It holds keyboard focus and moves a
@@ -424,7 +423,7 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                         format!("{note:+}")
                     },
                     FontId::proportional(12.0),
-                    CREAM,
+                    roles().legend,
                 );
                 for step in 0..16 {
                     let index = bar * 16 + step;
@@ -442,13 +441,13 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                     }
                     let current = grid.has_focus() && cursor == (note, step);
                     let fill = if selected {
-                        CORAL
+                        roles().coral
                     } else if response.hovered() {
-                        CELL_HOVER
+                        roles().cell_hover
                     } else if matches!((note + 24) % 12, 0 | 2 | 3 | 5 | 7 | 8 | 10) {
-                        FACE
+                        roles().face
                     } else {
-                        CELL_ALTERNATE
+                        roles().cell_alternate
                     };
                     ui.painter().rect_filled(cell, 2.0, fill);
                     ui.painter().rect_stroke(
@@ -457,9 +456,9 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                         Stroke::new(
                             1.0_f32,
                             if selected {
-                                CORAL.lerp_to_gamma(CREAM, 0.4)
+                                roles().coral.lerp_to_gamma(roles().legend, 0.4)
                             } else {
-                                CELL_EDGE
+                                roles().cell_edge
                             },
                         ),
                         egui::StrokeKind::Inside,
@@ -480,7 +479,11 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                         ui,
                         &response,
                         current,
-                        if selected { controls::INK } else { CREAM },
+                        if selected {
+                            roles().ink
+                        } else {
+                            roles().legend
+                        },
                     );
                     if current && reveal {
                         ui.scroll_to_rect(cell, None);
@@ -502,19 +505,19 @@ fn form_style(ui: &mut egui::Ui) {
     style.spacing.interact_size.y = 26.0;
     style.spacing.item_spacing = Vec2::new(8.0, 6.0);
     style.spacing.slider_width = 180.0;
-    style.visuals.override_text_color = Some(CREAM);
-    style.visuals.panel_fill = FACE;
-    style.visuals.extreme_bg_color = FACE;
-    style.visuals.selection.stroke = Stroke::new(1.0_f32, CREAM);
+    style.visuals.override_text_color = Some(roles().legend);
+    style.visuals.panel_fill = roles().face;
+    style.visuals.extreme_bg_color = roles().face;
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, roles().legend);
     for widgets in [
         &mut style.visuals.widgets.inactive,
         &mut style.visuals.widgets.hovered,
         &mut style.visuals.widgets.active,
     ] {
-        widgets.bg_fill = FACE;
-        widgets.weak_bg_fill = FACE;
-        widgets.bg_stroke = Stroke::new(1.0_f32, EDGE);
-        widgets.fg_stroke = Stroke::new(1.0_f32, CREAM);
+        widgets.bg_fill = roles().face;
+        widgets.weak_bg_fill = roles().face;
+        widgets.bg_stroke = Stroke::new(1.0_f32, roles().tool_edge);
+        widgets.fg_stroke = Stroke::new(1.0_f32, roles().legend);
     }
 }
 fn toggle(ui: &mut egui::Ui, center: Pos2, label_at: Pos2, name: &str, value: &mut bool) {

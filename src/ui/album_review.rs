@@ -274,7 +274,7 @@ fn grid_body(ui: &mut egui::Ui, state: &mut AlbumReviewState, shelf: &Shelf) {
 fn button_width(ui: &egui::Ui, label: &str) -> f32 {
     let text = ui
         .painter()
-        .layout_no_wrap(label.into(), FontId::proportional(13.0), controls::INK)
+        .layout_no_wrap(label.into(), FontId::proportional(13.0), roles().ink)
         .size()
         .x;
     (text + 26.0).max(72.0)
@@ -299,7 +299,7 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
     ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new("Artists")
-                .color(controls::CREAM)
+                .color(roles().legend)
                 .strong(),
         );
         for artist in collection::artists(reviews) {
@@ -314,11 +314,7 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
     let genres = collection::genre_counts(reviews);
     let hidden = genres.len().saturating_sub(TOP_GENRES);
     ui.horizontal_wrapped(|ui| {
-        ui.label(
-            egui::RichText::new("Genres")
-                .color(controls::CREAM)
-                .strong(),
-        );
+        ui.label(egui::RichText::new("Genres").color(roles().legend).strong());
         for (index, (genre, count)) in genres.iter().enumerate() {
             let active = state.filter.genres.contains(genre);
             if !state.genres_expanded && index >= TOP_GENRES && !active {
@@ -358,7 +354,7 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
     ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new("Filters")
-                .color(controls::CREAM)
+                .color(roles().legend)
                 .strong(),
         );
         let mut remove_artist = None;
@@ -393,24 +389,24 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
 /// A placeholder for a cover that is not loaded: a record sleeve outline.
 fn placeholder(ui: &egui::Ui, rect: Rect) {
     let painter = ui.painter();
-    painter.rect_filled(rect, 4.0, controls::INK);
+    painter.rect_filled(rect, 4.0, roles().ink);
     let disc = rect.center() + Vec2::new(rect.width() * 0.12, 0.0);
     let radius = rect.width() * 0.3;
     painter.circle_stroke(
         disc,
         radius,
-        Stroke::new(2.0_f32, MUTED.gamma_multiply(0.5)),
+        Stroke::new(2.0_f32, roles().muted.gamma_multiply(0.5)),
     );
-    painter.circle_filled(disc, radius * 0.35, MUTED.gamma_multiply(0.35));
+    painter.circle_filled(disc, radius * 0.35, roles().muted.gamma_multiply(0.35));
     let sleeve = Rect::from_center_size(
         rect.center() - Vec2::new(rect.width() * 0.12, 0.0),
         Vec2::splat(rect.width() * 0.56),
     );
-    painter.rect_filled(sleeve, 3.0, controls::INK);
+    painter.rect_filled(sleeve, 3.0, roles().ink);
     painter.rect_stroke(
         sleeve,
         3.0,
-        Stroke::new(2.0_f32, MUTED.gamma_multiply(0.6)),
+        Stroke::new(2.0_f32, roles().muted.gamma_multiply(0.6)),
         egui::StrokeKind::Inside,
     );
 }
@@ -421,7 +417,7 @@ fn cover(ui: &egui::Ui, state: &AlbumReviewState, id: &str, rect: Rect) {
             let size = texture.size_vec2();
             let scale = (rect.width() / size.x).min(rect.height() / size.y);
             let shown = Rect::from_center_size(rect.center(), size * scale);
-            ui.painter().rect_filled(rect, 4.0, controls::INK);
+            ui.painter().rect_filled(rect, 4.0, roles().ink);
             ui.painter().image(
                 texture.id(),
                 shown,
@@ -440,16 +436,16 @@ fn card(ui: &mut egui::Ui, state: &AlbumReviewState, review: &Review) -> Respons
         rect,
         5.0,
         if hovered {
-            controls::FACE.gamma_multiply(1.4)
+            roles().face.gamma_multiply(1.4)
         } else {
-            controls::FACE
+            roles().face
         },
     );
     if response.has_focus() {
         ui.painter().rect_stroke(
             rect,
             5.0,
-            Stroke::new(2.0_f32, controls::ACCENT),
+            Stroke::new(2.0_f32, roles().tools[0].1),
             egui::StrokeKind::Inside,
         );
     }
@@ -474,8 +470,8 @@ fn card(ui: &mut egui::Ui, state: &AlbumReviewState, review: &Review) -> Respons
             .with_clip_rect(clipped)
             .galley(clipped.min, galley, color);
     };
-    text(150.0, &review.artist.to_uppercase(), 11.0, MUTED);
-    text(166.0, &review.title, 13.5, controls::CREAM);
+    text(150.0, &review.artist.to_uppercase(), 11.0, roles().muted);
+    text(166.0, &review.title, 13.5, roles().legend);
     let detail = format!(
         "{} · {} track{}{}",
         review.year,
@@ -487,7 +483,7 @@ fn card(ui: &mut egui::Ui, state: &AlbumReviewState, review: &Review) -> Respons
             ""
         }
     );
-    text(188.0, &detail, 11.5, MUTED);
+    text(188.0, &detail, 11.5, roles().muted);
     let name = format!("Open review: {} — {}", review.artist, review.title);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
     response.hover_hint(format!(
@@ -505,7 +501,7 @@ fn problems_list(ui: &mut egui::Ui, problems: &[(String, String)]) {
     }
     controls::disclosure(format!("Files that did not load ({})", problems.len())).show(ui, |ui| {
         for (file, error) in problems {
-            ui.colored_label(CORAL, format!("{file}: {error}"));
+            ui.colored_label(roles().coral, format!("{file}: {error}"));
         }
     });
 }
@@ -558,7 +554,7 @@ fn footer(ui: &mut egui::Ui, state: &mut AlbumReviewState) {
 /// The sources of the reviews and the rights in their content.
 fn credits(ui: &mut egui::Ui) {
     let section = |ui: &mut egui::Ui, heading: &str, text: &str, links: &[(&str, &str, &str)]| {
-        ui.label(egui::RichText::new(heading).color(controls::CREAM).strong());
+        ui.label(egui::RichText::new(heading).color(roles().legend).strong());
         ui.label(text);
         for (source, use_, url) in links {
             ui.horizontal_wrapped(|ui| {
@@ -643,7 +639,7 @@ fn energy_color(energy: Energy) -> Color32 {
         Energy::Low => Color32::from_rgb(137, 176, 210),
         Energy::Mid => Color32::from_rgb(162, 196, 133),
         Energy::High => Color32::from_rgb(232, 197, 133),
-        Energy::Peak => CORAL,
+        Energy::Peak => roles().coral,
     }
 }
 
@@ -695,9 +691,13 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
             ui.label(
                 egui::RichText::new(&review.title)
                     .size(22.0)
-                    .color(controls::CREAM),
+                    .color(roles().legend),
             );
-            ui.label(egui::RichText::new(&review.artist).size(15.0).color(MUTED));
+            ui.label(
+                egui::RichText::new(&review.artist)
+                    .size(15.0)
+                    .color(roles().muted),
+            );
             ui.add_space(4.0);
             egui::Grid::new("album-review-metadata")
                 .num_columns(2)
@@ -705,7 +705,7 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
                 .show(ui, |ui| {
                     let mut row = |name: &str, value: String| {
                         ui.add(
-                            egui::Label::new(egui::RichText::new(name).color(MUTED))
+                            egui::Label::new(egui::RichText::new(name).color(roles().muted))
                                 .wrap_mode(egui::TextWrapMode::Extend),
                         );
                         ui.label(value);
@@ -738,7 +738,7 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
     ui.label(
         egui::RichText::new("Overview")
             .size(16.0)
-            .color(controls::CREAM),
+            .color(roles().legend),
     );
     for paragraph in review.overview.split("\n\n") {
         ui.label(paragraph.trim());
@@ -747,7 +747,7 @@ fn page(ui: &mut egui::Ui, state: &mut AlbumReviewState, id: &str) {
     ui.label(
         egui::RichText::new("Timeline")
             .size(16.0)
-            .color(controls::CREAM),
+            .color(roles().legend),
     );
     if let Some(num) = timeline_chart(ui, &review) {
         state.reveal_track = Some(num);
@@ -796,7 +796,7 @@ fn cover_controls(ui: &mut egui::Ui, state: &mut AlbumReviewState, review: &Revi
             if pending {
                 ui.label("Downloading the cover…");
             } else if let Some(reason) = state.cover_errors.get(&review.id) {
-                ui.colored_label(CORAL, format!("No cover: {reason}"));
+                ui.colored_label(roles().coral, format!("No cover: {reason}"));
             }
         }
         Some(_) => {}
@@ -816,7 +816,7 @@ fn listening(ui: &mut egui::Ui, review: &Review) {
         ("Song file", &review.song_file),
     ];
     if links.iter().chain(&local).all(|(_, value)| value.is_none()) {
-        ui.label(egui::RichText::new("No listening links.").color(MUTED));
+        ui.label(egui::RichText::new("No listening links.").color(roles().muted));
         return;
     }
     ui.horizontal_wrapped(|ui| {
@@ -830,7 +830,7 @@ fn listening(ui: &mut egui::Ui, review: &Review) {
         if let Some(path) = path {
             let shown = display_paths(path);
             ui.horizontal_wrapped(|ui| {
-                ui.label(egui::RichText::new(label).color(MUTED));
+                ui.label(egui::RichText::new(label).color(roles().muted));
                 ui.add(egui::Label::new(&shown).truncate())
                     .hover_hint(&shown);
             });
@@ -857,7 +857,7 @@ fn timeline_chart(ui: &mut egui::Ui, review: &Review) -> Option<u32> {
         let painter = ui.painter();
         let title = format!("{}. {}", track.num, track.title);
         let galley =
-            painter.layout_no_wrap(title.clone(), FontId::proportional(12.0), controls::CREAM);
+            painter.layout_no_wrap(title.clone(), FontId::proportional(12.0), roles().legend);
         painter
             .with_clip_rect(Rect::from_min_size(
                 row.min,
@@ -866,7 +866,7 @@ fn timeline_chart(ui: &mut egui::Ui, review: &Review) -> Option<u32> {
             .galley(
                 Pos2::new(row.left(), row.center().y - galley.size().y / 2.0),
                 galley,
-                controls::CREAM,
+                roles().legend,
             );
         let bar_left = row.left() + label_width;
         let duration = clock_seconds(&track.duration).unwrap_or(0) as f32;
@@ -886,7 +886,7 @@ fn timeline_chart(ui: &mut egui::Ui, review: &Review) -> Option<u32> {
             painter.rect_filled(segment, 2.0, section_color(&event.section));
             painter.line_segment(
                 [segment.left_top(), segment.left_bottom()],
-                Stroke::new(1.0_f32, controls::INK),
+                Stroke::new(1.0_f32, roles().ink),
             );
         }
         painter.text(
@@ -894,13 +894,13 @@ fn timeline_chart(ui: &mut egui::Ui, review: &Review) -> Option<u32> {
             Align2::LEFT_CENTER,
             &track.duration,
             FontId::proportional(11.0),
-            MUTED,
+            roles().muted,
         );
         if response.hovered() {
             painter.rect_stroke(
                 row.expand(1.0),
                 2.0,
-                Stroke::new(1.0_f32, controls::ACCENT),
+                Stroke::new(1.0_f32, roles().tools[0].1),
                 egui::StrokeKind::Outside,
             );
         }
@@ -927,15 +927,15 @@ fn track_section(ui: &mut egui::Ui, track: &Track, reveal: bool) {
         ui.label(
             egui::RichText::new(format!("{}. {}", track.num, track.title))
                 .size(15.0)
-                .color(controls::CREAM),
+                .color(roles().legend),
         );
-        ui.label(egui::RichText::new(&track.duration).color(MUTED));
+        ui.label(egui::RichText::new(&track.duration).color(roles().muted));
         ui.label(
             egui::RichText::new(format!("Energy: {}", track.energy.key()))
                 .color(energy_color(track.energy))
                 .strong(),
         );
-        ui.label(egui::RichText::new(track.tags.join(" · ")).color(MUTED));
+        ui.label(egui::RichText::new(track.tags.join(" · ")).color(roles().muted));
     });
     if reveal {
         heading.response.scroll_to_me(Some(egui::Align::TOP));
@@ -965,7 +965,7 @@ fn track_section(ui: &mut egui::Ui, track: &Track, reveal: bool) {
                 ui.set_max_width(ui.available_width().max(240.0));
                 ui.label(&event.description);
                 if let Some(detail) = &event.detail {
-                    ui.label(egui::RichText::new(detail).color(MUTED).size(12.5));
+                    ui.label(egui::RichText::new(detail).color(roles().muted).size(12.5));
                 }
             });
         });

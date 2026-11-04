@@ -6,7 +6,6 @@
 //! and its dials.
 //! The window edits copies of the track's settings; the caller turns
 //! changed copies into a mixer edit.
-use super::controls::CREAM;
 use super::master::{Dial, Format, decimal, dial};
 use super::*;
 use mixjam_techno::application::{
@@ -358,7 +357,7 @@ fn show(ui: &mut egui::Ui, name: &str, track: usize, channel: &Channel) -> Actio
             Align2::CENTER_CENTER,
             heading,
             FontId::proportional(12.0),
-            CREAM,
+            roles().legend,
         );
         for (row, param) in params.iter().enumerate() {
             let y = top + 48.0 + row as f32 * ROW;
@@ -524,7 +523,7 @@ fn compressor_section(
         Align2::CENTER_CENTER,
         "Stereo",
         FontId::proportional(12.0),
-        CREAM,
+        roles().legend,
     );
     let before = decimal(width);
     let mut value = before;
@@ -650,7 +649,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
     let y_of = |db: f64| {
         plot.center().y - (db.clamp(-CURVE_DB, CURVE_DB) / CURVE_DB) as f32 * plot.height() / 2.0
     };
-    let grid = CREAM.gamma_multiply(0.18);
+    let grid = roles().legend.gamma_multiply(0.18);
     let painter = ui.painter().with_clip_rect(rect);
     for hz in [50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10_000.0] {
         let x = x_of(hz);
@@ -669,7 +668,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
                 Align2::CENTER_CENTER,
                 label,
                 FontId::proportional(10.0),
-                CREAM,
+                roles().legend,
             );
         }
     }
@@ -680,7 +679,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
             Stroke::new(
                 1.0_f32,
                 if db == 0.0 {
-                    CREAM.gamma_multiply(0.4)
+                    roles().legend.gamma_multiply(0.4)
                 } else {
                     grid
                 },
@@ -691,7 +690,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
             Align2::RIGHT_CENTER,
             label,
             FontId::proportional(10.0),
-            CREAM,
+            roles().legend,
         );
     }
     let points: Vec<Pos2> = (0..=160)
@@ -703,7 +702,7 @@ fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
     let color = if eq.on {
         controls::print_color(ui)
     } else {
-        CREAM.gamma_multiply(0.35)
+        roles().legend.gamma_multiply(0.35)
     };
     painter.add(egui::Shape::line(points, Stroke::new(2.0_f32, color)));
     let response = ui.interact(rect, ui.id().with(("eq-curve", name)), Sense::hover());
