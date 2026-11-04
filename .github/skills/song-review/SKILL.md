@@ -3,7 +3,8 @@ name: song-review
 description: >
   Review, rate, or master a song made with MixJam Techno. Use to run the song
   critique loop, to brief a composition critic, mix critic, rhythm critic,
-  blind rater, or mastering engineer, or to act as one of these roles.
+  Devil's advocate, blind rater, or mastering engineer, or to act as one of
+  these roles.
 ---
 
 # Review a song
@@ -21,7 +22,8 @@ round log format, and the generic targets.
 1. If you are a critic, the rater, or the mastering engineer, read your role
    file and do only that role:
    [COMPOSITION-CRITIC.md](COMPOSITION-CRITIC.md), [MIX-CRITIC.md](MIX-CRITIC.md),
-   [RHYTHM-CRITIC.md](RHYTHM-CRITIC.md), [RATER.md](RATER.md), or
+   [RHYTHM-CRITIC.md](RHYTHM-CRITIC.md), [DEVILS-ADVOCATE.md](DEVILS-ADVOCATE.md),
+   [RATER.md](RATER.md), or
    [MASTERING-ENGINEER.md](MASTERING-ENGINEER.md).
    Completion criterion: Your output follows the format in your role file.
 2. If the user asks only for feedback or a rating, select the evaluation branch.
@@ -158,6 +160,15 @@ Each repair round costs render time and agent turns. To keep rounds short:
    plan. The owner chooses which of its fixes and auditions to run.
    Completion criterion: Its output follows `RHYTHM-CRITIC.md`, and none of
    its proposals is applied without the owner's choice.
+5. If the user or the artist profile asks for a Devil's advocate review, launch
+   it as a fresh agent after the other critiques of the round are written:
+   `song-devils-advocate`. Give it the evidence package, the current round's
+   critiques, the round log or the handoff, and the owner verdicts file. Do
+   not give it a rating or a score. It argues against the targets and the
+   critics' consensus and proposes bold moves as auditions. The owner
+   chooses which proposals to audition.
+   Completion criterion: Its output follows `DEVILS-ADVOCATE.md`, no proposal
+   goes against an owner decision, and none is applied without the owner's choice.
 
 The agents are in `.claude/agents/` for Claude Code and in `.codex/agents/` for
 Codex, where the names use underscores (`song_composition_critic`). If the

@@ -25,7 +25,8 @@ Give each role the same evidence for a pass, as paths:
 | Reference profile | `REFERENCE_PROFILE` or `reference.json` beside the artist profile, when available; screen the rater's copy; required for mastering measurements against a reference |
 | Review folder and output path | where the role writes its output |
 
-Only the critics and the main agent read the round log. The rater never reads
+Only the critics and the main agent read the round log. The Devil's advocate
+also reads the current round's critiques, because it argues against them. The rater never reads
 the round log, a critique, or an earlier rating. The mastering engineer does
 not read the round log. Give it a decisions-only extract when earlier board
 decisions are needed.
