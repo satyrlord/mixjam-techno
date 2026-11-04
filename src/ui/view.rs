@@ -3113,6 +3113,10 @@ pub(super) fn configure_style(ctx: &egui::Context) {
     let roles = roles();
     let mut style = (*ctx.style()).clone();
     style.visuals = egui::Visuals::dark();
+    // egui's dark-mode curve (close to gamma 0.5) suits light text on dark
+    // fields but bloats dark legends on light button faces; linear thins the
+    // light text. One curve serves both in the shared glyph atlas.
+    style.visuals.text_alpha_from_coverage = egui::epaint::AlphaFromCoverage::Gamma(0.7);
     style.visuals.override_text_color = Some(roles.text);
     style.visuals.panel_fill = roles.canvas;
     style.visuals.window_fill = roles.panel;
@@ -4660,13 +4664,22 @@ pub(super) fn transport_button(
     } else {
         roles().text
     };
+    // Snapped corners keep the flat edge on a pixel boundary; a fractional
+    // edge leaves a faint ghost column beside the glyph.
     let triangle = |x: f32, direction: f32| {
         painter.add(egui::Shape::convex_polygon(
-            vec![
-                center + Vec2::new(x - direction * 5.0, -9.0),
-                center + Vec2::new(x - direction * 5.0, 9.0),
-                center + Vec2::new(x + direction * 7.0, 0.0),
-            ],
+            [
+                Vec2::new(x - direction * 5.0, -9.0),
+                Vec2::new(x - direction * 5.0, 9.0),
+                Vec2::new(x + direction * 7.0, 0.0),
+            ]
+            .map(|offset| {
+                egui::emath::GuiRounding::round_to_pixels(
+                    center + offset,
+                    painter.pixels_per_point(),
+                )
+            })
+            .to_vec(),
             color,
             Stroke::NONE,
         ));

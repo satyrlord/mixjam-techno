@@ -7240,6 +7240,13 @@ mod tests {
                     .iter()
                     .find_map(|shape| {
                         let bounds = match &shape.shape {
+                            // Aero's gradient mesh ends half a point inside its
+                            // rim and carries a half-pixel feather.
+                            egui::Shape::Mesh(mesh)
+                                if roles().material == theme::Material::Plastic =>
+                            {
+                                mesh.calc_bounds().expand(0.5 - 0.5 / density)
+                            }
                             egui::Shape::Mesh(mesh) => mesh.calc_bounds(),
                             egui::Shape::Rect(rect) if rect.fill == roles().cap => rect.rect,
                             _ => return None,

@@ -489,8 +489,9 @@ pub(super) fn configure_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// Points around a rounded rectangle, clockwise from its top edge.
-fn rounded_outline(rect: Rect, radius: f32) -> Vec<Pos2> {
+/// Points around a rounded rectangle, clockwise from its top edge, each with
+/// its outward unit normal.
+fn rounded_outline(rect: Rect, radius: f32) -> Vec<(Pos2, Vec2)> {
     const STEPS: usize = 6;
     let radius = radius
         .min(rect.width() / 2.0)
@@ -505,15 +506,17 @@ fn rounded_outline(rect: Rect, radius: f32) -> Vec<Pos2> {
     let mut points = Vec::with_capacity(4 * (STEPS + 1));
     for (center, start) in corners {
         for step in 0..=STEPS {
-            let angle = (start + 90.0 * step as f32 / STEPS as f32).to_radians();
-            points.push(center + Vec2::angled(angle) * radius);
+            let normal = Vec2::angled((start + 90.0 * step as f32 / STEPS as f32).to_radians());
+            points.push((center + normal * radius, normal));
         }
     }
     points
 }
 
 /// A rounded rectangle shaded from `top` to `bottom`. A vertical gradient is
-/// linear in y, so the fan's interpolation reproduces it exactly.
+/// linear in y, so the fan's interpolation reproduces it exactly. Like egui's
+/// own shapes, the silhouette fades over one physical pixel; a hard mesh
+/// edge would show its stairs through the antialiased rim drawn over it.
 pub(super) fn gradient(
     painter: &egui::Painter,
     rect: Rect,
@@ -532,13 +535,21 @@ pub(super) fn gradient(
     };
     let mut mesh = egui::Mesh::default();
     mesh.colored_vertex(rect.center(), shade(rect.center()));
+    let feather = 0.5 / painter.pixels_per_point();
     let outline = rounded_outline(rect, radius);
     let count = outline.len() as u32;
-    for point in outline {
-        mesh.colored_vertex(point, shade(point));
+    for (point, normal) in outline {
+        let inner = point - normal * feather;
+        mesh.colored_vertex(inner, shade(inner));
+        mesh.colored_vertex(point + normal * feather, Color32::TRANSPARENT);
     }
     for index in 0..count {
-        mesh.add_triangle(0, 1 + index, 1 + (index + 1) % count);
+        let next = (index + 1) % count;
+        let (inner, outer) = (1 + 2 * index, 2 + 2 * index);
+        let (next_inner, next_outer) = (1 + 2 * next, 2 + 2 * next);
+        mesh.add_triangle(0, inner, next_inner);
+        mesh.add_triangle(inner, outer, next_outer);
+        mesh.add_triangle(inner, next_outer, next_inner);
     }
     painter.add(mesh);
 }
@@ -553,10 +564,14 @@ pub(super) const PLASTIC_GLOSS: u8 = 10;
 /// Molded plastic: broad soft shading, a quiet highlight across the upper
 /// part, and a restrained rim. The finish is the owner's softer gloss.
 pub(super) fn plastic(painter: &egui::Painter, rect: Rect, radius: f32, fill: Color32) {
+    // egui snaps the rim strokes below to whole pixels; the fill snaps with
+    // them and ends under the rim, as egui's own filled and stroked shapes
+    // do. A fill reaching the rim's outer edge tints its antialiased pixels.
+    let rect = egui::emath::GuiRounding::round_to_pixels(rect, painter.pixels_per_point());
     gradient(
         painter,
-        rect,
-        radius,
+        rect.shrink(0.5),
+        (radius - 0.5).max(0.0),
         fill.lerp_to_gamma(Color32::WHITE, PLASTIC_LIGHT),
         fill.lerp_to_gamma(Color32::BLACK, PLASTIC_SHADE),
     );
