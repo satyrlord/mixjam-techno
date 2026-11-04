@@ -2376,6 +2376,7 @@ impl MixJamApp {
         if self.blocking_modal(ctx).is_none() {
             self.keyboard(ctx);
         }
+        self.file_drop(ctx);
         self.header(ctx);
         self.side_rail(ctx);
         self.bottom(ctx);

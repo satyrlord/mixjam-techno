@@ -469,12 +469,16 @@ keeps copies of those WAV files together in the application's data folder.
 The song retains its native sample identities. These copies are source audio
 for the saved song; repeated saves reuse unchanged copies.
 
-A `.mixjam` song is JSON, format version 19. [SONG-FORMAT.md](SONG-FORMAT.md)
+A `.mixjam` song is JSON, format version 24. [SONG-FORMAT.md](SONG-FORMAT.md)
 describes it and how earlier versions open. A song links to WAV files. It is
 not a portable audio bundle. A song finds a WAV that moved within a library
 folder, or to another library folder, by the end of its path: the file name and
 the folders just above it. After moving a library folder, add its new location
 before you open the song.
+
+To open a song without **Open**, drag its file from Explorer onto the window.
+A dropped file opens like a song chosen with **Open**: unsaved work asks to be
+saved first. If you drop several files, the first song among them opens.
 
 ## Open songs from other programs
 

@@ -209,12 +209,17 @@ struct HandleDrag {
     preview: Clip,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum PendingAction {
     New,
     Open,
+    /// A song file dropped on the window.
+    OpenPath(PathBuf),
     Close,
 }
+
+/// The file extensions that Open song accepts.
+const SONG_EXTENSIONS: &[&str] = &["mixjam", "mix", "json"];
 
 /// What a chosen path is for. While an agent drives the application, the
 /// request waits in the Choose path modal instead of a native file dialog.
@@ -1068,6 +1073,80 @@ impl MixJamApp {
         }
     }
 
+    /// Open the first song file dropped on the window, and mark the window
+    /// while a file hovers over it.
+    fn file_drop(&mut self, ctx: &egui::Context) {
+        let is_song = |path: &Path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    SONG_EXTENSIONS
+                        .iter()
+                        .any(|song| extension.eq_ignore_ascii_case(song))
+                })
+        };
+        let (hovered, dropped) = ctx.input(|input| {
+            (
+                input
+                    .raw
+                    .hovered_files
+                    .iter()
+                    .map(|file| file.path.clone())
+                    .collect::<Vec<_>>(),
+                input
+                    .raw
+                    .dropped_files
+                    .iter()
+                    .filter_map(|file| file.path.clone())
+                    .collect::<Vec<_>>(),
+            )
+        });
+        if !hovered.is_empty() {
+            let song = hovered.iter().flatten().any(|path| is_song(path));
+            let painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("file-drop"),
+            ));
+            let screen = ctx.viewport_rect();
+            painter.rect_filled(screen, 0.0, Color32::from_black_alpha(150));
+            painter.rect_stroke(
+                screen.shrink(12.0),
+                8.0,
+                Stroke::new(3.0_f32, roles().accent),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                screen.center(),
+                Align2::CENTER_CENTER,
+                if song {
+                    "Drop to open the song"
+                } else {
+                    "Only song files open here"
+                },
+                FontId::proportional(24.0),
+                Color32::WHITE,
+            );
+        }
+        if dropped.is_empty() {
+            return;
+        }
+        let Some(path) = dropped.into_iter().find(|path| is_song(path)) else {
+            self.error(format!(
+                "Cannot open the dropped file: songs are .{} files.",
+                SONG_EXTENSIONS.join(", .")
+            ));
+            return;
+        };
+        if let Some(identity) = self.blocking_modal(ctx) {
+            dialog::expand(ctx, identity);
+            self.error(format!(
+                "Finish or cancel {identity} before starting another file action."
+            ));
+            return;
+        }
+        self.request_action(PendingAction::OpenPath(path), ctx);
+    }
+
     fn save(&mut self, choose_path: bool) {
         match self.session.file().map(Path::to_path_buf) {
             Some(path) if !choose_path => self.save_to(&path),
@@ -1198,6 +1277,10 @@ impl MixJamApp {
         match action {
             PendingAction::New => self.new_mix(),
             PendingAction::Open => self.open(),
+            PendingAction::OpenPath(path) => {
+                self.session.remember_song_folder(&path);
+                self.open_path(&path);
+            }
             PendingAction::Close => {
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1861,11 +1944,11 @@ impl MixJamApp {
         if !dialog::is_collapsed(ctx, "Save your changes?")
             && self.path_prompt.is_none()
             && std::mem::take(&mut self.resume_save_changes)
-            && let Some(action) = self.pending_action
+            && let Some(action) = self.pending_action.clone()
         {
             self.save_changes(action, ctx);
         }
-        if let Some(action) = self.pending_action
+        if let Some(action) = self.pending_action.clone()
             && self.path_prompt.is_none()
         {
             let response = dialog::modal(ctx, "Save your changes?", "Save your changes?", |ui| {
@@ -1880,10 +1963,10 @@ impl MixJamApp {
                 );
                 ui.horizontal(|ui| {
                     if dialog::primary(ui, "Save changes").clicked() {
-                        self.save_changes(action, ctx);
+                        self.save_changes(action.clone(), ctx);
                     }
                     if dialog::danger(ui, "Discard changes").clicked() {
-                        self.run_action(action, ctx);
+                        self.run_action(action.clone(), ctx);
                     }
                     if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {
                         self.pending_action = None;
@@ -2350,7 +2433,7 @@ impl MixJamApp {
             FileRequest::OpenSong => (
                 "Open song".into(),
                 OpenFile,
-                Some(("Songs", &["mixjam", "mix", "json"])),
+                Some(("Songs", SONG_EXTENSIONS)),
                 None,
                 Some(
                     self.session

@@ -190,3 +190,64 @@ fn workspace_file_requests_cannot_replace_paused_tasks() {
     assert_eq!(app.import_path, Some(PathBuf::from("first.wav")));
     assert_eq!(app.import_bpm, 127.0);
 }
+
+/// A frame in which `paths` are dropped on the window.
+fn drop_frame(ctx: &egui::Context, app: &mut MixJamApp, paths: &[PathBuf]) {
+    let _ = ctx.run(
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+            focused: true,
+            dropped_files: paths
+                .iter()
+                .map(|path| egui::DroppedFile {
+                    path: Some(path.clone()),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        },
+        |ctx| app.draw(ctx),
+    );
+}
+
+#[test]
+fn dropped_song_opens_and_asks_before_replacing_unsaved_work() {
+    let folder = std::env::temp_dir().join(format!("mixjam-ui-drop-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let ctx = egui::Context::default();
+    configure_style(&ctx);
+    let mut app = MixJamApp::from_session(
+        Session::headless(Arc::new(Library::empty()), Project::default())
+            .unwrap()
+            .with_settings_root(folder.clone()),
+        "Printed panel lifecycle".into(),
+        false,
+    );
+    app.capture_path = None;
+    app.options = None;
+    let song = folder.join("Dropped.MIXJAM");
+    app.session.edit(EditCommand::SetTempo(135.0)).unwrap();
+    app.session.save(&song).unwrap();
+    app.new_mix();
+
+    // A file that is not a song is refused and leaves the mix alone.
+    drop_frame(&ctx, &mut app, &[folder.join("loop.wav")]);
+    assert!(app.status_error && app.status.contains(".mixjam"));
+    assert!(app.session.file().is_none());
+
+    // The first song among the dropped files opens.
+    drop_frame(&ctx, &mut app, &[folder.join("loop.wav"), song.clone()]);
+    assert_eq!(app.session.file(), Some(song.as_path()));
+    assert_eq!(app.session.project().bpm, 135.0);
+
+    // Unsaved work asks first; Discard changes then opens the dropped song.
+    app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+    drop_frame(&ctx, &mut app, std::slice::from_ref(&song));
+    assert!(matches!(app.pending_action, Some(PendingAction::OpenPath(ref path)) if *path == song));
+    assert_eq!(app.session.project().bpm, 160.0);
+    app.run_action(app.pending_action.clone().unwrap(), &ctx);
+    assert!(app.pending_action.is_none());
+    assert_eq!(app.session.project().bpm, 135.0);
+    assert!(!app.session.unsaved());
+    std::fs::remove_dir_all(folder).unwrap();
+}
