@@ -224,11 +224,32 @@ fn overlap_add(
                 .max(0.000001)
         })
         .collect();
+    // The first grain reads the source's first frames. The last one is pinned
+    // to the source's last frames and is placed first, so the grains before it
+    // align with it. Both ends of the output then match the source's ends, and
+    // a sound that loops without a seam still does after the stretch: a clip
+    // that restarts it does not click.
+    let tail = (frames > window + hop).then(|| frames - window);
+    if let Some(tail) = tail {
+        let source_tail = source_frames - window;
+        for index in 0..window {
+            let weight = if index < hop {
+                window_weights[index]
+            } else {
+                1.0
+            };
+            weights[tail + index] += weight;
+            for channel in 0..channels {
+                output[(tail + index) * channels + channel] +=
+                    samples[(source_tail + index) * channels + channel] * weight;
+            }
+        }
+    }
     // The output that each candidate grain must continue, as offsets from a
     // grain's first sample and their values. It is the same for every
     // candidate, so it is read once per grain.
     let mut target: Vec<(usize, f64)> = Vec::new();
-    for destination in (0..frames).step_by(hop) {
+    for destination in (0..tail.unwrap_or(frames)).step_by(hop) {
         let nominal = (destination as f64 / ratio).round() as usize;
         let nominal = nominal.min(source_frames - window);
         let overlap = window.min(frames - destination).min(hop);
@@ -398,6 +419,37 @@ mod tests {
             "{}",
             frequency(&output)
         );
+    }
+    #[test]
+    fn a_repitched_loop_still_joins_its_own_start_without_a_click() {
+        // One second of 110 Hz and 440 Hz: whole cycles, so the loop's end runs
+        // straight into its start. A repitched copy that ends elsewhere in the
+        // waveform clicks when the next clip restarts the sound.
+        let rate = 44_100;
+        let input = Pcm {
+            sample_rate: rate,
+            channels: 1,
+            samples: (0..rate)
+                .map(|frame| {
+                    let t = frame as f32 / rate as f32;
+                    0.4 * (std::f32::consts::TAU * 110.0 * t).sin()
+                        + 0.2 * (std::f32::consts::TAU * 440.0 * t).sin()
+                })
+                .collect(),
+        };
+        for cents in [1, 204, -204, 700] {
+            let output = repitch(&input, cents).unwrap();
+            let samples = &output.samples;
+            let largest_step = samples
+                .windows(2)
+                .map(|pair| (pair[1] - pair[0]).abs())
+                .fold(0.0, f32::max);
+            let seam = (samples[0] - samples[samples.len() - 1]).abs();
+            assert!(
+                seam <= largest_step * 1.25,
+                "{cents} cents: seam {seam}, largest step inside {largest_step}"
+            );
+        }
     }
     #[test]
     fn stretcher_keeps_stereo_channels_isolated_and_rejects_unknown_tempo() {
