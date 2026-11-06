@@ -126,6 +126,10 @@ impl Lfo {
     pub(super) fn advance(&mut self, hz: f64) {
         self.phase = (self.phase + hz / RATE).fract();
     }
+    /// Advance by `frames` frames at once.
+    pub(super) fn skip(&mut self, hz: f64, frames: u64) {
+        self.phase = (self.phase + hz * frames as f64 / RATE).fract();
+    }
 }
 
 /// Lowers the wet sound while the dry input is loud. A stereo-linked peak

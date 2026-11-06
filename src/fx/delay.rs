@@ -188,6 +188,13 @@ impl Core {
         self.ducker.clear();
         self.activity = 0.0;
     }
+    /// Move the modulation on by `frames` frames that the bus slept through,
+    /// so its phase does not depend on when the bus slept.
+    pub(super) fn skip(&mut self, frames: u64) {
+        self.lfo.skip(self.rate, frames);
+        self.wow.skip(0.53, frames);
+        self.flutter.skip(6.1, frames);
+    }
     /// Activity before output mute or ducking, including the feedback taps.
     pub(super) fn activity(&self) -> f64 {
         self.activity

@@ -129,10 +129,14 @@ impl Shifter {
             band: [OnePole::default(); 2],
         }
     }
+    /// Silence the window. The read heads keep their phase, as the reverb's
+    /// modulation does, so a bus that slept sounds as one that did not.
     fn clear(&mut self) {
         self.line.clear();
         self.band.iter_mut().for_each(OnePole::clear);
-        self.phase = 0.0;
+    }
+    fn skip(&mut self, ratio: f64, frames: u64) {
+        self.phase = (self.phase + frames as f64 * (ratio - 1.0) / WINDOW).rem_euclid(1.0);
     }
     /// Band-limit the input so the shifted copy stays under the Nyquist
     /// frequency and the tone's high cut.
@@ -395,6 +399,19 @@ impl Core {
         self.shifters.iter_mut().for_each(Shifter::clear);
         self.shimmer = [0.0; 2];
         self.ducker.clear();
+    }
+    /// Move the modulation and the shimmer's read heads on by `frames`
+    /// frames that the bus slept through, so their phases do not depend on
+    /// when the bus slept.
+    pub(super) fn skip(&mut self, frames: u64) {
+        self.lfo.skip(self.mod_rate, frames);
+        self.wander.skip(0.07, frames);
+        if self.shimmer_level.value() > 0.0 || self.shimmer_send > 0.0 {
+            let ratio = self.ratio;
+            self.shifters
+                .iter_mut()
+                .for_each(|shifter| shifter.skip(ratio, frames));
+        }
     }
     pub(super) fn activity(&self) -> f64 {
         self.activity

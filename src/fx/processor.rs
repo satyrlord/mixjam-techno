@@ -45,6 +45,10 @@ struct Bus {
     limiter: SafetyLimiter,
     awake: bool,
     quiet: usize,
+    /// Frames since the bus fell asleep. Its effect's modulation moves on by
+    /// as many when it wakes, so the output does not depend on when it slept,
+    /// which depends on the level.
+    slept: u64,
     /// Frames left of a cut's fade, and whether the module changes after it.
     cut: usize,
     pending: Option<FxBus>,
@@ -61,6 +65,7 @@ impl Bus {
             limiter: SafetyLimiter::new(),
             awake: false,
             quiet: 0,
+            slept: 0,
             cut: 0,
             pending: None,
         }
@@ -112,6 +117,7 @@ impl Bus {
         self.limiter.clear();
         self.awake = false;
         self.quiet = 0;
+        self.slept = 0;
     }
     fn clear_tail(&mut self) {
         if self.awake && self.cut == 0 {
@@ -143,10 +149,17 @@ impl Bus {
         let fed = left != 0.0 || right != 0.0;
         if !self.awake {
             if !fed || self.kind == Kind::Empty {
+                self.slept += 1;
                 return (0.0, 0.0);
+            }
+            match self.kind {
+                Kind::Delay => self.delay.skip(self.slept),
+                Kind::Reverb => self.reverb.skip(self.slept),
+                Kind::Empty => {}
             }
             self.awake = true;
             self.quiet = 0;
+            self.slept = 0;
         }
         let (wet_l, wet_r) = match self.kind {
             Kind::Empty => (0.0, 0.0),
@@ -340,6 +353,14 @@ impl ReturnsProcessor {
                 out[0] += sum.0 as f32;
                 out[1] += sum.1 as f32;
             }
+        } else {
+            self.sleep_through(block.len() / 2);
+        }
+    }
+    /// Every bus sleeps through a block that no bus processes.
+    fn sleep_through(&mut self, frames: usize) {
+        for bus in self.buses.iter_mut() {
+            bus.slept += frames as u64;
         }
     }
     /// Each bus's return alone, for an export in parts: `returns` gets the
@@ -356,6 +377,7 @@ impl ReturnsProcessor {
         self.poll();
         returns.fill(0.0);
         if sends.is_none() && !self.ringing() {
+            self.sleep_through(returns.len() / (2 * BUSES));
             return;
         }
         let bpm = self.bpm;
@@ -594,6 +616,80 @@ mod tests {
             out.extend(block);
         }
         out
+    }
+
+    /// Two bursts with a gap long enough for the bus to sleep. A louder
+    /// tail takes longer to die away, so the bus falls asleep later, but the
+    /// return still scales with the input: the modulation's phase must not
+    /// depend on when the bus slept.
+    #[test]
+    fn a_return_scales_with_its_input_across_a_sleep() {
+        // The vintage character and the tape saturate a little, which is
+        // not linear by design: these characters do not.
+        let reverb = Aetherform {
+            character: crate::fx::ReverbCharacter::Natural,
+            decay_seconds: 1.0,
+            mod_rate_hz: 0.7,
+            mod_depth_percent: 60.0,
+            duck_amount_percent: 0.0,
+            shimmer_enabled: true,
+            ..Aetherform::default()
+        };
+        let delay = Echoform {
+            mode: TimeMode::Free,
+            time_ms_l: 120.0,
+            time_ms_r: 170.0,
+            feedback: 40.0,
+            mod_depth: 6.0,
+            mod_rate: 0.9,
+            ..plain_delay()
+        };
+        let burst = 44_100;
+        let frames = 14 * 44_100;
+        let render = |module: Module, gain: f32| {
+            let mut processor = ReturnsProcessor::new(&buses(module), 120.0);
+            let mut out = Vec::new();
+            for start in (0..frames).step_by(1024) {
+                let count = 1024.min(frames - start);
+                let mut block = vec![0.0; count * 2];
+                let sounding = |i: usize| i < burst || i >= frames - burst;
+                if (start..start + count).any(sounding) {
+                    let mut sends = vec![0.0; count * 2 * BUSES];
+                    for i in (0..count).filter(|i| sounding(start + i)) {
+                        let x = gain * 0.01 * (0.031 * (start + i) as f32).sin();
+                        sends[i * 2 * BUSES..i * 2 * BUSES + 2].copy_from_slice(&[x, x]);
+                    }
+                    processor.process(&mut block, Some(&sends));
+                } else {
+                    processor.process(&mut block, None);
+                }
+                out.extend(block);
+            }
+            out
+        };
+        for module in [
+            Module::EchoformDelay(delay),
+            Module::AetherformReverb(reverb),
+        ] {
+            let quiet = render(module, 1.0);
+            let loud = render(module, 8.0);
+            let second = 2 * (frames - burst)..;
+            let signal: f64 = loud[second.clone()]
+                .iter()
+                .map(|x| f64::from(*x).powi(2))
+                .sum();
+            let error: f64 = loud[second.clone()]
+                .iter()
+                .zip(&quiet[second])
+                .map(|(l, q)| (f64::from(*l) - 8.0 * f64::from(*q)).powi(2))
+                .sum();
+            assert!(signal > 0.0);
+            assert!(
+                error < signal * 1e-8,
+                "the second burst differs by {:.1} dB",
+                10.0 * (error / signal).log10()
+            );
+        }
     }
 
     #[test]
