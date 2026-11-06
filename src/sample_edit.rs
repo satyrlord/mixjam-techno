@@ -125,14 +125,31 @@ pub fn repitch(input: &Pcm, cents: i32) -> Result<Pcm, String> {
 /// The split between the stretcher's two bands, in hertz.
 const BAND_SPLIT_HZ: f64 = 150.0;
 
+/// The lowest fundamental the stretcher keeps in tune, in hertz.
+const LOWEST_TONE_HZ: usize = 20;
+
+/// How much correlation a grain gives up for each search width it moves from
+/// its nominal place. A tone's period-aligned place correlates far better than
+/// its neighbours and still wins; in noise and drum hits every place
+/// correlates about as well, so the grain stays near its nominal place and the
+/// hits keep their timing.
+const DISTANCE_PENALTY: f64 = 0.2;
+
 /// Make `input` `ratio` times as long and keep its pitch.
 ///
 /// A grain must span a period of the tone it carries, or the overlap-add
 /// follows the waveform slowly and changes the pitch with the length. Short
 /// grains keep transients tight but miss periods longer than about 10 ms, so
 /// the sound is split at 150 Hz: the bass band gets grains long enough for
-/// tones down to about 30 Hz, the rest keeps the short grains, and the bands
+/// tones down to about 20 Hz, the rest keeps the short grains, and the bands
 /// sum back to the whole sound.
+///
+/// Both bands search half the period of a 20 Hz tone around each grain's
+/// nominal place. The upper band of a low note (its harmonics) repeats at the
+/// note's period, not at its own frequencies: a grain that can only move a few
+/// milliseconds finds no place in step with that period, follows the source
+/// instead, and the note's harmonics keep their pitch while its fundamental
+/// moves.
 fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
     let source_frames = input.frames() as usize;
     let frames = (source_frames as f64 * ratio).round().max(1.0) as usize;
@@ -148,8 +165,9 @@ fn stretch(input: &Pcm, ratio: f64) -> Result<Pcm, String> {
         .zip(&low)
         .map(|(sample, low)| f64::from(*sample) - low)
         .collect();
-    let low = overlap_add(&low, channels, frames, ratio, rate / 15, rate / 60);
-    let high = overlap_add(&high, channels, frames, ratio, rate / 50, rate / 200);
+    let search = rate / (2 * LOWEST_TONE_HZ);
+    let low = overlap_add(&low, channels, frames, ratio, rate / 15, search);
+    let high = overlap_add(&high, channels, frames, ratio, rate / 50, search);
     let samples = low
         .iter()
         .zip(&high)
@@ -201,7 +219,8 @@ fn zero_phase_low_pass(input: &Pcm, cutoff: f64) -> Vec<f64> {
 
 /// Waveform-aligned overlap-add of interleaved `samples` into `frames` frames:
 /// grains of `window` frames, each placed where it best continues the output
-/// within `search` frames of its nominal position.
+/// within `search` frames of its nominal position, with a penalty for its
+/// distance from that position.
 fn overlap_add(
     samples: &[f64],
     channels: usize,
@@ -279,11 +298,12 @@ fn overlap_add(
                     b_power += b * b;
                 }
                 let magnitude = (a_power * b_power).sqrt();
-                if magnitude > 1e-12 {
+                let correlation = if magnitude > 1e-12 {
                     dot / magnitude
                 } else {
                     0.0
-                }
+                };
+                correlation - DISTANCE_PENALTY * candidate.abs_diff(nominal) as f64 / search as f64
             };
             let mut best_score = correlation(nominal);
             for candidate in (first..=last).step_by(4) {
@@ -419,6 +439,119 @@ mod tests {
             "{}",
             frequency(&output)
         );
+    }
+    #[test]
+    fn a_low_note_with_harmonics_moves_by_the_whole_pitch_change() {
+        // A 55 Hz sawtooth: its fundamental is in the stretcher's bass band and
+        // its harmonics above 150 Hz are in the upper band. Both must move, or
+        // the note's pitch moves only a fraction of the change (+27 cents gave
+        // +5 cents when the upper band's grains could not follow the period).
+        let rate = 44_100;
+        let saw = |hertz: f64| Pcm {
+            sample_rate: rate,
+            channels: 1,
+            samples: (0..2 * rate)
+                .map(|frame| {
+                    let t = f64::from(frame) / f64::from(rate);
+                    (1..12)
+                        .map(|k| (std::f64::consts::TAU * hertz * k as f64 * t).sin() / k as f64)
+                        .sum::<f64>() as f32
+                        * 0.4
+                })
+                .collect(),
+        };
+        // The period in frames, from the autocorrelation peak near the expected
+        // one, refined between frames.
+        let period = |pcm: &Pcm, expected: f64| {
+            let middle = &pcm.samples[pcm.samples.len() / 4..pcm.samples.len() * 3 / 4];
+            let span = middle.len() - (expected * 1.2) as usize;
+            let score = |lag: usize| -> f64 {
+                (0..span)
+                    .map(|i| f64::from(middle[i]) * f64::from(middle[i + lag]))
+                    .sum()
+            };
+            let lags = (expected * 0.9) as usize..=(expected * 1.1) as usize;
+            let best = lags.max_by(|&a, &b| score(a).total_cmp(&score(b))).unwrap();
+            let (a, b, c) = (score(best - 1), score(best), score(best + 1));
+            best as f64 + 0.5 * (a - c) / (a - 2.0 * b + c)
+        };
+        // A0 is the lowest note and gets a wider tolerance: half its period is
+        // the edge of the search.
+        for (hertz, tolerance) in [(27.5, 5.0), (41.2, 2.0), (55.0, 2.0)] {
+            let input = saw(hertz);
+            let plain = period(&input, f64::from(rate) / hertz);
+            for cents in [-9, 27, -50] {
+                let output = repitch(&input, cents).unwrap();
+                let moved = 1200.0 * (plain / period(&output, plain)).log2();
+                assert!(
+                    (moved - f64::from(cents)).abs() < tolerance,
+                    "{hertz} Hz, {cents} cents: moved {moved:.1}"
+                );
+            }
+        }
+    }
+    #[test]
+    fn stretched_drum_hits_keep_their_timing() {
+        // Noise clicks over a falling kick body, eight a second. Noise
+        // correlates about as well everywhere, so a grain free to move across
+        // the whole search drifts the hits off the beat.
+        let rate = 44_100usize;
+        let hit_every = rate / 8;
+        let hits = 30;
+        let mut seed = 1u32;
+        let mut noise = move || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            f64::from(seed >> 8) / f64::from(1u32 << 24) * 2.0 - 1.0
+        };
+        let mut samples = vec![0.0f32; hit_every * (hits + 2)];
+        for hit in 0..hits {
+            let start = hit_every * (hit + 1);
+            let mut phase = 0.0;
+            for index in 0..hit_every {
+                let t = index as f64 / rate as f64;
+                phase += std::f64::consts::TAU * (50.0 + 70.0 * (-t / 0.02).exp()) / rate as f64;
+                let click = 0.3 * noise() * (-t / 0.006).exp();
+                let body = 0.6 * phase.sin() * (-t / 0.06).exp();
+                samples[start + index] = (click + body) as f32;
+            }
+        }
+        let input = Pcm {
+            sample_rate: rate as u32,
+            channels: 1,
+            samples,
+        };
+        // Energy in 1 ms frames.
+        let envelope = |pcm: &Pcm| -> Vec<f64> {
+            pcm.samples
+                .chunks(rate / 1000)
+                .map(|chunk| chunk.iter().map(|s| f64::from(*s).powi(2)).sum())
+                .collect()
+        };
+        let source = envelope(&input);
+        let first = hit_every * 1000 / rate;
+        let template = &source[first..first + 80];
+        for (from, to) in [(160.0, 180.0), (180.0, 160.0)] {
+            let output = time_stretch(&input, from, to).unwrap();
+            let stretched = envelope(&output);
+            let ratio = from / to;
+            let worst = (1..hits - 1)
+                .map(|hit| {
+                    let ideal = ((hit + 1) as f64 * hit_every as f64 * ratio * 1000.0 / rate as f64)
+                        .round() as i64;
+                    let fit = |lag: i64| {
+                        let at = &stretched[(ideal + lag) as usize..(ideal + lag) as usize + 80];
+                        let norm = at.iter().map(|v| v * v).sum::<f64>().sqrt().max(1e-12);
+                        template.iter().zip(at).map(|(a, b)| a * b).sum::<f64>() / norm
+                    };
+                    (-40..=40i64)
+                        .max_by(|&a, &b| fit(a).total_cmp(&fit(b)))
+                        .unwrap()
+                        .abs()
+                })
+                .max()
+                .unwrap();
+            assert!(worst <= 20, "{from} to {to} BPM: a hit moved {worst} ms");
+        }
     }
     #[test]
     fn a_repitched_loop_still_joins_its_own_start_without_a_click() {
