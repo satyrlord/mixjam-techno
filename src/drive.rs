@@ -971,9 +971,16 @@ mod tests {
     #[test]
     fn nearby_settings_sound_nearby() {
         // Each control, swept in 48 steps across its range, changes the
-        // harmonics and the level a little at a time, with no jump.
+        // harmonics and the level a little at a time, with no jump. The
+        // controls sweep on their own threads: this is the suite's longest test.
         let input = tone(50.0, 0.5, 44_100);
-        for param in DriveParam::ALL {
+        std::thread::scope(|scope| {
+            for param in DriveParam::ALL {
+                let input = &input;
+                scope.spawn(move || sweep_control(param, input));
+            }
+        });
+        fn sweep_control(param: DriveParam, input: &[f32]) {
             let range = param.range();
             let mut sweep = Vec::new();
             for index in 0..=48 {
@@ -988,7 +995,7 @@ mod tests {
                     f64::from(range.low) + f64::from(range.high - range.low) * position
                 };
                 param.set(&mut settings, value as f32);
-                let output = drive(&settings, &input);
+                let output = drive(&settings, input);
                 // The last half second: 25 whole cycles.
                 let output = &output[44_100..];
                 let total = 10.0_f64.powf(power_db(output) / 10.0);

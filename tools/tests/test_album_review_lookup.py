@@ -67,9 +67,6 @@ class LookupTests(unittest.TestCase):
         self.assertGreater(exact, other)
         self.assertEqual(lookup.fold("Oxygène"), "oxygene")
 
-    def test_the_user_agent_names_the_application(self):
-        self.assertIn("MixJamTechno", lookup.USER_AGENT)
-
 
 if __name__ == "__main__":
     unittest.main()

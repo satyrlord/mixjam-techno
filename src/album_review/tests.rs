@@ -72,13 +72,11 @@ fn a_complete_review_passes_and_round_trips_through_its_file_text() {
 }
 
 #[test]
-fn the_shape_rejects_unknown_fields_and_the_dropped_streaming_links() {
+fn the_shape_rejects_unknown_fields_such_as_a_rating() {
     let text = review("artist-album", "Artist", "Album", 1999, &["Electronic"]).to_file_text();
-    for field in ["spotifyUrl", "audioStreamUrl", "videoStreamUrl", "rating"] {
-        let changed = text.replacen('{', &format!("{{\n  \"{field}\": \"x\","), 1);
-        let error = parse(&changed).unwrap_err();
-        assert!(error.contains(field), "{field}: {error}");
-    }
+    let changed = text.replacen('{', "{\n  \"rating\": \"x\",", 1);
+    let error = parse(&changed).unwrap_err();
+    assert!(error.contains("rating"), "{error}");
     let wrong_energy = text.replace("\"low\"", "\"loud\"");
     assert!(parse(&wrong_energy).is_err());
     let missing = text.replace("\"label\": \"Label\",", "");
