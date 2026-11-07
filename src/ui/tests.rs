@@ -2500,7 +2500,10 @@ mod tests {
         for _ in 0..5 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
-        assert!((app.zoom - before * 1.1).abs() < 1e-4, "A wheel event acts once.");
+        assert!(
+            (app.zoom - before * 1.1).abs() < 1e-4,
+            "A wheel event acts once."
+        );
         wheel(&ctx, &mut app, -20.0);
         assert!((app.zoom - before).abs() < 1e-4, "One step down undoes it.");
         for _ in 0..40 {
@@ -11682,6 +11685,33 @@ mod tests {
     }
 
     #[test]
+    fn audio_capture_shortcut_works_in_a_modal_and_does_not_repeat() {
+        let (ctx, mut app) = fixture();
+        app.pending_action = Some(PendingAction::New);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.blocking_modal(&ctx), Some("Save your changes?"));
+        app.session.take_notice();
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::F12, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let (message, error) = app
+            .session
+            .take_notice()
+            .expect("F12 must reach the session.");
+        assert!(error && message.contains("Audio output is unavailable"));
+        assert_eq!(app.blocking_modal(&ctx), Some("Save your changes?"));
+        let mut repeat = key_event(egui::Key::F12, egui::Modifiers::NONE);
+        if let egui::Event::Key { repeat, .. } = &mut repeat {
+            *repeat = true;
+        }
+        frame(&ctx, &mut app, vec![repeat], egui::Modifiers::NONE);
+        assert!(app.session.take_notice().is_none());
+    }
+
+    #[test]
     fn focused_controls_keep_command_shortcuts_and_only_typing_blocks_them() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
@@ -12109,7 +12139,7 @@ mod tests {
     }
 
     #[test]
-    fn mixer_wheel_moves_the_fader_send_and_pan_under_the_pointer_once() {
+    fn mixer_wheel_moves_the_fader_and_send_under_the_pointer_once_and_never_the_pan() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         app.bottom_module = BottomModule::Mixer;
@@ -12145,7 +12175,11 @@ mod tests {
         assert!((app.session.project().tracks[0].sends[0] - 0.05).abs() < 0.0001);
         let pan = effects_control_rect(&output, "Track 1 pan");
         wheel(&ctx, &mut app, pan.center(), false);
-        assert!((app.session.project().tracks[0].pan + 0.05).abs() < 0.0001);
+        assert_eq!(
+            app.session.project().tracks[0].pan,
+            0.0,
+            "The pan leaves the wheel to the view, so a scroll never moves it."
+        );
         let master = effects_control_rect(&output, "Master gain");
         let before = app.session.project().master_gain;
         wheel(&ctx, &mut app, master.center(), false);

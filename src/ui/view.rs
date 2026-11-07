@@ -2383,6 +2383,7 @@ impl MixJamApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request_action(PendingAction::Close, ctx);
         }
+        self.capture_keyboard(ctx);
         if self.blocking_modal(ctx).is_none() {
             self.keyboard(ctx);
         }
@@ -3002,24 +3003,16 @@ fn embedded_effect_dial(
 }
 
 /// A track's pan knob. While its pan lane has points, the knob is
-/// `automated`: the lane sets the pan while the song plays.
+/// `automated`: the lane sets the pan while the song plays. The knob leaves
+/// the wheel to the view behind it, so a scroll over the strips never moves
+/// a pan.
 pub(super) fn pan_control(
     ui: &mut egui::Ui,
     index: usize,
     pan: &mut f32,
     automated: bool,
 ) -> Response {
-    let mut response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
-    let turn = controls::wheel(ui, &response);
-    if turn != 0.0 {
-        let step = if ui.input(|i| i.modifiers.shift) {
-            1.0
-        } else {
-            5.0
-        };
-        *pan = ((*pan * 100.0 + turn * step).round() / 100.0).clamp(-1.0, 1.0);
-        response.mark_changed();
-    }
+    let response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(
             ui.is_enabled(),
@@ -3030,7 +3023,7 @@ pub(super) fn pan_control(
         info
     });
     response.hover_hint(format!(
-        "Track {} pan: {}. Drag or use the wheel (Shift for fine steps). Pan does not enable \
+        "Track {} pan: {}. Drag or use the arrow keys; the wheel scrolls. Pan does not enable \
          a disabled L/R output.{}",
         index + 1,
         pan_description(*pan),

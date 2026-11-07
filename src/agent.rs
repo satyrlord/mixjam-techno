@@ -124,6 +124,11 @@ Album Review (reviews of albums and of your own songs; no window needed)
                          that id, under the same rules.
 
 Other
+  capture [reason=]      Save the last 30 seconds that playback sent to the
+                         audio device, as F12 does: device.wav, source.wav,
+                         and state.json in a new diagnostics/<local time>
+                         folder of the data folder. The reply has the folder
+                         and the state.
   quit                   Close the window. Unsaved work opens the save modal.
 
 An action replies with the status line, the open modal, and the open windows.
@@ -398,6 +403,11 @@ pub enum Request {
     UpdateReview {
         review: Option<serde_json::Value>,
         file: Option<PathBuf>,
+    },
+    /// Save a capture of what playback just sent to the audio device.
+    Capture {
+        #[serde(default, deserialize_with = "optional_text")]
+        reason: Option<String>,
     },
     Quit,
 }
@@ -729,6 +739,11 @@ pub enum Body {
         id: String,
         path: PathBuf,
         added: bool,
+    },
+    /// A saved playback capture: its folder and its `state.json`.
+    Capture {
+        folder: PathBuf,
+        state: serde_json::Value,
     },
     Done(Box<Outcome>),
 }
@@ -1664,6 +1679,32 @@ mod tests {
 
     fn key_folder(tag: &str) -> PathBuf {
         std::env::temp_dir().join(format!("mixjam-agent-{}-{tag}", std::process::id()))
+    }
+
+    #[test]
+    fn capture_takes_an_optional_reason_and_replies_with_its_folder() {
+        let parse = |words: &[&str]| {
+            serde_json::from_str::<Request>(&request_line(&strings(words)).unwrap())
+        };
+        assert_eq!(
+            parse(&["capture"]).unwrap(),
+            Request::Capture { reason: None }
+        );
+        assert_eq!(
+            parse(&["capture", "reason=Noise after bar 65"]).unwrap(),
+            Request::Capture {
+                reason: Some("Noise after bar 65".into())
+            }
+        );
+        assert!(request_line(&strings(&["capture", "seconds=10"])).is_err());
+        assert!(HELP.contains("capture [reason=]"));
+        let reply = serde_json::to_value(Body::Capture {
+            folder: PathBuf::from("diagnostics/2026-11-07_21-30-00"),
+            state: serde_json::json!({"reason": "Saved by an agent"}),
+        })
+        .unwrap();
+        assert_eq!(reply["folder"], "diagnostics/2026-11-07_21-30-00");
+        assert_eq!(reply["state"]["reason"], "Saved by an agent");
     }
 
     #[test]

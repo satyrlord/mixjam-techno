@@ -30,9 +30,9 @@ fn wait_for_render(session: &mut Session) -> Result<Arc<audio::Mix>, String> {
 }
 
 #[derive(Default)]
-struct Scan {
-    peak: f32,
-    non_finite: usize,
+pub(super) struct Scan {
+    pub(super) peak: f32,
+    pub(super) non_finite: usize,
     first_non_finite: Option<usize>,
     /// Loud windows whose sample-to-sample steps are as large as white
     /// noise's: the first such frame and the count of such windows.
@@ -42,7 +42,7 @@ struct Scan {
     longest_noisy: usize,
 }
 
-fn scan(samples: &[f32]) -> Scan {
+pub(super) fn scan(samples: &[f32]) -> Scan {
     let mut result = Scan::default();
     for (index, &value) in samples.iter().enumerate() {
         if value.is_finite() {
@@ -239,7 +239,7 @@ fn sequence_scan() {
 }
 
 /// Loud windows of `samples` whose steps are close to white noise's.
-fn loud_noise(samples: &[f32]) -> usize {
+pub(super) fn loud_noise(samples: &[f32]) -> usize {
     samples
         .chunks(2048)
         .filter(|frames| {

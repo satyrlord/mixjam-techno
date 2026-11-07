@@ -1,15 +1,18 @@
 //! Device output with a selected buffer target. The device can use another
 //! callback interval; buffer capacity is not a callback deadline.
+use super::flight;
 use crate::options::PlaybackBufferTarget;
 use cpal::{
     BufferSize, SampleFormat, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use rodio::{Sink, dynamic_mixer};
+use serde_json::{Value, json};
 use std::{
+    path::Path,
     sync::{
         Arc,
-        atomic::{AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
     time::Instant,
 };
@@ -64,6 +67,50 @@ pub(crate) struct Output {
     format: SupportedStreamConfig,
     target: PlaybackBufferTarget,
     fallback_reason: Option<String>,
+    name: String,
+    /// The last half minute of what the callback wrote, and its counters.
+    flight: Arc<flight::Flight>,
+    /// The thread that watches `flight` for faults, while this output lives.
+    watch: Option<flight::Watch>,
+}
+
+/// What a capture records of an output.
+#[derive(Clone)]
+struct Described {
+    name: String,
+    sample_format: String,
+    configuration: OutputConfiguration,
+    metrics: Arc<CallbackMetrics>,
+    target: PlaybackBufferTarget,
+    fallback_reason: Option<String>,
+    flight: Arc<flight::Flight>,
+}
+
+impl Described {
+    fn json(&self) -> Value {
+        let configuration = self.metrics.configuration(self.configuration);
+        json!({
+            "name": self.name,
+            "sample_rate": configuration.sample_rate,
+            "channels": configuration.channels,
+            "sample_format": self.sample_format,
+            "buffer_target": target_name(self.target),
+            "requested_buffer_frames": configuration.requested_buffer_frames,
+            "last_callback_frames": configuration.callback_frames,
+            "last_callback_period_micros": configuration.callback_period_micros,
+            "status": status_text(configuration, self.target, self.fallback_reason.as_deref()),
+            "fallback_reason": self.fallback_reason,
+            "mixer_sources": self.flight.mixer_sources(),
+        })
+    }
+}
+
+fn target_name(target: PlaybackBufferTarget) -> &'static str {
+    match target {
+        PlaybackBufferTarget::Automatic => "Automatic",
+        PlaybackBufferTarget::Ms20 => "20 ms",
+        PlaybackBufferTarget::Ms40 => "40 ms",
+    }
 }
 
 /// Unknown ranges need an opening attempt. A known unsupported target must
@@ -101,13 +148,21 @@ impl Output {
             .ok_or("There is no default audio output device.")?;
         match Self::open_device(&device, target) {
             Ok(output) => Ok(output),
-            Err(original) => host
-                .output_devices()
-                .ok()
-                .and_then(|mut devices| {
-                    devices.find_map(|device| Self::open_device(&device, target).ok())
-                })
-                .ok_or(original),
+            Err(original) => {
+                flight::log(
+                    "fallback",
+                    format!(
+                        "The default output {} did not open: {original}",
+                        device.name().unwrap_or_default()
+                    ),
+                );
+                host.output_devices()
+                    .ok()
+                    .and_then(|mut devices| {
+                        devices.find_map(|device| Self::open_device(&device, target).ok())
+                    })
+                    .ok_or(original)
+            }
         }
     }
 
@@ -117,6 +172,10 @@ impl Output {
             Ok(output) => return Ok(output),
             Err(error) => error,
         };
+        flight::log(
+            "fallback",
+            format!("The default format did not open: {original} Trying the other formats."),
+        );
         let Ok(supported) = device.supported_output_configs() else {
             return Err(original);
         };
@@ -152,7 +211,7 @@ impl Output {
         match attempt {
             Ok(mut output) => {
                 output.target = target;
-                Ok(output)
+                Ok(output.watched("open"))
             }
             Err(error) if target != PlaybackBufferTarget::Automatic => {
                 let mut output = Self::open_format(device, &format, BufferSize::Default)?;
@@ -160,10 +219,64 @@ impl Output {
                 output.fallback_reason = Some(format!(
                     "The requested buffer is unavailable: {error} Using the system default buffer."
                 ));
-                Ok(output)
+                Ok(output.watched("open"))
             }
             Err(error) => Err(error),
         }
+    }
+
+    fn described(&self) -> Described {
+        Described {
+            name: self.name.clone(),
+            sample_format: self.format.sample_format().to_string(),
+            configuration: self.configuration,
+            metrics: Arc::clone(&self.metrics),
+            target: self.target,
+            fallback_reason: self.fallback_reason.clone(),
+            flight: Arc::clone(&self.flight),
+        }
+    }
+
+    /// Log the opened output and start watching what it plays for faults.
+    fn watched(mut self, kind: &'static str) -> Self {
+        let described = self.described();
+        let buffer = self.configuration.requested_buffer_frames.map_or_else(
+            || "system default".to_owned(),
+            |frames| format!("{frames} frames"),
+        );
+        let fallback = self
+            .fallback_reason
+            .as_deref()
+            .map_or_else(String::new, |reason| format!(" {reason}"));
+        flight::log(
+            kind,
+            format!(
+                "{}: {} Hz, {} channels, {}, buffer {buffer}.{fallback}",
+                described.name,
+                self.configuration.sample_rate,
+                self.configuration.channels,
+                described.sample_format,
+            ),
+        );
+        self.watch = flight::watch(Arc::clone(&self.flight), move || described.json());
+        self
+    }
+
+    /// Save a capture of the last half minute that the device played to
+    /// `data_root/diagnostics`, with `session` describing the song.
+    pub(crate) fn capture(
+        &self,
+        reason: &str,
+        data_root: &Path,
+        session: Option<Value>,
+    ) -> Result<flight::Saved, String> {
+        flight::save(
+            &self.flight,
+            self.described().json(),
+            reason,
+            data_root,
+            session.map(|session| (std::time::Duration::ZERO, session)),
+        )
     }
 
     /// Prepare a silent replacement on the current device and sample format.
@@ -177,7 +290,7 @@ impl Output {
         let mut output = Self::open_format(&self.device, &self.format, buffer)
             .map_err(|error| format!("Cannot apply the playback buffer target: {error}"))?;
         output.target = target;
-        Ok(output)
+        Ok(output.watched("replacement"))
     }
 
     pub(crate) fn buffer_target_error(&self, target: PlaybackBufferTarget) -> Option<String> {
@@ -219,6 +332,16 @@ impl Output {
         let mut config = format.config();
         config.buffer_size = buffer_size;
         let (mixer, source) = dynamic_mixer::mixer::<f32>(config.channels, config.sample_rate.0);
+        let flight = flight::Flight::new(config.channels, config.sample_rate.0);
+        let writer = flight.writer();
+        // A stream error ends the stream: the audio library's thread stops.
+        let errors = Arc::clone(&flight);
+        let mut error = error;
+        let error = move |failure: cpal::StreamError| {
+            errors.record_stream_error();
+            flight::log("stream error", failure.to_string());
+            error(failure);
+        };
         let metrics = Arc::new(CallbackMetrics::default());
         let observed = Arc::clone(&metrics);
         let mut previous = None;
@@ -235,7 +358,7 @@ impl Output {
         };
         macro_rules! stream {
             ($sample:ty) => {
-                build::<$sample, _, _>(device, &config, source, observe, error)
+                build::<$sample, _, _>(device, &config, source, writer, observe, error)
             };
         }
         let stream = match format.sample_format() {
@@ -272,13 +395,18 @@ impl Output {
             format: format.clone(),
             target: PlaybackBufferTarget::Automatic,
             fallback_reason: None,
+            name: device
+                .name()
+                .unwrap_or_else(|_| "unnamed device".to_owned()),
+            flight,
+            watch: None,
         })
     }
 
     /// A sink on the device's mixer for one source of `channels` channels
     /// at `sample_rate`.
     pub(crate) fn sink(&self, channels: u16, sample_rate: u32) -> Sink {
-        sink_on(&self.mixer, channels, sample_rate)
+        sink_on(&self.mixer, channels, sample_rate, &self.flight.sources)
     }
 
     pub(crate) fn configuration(&self) -> OutputConfiguration {
@@ -290,40 +418,43 @@ impl Output {
     }
 
     pub(crate) fn status(&self) -> String {
-        let configuration = self.configuration();
-        let target = match self.target {
-            PlaybackBufferTarget::Automatic => "Automatic",
-            PlaybackBufferTarget::Ms20 => "20 ms",
-            PlaybackBufferTarget::Ms40 => "40 ms",
-        };
-        let request = configuration.requested_buffer_frames.map_or_else(
-            || "system default".to_owned(),
-            |frames| format!("{frames} frames"),
-        );
-        let callback = configuration.callback_frames.map_or_else(
-            || "Callback frames unavailable".to_owned(),
-            |frames| format!("Last callback: {frames} frames"),
-        );
-        let period = configuration.callback_period_micros.map_or_else(
-            || "measured callback interval unavailable".to_owned(),
-            |micros| {
-                format!(
-                    "last measured callback interval: {:.2} ms",
-                    micros as f64 / 1000.0
-                )
-            },
-        );
-        let mut status = format!(
-            "Target: {target}; request: {request} at {} Hz. \
-             Negotiated buffer capacity unavailable. {callback}; {period}.",
-            configuration.sample_rate
-        );
-        if let Some(reason) = self.fallback_reason() {
-            status.push(' ');
-            status.push_str(reason);
-        }
-        status
+        status_text(self.configuration(), self.target, self.fallback_reason())
     }
+}
+
+fn status_text(
+    configuration: OutputConfiguration,
+    target: PlaybackBufferTarget,
+    fallback_reason: Option<&str>,
+) -> String {
+    let target = target_name(target);
+    let request = configuration.requested_buffer_frames.map_or_else(
+        || "system default".to_owned(),
+        |frames| format!("{frames} frames"),
+    );
+    let callback = configuration.callback_frames.map_or_else(
+        || "Callback frames unavailable".to_owned(),
+        |frames| format!("Last callback: {frames} frames"),
+    );
+    let period = configuration.callback_period_micros.map_or_else(
+        || "measured callback interval unavailable".to_owned(),
+        |micros| {
+            format!(
+                "last measured callback interval: {:.2} ms",
+                micros as f64 / 1000.0
+            )
+        },
+    );
+    let mut status = format!(
+        "Target: {target}; request: {request} at {} Hz. \
+         Negotiated buffer capacity unavailable. {callback}; {period}.",
+        configuration.sample_rate
+    );
+    if let Some(reason) = fallback_reason {
+        status.push(' ');
+        status.push_str(reason);
+    }
+    status
 }
 
 /// Add a sink to `mixer` for one source of `channels` channels at
@@ -333,16 +464,20 @@ impl Output {
 /// and right interleaved as one channel. It would also restart its
 /// resampler every 512 samples, as the queue does not say how long its
 /// format lasts.
+/// `sources` counts the sinks that the mixer still reads.
 pub(super) fn sink_on(
     mixer: &dynamic_mixer::DynamicMixerController<f32>,
     channels: u16,
     sample_rate: u32,
+    sources: &Arc<AtomicUsize>,
 ) -> Sink {
     let (sink, queue) = Sink::new_idle();
+    sources.fetch_add(1, Ordering::Relaxed);
     mixer.add(Fixed {
         queue,
         channels,
         sample_rate,
+        _counted: Counted(Arc::clone(sources)),
     });
     sink
 }
@@ -354,6 +489,16 @@ struct Fixed {
     queue: rodio::queue::SourcesQueueOutput<f32>,
     channels: u16,
     sample_rate: u32,
+    _counted: Counted,
+}
+
+/// One count of the mixer's sources, given back when the mixer drops it.
+struct Counted(Arc<AtomicUsize>);
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 impl Iterator for Fixed {
@@ -383,11 +528,13 @@ fn build<T, F, E>(
     device: &cpal::Device,
     config: &StreamConfig,
     mut source: dynamic_mixer::DynamicMixer<f32>,
+    mut writer: flight::Writer,
     mut observe: F,
     error: E,
 ) -> Result<cpal::Stream, cpal::BuildStreamError>
 where
     T: cpal::SizedSample + cpal::FromSample<f32>,
+    f32: cpal::FromSample<T>,
     F: FnMut(usize, &cpal::OutputCallbackInfo) + Send + 'static,
     E: FnMut(cpal::StreamError) + Send + 'static,
 {
@@ -395,8 +542,11 @@ where
     device.build_output_stream(
         config,
         move |data: &mut [T], info| {
-            observe(data.len() / channels, info);
-            fill(data, &mut source);
+            let started = Instant::now();
+            let frames = data.len() / channels;
+            observe(frames, info);
+            fill_into(data, &mut source, &mut writer);
+            writer.record_fill(frames, started.elapsed());
         },
         error,
         None,
@@ -405,16 +555,38 @@ where
 
 /// Write the device buffer. A non-finite sample is written as silence: the
 /// device and the system mixer can turn NaN or infinity into full-scale noise.
-fn fill<T: cpal::Sample + cpal::FromSample<f32>>(
+#[cfg(test)]
+fn fill<T>(output: &mut [T], source: &mut impl Iterator<Item = f32>)
+where
+    T: cpal::Sample + cpal::FromSample<f32>,
+    f32: cpal::FromSample<T>,
+{
+    fill_into(output, source, &mut ());
+}
+
+/// `fill`, handing `tap` each sample from the mixer and as written.
+pub(super) fn fill_into<T>(
     output: &mut [T],
     source: &mut impl Iterator<Item = f32>,
-) {
-    for sample in output {
-        *sample = match source.next() {
+    tap: &mut impl flight::Tap,
+) where
+    T: cpal::Sample + cpal::FromSample<f32>,
+    f32: cpal::FromSample<T>,
+{
+    let mut non_finite = 0;
+    for sample in output.iter_mut() {
+        let value = source.next();
+        *sample = match value {
             Some(value) if value.is_finite() => T::from_sample(value),
-            _ => T::EQUILIBRIUM,
+            Some(_) => {
+                non_finite += 1;
+                T::EQUILIBRIUM
+            }
+            None => T::EQUILIBRIUM,
         };
+        tap.sample(value, <f32 as cpal::Sample>::from_sample(*sample));
     }
+    tap.finish(non_finite);
 }
 
 #[cfg(test)]

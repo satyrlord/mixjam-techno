@@ -141,6 +141,20 @@ the old stream until settings persistence succeeds and rejects opening failures.
 `output_configuration` reports requested frames separately from observed
 callback frames and the last measured callback interval. CPAL does not expose
 negotiated buffer capacity; that value remains unavailable.
+
+`audio::flight` keeps the latest 30 seconds of device and mixer samples in
+preallocated atomic rings. The output callback writes them without allocation
+or locks. A worker checks fresh audio for sustained loud broadband noise and
+observes non-finite samples and stream errors, including startup faults.
+Automatic captures normally wait four seconds and are limited to one per five
+minutes. Replacing an output saves its pending capture early. Process exit
+can end the worker before a pending save completes.
+`Session` publishes song and transport context at most once per second and
+polls at least every 250 ms while an output exists, including while idle.
+F12, the Options action, and the agent `capture` request use the same Session
+operation to save the rings and diagnostic state under the data folder.
+Captures record the callback's output, not downstream driver or speaker audio.
+
 WASAPI shared-mode callback cadence remains device-controlled; requesting
 40 ms does not promise 40 ms callbacks. rodio pulls
 `PlaybackSource` one sample at a time inside the device's callback, and the

@@ -7,6 +7,7 @@ use crate::{
     master::{MasterChain, MasterControl, MasterProcessor},
 };
 use rodio::{Sink, Source};
+pub(crate) mod flight;
 mod output;
 mod resample;
 pub use output::OutputConfiguration;
@@ -2456,6 +2457,17 @@ impl Player {
 
     pub fn output_status(&self) -> String {
         self.output.status()
+    }
+
+    /// Save the last half minute that the device played, with `session`
+    /// describing the song, to `data_root/diagnostics/<local time>/`.
+    pub(crate) fn save_capture(
+        &self,
+        reason: &str,
+        data_root: &Path,
+        session: serde_json::Value,
+    ) -> Result<flight::Saved, String> {
+        self.output.capture(reason, data_root, Some(session))
     }
 
     pub fn buffer_target_error(

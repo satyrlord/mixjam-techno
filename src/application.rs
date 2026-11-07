@@ -2557,8 +2557,94 @@ impl Session {
             self.message("Stopped.");
         }
     }
+    /// What a playback capture records of the session: the song, the
+    /// transport, and the settings that shape playback.
+    fn capture_context(&self) -> serde_json::Value {
+        let project = self.editor.project();
+        let ticks = crate::engine::TICKS_PER_BAR;
+        let position = self.player.as_ref().map(Player::position_frames);
+        serde_json::json!({
+            "song": {
+                "title": project.title,
+                "path": self.file,
+                "unsaved_changes": self.unsaved,
+                "bpm": project.bpm,
+                "tracks": project.tracks.len(),
+                "clips": project.clips.len(),
+                "loop_region": project.loop_region,
+                "revision": self.revision,
+            },
+            "transport": {
+                "playing_mix": self.playing_mix(),
+                "previewing": self.is_previewing(),
+                "recording": self.is_recording(),
+                "wants_playback": self.wants_playback,
+                "seek_pending": self.seek_pending,
+                "cursor_tick": self.cursor_tick,
+                "bar": self.cursor_tick / ticks + 1,
+                "tick_in_bar": self.cursor_tick % ticks,
+                "position_frames": position,
+                "frames_per_tick": self.playback_frames_per_tick,
+                "mix_prepared": self.render.is_some() && !self.render_dirty,
+            },
+            "options": self.options,
+            "master": project.master,
+            "fx": project.fx,
+        })
+    }
+
+    /// Save the last half minute that the device played, and the state of
+    /// the song and the output, to `diagnostics/<local time>/` in the data
+    /// folder. Shows the folder in the status line.
+    pub fn save_playback_capture(
+        &mut self,
+        reason: &str,
+    ) -> Result<(PathBuf, serde_json::Value), String> {
+        let result = match &self.player {
+            None => Err("Audio output is unavailable, so there is nothing to capture.".to_owned()),
+            Some(player) => {
+                player.save_capture(reason, &self.settings_root, self.capture_context())
+            }
+        };
+        match result {
+            Ok(saved) => {
+                self.message(format!(
+                    "Saved an audio capture to {}",
+                    saved.folder.display()
+                ));
+                Ok((saved.folder, saved.state))
+            }
+            Err(error) => {
+                self.error(format!("Cannot save an audio capture: {error}"));
+                Err(error)
+            }
+        }
+    }
+
+    /// Keep the watcher's context current and report its captures.
+    fn poll_capture(&mut self) {
+        if self.player.is_none() {
+            return;
+        }
+        audio::flight::publish_context(std::time::Duration::from_secs(1), || {
+            audio::flight::Context {
+                data_root: self.settings_root.clone(),
+                state: self.capture_context(),
+            }
+        });
+        match audio::flight::take_automatic() {
+            Some(Ok(folder)) => self.error(format!(
+                "Playback sounded wrong, so an audio capture was saved to {}",
+                folder.display()
+            )),
+            Some(Err(error)) => self.error(format!("Cannot save an audio capture: {error}")),
+            None => {}
+        }
+    }
+
     /// Advances devices and the render queue. Returns a suggested polling delay in milliseconds.
     pub fn poll(&mut self) -> Option<u64> {
+        self.poll_capture();
         self.poll_stretch();
         let scan_delay = match (self.poll_wave_scan(), self.poll_export()) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -2594,6 +2680,10 @@ impl Session {
             Some(30)
         } else if self.is_recording() {
             Some(40)
+        } else if self.player.is_some() {
+            // Refresh capture context and report worker results even when
+            // neither transport nor user input wakes the window.
+            Some(250)
         } else {
             None
         };
@@ -3562,6 +3652,32 @@ mod tests {
                 .unwrap()
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[ignore = "opens the physical audio output for silence"]
+    fn idle_audio_keeps_polling_for_capture_notices() {
+        let mut session = fixture();
+        assert_eq!(session.poll(), None);
+        session.player = Some(Player::new().expect("opens the physical audio output"));
+        assert_eq!(session.poll(), Some(250));
+    }
+
+    #[test]
+    fn a_capture_without_audio_output_says_why_and_describes_the_transport() {
+        let mut session = fixture();
+        session.cursor_tick = 64 * 256 + 17;
+        let error = session.save_playback_capture("test").unwrap_err();
+        assert!(error.contains("Audio output is unavailable"), "{error}");
+        assert_eq!(
+            session.take_notice(),
+            Some((format!("Cannot save an audio capture: {error}"), true))
+        );
+        let context = session.capture_context();
+        assert_eq!(context["transport"]["bar"], 65);
+        assert_eq!(context["transport"]["tick_in_bar"], 17);
+        assert_eq!(context["transport"]["playing_mix"], false);
+        assert!(context["master"].is_object() && context["options"].is_object());
     }
 
     fn fixture() -> Session {
@@ -5879,5 +5995,7 @@ mod boundary_tests {
     }
 }
 
+#[cfg(test)]
+mod seam_scan;
 #[cfg(test)]
 mod sequence_scan;

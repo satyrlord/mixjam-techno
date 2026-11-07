@@ -13,6 +13,7 @@
 - [Album Review](#album-review)
 - [Save and export](#save-and-export)
 - [Open songs from other programs](#open-songs-from-other-programs)
+- [Audio captures](#audio-captures)
 - [Known limits](#known-limits)
 
 ## Interface
@@ -145,6 +146,8 @@ On **Audio**:
   capacity is unavailable.
   If a target cannot open, Apply keeps the working output and reports the error.
   At startup, an unavailable target can use the system default with a warning.
+- **Save audio capture**, under **Device details**, does what F12 does: see
+  [Audio captures](#audio-captures).
 - **Preview level** attenuates previews from -30 to 0 dB; **Mute previews**
   silences them. These controls cover sound, clip, tool, and recorded-take
   previews. They do not change recordings, saved sounds, song volume, or exports.
@@ -268,6 +271,8 @@ by this build.
 - Press Space to play or pause. Drag across the bar ruler to select a loop.
 - Playback uses the output-buffer target in [Options](#options), 40 ms by
   default where supported. The actual callback interval remains device-controlled.
+- If playback sounds wrong, such as a sudden loud hiss, press F12 while it
+  does. See [Audio captures](#audio-captures).
 - A song can have sections: named parts such as Intro or Break. Each one is a
   bookmark, a colored line across the lanes with its name on the bar ruler, and
   lasts until the next one starts. With sections shown, the Loop button loops
@@ -295,8 +300,10 @@ by this build.
 Use Mixer for track gain, pan, L/R routing, Mute, Solo, and master volume.
 Master stays visible while you scroll through tracks. Each strip shows its
 track number and the sound names on that track. The mouse wheel moves the
-fader, knob, or pan under the pointer (Shift for fine steps). Gain and pan
-change smoothly while the song plays, including when you undo or redo them.
+fader or effect knob under the pointer (Shift for fine steps). Over a pan
+control, the wheel scrolls the view. Drag or use the arrow keys to change pan.
+Gain and pan change smoothly while the song plays, including when you undo or
+redo them.
 
 - Gain runs from -inf dB (silence) to +12 dB; 0 dB is unity. Negative dB
   attenuates the signal. The rail gives more space to useful mixing levels.
@@ -562,6 +569,32 @@ were recorded at 90 BPM. It is generated from the original media by the
 owner-local `examples/export_source_tempos.rs` (the `examples/` folder is not
 published), with `MIXJAM_TECHNO_MEDIA_ROOT` set. This metadata adds tempo
 evidence; it does not add song-format support for those products.
+
+## Audio captures
+
+The application keeps the last 30 seconds that playback sent to the audio
+device. Press **F12**, anywhere in the window, or select **Save audio capture**
+under **Device details** on the Audio page of Options, to save them. The status
+line names the new folder: `diagnostics\<date>_<time>` in the data folder
+(`%LOCALAPPDATA%\MixJam Techno`, or `MIXJAM_TECHNO_DATA_DIR`). It holds:
+
+- `device.wav`: what was written to the device, as 32-bit float.
+- `source.wav`: the mixer samples before conversion to the device format
+  and before invalid samples (NaN or infinity) were replaced by silence.
+- `state.json`: the song's title and file, the transport and the playhead's bar
+  and tick, the time, the audio device and its format, callback counts,
+  maximum fill time and latest measured interval, device open, fallback, and
+  error events, the Options, the
+  master pedalboard and FX buses, and what a capture does not record.
+
+The application also saves one by itself, four seconds after it detects loud,
+broadband noise in the output for more than a second, finds NaN or infinity,
+or sees a device error. Replacing the output saves a pending
+capture early. It saves at most one such capture in five minutes and says so
+in the status line. Keep the application open until that line confirms the
+save. These files do not record changes made by the system mixer or driver,
+or the sound from the speakers. Send the folder with a description of what
+you heard.
 
 ## Known limits
 

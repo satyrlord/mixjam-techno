@@ -347,6 +347,7 @@ impl MixJamApp {
         let mut cancel = false;
         let mut apply = false;
         let mut pick_folder = false;
+        let mut capture = false;
         let stale = draft.revision != self.session.options_revision();
         let audio_blocked = draft
             .audio_changed(self.session.options())
@@ -504,7 +505,9 @@ impl MixJamApp {
                                         ui.colored_label(roles().tools[0].1, reason);
                                     }
                                     match draft.page {
-                                        Page::Audio => self.audio_options(ui, &mut draft.values),
+                                        Page::Audio => {
+                                            capture = self.audio_options(ui, &mut draft.values);
+                                        }
                                         Page::Workspace => workspace_options(ui, &mut draft.values),
                                         Page::Files => {
                                             pick_folder = self.file_options(ui, &mut draft.values);
@@ -649,9 +652,13 @@ impl MixJamApp {
         if pick_folder {
             self.ask_path(FileRequest::OptionsFolder);
         }
+        if capture {
+            let _ = self.session.save_playback_capture("Saved from Options");
+        }
     }
 
-    fn audio_options(&self, ui: &mut egui::Ui, values: &mut AppOptions) {
+    /// The Audio page. Returns whether Save audio capture was pressed.
+    fn audio_options(&self, ui: &mut egui::Ui, values: &mut AppOptions) -> bool {
         section(ui, "Playback quality");
         help(
             ui,
@@ -744,6 +751,7 @@ impl MixJamApp {
         );
         // The request and the measured callback, apart from each other (Options
         // spec), out of the way until someone needs them.
+        let mut capture = false;
         let details = controls::disclosure("Device details")
             .default_open(false)
             .show(ui, |ui| {
@@ -751,6 +759,15 @@ impl MixJamApp {
                     egui::RichText::new(self.session.buffer_status())
                         .size(12.0)
                         .color(roles().help),
+                );
+                let save =
+                    controls::button(ui, "Save audio capture", controls::ButtonRole::Secondary);
+                remember_focus(&save);
+                capture = save.clicked();
+                help(
+                    ui,
+                    "Saves the last 30 seconds sent to the audio device, with the song's state, \
+                     to the diagnostics folder in the data folder. F12 does the same anywhere.",
                 );
             });
         remember_focus(&details.header_response);
@@ -784,6 +801,7 @@ impl MixJamApp {
             ui,
             "Reduced draws meters at most 15 times a second. Measurement and peaks stay exact.",
         );
+        capture
     }
 
     /// Returns whether the fixed song folder picker was requested.

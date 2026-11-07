@@ -106,6 +106,10 @@ port.
   `file=PATH`. The
   [album-analysis skill](../.github/skills/album-analysis/SKILL.md) has the
   format and the procedure.
+- `capture [reason=TEXT]` saves the last 30 seconds that playback sent to the
+  audio device, as F12 does, to a new `diagnostics/<local time>` folder in the
+  data folder: `device.wav`, `source.wav`, and `state.json`. The reply has the
+  `folder` and the `state`. Without audio output it fails and says why.
 - While an agent is attached, a file choice opens a **Choose path** modal in the
   window in place of the native dialog. Set its **Path** field and select
   **Confirm path**. A person can type the path too. If the song changes while

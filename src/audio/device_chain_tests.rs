@@ -19,7 +19,12 @@ fn playback(samples: Vec<f32>) -> PlaybackSource {
 }
 
 fn sink(controller: &DynamicMixerController<f32>) -> Sink {
-    output::sink_on(controller, 2, Mix::SAMPLE_RATE)
+    output::sink_on(
+        controller,
+        2,
+        Mix::SAMPLE_RATE,
+        &Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+    )
 }
 
 fn pull(out: &mut DynamicMixer<f32>, frames: usize) -> Vec<[f32; 2]> {
@@ -107,5 +112,129 @@ fn playback_resamples_for_the_device_without_seams() {
             largest < 1.5 * own,
             "{device_rate} Hz: {largest} against {own}"
         );
+    }
+}
+
+/// Plays a real song through the whole device chain, from a sink through
+/// the device's mixer, in callbacks of irregular sizes as a device asks,
+/// at 44.1 and 48 kHz. Compares what the device would get with the same
+/// chain read in callbacks of one size, and at 44.1 kHz with the playback
+/// source alone, and scans it for broadband noise.
+///
+/// ```text
+/// MIXJAM_SEAM_SONG=song.mixjam MIXJAM_SEAM_FROM=61,65 MIXJAM_SEAM_TO=77 cargo test --release --lib device_chain_song_scan -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "plays a real song"]
+fn device_chain_song_scan() {
+    let env = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.into());
+    let path = std::path::PathBuf::from(env("MIXJAM_SEAM_SONG", ""));
+    let from: Vec<u32> = env("MIXJAM_SEAM_FROM", "61")
+        .split(',')
+        .map(|bar| bar.trim().parse().unwrap())
+        .collect();
+    let to: u32 = env("MIXJAM_SEAM_TO", "77").parse().unwrap();
+    let (project, library, _) =
+        crate::project_io::open_song(&path, &Library::empty()).expect("opens");
+    let fpt = project.frames_per_tick(Mix::SAMPLE_RATE);
+    let bar_frame =
+        |bar: u32| (f64::from((bar - 1) * crate::engine::TICKS_PER_BAR) * fpt).round() as u64;
+    let quality = crate::playback_quality::PlaybackQuality::FULL;
+    let mix: Arc<Mix> =
+        Arc::new(prepare_project_with_quality(&project, &library, quality).expect("prepares"));
+    let control = || {
+        let control = MasterControl::new(&project.master);
+        control.set_returns(&project.fx);
+        control.set_levels(&project);
+        control
+    };
+    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut random = move |range: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % range
+    };
+    for bar in from {
+        // A start at a tick, as the cursor gives.
+        let tick = ((bar - 1) * crate::engine::TICKS_PER_BAR) as u64 - random(256);
+        let start = (tick as f64 * fpt).round() as u64;
+        let frames = bar_frame(to) - start;
+        let mut alone = Vec::new();
+        play_offline(
+            mix.clone(),
+            start,
+            None,
+            Some(control()),
+            quality,
+            frames,
+            |block| alone.extend_from_slice(block),
+        );
+        for device_rate in [44_100_u32, 48_000] {
+            let device_frames =
+                (frames * u64::from(device_rate) / u64::from(Mix::SAMPLE_RATE)) as usize;
+            let mut chains = Vec::new();
+            for irregular in [false, true] {
+                let (controller, mut out) = mixer::<f32>(2, device_rate);
+                let source = PlaybackSource::with_quality_block(
+                    mix.clone(),
+                    start,
+                    None,
+                    Some(control()),
+                    PlaybackSource::BLOCK_FRAMES,
+                    quality,
+                );
+                let _current = Current::start(sink(&controller), source, None);
+                let mut device = Vec::with_capacity(device_frames * 2);
+                while device.len() < device_frames * 2 {
+                    let callback = if irregular {
+                        [441, 480, 512, 1024][random(4) as usize].max(1 + random(2000) as usize)
+                            * usize::from(random(3) == 0)
+                            + [441, 480, 512, 1024][random(4) as usize]
+                    } else {
+                        480
+                    };
+                    for _ in 0..callback * 2 {
+                        device.push(out.next().unwrap_or(0.0));
+                    }
+                }
+                device.truncate(device_frames * 2);
+                chains.push(device);
+            }
+            let (steady, irregular) = (&chains[0], &chains[1]);
+            let differing = steady
+                .iter()
+                .zip(irregular)
+                .position(|(a, b)| a.to_bits() != b.to_bits());
+            // At the source's rate the chain plays the source after a short
+            // lead of silence.
+            let against_source = (device_rate == Mix::SAMPLE_RATE).then(|| {
+                let lead = steady.iter().position(|x| *x != 0.0).unwrap_or(0)
+                    - alone.iter().position(|x| *x != 0.0).unwrap_or(0);
+                steady[lead..]
+                    .iter()
+                    .zip(&alone)
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0_f32, f32::max)
+            });
+            let mut detector = flight::Detector::new(device_rate, 2);
+            let window = detector.window_samples();
+            let (mut flattest, mut noisy) = (0.0_f32, 0);
+            let mut at = 0;
+            while at + window <= irregular.len() {
+                for reading in detector.read(&irregular[at..at + window]) {
+                    flattest = flattest.max(reading.flatness);
+                    noisy += usize::from(reading.noisy());
+                }
+                at += window / 2;
+            }
+            let peak = irregular.iter().fold(0.0_f32, |peak, x| peak.max(x.abs()));
+            println!(
+                "from tick {tick} (bar {bar}) to bar {to} at {device_rate} Hz: \
+                 irregular callbacks differ from steady ones at {differing:?}; \
+                 largest difference from the source alone {against_source:?}; \
+                 peak {peak:.3}, flattest window {flattest:.2}, noisy windows {noisy}"
+            );
+        }
     }
 }

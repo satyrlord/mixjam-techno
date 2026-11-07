@@ -1133,6 +1133,11 @@ impl MixJamApp {
                     None => return Err("That is not an Album Review request.".into()),
                 }
             }
+            Request::Capture { reason } => {
+                let reason = reason.unwrap_or_else(|| "Saved by an agent".to_owned());
+                let (folder, state) = self.session.save_playback_capture(&reason)?;
+                Start::Reply(Body::Capture { folder, state })
+            }
             Request::Quit => {
                 self.request_action(PendingAction::Close, ctx);
                 // Unsaved work opens a modal instead. The loop replies at

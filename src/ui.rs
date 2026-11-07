@@ -1437,6 +1437,26 @@ impl MixJamApp {
         self.place_on_click = false;
     }
 
+    fn capture_keyboard(&mut self, ctx: &egui::Context) {
+        // F12 saves what playback just played, wherever the focus is: the
+        // owner presses it while hearing a fault. Once per press.
+        let capture = ctx.input_mut(|input| {
+            let pressed = input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key {
+                        key: egui::Key::F12, pressed: true, repeat: false, modifiers, ..
+                    } if modifiers.is_none()
+                )
+            });
+            input.consume_key(egui::Modifiers::NONE, egui::Key::F12);
+            pressed
+        });
+        if capture {
+            let _ = self.session.save_playback_capture("Saved with F12");
+        }
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context) {
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma)) {
             self.open_options(ctx);
@@ -2042,6 +2062,12 @@ impl MixJamApp {
                                 "Export",
                                 "Stereo WAV of the mix. Export tracks… in the Mixer writes each \
                                  track and FX return to its own WAV.",
+                            ),
+                            (
+                                "Audio capture",
+                                "F12 saves the last 30 seconds that playback sent to the audio \
+                                 device, with the song's state, to the diagnostics folder in the \
+                                 data folder. Press it while something sounds wrong.",
                             ),
                             ("Help", "F1"),
                         ] {
