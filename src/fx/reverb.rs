@@ -23,6 +23,8 @@ const LINES: usize = 8;
 const FADE: usize = 2205;
 /// The pitch shifter's window: 60 ms.
 const WINDOW: f64 = 2646.0;
+/// The vintage character's slow drift of every line's read position, in hertz.
+const WANDER_HZ: f64 = 0.07;
 /// The lengths of the all-passes inside the loop, one per line.
 const INNER_MS: [f64; LINES] = [2.31, 3.07, 3.71, 4.39, 2.73, 3.41, 4.13, 4.87];
 
@@ -405,7 +407,7 @@ impl Core {
     /// when the bus slept.
     pub(super) fn skip(&mut self, frames: u64) {
         self.lfo.skip(self.mod_rate, frames);
-        self.wander.skip(0.07, frames);
+        self.wander.skip(WANDER_HZ, frames);
         if self.shimmer_level.value() > 0.0 || self.shimmer_send > 0.0 {
             let ratio = self.ratio;
             self.shifters
@@ -505,7 +507,7 @@ impl Core {
             *tap = self.inner[i].process(x, density);
         }
         self.lfo.advance(self.mod_rate);
-        self.wander.advance(0.07);
+        self.wander.advance(WANDER_HZ);
         self.activity = taps
             .iter()
             .chain(&pre)

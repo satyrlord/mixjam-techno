@@ -113,6 +113,14 @@ fn target_name(target: PlaybackBufferTarget) -> &'static str {
     }
 }
 
+/// The requested buffer, as the status and the log name it.
+fn request_text(configuration: OutputConfiguration) -> String {
+    configuration.requested_buffer_frames.map_or_else(
+        || "system default".to_owned(),
+        |frames| format!("{frames} frames"),
+    )
+}
+
 /// Unknown ranges need an opening attempt. A known unsupported target must
 /// not be presented as an accepted target of another size.
 fn requested_buffer(
@@ -240,10 +248,7 @@ impl Output {
     /// Log the opened output and start watching what it plays for faults.
     fn watched(mut self, kind: &'static str) -> Self {
         let described = self.described();
-        let buffer = self.configuration.requested_buffer_frames.map_or_else(
-            || "system default".to_owned(),
-            |frames| format!("{frames} frames"),
-        );
+        let buffer = request_text(self.configuration);
         let fallback = self
             .fallback_reason
             .as_deref()
@@ -428,10 +433,7 @@ fn status_text(
     fallback_reason: Option<&str>,
 ) -> String {
     let target = target_name(target);
-    let request = configuration.requested_buffer_frames.map_or_else(
-        || "system default".to_owned(),
-        |frames| format!("{frames} frames"),
-    );
+    let request = request_text(configuration);
     let callback = configuration.callback_frames.map_or_else(
         || "Callback frames unavailable".to_owned(),
         |frames| format!("Last callback: {frames} frames"),

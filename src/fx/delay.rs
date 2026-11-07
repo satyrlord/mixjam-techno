@@ -16,6 +16,9 @@ use std::f64::consts::PI;
 const REACH_SECONDS: f64 = 3.1;
 /// A digital time change crossfades between two read heads over 30 ms.
 const FADE: usize = 1323;
+/// The tape character's slow and fast speed wobbles, in hertz.
+const WOW_HZ: f64 = 0.53;
+const FLUTTER_HZ: f64 = 6.1;
 
 /// The time of one side and the reads at it.
 struct Head {
@@ -192,8 +195,8 @@ impl Core {
     /// so its phase does not depend on when the bus slept.
     pub(super) fn skip(&mut self, frames: u64) {
         self.lfo.skip(self.rate, frames);
-        self.wow.skip(0.53, frames);
-        self.flutter.skip(6.1, frames);
+        self.wow.skip(WOW_HZ, frames);
+        self.flutter.skip(FLUTTER_HZ, frames);
     }
     /// Activity before output mute or ducking, including the feedback taps.
     pub(super) fn activity(&self) -> f64 {
@@ -248,8 +251,8 @@ impl Core {
             depth * self.lfo.value(0.25) + wander,
         ];
         self.lfo.advance(self.rate);
-        self.wow.advance(0.53);
-        self.flutter.advance(6.1);
+        self.wow.advance(WOW_HZ);
+        self.flutter.advance(FLUTTER_HZ);
         let digital = self.digital;
         let taps = [
             self.heads[0].read(&self.lines[0], offsets[0], digital, self.compensation),

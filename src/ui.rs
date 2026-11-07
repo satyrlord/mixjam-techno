@@ -1439,7 +1439,7 @@ impl MixJamApp {
 
     fn capture_keyboard(&mut self, ctx: &egui::Context) {
         // F12 saves what playback just played, wherever the focus is: the
-        // owner presses it while hearing a fault. Once per press.
+        // user presses it while hearing a fault. Once per press.
         let capture = ctx.input_mut(|input| {
             let pressed = input.events.iter().any(|event| {
                 matches!(
