@@ -2536,7 +2536,7 @@ impl Player {
         } else {
             start_frame.min(total)
         };
-        let sink = self.output.sink();
+        let sink = self.output.sink(audio.channels(), audio.sample_rate());
         self.previewing = master.is_none();
         if self.previewing {
             sink.set_volume(self.preview_gain);
@@ -2592,7 +2592,41 @@ impl Player {
 }
 
 #[cfg(test)]
+mod device_chain_tests;
+#[cfg(test)]
 mod realtime_bench;
+
+/// Play `audio` as the device would, without a device: through a live
+/// `PlaybackSource` from `start`, handing each processed block to `each`
+/// until `frames` frames have played or the source ends.
+#[cfg(test)]
+pub(crate) fn play_offline(
+    audio: Arc<dyn Frames>,
+    start: u64,
+    loop_region: Option<[u64; 2]>,
+    master: Option<Arc<MasterControl>>,
+    quality: crate::playback_quality::PlaybackQuality,
+    frames: u64,
+    mut each: impl FnMut(&[f32]),
+) {
+    let channels = audio.channels() as u64;
+    let mut source = PlaybackSource::with_quality_block(
+        audio,
+        start,
+        loop_region,
+        master,
+        PlaybackSource::BLOCK_FRAMES,
+        quality,
+    );
+    let mut played = 0;
+    while played < frames && source.fill() {
+        let block = &source.block[source.cursor..source.filled];
+        let take = (block.len() as u64 / channels).min(frames - played);
+        each(&block[..(take * channels) as usize]);
+        played += take;
+        source.cursor = source.filled;
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -275,10 +275,10 @@ impl Output {
         })
     }
 
-    pub(crate) fn sink(&self) -> Sink {
-        let (sink, source) = Sink::new_idle();
-        self.mixer.add(source);
-        sink
+    /// A sink on the device's mixer for one source of `channels` channels
+    /// at `sample_rate`.
+    pub(crate) fn sink(&self, channels: u16, sample_rate: u32) -> Sink {
+        sink_on(&self.mixer, channels, sample_rate)
     }
 
     pub(crate) fn configuration(&self) -> OutputConfiguration {
@@ -326,6 +326,59 @@ impl Output {
     }
 }
 
+/// Add a sink to `mixer` for one source of `channels` channels at
+/// `sample_rate`. The mixer reads the sink's queue in that format from its
+/// first sample: rodio's queue starts as a mono 48 kHz source, and the mixer
+/// would read the first 512 samples of the playback in that format, left
+/// and right interleaved as one channel. It would also restart its
+/// resampler every 512 samples, as the queue does not say how long its
+/// format lasts.
+pub(super) fn sink_on(
+    mixer: &dynamic_mixer::DynamicMixerController<f32>,
+    channels: u16,
+    sample_rate: u32,
+) -> Sink {
+    let (sink, queue) = Sink::new_idle();
+    mixer.add(Fixed {
+        queue,
+        channels,
+        sample_rate,
+    });
+    sink
+}
+
+/// A sink's queue read as one unending source of a fixed format. The queue
+/// holds one playback source of that format, between silences whose sample
+/// counts are whole frames of it.
+struct Fixed {
+    queue: rodio::queue::SourcesQueueOutput<f32>,
+    channels: u16,
+    sample_rate: u32,
+}
+
+impl Iterator for Fixed {
+    type Item = f32;
+    #[inline]
+    fn next(&mut self) -> Option<f32> {
+        self.queue.next()
+    }
+}
+
+impl rodio::Source for Fixed {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
+
 fn build<T, F, E>(
     device: &cpal::Device,
     config: &StreamConfig,
@@ -350,12 +403,17 @@ where
     )
 }
 
+/// Write the device buffer. A non-finite sample is written as silence: the
+/// device and the system mixer can turn NaN or infinity into full-scale noise.
 fn fill<T: cpal::Sample + cpal::FromSample<f32>>(
     output: &mut [T],
     source: &mut impl Iterator<Item = f32>,
 ) {
     for sample in output {
-        *sample = source.next().map_or(T::EQUILIBRIUM, T::from_sample);
+        *sample = match source.next() {
+            Some(value) if value.is_finite() => T::from_sample(value),
+            _ => T::EQUILIBRIUM,
+        };
     }
 }
 
@@ -364,6 +422,18 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn fill_writes_non_finite_samples_as_silence() {
+        let mut source = [0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.25].into_iter();
+        let mut out = [1.0_f32; 6];
+        fill(&mut out, &mut source);
+        assert_eq!(out, [0.5, 0.0, 0.0, 0.0, -0.25, 0.0]);
+        let mut source = [f32::NAN, 1.0].into_iter();
+        let mut out = [7_i16; 2];
+        fill(&mut out, &mut source);
+        assert_eq!(out, [0, i16::MAX]);
+    }
 
     #[test]
     fn requests_exact_targets_and_rejects_known_unsupported_ranges() {

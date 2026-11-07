@@ -5878,3 +5878,6 @@ mod boundary_tests {
         assert!(!session.needs_save_confirmation());
     }
 }
+
+#[cfg(test)]
+mod sequence_scan;
