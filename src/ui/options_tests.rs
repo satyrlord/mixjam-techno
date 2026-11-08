@@ -179,7 +179,8 @@ fn options_keyboard_edits_applies_restores_and_cancels() {
             .and_then(|(_, node)| node.label()),
         Some("Sample libraries")
     );
-    // The page starts with the theme, then the startup switches.
+    // The page starts with the theme and the lane height, then the startup
+    // switches.
     frame(
         &ctx,
         &mut app,
@@ -194,6 +195,21 @@ fn options_keyboard_edits_applies_restores_and_cancels() {
             .find(|(id, _)| *id == tree.focus)
             .and_then(|(_, node)| node.label()),
         Some("Theme")
+    );
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![key(egui::Key::Tab, egui::Modifiers::NONE)],
+    );
+    let output = frame(&ctx, &mut app, size, vec![]);
+    let tree = output.platform_output.accesskit_update.as_ref().unwrap();
+    assert_eq!(
+        tree.nodes
+            .iter()
+            .find(|(id, _)| *id == tree.focus)
+            .and_then(|(_, node)| node.label()),
+        Some("Lane height")
     );
     frame(
         &ctx,
@@ -1207,6 +1223,46 @@ fn theme_applies_at_once_restores_and_cancels_without_touching_the_song() {
     assert!(!app.session.unsaved());
     assert!(!app.session.has_history_step(false));
     theme::paint_as(Theme::Studio);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn lane_height_applies_at_once_without_touching_the_song() {
+    use mixjam_techno::application::options::LaneHeight;
+    let (ctx, mut app, root) = fixture();
+    let size = Vec2::new(1024.0, 768.0);
+    let project = app.session.project().clone();
+    app.open_options(&ctx);
+    click(&ctx, &mut app, "Workspace");
+    let output = frame(&ctx, &mut app, size, vec![]);
+    assert_eq!(app.timeline_row_height, 30.0);
+    assert_eq!(node(&output, "Lane height").value(), Some("30 px"));
+    for (choice, height, saved_as) in [
+        ("20 px", LaneHeight::Px20, "20px"),
+        ("40 px", LaneHeight::Px40, "40px"),
+    ] {
+        choose(&ctx, &mut app, "Lane height", choice);
+        // A draft does not resize the rows.
+        frame(&ctx, &mut app, size, vec![]);
+        assert_eq!(app.timeline_row_height, 30.0);
+        click(&ctx, &mut app, "Apply");
+        frame(&ctx, &mut app, size, vec![]);
+        assert_eq!(app.session.options().lane_height, height);
+        assert_eq!(app.timeline_row_height, height.points());
+        let saved = std::fs::read_to_string(root.join("options.json")).unwrap();
+        assert!(
+            saved.contains(&format!("\"laneHeight\": \"{saved_as}\"")),
+            "{saved}"
+        );
+        // Put the draft's starting point back at 30 px for the next choice.
+        choose(&ctx, &mut app, "Lane height", "30 px");
+        click(&ctx, &mut app, "Apply");
+        frame(&ctx, &mut app, size, vec![]);
+        assert_eq!(app.timeline_row_height, 30.0);
+    }
+    assert_eq!(app.session.project(), &project);
+    assert!(!app.session.unsaved());
+    assert!(!app.session.has_history_step(false));
     std::fs::remove_dir_all(root).unwrap();
 }
 

@@ -24,8 +24,8 @@ pub mod eq {
 /// Validated application preferences, independent of the song model.
 pub mod options {
     pub use crate::options::{
-        AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
-        SongFolderMode, StartingModule, Theme,
+        AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget,
+        SampleQuality, SongFolderMode, StartingModule, Theme,
     };
 }
 /// The drive of each track and its controls.

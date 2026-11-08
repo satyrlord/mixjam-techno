@@ -71,7 +71,8 @@ port.
   controls on each page. Use `set` with labels such as `Drive playback
   oversampling` (`4x` or `Off`), `Sample playback quality` (`High` or `Low`),
   `Playback buffer target` (`Automatic`, `20 ms`,
-  `40 ms`), `Preview level` (dB), `Mute previews`, `Starting module`, and
+  `40 ms`), `Preview level` (dB), `Mute previews`, `Lane height` (`20 px`,
+  `30 px`, `40 px`), `Starting module`, and
   `Song dialog folder`. Click `Apply`, `Cancel`, `Restore options defaults`, or
   `Reload active options` in `window="Options"`. Apply uses the same validation, stopped-audio
   requirement, stale-draft check, persistence, and errors as a person does.

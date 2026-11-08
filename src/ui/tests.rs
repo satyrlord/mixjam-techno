@@ -8332,6 +8332,107 @@ mod tests {
     }
 
     #[test]
+    fn lane_heights_keep_reversed_clip_names_clear_of_the_marker() {
+        use mixjam_techno::application::options::LaneHeight;
+        each_theme(|theme| {
+            let (ctx, mut app) = fixture();
+            let root = std::env::temp_dir().join(format!(
+                "mixjam-lane-reverse-ui-{}-{}",
+                std::process::id(),
+                theme.label()
+            ));
+            let mut samples = app.session.library().samples.to_vec();
+            samples[0].name = "A long sample name that needs an ellipsis".into();
+            let mut project = app.session.project().clone();
+            project.clips[0].reverse = true;
+            app.session = Session::headless(Arc::new(Library::fixture(samples)), project)
+                .unwrap()
+                .with_settings_root(root.clone());
+            for lane_height in LaneHeight::ALL {
+                let mut options = app.session.options().clone();
+                options.theme = theme;
+                options.lane_height = lane_height;
+                app.session
+                    .apply_options(options, app.session.options_revision(), false)
+                    .unwrap();
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let clip =
+                    app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+                let text = |label: &str| {
+                    output
+                        .shapes
+                        .iter()
+                        .find_map(|shape| match &shape.shape {
+                            egui::Shape::Text(text)
+                                if text.galley.job.text == label && clip.contains(text.pos) =>
+                            {
+                                Some(
+                                    text.galley
+                                        .mesh_bounds
+                                        .translate(text.pos.to_vec2())
+                                        .intersect(shape.clip_rect),
+                                )
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| panic!("Missing clip text: {label}"))
+                };
+                let name = text("A long sample name that needs an ellipsis");
+                let reverse = text("rev");
+                assert!(name.is_positive() && reverse.is_positive());
+                assert!(
+                    !name.intersects(reverse),
+                    "{theme:?} {lane_height:?}: name {name:?} overlaps rev {reverse:?}"
+                );
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn lane_heights_keep_the_new_track_drop_hint_visible() {
+        use mixjam_techno::application::options::LaneHeight;
+        each_theme(|theme| {
+            let (ctx, mut app) = fixture();
+            let root = std::env::temp_dir().join(format!(
+                "mixjam-lane-drop-ui-{}-{}",
+                std::process::id(),
+                theme.label()
+            ));
+            app.session = app.session.with_settings_root(root.clone());
+            for lane_height in LaneHeight::ALL {
+                let mut options = app.session.options().clone();
+                options.theme = theme;
+                options.lane_height = lane_height;
+                app.session
+                    .apply_options(options, app.session.options_revision(), false)
+                    .unwrap();
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let hint = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == "Drop a sound here" => {
+                            Some((
+                                text.galley.mesh_bounds.translate(text.pos.to_vec2()),
+                                shape.clip_rect,
+                            ))
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| panic!("{theme:?} {lane_height:?}: missing drop hint"));
+                assert!(
+                    hint.1.contains_rect(hint.0),
+                    "The hint must not be clipped."
+                );
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
     fn fine_snap_and_two_line_labels_preserve_unicode_boundaries() {
         let (_, app) = fixture();
         let rect = app.timeline_rect.unwrap();

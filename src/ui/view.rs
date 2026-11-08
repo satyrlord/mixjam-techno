@@ -121,9 +121,6 @@ pub(super) fn section_color(index: usize) -> Color32 {
     sections[index % sections.len()]
 }
 
-/// The height of an arrangement row. It stays the same at any window or panel
-/// size: more room shows more rows.
-const ROW_HEIGHT: f32 = 36.0;
 /// The timeline zoom: the Zoom slider's range and the factor of one wheel step.
 const ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.55..=2.0;
 const ZOOM_WHEEL_STEP: f32 = 1.1;
@@ -1526,7 +1523,9 @@ impl MixJamApp {
         let visible_tracks = self.timeline_tracks.clone();
         let add_track = self.timeline_add_track;
         let row_count = visible_tracks.len();
-        let row_height = ROW_HEIGHT;
+        // The Lane height option sets it; it stays the same at any window or
+        // panel size, so more room shows more rows.
+        let row_height = self.session.options().lane_height.points();
         let bar_width = 62.0 * self.zoom;
         self.timeline_row_height = row_height;
         self.timeline_bar_width = bar_width;
@@ -1673,13 +1672,13 @@ impl MixJamApp {
                             Vec2::new(width, row_height),
                         )
                         .intersect(canvas_clip);
-                        if target.height() >= 22.0 {
+                        let hint = painter.layout_no_wrap(
+                            "Drop a sound here".into(),
+                            FontId::proportional(13.0),
+                            roles().muted,
+                        );
+                        if target.height() >= hint.size().y + 2.0 {
                             // Clear the bar lines behind the hint.
-                            let hint = painter.layout_no_wrap(
-                                "Drop a sound here".into(),
-                                FontId::proportional(13.0),
-                                roles().muted,
-                            );
                             let area = Rect::from_center_size(target.center(), hint.size());
                             painter.rect_filled(
                                 area.expand2(Vec2::new(6.0, 1.0)),
@@ -1734,10 +1733,8 @@ impl MixJamApp {
                                 sample,
                                 self.session.missing_sample(clip.sample_id),
                                 self.selected_clips.contains(&clip.id),
+                                clip.reverse,
                             );
-                            if clip.reverse {
-                                draw_reverse_mark(&painter, clip_rect);
-                            }
                             let bpm = sample.map_or(self.session.project().bpm, |sample| {
                                 self.session
                                     .project()
@@ -2118,7 +2115,7 @@ impl MixJamApp {
                         });
                         if self.armed_track == index {
                             ui.painter().circle_filled(
-                                number + Vec2::new(0.0, 9.0),
+                                number + Vec2::new(0.0, (row_height / 2.0 - 4.0).min(9.0)),
                                 2.0,
                                 roles().coral,
                             );
@@ -4077,19 +4074,22 @@ fn return_value(y: f32, row: Rect) -> f32 {
 }
 
 /// Mark a clip that plays backwards: "rev" in its bottom right corner.
-fn draw_reverse_mark(painter: &egui::Painter, rect: Rect) {
-    if rect.width() < 36.0 || rect.height() < 18.0 {
-        return;
+fn draw_reverse_mark(painter: &egui::Painter, rect: Rect) -> Option<Rect> {
+    // The shortest lane height still shows it.
+    if rect.width() < 36.0 || rect.height() < 16.0 {
+        return None;
     }
-    painter
-        .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
-        .text(
-            rect.right_bottom() + Vec2::new(-6.0, -3.0),
-            Align2::RIGHT_BOTTOM,
-            "rev",
-            FontId::proportional(10.0),
-            roles().on_light,
-        );
+    Some(
+        painter
+            .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
+            .text(
+                rect.right_bottom() + Vec2::new(-6.0, -3.0),
+                Align2::RIGHT_BOTTOM,
+                "rev",
+                FontId::proportional(10.0),
+                roles().on_light,
+            ),
+    )
 }
 
 /// Shade a clip's fades above their curves. The fade out ends where the
@@ -4423,6 +4423,7 @@ pub(super) fn draw_clip(
     sample: Option<&Sample>,
     missing: Option<&MissingSample>,
     selected: bool,
+    reverse: bool,
 ) {
     let color = if missing.is_some() {
         roles().raised
@@ -4459,6 +4460,7 @@ pub(super) fn draw_clip(
             egui::StrokeKind::Inside,
         );
     }
+    let reverse_mark = reverse.then(|| draw_reverse_mark(painter, rect)).flatten();
     let label = missing
         .map(|missing| format!("Missing: {}", missing.name))
         .or_else(|| sample.map(|sample| sample.name.clone()));
@@ -4469,14 +4471,33 @@ pub(super) fn draw_clip(
             roles().on_light
         };
         let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
-        let text = clipped.layout_job(elided(
+        let mut text = clipped.layout_job(elided(
             &label,
             size,
             text_color,
             rect.width() - 12.0,
             clip_label_rows(rect.height()),
         ));
-        clipped.galley(rect.left_top() + Vec2::new(6.0, 4.0), text, text_color);
+        // The 20-point lane leaves no room below the name at the usual inset.
+        let top = if rect.height() < 20.0 { 2.0 } else { 4.0 };
+        let at = rect.left_top() + Vec2::new(6.0, top);
+        let mut label_painter = clipped;
+        if let Some(mark) = reverse_mark
+            && text.mesh_bounds.translate(at.to_vec2()).intersects(mark)
+        {
+            let right = mark.left() - 4.0;
+            text = label_painter.layout_job(elided(
+                &label,
+                size,
+                text_color,
+                right - at.x,
+                clip_label_rows(rect.height()),
+            ));
+            let mut clip = label_painter.clip_rect();
+            clip.max.x = clip.max.x.min(right);
+            label_painter = label_painter.with_clip_rect(clip);
+        }
+        label_painter.galley(at, text, text_color);
     }
 }
 
@@ -4613,9 +4634,11 @@ fn route_color(active: bool) -> Color32 {
 
 fn switch_letter(painter: &egui::Painter, rect: Rect, on: bool, switch: TrackSwitch) {
     // The bar marks a switch that is on, so the state does not rest on color.
+    // It moves up in a short row so it stays inside the button.
     if on {
+        let below = (rect.height() / 2.0 - 2.5).min(9.0);
         painter.rect_filled(
-            Rect::from_center_size(rect.center() + Vec2::new(0.0, 9.0), Vec2::new(9.0, 2.0)),
+            Rect::from_center_size(rect.center() + Vec2::new(0.0, below), Vec2::new(9.0, 2.0)),
             1.0,
             roles().accent,
         );

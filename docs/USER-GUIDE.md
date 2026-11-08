@@ -158,11 +158,12 @@ Stop playback, previews, and recording before you apply audio changes.
 Options does not stop them for you. Workspace and Files changes can apply
 while playback continues.
 
-On **Workspace**, choose the **Theme**, and set **Follow playhead on startup**,
+On **Workspace**, choose the **Theme** and the **Lane height** (20, 30, or
+40 px; 30 by default), and set **Follow playhead on startup**,
 **Show section bookmarks**, **Starting module**, and **Show tooltips**. A theme
-applies as soon as you select Apply, even while a song plays, and the app
-opens in it at every later launch. It never changes your song or its undo
-history. Follow and Starting module apply on the next launch. The toolbar still controls Follow for the current session.
+or lane height applies as soon as you select Apply, even while a song plays,
+and the app opens with it at every later launch. Neither changes your song or
+its undo history. Follow and Starting module apply on the next launch. The toolbar still controls Follow for the current session.
 Show section bookmarks shares its saved value with the Sections toolbar toggle.
 Turning tooltips off keeps control names, keyboard focus, errors, and visible
 instructions available.

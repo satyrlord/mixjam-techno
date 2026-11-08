@@ -6,7 +6,7 @@ const STALE_DRAFT: &str = "Options changed outside this draft. \
 const RELOAD_ACTION: &str = "Reload active options";
 pub(super) const DISCARD: &str = "Discard changes?";
 use mixjam_techno::application::options::{
-    AppOptions, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
+    AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
     SongFolderMode, StartingModule, Theme,
 };
 
@@ -84,6 +84,7 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 4] {
         starting_module,
         show_tooltips,
         theme,
+        lane_height,
         song_folder_mode,
         fixed_song_folder,
     } = draft;
@@ -104,6 +105,7 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 4] {
             *starting_module != active.starting_module,
             *show_tooltips != active.show_tooltips,
             *theme != active.theme,
+            *lane_height != active.lane_height,
         ]),
         count(&[
             *song_folder_mode != active.song_folder_mode,
@@ -864,6 +866,17 @@ fn workspace_options(ui: &mut egui::Ui, values: &mut AppOptions) {
         "Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted \
          metal. Layout and controls stay the same. Apply changes it at once, even while a \
          song plays.",
+    );
+    choice(
+        ui,
+        "Lane height",
+        &mut values.lane_height,
+        &LaneHeight::ALL.map(|height| (height, height.label())),
+    );
+    help(
+        ui,
+        "The height of each arrangement row. Apply changes it at once, even while a song \
+         plays.",
     );
     switch(
         ui,

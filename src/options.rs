@@ -62,6 +62,38 @@ impl Theme {
     }
 }
 
+/// The height of an arrangement row in points.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LaneHeight {
+    #[serde(rename = "20px")]
+    Px20,
+    #[default]
+    #[serde(rename = "30px")]
+    Px30,
+    #[serde(rename = "40px")]
+    Px40,
+}
+
+impl LaneHeight {
+    pub const ALL: [Self; 3] = [Self::Px20, Self::Px30, Self::Px40];
+
+    pub fn points(self) -> f32 {
+        match self {
+            Self::Px20 => 20.0,
+            Self::Px30 => 30.0,
+            Self::Px40 => 40.0,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Px20 => "20 px",
+            Self::Px30 => "30 px",
+            Self::Px40 => "40 px",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SongFolderMode {
@@ -90,6 +122,9 @@ pub struct AppOptions {
     /// Added after schema 1 was released, so a file without it loads Studio.
     #[serde(default)]
     pub theme: Theme,
+    /// Added after schema 1 was released, so a file without it loads at 30 px.
+    #[serde(default)]
+    pub lane_height: LaneHeight,
     pub song_folder_mode: SongFolderMode,
     pub fixed_song_folder: Option<PathBuf>,
 }
@@ -110,6 +145,7 @@ impl Default for AppOptions {
             starting_module: StartingModule::Sounds,
             show_tooltips: true,
             theme: Theme::Studio,
+            lane_height: LaneHeight::Px30,
             song_folder_mode: SongFolderMode::LastUsed,
             fixed_song_folder: None,
         }
@@ -360,6 +396,42 @@ mod tests {
         assert!(loaded.future);
         assert_eq!(loaded.values.theme, Theme::Studio);
         assert_eq!(fs::read(root.join("options.json")).unwrap(), bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn lane_height_persists_older_files_load_30px_and_it_is_not_an_audio_change() {
+        let root = root();
+        assert_eq!(AppOptions::default().lane_height, LaneHeight::Px30);
+        // A schema 1 file saved before the setting existed.
+        let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+        raw.as_object_mut().unwrap().remove("laneHeight").unwrap();
+        fs::write(root.join("options.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+        let loaded = load(&root);
+        assert!(loaded.error.is_none() && !loaded.invalid && !loaded.future);
+        assert_eq!(loaded.values.lane_height, LaneHeight::Px30);
+        for lane_height in LaneHeight::ALL {
+            let values = AppOptions {
+                lane_height,
+                ..AppOptions::default()
+            };
+            save(&root, &values).unwrap();
+            let loaded = load(&root);
+            assert!(loaded.error.is_none());
+            assert_eq!(loaded.values, values);
+            assert!(!AppOptions::default().audio_changed(&values));
+        }
+        let text = String::from_utf8(fs::read(root.join("options.json")).unwrap()).unwrap();
+        assert!(text.contains("\"laneHeight\": \"40px\""));
+        assert_eq!(LaneHeight::ALL.map(LaneHeight::points), [20.0, 30.0, 40.0]);
+        for value in [serde_json::json!("36px"), serde_json::json!(30)] {
+            let mut raw = serde_json::to_value(AppOptions::default()).unwrap();
+            raw["laneHeight"] = value;
+            fs::write(root.join("options.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+            let loaded = load(&root);
+            assert!(loaded.invalid);
+            assert_eq!(loaded.values, AppOptions::default());
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

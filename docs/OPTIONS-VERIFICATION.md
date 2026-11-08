@@ -185,3 +185,39 @@ minimum supported hardware. Check both quality modes with bass, bright tones,
 drums, and dense mixes at 44.1 and 48 kHz. Listen during starts, seeks, and short
 loops. Test a screen reader and the native pickers separately. No hardware
 capacity or release-readiness claim follows from these checks.
+
+## Lane height follow-up, 2026-11-08
+
+The Lane height preference adds 20, 30, and 40 px choices, with 30 px as the
+default. Existing schema 1 files without `laneHeight` load that default.
+Options remain at schema 1; the current song format is 24. The earlier results
+above describe the 2026-11-02 implementation.
+
+The review corrected overlapping clip names and reverse marks in compact
+rows, and a new-track drop hint that disappeared at 20 px. Both new rendering
+tests failed before the repairs and passed afterward. They check visible
+glyph bounds in every theme at every lane height. The persistence field and
+its migration default are now included in the specification's stored fields.
+
+| Check | Result |
+|---|---|
+| Default-feature workspace and all-target tests | 986 passed; 26 optional tests ignored |
+| No-default-feature workspace and all-target tests | 686 passed; 26 optional tests ignored |
+| Clippy, warnings denied | Pass |
+| Both Rust format checks | Pass; independent check covered 98 Rust files |
+| Python tools tests | 152 passed |
+| Fonts and all documented raster-asset checks | Pass |
+| Release build | Pass; application v1.080 |
+| Arrangement and Workspace captures | 18 passed and inspected: all three themes at 960x720, 1024x768, and 1440x1000 |
+| Compact and tall lane captures | Six passed and inspected: 20 and 40 px in all three themes at 960x720 |
+| Built-app agent verification | 45 checks passed through 117 requests |
+| Independent final review | No further confirmed defects after the stored-fields correction |
+
+Native checks used isolated settings on Windows 11 Pro build 26300. They
+covered draft isolation, Apply, saved values, unchanged song content, Cancel
+with discarded edits, Restore defaults, and persistence after restart.
+Native interaction did not start playback or recording. Physical high-DPI
+displays and screen readers remain unverified. Check compact labels and track
+controls on those displays and with a screen reader before claiming those
+forms of accessibility. These checks do not establish minimum-machine support
+or audio parity.

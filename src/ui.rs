@@ -1845,7 +1845,7 @@ impl MixJamApp {
                 painter.set_opacity(0.6);
                 for (ghost, sample_id) in ghosts {
                     let sample = self.session.library().sample_by_id(sample_id);
-                    draw_clip(&painter, ghost, sample, None, true);
+                    draw_clip(&painter, ghost, sample, None, true, false);
                 }
             } else if let DragItem::Sample(id) = drag {
                 let name = self

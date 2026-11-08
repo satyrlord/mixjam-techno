@@ -122,6 +122,7 @@ playback quality is Low. Exports always read samples at High.
 | Show section bookmarks | Existing saved value, otherwise On | Shares one current value with the Sections toolbar toggle. Both update the same preference; neither edits the song or its section data. |
 | Starting module | Sounds | Choices: Sounds, Mixer, Mastering, Effects. Applies on the next launch, not when a project opens. Capture and verification modes retain their explicit view overrides. |
 | Theme | Studio | Choices: Studio, Aero, Vintage; the first control on the page. Apply repaints the whole application at once, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data, undo history, renders, the audio device, or parameter ranges. Every theme keeps the same layout, controls, and features. |
+| Lane height | 30 px | Choices: 20 px, 30 px, 40 px; the height of each arrangement row. Apply resizes the rows at once, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data or undo history. |
 | Show tooltips | On | Controls hover hints. Never removes accessible names, descriptions, focus indication, errors, or essential visible instructions. |
 
 ### Files
@@ -249,7 +250,8 @@ Stored fields: `schemaVersion`, `drivePlaybackOversampling`,
 schema 1 file without it loads at `high`), `previewLevelDb`, `previewMuted`,
 `playbackBufferTarget`, `meterDisplayRate`, `followOnStartup`, `showSectionBookmarks`, `startingModule`,
 `showTooltips`, `theme` (`studio`, `aero`, or `vintage`; a schema 1 file
-without it loads `studio`), `songFolderMode`, and `fixedSongFolder`. Do not
+without it loads `studio`), `laneHeight` (`20px`, `30px`, or `40px`; a schema 1
+file without it loads `30px`), `songFolderMode`, and `fixedSongFolder`. Do not
 store transient drafts or current playback state. Add migration tests before
 changing this schema later.
 
