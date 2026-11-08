@@ -1,0 +1,397 @@
+{
+  "id": "jean-michel-jarre-chronology",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Chronologie",
+  "year": 1993,
+  "label": "Disques Dreyfus · Polydor",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Techno",
+  "genreTags": [
+    "Electronic",
+    "Techno"
+  ],
+  "runtime": "42:06",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/17/Chronologie_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Chronologie",
+  "overview": "Jarre's eleventh studio album, released on 24 May 1993 by Disques Dreyfus under licence to Polydor, with a concept that the booklet credits to Stephen Hawking's A Brief History of Time. Jarre and Michel Geiss recorded and mixed it at Jarre's Croissy studio, with Francis Rimbert, Geiss and Dominique Perrier on additional keyboards and Patrick Rondat on guitar. The booklet lists analogue synthesizers (ARP 2600, Minimoog, EMS Synthi AKS, Eminent 310) beside digital ones (Kurzweil K2000, Roland JD-800, Fairlight CMI) and a rhythm rig built on the Akai MPC60, Akai S1000 and Roland TR-909; Jarre called the album a mixture of the 1970s sound of old synthesizers with the beat of the 1990s dance scene, close in spirit to Oxygène. The eight numbered parts take time as their subject, and three of them run without a break into the next. Parts 4 and 5 were first written for Swatch, the sponsor of Jarre's 1992 Zermatt concert, and the beeping tones of Part 4 reappeared in the Swatch Musicall watch.\n\nThe album reached No. 11 in the UK and No. 2 in France. The Part 4 single followed in June 1993 with remixes by Sunscreem, Praga Khan and Black Girl Rock; Part 6 was remixed by Slam and Gat Decor, and Part 8 by Michel Geiss. The music toured in the Europe in Concert series of 1993.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Chronologie, Part 1",
+      "duration": "10:52",
+      "energy": "mid",
+      "tags": [
+        "Neo-Classical Opening",
+        "Longest Part",
+        "Multi-Section Part",
+        "Segue to Part 2"
+      ],
+      "role": "Album role: Side one's opening statement and the longest of the eight parts, a chain of short sections in a modern-classical register before the beat-driven Parts 2 and 4; it runs straight into Part 2.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "A low drone fades in, and higher layers rise over it within half a minute.",
+          "detail": "Reviewers place the part's neo-classical writing in its first half."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Darker passage",
+          "description": "The highs drop away and the harmony darkens."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Build",
+          "description": "The bass enters and the music starts a long, steady climb."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Plateau",
+          "description": "A long plateau cycles through a series of chords for about two minutes."
+        },
+        {
+          "timestamp": "4:26",
+          "section": "Bass cut",
+          "description": "The low end drops out for 15 seconds, leaving a pulsing high texture, then returns."
+        },
+        {
+          "timestamp": "5:01",
+          "section": "Pulsed climax",
+          "description": "The part's most strongly pulsed passage."
+        },
+        {
+          "timestamp": "5:29",
+          "section": "Fade",
+          "description": "The music fades almost to silence by 6:30."
+        },
+        {
+          "timestamp": "6:35",
+          "section": "Dark section",
+          "description": "A dark, bass-heavy section begins."
+        },
+        {
+          "timestamp": "7:55",
+          "section": "Busy section",
+          "description": "The mid and high layers return, and the texture changes every 12 to 15 seconds.",
+          "detail": "A blog review describes intricate keyboard interplay, tempo changes and rock instruments beside electronic devices in this part."
+        },
+        {
+          "timestamp": "9:59",
+          "section": "Segue",
+          "description": "The level drops, the bass swells again, and the part runs without a break into Part 2."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Chronologie, Part 2",
+      "duration": "6:05",
+      "energy": "high",
+      "tags": [
+        "Synth-Pop Rhythm",
+        "Church Organ",
+        "France-Only Single",
+        "Segue from Part 1"
+      ],
+      "role": "Album role: The first beat-driven part, growing out of Part 1's ending and bringing in its beat after a minute; issued as the France-only single \"Chronologie 2\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless opening that continues where Part 1 ended."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Beat entry",
+          "description": "The beat enters.",
+          "detail": "One review hears synth-pop rhythms and church-organ sounds; another compares Parts 2 and 4 to the mid-1980s work of The Human League and OMD."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Thinner stretch",
+          "description": "The bass thins and the beat weakens for about 20 seconds."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Beat returns",
+          "description": "The beat comes back with fuller low end."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Breakdown",
+          "description": "Every layer drops back: the biggest change in the part."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Final section",
+          "description": "The beat returns for the loudest stretch, which lasts until about 5:20."
+        },
+        {
+          "timestamp": "5:27",
+          "section": "Outro",
+          "description": "The highs are cut and the part fades out."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Chronologie, Part 3",
+      "duration": "3:59",
+      "energy": "mid",
+      "tags": [
+        "Young Voice",
+        "Side One Closer",
+        "Fade to Silence"
+      ],
+      "role": "Album role: Side one's closing part, between the beat-driven Part 2 and side two's Swatch-derived Parts 4 and 5, and the album's vocal feature, a young girl's voice.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "An opening without bass."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Bass entry",
+          "description": "The low end enters, and the harmony swings between two chords.",
+          "detail": "A forum review mentions a female voice in this part; Michel Geiss recalls suggesting the young singer Julie Lecrenais when Jarre was looking for a young voice for it."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Lift",
+          "description": "The whole arrangement lifts slightly."
+        },
+        {
+          "timestamp": "3:26",
+          "section": "Ending",
+          "description": "The main texture stops, and a quiet tail fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Chronologie, Part 4",
+      "duration": "3:59",
+      "energy": "high",
+      "tags": [
+        "Lead Single",
+        "Swatch Origin",
+        "Beeping Tones",
+        "Keyboard Solos"
+      ],
+      "role": "Album role: Side two's opening and the album's first single (June 1993), the first of the two parts written for Swatch; Michel Geiss, who worked on its arrangement, singles out its keyboard solos.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The full band starts at once, with a steady pulse from 0:05.",
+          "detail": "Swatch reused the part's beeping tones in its Musicall watch (1993)."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "High layer",
+          "description": "A bright top layer enters."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Harmonic shift",
+          "description": "The harmony moves to new chords, then settles into a minor section at 1:27."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Thinner highs",
+          "description": "The top end pulls back."
+        },
+        {
+          "timestamp": "2:58",
+          "section": "Bass break",
+          "description": "The bass drops out for 10 seconds before the final stretch."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Outro",
+          "description": "The part fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Chronologie, Part 5",
+      "duration": "5:35",
+      "energy": "high",
+      "tags": [
+        "Swatch Origin",
+        "Hip-Hop Beats",
+        "Orchestral Hits",
+        "Record Scratches"
+      ],
+      "role": "Album role: The second part written for Swatch; it opens quietly and turns, after two minutes, to early-1990s hip-hop beats, orchestral hits and scratching, then runs straight into Part 6.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening in the same key as Part 4.",
+          "detail": "A listener review hears a laid-back reprise of Part 4 here."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Low notes",
+          "description": "Low notes come and go under the quiet texture."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Beat entry",
+          "description": "A beat enters and the highs brighten; the full band arrives at 2:30.",
+          "detail": "One review hears hip-hop beats, orchestral hits and fake record scratches in Parts 5 and 8."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Break",
+          "description": "A five-second break, then the band returns much louder: the biggest change in the part."
+        },
+        {
+          "timestamp": "4:07",
+          "section": "Bass drop",
+          "description": "The bass drops out and the highs play alone for 15 seconds."
+        },
+        {
+          "timestamp": "4:22",
+          "section": "Segue",
+          "description": "The bass returns, and the part runs at full level straight into Part 6."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Chronologie, Part 6",
+      "duration": "3:45",
+      "energy": "high",
+      "tags": [
+        "Pulsing Sequences",
+        "Layered Strings",
+        "Accordion Counterpoint",
+        "House Groove",
+        "Slam and Gat Decor Remixes"
+      ],
+      "role": "Album role: Side two's house-oriented part, issued as a 1993 single and remixed by Slam and Gat Decor; its pulsing sequences recall Equinoxe Part 4 (1978).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Sequence",
+          "description": "The sequence starts at once, filtered and muffled.",
+          "detail": "A review describes pulsing melodic sequences more frantic than Equinoxe Part 4, layered strings and French-flavoured accordion counterpoint in this part."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Filter opens",
+          "description": "The filter opens gradually, reaching full level by 0:55."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Chord cycle",
+          "description": "The harmony starts to move through a short chord cycle."
+        },
+        {
+          "timestamp": "1:32",
+          "section": "Break",
+          "description": "The highs drop out for 14 seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Full band",
+          "description": "The full band returns and holds steady until about 3:10."
+        },
+        {
+          "timestamp": "3:16",
+          "section": "Outro",
+          "description": "The highs drop and the part fades over 25 seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Chronologie, Part 7",
+      "duration": "2:18",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Shortest Part",
+        "Unpulsed",
+        "Segue to Part 8"
+      ],
+      "role": "Album role: The shortest part, a quiet interlude without a pulse between Part 6's house groove and the finale of Part 8.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, unpulsed opening.",
+          "detail": "A forum review mentions buzzing flies, experimental noises, very low guitars and voices in this part."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "Shifting texture",
+          "description": "The level rises slightly and the texture changes every 11 to 15 seconds."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Bright layer",
+          "description": "A bright element enters on top."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Segue",
+          "description": "The bass swells and the harmony moves to the key in which Part 8 begins."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Chronologie, Part 8",
+      "duration": "5:34",
+      "energy": "high",
+      "tags": [
+        "Finale",
+        "Funk Dance",
+        "Sampled Noises",
+        "Orchestral Hits",
+        "Geiss Remix"
+      ],
+      "role": "Album role: The closing part, a funk-leaning dance track of sampled noises, orchestral hits and scratches that ends the album on a lone low tone; issued as the France-only single \"Chronologie 8\" and remixed by Michel Geiss.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless opening.",
+          "detail": "One review notes the part's many sampled noises."
+        },
+        {
+          "timestamp": "0:13",
+          "section": "Highs open",
+          "description": "The top end opens up."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Beat entry",
+          "description": "The beat enters and the harmony turns minor: the biggest change in the part.",
+          "detail": "Reviews describe a funky dance groove with hip-hop beats, orchestral hits and fake record scratches."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the part, until about 3:35."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Highs fade",
+          "description": "The highs fade gradually and the beat weakens by 4:05."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Coda",
+          "description": "A deep low tone remains alone and fades to silence, ending the album."
+        }
+      ]
+    }
+  ]
+}

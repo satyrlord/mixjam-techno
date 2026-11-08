@@ -1,0 +1,476 @@
+{
+  "id": "jean-michel-jarre-revolutions",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Revolutions",
+  "year": 1988,
+  "label": "Disques Dreyfus",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Synth-Pop",
+  "genreTags": [
+    "Electronic",
+    "Synth-Pop"
+  ],
+  "runtime": "44:28",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/b/b7/Revolutions_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Revolutions_(Jean-Michel_Jarre_album)",
+  "youtubeUrl": "https://www.youtube.com/playlist?list=OLAK5uy_l2ob9nzmX8l86x0rFB6oHRWgOmPK3KbB0",
+  "overview": "Recorded in 1987–1988 at Jarre's Croissy studio with the engineer Denis Vanzetto, and released by Disques Dreyfus on 26 September 1988, shortly before the Destination Docklands concerts in London on 8 and 9 October. The Roland D-50 supplies the core sound, mostly through its factory presets (Jarre called it the \"anti Yamaha DX7\"), beside the Fairlight CMI, the Elka Synthex and Michel Geiss's ARP 2600, with Jo Hammer on Simmons SDX drums and Guy Delacroix on bass. Hank Marvin plays guitar on \"London Kid\" and Jun Miyake trumpet on \"Tokyo Kid\"; the Bruno Rossignol choir sings on the Industrial Revolution suite, \"London Kid\" and \"The Emigrant\", and a choir of young girls from Mali sings on \"September\", a tribute to the ANC representative Dulcie September, assassinated in Paris on 29 March 1988. The four-part Industrial Revolution suite fills the first 17 minutes, and six songs follow.\n\nThe album reached No. 2 in the UK, Jarre's highest position there since Oxygène, and produced the singles \"Revolutions\" and \"London Kid\". The original title track sampled an unpublished ney recording by Kudsi Erguner, who sued and won; later pressings, including the one timed here, replace it with \"Revolution, Revolutions\", played by the Arab classical ensemble Al Mawsili.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Industrial Revolution: Overture",
+      "duration": "5:11",
+      "energy": "mid",
+      "tags": [
+        "Suite Opener",
+        "Factory Sounds",
+        "Synthetic Strings",
+        "Bruno Rossignol Choir"
+      ],
+      "role": "Album role: Opens the four-part Industrial Revolution suite that fills the album's first 17 minutes and also opened the Destination Docklands concerts.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening, well below the level of what follows.",
+          "detail": "A fan review describes the suite's palette as stylised factory sounds, heavy synthetic strings and choir; the booklet credits the Bruno Rossignol choir on the suite."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Bass entry",
+          "description": "The low end comes in under a loose, slow pulse."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Darker passage",
+          "description": "The bass falls back and the harmony turns minor for half a minute, then the main theme returns with a firmer pulse."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Climax",
+          "description": "The loudest passage: the top end opens while the pulse gives way to sustained chords, then resumes at 3:27."
+        },
+        {
+          "timestamp": "4:26",
+          "section": "Dark coda",
+          "description": "The treble thins out and the harmony settles in a minor key."
+        },
+        {
+          "timestamp": "4:51",
+          "section": "Hand-off",
+          "description": "The highs return briefly before the track drops into Part 1."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Industrial Revolution: Part 1",
+      "duration": "5:11",
+      "energy": "mid",
+      "tags": [
+        "Suite Part 1",
+        "Late Beat Entry",
+        "Synthetic Strings",
+        "Bruno Rossignol Choir"
+      ],
+      "role": "Album role: First numbered part of the Industrial Revolution suite and its first beat-driven stretch, between the Overture and Part 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Low build",
+          "description": "The low end grows while the highs recede, and the level builds slowly."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Dark passage",
+          "description": "The high frequencies drop away, leaving a muffled, low-register texture."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Beat entry",
+          "description": "A beat enters with a bright, percussive top end: the biggest change in the part."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Break",
+          "description": "The beat stops for about half a minute while the harmony moves."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Beat returns",
+          "description": "The beat comes back and builds to the loudest stretch of the part around 4:10."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Outro",
+          "description": "The level drops and the part settles on a held chord until it stops."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Industrial Revolution: Part 2",
+      "duration": "2:18",
+      "energy": "mid",
+      "tags": [
+        "Suite Part 2",
+        "Shortest Suite Part",
+        "Segue to Part 3"
+      ],
+      "role": "Album role: The shortest part of the Industrial Revolution suite, a steady-pulse link between Part 1 and Part 3.",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Pulse",
+          "description": "A steady pulse runs from the start."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Lift",
+          "description": "A new layer lifts the level: the biggest change in the part."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Brighter turn",
+          "description": "The sub-bass drops back and the harmony brightens from minor to major."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Segue",
+          "description": "The low end returns, and the part runs at full level straight into Part 3."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Industrial Revolution: Part 3",
+      "duration": "4:13",
+      "energy": "mid",
+      "tags": [
+        "Suite Closer",
+        "Slow Build",
+        "Late Rhythm Entry",
+        "Bruno Rossignol Choir"
+      ],
+      "role": "Album role: The final part of the Industrial Revolution suite, a slow build to the suite's loudest stretch before the songs begin with \"London Kid\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Segue",
+          "description": "The part picks up from Part 2, then drops back with the highs cut."
+        },
+        {
+          "timestamp": "0:31",
+          "section": "Slow build",
+          "description": "A slow, beatless build lasts about 90 seconds."
+        },
+        {
+          "timestamp": "2:07",
+          "section": "Rhythm entry",
+          "description": "A regular rhythm enters and the top end opens."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Final build",
+          "description": "The bass rises into the loudest stretch of the suite."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Ending",
+          "description": "The rhythm stops, and the suite closes on a quiet major chord."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "London Kid",
+      "duration": "4:27",
+      "energy": "mid",
+      "tags": [
+        "Hank Marvin",
+        "Guitar Pop",
+        "Bruno Rossignol Choir",
+        "Second Single",
+        "Late Key Change"
+      ],
+      "role": "Album role: The first song after the suite and the album's second single, a collaboration with Hank Marvin, who also played it with Jarre at Destination Docklands.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The full band and a steady pulse start together.",
+          "detail": "The booklet credits Hank Marvin on guitar, Sylvain Durand on Fairlight CMI and the Bruno Rossignol choir on this track."
+        },
+        {
+          "timestamp": "0:51",
+          "section": "Minor section",
+          "description": "The harmony moves to minor chords for half a minute: the biggest change in the song."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Main theme",
+          "description": "The major-key theme returns, slightly louder."
+        },
+        {
+          "timestamp": "2:33",
+          "section": "Lift",
+          "description": "The arrangement lifts a little as the main cycle repeats."
+        },
+        {
+          "timestamp": "3:36",
+          "section": "Off-key chords",
+          "description": "The harmony leaves the home key for chords from outside it."
+        },
+        {
+          "timestamp": "4:06",
+          "section": "Key change",
+          "description": "The song jumps to a distant key for its last bars."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Ending",
+          "description": "The song stops dead, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Revolution, Revolutions",
+      "duration": "4:57",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "Re-Recorded Version",
+        "Al Mawsili Ensemble",
+        "Computer Voice"
+      ],
+      "role": "Album role: The title track and the album's world-music centrepiece; this pressing has the re-recorded version that replaced the disputed ney sample of the 1988 original, which was the first single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening without bass."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Build",
+          "description": "The bass and the top end rise, and a pulse takes hold by 0:55."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Break",
+          "description": "A five-second drop."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Beat entry",
+          "description": "The full beat enters with heavy low end: the biggest change in the track.",
+          "detail": "The 1991 booklet credits the Arab classical ensemble Al Mawsili, directed by Larbi Ouechni, and a computer voice by Jarre and Geiss made with Street Electronics voice synthesis."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Second break",
+          "description": "A short cut, mostly of the bass, before the groove returns."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Final section",
+          "description": "After a third short break, the last section enters and becomes the loudest passage on the album."
+        },
+        {
+          "timestamp": "4:47",
+          "section": "Outro",
+          "description": "The level drops and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Tokyo Kid",
+      "duration": "5:23",
+      "energy": "mid",
+      "tags": [
+        "Jun Miyake",
+        "Trumpet",
+        "Megaphone",
+        "Distorted Jazz Beat"
+      ],
+      "role": "Album role: The counterpart to \"London Kid\" and the album's second guest feature, placed after the title track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, low-register opening with almost no treble."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Full band",
+          "description": "The top end opens and a steady pulse starts.",
+          "detail": "A fan review hears Jun Miyake's trumpet over a distorted jazz beat; the booklet credits Jarre with the drum programming on this track."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Harmonic shift",
+          "description": "The harmony moves away from the home chord."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Lift",
+          "description": "After a brief dip, a louder and brighter section enters."
+        },
+        {
+          "timestamp": "3:29",
+          "section": "Bass drop",
+          "description": "The low end drops out for a few seconds, then the loudest stretch runs to about 4:25."
+        },
+        {
+          "timestamp": "4:29",
+          "section": "Off-key passage",
+          "description": "The level falls and the harmony blurs, settling a semitone below the home key."
+        },
+        {
+          "timestamp": "4:56",
+          "section": "Final section",
+          "description": "The home key returns at full level until the track ends."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Computer Weekend",
+      "duration": "4:43",
+      "energy": "mid",
+      "tags": [
+        "Synth-Pop",
+        "Recorded 1987",
+        "Mosquito Sound Effect"
+      ],
+      "role": "Album role: A song recorded and released in 1987, a year before the album, and played in the Swinging Sixties part of Destination Docklands.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "After two seconds of silence, the full band and a steady pulse arrive by 0:08."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "High layer",
+          "description": "A bright layer enters on top."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Build",
+          "description": "The arrangement builds in two steps to its full level."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Minor turn",
+          "description": "The bass recedes and the harmony turns minor."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Coda",
+          "description": "The beat and bass stop, and a quiet coda fades out.",
+          "detail": "Jarre describes a mosquito sound in the track that changes into a dog at the end."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "September",
+      "duration": "4:06",
+      "energy": "mid",
+      "tags": [
+        "Dulcie September Tribute",
+        "Mali Girls' Choir",
+        "Mireille Pombo",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The dedication to Dulcie September, placed second to last, and the opening of the finale at Destination Docklands.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short swell, then the full band and a steady pulse arrive at 0:08 and run unchanged until the coda.",
+          "detail": "The booklet credits Mireille Pombo's vocal chorus and a choir of young girls from Mali directed by Sori Bamba."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Upper layer",
+          "description": "A brighter upper layer enters over the pulse."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Minor colour",
+          "description": "The harmony leans on its relative minor."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Bright final stretch",
+          "description": "The top end opens for the last minute of the song."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Coda",
+          "description": "The band stops, and a quiet coda closes the track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "The Emigrant",
+      "duration": "3:57",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Bruno Rossignol Choir",
+        "No Steady Beat",
+        "Docklands Finale"
+      ],
+      "role": "Album role: The closing track, loud but without a steady beat, which followed \"September\" in the Destination Docklands finale.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, muffled opening; no steady beat appears anywhere in the track."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Highs open",
+          "description": "The top end opens within ten seconds."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Minor turn",
+          "description": "The harmony turns minor."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Second section",
+          "description": "The harmony returns to major and the texture brightens."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Lift",
+          "description": "The low end grows, and the level stays high from about 1:55."
+        },
+        {
+          "timestamp": "3:04",
+          "section": "Final section",
+          "description": "The bass rises into the loudest stretch of the track."
+        },
+        {
+          "timestamp": "3:52",
+          "section": "Ending",
+          "description": "The track stops dead."
+        }
+      ]
+    }
+  ]
+}
