@@ -1166,8 +1166,9 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
                 })
                 .custom_parser(parse_db),
             );
+            let focused = response.has_focus();
             ui.ctx().data_mut(|data| {
-                if response.has_focus() {
+                if focused {
                     data.insert_temp(typed_id, typed);
                 } else {
                     data.remove::<bool>(typed_id);
