@@ -1,0 +1,606 @@
+{
+  "id": "vangelis-mythodea",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Mythodea",
+  "year": 2001,
+  "label": "Sony Classical",
+  "producer": "Vangelis",
+  "genre": "Classical / Electronic",
+  "genreTags": [
+    "Classical",
+    "Electronic",
+    "Modern Classical",
+    "Choral",
+    "Orchestral"
+  ],
+  "runtime": "1:06:55",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/b/b0/Mythodea_album_cover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Mythodea",
+  "overview": "Mythodea: Music for the NASA Mission: 2001 Mars Odyssey (2001) is a choral symphony by Vangelis, first performed in Athens in 1993 and then expanded and reorchestrated for Sony Classical, which arranged a NASA tie-in that made it the official music of the 2001 Mars Odyssey mission. The album was recorded at the Athens Concert Hall with Vangelis on synthesizers and keyboards, the London Metropolitan Orchestra (with two harpists added) conducted by Blake Neely, the Greek National Opera Choir, and the sopranos Kathleen Battle and Jessye Norman, and the work was presented live at the Temple of Olympian Zeus in Athens on 28 June 2001. Frédérick Rousseau and Philippe Colonna are credited with recording and mixing it. The CD was timed to coincide with the spacecraft's entry into Mars orbit on 23 October 2001, and it reached Greece No. 1 (Platinum), Portugal No. 2, Germany No. 46, and Billboard Top Classical Albums No. 4.\n\nOn the standard CD an Introduction is followed by Movements 1 to 10, and Filmtracks names a chanting march as the anchor of Movement 1 and Movement 10. This rip is the Austrian pressing, which titles its tracks Movement 1 to Movement 11, so every movement number here is one higher than on the standard CD, and which adds a twelfth track, the Special Edit, that the standard 11-track CD lacks.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Movement 1",
+      "duration": "2:44",
+      "energy": "mid",
+      "tags": [
+        "Introduction Track",
+        "Swelling Opening",
+        "No Fade-Out"
+      ],
+      "role": "Album role: Opening track of the rip, the standard CD's Introduction, which swells from near silence and ends at close to full level as Movement 2 starts at once.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and swells to a fuller sound within about twenty seconds.",
+          "detail": "On the standard 11-track CD this track is titled Introduction, and the tracks after it are Movement 1 to Movement 10 (Wikipedia, MusicBrainz)."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Brighter passage",
+          "description": "The texture brightens as more upper-register content enters."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Swell",
+          "description": "A second swell follows, with a brighter top end than the first."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Final stretch",
+          "description": "The loudest stretch of the track begins and runs to the end without a fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Movement 2",
+      "duration": "5:41",
+      "energy": "high",
+      "tags": [
+        "Chanting March",
+        "Steady Pulse",
+        "Der Maulwurf Theme",
+        "Trailer Music"
+      ],
+      "role": "Album role: First of the two movements anchored by the chanting march, the pulse-driven theme that returns in Movement 11 and so frames the main sequence of the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts at once at a moderate level, with the pulse not yet settled.",
+          "detail": "This is Movement 1 on the standard CD. Wikipedia reports that the 2003 remix on Odyssey: The Definitive Collection opens with fewer sound effects, brings in the instruments one by one more clearly, and omits the initial spoken countdown."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Beat entry",
+          "description": "A steady repeating pulse settles in and carries the movement.",
+          "detail": "Filmtracks names the chanting march as the anchor of Movement 1 and Movement 10 on the standard CD, which are Movement 2 and Movement 11 on this rip. Wikipedia reports that this music was the title theme of the German reality series Der Maulwurf (Pro7, 2001) and was used in the trailers for X-Men (2000) and The Scorpion King (2002)."
+        },
+        {
+          "timestamp": "2:19",
+          "section": "Brightening",
+          "description": "The sound brightens and fills out, with more upper-register content."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Peak",
+          "description": "The loudest stretch of the movement, in which the pulse is less prominent than before."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Outro",
+          "description": "The level drops quickly and the movement fades to silence within about ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Movement 3",
+      "duration": "5:40",
+      "energy": "mid",
+      "tags": [
+        "Quiet Opening",
+        "Brief Swells",
+        "Sustained Climax",
+        "Quiet Coda"
+      ],
+      "role": "Album role: Quiet-to-loud movement that builds through two brief swells to one sustained climax, then drops to a quiet coda.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and stays at a low level for about half a minute.",
+          "detail": "This is Movement 2 on the standard CD."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Brightening",
+          "description": "The texture brightens as upper-register content enters, while the level rises only slightly."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "First swell",
+          "description": "A short swell reaches a bright high point and falls back to the quiet level."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Second swell",
+          "description": "A second, larger swell follows, again short and bright."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Climax",
+          "description": "A long, loud stretch with a bright top end begins."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Coda",
+          "description": "The loud section ends abruptly, and a quieter, darker coda fades to silence by the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Movement 4",
+      "duration": "5:51",
+      "energy": "mid",
+      "tags": [
+        "Near-Silent Opening",
+        "Stepwise Build",
+        "Abrupt Breakdown",
+        "Sustained Peak"
+      ],
+      "role": "Album role: Quiet-start movement that grows in steps to a sustained peak, drops out abruptly once, and swells again before a quiet close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens almost silent and stays very quiet for about a minute.",
+          "detail": "This is Movement 3 on the standard CD. On the standard CD, the CD-Text line for this track lists Vangelis, the London Metropolitan Orchestra, the Athens Opera Choir, K. Battle, and J. Norman (Wikipedia)."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Entry",
+          "description": "The level steps up sharply and the sound fills out."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Build",
+          "description": "A second, larger step up brings in strong low-frequency weight and the full sound of the movement."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Peak",
+          "description": "The loudest and fullest stretch of the movement, with a heavy low end."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Breakdown",
+          "description": "The sound drops abruptly to a quiet passage of about twenty-five seconds."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Return",
+          "description": "The music returns suddenly and settles at a moderate level."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Final swell",
+          "description": "A last swell builds to a high point."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Outro",
+          "description": "The level falls away over the final seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Movement 5",
+      "duration": "13:42",
+      "energy": "high",
+      "tags": [
+        "Longest Movement",
+        "Wave-Like Dynamics",
+        "Sudden Drops",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: The longest movement of the work, a sequence of quiet-to-loud waves separated by sudden drops that ends on its loudest, lowest-register build.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens very quietly and builds slowly for more than a minute.",
+          "detail": "This is Movement 4 on the standard CD, the longest movement at 13:42 (Wikipedia, MusicBrainz)."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "First peak",
+          "description": "The first loud, bright peak holds for about forty-five seconds."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Breakdown",
+          "description": "An abrupt drop to a quiet, softer passage follows."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Quiet middle",
+          "description": "A brief swell cuts off, and a long quiet stretch begins."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Rebuild",
+          "description": "The level climbs gradually back to a moderate plateau that holds for over a minute."
+        },
+        {
+          "timestamp": "6:20",
+          "section": "Swell",
+          "description": "A louder swell rises above the plateau, brighter than the section before it."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Near silence",
+          "description": "The sound falls almost to silence for a few seconds before the music resumes."
+        },
+        {
+          "timestamp": "8:25",
+          "section": "Climb",
+          "description": "A steep climb leads to a bright, loud high point."
+        },
+        {
+          "timestamp": "10:30",
+          "section": "Peak",
+          "description": "A loud, bright stretch ends in a sudden cut to near silence."
+        },
+        {
+          "timestamp": "10:50",
+          "section": "Quiet passage",
+          "description": "A quiet passage in a darker register follows and lasts over a minute."
+        },
+        {
+          "timestamp": "12:00",
+          "section": "Final build",
+          "description": "A dark, low-register passage builds steadily for about a minute and a half, brightening as it grows."
+        },
+        {
+          "timestamp": "13:27",
+          "section": "Ending",
+          "description": "The music stops abruptly at its loudest point and leaves a fading tail of about fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Movement 6",
+      "duration": "6:36",
+      "energy": "mid",
+      "tags": [
+        "Abrupt Contrasts",
+        "Bright Peaks",
+        "Dark Low-Register Close"
+      ],
+      "role": "Album role: Movement of abrupt contrasts, in which loud, bright sections alternate with sudden drops to quiet before a dark, low-register close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a low level and rises quickly to a louder passage within about ten seconds.",
+          "detail": "This is Movement 5 on the standard CD."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Build",
+          "description": "The level and brightness rise to a loud, bright stretch that lasts about forty seconds."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Breakdown",
+          "description": "The sound falls sharply to a quiet, dark passage, then recovers part of the way."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Swell",
+          "description": "A swell reaches a bright high point."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Quiet passage",
+          "description": "The sound drops to a quiet, dark passage of about twenty-five seconds."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Return",
+          "description": "The loud sound returns at once at a high level."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Climax",
+          "description": "A louder, brighter stretch begins and forms the climax of the movement."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Outro",
+          "description": "The level falls and the sound darkens into a low-register close that lasts about a minute."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Movement 7",
+      "duration": "6:27",
+      "energy": "mid",
+      "tags": [
+        "Thin Opening",
+        "Pulse-Led Middle",
+        "Long Build",
+        "Quiet Close"
+      ],
+      "role": "Album role: Gradual build from a quiet, thin opening through a pulse-led middle to a long loud stretch and a quiet close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly with a thin, bright texture and little low end.",
+          "detail": "This is Movement 6 on the standard CD."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Build",
+          "description": "The level rises and the low end fills in."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Beat entry",
+          "description": "A repeating pulse becomes audible and carries the middle of the movement for about half a minute."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Peak",
+          "description": "A long, loud stretch with a brighter top end begins."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Breakdown",
+          "description": "A brief quieter passage of about twenty seconds interrupts the loud section."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Final peak",
+          "description": "One more loud stretch follows."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Outro",
+          "description": "The level falls and the movement closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Movement 8",
+      "duration": "4:58",
+      "energy": "high",
+      "tags": [
+        "Strong Pulse",
+        "Loud Opening",
+        "Abrupt Drop",
+        "No Fade-Out"
+      ],
+      "role": "Album role: Loud, pulse-driven movement with two strong rhythmic sections, separated by an abrupt drop and a quiet middle stretch, ending without a fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a loud, full level at once, with no quiet introduction.",
+          "detail": "This is Movement 7 on the standard CD."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Breakdown",
+          "description": "The loud opening section ends abruptly, and the music restarts from a quiet level."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Build",
+          "description": "The level climbs back to full strength."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Beat entry",
+          "description": "A strong, regular pulse takes over and stands out clearly for about half a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Quiet stretch",
+          "description": "A quieter, less regular stretch of about a minute follows."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Peak",
+          "description": "The loudest section of the movement begins, with a strong pulse."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Ending",
+          "description": "The movement ends at close to full level, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Movement 9",
+      "duration": "3:07",
+      "energy": "mid",
+      "tags": [
+        "Compact Movement",
+        "Brief Drop-Out",
+        "Loud Ending"
+      ],
+      "role": "Album role: Compact, high-contrast movement with a quiet start, a loud first half, a brief drop-out, a darker second half, and a loud ending.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and builds over about half a minute to a loud, full sound.",
+          "detail": "This is Movement 8 on the standard CD."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Peak",
+          "description": "The first loud stretch holds for nearly a minute."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Breakdown",
+          "description": "The sound drops suddenly to a very quiet passage of about ten seconds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Second section",
+          "description": "A steadier, darker section follows, at a lower level than the first peak."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Ending",
+          "description": "The level swells to its loudest point, and the track ends there without a fade."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Movement 10",
+      "duration": "5:00",
+      "energy": "mid",
+      "tags": [
+        "Slow Rise",
+        "No Steady Pulse",
+        "Wave-Like Climb",
+        "Loud Finish"
+      ],
+      "role": "Album role: Slow-rising movement without a steady pulse that climbs in waves to a loud finish, placed just before the closing chanting-march movement.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly in a low register, with no steady pulse.",
+          "detail": "This is Movement 9 on the standard CD. Wikipedia lists it on the compilation Classic Kathleen Battle / A Portrait and reports a piano version of 3:48 on Vangelis's Nocturne: The Piano Album (2019)."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Entry",
+          "description": "The level and brightness rise, and the music settles at a moderate level for over a minute."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Build",
+          "description": "A slow, steady rise in level begins and continues for about a minute and a half."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "First peak",
+          "description": "The first high point of the movement, after which the level falls back."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Lull",
+          "description": "A quieter stretch of about half a minute follows."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Second climb",
+          "description": "A second climb reaches a loud high point, followed by a short dip."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Finale",
+          "description": "A final push in the low end and the upper register brings a loud finish without a fade.",
+          "detail": "At the 2001 concert, an encore combined this movement and the next one (Movements 9 and 10 on the standard CD), according to Wikipedia."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Movement 11",
+      "duration": "3:03",
+      "energy": "high",
+      "tags": [
+        "Chanting March",
+        "Steady Pulse",
+        "Abrupt Stop",
+        "Closing Movement"
+      ],
+      "role": "Album role: Return of the chanting march as the closing movement of the main sequence, ending in a sudden stop and a long quiet tail.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat entry",
+          "description": "The march pulse starts at once and runs unbroken for over a minute and a half.",
+          "detail": "This is Movement 10 on the standard CD, the second of the two movements that Filmtracks describes as anchored by the chanting march."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Breakdown",
+          "description": "The pulse drops out briefly while the level holds, then resumes."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, with the pulse still in place."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Outro",
+          "description": "The march stops abruptly, and a quiet, dark tail fades to silence over about forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Mythodea - Special Edit",
+      "duration": "4:06",
+      "energy": "high",
+      "tags": [
+        "Bonus Track",
+        "Special Edit",
+        "Edit Of Earlier Material",
+        "Pulse-Driven"
+      ],
+      "role": "Album role: Bonus track of this pressing, an edit that joins pulse-driven and pulse-free material from the main movements and is not on the standard 11-track CD.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts quietly, and the march pulse is established within about five seconds.",
+          "detail": "Wikipedia reports that the Special Edit combines parts of Movement 9 and Movement 1 of the standard CD (Movement 10 and Movement 2 here), was issued on two CD singles at 3:57, and was sometimes included on the album as a bonus or hidden track. This rip's version runs 4:06."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Breakdown",
+          "description": "The pulse stops, and a quieter pulse-free passage begins and builds slowly.",
+          "detail": "Compared with the other tracks of the rip, this stretch is closest to Movement 10."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Beat entry",
+          "description": "The pulse returns and carries the music into the final section."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins.",
+          "detail": "Compared with the other tracks of the rip, this stretch is closest to the loud section of Movement 11."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Outro",
+          "description": "The music stops, and a quiet tail dies away over the last twenty seconds."
+        }
+      ]
+    }
+  ]
+}

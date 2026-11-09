@@ -1,0 +1,611 @@
+{
+  "id": "jean-michel-jarre-metamorphoses",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Métamorphoses",
+  "year": 2000,
+  "label": "Epic · Disques Dreyfus",
+  "producer": "Jean-Michel Jarre · Joachim Garraud",
+  "genre": "Electronic / Techno Pop",
+  "genreTags": [
+    "Electronic",
+    "Techno Pop",
+    "Ambient",
+    "Electro"
+  ],
+  "runtime": "1:00:16",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/e/e2/Metamorphoses_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/M%C3%A9tamorphoses_(album)",
+  "youtubeUrl": "https://www.youtube.com/playlist?list=OLAK5uy_kG-hn9vPZIyR1LBcaIIGp9CUezjOoZaYs",
+  "overview": "Jarre's thirteenth studio album and his first record of songs: after twenty-five years of instrumental albums, the twelve tracks carry sung and processed voices, including Jarre's own through a vocoder. He began in September 1998, after the Apple Expo concert in Paris, and wrote about twenty-four songs alone in the south of France before choosing the twelve. It was also the first album he built on a digital audio workstation, Pro Tools, with the co-producer Joachim Garraud on drum programming, sound design and additional keyboards. Recording and mixing took place at JMJ Studio and Square Production, the strings for \"Millions of Stars\" and \"Gloria, Lonely Boy\" were recorded at Studio Davout, and John Davis mastered it at Whitfield Street in London after Jarre rejected a first mastering at Sterling Sound in New York. The booklet credits Yvan Cassar with the string arrangements and Jean Baptiste Saudray as choir conductor. Jarre named Underworld, The Chemical Brothers, Orbital and Leftfield as the music that pushed him to the album, while saying that it is neither a techno record nor a dance-floor record.\n\nThe guests are Laurie Anderson on \"Je me souviens\", who had already sung on Zoolook in 1984, Natacha Atlas on \"C'est la vie\", Sharon Corr of The Corrs on violin on \"Rendez-vous à Paris\", Lisa Jacobs and Veronique Bossa on \"Millions of Stars\", Veronique Bossa again on \"Give Me a Sign\", Dierdre Dubois of Ekova on \"Miss Moon\" and Özlem Çetin on \"Silhouette\". The tracks do not crossfade; Jarre kept them as separate songs and swapped \"C'est la vie\" and \"Hey Gagarin\" in the running order shortly before release, and only \"Bells\" and one other track are close to instrumental. Epic released the album in January 2000 after a postponement from October 1999 that left room for the Egypt millennium concert, and Disques Dreyfus issued it in the United States in 2004. It reached France No. 7, Finland No. 7, Germany No. 17, Norway No. 19 and UK No. 37, and produced the singles \"C'est la vie\" and \"Tout est bleu\". The timings of the section changes in the track notes come from measurements of one copy and are approximate.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Je Me Souviens",
+      "duration": "4:26",
+      "energy": "mid",
+      "tags": [
+        "Laurie Anderson",
+        "Minimalist Lyrics",
+        "Album Opener",
+        "Jarre Chorus"
+      ],
+      "role": "Album role: The opener and the first sign of the vocal direction, the track Jarre calls the one that best shows what he wanted from the album.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The music starts almost at once at a moderate level, and the bass grows over the first minute.",
+          "detail": "Jarre says he sings \"Je me souviens\" in the choruses and asked Laurie Anderson for the verses, built on single nouns such as the house, the child, the fish and the tree, each spoken with its own emotional colour, with no sentences, verbs or adjectives."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Fuller section",
+          "description": "The top end opens and the level rises to a firmer, steadier pulse."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Thinner passage",
+          "description": "The highs and the bass fall away for about ten seconds before the full sound returns."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Final section",
+          "description": "The low end and the highs return together in the loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:17",
+          "section": "Ending",
+          "description": "The level drops and the track stops."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "C'est La Vie",
+      "duration": "7:11",
+      "energy": "high",
+      "tags": [
+        "Natacha Atlas",
+        "Lead Single",
+        "Near-Eastern Percussion",
+        "Trance-Leaning Keyboards"
+      ],
+      "role": "Album role: The album's longest track and its centre-piece, written first as an instrumental and chosen as the first single; Jarre moved it from fourth to second place shortly before release.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that builds within twenty seconds to a steady mid-level texture.",
+          "detail": "Jarre says he wrote it as an instrumental and then heard its tempo as close to oriental song; the booklet credits Natacha Atlas on vocals and Rabah Khalfa on bendir and darbouka, and the official site describes the percussion as Near-Eastern and the keyboards as trance-leaning."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Beat entry",
+          "description": "A heavy low-end beat enters and the pulse becomes regular."
+        },
+        {
+          "timestamp": "2:53",
+          "section": "Break",
+          "description": "The beat thins and the highs fall away for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Beat returns",
+          "description": "The beat comes back brighter and louder than before the break."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Breakdown",
+          "description": "The low end drops out completely, then rebuilds over about 50 seconds."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Final section",
+          "description": "The full beat returns with heavy low end and runs unchanged for about a minute and a half."
+        },
+        {
+          "timestamp": "6:42",
+          "section": "Outro",
+          "description": "The level falls, the bass drops away and the track ends in a short fade."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Rendez-Vous À Paris",
+      "duration": "4:19",
+      "energy": "high",
+      "tags": [
+        "Sharon Corr",
+        "Violin",
+        "Steady Pulse",
+        "Late Violin Entry"
+      ],
+      "role": "Album role: The guest feature that is a violin rather than a voice, set third between the album's two longest tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse and low end start within ten seconds, and the top end opens gradually over the first minute.",
+          "detail": "The booklet credits Sharon Corr of The Corrs with violin on this track; Jarre describes the Corrs as digging into Celtic roots in a universal way and says he sought the contrast of her playing against music that has no Irish influence."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Firmer bass",
+          "description": "After a brief dip, the low end returns with a firmer bass pulse."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Break",
+          "description": "The highs and the level fall away for about twenty seconds."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Full section",
+          "description": "The full texture returns and builds to a brighter, louder stretch."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Second break",
+          "description": "A short break removes the highs for about ten seconds."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Final section",
+          "description": "The beat returns with the brightest top end of the track, and the section runs to the end.",
+          "detail": "Jarre says Sharon Corr's violin enters in the last part of the track."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Ending",
+          "description": "The beat and the level stop together."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Hey Gagarin",
+      "duration": "6:20",
+      "energy": "high",
+      "tags": [
+        "Dance Track",
+        "Gagarin Tribute",
+        "Space Theme",
+        "Long Build"
+      ],
+      "role": "Album role: The album's space-flight dance track, placed fourth; Jarre names it among his favourites and says he would himself have chosen it as the first single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, nearly beatless opening without much low end.",
+          "detail": "The official site says the track was inspired by Jarre's link-up with the Mir space station during his Moscow concert; Jarre calls it a simple dance track and a tribute to Gagarin, with the words of someone who would like to fly like him."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Low end enters",
+          "description": "The bass arrives and a pulse takes hold."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Beat entry",
+          "description": "The level and the low end step up into the full beat."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Breakdown",
+          "description": "The beat thins out and the bass falls back for about 45 seconds."
+        },
+        {
+          "timestamp": "3:59",
+          "section": "Final section",
+          "description": "The level jumps abruptly and the full beat returns with the loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:39",
+          "section": "Second break",
+          "description": "The beat and the bass drop out for about ten seconds."
+        },
+        {
+          "timestamp": "4:52",
+          "section": "Beat returns",
+          "description": "The bass comes back and the track builds again for a long closing stretch."
+        },
+        {
+          "timestamp": "6:03",
+          "section": "Outro",
+          "description": "The highs drop away and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Millions Of Stars",
+      "duration": "5:41",
+      "energy": "low",
+      "tags": [
+        "Ambient Piece",
+        "Oxygène Atmosphere",
+        "Veronique Bossa",
+        "Lisa Jacobs",
+        "Studio Davout Strings"
+      ],
+      "role": "Album role: The track Jarre ties most closely to his earlier instrumental work, a slow, nearly beatless piece at the middle of the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, spacious opening with no firm beat.",
+          "detail": "Jarre says the idea came in Egypt, from the night sky above the pyramids; a magazine review compares the way the track announces the notes about to be played with Spiritualized's \"100 Bars\". The booklet credits Veronique Bossa and Lisa Jacobs with vocals, and the official site places the string recording at Studio Davout."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Bass drop-out",
+          "description": "The low end falls away for about 25 seconds."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Bass returns",
+          "description": "The low end comes back and the level settles higher."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Brighter passage",
+          "description": "The top end opens for the last stretch of full texture."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Low end recedes",
+          "description": "The bass thins gradually over the following minute."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Fade",
+          "description": "The level drops and the track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Tout Est Bleu",
+      "duration": "6:01",
+      "energy": "high",
+      "tags": [
+        "Second Single",
+        "Weather Forecast Voices",
+        "Mobile Phone Rhythm",
+        "Chorus of Five Men"
+      ],
+      "role": "Album role: The album's second single, a dance track built on weather-forecast voices and placed after the quiet \"Millions of Stars\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark opening without highs, a fraction of the full level.",
+          "detail": "The Access All Areas feature says the rhythm track rests on the stuttering interference of a mobile phone. Jarre says the song stacks weather presenters from different countries reading dull forecasts against a chorus of five men singing that everything is blue; the feature lists Lisa Jacobs, Cullard Xiangquiam and Ute Eckerfield as the Weather Girls."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Level step",
+          "description": "The level steps up and the bass fills out."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Highs open",
+          "description": "The top end opens and the track brightens."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Break",
+          "description": "A short drop in which the beat and the highs vanish."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Full section",
+          "description": "The full beat returns, brighter than before."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Stripped section",
+          "description": "The highs disappear for about half a minute and the texture is left in the low and middle range."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Highs return",
+          "description": "The top end comes back and the beat builds to its loudest stretch around 4:30."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Outro",
+          "description": "The bass drops away and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Love Love Love",
+      "duration": "4:27",
+      "energy": "mid",
+      "tags": [
+        "Jarre Vocals",
+        "Processed Voices",
+        "Macintosh Vocal Processing",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: A comic song about nymphomania that carries Jarre's own sung choruses, placed after \"Tout est bleu\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark opening with almost no treble; the highs open over the first 30 seconds.",
+          "detail": "Jarre says the verses are vocals he created and processed entirely on a Macintosh computer, that he sings the choruses himself, and that the song is about nymphomania."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Beat entry",
+          "description": "A firm beat enters with a bright top end."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Lift",
+          "description": "The bass and the level rise for the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Break",
+          "description": "The beat stops for about eight seconds."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Beat returns",
+          "description": "The beat comes back at full level and runs until the close."
+        },
+        {
+          "timestamp": "4:13",
+          "section": "Outro",
+          "description": "The highs and the bass fall away and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Bells",
+      "duration": "3:49",
+      "energy": "high",
+      "tags": [
+        "Instrumental",
+        "Bell Theme",
+        "Beat-Driven"
+      ],
+      "role": "Album role: One of the few near-instrumental tracks, a short, beat-driven piece in the second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A moderate opening that dips briefly at 0:20.",
+          "detail": "Jarre says the track is named for the bells used for its theme and that he values the ritual meaning that bells carry for people everywhere."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Highs open",
+          "description": "A bright top layer enters and the level rises."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Beat entry",
+          "description": "The beat enters with heavy low end."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Bass drop",
+          "description": "The low end drops out for about ten seconds, then returns."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Break",
+          "description": "The beat and the highs stop for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Final section",
+          "description": "The beat and the bass return at full level."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Ending",
+          "description": "The level drops and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Miss Moon",
+      "duration": "6:09",
+      "energy": "mid",
+      "tags": [
+        "Dierdre Dubois",
+        "Ekova",
+        "Sprinkler Beat",
+        "Desert Atmosphere"
+      ],
+      "role": "Album role: The album's desert piece, a long song whose beat is built from a lawn sprinkler, placed before the closing run of shorter songs.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, slowly opening texture with a faint pulse and no strong highs.",
+          "detail": "The booklet credits Dierdre Dubois of Ekova with vocals, and the official site says she appears courtesy of Sony Classical. Jarre says the beat is made from the sound of a garden sprinkler, to evoke a desert through water; the Access All Areas feature compares the landscape to Vangelis's Blade Runner."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Beat entry",
+          "description": "The level steps up and the full beat enters."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Break",
+          "description": "The beat and the highs drop away for about 25 seconds."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Beat returns",
+          "description": "The beat returns with heavy bass at a clearly higher level."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Second break",
+          "description": "The bass and the level fall away for about twenty seconds."
+        },
+        {
+          "timestamp": "3:22",
+          "section": "Final section",
+          "description": "The low end and the beat return for a long closing section of almost two and a half minutes."
+        },
+        {
+          "timestamp": "5:47",
+          "section": "Outro",
+          "description": "The level and the bass fall and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Give Me A Sign",
+      "duration": "3:50",
+      "energy": "mid",
+      "tags": [
+        "Veronique Bossa",
+        "Pop Song",
+        "Written For Kate Bush",
+        "Steady Beat"
+      ],
+      "role": "Album role: A love song that Jarre says is structured as a pop song, in the closing run of the album; the head of Sony Music Europe, Richard Ogden, pressed for it as a single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless opening of a few seconds, then the beat enters at 0:08 and runs through the song.",
+          "detail": "Jarre says he wrote it for Kate Bush, who could not record it in time, and that it is a love song about a girl speaking to someone who has died or left; the booklet credits Veronique Bossa with vocals. Garraud says it went through eight versions."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Brighter layer",
+          "description": "The top end brightens and the arrangement fills out."
+        },
+        {
+          "timestamp": "1:51",
+          "section": "Bass lift",
+          "description": "The low end rises for a short stretch."
+        },
+        {
+          "timestamp": "2:53",
+          "section": "Break",
+          "description": "The bass and the highs fall away for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Final section",
+          "description": "The full texture returns, brighter than before, until the close."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Ending",
+          "description": "The highs and the level fall away and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Gloria, Lonely Boy",
+      "duration": "5:32",
+      "energy": "mid",
+      "tags": [
+        "Processed Orchestra",
+        "Vocoder And Opera Voice",
+        "Transgender Theme",
+        "Studio Davout Strings"
+      ],
+      "role": "Album role: The song Jarre calls heavy and says the album could not exist without, as the statement of its title theme; placed second to last, before a short closing piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that rises abruptly at 0:20 into a full mid-level texture.",
+          "detail": "Jarre says the song is about transsexual and transvestite lives, an idea from a Pedro Almodóvar film, and that it combines a real symphonic orchestra, processed, with a heavily processed drum track and his own voice between vocoder and opera voice. The official site places the string recording at Studio Davout, and Garraud says it went through about five versions."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Beat entry",
+          "description": "The full band and the beat arrive with heavy low end."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Thinner section",
+          "description": "The beat falls away for about 20 seconds while the texture stays full."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Break",
+          "description": "A short drop in level before the full band returns at 2:28."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Highs recede",
+          "description": "The top end falls back and the pulse weakens."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Breakdown",
+          "description": "The bass thins and the beat all but stops for about 15 seconds."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Final section",
+          "description": "The low end returns and the level rises for the last long section."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Ending",
+          "description": "The track stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Silhouette",
+      "duration": "2:31",
+      "energy": "low",
+      "tags": [
+        "Özlem Çetin",
+        "Chill-Out",
+        "Closing Song",
+        "Turkish Vocalist"
+      ],
+      "role": "Album role: A short chill-out closer that lands the album after \"Gloria, Lonely Boy\", which Jarre says is meant to bring the listener back to the beginning.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with the top end present and little low end.",
+          "detail": "Jarre describes it as a chill-out song with a haunting voice, that of the Turkish singer Özlem Çetin, credited in the booklet."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Bass entry",
+          "description": "The bass enters and the level steps up to a steady mid-level texture."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Brief dip",
+          "description": "The level and the highs sink for about ten seconds, then return."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Ending",
+          "description": "The highs fall away and the track closes quietly."
+        }
+      ]
+    }
+  ]
+}

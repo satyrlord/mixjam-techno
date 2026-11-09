@@ -1,0 +1,453 @@
+{
+  "id": "pink-floyd-obscured-by-clouds",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Obscured by Clouds",
+  "year": 1972,
+  "label": "Harvest · Capitol",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock / Folk Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Folk Rock",
+    "Soundtrack"
+  ],
+  "runtime": "40:28",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/e/ef/Pink_Floyd_-_Obscured_by_Clouds.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Obscured_by_Clouds",
+  "overview": "The soundtrack to Barbet Schroeder's film La Vallée, recorded from 23 February to 6 April 1972 at Strawberry Studios in the Château d'Hérouville, France, in two breaks around a Japanese tour and the work on The Dark Side of the Moon, and mixed from 4 to 6 April at Morgan Sound Studios in London. As for More (1969), the band watched a rough cut of the film and timed its cues with a stopwatch, and Pink Floyd produced the album. After the band fell out with the film company, the soundtrack came out as Obscured by Clouds, and the film was retitled La Vallée (Obscured by Clouds). Richard Wright bought the VCS 3 synthesiser from the BBC Radiophonic Workshop; it appears on the title track, where Nick Mason plays electronic drums, and the album also features Gilmour's acoustic, electric and pedal steel guitars and Wright's Hammond and Farfisa organs, piano and electric piano. The original sleeve credits none of the players. Four instrumentals (\"Obscured by Clouds\", \"When You're In\", \"Mudmen\" and \"Absolutely Curtains\") alternate with six songs, tracks 1 to 6 making up side one and tracks 7 to 10 side two.\n\nThe album was released by Harvest and Capitol Records on 2 June 1972 in the UK and 15 June 1972 in the US. It reached France No. 1, UK No. 6, the Netherlands No. 3, Denmark No. 3, Italy No. 5, Germany No. 19 and US No. 46, and is certified Gold in the UK, the US and Germany. \"Free Four\" was its only single, released in the US on 10 July 1972. Reviews were mixed: Rolling Stone called it a \"dull film soundtrack\", and The Daily Telegraph found that its \"elegant instrumentals point the way to Dark Side\".\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Obscured by Clouds",
+      "duration": "3:04",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "VCS 3",
+        "Electronic Drums",
+        "Instrumental"
+      ],
+      "role": "Album role: The title track and album opener, an instrumental built on the VCS 3 and electronic drums that sets the soundtrack's electronic colour before the guitar-led pieces.",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Fade-in",
+          "description": "The track starts almost silent and rises over about twenty seconds, the low end entering first.",
+          "detail": "Wikipedia says the title track uses the VCS 3 and Mason playing electronic drums, and credits Gilmour and Wright with the VCS 3."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Full level",
+          "description": "The track reaches its plateau with the low and the upper range both open, and the level then barely moves for over two minutes."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Brief dip",
+          "description": "The upper range falls away for a few seconds, then returns; a second short dip follows at about 1:50."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out by about 3:00."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "When You're In",
+      "duration": "2:31",
+      "energy": "high",
+      "tags": [
+        "Riff Jam",
+        "Hammond Organ",
+        "Instrumental",
+        "Title Track Live Pairing"
+      ],
+      "role": "Album role: A short group instrumental that follows the title track; the two were played back to back in concert in late 1972 and on the 1973 tours.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Riff",
+          "description": "The track starts at once at full level, with no run-in, and holds that level for a minute and a half.",
+          "detail": "Wikipedia says Gilmour wrote the main riff and the band jammed on it, and that the title comes from a phrase said by the roadie Chris Adamson. Wright is credited with Hammond organ on this track."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades out over about 45 seconds."
+        },
+        {
+          "timestamp": "2:18",
+          "section": "Silence",
+          "description": "The audio has ended, and the rest of the track on the rip is silence."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Burning Bridges",
+      "duration": "3:30",
+      "energy": "mid",
+      "tags": [
+        "Wright and Waters",
+        "Song",
+        "Hammond Organ",
+        "Source of Mudmen"
+      ],
+      "role": "Album role: The first song of the album and one of its two Wright and Waters collaborations; its material returns as the instrumental \"Mudmen\" three tracks later.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quieter opening with less top end, which grows over the first twenty seconds.",
+          "detail": "Wikipedia credits the music to Wright and the lyrics to Waters; the lead vocals are credited to Gilmour and Wright. Wright is credited with Hammond organ on this track."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Main section",
+          "description": "The level rises and the top end opens; the arrangement then holds a steady level."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Louder passage",
+          "description": "A louder passage with a fuller midrange and more top end."
+        },
+        {
+          "timestamp": "1:51",
+          "section": "Brighter passage",
+          "description": "The sound brightens again and the level rises."
+        },
+        {
+          "timestamp": "2:53",
+          "section": "Closing section",
+          "description": "The last section is bright and at a high level."
+        },
+        {
+          "timestamp": "3:11",
+          "section": "Fade-out",
+          "description": "The level falls away and the track is silent by about 3:15."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Gold It's in the...",
+      "duration": "3:08",
+      "energy": "high",
+      "tags": [
+        "Rock Song",
+        "Gilmour Lead Vocal",
+        "Layered Electric Guitars"
+      ],
+      "role": "Album role: The most direct rock song of the album, placed after the Wright and Waters piece, with Gilmour as writer and singer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at once at full level, with no run-in, and the level stays within a narrow range to the end.",
+          "detail": "Wikipedia calls it a straightforward rock song, with Gilmour as composer and lead vocalist; it cites Guesdon and Margotin for Gilmour playing several electric guitar parts."
+        },
+        {
+          "timestamp": "0:09",
+          "section": "Top end opens",
+          "description": "The upper range opens and the sound becomes brighter."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Second half",
+          "description": "A small change in the low end marks the start of the second half, with the level and brightness otherwise unchanged."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out by about 2:55."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Wot's...Uh the Deal",
+      "duration": "5:09",
+      "energy": "low",
+      "tags": [
+        "Acoustic Song",
+        "Gilmour and Waters",
+        "Piano",
+        "Longest Song"
+      ],
+      "role": "Album role: The album's longest song and its acoustic centrepiece, which closes the run of songs on side one before the instrumental \"Mudmen\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a restrained top end."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Top end opens",
+          "description": "The upper range opens and the sound brightens, at a level still below the rest of the song.",
+          "detail": "Wikipedia describes the track as an acoustic piece with music by Gilmour and lyrics by Waters, with Wright on Hammond organ and piano. Pink Floyd never played it live; Gilmour revived it on his 2006 tour."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Louder passage",
+          "description": "The level and the brightness rise, and the song holds that level for about 25 seconds."
+        },
+        {
+          "timestamp": "1:51",
+          "section": "Brighter passage",
+          "description": "The midrange and top end grow, and the arrangement fills out."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Fuller texture",
+          "description": "The sound brightens and the texture thickens for about 25 seconds."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Pared-back stretch",
+          "description": "The low end and the top end drop back, and the texture thins for a short stretch."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Final section",
+          "description": "A louder, fuller last section that runs to the end, and the song fades out from about 4:50."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Mudmen",
+      "duration": "4:18",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "Burning Bridges Reworked",
+        "Hammond Organ",
+        "Piano",
+        "Wright and Gilmour"
+      ],
+      "role": "Album role: The side one closer, an instrumental that reworks \"Burning Bridges\" in a different time signature.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that grows slowly in level over the first half minute.",
+          "detail": "Wikipedia describes the track as an instrumental adaptation of \"Burning Bridges\" in a different time signature, credited to Wright and Gilmour; Wright is credited with Hammond organ and piano on this track."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Slow build",
+          "description": "The sound grows gradually brighter and the level rises, with no strong pulse."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Bright section",
+          "description": "The top end opens sharply and the sound becomes much brighter and fuller: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Darker passage",
+          "description": "The top end falls away and the sound turns dark and muted for about a minute."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Bright return",
+          "description": "The bright sound returns at a higher level and holds until the end."
+        },
+        {
+          "timestamp": "4:06",
+          "section": "Ending",
+          "description": "The level drops and the track stops by about 4:10."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Childhood's End",
+      "duration": "4:33",
+      "energy": "mid",
+      "tags": [
+        "Side Two Opener",
+        "Gilmour Song",
+        "Long Fade-In",
+        "Hammond Organ"
+      ],
+      "role": "Album role: The opener of side two, the last Pink Floyd song with lyrics by Gilmour until A Momentary Lapse of Reason (1987); its opening drum pattern was reused on \"Time\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Fade-in",
+          "description": "The track rises from silence over almost a minute and a half; the first audible sound arrives after about 13 seconds.",
+          "detail": "Wikipedia says the drum pattern opening the track was recycled for \"Time\" on The Dark Side of the Moon, and that the song was played live in late 1972 and early 1973. Wright is credited with Hammond organ on this track."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Building level",
+          "description": "The level and the low end keep rising towards the full sound."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Full level",
+          "description": "The top end opens and the song reaches its full level, which it keeps almost unchanged to the end."
+        },
+        {
+          "timestamp": "4:17",
+          "section": "Ending",
+          "description": "The track stops at about 4:20 without a long fade, the low end going first."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Free Four",
+      "duration": "4:17",
+      "energy": "mid",
+      "tags": [
+        "Waters Song",
+        "Only Single",
+        "Acoustic Rhythm Guitar",
+        "US Radio Single"
+      ],
+      "role": "Album role: The album's only single, written entirely by Waters and chosen for US release because the band felt it suited AM radio.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening",
+          "description": "The track starts quickly and reaches full level within five seconds, with a steady pulse from the first bars.",
+          "detail": "Wikipedia says the title comes from a Cockney-accented count-in, and that Waters played rhythm acoustic guitar and bass on the recording."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Fuller section",
+          "description": "The midrange and the top end grow for about twenty seconds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Return",
+          "description": "The arrangement drops back to the opening texture."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Final section",
+          "description": "The sound becomes brighter and fuller again and stays so for nearly a minute."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Fade-out",
+          "description": "The level falls and the song fades out by about 4:05."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Stay",
+      "duration": "4:08",
+      "energy": "mid",
+      "tags": [
+        "Wright Song",
+        "Piano",
+        "Wright Lead Vocal",
+        "Slow Build"
+      ],
+      "role": "Album role: The only song on the album written and sung by Wright, with lyrics by Waters, placed before the closing instrumental.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with little top end, at a low level for about half a minute.",
+          "detail": "Wikipedia credits the music and lead vocal to Wright and the lyrics to Waters, and lists Wright on piano for this track."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Fuller texture",
+          "description": "The level and the top end rise and the arrangement fills out."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Louder section",
+          "description": "The song reaches a higher level for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Quiet stretch",
+          "description": "The level and the top end fall away for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Return",
+          "description": "The full sound returns and holds a steady level."
+        },
+        {
+          "timestamp": "2:41",
+          "section": "Final build",
+          "description": "After a short dip, the level climbs to the loudest stretch of the song at about 3:00."
+        },
+        {
+          "timestamp": "3:32",
+          "section": "Coda",
+          "description": "The level drops and a quieter coda runs to the end, fading by about 3:55."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Absolutely Curtains",
+      "duration": "5:50",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Keyboard Instrumental",
+        "Mapuga Chant",
+        "Hammond and Farfisa"
+      ],
+      "role": "Album role: The closing instrumental, built mainly on Wright's keyboards and ending with a recording of the Mapuga tribe chanting, as seen in the film.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Fade-in",
+          "description": "The track rises slowly from silence with a soft, beatless texture.",
+          "detail": "Wikipedia credits the track to the whole band but says it is built mainly on Wright's keyboards, with Wright on Hammond organ, piano and Farfisa organ."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Low end enters",
+          "description": "A low-end layer enters and the level rises to about the level it keeps for the next two minutes."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Low end drops out",
+          "description": "The low end falls away for about twenty seconds and the texture thins, then returns."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Second drop",
+          "description": "The low end falls away again for about fifteen seconds."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, full and bright, which lasts for about fifteen seconds."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Quiet section",
+          "description": "The level drops and a long, quieter section with a steady low end runs for about a minute and a quarter."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Closing texture",
+          "description": "The low end disappears and the sound changes to a midrange texture that runs to the end.",
+          "detail": "Wikipedia says the track ends with a recording of the Mapuga tribe chanting, as seen in the film; the rip does not identify where it starts."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Ending",
+          "description": "The sound stops at about 5:47, closing the album."
+        }
+      ]
+    }
+  ]
+}

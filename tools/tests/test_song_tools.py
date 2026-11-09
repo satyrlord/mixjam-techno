@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import struct
 import tempfile
+import threading
 import unittest
 import wave
 from unittest import mock
@@ -1066,6 +1067,56 @@ class MeasureTests(unittest.TestCase):
             result = render.render_lanes(song.document(), {'bass': [2]}, Path(directory), jobs=1)
             _, pcm = mixjam.read_wav(result['bass'])
             np.testing.assert_array_equal(pcm, 0)
+
+    def test_renders_yield_the_processor(self):
+        calls = []
+        def native(command, **kwargs):
+            calls.append(kwargs)
+            return mock.Mock(returncode=0)
+        with mock.patch.object(render.subprocess, 'run', side_effect=native), \
+                mock.patch.object(render, 'contain') as contain:
+            render.run('song.mixjam', 'out.wav', Path('data'))
+        contain.assert_called_once()
+        if sys.platform == 'win32':
+            self.assertEqual(calls[0]['creationflags'], render.BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            self.assertNotIn('creationflags', calls[0])
+        pools, executor = [], render.ThreadPoolExecutor
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(render.os, 'cpu_count', return_value=32), \
+                mock.patch.object(render, 'ThreadPoolExecutor',
+                                  side_effect=lambda jobs: pools.append(jobs) or executor(jobs)):
+            render.render_lanes(mixjam.Song('jobs').document(), {}, Path(directory))
+        self.assertEqual(pools, [render.MAX_JOBS])
+
+    def test_posix_lanes_and_master_inherit_lower_priority(self):
+        priority, calls = threading.local(), {}
+        together = threading.Barrier(2)
+        caller, executor = threading.current_thread(), render.ThreadPoolExecutor
+        def nice(increment):
+            priority.value = getattr(priority, 'value', 0) + increment
+            return priority.value
+        def pool(jobs):
+            # Linux stores niceness per thread. New workers inherit their creator's value.
+            inherited = getattr(priority, 'value', 0)
+            return executor(jobs, initializer=lambda: setattr(priority, 'value', inherited))
+        def native(command, **kwargs):
+            calls[Path(command[command.index('--output') + 1]).name] = getattr(priority, 'value', 0)
+            if threading.current_thread() is not caller:
+                together.wait(timeout=5)
+            return mock.Mock(returncode=0)
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(render.sys, 'platform', 'linux'), \
+                mock.patch.object(render.os, 'nice', side_effect=nice, create=True), \
+                mock.patch.object(render, '_contained', False), \
+                mock.patch.object(render.env, 'exe', return_value=Path('renderer')), \
+                mock.patch.object(render, 'ThreadPoolExecutor', side_effect=pool), \
+                mock.patch.object(render.subprocess, 'run', side_effect=native):
+            root = Path(directory)
+            render.render_lanes(mixjam.Song('priority').document(), {'one': [1], 'two': [2]}, root, jobs=2)
+            render.run(root / 'song.mixjam', root / 'master.wav')
+        self.assertEqual(calls, {'lane-01.wav': render.POSIX_NICENESS,
+                                 'lane-02.wav': render.POSIX_NICENESS,
+                                 'master.wav': render.POSIX_NICENESS})
 
     def short_song_report(self, frames=18900, sections=()):
         with tempfile.TemporaryDirectory() as directory:

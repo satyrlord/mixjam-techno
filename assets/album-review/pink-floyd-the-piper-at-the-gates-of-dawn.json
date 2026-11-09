@@ -1,0 +1,494 @@
+{
+  "id": "pink-floyd-the-piper-at-the-gates-of-dawn",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Piper at the Gates of Dawn",
+  "year": 1967,
+  "label": "EMI Columbia",
+  "producer": "Norman Smith",
+  "genre": "Psychedelic Rock / Space Rock",
+  "genreTags": [
+    "Psychedelic Rock",
+    "Space Rock",
+    "Acid Pop",
+    "Experimental Rock",
+    "Psychedelia"
+  ],
+  "runtime": "41:55",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/3/3c/PinkFloyd-album-piperatthegatesofdawn_300.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Piper_at_the_Gates_of_Dawn",
+  "overview": "Pink Floyd's debut album was recorded between 21 February and 21 May 1967 at EMI Studios, Abbey Road, London, produced by Norman Smith with Pete Bown as balance engineer, and released in August 1967 by EMI Columbia; Tower issued it in the United States on 21 October 1967 as \"Pink Floyd\", with a shortened track list that included \"See Emily Play\". The line-up is Syd Barrett on vocals and guitars, Roger Waters on bass and vocals, Rick Wright on organ, piano and vocals, and Nick Mason on drums. Barrett wrote eight of the songs and shares the band credit on the two instrumentals, \"Pow R. Toc H.\" and \"Interstellar Overdrive\", while Waters wrote \"Take Up Thy Stethoscope and Walk\"; the title comes from the seventh chapter of Kenneth Grahame's The Wind in the Willows (1908), and the album was still called Projection in July 1967. The sessions used automatic double tracking, customised EMT 140 plate reverberators and the studio's echo chamber of 1931, and Barrett sang in a vocal isolation booth because his voice was quiet.\n\nThe album reached UK No. 6 and US No. 131 on the Billboard 200, and it is certified Gold in the United Kingdom, for the 1994 release, and in Italy. Side one holds five short songs and one instrumental, and side two opens with the nine-minute improvisation \"Interstellar Overdrive\", which runs into \"The Gnome\" before three more short Barrett songs. The original UK LP appeared in both mono and stereo mixes, and the 2007 fortieth-anniversary edition holds each on its own disc; the rip measured here carries different material in the left and right channels, so it is the stereo mix, and its tags do not say which remaster it is.\n\nSection timestamps are measured on a digital rip of the stereo mix and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Astronomy Domine",
+      "duration": "4:11",
+      "energy": "high",
+      "tags": [
+        "Peter Jenner Intro",
+        "Fender Esquire",
+        "Farfisa Organ",
+        "Binson Echo",
+        "Space Theme"
+      ],
+      "role": "Album role: The opener, a Barrett song that sets the album's space theme before the shorter songs that follow.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track opens very quietly and the level builds over about twenty seconds.",
+          "detail": "Wikipedia says Peter Jenner, one of the band's managers, reads the names of planets, stars and galaxies through a megaphone at the start, and that a rapid beeping sound appears around 0:19."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Band entry",
+          "description": "The drums and the guitar enter and the full level is reached within a few seconds.",
+          "detail": "Wikipedia lists Barrett on a Fender Esquire for lead and slide guitar through a Binson echo unit, Wright on a Farfisa organ, Waters on a Rickenbacker 4001 bass and Mason on drums, with Barrett and Wright sharing the lead vocals."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Quiet passage",
+          "description": "The level falls sharply for about ten seconds and the low end almost disappears."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Full return",
+          "description": "The full band returns with a brighter top end than before the quiet passage."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Ending",
+          "description": "The level falls and the track stops at about 4:05."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Lucifer Sam",
+      "duration": "3:07",
+      "energy": "high",
+      "tags": [
+        "Descending Riff",
+        "Echo Guitar",
+        "Bowed Bass",
+        "Farfisa Organ",
+        "Percy The Rat Catcher"
+      ],
+      "role": "Album role: A short riff-driven Barrett song placed second, between the opener and \"Matilda Mother\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The riff and a steady pulse begin at once at a moderate level.",
+          "detail": "Wikipedia gives Barrett's electric guitar through an echo machine as the basis of the descending riff, likened to a sinister Duane Eddy, with Wright on Farfisa organ, Waters on bass and Mason on drums and timpani. The song was called \"Percy the Rat Catcher\" in the sessions, and its cat is Barrett's Siamese cat."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Firmer pulse",
+          "description": "The pulse becomes stronger and the low end fuller."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Louder stretch",
+          "description": "The level rises a step for about fifteen seconds before settling back."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Low-end dip",
+          "description": "The bass falls away for a few seconds and returns at about 2:15 with a firmer pulse.",
+          "detail": "Wikipedia says bowed bass and increasingly agitated organ and percussion effects add to the track as it develops."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Ending",
+          "description": "The bass falls away and the track stops at about 3:00."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Matilda Mother",
+      "duration": "3:08",
+      "energy": "mid",
+      "tags": [
+        "Richard Wright Lead Vocal",
+        "Double-Tracked Vocals",
+        "Organ Solo",
+        "Waltz Ending",
+        "First Song Recorded"
+      ],
+      "role": "Album role: The first song recorded for the album, on 21 February 1967, placed third on side one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bass and organ opening at a moderate level, with the top end opening over the first ten seconds.",
+          "detail": "Wikipedia says Wright sings most of the lead, with Barrett joining on the choruses and singing the final verse, both double-tracked; the guitar rarely plays chords, and Wright takes an organ solo. Barrett first wrote the song around verses from Hilaire Belloc's Cautionary Tales and rewrote it after Belloc's estate refused permission."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Pulse firms",
+          "description": "A steadier pulse takes hold and the level lifts a little."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Looser stretch",
+          "description": "The pulse weakens for about fifty seconds while the level stays the same."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Pulse returns",
+          "description": "A steadier pulse comes back for about half a minute."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Fade",
+          "description": "The level falls steadily into a fade over the last twenty seconds.",
+          "detail": "Wikipedia describes the ending of the song as a simple waltz with wordless vocal harmonies."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Flaming",
+      "duration": "2:46",
+      "energy": "mid",
+      "tags": [
+        "Wind-Up Toys",
+        "Slide Whistle",
+        "Tack Piano",
+        "US Single",
+        "Originally Snowing"
+      ],
+      "role": "Album role: The shortest track on side one, released in November 1967 as a US single (Tower 378) with \"The Gnome\" on the other side.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A moderate opening that reaches a steady level within a few seconds.",
+          "detail": "Wikipedia says the song was originally called \"Snowing\" and was recorded on 16 March 1967 in one take with one vocal overdub. Its credits list Barrett on lead vocals, electric guitar and 12-string acoustic guitar, Wright on Farfisa, Hammond and Lowrey organs and tack piano, Waters on bass and slide whistle, Mason on drums and finger cymbals, and all four on wind-up toys and vocal percussion."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Pulse firms",
+          "description": "The pulse firms up and the top end opens."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Looser passage",
+          "description": "The pulse weakens for about twenty seconds before it steadies again."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Final section",
+          "description": "The low end returns and the level rises until the track stops at about 2:40."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Pow R. Toc H.",
+      "duration": "4:26",
+      "energy": "high",
+      "tags": [
+        "Instrumental",
+        "Group Composition",
+        "Vocal Effects",
+        "Piano",
+        "Waters Scream"
+      ],
+      "role": "Album role: The band's instrumental on side one, credited to all four members, placed before Waters's song that closes the side.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that rises to a steady level within about fifteen seconds.",
+          "detail": "Wikipedia lists Barrett on acoustic and electric guitars and vocal percussion, Waters on bass and screams, Wright on Farfisa organ, piano and vocalisations, and Mason on drums and percussion, with piano prominent. It adds that Nick Mason recalls the band watching the Beatles record \"Lovely Rita\" at Abbey Road during the sessions, and that voice noises like those on that song can be heard, reportedly recorded in the next studio."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Steady pulse",
+          "description": "A regular pulse settles in and the sound narrows to the low and middle range.",
+          "detail": "Wikipedia says the scream that Waters uses here is one he later used in \"Careful with That Axe, Eugene\"."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Brighter section",
+          "description": "The top end opens and the level rises."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Low-end dip",
+          "description": "The low end falls away for about ten seconds."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Sparse section",
+          "description": "The sound darkens and the pulse weakens for about fifty seconds."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Final section",
+          "description": "The level rises for a short last stretch and the track stops abruptly at about 4:20."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Take Up Thy Stethoscope and Walk",
+      "duration": "3:06",
+      "energy": "mid",
+      "tags": [
+        "Roger Waters Lead Vocal",
+        "First Waters Song",
+        "Biblical Title",
+        "Originally Doctor Doctor"
+      ],
+      "role": "Album role: The side-one closer and the first Waters song the band recorded, his only writing credit on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level and settles within ten seconds.",
+          "detail": "Wikipedia gives recording dates of 20 and 29 March and 18 July 1967 at EMI Studio Three, with Waters on bass and lead vocals, Barrett on electric rhythm and lead guitars and backing vocals, Wright on organ and backing vocals, and Mason on drums. The song was first titled \"Doctor, Doctor\", and the final title alludes to John 5:8."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Brighter passage",
+          "description": "The top end opens and the level rises."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Steadier pulse",
+          "description": "The pulse becomes regular and strong for about half a minute."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Loudest stretch",
+          "description": "The level and the top end rise to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Ending",
+          "description": "The low end falls away and the track stops at about 2:58."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Interstellar Overdrive",
+      "duration": "9:41",
+      "energy": "peak",
+      "tags": [
+        "Instrumental",
+        "Group Composition",
+        "Free Improvisation",
+        "Farfisa Organ",
+        "Stereo Organ Panning"
+      ],
+      "role": "Album role: Side two's opener and the album's longest track, a group-credited instrumental improvisation that runs into \"The Gnome\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening riff",
+          "description": "The track starts at once at full level with a firm pulse.",
+          "detail": "Wikipedia describes a distorted descending guitar riff by Barrett with Waters on bass and Wright on Farfisa organ, with Mason's drums entering after it; the theme began as a tune hummed by the manager Peter Jenner, which Barrett worked out on guitar."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Quiet interlude",
+          "description": "The level and the top end fall away for about twenty seconds.",
+          "detail": "Wikipedia says the improvisation includes modal passages, Farfisa organ flourishes and quiet interludes, with a free tempo and occasional guitar noises."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Full return",
+          "description": "The full level returns with a heavy low end."
+        },
+        {
+          "timestamp": "6:09",
+          "section": "Sparse passage",
+          "description": "The level falls, the top end falls away and the pulse nearly disappears for over a minute, with one brief bright burst around 6:32.",
+          "detail": "Wikipedia says the stereo mix has an organ that moves between the speakers, while the mono mix lacks that effect and adds an extra organ and guitar."
+        },
+        {
+          "timestamp": "7:20",
+          "section": "Full return",
+          "description": "The level rises again and the top end opens to a loud, bright stretch."
+        },
+        {
+          "timestamp": "8:21",
+          "section": "Firm pulse",
+          "description": "The pulse firms up with a heavier low end for the closing stretch.",
+          "detail": "Wikipedia says the band restates the main theme near the end, slowing and building in intensity, and that producer Norman Smith plays the drum roll near the end."
+        },
+        {
+          "timestamp": "9:12",
+          "section": "Closing tail",
+          "description": "The pulse and the top end fall away over the last half-minute, and the track ends without a fade."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "The Gnome",
+      "duration": "2:14",
+      "energy": "low",
+      "tags": [
+        "Celesta",
+        "Vibraphone",
+        "12-String Acoustic Guitar",
+        "Temple Blocks",
+        "US B-Side"
+      ],
+      "role": "Album role: A short Barrett song of acoustic guitars, celesta and vibraphone after the long improvisation, issued in the US as the B-side of \"Flaming\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level.",
+          "detail": "Wikipedia says the song is linked to the improvisation by a segue, which the US edition broke up. It lists Barrett on acoustic and 12-string acoustic guitars, Wright on celesta and vibraphone, Waters on bass and Mason on temple blocks and cymbal, with Waters and Wright on backing vocals; the gnome is called Grimble Gromble, and the article suggests the children's book The Little Grey Men, a favourite of Barrett, may have influenced the text."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Looser passage",
+          "description": "The pulse weakens for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Full return",
+          "description": "The pulse returns and the level rises to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:07",
+          "section": "Ending",
+          "description": "The level falls and the track stops at about 2:10."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Chapter 24",
+      "duration": "3:42",
+      "energy": "low",
+      "tags": [
+        "I Ching Source",
+        "Harmonium",
+        "Gong",
+        "Tubular Bells",
+        "Fade-Out"
+      ],
+      "role": "Album role: The slow, unpulsed centre of side two, built on a text from the I Ching, placed between \"The Gnome\" and \"The Scarecrow\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that rises to a steady level within ten seconds; no regular beat is measured anywhere in the track.",
+          "detail": "Wikipedia says the text follows chapter 24 of the I Ching, the Fu (Return) hexagram, and credits Barrett with lead vocals and guitar feedback, Wright with Farfisa organ, Hohner Pianet, cello, harmonium and backing vocals, Waters with bass and gong, and Mason with crash cymbals and tubular bells."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brief dip",
+          "description": "The level and the bass fall for about ten seconds and then return."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Second dip",
+          "description": "The level falls for about ten seconds."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Final section",
+          "description": "The level rises to the loudest stretch of the track and holds until the fade."
+        },
+        {
+          "timestamp": "3:18",
+          "section": "Fade",
+          "description": "The level falls steadily and the track fades to silence by about 3:35."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "The Scarecrow",
+      "duration": "2:11",
+      "energy": "low",
+      "tags": [
+        "Single B-Side",
+        "Cello",
+        "Hard-Panned Stereo",
+        "Spoken And Sung Lines",
+        "Temple Blocks"
+      ],
+      "role": "Album role: A short song placed second to last, first issued on 16 June 1967 as the B-side of the single \"See Emily Play\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that rises gradually over about thirty seconds with little low end.",
+          "detail": "Wikipedia lists Barrett on lead vocals, electric guitar and 6- and 12-string acoustic guitars, Wright on Farfisa organ, cello and backing vocals, Waters on bass and bowed bass, and Mason on temple blocks and metal cups. It describes two vocal lines run together, one spoken and one sung, and all instruments panned to the extreme left and right, which agrees with the rip, where the two channels carry different material."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Low end enters",
+          "description": "The bass arrives and the level steps up."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Fuller low end",
+          "description": "The low end strengthens for about fifteen seconds.",
+          "detail": "Wikipedia notes a baroque, psychedelic folk instrumental section featuring 12-string acoustic guitar and cello, but gives no time for it."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Fade",
+          "description": "The level falls over about fifteen seconds to silence at about 2:05."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Bike",
+      "duration": "3:21",
+      "energy": "mid",
+      "tags": [
+        "Musique Concrète Coda",
+        "Tape Loop Laughter",
+        "Celesta",
+        "Harmonium",
+        "Closing Track"
+      ],
+      "role": "Album role: The closer, a Barrett song that ends in a tape-collage coda and fades out on a sped-up, reversed loop of laughter.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The song starts at once at a moderate level with a steady pulse.",
+          "detail": "Wikipedia says Barrett wrote it for his girlfriend of the time, Jenny Spires, and that it was recorded on 21 May 1967. It lists Barrett on electric guitars and double-tracked lead vocals, Wright on piano, harmonium, tack piano, celesta and violin, Waters on bass and Mason on drums, timpani, chimes and percussion, and says each chorus is followed by a sharp percussive noise like two gunshots, with heavy reverb that cuts off as the next verse begins."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Firmer stretch",
+          "description": "The low end and the top end rise and the pulse firms up for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Sudden drop",
+          "description": "The beat stops and the level falls to near silence for about eight seconds."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Tape collage",
+          "description": "A dense, bright texture without a regular pulse replaces the song and runs for more than a minute.",
+          "detail": "Wikipedia describes the passage as musique concrète, a collage of oscillators, clocks, gongs, bells, violin and tape-edited sounds that evokes the turning gears of a bicycle."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Ending",
+          "description": "The level falls away within a few seconds and the track ends.",
+          "detail": "Wikipedia says the song fades out on a tape loop of the band laughing, sped up and reversed, and that all four members contribute laughter and tape effects."
+        }
+      ]
+    }
+  ]
+}

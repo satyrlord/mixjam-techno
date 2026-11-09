@@ -1,0 +1,173 @@
+{
+  "id": "vangelis-hypothesis",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Hypothesis",
+  "year": 1978,
+  "label": "Charly Records",
+  "producer": "Giorgio Gomelsky",
+  "genre": "Experimental / Jazz",
+  "genreTags": [
+    "Experimental",
+    "Jazz",
+    "Electronic",
+    "Jam Session"
+  ],
+  "runtime": "31:51",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/3/3d/Vangelis_Hypothesis.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Hypothesis_(album)",
+  "overview": "Hypothesis was recorded in May 1971 at Marquee Studios in London, in jam sessions that Giorgio Gomelsky produced for BYG Records, and was issued in 1978 without Vangelis's approval. Gomelsky says the aim was to find grooves that could lead into long, trance-like patterns with improvisation on top, that there was little time for performances or overdubs, and that some of Vangelis's gear was custom-made and unknown to the studio technicians. Vangelis, credited with keyboards, was joined for some of the sessions by Michel Ripoche (violin), Brian Odgers (bass guitar, spelled \"Odger\" on the sleeve) and Tony Oxley (drums); the sources do not say who plays in which part. Wikipedia describes the album as an extended jam session of experimental jazz, and AllMusic rates it 2 of 5.\n\nThe material was unfinished and not intended for release: Gomelsky says the tapes reached BYG's former partner Jean-Luc Young after the company went bankrupt, and Charly Records issued them in 1978 on its Affinity label, together with The Dragon. Wikipedia, citing Spin (June 1985), says the label used forged signatures and Vangelis won a court case to have both LPs withdrawn, and quotes him as saying he does not agree with that music at all; Gomelsky says the case was either won by Vangelis or settled. The album also appeared as Visions of the Future, and in Germany together with The Dragon as the double LP Portrait. This review follows the rip of a CD edition, whose two parts run 15:30 and 16:21 against 16:00 and 16:10 on Wikipedia's track list.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Hypothesis, Part 1",
+      "duration": "15:30",
+      "energy": "mid",
+      "tags": [
+        "Improvised Jam",
+        "Marquee Studios 1971",
+        "Opening Part",
+        "Recurring Quiet Breaks"
+      ],
+      "role": "Album role: The first of the album's two parts; a continuous improvisation that alternates loud, busy stretches with quiet breaks and several returns of a steady pulse, and fades out before Part 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a low level with a dark tone and sparse activity, and the level dips several times in the first minute.",
+          "detail": "In a 2000 interview, Gomelsky said the aim of the sessions was to find grooves that could lead into long, trance-like patterns with improvisation on top."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Busier section",
+          "description": "The top end rises and the playing becomes much busier, with a short steady pulse early on before the level falls back."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Bright passage",
+          "description": "A sustained bright passage of about a minute and a half, with a loud high point and a brief dip along the way."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Break",
+          "description": "The sound falls away to a quiet break of about 15 seconds, then re-enters darker and heavier in the low end and brightens again."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Pulse entry",
+          "description": "After a short quiet gap, a steady rhythmic pulse sets in; the low end and the top end grow together and the level climbs to a high point."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Quiet interlude",
+          "description": "The sound drops for about half a minute to a quiet, dark texture with almost no pulse, then rebuilds and stays high for about two minutes."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Dip",
+          "description": "A short dip takes away most of the top end; a loud, bright passage then runs for about 40 seconds."
+        },
+        {
+          "timestamp": "9:25",
+          "section": "Quiet stretch",
+          "description": "The level falls for about 25 seconds and the deep low end almost disappears before the full sound rebuilds."
+        },
+        {
+          "timestamp": "10:00",
+          "section": "Busiest stretch",
+          "description": "A steady pulse returns and the playing becomes the busiest on the rip for about a minute and a half; the top end then fades and the sound turns darker."
+        },
+        {
+          "timestamp": "12:15",
+          "section": "Pulse returns",
+          "description": "A strong, steady pulse returns and the level and the top end rise to a loud, bright stretch of about a minute."
+        },
+        {
+          "timestamp": "13:35",
+          "section": "Final stretch",
+          "description": "The pulse comes back after a brief dip and holds through the loudest sustained stretch of the track, which lasts about a minute and a half."
+        },
+        {
+          "timestamp": "15:18",
+          "section": "Fade-out",
+          "description": "The sound fades out over about nine seconds and the track ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Hypothesis, Part 2",
+      "duration": "16:21",
+      "energy": "high",
+      "tags": [
+        "Improvised Jam",
+        "Long Steady Pulse",
+        "Closing Part",
+        "Long Quiet Section"
+      ],
+      "role": "Album role: The second and final part; a continuous improvisation with a long steady-pulse stretch in its first half, a long quiet section after it, and the loudest stretch of the album near the end, followed by a fade-out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady, moderate level without a clear pulse; the top end comes and goes."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Loud entry",
+          "description": "The level and the low end jump into a loud, bass-heavy passage; the level then falls and stays lighter and uneven for about a minute."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Quiet section",
+          "description": "The sound turns quieter and darker with very little top end; the low end returns later and the top end brightens again."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Lull",
+          "description": "The level falls to the quietest stretch of the album, about 25 seconds in which the sound nearly disappears."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Steady pulse",
+          "description": "The sound builds into a loud, bass-heavy passage with the longest steady pulse of the album, which runs for nearly four minutes."
+        },
+        {
+          "timestamp": "8:10",
+          "section": "Break",
+          "description": "The level falls to a very quiet, near-empty sound for about 15 seconds and the pulse stops."
+        },
+        {
+          "timestamp": "8:30",
+          "section": "Bright passage",
+          "description": "The sound returns with a much stronger top end and a lighter low end, among the brightest stretches on the rip, before a loud, bass-heavy passage follows."
+        },
+        {
+          "timestamp": "10:08",
+          "section": "Long quiet section",
+          "description": "The level drops abruptly into the longest quiet section of the album, about 90 seconds of low-level sound with almost no top end."
+        },
+        {
+          "timestamp": "11:40",
+          "section": "Rebuild",
+          "description": "The level and the top end rise gradually and the sound becomes steadily fuller."
+        },
+        {
+          "timestamp": "12:20",
+          "section": "Loud stretch",
+          "description": "A loud stretch with a heavy low end and a strong top end lasts about a minute and a quarter before the level settles."
+        },
+        {
+          "timestamp": "15:00",
+          "section": "Final peak",
+          "description": "After a dark, slightly quieter dip, the loudest stretch of the album lasts about a minute, with the heaviest low end near its middle."
+        },
+        {
+          "timestamp": "16:13",
+          "section": "Fade-out",
+          "description": "The sound fades out over about seven seconds."
+        }
+      ]
+    }
+  ]
+}

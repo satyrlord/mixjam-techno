@@ -1,0 +1,312 @@
+{
+  "id": "pink-floyd-wish-you-were-here",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Wish You Were Here",
+  "year": 1975,
+  "label": "Harvest / Columbia",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock / Art Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Art Rock",
+    "Experimental Rock",
+    "Concept Album"
+  ],
+  "runtime": "44:13",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/a/a4/Pink_Floyd%2C_Wish_You_Were_Here_%281975%29.png",
+  "coverSource": "https://en.wikipedia.org/wiki/Wish_You_Were_Here_(Pink_Floyd_album)",
+  "overview": "Recorded from 13 January to 28 July 1975 in Studio Three at EMI Studios (now Abbey Road Studios) in London, and produced by Pink Floyd with Brian Humphries as sound engineer; Alan Parsons, who engineered The Dark Side of the Moon, declined to continue. Harvest released the album in the UK and Columbia in the US in September 1975, the band's first release on Columbia. Its themes are absence, centred on Syd Barrett's departure from the band, and criticism of the music industry, and \"Shine On You Crazy Diamond\" is a tribute to Barrett. Roger Waters wanted to split that piece and place songs between its halves; David Gilmour disagreed and was outvoted three to one, which gives the five-track sequence: Parts I–V, \"Welcome to the Machine\", \"Have a Cigar\", \"Wish You Were Here\", then Parts VI–IX.\n\nPer the Wikipedia personnel list, Richard Wright plays Minimoog on every track and Steinway piano on tracks 1, 4 and 5, the EMS VCS 3 is used by Waters, Gilmour and Wright, and the guests are Dick Parry (saxophones), Venetta Fields and Carlena Williams (backing vocals), Roy Harper (lead vocal on \"Have a Cigar\") and Stéphane Grappelli (violin on the title song). The album reached No. 1 in the UK and in the US, and the sleeve was designed by Hipgnosis, with the cover photograph of two businessmen shaking hands, one on fire, and a black shrink-wrap over the sleeve.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Shine On You Crazy Diamond (Parts I–V)",
+      "duration": "13:31",
+      "energy": "mid",
+      "tags": [
+        "Syd Barrett Tribute",
+        "Dick Parry Saxophone",
+        "Singing Glasses",
+        "Minimoog",
+        "Album Opener"
+      ],
+      "role": "Album role: Opens the album with the first half of the tribute to Syd Barrett; Roger Waters wanted to split the piece around two other songs, and David Gilmour, who disagreed, was outvoted three to one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from silence; the first audible sound arrives after about ten seconds as a low, slowly moving wash.",
+          "detail": "Wikipedia's personnel list credits Richard Wright with Minimoog and Steinway piano on this track, Dick Parry with saxophones, Venetta Fields and Carlena Williams with backing vocals, Roger Waters with lead vocals, and unidentified musicians with singing glasses and sound effects."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Swell",
+          "description": "The level rises steeply and the low and middle range fill in, reaching a steady plateau by 0:30."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Fuller texture",
+          "description": "The sound thickens in the middle range and reaches the loudest point of the opening section around 2:30."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Pull-back",
+          "description": "The level falls to a thin, very quiet passage that lasts until about 4:20."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Pulse enters",
+          "description": "The biggest jump in level in the first half of the track: the top end opens wide and a pulse-driven section begins."
+        },
+        {
+          "timestamp": "6:25",
+          "section": "Drop",
+          "description": "The highs and much of the level fall away at once, leaving a darker, quieter passage."
+        },
+        {
+          "timestamp": "7:34",
+          "section": "Bright return",
+          "description": "The level jumps and the high range returns, brighter than before."
+        },
+        {
+          "timestamp": "8:35",
+          "section": "Quiet dip",
+          "description": "A short drop in level, about ten seconds long, before the sound rebuilds at 8:49."
+        },
+        {
+          "timestamp": "12:40",
+          "section": "Fade-out",
+          "description": "The level declines over the last minute, the highs leaving first, and the track ends on a low hum that leads into the next track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Welcome to the Machine",
+      "duration": "7:32",
+      "energy": "mid",
+      "tags": [
+        "EMS VCS 3",
+        "Synthesizer Texture",
+        "Gilmour Lead Vocal",
+        "Heavy Low End"
+      ],
+      "role": "Album role: The synthesizer-led song that ends side one, after the first half of \"Shine On You Crazy Diamond\"; David Gilmour sings the lead vocal.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at once with a heavy low end, and a steady pulse is audible from about 0:10.",
+          "detail": "Wikipedia names the EMS VCS 3 synthesizer as a feature of this track and credits Gilmour with acoustic guitar and Nick Mason with timpani and cymbals."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Lighter texture",
+          "description": "The heaviest low end falls back and the upper range opens, giving a lighter and busier texture."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Lift",
+          "description": "The level jumps and the middle range grows fuller for about half a minute."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Fuller section",
+          "description": "The low end strengthens again and the track reaches its loudest stretch around 3:45."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Bright stretch",
+          "description": "The upper range is at its brightest for the next minute and a half."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Drop",
+          "description": "The pulse and the low end vanish suddenly, leaving a quiet mid-range texture."
+        },
+        {
+          "timestamp": "6:55",
+          "section": "Outro",
+          "description": "The remaining sound thins out and fades to silence by about 7:25."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Have a Cigar",
+      "duration": "5:08",
+      "energy": "high",
+      "tags": [
+        "Roy Harper Lead Vocal",
+        "Guitar Rock",
+        "Side Two Opener"
+      ],
+      "role": "Album role: Opens side two with a guest lead vocal, Roy Harper singing in place of Roger Waters, ahead of the title song.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level with a lighter sound.",
+          "detail": "Wikipedia credits Roy Harper with lead vocals on this track, standing in for Roger Waters."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Groove",
+          "description": "The top end opens and a steady pulse settles in with a full, mid-heavy sound."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brighter",
+          "description": "The upper range opens further and the level steps up."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Pull-back",
+          "description": "The level drops for about ten seconds, then returns at 2:15."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Loud stretch",
+          "description": "A louder, brighter passage runs for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Drop",
+          "description": "A brief dip in level, after which the full sound resumes."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Ending",
+          "description": "The low end and most of the level fall away abruptly, and a thin upper-mid tail runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Wish You Were Here",
+      "duration": "5:35",
+      "energy": "low",
+      "tags": [
+        "Title Song",
+        "Car Radio Intro",
+        "Acoustic Guitar",
+        "Stéphane Grappelli Violin"
+      ],
+      "role": "Album role: The title song, placed before the second half of \"Shine On You Crazy Diamond\" on side two; David Gilmour sings the lead vocal.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening confined to the middle range; the Wikipedia article describes a recording from Gilmour's car radio, with Gilmour turning the dial.",
+          "detail": "Wikipedia credits Gilmour with acoustic and twelve-string guitar and pedal steel on the album and lists Stéphane Grappelli on violin on this track, mixed to an almost inaudible level on the original release."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Entry",
+          "description": "The level steps up and the bass range comes in over the next half minute."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Deep low end",
+          "description": "A very low register enters and the level climbs steadily."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Fuller section",
+          "description": "A large jump in level: the full sound is in place and holds for about half a minute."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Pull-back",
+          "description": "The level and the high range fall back to a lighter texture."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Second lift",
+          "description": "The sound lifts again to a loud, full passage, then falls back again at 3:45."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Third lift",
+          "description": "A shorter lift returns the full sound before it settles."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Outro",
+          "description": "The level falls steadily to a very quiet, thin tail that runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Shine On You Crazy Diamond (Parts VI–IX)",
+      "duration": "12:27",
+      "energy": "mid",
+      "tags": [
+        "Syd Barrett Tribute",
+        "Album Closer",
+        "Singing Glasses",
+        "Minimoog"
+      ],
+      "role": "Album role: Closes the album with the second half of the tribute to Syd Barrett that opened it, bookending the three songs in between.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening in the middle range, with the level rising slowly over the first minute.",
+          "detail": "Wikipedia credits Richard Wright with the music of Parts VI–IX, lists Roger Waters on lead vocals, and credits unidentified musicians with singing glasses, sound effects and EMS VCS 3 on this track."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Low end enters",
+          "description": "The bass and low range fill in and the level steps up."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Upper range opens",
+          "description": "The top end opens and the sound brightens while the level stays steady."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Louder",
+          "description": "The level steps up and the track reaches its loudest stretch, from about 4:15 to 4:45."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Pull-back",
+          "description": "The highs recede and the level falls for about half a minute before the sound rebuilds."
+        },
+        {
+          "timestamp": "6:03",
+          "section": "Low-end dip",
+          "description": "The low end drops away briefly and the level falls."
+        },
+        {
+          "timestamp": "6:28",
+          "section": "Low-end return",
+          "description": "The low end comes back with the largest jump in bass energy in the track."
+        },
+        {
+          "timestamp": "8:35",
+          "section": "Quiet passage",
+          "description": "The level falls to its quietest point in the middle of the track, around 8:55."
+        },
+        {
+          "timestamp": "9:05",
+          "section": "Return",
+          "description": "The full sound returns with a large jump in level, dominated by the low end."
+        },
+        {
+          "timestamp": "10:35",
+          "section": "Final build",
+          "description": "A louder, fuller stretch begins and runs to about 11:20."
+        },
+        {
+          "timestamp": "11:25",
+          "section": "Outro",
+          "description": "The level falls steadily, the highs leaving first, and the track fades to near silence by 12:15."
+        }
+      ]
+    }
+  ]
+}

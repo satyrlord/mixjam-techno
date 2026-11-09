@@ -1,0 +1,262 @@
+{
+  "id": "jean-michel-jarre-oxygene-new-master-recording",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Oxygène (New Master Recording)",
+  "year": 2007,
+  "label": "EMI · Capitol Records",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Re-Recording"
+  ],
+  "runtime": "40:12",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/9/9e/Oxygene2007cd.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Oxyg%C3%A8ne:_New_Master_Recording",
+  "overview": "A new recording of the six parts of Oxygène, made for the 30th anniversary of the 1976 album and released by EMI on 26 November 2007 in France and on 11 December 2007 worldwide (Wikipedia); the pressing reviewed here carries the Capitol catalogue number 509995141392 7. Jarre produced it. Wikipedia quotes him saying that about 95 per cent of the instruments date from the period of the original, with one or two exceptions, that he avoided instruments made after the original album, and that several Eminent string machines supply one of the main string sounds. A reviewer at Sonic Immersion adds that the work was played with the original instruments and names the Moog Liberation, and a user-edited Discogs credit for one pressing lists the re-recording as made at JMJ Studios in 24-bit, 96 kHz high definition; that credit is a secondary source.\n\nThe CD keeps the original part titles and order; the set also has a DVD, \"Live in Your Living Room\", in which Jarre plays the whole album at a studio in Lint, Belgium, with Francis Rimbert, Claude Samard and Dominique Perrier and no tape or hard-disk playback (Wikipedia). The DVD adds a prelude and three variations that are not on the CD, so the CD itself has the six parts only. The Sonic Immersion reviewer hears music close to the original with less background noise, a slower overall pace, some improvised additions and a Moog Liberation solo in the second half of the live version that he finds more distracting than enjoyable. On the measured durations of this rip, Part 2 and Part 6 run longer than on the 1976 recording and Parts 3 and 5 run shorter, with Part 6 about three-quarters of a minute longer; the album as a whole is about half a minute longer.\n\nThe cover is a 3D model by Giovanni Bourgeois after Michel Granger's original artwork (Wikipedia). The album reached No. 1 in Hungary, No. 40 in France, No. 55 in Belgium (Wallonia), No. 67 in Spain and No. 83 in Italy. In 2008 the Mail on Sunday gave away more than two million copies of the CD in the UK. Jarre played the album at the Théâtre Marigny in Paris from 12 to 26 December 2007 and in further European concerts in 2008, including the Royal Albert Hall. The timeline below comes from measuring the CD tracks, not from a transcribed listening; the times are approximate.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Oxygène (Part I)",
+      "duration": "7:39",
+      "energy": "mid",
+      "tags": [
+        "Slow Opener",
+        "Two-Stage Entry",
+        "Late Peak"
+      ],
+      "role": "Album role: Opens the CD with the same running time as the 1976 Part I, and builds slowly towards its loudest stretch in the last third.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening, well below the level of the rest of the part."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Fuller entry",
+          "description": "The level steps up in two stages, and by about 1:00 the part sits at a steady, fuller level."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Low swell",
+          "description": "The low end swells for a short stretch before settling again."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the part, lasting about half a minute."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Drop",
+          "description": "The level falls back sharply, then builds again through the last minutes."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Oxygène (Part II)",
+      "duration": "7:55",
+      "energy": "high",
+      "tags": [
+        "Steady Level",
+        "Bright Turn",
+        "Long Fade"
+      ],
+      "role": "Album role: The longest of the first three parts at full level from the first second, holding it for most of its length before a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts at full body with no quiet opening."
+        },
+        {
+          "timestamp": "1:47",
+          "section": "Highs open",
+          "description": "The top end opens sharply: the biggest change in the part."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The level reaches its highest plateau, which holds to about 6:30."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Fade-out",
+          "description": "The level falls steadily over the last minute and a half until the part is nearly silent."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Oxygène (Part III)",
+      "duration": "3:07",
+      "energy": "mid",
+      "tags": [
+        "Shortest Part",
+        "Abrupt Entry",
+        "Dissolving End"
+      ],
+      "role": "Album role: The shortest part of the CD, an interlude that starts almost silent and fades out completely.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "An almost silent opening."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Sudden entry",
+          "description": "The sound jumps to a fuller level with a strong low end: the biggest change in the part."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Dissolve",
+          "description": "The level drops and the texture begins to thin."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Close",
+          "description": "The last twelve seconds are close to silent."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Oxygène (Part IV)",
+      "duration": "4:13",
+      "energy": "peak",
+      "tags": [
+        "Pulse Entry",
+        "Loudest Part",
+        "Short Part"
+      ],
+      "role": "Album role: The loudest part on the CD, a pulse-driven piece between the interlude of Part III and the long Part V.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that lasts a few seconds."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Pulse entry",
+          "description": "A steady pulse enters together with the full sound: the biggest jump on the CD."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Brief hollowing",
+          "description": "The highs recede for a short passage before the full sound returns."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Outro",
+          "description": "The level falls away over the last quarter-minute."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Oxygène (Part V)",
+      "duration": "10:11",
+      "energy": "mid",
+      "tags": [
+        "Longest Part",
+        "Quiet Start",
+        "Late Low Pulse",
+        "Long Build"
+      ],
+      "role": "Album role: The longest part of the CD, quiet for its first half and loudest in its last third, which turns the album's centre of weight towards the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that stays below the level of the other parts for several minutes."
+        },
+        {
+          "timestamp": "1:41",
+          "section": "Low swell",
+          "description": "The low end swells, and again at about 2:00."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Highs open",
+          "description": "The top end opens for the first time."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Bass and highs rise",
+          "description": "The bass and the top end rise together for a short stretch."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Dip",
+          "description": "The level drops and the highs fall away, then return by about 4:35."
+        },
+        {
+          "timestamp": "5:29",
+          "section": "Low pulse",
+          "description": "A clear low pulse takes hold and the level begins to climb."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the part, held through to about 9:30."
+        },
+        {
+          "timestamp": "9:45",
+          "section": "Outro",
+          "description": "The level falls away over the last half-minute."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Oxygène (Part VI)",
+      "duration": "7:06",
+      "energy": "mid",
+      "tags": [
+        "Quiet Start",
+        "Long Fade",
+        "Album Closer",
+        "Longer Than 1976"
+      ],
+      "role": "Album role: The closing part, about three-quarters of a minute longer than the 1976 Part VI, which ends the CD with a fade that is close to silent for its last half-minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that lasts for about a minute."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Highs open",
+          "description": "The top end opens and a steady pulse is in place."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Low rise",
+          "description": "The low end and the level rise together, and the part reaches full level by about 1:30."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Peak",
+          "description": "The loudest stretch of the part, running to about 5:30."
+        },
+        {
+          "timestamp": "5:33",
+          "section": "Fade-out",
+          "description": "The level falls sharply and keeps falling through the last minutes."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Close",
+          "description": "The album ends in near silence."
+        }
+      ]
+    }
+  ]
+}

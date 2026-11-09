@@ -1,0 +1,884 @@
+{
+  "id": "vangelis-1492-conquest-of-paradise-the-complete-score",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "1492: Conquest of Paradise (The Complete Score)",
+  "year": 2002,
+  "label": "Andromeda Music",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Score",
+    "Modern Classical"
+  ],
+  "runtime": "1:41:11",
+  "isSoundtrack": true,
+  "coverUrl": "https://coverartarchive.org/release/32ca0c2d-9eb0-4665-8fe9-0d615e098bd5/23239162966.jpg",
+  "coverSource": "https://musicbrainz.org/release/32ca0c2d-9eb0-4665-8fe9-0d615e098bd5",
+  "overview": "1492: Conquest of Paradise (The Complete Score) is a two-disc, 28-track set from 2002 collecting Vangelis's music for Ridley Scott's film 1492: Conquest of Paradise (1992), in which Gérard Depardieu plays Christopher Columbus. It appeared on Andromeda Music (AM0402, UK); MusicBrainz lists the release as a bootleg and Discogs lists it as an unofficial, limited-edition release. The booklet, as transcribed on both sites, gives Epsilon Laboratory in Paris as the place of recording and mixing, CTS Studios in Wembley for the English Chamber Choir, and mastering at 44.1 in Paris. Discogs credits Vangelis with composing, arranging, producing and performing, Philippe Colonna with recording and mixing, Guy Protheroe as conductor, Didier Malherbe on flute, Francis Darizcuren on mandolin and violin, and Bruno Manjarres and Pepe Martinez on Spanish guitar.\n\nThe 1992 album (Atlantic/WEA, 54:44) has twelve tracks; this set runs 28 and adds cues whose titles are not on that album, among them \"Dreams of Adventure\", \"Into the Soul\", \"Execution\" and \"Fuerte Navidad\", and it has four two-part cues: \"Dreams of Adventure\", \"Monasterio de la Rabida\", \"Moxica and the Horse\" and \"Conquest of Paradise\". Tracks 24 and 25 are the single versions of \"Line Open\" and \"Landscape\", which Wikipedia lists on the 1992 CD single and not on the 1992 album. Several cues run to a different length from their 1992 namesakes, for example \"Deliverance\" at 4:54 against 3:28 and \"Pinta, Nina, Santa Maria\" at 11:43 against 13:19.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Main Titles (Hispaniola)",
+      "duration": "3:36",
+      "energy": "mid",
+      "tags": [
+        "Main Titles",
+        "Disc One Opener",
+        "Rhythmic Pulse"
+      ],
+      "role": "Album role: Opens disc one with the main-titles cue; the 1992 album's \"Hispañola\" runs 4:56 against 3:36 here.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens near silence and grows to a full, bright sound within about 25 seconds."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Pulse",
+          "description": "A steady rhythmic pulse becomes more prominent under the full sound."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Breakdown",
+          "description": "The texture thins briefly and the pulse falls away before the full sound returns."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Outro",
+          "description": "A short fade ends the track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Opening",
+      "duration": "3:05",
+      "energy": "low",
+      "tags": [
+        "Fade-In Opening",
+        "Slow Build"
+      ],
+      "role": "Album role: Second cue of disc one; at 3:05 it is longer than the 1:21 \"Opening\" on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens very quietly with a low, dark texture."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Brighter entry",
+          "description": "A brighter sound joins and the texture widens."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fuller section",
+          "description": "The level rises and the sound is at its fullest so far."
+        },
+        {
+          "timestamp": "2:23",
+          "section": "Change",
+          "description": "The texture shifts clearly and the level eases for the rest of the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Dreams of Adventure Part I",
+      "duration": "1:17",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: Short first part of a two-part cue; Part II is track 14, the last track of disc one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts from silence and a soft, dark texture appears after a few seconds."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brighter section",
+          "description": "The sound grows brighter and fuller until the track stops."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Monasterio de la Rabida",
+      "duration": "4:26",
+      "energy": "mid",
+      "tags": [
+        "Monastery Cue",
+        "Slow Build",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: First of two cues titled \"Monasterio de la Rabida\"; Part II (Psalmus) is track 12.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and builds over the first minute.",
+          "detail": "Filmtracks' review of the 1992 album says the cue \"Monastery of La Rabida\" introduces the religious element, with liturgical chanting behind the synthetics."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Fuller section",
+          "description": "The level rises and the tone turns darker and warmer."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Outro",
+          "description": "The level falls away to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "City of Isabel",
+      "duration": "2:10",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: Short cue on disc one; the 1992 album has a 2:16 cue of the same name.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts directly at a steady level with no fade-in."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Louder section",
+          "description": "A louder, more spacious section runs to the fade at the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Into the Soul",
+      "duration": "2:55",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, loud opening passage, then the level settles lower."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Louder middle",
+          "description": "The level rises again for a stretch."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Outro",
+          "description": "The level falls steadily to a very quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Moxica and the Horse Part I",
+      "duration": "5:29",
+      "energy": "high",
+      "tags": [
+        "Moxica Cue",
+        "Rhythmic Pulse",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: Part I of a two-part cue named for Moxica; the film's Adrián de Moxica is played by Michael Wincott, and the 1992 album has the cue as one 7:06 track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and reaches full level within 15 seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Pulse enters",
+          "description": "A steady rhythmic pulse sets in and runs for about three minutes."
+        },
+        {
+          "timestamp": "3:52",
+          "section": "Pulse drops out",
+          "description": "The pulse stops, leaving a sparser, quieter texture."
+        },
+        {
+          "timestamp": "4:14",
+          "section": "Closing section",
+          "description": "A brighter, lighter texture carries the track to its end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Execution",
+      "duration": "2:29",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Short cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and stays soft and uneven for the first minute and a half."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Peak",
+          "description": "Level and brightness rise sharply, and the sound stops soon after it peaks."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Eternity",
+      "duration": "3:48",
+      "energy": "mid",
+      "tags": [
+        "Pulse Interlude",
+        "Longer Than 1992 Cue"
+      ],
+      "role": "Album role: Longer than the 1:59 \"Eternity\" on the 1992 album, at 3:48 here.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly with a sustained texture and grows slowly."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Pulse enters",
+          "description": "A rhythmic pulse and a brighter texture appear for roughly 40 seconds."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Fuller section",
+          "description": "The pulse is gone and a warmer, lower texture reaches a higher level."
+        },
+        {
+          "timestamp": "3:04",
+          "section": "Late rise",
+          "description": "After a brief quiet dip the level rises again."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Conquest of Paradise Part I",
+      "duration": "4:19",
+      "energy": "mid",
+      "tags": [
+        "Title Theme Part I",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: Part I of the two \"Conquest of Paradise\" cues; Part II (End Titles) is track 28.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence with a short, loud passage."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Quiet section",
+          "description": "The level drops and stays low for roughly a minute and a half."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Fuller section",
+          "description": "The level rises clearly and stays high for more than a minute."
+        },
+        {
+          "timestamp": "3:33",
+          "section": "Outro",
+          "description": "Level and brightness fall away to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Light and Shadow",
+      "duration": "3:49",
+      "energy": "mid",
+      "tags": [
+        "Near-Match Length",
+        "No Steady Pulse",
+        "Late Peak"
+      ],
+      "role": "Album role: One-part cue of nearly the same length as the 1992 album's 3:46 \"Light and Shadow\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and reaches full level in about 15 seconds."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fuller section",
+          "description": "The sound is louder and brighter than the opening, with no steady rhythmic pulse.",
+          "detail": "Filmtracks' review of the 1992 album describes a resolute choral progression that alternates stark chanting with lyrical full-choir passages over forbidding percussion, and calls the solo flute mix outstanding."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "3:28",
+          "section": "Outro",
+          "description": "The level drops for the final stretch."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Monasterio de la Rabida Part II (Psalmus)",
+      "duration": "2:13",
+      "energy": "low",
+      "tags": [
+        "Psalmus",
+        "Short Cue",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: Short second part, subtitled \"Psalmus\", of the monastery cue that began as track 4.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens fairly quietly and reaches full level within half a minute."
+        },
+        {
+          "timestamp": "1:34",
+          "section": "Last swell",
+          "description": "The level rises, then drops away to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Moxica and the Horse Part II",
+      "duration": "5:49",
+      "energy": "high",
+      "tags": [
+        "Moxica Cue",
+        "Rhythmic Pulse",
+        "Two-Part Cue"
+      ],
+      "role": "Album role: Part II of the Moxica cue begun as track 7, and the longest track of disc one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence into a moderately loud, steady texture."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Brighter lift",
+          "description": "A short, brighter and louder stretch breaks the steady texture."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Pulse enters",
+          "description": "A steady rhythmic pulse sets in and runs to the end of the track."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The level rises to the loudest stretch of the track."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Dreams of Adventure Part II",
+      "duration": "3:58",
+      "energy": "low",
+      "tags": [
+        "Two-Part Cue",
+        "Disc One Closer"
+      ],
+      "role": "Album role: Part II of the two-part cue begun as track 3, closing disc one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and rises over the first quarter-minute."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Dip",
+          "description": "The level dips and the texture turns brighter."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Fuller section",
+          "description": "The level rises clearly after a quiet stretch."
+        },
+        {
+          "timestamp": "3:34",
+          "section": "Closing section",
+          "description": "The texture turns darker and lower until the end."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Pinta, Nina, Santa Maria",
+      "duration": "11:43",
+      "energy": "high",
+      "tags": [
+        "Disc Two Opener",
+        "Rhythmic Pulse",
+        "Long Form"
+      ],
+      "role": "Album role: Opens disc two with the longest track of the set; at 11:43 it is shorter than the 13:19 \"Pinta, Niña, Santa María (Into Eternity)\" on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and a rhythmic pulse sets in within half a minute."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Steady pulse",
+          "description": "The pulse settles and continues through the rest of the track.",
+          "detail": "Filmtracks' review of the 1992 album notes slight rock rhythms and electric guitars in the 1992 album's version of this cue."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Brighter section",
+          "description": "The texture turns brighter and the level rises a little."
+        },
+        {
+          "timestamp": "4:34",
+          "section": "Fuller section",
+          "description": "The level rises again and the sound is fuller."
+        },
+        {
+          "timestamp": "6:45",
+          "section": "Climb",
+          "description": "The level climbs toward the loudest stretch."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins."
+        },
+        {
+          "timestamp": "10:04",
+          "section": "Easing",
+          "description": "The level eases down and stays lower."
+        },
+        {
+          "timestamp": "11:00",
+          "section": "Outro",
+          "description": "The track fades out over its last three-quarters of a minute."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "West Across the Ocean Sea",
+      "duration": "2:55",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Near-Match Length",
+        "Late Fade"
+      ],
+      "role": "Album role: Short cue of nearly the same length as the 1992 album's 2:53 cue of the same name.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and gradually.",
+          "detail": "Wikipedia's article on the 1992 album credits the 1992 cue as played entirely by Vangelis on pianos, strings and harp."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Fuller section",
+          "description": "The level jumps clearly and the sound turns brighter."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Outro",
+          "description": "The level falls to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Luz de Luna",
+      "duration": "1:04",
+      "energy": "low",
+      "tags": [
+        "Shortest Track",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Shortest track of the set, at 1:04, without a counterpart on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Fades in from silence."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Outro",
+          "description": "The level falls away for the last ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Twenty Eighth Parallel",
+      "duration": "5:16",
+      "energy": "low",
+      "tags": [
+        "Near-Match Length",
+        "Late Peak",
+        "Alternating Phrases"
+      ],
+      "role": "Album role: Cue of nearly the same length as the 1992 album's 5:14 \"Twenty Eighth Parallel\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from silence and sets its level within about 15 seconds.",
+          "detail": "Wikipedia's article on the 1992 album credits the 1992 cue as played entirely by Vangelis on pianos, strings and harp; Filmtracks' review of the 1992 album calls it the only major cue that elaborates on the title theme."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Rise",
+          "description": "The first strong rise in level after a quiet dip."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Closing section",
+          "description": "Louder and quieter phrases alternate until the end."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "Echoes of Glory",
+      "duration": "2:58",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly with a dark, low texture that brightens within 15 seconds."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Fuller section",
+          "description": "The level rises as the sound turns brighter."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Peak",
+          "description": "The loudest moment of the track."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "Deliverance",
+      "duration": "4:54",
+      "energy": "mid",
+      "tags": [
+        "Longer Than 1992 Cue",
+        "Quiet Section",
+        "Final Rise"
+      ],
+      "role": "Album role: Runs 4:54 here against 3:28 for \"Deliverance\" on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and quickly reaches a bright, moderately loud sound."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Quiet section",
+          "description": "The level drops and the sound turns darker for about 20 seconds."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Drop-out",
+          "description": "The sound thins sharply and the pulse falls away.",
+          "detail": "Filmtracks' review of the 1992 album describes a choral crescendo in the latter half of the cue as \"frightfully gripping\"."
+        },
+        {
+          "timestamp": "3:59",
+          "section": "Final rise",
+          "description": "A last rise gives the loudest moment of the track, then the level falls quickly."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "Clash of Civilisation",
+      "duration": "1:45",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Short cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and rises to a louder level within half a minute."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Abrupt end",
+          "description": "The sound stops suddenly, followed by silence to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 22,
+      "title": "Lament",
+      "duration": "3:12",
+      "energy": "low",
+      "tags": [
+        "Not On 1992 Album",
+        "Gradual Brightening"
+      ],
+      "role": "Album role: Cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence with a short, louder first passage."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Settling",
+          "description": "The first moments give way to a lower, steadier level."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Brightening",
+          "description": "The sound becomes steadily brighter toward the end."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Outro",
+          "description": "The level falls over the last half-minute."
+        }
+      ]
+    },
+    {
+      "num": 23,
+      "title": "Cuhuni",
+      "duration": "1:18",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Short cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens with a brief rhythmic pulse and a bright, high texture."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Outro",
+          "description": "The sound stops quickly at the end."
+        }
+      ]
+    },
+    {
+      "num": 24,
+      "title": "Line Open (Single Version)",
+      "duration": "4:47",
+      "energy": "high",
+      "tags": [
+        "Single Version",
+        "Rhythmic Pulse",
+        "Late Brightening"
+      ],
+      "role": "Album role: The single version of \"Line Open\", a track on the 1992 CD single but not on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens quietly and the level builds over the first half-minute."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Pulse enters",
+          "description": "A steady rhythmic pulse sets in and holds for about two minutes.",
+          "detail": "Filmtracks' review of the 1992 album describes a drum kit, electric bass and pop touches against solo cello on this cue; Wikipedia's article on the 1992 album lists it with 4:43 on the single."
+        },
+        {
+          "timestamp": "2:59",
+          "section": "Brighter section",
+          "description": "A brighter, louder section with a stronger pulse begins."
+        },
+        {
+          "timestamp": "4:36",
+          "section": "Outro",
+          "description": "The level falls and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 25,
+      "title": "Lanscape (Single Version)",
+      "duration": "1:39",
+      "energy": "low",
+      "tags": [
+        "Single Version",
+        "Short Cue",
+        "Quiet Tail"
+      ],
+      "role": "Album role: The single version of \"Landscape\" (printed \"Lanscape\" on this release), a track on the 1992 CD single but not on the 1992 album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a moderate level on a low, dark texture that brightens within 15 seconds.",
+          "detail": "Filmtracks' review of the 1992 album describes cello writing that fits the score but is \"subdued to a fault\"."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Outro",
+          "description": "The level drops away and the track ends in a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 26,
+      "title": "Destiny",
+      "duration": "1:28",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Not On 1992 Album"
+      ],
+      "role": "Album role: Short cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence with a sudden, loud first entry within seconds."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Late swell",
+          "description": "The level rises, then falls away to the end."
+        }
+      ]
+    },
+    {
+      "num": 27,
+      "title": "Fuerte Navidad",
+      "duration": "4:42",
+      "energy": "low",
+      "tags": [
+        "Not On 1992 Album",
+        "Quiet Middle"
+      ],
+      "role": "Album role: Cue without a counterpart on the 1992 album, whose track list has no cue of this title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and builds slowly."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fuller section",
+          "description": "Level and brightness rise to a loud stretch."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Quiet middle",
+          "description": "The level falls sharply and stays low for about 40 seconds."
+        },
+        {
+          "timestamp": "2:39",
+          "section": "Return",
+          "description": "The level jumps back to a moderate level and stays there to the end."
+        }
+      ]
+    },
+    {
+      "num": 28,
+      "title": "Conquest of Paradise Part II (End Titles)",
+      "duration": "4:06",
+      "energy": "mid",
+      "tags": [
+        "Title Theme Part II",
+        "End Titles",
+        "Rhythmic Pulse",
+        "Set Closer"
+      ],
+      "role": "Album role: Closes the set as Part II of the title cue begun as track 10.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens from near silence and a rhythmic pulse is audible within 15 seconds."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Brighter section",
+          "description": "The sound grows brighter and louder."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Closing section",
+          "description": "The sound turns darker and quieter for the close."
+        }
+      ]
+    }
+  ]
+}

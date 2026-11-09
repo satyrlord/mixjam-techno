@@ -1,0 +1,495 @@
+{
+  "id": "jon-vangelis-page-of-life",
+  "kind": "reference",
+  "artist": "Jon & Vangelis",
+  "title": "Page of Life",
+  "year": 1991,
+  "label": "Arista",
+  "producer": "Vangelis",
+  "genre": "Electronic / New Age",
+  "genreTags": [
+    "Electronic",
+    "New Age",
+    "Synth-pop"
+  ],
+  "runtime": "52:22",
+  "coverUrl": "https://coverartarchive.org/release/93926894-6ea9-3361-af7c-51768a2a9f00/15617283528.jpg",
+  "coverSource": "https://musicbrainz.org/release/93926894-6ea9-3361-af7c-51768a2a9f00",
+  "overview": "Page of Life (1991) is the fourth studio album by Jon and Vangelis, the duo of the Yes singer Jon Anderson and the Greek synthesiser musician Vangelis. Wikipedia says it was recorded in 1986 and released by Arista in 1991, that its twelve tracks come from the duo's attempts in 1986 to write a new album, and lists Sound Studios in Athens, Forum Studios in Rome and the Record Plant in Los Angeles as the recording studios. Wikipedia credits Vangelis with keyboards, synthesisers and programming and Anderson with the vocals, and Discogs credits Vangelis with composing, arranging and producing the album and Anderson with the lyrics. The exception is the sixth track, \"Is It Love\", for which Discogs credits Anderson as producer, with David Tickle as co-producer and other musicians on keyboards, guitar and bass; the Yescog discography lists it as Anderson's own composition.\n\nThe album's single was \"Wisdom Chain\" (26 August 1991), and the album reached No. 37 on the Dutch Album Top 100. AllMusic's Jonathan Widran gave it three stars out of five and praised \"Garden of Senses\", \"Anyone Can Light a Candle\" and \"Is It Love\". In 1998 Anderson reworked the album for a nine-track US release by Higher Octave, which Wikipedia says Vangelis did not approve; this review covers the original 1991 release, and the rip holds its twelve tracks with no bonus material.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Wisdom Chain",
+      "duration": "5:22",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Album Single",
+        "Quiet Start",
+        "Mid-Track Breakdown"
+      ],
+      "role": "Album role: Opener and the album's single, a five-minute piece that builds from a quiet start to a loud close.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track starts from silence and swells quietly, with the top end filling out over about fifteen seconds.",
+          "detail": "Wikipedia lists \"Wisdom Chain\" as the album's single, released on 26 August 1991 (Music Week)."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low-end entry",
+          "description": "The low end arrives, the level steps up and a steady pulse sets in.",
+          "detail": "Discogs credits Derek Wilson with additional percussion on this track and on \"Money\", without saying where he plays."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Fuller stretch",
+          "description": "The sound fills out a little and then holds a steady level for about two and a half minutes."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Breakdown",
+          "description": "The low end drops out abruptly and the level falls for about twenty seconds."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Peak",
+          "description": "The low end returns with more weight and the track reaches its loudest stretch."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Outro",
+          "description": "The level falls away and the track fades to silence.",
+          "detail": "Wikipedia says the 1998 US version of the album has a longer version of the song, about twice as long as this one, with different vocal arrangements; the rip holds the original."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Page of Life",
+      "duration": "3:16",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "Short Form",
+        "Two Short Breaks"
+      ],
+      "role": "Album role: Title track, a short second piece that follows the opening single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level with the low end already present.",
+          "detail": "Wikipedia reports that the Kitchener-Waterloo Record (6 February 1992) called the title track's vocal and instrumental performance gorgeous."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Short break",
+          "description": "The sound thins for a few seconds and then returns at full level."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Second break",
+          "description": "The level dips again briefly and then rises to a fuller sound."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Outro",
+          "description": "The top end falls away and the level drops, and the track ends in a dark, quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Money",
+      "duration": "6:07",
+      "energy": "mid",
+      "tags": [
+        "Long Form",
+        "Additional Percussion",
+        "Quiet Start",
+        "Late Low-End Drop"
+      ],
+      "role": "Album role: Third track and, with \"Garden of Senses\", one of the two longest pieces on the album at just over six minutes, with a slow build from near silence.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track opens from near silence with a dark sound and the level climbs slowly for about half a minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Full entry",
+          "description": "The level jumps, the top end opens and a steady pulse sets in.",
+          "detail": "Discogs credits Derek Wilson with additional percussion on this track and on \"Wisdom Chain\"."
+        },
+        {
+          "timestamp": "3:23",
+          "section": "Low-end drop",
+          "description": "The low end thins out for about twenty seconds while the rest of the sound carries on."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Return",
+          "description": "The low end comes back with full weight and the level rises again."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Peak",
+          "description": "The loudest and fullest stretch begins and holds, with small variations, to near the end."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Outro",
+          "description": "The top end and the level fall away and the track ends in a short, quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Jazzy Box",
+      "duration": "3:15",
+      "energy": "mid",
+      "tags": [
+        "Short Form",
+        "Steady Level",
+        "Late Low-End Dip"
+      ],
+      "role": "Album role: Short fourth track, a level-steady piece set between the two six-minute tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once with a thin, quiet sound."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Full entry",
+          "description": "The low end and the top end arrive together and the level steps up to the level the track keeps."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Brighter",
+          "description": "The top end brightens and the sound stays brighter to the end."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Low-end dip",
+          "description": "The low end drops out briefly and returns stronger, making the last minute the loudest stretch."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Garden of Senses",
+      "duration": "6:24",
+      "energy": "mid",
+      "tags": [
+        "Longest Track",
+        "Slow Build",
+        "Steady Plateau",
+        "Quiet Start"
+      ],
+      "role": "Album role: Longest track on the album and one of the three that AllMusic's Jonathan Widran singles out for praise, a long steady stretch after a very quiet start.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts very quietly with almost no low end."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low-end entry",
+          "description": "The low end arrives and the level climbs within about ten seconds to a steady plateau."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Steady stretch",
+          "description": "The sound settles and holds a level that changes only slightly for most of the next five minutes."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Fuller stretch",
+          "description": "The level steps up a little with more weight in the low end."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Outro",
+          "description": "The level falls and the top end drops away, and the track ends within about twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Is It Love",
+      "duration": "4:27",
+      "energy": "mid",
+      "tags": [
+        "Jon Anderson Production",
+        "David Tickle Co-Production",
+        "Separate Musicians"
+      ],
+      "role": "Album role: Sixth track, credited on Discogs to Jon Anderson as producer and David Tickle as co-producer, with a separate group of musicians from the rest of the album.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A quiet, thin opening with a light low end lasts about twenty-five seconds.",
+          "detail": "Discogs credits Rory Kaplan, Sean Murray and Brad Ellis on keyboards, Jimmy Haun on guitar and Eduardo Singore on bass for this track; Wikipedia credits Kaplan with keyboards, synthesisers and drum programming."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Full entry",
+          "description": "The level steps up and the low end and the top end fill in.",
+          "detail": "Discogs lists Jon Anderson as producer and David Tickle as co-producer of this track; the Yescog discography lists Anderson as its composer."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Lift",
+          "description": "The level rises again to a fuller, louder sound that stays high through the main body of the track."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Outro",
+          "description": "The low end drops out and the level falls, leaving a quiet, light tail that runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Anyone Can Light a Candle",
+      "duration": "3:45",
+      "energy": "low",
+      "tags": [
+        "Quiet Piece",
+        "Gradual Build",
+        "Fade-Out"
+      ],
+      "role": "Album role: Seventh track, a quieter piece that builds gradually to one high point and fades; AllMusic's Jonathan Widran singles it out for praise.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening with a light low end."
+        },
+        {
+          "timestamp": "0:54",
+          "section": "Brighter",
+          "description": "The top end opens up and the level rises for about twenty seconds."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Thin passage",
+          "description": "The level falls and the sound thins for about twenty seconds."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Build",
+          "description": "The level rises steadily for the best part of a minute, with the low end fuller."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Peak",
+          "description": "The level reaches its highest point in the track and then falls back."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Outro",
+          "description": "The level and the top end fall away and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Be a Good Friend of Mine",
+      "duration": "4:14",
+      "energy": "high",
+      "tags": [
+        "Steady Level",
+        "Long Plateau",
+        "Quiet Start"
+      ],
+      "role": "Album role: Eighth track, a plateau that holds one loud level for about three and a half minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a low level and builds for about half a minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Full level",
+          "description": "The level steps up to its full weight, with a clear steady pulse and a heavy low end, and then hardly moves."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Brighter passage",
+          "description": "The sound brightens for about twenty-five seconds and then settles back."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Brighter again",
+          "description": "The sound brightens a second time and stays bright for most of the rest of the plateau."
+        },
+        {
+          "timestamp": "4:03",
+          "section": "Outro",
+          "description": "The level falls sharply and the track ends in a short, quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Shine for Me",
+      "duration": "4:11",
+      "energy": "mid",
+      "tags": [
+        "Irregular Pulse",
+        "Level Breaks",
+        "Quiet Tail"
+      ],
+      "role": "Album role: Ninth track, a piece with a weak, irregular pulse and several short breaks in level.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens very quietly with the low end absent."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Low-end entry",
+          "description": "The low end and the top end arrive together and the level jumps."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Brighter",
+          "description": "The top end opens and the level rises again."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "First break",
+          "description": "The level and the low end fall for about fifteen seconds before a bright return at full level."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Second break",
+          "description": "A shorter dip in level and low end, followed by a return that is louder than before."
+        },
+        {
+          "timestamp": "3:41",
+          "section": "Outro",
+          "description": "The level and the top end fall and the track ends in a quiet tail of about half a minute."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Genevieve",
+      "duration": "3:48",
+      "energy": "mid",
+      "tags": [
+        "Quiet Opening",
+        "Sudden Full Entry",
+        "Fade-Out"
+      ],
+      "role": "Album role: Tenth track, with a quiet opening of about forty seconds before the full sound arrives all at once.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with very little low end."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Full entry",
+          "description": "The low end enters and the level jumps by a large step to the full sound."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Fuller stretch",
+          "description": "The sound fills out a little and the level rises."
+        },
+        {
+          "timestamp": "3:33",
+          "section": "Outro",
+          "description": "The level falls and the track fades to silence within about fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Journey to Ixtlan",
+      "duration": "5:50",
+      "energy": "mid",
+      "tags": [
+        "Quiet Start",
+        "Long Fade-Out",
+        "Late Dip"
+      ],
+      "role": "Album role: Penultimate track, a long piece that ends in a fade lasting more than a minute.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A quiet opening with almost no low end starts after about five seconds of silence."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low-end entry",
+          "description": "The low end arrives and the level steps up."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Peak",
+          "description": "The level rises to its highest point in the track and holds for about twenty-five seconds."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Dip",
+          "description": "The level and the top end fall back for about twenty seconds."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Final stretch",
+          "description": "The level and the top end return and hold for about a minute."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The low end thins and the level sinks steadily, and the track ends in a fade."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Little Guitar",
+      "duration": "1:44",
+      "energy": "low",
+      "tags": [
+        "Shortest Track",
+        "Very Quiet",
+        "Album Closer"
+      ],
+      "role": "Album role: Shortest track and the album's closer, a very quiet piece of under two minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a very low level with almost no low end and little top end.",
+          "detail": "Wikipedia reports that the Kitchener-Waterloo Record (6 February 1992) praised Vangelis's guitar sound on this track."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Louder stretch",
+          "description": "The level rises by a clear step and the middle of the sound fills in."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Outro",
+          "description": "The level falls away and the track ends in a quiet tail."
+        }
+      ]
+    }
+  ]
+}

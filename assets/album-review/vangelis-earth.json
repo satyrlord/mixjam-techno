@@ -1,0 +1,437 @@
+{
+  "id": "vangelis-earth",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Earth",
+  "year": 1973,
+  "label": "Vertigo",
+  "producer": "Vangelis",
+  "genre": "Electronic / Progressive Rock / World Music",
+  "genreTags": [
+    "Electronic",
+    "Progressive Rock",
+    "World Music"
+  ],
+  "runtime": "39:15",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/4e/Earth_the_album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Earth_(Vangelis_album)",
+  "overview": "Earth (stylised \"earth\" and credited to Vangelis O. Papathanassiou) was released in October 1973 on Vertigo (6499 693) and is described by Wikipedia's album article as his first official solo album, although its Vangelis article calls it his second; it was recorded at Europa-Sonor studios in Paris. The LP credits Vangelis with composition, arrangement and production, and with keyboards, percussion, tabla, flute and backing vocals; Wikipedia lists a Hammond L100 organ, an Elka Tornado reed organ and a Selmer Clavioline, and says most of the synthetic organic sounds came from the Hammond L100 through a Binson Echorec. Anargyros (Silver) Koulouris, his former Aphrodite's Child bandmate, plays guitars and lute, and Robert Fitoussi, later known as F. R. David, plays bass and sings lead on tracks 1, 4, 6 and 8; Warren Shapovitch narrates \"We Were All Uprooted\" and \"A Song\", and Richelle Dassin is credited with the lyrics.\n\nSide one holds a two-minute opener, two pieces of close to seven minutes and a four-minute closer; side two holds six pieces of one to four and a half minutes and ends with the narrated \"A Song\". The album was promoted by a concert at the Olympia in Paris in February 1974, two left-over tracks, \"Who\" and \"Sad Face\", came out as a WWA single that year, and Wikipedia cites an AllMusic rating of 3.5 out of 5. The album did not appear on CD in the 1980s; a CD followed in 1996, in Greece only. This review covers the original 1973 album; the CD used for the measurements is a 1998 Euroton reissue (Hungary) with the same ten tracks, and its times run a few seconds longer than the LP times.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Come On",
+      "duration": "2:10",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Lead Vocal",
+        "Robert Fitoussi",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Side one's short, immediate opener, the first of the four tracks with Robert Fitoussi on lead vocals.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once, without a fade-in, at the level it keeps for most of its length, with a steady pulse from the first seconds.",
+          "detail": "Wikipedia and the LP credits give Fitoussi the lead vocal here; the measurements do not show where the voice enters. Head Heritage's 2007 review calls it a thunderous apocalypse and says it is musically similar to \"Do It\" and \"Battle of the Locusts\" from Aphrodite's Child's 666."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Lift",
+          "description": "The level and the middle of the range rise slightly for about half a minute, then settle back."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Ending",
+          "description": "The low end drops away and the track stops within seconds, with no long fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "We Were All Uprooted",
+      "duration": "6:52",
+      "energy": "mid",
+      "tags": [
+        "Longest Track",
+        "Narration",
+        "Warren Shapovitch",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The album's longest track and its first extended piece, with spoken narration by Warren Shapovitch over a steady rhythm. The LP credits and Wikipedia's track list print the title as \"We Are All Uprooted\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens loud and low in register for about five seconds, then falls to a quieter, brighter texture.",
+          "detail": "Wikipedia and the LP credits name Shapovitch as narrator on this track; the measurements do not show where the narration sits."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Rhythm established",
+          "description": "A steady, regular pulse takes hold and carries the track through the first minute.",
+          "detail": "Head Heritage's review says the rhythm is very possibly a drum machine, noting that Vangelis was an early exponent of them; no source confirms the instrument."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Fuller passage",
+          "description": "The level and the middle of the range rise, and the pulse is less clear for about half a minute."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Brighter passage",
+          "description": "The upper range opens up and the level rises."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Low-end push",
+          "description": "The level rises clearly with a heavier low end, and the sound brightens again shortly afterwards."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Dark, heavy stretch",
+          "description": "The sound turns darker and heavier for about a quarter of a minute, and the pulse thins out."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Peak",
+          "description": "The loudest sustained stretch of the track, with a strong low end and an open top, runs for about 20 seconds."
+        },
+        {
+          "timestamp": "6:43",
+          "section": "Fade-out",
+          "description": "The level falls away over the last eight seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Sunny Earth",
+      "duration": "6:42",
+      "energy": "mid",
+      "tags": [
+        "Tabla",
+        "Wordless Chant",
+        "Slow Build"
+      ],
+      "role": "Album role: Side one's second long piece; it opens from near silence and develops more slowly than the tracks on either side of it, with a clear pulse only in its second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The track fades in from near silence over a few seconds and stays quiet and sparse, with no steady pulse.",
+          "detail": "Head Heritage's review says the track begins with a wordless chant and deep pounding drums and has a tabla rhythm played by Vangelis himself; it does not say when each part enters."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Low-end entry",
+          "description": "A heavy low-end layer arrives and the level jumps; the next minute is fuller and darker."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Quiet passage",
+          "description": "The level and the upper range fall away sharply, leaving a thin, quiet passage of about half a minute."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Return",
+          "description": "The level and the low end rise again, and the top end brightens soon after."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Steadier pulse",
+          "description": "A clearer, steadier pulse appears and holds for about a minute, the most regular rhythm of the track so far."
+        },
+        {
+          "timestamp": "5:05",
+          "section": "Build",
+          "description": "The level and the low end rise gradually, and the top end then opens into the brightest stretch of the track."
+        },
+        {
+          "timestamp": "6:15",
+          "section": "Peak",
+          "description": "The loudest passage of the track, with a strong low end."
+        },
+        {
+          "timestamp": "6:36",
+          "section": "Outro",
+          "description": "The sound falls away and the track ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "He-O",
+      "duration": "4:13",
+      "energy": "high",
+      "tags": [
+        "Lead Vocal",
+        "Robert Fitoussi",
+        "Tabla",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Side one's closer, a steady-pulse track with Fitoussi's lead vocal that ends in a fade-out of about ten seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderately high level.",
+          "detail": "Wikipedia and the LP credits give Fitoussi the lead vocal here. Head Heritage's review describes a stomping tabla-and-acoustic track with glistening Popol Vuh-style piano runs and calls it the most \"pop\" track on the LP."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Steady pulse",
+          "description": "A steady pulse is clear and holds through most of the track, with the level close to constant."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Brighter stretch",
+          "description": "The upper range opens slightly and the level rises a little for about half a minute."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Dip",
+          "description": "The level dips for about 20 seconds before the groove returns."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Fade-out",
+          "description": "The track fades out over about ten seconds and ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Ritual",
+      "duration": "2:46",
+      "energy": "high",
+      "tags": [
+        "Timpani",
+        "Chant",
+        "Side Two Opener"
+      ],
+      "role": "Album role: Side two's opener, a short, dense piece after the long tracks of side one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A few seconds of quieter sound lead into the full level, which holds with a strong low end for about 40 seconds before a brief dip.",
+          "detail": "Head Heritage's review describes gurgling, throaty voices chanting as massive timpani are bashed away, and finds the piece reminiscent of late-1970s Popol Vuh; it does not say when each part enters."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Clear pulse",
+          "description": "A regular pulse becomes measurable and the sound brightens, for about half a minute."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Bright passage",
+          "description": "The low end drops out and the top end opens for about ten seconds, then the low end returns."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Dip and ending",
+          "description": "A quiet dip of about seven seconds is followed by a short return to the full level, and the track stops soon after."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Let It Happen",
+      "duration": "4:20",
+      "energy": "mid",
+      "tags": [
+        "Lead Vocal",
+        "Robert Fitoussi",
+        "Rhodes Piano",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: The third of the four lead-vocal tracks by Robert Fitoussi, a groove piece that closes with a slow fade-out of about twenty seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track rises from a quiet start to its full level within about five seconds.",
+          "detail": "Wikipedia and the LP credits give Fitoussi the lead vocal here. Head Heritage's review describes a clipped bass under a glassy Rhodes piano, with Vangelis playing the Rhodes, in a Mediterranean pop-rock vein."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Bright section",
+          "description": "The upper range opens and the sound stays bright and steady for about a minute."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Dark, thin passage",
+          "description": "The top end falls away and the sound turns darker and thinner for about 20 seconds."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Groove returns",
+          "description": "The low end comes back strongly, and a clearer pulse holds for about a minute and a half."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Brighter build",
+          "description": "The upper range opens again and the sound brightens, reaching its brightest point soon after."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Fade-out",
+          "description": "The level falls slowly over the last 20 seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "The City",
+      "duration": "1:15",
+      "energy": "mid",
+      "tags": [
+        "Interlude",
+        "Sound Effects",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The shortest track on the album, an interlude between the lead-vocal tracks \"Let It Happen\" and \"My Face in the Rain\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts quietly and the level rises steadily over the first 20 seconds.",
+          "detail": "Head Heritage's review describes a short collage of sound effects, voices and Big Ben soundalikes."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Full level",
+          "description": "A steady, regular pulse and a strong low end hold at full level for about 35 seconds."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Drop-back",
+          "description": "The level and the top end fall for the last 15 seconds, and the track ends without a fade to silence."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "My Face in the Rain",
+      "duration": "4:24",
+      "energy": "low",
+      "tags": [
+        "Lead Vocal",
+        "Robert Fitoussi",
+        "Slow Build"
+      ],
+      "role": "Album role: The last of the four lead-vocal tracks by Robert Fitoussi, a slow build without a steady pulse that peaks about two-thirds of the way through.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening without a measurable steady pulse; the level stays low for the first minute.",
+          "detail": "Wikipedia and the LP credits give Fitoussi the lead vocal here."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Build",
+          "description": "The low end and the level rise gradually to a higher level that holds for about three-quarters of a minute."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Quieter passage",
+          "description": "The level and the low end fall back for about 40 seconds."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins, with a strong low end, and lasts about 30 seconds."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Last lift",
+          "description": "The level rises toward the end, and the track fades out over the last seven seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Watch Out",
+      "duration": "3:03",
+      "energy": "mid",
+      "tags": [
+        "Pulse Entry",
+        "Sparse Passage",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: Side two's penultimate track, ending in a fade-out of about 25 seconds before the narrated closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening burst",
+          "description": "The track starts at a high level for about three seconds, then falls to a quiet, sparse texture.",
+          "detail": "Head Heritage's review treats this track and \"A Song\" as the closing pair and describes a string-laden arrangement and an oboe-sounding keyboard melody that it says pre-empt Vangelis's trademark Blade Runner sound; it does not say which of the two tracks, or where, they sit."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Pulse entry",
+          "description": "A steady pulse and a strong low end enter, and the level rises to full within about ten seconds."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Sparse passage",
+          "description": "The level and the top end fall sharply, leaving a quieter, darker passage of about 20 seconds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Return",
+          "description": "The sound returns at a higher level with a bright, open top end, and the pulse is less regular than before."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Fade-out",
+          "description": "The sound darkens, and the level then falls away over about 25 seconds to the end."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "A Song",
+      "duration": "3:29",
+      "energy": "low",
+      "tags": [
+        "Narration",
+        "Warren Shapovitch",
+        "Album Closer",
+        "Fade-Out"
+      ],
+      "role": "Album role: The closer, with spoken narration by Warren Shapovitch, ending in a fade-out of about fifteen seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The track fades in over a couple of seconds and stays low and sparse for about 45 seconds, without a steady pulse.",
+          "detail": "Wikipedia and the LP credits name Shapovitch as narrator on this track; the measurements do not show where the narration sits."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Louder section",
+          "description": "The level and the low end rise clearly, and a pulse becomes measurable for about 20 seconds."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Drop-back",
+          "description": "The level and the low end fall sharply to a quiet passage that lasts about 50 seconds."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Fuller return",
+          "description": "The level and the low end rise again and hold fairly even for about a minute."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out over the last 15 seconds or so."
+        }
+      ]
+    }
+  ]
+}

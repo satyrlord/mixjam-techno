@@ -1,0 +1,549 @@
+{
+  "id": "vangelis-rosetta",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Rosetta",
+  "year": 2016,
+  "label": "Decca Records",
+  "producer": "Vangelis",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Classical",
+    "New Age"
+  ],
+  "runtime": "53:39",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/2/2b/Vangelis_-_Rosetta.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Rosetta_(album)",
+  "overview": "Rosetta, released by Decca Records on 23 September 2016, is dedicated to the European Space Agency's Rosetta space probe mission, launched in 2004. Wikipedia gives the recording period as 2014 to 2016 and credits Vangelis as composer, arranger, performer and producer, with Philippe Colonna as engineer; the sources found name no studio and no instruments for the album as a whole. The project grew out of a video call between ESA astronaut André Kuipers, then on board the International Space Station, and Vangelis. In November 2014 ESA published three videos named \"Arrival\", \"Philae's Journey\" and \"Rosetta's Waltz\" to mark the first attempted soft landing on a comet, and tracks 1 and 10 carry the first and third of those names in their titles. Vangelis dedicated the album to everyone who made the mission possible, and Wikipedia, citing Fact, says \"Rosetta's Waltz\" shows his appreciation to the mission team.\n\nThe album reached US New Age Albums No. 2, Greece No. 3, Flanders No. 10 and UK No. 40, and was nominated for Best New Age Album at the 59th Annual Grammy Awards; The Arts Desk gave it 3 of 5, calling the music too descriptive and too literal, while laut.de and The Bolton News gave it 4 of 5. Its thirteen tracks run for 53:39, and the sleeve carries a timeline of the mission from the launch on 2 March 2004 to the nominal mission end in September 2016. The Electricity Club's review reads the running order as an arc from an ambient opening through the tension of the landing to a melancholy close.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Origins (Arrival)",
+      "duration": "4:23",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Slow Build",
+        "Low-End Dropout",
+        "Gradual Close"
+      ],
+      "role": "Album role: Opening track, which starts quietly and builds to a bright, busy stretch before a sudden breakdown; its subtitle matches the title of one of the three ESA videos of November 2014.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "The track starts after about a second of silence with a dark, low-level sound and little top end.",
+          "detail": "The Electricity Club's review of the album pairs the \"sweeping ambience\" of this track with \"Starstuff\" as the ambient opening. The sleeve timeline gives the spacecraft's arrival at the comet as 6 August 2014."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Brighter entry",
+          "description": "The sound brightens a little and stays at a moderate level."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Low-end swell",
+          "description": "The low end grows heavier and the level rises slightly as the music builds."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Bright layer",
+          "description": "A bright, busy layer opens up the top end and makes the pulse more noticeable."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Breakdown",
+          "description": "The low end drops out for about 25 seconds and only a thin, bright texture remains."
+        },
+        {
+          "timestamp": "3:56",
+          "section": "Full return",
+          "description": "The low end returns suddenly at full weight and the top end falls back; this is the biggest change in the track."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Outro",
+          "description": "The top end falls away and the track settles into a dark, quiet close."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Starstuff",
+      "duration": "5:14",
+      "energy": "low",
+      "tags": [
+        "Slow Ambient",
+        "Low Level",
+        "Late Peak",
+        "Dark Close"
+      ],
+      "role": "Album role: Slow second track that holds a low level for its first half and swells to a heavy peak near the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, soft opening that stays at a low level for the first half of the track.",
+          "detail": "The Electricity Club's review of the album calls the atmospheres of this track \"widescreen\"."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Brighter passage",
+          "description": "The top end opens for about 20 seconds before the sound settles again."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Thin stretch",
+          "description": "The deepest low end drops out for about half a minute and the texture thins."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Dark return",
+          "description": "The low end returns and the tone turns darker, with much less top end."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Build",
+          "description": "The level starts to rise and keeps rising for the next minute."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Peak",
+          "description": "The loudest, heaviest stretch of the track, with a strong low end, lasts for about half a minute."
+        },
+        {
+          "timestamp": "4:37",
+          "section": "Outro",
+          "description": "The level and the top end fall away and the track closes on a dark, low tone at a moderate level."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Infinitude",
+      "duration": "4:30",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Even Level",
+        "Fade-Out"
+      ],
+      "role": "Album role: Third track, driven by a steady rhythmic pulse that holds an even level to a closing fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens softly with a dark tone and reaches its working level within about ten seconds."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Pulse entry",
+          "description": "A steady rhythmic pulse sets in and the mid-range fills out; it continues for most of the track.",
+          "detail": "The Electricity Club's review of the album says the drama unfolds with the \"orchestrated moods\" of this track and of \"Exo Genesis\"."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Bright section",
+          "description": "The top end opens up and the texture brightens while the level stays even."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Softer passage",
+          "description": "The upper mid-range thins and the sound turns softer and darker for about a minute."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Final lift",
+          "description": "The upper range brightens again before the closing fade."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Outro",
+          "description": "The level falls steadily and the track fades out over the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Exo Genesis",
+      "duration": "3:33",
+      "energy": "low",
+      "tags": [
+        "Quiet Restraint",
+        "Thin Opening",
+        "Low-End Entry",
+        "Fading Tail"
+      ],
+      "role": "Album role: Quiet fourth track that follows the steadier pulse of \"Infinitude\" with a thinner, lower-level texture and a fading tail.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens very quietly with a thin, bright texture and almost no low end.",
+          "detail": "The Electricity Club's review of the album calls this track \"ivory laced\"; the Classical Candor review picks it out for its quiet restraint."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Low-end entry",
+          "description": "A low-end layer enters and the sound fills out at a quiet, steady level."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Darker passage",
+          "description": "The top end falls back and the texture turns darker and rounder."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Fuller stretch",
+          "description": "The level and the low end rise to the fullest part of the track, which holds for about a minute and a half."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Closing",
+          "description": "The low end and the level drop away, leaving a thin, quiet, bright tail that decays to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Celestial Whispers",
+      "duration": "2:31",
+      "energy": "low",
+      "tags": [
+        "Short Interlude",
+        "Gentle Pulse",
+        "Quiet Texture",
+        "Short Fade"
+      ],
+      "role": "Album role: Short interlude that sits between the quiet \"Exo Genesis\" and the louder \"Albedo 0.06\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a low level with a soft, dark tone and a gentle pulse.",
+          "detail": "The Electricity Club's review of the album says this track \"drifts soothingly into the ether\" and acts as a \"gorgeous space lullaby\"."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Brighter entry",
+          "description": "A deeper layer joins and the top end brightens a little."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Final swell",
+          "description": "The level and the low end rise for the last stretch, and a short fade of a few seconds ends the track."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Albedo 0.06",
+      "duration": "4:45",
+      "energy": "high",
+      "tags": [
+        "Albedo 0.39 Reference",
+        "Driving Pulse",
+        "Full-Level Stretch",
+        "Abrupt End"
+      ],
+      "role": "Album role: Loud, driving sixth track that holds a strong pulse and a full level from the first half minute to a cut-off ending.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a lower level with a pulsing texture that reaches full level within half a minute.",
+          "detail": "The Electricity Club's review of the album calls it the \"frantic\" sixth track and a reference to Vangelis's 1976 album Albedo 0.39."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Full texture",
+          "description": "The texture fills out in the mid-range and upper range, and a driving, steady feel holds for most of the track."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Change",
+          "description": "The mid-range and upper range thicken and brighten; this is the biggest change in the track."
+        },
+        {
+          "timestamp": "4:21",
+          "section": "Ending",
+          "description": "The top end falls away and the track ends on a sustained dark tone, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Sunlight",
+      "duration": "4:22",
+      "energy": "mid",
+      "tags": [
+        "Quiet Start",
+        "Slow Build",
+        "Sudden Drop",
+        "Abrupt End"
+      ],
+      "role": "Album role: Seventh track, which follows the loud \"Albedo 0.06\" with a very quiet first half and a slow build to one full-level stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A louder opening sound dies away within about ten seconds."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Quiet passage",
+          "description": "A very quiet, sparse passage with little low end follows and holds for well over a minute.",
+          "detail": "The Electricity Club's review of the album calls this track an \"expansive soundscape\"."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Build",
+          "description": "The level and the top end rise and a deeper low end joins, building toward the main stretch."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Full stretch",
+          "description": "The loudest, brightest stretch of the track holds for about a minute."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Drop",
+          "description": "The sound falls away abruptly to a thin, quiet texture, then the low end returns."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Ending",
+          "description": "The sound settles on a dark, low tone at a moderate level, and the track ends without a fade."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Rosetta",
+      "duration": "5:02",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "Album Centrepiece",
+        "Slow Build",
+        "Closing Fade"
+      ],
+      "role": "Album role: Title track, which Prog says seems always intended as the album's centrepiece and which laut.de names as the album's highlight.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A steady, mid-level opening with a full low end and a moderate pulse.",
+          "detail": "Prog's Johnny Sharp writes that the title track seems always intended as the centrepiece, with plucked strings and a folky dulcimer-style accompaniment that emulate Morricone's mournful majesty before triumphant brass adds pomp and circumstance. The Electricity Club's review hears a dreamy harpsichord motif reminiscent of John Barry and Roy Budd."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Brighter layer",
+          "description": "A brighter layer enters and the top end opens up while the level stays even; this is the biggest change in the track."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Rise",
+          "description": "The level climbs over the next half minute to the first loud high point."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Peak",
+          "description": "The loudest passage of the track arrives, just before the closing fade."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Outro",
+          "description": "The top end falls away and the track fades out over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Philae's Descent",
+      "duration": "3:04",
+      "energy": "high",
+      "tags": [
+        "Rhythmic Drive",
+        "Philae Landing Title",
+        "Moving Low End",
+        "Short Fade"
+      ],
+      "role": "Album role: Compact, rhythmic ninth track that follows the title track; its title names the Philae lander, whose landing the sleeve timeline dates to 12 November 2014.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a moderate level with a dark tone, and the top end opens up within about ten seconds.",
+          "detail": "The Electricity Club's review of the album says the \"climactic overtures\" of this track document the tension and the spark. ESA's 2014 video was titled \"Philae's Journey\"; the sources found do not say whether it uses this piece."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Slow swells",
+          "description": "The low end moves in slow swells while the strong pulse continues."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Heavier stretch",
+          "description": "The low end settles at a heavier, steadier level for the rest of the track, with a strong pulse throughout."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Closing",
+          "description": "The loudest moments come in the last half minute, and a short fade of a few seconds ends the track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Mission Accomplie (Rosetta's Waltz)",
+      "duration": "2:13",
+      "energy": "mid",
+      "tags": [
+        "Shortest Track",
+        "Full Level",
+        "Mission Team Tribute",
+        "Rosetta's Waltz"
+      ],
+      "role": "Album role: The album's shortest track, a steady full-level piece that Wikipedia, citing Fact, says shows Vangelis's appreciation to the mission team.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens at full level with a warm, low-heavy sound."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Brightening",
+          "description": "The top end opens and the texture brightens while the level stays even.",
+          "detail": "The Electricity Club's review of the album calls the piece a \"classic VANGELIS symphony\"."
+        },
+        {
+          "timestamp": "1:47",
+          "section": "Final stretch",
+          "description": "The last half minute is the loudest of the track, and the track ends almost without a fade."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Perihelion",
+      "duration": "6:35",
+      "energy": "high",
+      "tags": [
+        "Longest Track",
+        "Sequencer Pattern",
+        "Mid-Track Drop",
+        "Quiet Coda"
+      ],
+      "role": "Album role: The album's longest and loudest track, with an abrupt drop in the middle and another before a quiet coda.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at once at full level with a strong, driving pulse and a heavy low end.",
+          "detail": "The Electricity Club's review of the album says it brings back the tension with a \"sequencer pattern and rockist fusion\". The sleeve timeline lists the comet's closest approach to the Sun on 13 August 2015."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Drop",
+          "description": "The sound falls abruptly to a much quieter, sparser texture without a clear pulse."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Rebuild",
+          "description": "The level climbs back within about ten seconds and the strong pulse returns."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The track reaches its highest level, with a bright top end and a heavy low end."
+        },
+        {
+          "timestamp": "5:03",
+          "section": "Breakdown",
+          "description": "An abrupt cut to a very quiet, thin texture follows, with almost no low end at first, and it lasts for about a minute."
+        },
+        {
+          "timestamp": "6:04",
+          "section": "Coda",
+          "description": "The low end returns under a dark, moderate-level sound, and the track fades out over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Elegy",
+      "duration": "3:07",
+      "energy": "low",
+      "tags": [
+        "Low-Level Piece",
+        "Slow Bass Cycle",
+        "Closing Pair",
+        "Short Fade"
+      ],
+      "role": "Album role: First of the two closing tracks, a low-level piece that The Electricity Club's review reads as laced with melancholy as the mission ends.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track begins at a quiet level with a soft, moderately bright tone.",
+          "detail": "The sleeve timeline gives the nominal mission end as September 2016."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Slow swells",
+          "description": "The low end swells and recedes in a regular slow cycle while the level stays even."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Thinning",
+          "description": "The level drops a little and the low end and the top end both thin out."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Closing",
+          "description": "The low end returns under a darker, quieter sound, and the track fades out over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Return to the Void",
+      "duration": "4:20",
+      "energy": "low",
+      "tags": [
+        "Closing Track",
+        "Very Quiet",
+        "Thin Texture",
+        "Long Fade"
+      ],
+      "role": "Album role: Closing track, the quietest on the album, which thins out and fades slowly to silence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, thin opening with a soft top end and almost no low end.",
+          "detail": "The Electricity Club's review of the album says this track and \"Elegy\" are laced with melancholy as the mission comes to its conclusion."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Low-end swells",
+          "description": "A low-end layer begins to appear in swells, with quiet gaps between them."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Thin stretch",
+          "description": "The low end disappears again and thin, quiet sound carries the rest of the track."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Outro",
+          "description": "The level falls away and the track fades slowly to silence over about half a minute."
+        }
+      ]
+    }
+  ]
+}

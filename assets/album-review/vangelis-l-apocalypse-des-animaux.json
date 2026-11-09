@@ -1,0 +1,356 @@
+{
+  "id": "vangelis-l-apocalypse-des-animaux",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "L'Apocalypse des animaux",
+  "year": 1973,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Documentary"
+  ],
+  "runtime": "35:27",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/9/9e/L%27Apocalypse_des_animaux_cover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/L'Apocalypse_des_animaux_(album)",
+  "overview": "L'Apocalypse des animaux (1973) is the soundtrack album for Frédéric Rossif's six-part documentary series about the animal kingdom, produced by Télé-Hachette and first broadcast on the first channel of the French broadcaster O.R.T.F. from 5 June 1973. Vangelis composed, arranged and produced the music, recorded at Studio Europa Sonor in Paris with Didier Pitois as sound engineer; Vangelis Movements gives 1970 as the recording year, taken from the UK pressing of the LP, while the fan site Elsewhere says 1971 or 1972. Wikipedia says he recorded generic pieces on the wildlife theme without seeing the footage and left the editors to splice in what they needed, so the series holds much more of his music than the album does. Elsewhere describes a mix of acoustic and early electronic instruments — acoustic and electric guitars, electric pianos, rotary effects and sustained pads from modified organs and other keyboards — and Wikipedia credits Vangelis with keyboards and says a friend of his, not Vangelis, played the flugelhorn on \"Le Singe bleu\".\n\nPolydor issued the LP in 1973 with five pieces on side one and two on side two, the shortest about a minute long and the longest, \"Création du monde\", at just over ten minutes; Wikipedia lists an AllMusic rating of 3 out of 5 and no chart positions or certifications. The rip is the 1988 Polydor CD (831 503-2), which holds the same seven pieces in the same order as the 1973 LP; Wikipedia and Vangelis Collector note that the French LP sleeve misprints the length of \"Création du monde\" as 17:45. The sources do not say where individual instruments play, so the timeline notes follow measured changes in level, brightness and low end.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Apocalypse des animaux – Générique",
+      "duration": "1:28",
+      "energy": "mid",
+      "tags": [
+        "Title Music",
+        "Side One Opener",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: Opener of side one and the second-shortest piece on the album; its subtitle \"Générique\" is the French term for the title or credits music of a programme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece starts at once at a low level and reaches a steady, full texture within about five seconds.",
+          "detail": "The track list gives the piece the subtitle \"Générique\"."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller passage",
+          "description": "The level and the low end rise for about fifteen seconds and the texture becomes fuller."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Peak",
+          "description": "The loudest stretch of the piece begins, with the low end at its strongest."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Outro",
+          "description": "The music stops abruptly at full level and a few seconds of silence follow."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "La Petite Fille de la mer",
+      "duration": "6:01",
+      "energy": "mid",
+      "tags": [
+        "Side One",
+        "Slava's Snowshow Music",
+        "Shifting Levels"
+      ],
+      "role": "Album role: First long piece of the album, just over six minutes, placed between the short title music and the longer \"Le Singe bleu\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece rises from near silence to a steady level and holds an even texture for about forty seconds.",
+          "detail": "Wikipedia's article on Slava Polunin's stage show Slava's Snowshow lists this piece in the show's music."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Breakdown",
+          "description": "The level and the low end drop away for about ten seconds, then the full texture returns."
+        },
+        {
+          "timestamp": "2:38",
+          "section": "Quiet passage",
+          "description": "The level falls and the top end thins; the texture stays darker and quieter for about forty seconds."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Loud step",
+          "description": "The level jumps and the top end opens; this fuller stretch lasts about half a minute."
+        },
+        {
+          "timestamp": "4:28",
+          "section": "Low-end gap",
+          "description": "The low end drops out for about ten seconds while the mid range carries on."
+        },
+        {
+          "timestamp": "4:52",
+          "section": "Peak",
+          "description": "The loudest stretch of the piece begins, with the low end back and the top end open; it holds for about twenty seconds."
+        },
+        {
+          "timestamp": "5:44",
+          "section": "Outro",
+          "description": "The level falls away and the music ends, followed by about nine seconds of silence."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Le Singe bleu",
+      "duration": "7:41",
+      "energy": "mid",
+      "tags": [
+        "Flugelhorn",
+        "Longest Side-One Piece",
+        "Dark Opening",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: Longest piece of side one at over seven minutes; Wikipedia and Vangelis Movements say the flugelhorn on this track was played by an unnamed friend of Vangelis, not by Vangelis himself.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens quietly and darkly, with little top end, and stays that way for about half a minute.",
+          "detail": "French Wikipedia lists \"Le Singe bleu\" among the pieces that are rather jazz-like and melancholic."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Main entry",
+          "description": "The level jumps and the top end opens; the texture becomes much fuller and brighter."
+        },
+        {
+          "timestamp": "2:53",
+          "section": "Sparse passage",
+          "description": "The level eases and the low end thins for about half a minute."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Loud step",
+          "description": "The level jumps and the mid range and top end rise again; this fuller stretch lasts about twenty seconds."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Quiet stretch",
+          "description": "The level falls sharply and the low end almost disappears, leaving a thin, quiet texture for about half a minute."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Peak",
+          "description": "The level and the top end jump and the loudest stretch of the track follows, lasting about forty seconds."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Low-end gap",
+          "description": "The low end falls away for about half a minute while the mid range carries on; the passage ends with a brighter return."
+        },
+        {
+          "timestamp": "7:16",
+          "section": "Outro",
+          "description": "The level and the low end rise for the final stretch, and the music then stops abruptly, followed by about four seconds of silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "La Mort du loup",
+      "duration": "3:07",
+      "energy": "low",
+      "tags": [
+        "Side One",
+        "Lighter Final Section",
+        "Under Four Minutes"
+      ],
+      "role": "Album role: Three-minute piece after the long \"Le Singe bleu\" that brings side one down to shorter lengths before its one-minute closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens in near silence and reaches a steady, quiet level within about ten seconds."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brighter passage",
+          "description": "The top end opens and the level rises for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Peak",
+          "description": "The level builds to the loudest stretch of the track, with the low end at its fullest, lasting about twenty seconds."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Bright lift",
+          "description": "The level and the top end rise again for about fifteen seconds."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Sudden drop",
+          "description": "The level and the top end fall at once; when the music settles, the deepest low end is gone and a lighter, steady texture carries on to the end."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Outro",
+          "description": "The level eases and the music fades out, followed by about six seconds of silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "L'Ours musicien",
+      "duration": "1:05",
+      "energy": "low",
+      "tags": [
+        "Shortest Piece",
+        "Side One Closer",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: One-minute closer of side one and the shortest piece on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece starts at once and reaches a steady level within about five seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Darker passage",
+          "description": "The top end and the low end fall away and the texture turns darker for about twenty seconds."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Brighter return",
+          "description": "The top end opens again and the low end returns; the piece holds that texture until it stops abruptly, followed by about three seconds of silence."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Création du monde",
+      "duration": "10:08",
+      "energy": "high",
+      "tags": [
+        "Side Two Opener",
+        "Longest Piece",
+        "Low-Weighted Texture",
+        "Long Form"
+      ],
+      "role": "Album role: Opener of side two and the longest piece on the album at just over ten minutes; the French LP sleeve misprints its length as 17:45.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece enters at a dark, low-weighted, full level after a moment of silence and keeps a steady texture for about fifty seconds."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Bright plateau",
+          "description": "The mid range and the top end rise and the level holds high for about fifty seconds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Lower plateau",
+          "description": "The level settles lower and moves in small swings for about fifty seconds."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Darker stretch",
+          "description": "The top end largely disappears and the texture stays dark and steady for about a minute and a quarter."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Low surge",
+          "description": "A short, heavy surge in the low end and the level lasts about ten seconds."
+        },
+        {
+          "timestamp": "5:11",
+          "section": "Bright stretch",
+          "description": "The top end opens again in a bright stretch with short darker moments that lasts about a minute."
+        },
+        {
+          "timestamp": "7:19",
+          "section": "Climax",
+          "description": "The level, the mid range and the top end rise together in the loudest stretch of the track, which lasts about a minute."
+        },
+        {
+          "timestamp": "8:36",
+          "section": "Sparse passage",
+          "description": "The level falls to a thin, sparse texture for about twenty seconds."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Closing surge",
+          "description": "The low end swells again and the level rises for about twenty seconds."
+        },
+        {
+          "timestamp": "9:48",
+          "section": "Outro",
+          "description": "The level fades out over the last ten seconds or so and the track ends in silence.",
+          "detail": "Vangelis Movements says Rossif's documentaries contain longer versions of this piece than the album does."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "La Mer recommencée",
+      "duration": "5:56",
+      "energy": "mid",
+      "tags": [
+        "Side Two Closer",
+        "Album Closer",
+        "Bright Top End"
+      ],
+      "role": "Album role: Closer of side two and of the album, just under six minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "After about a second and a half of silence the piece enters at a steady level with a light, mid-range texture and very little low end."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Low end enters",
+          "description": "The low end enters and the texture deepens."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Louder passage",
+          "description": "The level and the top end rise and the texture grows fuller for about a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Fuller passage",
+          "description": "The low end swells and the top end opens soon after, in the loudest stretch of the track; it lasts about half a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Bright passage",
+          "description": "The very top end opens again and stays open for about three quarters of a minute."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Quiet passage",
+          "description": "The top end and the level fall away to the quietest stretch of the track, which lasts about half a minute."
+        },
+        {
+          "timestamp": "5:19",
+          "section": "Closing passage",
+          "description": "The level and the top end jump back for the closing stretch."
+        },
+        {
+          "timestamp": "5:41",
+          "section": "Outro",
+          "description": "The level fades over the last ten seconds or so, then the track ends in silence."
+        }
+      ]
+    }
+  ]
+}

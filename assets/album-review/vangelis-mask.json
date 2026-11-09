@@ -1,0 +1,357 @@
+{
+  "id": "vangelis-mask",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Mask",
+  "year": 1985,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Neoclassical",
+  "genreTags": [
+    "Electronic",
+    "Neoclassical",
+    "Dark Wave",
+    "Choral"
+  ],
+  "runtime": "43:37",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/9/96/Vangelis_album_cover_image_-_%28Mask%29.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Mask_(Vangelis_album)",
+  "overview": "Mask is a work in six movements, titled only Movement 1 to Movement 6, that Vangelis recorded at Nemo Studios, London, in 1984; Polydor released it in March 1985, and it was his last album produced for the label. The CD (Polydor 825 245-2) credits Vangelis as composer, arranger, producer and performer, with Jess Sutcliffe as engineer, and Wikipedia says he plays all the instruments, mainly synthesizers. Wikipedia lists the main sounds as Roland VP-330 strings, Yamaha CS-80 brass, sharp arpeggio sequences from a Sequential Circuits Prophet-10 on movements 1 and 5, a piano on movement 3, a marimba-like sequence on movement 4 and a deep mallet percussion sound on movement 5, with timpani and snare drum that appear to be Emulator samples. A choir is heard on every movement and a solo male voice on movement 4; neither is credited, the choir sings syllables chosen for their sound, and Wikipedia and an Echoes article by John Diliberto name the English Chamber Choir and the tenor Guy Protheroe as the likely performers.\n\nThe album reached UK No. 69, and AllMusic rated it four stars out of five. It follows Soil Festivities (1984) and precedes Invisible Connections (1985), the two albums that Wikipedia groups with it, very loosely, as a trilogy of 1980s albums. On the CD rip the movements run 10:22, 3:27, 6:41, 8:42, 10:03 and 4:24, and Wikipedia describes the arrangement as a symphony or suite of movements with different moods, with Movement 4 built on complex percussion that recalls West African drumming. In the measurements, Movements 1 and 3 move in blocks of near silence and sudden louder entries, Movement 4 keeps a steady pulse for most of its length, Movement 5 holds a loud, dense texture with a pulse only in its middle part, and Movement 6 is the quietest.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Movement 1",
+      "duration": "10:22",
+      "energy": "high",
+      "tags": [
+        "Opening Movement",
+        "Choir",
+        "Prophet-10 Arpeggios",
+        "Longest Movement"
+      ],
+      "role": "Album role: The longest movement and the opening of the work; it alternates near-silent gaps with sudden full-level entries and ends with a hard cut.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Near silence at the start, with the level and the top end rising over the first ten seconds."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Full sound",
+          "description": "The sound opens out: level, brightness and low end all step up within a few seconds.",
+          "detail": "For the movement as a whole, Wikipedia lists sharp arpeggio sequences from a Sequential Circuits Prophet-10, and choral vocals appear on all six movements; John Diliberto (Echoes, 2022) says the choral refrains here can sound like storm troopers on the march. The rip measurement does not show when each sound enters."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Louder stretch",
+          "description": "Level and brightness rise for about half a minute before easing back."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Pull-back",
+          "description": "The top end drops away and the level eases; the highs return soon after and the texture holds a steady medium level for about a minute."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Low end drops out",
+          "description": "The bass falls away for about half a minute, leaving a mid-range and top-end texture; the low end then returns strongly."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "First peak",
+          "description": "A bright, loud passage lasting about forty seconds, with the most top end so far."
+        },
+        {
+          "timestamp": "4:44",
+          "section": "Sudden drop",
+          "description": "The sound drops abruptly to a quiet level; over the next minute and a half, quieter and louder blocks alternate."
+        },
+        {
+          "timestamp": "6:22",
+          "section": "Near silence",
+          "description": "The level falls almost to silence and rebuilds slowly."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Return",
+          "description": "A louder block with a fuller low end returns for about twenty-five seconds."
+        },
+        {
+          "timestamp": "7:40",
+          "section": "Breakdown",
+          "description": "The sound falls very quiet, with almost no low end, then builds back and dips to near silence once more."
+        },
+        {
+          "timestamp": "8:54",
+          "section": "Final peak",
+          "description": "A sudden full-level entry, the biggest jump in the movement, with full low end and top end; the loud passage holds for about eighty seconds."
+        },
+        {
+          "timestamp": "10:15",
+          "section": "Hard cut",
+          "description": "The movement ends with a sudden stop at full level and no long fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Movement 2",
+      "duration": "3:27",
+      "energy": "low",
+      "tags": [
+        "Short Movement",
+        "Steady Pulse",
+        "Choir"
+      ],
+      "role": "Album role: The shortest movement, a quiet pulse-led passage between the ten-minute Movement 1 and Movement 3.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with very little top end; a regular pulse is already measurable in the first ten seconds.",
+          "detail": "Wikipedia says choral vocals appear on all six movements; no source gives details for this movement alone."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Highs open",
+          "description": "The top end opens and stays, brightening the texture while the pulse continues underneath."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Louder",
+          "description": "The level rises and stays higher for about half a minute."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Thinner",
+          "description": "The level and the top end ease back."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Low end enters",
+          "description": "Bass energy appears for the first time in the movement and holds for about half a minute."
+        },
+        {
+          "timestamp": "3:17",
+          "section": "Fade",
+          "description": "The level falls away and the track ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Movement 3",
+      "duration": "6:41",
+      "energy": "mid",
+      "tags": [
+        "Piano",
+        "Choir",
+        "Loud-Quiet Blocks",
+        "Abrupt Stop"
+      ],
+      "role": "Album role: A low-heavy movement, mostly without a steady pulse, whose loudest stretch comes near the end before an abrupt stop.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts quietly, then settles within a few seconds into a dense, low-heavy texture with no steady pulse.",
+          "detail": "Wikipedia lists a piano sound on this movement, and Diliberto (Echoes, 2022) describes its choir as imploring gothic voices from the heavens; the rip measurement does not show when each enters."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Swell",
+          "description": "A brief swell in level lasts about fifteen seconds, then the texture returns to its earlier level."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Fade-down",
+          "description": "The sound falls away until it is almost silent for a few seconds."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Rebuild",
+          "description": "The texture returns and builds back over about thirty seconds, with a short dip on the way before it settles at a steady level."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Loud stretch",
+          "description": "A louder passage with strong low end lasts about half a minute."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Thin section",
+          "description": "A sudden drop leaves a sparse, lower-level passage with little low end; the sound refills after about half a minute."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Peak",
+          "description": "The loudest sustained stretch of the movement: full, low-heavy and without a steady pulse, lasting about forty seconds."
+        },
+        {
+          "timestamp": "6:07",
+          "section": "Sudden stop",
+          "description": "The sound stops abruptly; a short, quieter section follows and ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Movement 4",
+      "duration": "8:42",
+      "energy": "high",
+      "tags": [
+        "Solo Tenor",
+        "Marimba-Like Sequence",
+        "West African Drum Reference",
+        "Continuous Pulse"
+      ],
+      "role": "Album role: The rhythmic centre of the work, the one movement carried by a continuous pulse for most of its length and the only one with a solo voice.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, dark opening with almost no top end; a strong regular pulse is measurable from the first seconds.",
+          "detail": "Wikipedia lists a marimba-like sequence and a solo male tenor on this movement, singing in a made-up language that resembles Latin; Diliberto (Echoes, 2022) describes a hypnotic marimba cycle and string bass groove under a solo voice that sings made-up syllables."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Highs open",
+          "description": "The top end opens abruptly while the pulse continues underneath.",
+          "detail": "Wikipedia, citing Spin (June 1985), says this movement features complex percussion that recalls West African tribal drumming."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Pull-back",
+          "description": "The top end drops out briefly; over the following minutes it comes and goes in short phrases while the pulse never stops."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Louder section",
+          "description": "A louder passage with more top end lasts about fifteen seconds."
+        },
+        {
+          "timestamp": "3:29",
+          "section": "Bright stretch",
+          "description": "The top end rises and stays high for about three-quarters of a minute, one of the brightest sustained stretches of the movement."
+        },
+        {
+          "timestamp": "5:11",
+          "section": "Darker stretch",
+          "description": "The top end falls back and the texture stays darker for about half a minute before it brightens again."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Sudden stop",
+          "description": "The pulse and the sound stop abruptly; near silence lasts about twenty seconds."
+        },
+        {
+          "timestamp": "7:38",
+          "section": "Quiet return",
+          "description": "A quieter texture returns with a weaker, less regular pulse and fades toward the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Movement 5",
+      "duration": "10:03",
+      "energy": "peak",
+      "tags": [
+        "Prophet-10 Arpeggios",
+        "Mallet Percussion",
+        "Mid-Track Pulse",
+        "Sudden Stop"
+      ],
+      "role": "Album role: The second ten-minute movement and the loudest of the six on average in the rip measurement, with a steady pulse only in its middle part and a sudden stop at full level.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Enters at nearly full level within a couple of seconds, with a dense, low-heavy texture and no strong pulse."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Brighter",
+          "description": "The top end rises and the texture brightens, staying dense and without a strong pulse."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Low end swells",
+          "description": "The low end grows over about half a minute and reaches the heaviest point of the first half."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Pulse enters",
+          "description": "The level drops back slightly and a strong, steady pulse enters.",
+          "detail": "Wikipedia lists sharp arpeggio sequences from a Sequential Circuits Prophet-10 and a deep mallet percussion sound on this movement; the rip measurement does not show which part carries the pulse."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Lift",
+          "description": "Level, top end and low end rise together; the pulse eases but continues."
+        },
+        {
+          "timestamp": "7:53",
+          "section": "Pulse fades",
+          "description": "The level dips briefly and the pulse fades; the dense, sustained texture continues to the end without a strong pulse."
+        },
+        {
+          "timestamp": "9:20",
+          "section": "Final build",
+          "description": "The level rises over about half a minute to one of the loudest sustained stretches of the movement."
+        },
+        {
+          "timestamp": "9:55",
+          "section": "Sudden stop",
+          "description": "The movement ends with a sudden stop at full level."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Movement 6",
+      "duration": "4:24",
+      "energy": "low",
+      "tags": [
+        "Closing Movement",
+        "Choir",
+        "Quietest Movement",
+        "Fade Out"
+      ],
+      "role": "Album role: The closing movement and the quietest of the six in the rip measurement, ending in a fade after the hard cuts that close Movements 1 and 5.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts almost silent, with sparse, low-level material for the first minute."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Low end falls away",
+          "description": "The bass disappears and a thin, quiet mid-range and top-end texture continues for about a minute and a half."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Brief swell",
+          "description": "A short, louder swell with strong bass lasts about fifteen seconds."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Near silence",
+          "description": "The sound falls to its quietest point and stays almost silent for about twenty seconds."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Closing section",
+          "description": "The low end returns and a steady, moderate level holds for about forty seconds, the most consistent passage of the movement."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Fade",
+          "description": "The sound fades away and the movement closes quietly."
+        }
+      ]
+    }
+  ]
+}

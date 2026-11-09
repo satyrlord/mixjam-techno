@@ -1,0 +1,758 @@
+{
+  "id": "jean-michel-jarre-odyssey-through-o2",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Odyssey Through O2",
+  "year": 1998,
+  "label": "Disques Dreyfus",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Trance",
+  "genreTags": [
+    "Electronic",
+    "Trance",
+    "House",
+    "Techno",
+    "Remix Album"
+  ],
+  "runtime": "1:05:52",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/1d/JMJ-odissey-remix.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Odyssey_Through_O2",
+  "overview": "Jarre's remix album of the 1997 Oxygène 7–13, released in May 1998 by Disques Dreyfus (catalogue FDM 36163-2 in France, with Epic listed as co-label on the European edition) and produced by Jarre; French Wikipedia gives its working title as Oxygène Odyssey and describes it as a successor to the remix album Jarremix of 1995. The cover credits the remixes as \"Revisited by\" Tetsuya \"TK\" Komuro, Apollo Four Forty, DJ Cam, Loop Guru, Resistance D, Hani, Boodjie & Veronika, Sunday Club and Takkyu Ishino, with the line \"Mixed by Claude Monnet\". The Discogs credits add Joachim Garraud as sound designer, Antoine Confetti as mastering engineer and Jp \"Moogly\" Fernandez for the cover illustration, and note that tracks 1 to 15 form one continuous DJ mix; the last two tracks, the Apollo 440 remix of \"Rendez-Vous 98\" and the TK remix of Oxygène 13, follow as bonus tracks. The disc also holds JArKaos, a scaled-down version of the ArKaos software that Jarre used for concert visuals, which plays visuals to the music when the disc is put in a computer's CD-ROM drive.\n\nThe album draws on six of the seven parts of Oxygène 7–13: Oxygène 8 supplies five tracks, Oxygène 10 three, and Oxygène 7, 11, 12 and 13 one each; Oxygène 9 is not remixed. Four short pieces, \"Odyssey Overture\", \"Odyssey Phase 2\", \"Odyssey Phase 3\" and \"Odyssey Finale\", link the remixes and carry no remixer credit. The album reached UK No. 50 in May 1998 for two weeks, and AllMusic rated it 2.5 out of 5. \"Rendez-Vous 98\" reached UK No. 12 in July 1998; it is a remix of \"Fourth Rendez-Vous\" that ITV used for its coverage of the 1998 World Cup, with Apollo 440 credited alongside Jarre.\n\nTimestamps come from measuring the level, balance and rhythm of the CD rip, not from a listen to the audio, and are approximate to ±5 seconds. Descriptions name only what those measurements show; remixer credits come from the cover and the Discogs credits.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Odyssey Overture",
+      "duration": "0:54",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Continuous Mix Opener",
+        "Claude Monnet Mix"
+      ],
+      "role": "Album role: The opening interlude of the continuous mix, a short link that runs straight into the first remix.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft opening that rises to a steady level within five seconds.",
+          "detail": "The Discogs notes state that tracks 1 to 15 are one continuous DJ mix, credited to Claude Monnet."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Darker passage",
+          "description": "The highs fall away and the low end thickens."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Opening out",
+          "description": "The top end returns and the texture brightens, with no steady beat, and widens further from 0:41."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Hand-off",
+          "description": "The low end drops out and a thin, high tail carries the piece into track 2."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Oxygène 10 (Transcengenics)",
+      "duration": "4:02",
+      "energy": "mid",
+      "tags": [
+        "Loop Guru Remix",
+        "Oxygène 10 Source",
+        "Mid-Tempo Groove"
+      ],
+      "role": "Album role: The first remix of the continuous mix, Loop Guru's reworking of Oxygène 10, the part of the 1997 album that was released as its second single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright, light opening at a modest level."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Groove settles",
+          "description": "The low end fills out and a steady pulse takes hold.",
+          "detail": "The 1997 Oxygène 10 remix single lists two Loop Guru mixes, \"Transcengenics 1\" of about five and a half minutes and \"Transcengenics 2\" of about six and a half, per Discogs; the album carries one \"Transcengenics\" of 4:02."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Low-end shift",
+          "description": "The sub-bass deepens while the midrange thins out: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Fuller groove",
+          "description": "The bass and top end rise together and the beat firms up."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Lull",
+          "description": "The level dips briefly before the groove resumes."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Bright layer",
+          "description": "A brighter layer enters on top and the track runs at full level to the end."
+        },
+        {
+          "timestamp": "3:59",
+          "section": "Cut-out",
+          "description": "The sound stops abruptly two seconds before the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Oxygène 7 (DJ Cam remix)",
+      "duration": "4:23",
+      "energy": "mid",
+      "tags": [
+        "DJ Cam Remix",
+        "Oxygène 7 Source",
+        "Scratches",
+        "Duller Breakdowns"
+      ],
+      "role": "Album role: The only remix of Oxygène 7, the long opening part of the 1997 album, which Jarre released as the third single in October 1997.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright, thin opening with little bass.",
+          "detail": "The Discogs credits list DJ Cam for the remix, the scratches and the mixing of this track."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Bass entry",
+          "description": "The bass and sub-bass enter at once and the track gains weight."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Duller passage",
+          "description": "The highs vanish and the track runs as a muffled, low-register texture for about twenty seconds."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Full groove",
+          "description": "The highs return in full and the rhythm runs at a high level for over a minute."
+        },
+        {
+          "timestamp": "2:49",
+          "section": "Break",
+          "description": "The bass and sub-bass fall out and the level drops by a wide margin."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Return",
+          "description": "The full low end comes back: the loudest stretch of the track."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Duller ending",
+          "description": "The highs fall away again and the level falls away from 4:10 into the next track."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Oxygène 8 (Hani's Oxygène 303)",
+      "duration": "4:20",
+      "energy": "high",
+      "tags": [
+        "Hani Remix",
+        "Oxygène 8 Source",
+        "Steady Pulse",
+        "Two-Part Remix"
+      ],
+      "role": "Album role: The first of five remixes of Oxygène 8, the 1997 album's first single, and the first of two Hani versions that run back to back.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The low end builds in over the first fifteen seconds."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Beat entry",
+          "description": "A steady, strongly marked pulse takes hold and holds to the end of the track.",
+          "detail": "The Discogs credits list Hani for the remix, and a second Hani version, the Reprise, follows as track 5."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Duller break",
+          "description": "The highs drop out and the level dips for about twenty seconds while the pulse continues."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Full groove",
+          "description": "The low end grows and the level rises."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Peak",
+          "description": "The loudest passage of the track, with the biggest low end."
+        },
+        {
+          "timestamp": "3:51",
+          "section": "Closing section",
+          "description": "The level drops and the rhythm runs on at a lower level into the Reprise."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Oxygène 8 (Hani's Oxygène 303 reprise)",
+      "duration": "2:31",
+      "energy": "mid",
+      "tags": [
+        "Hani Remix",
+        "Reprise",
+        "Alternating Sections"
+      ],
+      "role": "Album role: The short second Hani version of Oxygène 8, a cut-up reprise that follows the full version and leads to the Odyssey Phase 2 interlude.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A stripped, bright opening in which the pulse builds over the first twenty seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full passage",
+          "description": "The bass and sub-bass hit at full level for about fifteen seconds."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Stripped passage",
+          "description": "The low end drops out and the level falls well below the full passage."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Alternation",
+          "description": "Full and stripped passages alternate: the full low end returns for fifteen seconds, falls away at 1:29, and comes back for a last full passage from about 1:45 to 1:59."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Odyssey Phase 2",
+      "duration": "0:33",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Odyssey Series",
+        "Beatless"
+      ],
+      "role": "Album role: The second Odyssey interlude, a half-minute beatless pause after the two Hani remixes of Oxygène 8 and before the Oxygène 10 treatment by Resistance D.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, low-register opening with no steady beat."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Lift",
+          "description": "The level and the highs rise, leading into track 7."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Oxygène 10 (Resistance D Treatment)",
+      "duration": "6:43",
+      "energy": "high",
+      "tags": [
+        "Resistance D Remix",
+        "Oxygène 10 Source",
+        "Long Break",
+        "Dark Opening"
+      ],
+      "role": "Album role: The second Oxygène 10 remix and the first long track of the mix, built around a one-minute break in its middle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, muffled opening with the highs almost absent, and a steady pulse by 0:10."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Highs open",
+          "description": "The top end opens up and the track runs at a steady high level."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Break",
+          "description": "The bass and sub-bass drop out and the level falls steeply; a stripped, quiet passage of about a minute follows."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Return",
+          "description": "The full low end returns and the track reaches its loudest stretch, which holds to 5:40."
+        },
+        {
+          "timestamp": "5:48",
+          "section": "Second break",
+          "description": "The level falls and the highs thin out for half a minute."
+        },
+        {
+          "timestamp": "6:29",
+          "section": "Final section",
+          "description": "The highs return and the track runs to its end at a higher level."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Oxygène 8 (Transmix)",
+      "duration": "3:42",
+      "energy": "high",
+      "tags": [
+        "Boodjie & Veronika Remix",
+        "Oxygène 8 Source",
+        "Brightness Cycles",
+        "Beatless Break"
+      ],
+      "role": "Album role: The third Oxygène 8 remix, a continuous-pulse track that runs with the highs cycling in and out until a half-minute beatless break.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening groove",
+          "description": "A full-level pulse is in place from the start.",
+          "detail": "The cover credits Boodjie & Veronika and the Discogs credits list \"Boodjie & Veronica\" for the remix titled \"Transmix\"."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Brightness cycle",
+          "description": "The top end drops out and returns in a repeating cycle of roughly fifteen seconds, which continues to 1:37."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Beatless break",
+          "description": "The level falls and the pulse stops for about half a minute."
+        },
+        {
+          "timestamp": "2:31",
+          "section": "Beat returns",
+          "description": "The beat and the low end return and the level rises sharply."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Highs out",
+          "description": "The highs drop out for about a dozen seconds."
+        },
+        {
+          "timestamp": "3:28",
+          "section": "Final push",
+          "description": "The highs return and the track reaches its loudest stretch before the end."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Oxygène 8 (Sunday club)",
+      "duration": "7:32",
+      "energy": "high",
+      "tags": [
+        "Sunday Club Remix",
+        "Oxygène 8 Source",
+        "Extended Mix",
+        "Long Break"
+      ],
+      "role": "Album role: The longest track of the album, a loud, steady-pulse remix of Oxygène 8 that fills the middle of the continuous mix.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Groove",
+          "description": "A loud, steady pulse with a heavy low end runs from the start and carries the first two minutes.",
+          "detail": "The Discogs credits list Sunday Club for the remix; Wikipedia gives the track as \"Sunday Club Mix\"."
+        },
+        {
+          "timestamp": "2:18",
+          "section": "Lighter section",
+          "description": "The level drops and the low end eases while the pulse continues."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Break",
+          "description": "The bass and most of the beat fall away, leaving a thin, bright passage: the biggest change in the track."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Dark return",
+          "description": "The bass returns without the highs for about half a minute, giving a muffled texture."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Full return",
+          "description": "The highs come back, the level rises and the groove resumes."
+        },
+        {
+          "timestamp": "6:40",
+          "section": "Final stretch",
+          "description": "The loudest passage of the track, which runs to 7:15."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Outro",
+          "description": "The level drops and the highs recede, and the low end falls out for the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Oxygène 10 (@440 remix dub)",
+      "duration": "5:48",
+      "energy": "high",
+      "tags": [
+        "Apollo 440 Remix",
+        "Dub Mix",
+        "Oxygène 10 Source",
+        "Long Fade Tail"
+      ],
+      "role": "Album role: The third and last Oxygène 10 remix, Apollo 440's dub version, which closes the central run of long remixes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright, pulse-driven opening at a moderate level.",
+          "detail": "The cover names the group as Apollo Four Forty; the Discogs credits list Apollo 440 for this remix and for track 16."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Build",
+          "description": "The low end grows and the level rises to 1:00."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Pull-back",
+          "description": "The level and the bass fall back for half a minute."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Break",
+          "description": "The highs and the bass thin out and the pulse weakens for about half a minute."
+        },
+        {
+          "timestamp": "2:19",
+          "section": "Beat returns",
+          "description": "The beat and the sub-bass return and the level builds toward 3:20."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Peak",
+          "description": "The loudest passage of the track, followed by a plateau at a slightly lower level."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Outro",
+          "description": "The low end vanishes and a quiet, thin tail runs to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Odyssey Phase 3",
+      "duration": "0:14",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Odyssey Series",
+        "Beatless"
+      ],
+      "role": "Album role: The third and shortest Odyssey interlude, a fourteen-second link between the dub mix and the Oxygène 11 remix.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft, low-register sound with no beat."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Brightening",
+          "description": "The highs rise slightly as the piece hands over to track 12."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Oxygène 11 (remix)",
+      "duration": "0:55",
+      "energy": "mid",
+      "tags": [
+        "Oxygène 11 Source",
+        "Short Remix",
+        "Uncredited Remixer"
+      ],
+      "role": "Album role: The only remix of Oxygène 11, a short bridge of under a minute whose remixer the cover and the Discogs credits do not name.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright, thin opening."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Groove",
+          "description": "The low end fills in and a steady pulse settles for most of the track."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Brighter layer",
+          "description": "A brighter layer enters over the pulse, and the level rises a little from 0:44."
+        },
+        {
+          "timestamp": "0:54",
+          "section": "Hand-off",
+          "description": "The pulse stops and the level falls as the track passes into track 13."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Oxygène 12 (Claude Monnet remix)",
+      "duration": "5:15",
+      "energy": "high",
+      "tags": [
+        "Claude Monnet Remix",
+        "Oxygène 12 Source",
+        "Two Breaks",
+        "Bass-Heavy Drop"
+      ],
+      "role": "Album role: The only remix of Oxygène 12 and the mixer's own track, with two breaks that divide it into three sections.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse is in place from the start, with a dark, bass-heavy sound.",
+          "detail": "The Discogs credits list Claude Monnet for this remix and as mixer of tracks 1 to 15."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Highs open",
+          "description": "The top end opens and the track brightens."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Break",
+          "description": "The level falls to a near-silent passage of about fifteen seconds."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Drop",
+          "description": "A very heavy bass enters at the loudest level of the track and holds for forty seconds."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Second break",
+          "description": "The bass drops out and the level falls steeply for about twenty seconds."
+        },
+        {
+          "timestamp": "3:19",
+          "section": "Full groove",
+          "description": "The bass and the highs return and the groove runs at a steady high level."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Hand-off",
+          "description": "The low end drops out and the track passes into track 14."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Oxygène 8 (Takkyu Ishino extended mix)",
+      "duration": "4:21",
+      "energy": "high",
+      "tags": [
+        "Takkyu Ishino Remix",
+        "Oxygène 8 Source",
+        "Extended Mix",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The fifth and last Oxygène 8 remix, an extended mix with an unbroken, very steady pulse that closes the remix section of the continuous mix.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short opening at a moderate level."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Beat entry",
+          "description": "A strong, very regular pulse enters and holds to the end of the track.",
+          "detail": "The Discogs credits list Takkyu Ishino for this remix."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Short break",
+          "description": "The bass drops out for about ten seconds."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Full groove",
+          "description": "The full low end returns at a higher level."
+        },
+        {
+          "timestamp": "2:31",
+          "section": "Reduced section",
+          "description": "The bass and the level fall for about half a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Full return",
+          "description": "The full bass returns and runs at the highest level of the track."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Ending",
+          "description": "The beat stops and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Odyssey Finale",
+      "duration": "1:48",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Odyssey Series",
+        "Continuous Mix Closer",
+        "Fade To Silence"
+      ],
+      "role": "Album role: The closing interlude of the continuous mix, a dark piece that fades to silence before the two bonus tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, muffled opening with a heavy low end and almost no highs."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Low-end swell",
+          "description": "The bass swells to the highest level of the piece while the sound darkens further."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Fade-out",
+          "description": "The highs disappear and the level falls steadily."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Silence",
+          "description": "The track is near silent for its last eight seconds."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Rendez-Vous 98 (@440 remix)",
+      "duration": "7:14",
+      "energy": "peak",
+      "tags": [
+        "Bonus Track",
+        "Apollo 440 Remix",
+        "World Cup 1998",
+        "UK Single"
+      ],
+      "role": "Album role: A bonus track after the continuous mix and among the album's loudest, the Apollo 440 remix of the 1998 World Cup single, which is not an Oxygène part.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from near silence with a bright, thin sound.",
+          "detail": "Wikipedia states that ITV used a remixed version of \"Fourth Rendez-Vous\", called \"Rendez-Vous 98\", for its 1998 World Cup coverage, with Apollo 440 credited alongside Jarre. Official Charts lists the single at UK No. 12 from July 1998."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Beat entry",
+          "description": "A pulse and a heavy sub-bass enter together."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "First peak",
+          "description": "The level rises to one of the loudest stretches of the album, which holds to about 1:45."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Breakdown",
+          "description": "The pulse weakens and the level falls for about a minute while the harmony moves."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Beat returns",
+          "description": "The beat comes back and the groove builds to a second high-level stretch from 4:00."
+        },
+        {
+          "timestamp": "5:28",
+          "section": "Second breakdown",
+          "description": "The level falls and the pulse weakens again for about a minute."
+        },
+        {
+          "timestamp": "6:39",
+          "section": "Final section",
+          "description": "A strong low-frequency pulse returns for the last half minute."
+        },
+        {
+          "timestamp": "7:06",
+          "section": "Ending",
+          "description": "The level and the highs fall away and the track stops at about 7:10."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Oxygène 13 (TK remix)",
+      "duration": "5:37",
+      "energy": "mid",
+      "tags": [
+        "Bonus Track",
+        "Tetsuya Komuro Remix",
+        "Oxygène 13 Source",
+        "Slow Fade-In"
+      ],
+      "role": "Album role: The closing bonus track and the only remix of Oxygène 13, the last part of the 1997 album, in a lighter, less pulse-driven style than the tracks before it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from near silence over the first twenty seconds."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Full entry",
+          "description": "The full arrangement enters with a strong low end: the biggest change in the track.",
+          "detail": "The cover credits Tetsuya \"TK\" Komuro. The Discogs credits list him as remixer and producer, with Akihisa Murakami for programming, Toshihiro Wako as recording engineer and Eddie Delena as mixer."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Lift",
+          "description": "The bass and the top end rise and the level climbs to about 2:10."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Lower passage",
+          "description": "The level and the bass fall back for about a minute."
+        },
+        {
+          "timestamp": "3:32",
+          "section": "Short dip",
+          "description": "A brief drop in level before the final section."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Final section",
+          "description": "The level and the bass rise again and hold to about 4:30."
+        },
+        {
+          "timestamp": "5:18",
+          "section": "Outro",
+          "description": "The highs and the bass fall away and the track ends near silence at 5:31."
+        }
+      ]
+    }
+  ]
+}

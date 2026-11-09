@@ -1,0 +1,503 @@
+{
+  "id": "pink-floyd-a-momentary-lapse-of-reason",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "A Momentary Lapse of Reason",
+  "year": 1987,
+  "label": "EMI · Columbia",
+  "producer": "Bob Ezrin · David Gilmour",
+  "genre": "Progressive Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Rock"
+  ],
+  "runtime": "51:00",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/4e/MLoRLP01.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/A_Momentary_Lapse_of_Reason",
+  "overview": "Pink Floyd's thirteenth studio album, released on 7 September 1987 in the UK by EMI and the following day in the US by Columbia, is the first made without Roger Waters, who left the band in 1985; Richard Wright returned as a paid session player and has been credited as a band member on reissues since 2011. David Gilmour and Bob Ezrin produced it and Andy Jackson engineered and mixed it. Recording ran from November 1986 to March 1987 on the Astoria houseboat on the Thames and at Mayfair Studios, Britannia Row and Audio International in London, and at A&M Studios, Village Recorders and Can Am in Los Angeles. Most material went to a 32-track Mitsubishi ProDigi digital recorder, with drums on a 24-track analogue machine and MIDI synchronisation aided by an Apple Macintosh; samplers and drum machines were used throughout, Wright is credited with piano, Hammond organ and Kurzweil synthesiser, Nick Mason with electronic and acoustic drums and sound effects, and Jim Keltner and Carmine Appice also played drums, with Ezrin, Jon Carin and Patrick Leonard on keyboards and synthesisers and Tony Levin on bass guitar and Chapman Stick.\n\nThe album reached UK No. 3, US No. 3, Germany No. 2 and New Zealand No. 1, and was certified 4× Platinum by the RIAA and Gold by the BPI. Reviews were mixed: critics praised the production and instrumentation and faulted the songwriting, and William Ruhlmann's AllMusic review calls it a \"Gilmour solo album in all but name\". The singles were \"Learning to Fly\" with \"Terminal Frost\" as a double A-side (7 September 1987), \"On the Turning Away\" (7 December 1987) and \"One Slip\" (13 June 1988); a dispute over the use of the Pink Floyd name between Waters and the remaining members was settled on 23 December 1987. The original release has ten tracks, with \"Yet Another Movie / Round and Around\" as one track; this review follows the eleven-file split of the rip, which matches the separate indexing used since the 2011 remasters, and Storm Thorgerson designed the cover, a line of hospital beds on a beach photographed at Saunton Sands in July 1987.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Signs of Life",
+      "duration": "4:22",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Instrumental",
+        "Fade-In From Silence",
+        "Bob Ezrin Credit"
+      ],
+      "role": "Album role: The instrumental opener, starting from silence and building slowly through its first two minutes before a closing fade-out.",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Intro",
+          "description": "The first sound arrives after several seconds of silence, a very quiet low-register texture.",
+          "detail": "Wikipedia lists the track as an instrumental credited to Bob Ezrin and gives no further detail on its sounds."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Low end enters",
+          "description": "The low end fills out and the level rises clearly over the next ten seconds."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Fuller section",
+          "description": "The level and the low end rise again to the fullest sound of the track so far."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Step down",
+          "description": "The level steps down for a stretch of about half a minute."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Brighter stretch",
+          "description": "The top end opens and stays brighter until the closing fade."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades to silence by about 4:20."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Learning to Fly",
+      "duration": "4:52",
+      "energy": "mid",
+      "tags": [
+        "Lead Single",
+        "Steady Pulse",
+        "Flying Theme",
+        "Fade-Out"
+      ],
+      "role": "Album role: The album's first single, released on 7 September 1987 as a double A-side with \"Terminal Frost\", and the first track with a steady pulse from its opening seconds.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Opening",
+          "description": "A steady pulse is present from the first seconds, at the full level of the track.",
+          "detail": "Wikipedia credits Anthony Moore, Bob Ezrin and Jon Carin as writers; Carin composed the chord progression during a jam at Gilmour's Hook End studio, and the track was inspired by Gilmour's flying lessons. It includes a recording of Nick Mason's voice during an aircraft take-off, and Ezrin recorded the boatman Langley Iddens rowing on the Thames for the same track."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brighter turn",
+          "description": "The top end rises and the texture brightens."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Short dip",
+          "description": "The level and the top end dip for a few seconds before the groove resumes."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Lighter stretch",
+          "description": "The level and the top end fall for about 50 seconds, leaving a thinner texture."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Fuller return",
+          "description": "The low end and the level rise to the loudest point of the track."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Brighter stretch",
+          "description": "The top end opens fully and the track holds a bright, steady groove until the end."
+        },
+        {
+          "timestamp": "4:32",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence by about 4:48."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "The Dogs of War",
+      "duration": "6:04",
+      "energy": "high",
+      "tags": [
+        "Steady Pulse",
+        "Late Brightening",
+        "Anthony Moore Credit",
+        "Sampler Origin"
+      ],
+      "role": "Album role: The third track, opening with a dark, top-end-free groove and reaching its most insistent stretch in the last third.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening groove",
+          "description": "A steady pulse and a heavy low register with almost no top end.",
+          "detail": "Wikipedia reports that the track arose when a sampler accidentally played a laughter sample that Gilmour heard as a dog's bark; Gilmour describes the subject as physical and political mercenaries."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Top end enters",
+          "description": "A bright top-end layer enters and the pulse becomes less regular."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Steadier groove",
+          "description": "The pulse firms up again and the texture settles for about a minute."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Fuller section",
+          "description": "The low end and the level rise and the pulse becomes much more insistent: the loudest and most driving stretch, running to about 4:30."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Brief drop",
+          "description": "The top end falls away for about five seconds before the full groove returns."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Ending",
+          "description": "The level falls in the last seconds and the track ends almost without a fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "One Slip",
+      "duration": "5:09",
+      "energy": "mid",
+      "tags": [
+        "Third Single",
+        "Phil Manzanera Credit",
+        "Slow Build",
+        "Fade-Out"
+      ],
+      "role": "Album role: A track that builds from a quiet opening to full level in about the first seventy seconds, and the album's third single, released on 13 June 1988.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Quiet intro",
+          "description": "A quiet, low-level opening with little top end.",
+          "detail": "Wikipedia credits the track to Phil Manzanera and notes that the album's final title appears as a line in its chorus."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Top end enters",
+          "description": "The top end and a pulse enter at a still modest level."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Bass entry",
+          "description": "The bass enters and the level rises steadily."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Full groove",
+          "description": "The low end and the top end reach full level and the groove holds steady for more than a minute."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Thinner stretch",
+          "description": "The top end thins for about 20 seconds."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Brighter return",
+          "description": "The top end returns and the track holds its full level to the closing fade."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence by about 5:00."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "On the Turning Away",
+      "duration": "5:42",
+      "energy": "mid",
+      "tags": [
+        "Second Single",
+        "Gradual Build",
+        "Anthony Moore Credit",
+        "Fade-Out"
+      ],
+      "role": "Album role: The fifth track and the album's second single, released on 7 December 1987, a gradual build with a steadier pulse in its final third.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening",
+          "description": "A mid-level opening with a sparse top end."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Build",
+          "description": "The level and the low end rise gradually and the top end brightens, reaching a firmer level by about 1:45.",
+          "detail": "Wikipedia notes that Richard Wright recorded a solo for the track that was later discarded."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Drop-back",
+          "description": "The level falls for about 15 seconds before the full sound returns at about 2:45."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Steadier pulse",
+          "description": "A steadier pulse emerges and the track runs at a high level."
+        },
+        {
+          "timestamp": "5:12",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence by about 5:30."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Yet Another Movie",
+      "duration": "6:13",
+      "energy": "high",
+      "tags": [
+        "Patrick Leonard Credit",
+        "Sparse Opening",
+        "Cover Title Source",
+        "Hard Ending"
+      ],
+      "role": "Album role: A six-minute build from a sparse, uneven opening to a loud middle stretch, running into \"Round and Around\".",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Sparse intro",
+          "description": "A quiet, sparse opening with an uneven level and no top end.",
+          "detail": "Wikipedia credits the track to Patrick Leonard and reports that a phrase from it inspired the cover design; since the 2011 remasters it is indexed apart from \"Round and Around\"."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Body enters",
+          "description": "A fuller low and mid register enters and the level rises."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Top end opens",
+          "description": "A brighter top-end layer enters and the pulse becomes clearer."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Fuller section",
+          "description": "The level rises again and the texture holds a steady, fuller level."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins with a clearer pulse and a fuller low end, running to about 4:30."
+        },
+        {
+          "timestamp": "4:32",
+          "section": "Step down",
+          "description": "The level steps down and the pulse loosens for the last minute and a half."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Ending",
+          "description": "The track ends at its sustained level without a fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Round and Around",
+      "duration": "1:13",
+      "energy": "low",
+      "tags": [
+        "Short Track",
+        "Patrick Leonard Credit",
+        "Separate Index Since 2011",
+        "Fade-Out"
+      ],
+      "role": "Album role: A short coda that follows \"Yet Another Movie\", listed with it as one track on the original release and indexed separately since the 2011 remasters.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a fuller level with a brighter top end that recedes within five seconds."
+        },
+        {
+          "timestamp": "0:05",
+          "section": "Steady pulse",
+          "description": "A steady pulse carries the track at an even level."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades to silence by about 1:05."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "A New Machine Pt. 1",
+      "duration": "1:46",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Quiet Texture",
+        "Two-Part Piece",
+        "Vocal Exploration"
+      ],
+      "role": "Album role: A quiet interlude placed before \"Terminal Frost\", the first of two short pieces titled \"A New Machine\" that frame it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens louder and falls to near silence within five seconds.",
+          "detail": "Phil Sutcliffe's 1987 Q review, quoted on Wikipedia, calls Part 1 \"a chillingly beautiful vocal exploration\"."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Quiet body",
+          "description": "A low-level, sparse texture with irregular gaps."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Near silence",
+          "description": "The level falls almost to silence for about ten seconds before the texture returns."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Rise",
+          "description": "The level and the top end rise to the loudest point of the track before it falls away at about 1:40."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Terminal Frost",
+      "duration": "6:15",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "Double A-Side",
+        "Gilmour Demo",
+        "Fade-Out"
+      ],
+      "role": "Album role: The album's second instrumental, released with \"Learning to Fly\" as a double A-side, built from one of Gilmour's older demos and placed between the two parts of \"A New Machine\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A steady groove at a moderate level from the first seconds.",
+          "detail": "Wikipedia describes the track as one of Gilmour's older demos that he left as an instrumental."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Rise",
+          "description": "The level lifts and the groove holds a firmer level for more than a minute."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Fuller section",
+          "description": "The low end and the top end rise and the pulse strengthens: the loudest stretch, running to about 3:10."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Lighter stretch",
+          "description": "The level falls and the pulse loosens for about 30 seconds."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Second fuller stretch",
+          "description": "A shorter fuller passage with a heavier low end runs to about 4:15."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Settle",
+          "description": "The level settles back and the groove continues at a moderate level."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to near silence by about 6:10."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "A New Machine Pt. 2",
+      "duration": "0:39",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Two-Part Piece",
+        "Quiet Texture"
+      ],
+      "role": "Album role: The second short \"A New Machine\" piece, placed between \"Terminal Frost\" and \"Sorrow\", the shortest track on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens louder and falls to near silence within five seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Quiet body",
+          "description": "A low-level, sparse texture that rises slightly toward the end."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Ending",
+          "description": "The level falls to silence in the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Sorrow",
+      "duration": "8:45",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Longest Track",
+        "Beatless Opening",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: The closing track and the longest on the album, a beatless opening followed by a long, steady groove and a fade-out.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Beatless opening",
+          "description": "A heavy, sustained opening at a moderate level with no steady beat, running to about 1:40.",
+          "detail": "Wikipedia reports that the lyrics were written before the music and that the opening guitar solo was recorded at the Los Angeles Memorial Sports Arena, played through a public address system and recorded in surround sound."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Beat entry",
+          "description": "A steady beat enters after a short dip in level and the track settles into a groove."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Brighter stretch",
+          "description": "The top end rises and the track runs at a higher level."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Fuller stretch",
+          "description": "The low end and the level rise to a fuller stretch lasting about 20 seconds."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Beat drops out",
+          "description": "The beat falls away for about 35 seconds while the low register continues."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Beat returns",
+          "description": "The beat returns with a brighter top end and the groove holds its level for the rest of the track."
+        },
+        {
+          "timestamp": "8:15",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence by about 8:40."
+        }
+      ]
+    }
+  ]
+}

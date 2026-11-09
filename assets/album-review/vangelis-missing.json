@@ -1,0 +1,810 @@
+{
+  "id": "vangelis-missing",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Missing",
+  "year": 1982,
+  "label": "Unknown",
+  "producer": "Unknown",
+  "genre": "Soundtrack / Film Score",
+  "genreTags": [
+    "Soundtrack",
+    "Film Score"
+  ],
+  "runtime": "50:11",
+  "isSoundtrack": true,
+  "coverUrl": "https://coverartarchive.org/release/cfaa423d-7ffa-4639-a7f5-7c1953222964/front-500",
+  "coverSource": "https://musicbrainz.org/release/cfaa423d-7ffa-4639-a7f5-7c1953222964",
+  "overview": "Missing is the film score Vangelis wrote for Costa-Gavras's 1982 drama Missing, co-written with Donald E. Stewart from Thomas Hauser's book The Execution of Charles Horman: An American Sacrifice and set in Chile after the 1973 coup. The film shared the 1982 Cannes Palme d'Or with Yol and won the Academy Award for Best Adapted Screenplay. No soundtrack album came out with the film, and the first official release of music from it is the Main Theme on the compilation Themes (Polydor, 1989), so the rip reviewed here is not an official release: it is an unofficial, longer compilation of 24 cues, listed on MusicBrainz as a promotion CD with the same titles and order.\n\nTracks 18 to 23 repeat the cues of tracks 2, 5, 9, 11, 15, and 17 with running times within about a second and a half of the originals, and track 24 reuses the title of track 3 for a different, shorter cue. The cues run from 16 seconds to nearly six minutes, each ends in a short fade, and several drop to near silence in the middle. No source consulted documents the recording sessions, the equipment, or the producer, so the track notes describe only what the rip measures.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Main Titles",
+      "duration": "2:55",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Main Titles",
+        "Sparse Opening",
+        "Late Low-End Entry"
+      ],
+      "role": "Album role: Opening cue of the rip, titled Main Titles, whose full sound arrives only after the first minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Fades in over the first seconds to a sparse, quiet texture in which sound comes in short stretches with gaps between."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Main entry",
+          "description": "Low-register weight arrives and the level rises sharply, far fuller than the opening."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Settle",
+          "description": "The upper register thins out and the level eases, while the heavy low end stays to the close."
+        },
+        {
+          "timestamp": "2:48",
+          "section": "Outro",
+          "description": "Fades out over a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Little Prince",
+      "duration": "3:14",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Low-Register Weight",
+        "Mid-Cue Rise",
+        "Track 18 Repeat"
+      ],
+      "role": "Album role: Second cue of the rip, titled Little Prince; the same cue returns as track 18.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts at once at a steady, low-register-heavy level that holds for the first minute."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Rise",
+          "description": "The level steps up and the upper register brightens, the loudest stretch of the cue."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Release",
+          "description": "The level falls back to that of the opening and stays there to the end."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Outro",
+          "description": "Fades out over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Curfew",
+      "duration": "5:51",
+      "energy": "mid",
+      "tags": [
+        "Longest Cue",
+        "Steady Pulse",
+        "Near-Silent Gaps",
+        "Track 24 Shares Title"
+      ],
+      "role": "Album role: The longest cue of the rip, built from loud passages separated by near-silent gaps; a different, shorter cue with the same title closes the rip as track 24.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening",
+          "description": "Enters at once at a high level with a steady, measurable pulse."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Near silence",
+          "description": "The sound drops away for about 20 seconds before the cue resumes."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Low end drops out",
+          "description": "The bass leaves for about half a minute, leaving only the mid and upper register."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Quiet stretch",
+          "description": "Almost silent for about 40 seconds, the longest quiet passage of the cue."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Return",
+          "description": "Full level returns after the long quiet stretch."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Final passage",
+          "description": "The bass drops out again and the cue thins out into a long fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Arrest",
+      "duration": "1:59",
+      "energy": "mid",
+      "tags": [
+        "Film Cue",
+        "Quiet Opening",
+        "Steady Pulse",
+        "Near-Silent Break"
+      ],
+      "role": "Album role: Short cue titled Arrest, with a very quiet first half and a louder second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Very quiet opening that grows only slightly over its first 45 seconds."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Swell",
+          "description": "The level rises sharply and a steady pulse becomes measurable."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Break",
+          "description": "A drop to near silence for about ten seconds."
+        },
+        {
+          "timestamp": "1:34",
+          "section": "Return",
+          "description": "Full level returns and carries to a fade at the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Flashback",
+      "duration": "1:20",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Short Cue",
+        "Near-Silent Gap",
+        "Track 19 Repeat"
+      ],
+      "role": "Album role: First of two different cues titled Flashback; this one returns as track 19, while tracks 11 and 21 hold the other Flashback.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a moderate level with a heavy low end."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Near silence",
+          "description": "The sound drops to near silence for about ten seconds."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Return",
+          "description": "Full level returns with a heavy low end."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Peak",
+          "description": "The loudest stretch of the cue, before the low end drops out and the cue fades."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Hotel Theme",
+      "duration": "0:55",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Short Cue",
+        "Even Level"
+      ],
+      "role": "Album role: Short cue titled Hotel Theme, with no repeat later in the rip.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a steady level."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Steady body",
+          "description": "Holds the level with only small changes until the closing fade."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Outro",
+          "description": "The level declines gradually over the last several seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "The Hospital",
+      "duration": "2:09",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Late Bass Entry",
+        "Brief Gap"
+      ],
+      "role": "Album role: Cue titled The Hospital, with no repeat later in the rip.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Settles within seconds at a steady level with little low-register content."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Low end enters",
+          "description": "Bass weight arrives and stays for the rest of the cue, apart from one short dip."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Gap",
+          "description": "A drop to near silence for a few seconds."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Peak",
+          "description": "Full level returns and rises to the loudest point of the cue, followed by a fade."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Shoes In The Street",
+      "duration": "0:16",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Shortest Cue"
+      ],
+      "role": "Album role: The shortest cue of the rip, at 16 seconds, titled Shoes In The Street.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Fades in over the first two seconds and rises toward its loudest point."
+        },
+        {
+          "timestamp": "0:07",
+          "section": "Decline",
+          "description": "The level falls gradually to the end, with no separate fade section."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Arrest Witness",
+      "duration": "0:48",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Short Cue",
+        "Near-Silent Gap",
+        "Track 20 Repeat"
+      ],
+      "role": "Album role: Short cue titled Arrest Witness; the same cue returns as track 20.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A brief loud passage that starts at once."
+        },
+        {
+          "timestamp": "0:09",
+          "section": "Near silence",
+          "description": "The sound drops away for about ten seconds."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Return",
+          "description": "The level climbs back and the cue reaches its fullest sound before a closing fade."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Tied To A Chair",
+      "duration": "0:33",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Short Cue",
+        "Long Decay"
+      ],
+      "role": "Album role: Short cue titled Tied To A Chair, with no repeat later in the rip.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once and reaches its loudest level within seconds."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Decay",
+          "description": "The level falls well below the opening and fades slowly to the end."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Flashback",
+      "duration": "1:53",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Gradual Build",
+        "Second Flashback Cue",
+        "Track 21 Repeat"
+      ],
+      "role": "Album role: Second of two different cues titled Flashback, distinct from track 5 by measurement; this one returns as track 21.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens with a quiet, thin texture."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Build",
+          "description": "The low end strengthens gradually from here to the close."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Fullest section",
+          "description": "The heaviest, bass-rich stretch of the cue."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Outro",
+          "description": "Fades out over the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "To The Airport",
+      "duration": "0:39",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Short Cue",
+        "Even Level"
+      ],
+      "role": "Album role: Short cue titled To The Airport, with no repeat later in the rip.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once and reaches full level within seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Steady body",
+          "description": "Holds its loudest, steady level."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Outro",
+          "description": "The level declines steadily over the last several seconds."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "The Window",
+      "duration": "0:23",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Very Short Cue",
+        "Silent Tail"
+      ],
+      "role": "Album role: Very short cue titled The Window, ending in about four seconds of silence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a moderate level."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Outro",
+          "description": "Fades out, leaving the last few seconds silent."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Rooftop Dinner",
+      "duration": "4:22",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Even Level",
+        "Long Cue"
+      ],
+      "role": "Album role: The longest cue of the middle run, titled Rooftop Dinner and held at one level for nearly its whole length; no repeat later in the rip.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts at once and reaches its steady level within seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Steady body",
+          "description": "The level hardly changes for the next four minutes."
+        },
+        {
+          "timestamp": "2:33",
+          "section": "Brighter stretch",
+          "description": "The upper register gains a little presence for about half a minute."
+        },
+        {
+          "timestamp": "4:14",
+          "section": "Outro",
+          "description": "Fades out over the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Moxine",
+      "duration": "2:19",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Quiet Middle",
+        "Track 22 Repeat"
+      ],
+      "role": "Album role: Cue titled Moxine; the same cue returns as track 22.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a moderate level."
+        },
+        {
+          "timestamp": "0:18",
+          "section": "Loud section",
+          "description": "The level rises and the low end grows heavier."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Quiet middle",
+          "description": "The level drops to the quietest of the cue for about 15 seconds."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Final section",
+          "description": "Loud again with the fullest low end of the cue, then a fade."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Hotel Room",
+      "duration": "1:37",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Even Level",
+        "Abrupt Start"
+      ],
+      "role": "Album role: Short cue titled Hotel Room, the last cue before the End Titles.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts abruptly at full level after about a second and a half of silence, then holds a steady level."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Darker close",
+          "description": "The upper register falls away, leaving a darker sound for the last stretch."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Outro",
+          "description": "Fades out over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "End Titles",
+      "duration": "3:56",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "End Titles",
+        "Delayed Entry",
+        "Track 23 Repeat"
+      ],
+      "role": "Album role: Closing cue of the first 17 tracks, titled End Titles; the same cue returns as track 23.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Quiet, thin opening with little low-register content that stays low and uneven for the first minute."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Full entry",
+          "description": "Low-register weight arrives and the level steps up sharply."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Peak",
+          "description": "The upper register brightens for the loudest stretch of the cue."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Easing",
+          "description": "The level falls back and the sound darkens for the rest of the cue."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Outro",
+          "description": "Fades out over the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Little Prince",
+      "duration": "3:13",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 2",
+        "Low-Register Weight"
+      ],
+      "role": "Album role: Repeat of track 2, Little Prince, about half a second shorter, opening the run of repeated cues that makes up tracks 18 to 23.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts at once at a steady, low-register-heavy level.",
+          "detail": "Compared with track 2, the sequence of louder and quieter stretches follows the same course to within a fraction of a second."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Rise",
+          "description": "The level steps up and the upper register brightens."
+        },
+        {
+          "timestamp": "1:58",
+          "section": "Release",
+          "description": "The level falls back to that of the opening."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Outro",
+          "description": "Fades out, but the rip ends before the fade reaches silence."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "Flashback",
+      "duration": "1:22",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 5",
+        "Near-Silent Gap"
+      ],
+      "role": "Album role: Repeat of track 5, Flashback, about a second longer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a moderate level with a heavy low end.",
+          "detail": "Compared with track 5, the sequence of louder and quieter stretches follows the same course, shifted by a couple of seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Near silence",
+          "description": "The sound drops to near silence for about ten seconds."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Return",
+          "description": "Full level returns with a heavy low end."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Peak",
+          "description": "The loudest stretch of the cue, before the low end drops out and the cue fades."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "Arrest Witness",
+      "duration": "0:49",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 9",
+        "Near-Silent Gap"
+      ],
+      "role": "Album role: Repeat of track 9, Arrest Witness, a fraction of a second longer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A brief loud passage that starts at once.",
+          "detail": "Compared with track 9, the sequence of louder and quieter stretches follows the same course to within a fraction of a second."
+        },
+        {
+          "timestamp": "0:09",
+          "section": "Near silence",
+          "description": "The sound drops away for about ten seconds."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Return",
+          "description": "The level climbs back and the cue reaches its fullest sound before a closing fade."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "Flashback",
+      "duration": "1:52",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 11",
+        "Gradual Build"
+      ],
+      "role": "Album role: Repeat of track 11, the second Flashback cue, under a second shorter.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens with a quiet, thin texture.",
+          "detail": "Compared with track 11, the sequence of louder and quieter stretches follows the same course to within a fraction of a second."
+        },
+        {
+          "timestamp": "0:41",
+          "section": "Build",
+          "description": "The low end strengthens gradually from here to the close."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Fullest section",
+          "description": "The heaviest, bass-rich stretch of the cue."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Outro",
+          "description": "Fades out over the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 22,
+      "title": "Moxine",
+      "duration": "2:17",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 15",
+        "Quiet Middle"
+      ],
+      "role": "Album role: Repeat of track 15, Moxine, about a second and a half shorter.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Starts at once at a moderate level.",
+          "detail": "Compared with track 15, the sequence of louder and quieter stretches follows the same course to within a fraction of a second."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Loud section",
+          "description": "The level rises and the low end grows heavier."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Quiet middle",
+          "description": "The level drops to the quietest of the cue for about 15 seconds."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Final section",
+          "description": "Loud again with the fullest low end of the cue, then a fade."
+        }
+      ]
+    },
+    {
+      "num": 23,
+      "title": "End Titles",
+      "duration": "3:55",
+      "energy": "low",
+      "tags": [
+        "Film Cue",
+        "Repeat of Track 17",
+        "Delayed Entry"
+      ],
+      "role": "Album role: Repeat of track 17, End Titles, about a second shorter.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Quiet, thin opening with little low-register content that stays low and uneven for the first minute.",
+          "detail": "Compared with track 17, the sequence of louder and quieter stretches follows the same course to within a fraction of a second."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Full entry",
+          "description": "Low-register weight arrives and the level steps up sharply."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Peak",
+          "description": "The upper register brightens for the loudest stretch of the cue."
+        },
+        {
+          "timestamp": "2:31",
+          "section": "Easing",
+          "description": "The level falls back and the sound darkens for the rest of the cue."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Outro",
+          "description": "Fades out over the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 24,
+      "title": "Curfew",
+      "duration": "1:35",
+      "energy": "mid",
+      "tags": [
+        "Film Cue",
+        "Steady Pulse",
+        "Title Reused from Track 3"
+      ],
+      "role": "Album role: Closing cue of the rip; it shares the title Curfew with track 3, but no stretch of track 3 matches it in measurement.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Enters at once at a steady level with a regular pulse that continues through the cue."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Brighter turn",
+          "description": "The upper register gains presence for a short stretch."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Outro",
+          "description": "Fades out over the last few seconds."
+        }
+      ]
+    }
+  ]
+}

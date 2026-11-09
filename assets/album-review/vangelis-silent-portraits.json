@@ -1,0 +1,134 @@
+{
+  "id": "vangelis-silent-portraits",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Silent Portraits",
+  "year": 1984,
+  "label": "Polydor",
+  "producer": "Unknown",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "New Age"
+  ],
+  "runtime": "20:12",
+  "coverUrl": "https://coverartarchive.org/release/c9cfdbd3-a80a-46d4-9999-c4f1e29c73c6/36577492795.jpg",
+  "coverSource": "https://musicbrainz.org/release/c9cfdbd3-a80a-46d4-9999-c4f1e29c73c6",
+  "overview": "Silent Portraits (1984) is a 12-inch record of two long pieces, one per side, made for a limited photobook of the same name by the Italian fashion photographer Gian Paolo Barbieri, subtitled \"Polaroid from Seychelles\". The record was issued only inside the book's box, in an edition of 600 numbered copies signed by Barbieri, and Wikipedia's Vangelis discography lists it among his limited-release albums. The book, published by Massimo Baldini Editore, shows black-and-white Polaroid portraits of people of the Seychelles and opens with an introduction by the director Frédéric Rossif. The Gian Paolo Barbieri Foundation describes the disc as recorded for the occasion and inspired by the photographs, and Discogs notes that the music was meant to be played while looking at them.\n\nThe record is a Polydor Italy pressing without a catalogue number; its labels carry only \"1\" and \"2\", and MusicBrainz dates the release to July 1984. The sources are thin: none names a recording studio, other musicians or any equipment, although the fan site Vangelis Movements assumes, without confirmation, that it was recorded at Nemo Studios in London. Vangelis Movements describes side one as a slow (electric) piano piece that builds with flute-like synths, and side two as a rhythmic piece built around electronic percussion with a synth layer added halfway through.\n\nSection timestamps are measured on a rip of the record and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Silent Portraits, Part 1",
+      "duration": "9:18",
+      "energy": "low",
+      "tags": [
+        "Side One",
+        "Beatless",
+        "Slow Build",
+        "Closing Fade"
+      ],
+      "role": "Album role: Side one, the slow and beatless half of the two-piece record, ahead of the rhythmic second side.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece opens quietly, with no low end and no steady beat.",
+          "detail": "Vangelis Movements describes this side as a slow (electric) piano piece that builds with flute-like synths; the measurement shows the quiet, beatless opening but does not identify the instruments."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Low-end entry",
+          "description": "A low-end layer enters and the level steps up, with the music still beatless."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Fuller stretch",
+          "description": "A loud, full-range hit opens a fuller stretch of the piece."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Pull-back",
+          "description": "The low end thins out and the level drops for about 15 seconds before the full sound returns."
+        },
+        {
+          "timestamp": "6:45",
+          "section": "Peak",
+          "description": "The loudest stretch of the side, with the low end back at full weight, lasts about half a minute."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Recession",
+          "description": "The music thins out and the level falls to a quiet low point over about 20 seconds."
+        },
+        {
+          "timestamp": "8:06",
+          "section": "Bright passage",
+          "description": "The low end falls away and a brighter sound takes over for about half a minute."
+        },
+        {
+          "timestamp": "8:51",
+          "section": "Outro",
+          "description": "The low end returns at a modest level, then the music fades out to the end."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Silent Portraits, Part 2",
+      "duration": "10:54",
+      "energy": "mid",
+      "tags": [
+        "Side Two",
+        "Steady Pulse",
+        "Even Level",
+        "Long Fade"
+      ],
+      "role": "Album role: Side two, the longer and rhythmic half of the record, a steady groove that holds its level for most of its length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The groove starts at a low level with the pulse already present and builds over the first seconds.",
+          "detail": "Vangelis Movements describes this side as a rhythmic piece built around electronic percussion."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "High-end entry",
+          "description": "The high end opens up with a bright, rhythmic layer, and the level settles within about ten seconds."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Steady groove",
+          "description": "The level stays almost constant from here for more than nine minutes, and the pulse does not change."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Build",
+          "description": "The upper midrange lifts and stays higher for most of the rest of the side.",
+          "detail": "Vangelis Movements says a synth layer is added about halfway through; the measured change here is a lift in the upper midrange, and it does not identify the sound."
+        },
+        {
+          "timestamp": "6:10",
+          "section": "Brighter top",
+          "description": "The highest frequencies get a little brighter and stay that way for the next couple of minutes."
+        },
+        {
+          "timestamp": "7:20",
+          "section": "Brightest stretch",
+          "description": "The upper midrange reaches its highest level of the side and holds it for about a minute and a half."
+        },
+        {
+          "timestamp": "9:40",
+          "section": "Fade-out",
+          "description": "The level starts to fall, and the high end drops away first."
+        },
+        {
+          "timestamp": "10:20",
+          "section": "Outro",
+          "description": "A very quiet tail with the high end gone runs to the end of the side."
+        }
+      ]
+    }
+  ]
+}

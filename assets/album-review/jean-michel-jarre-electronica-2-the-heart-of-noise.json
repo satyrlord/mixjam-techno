@@ -1,0 +1,752 @@
+{
+  "id": "jean-michel-jarre-electronica-2-the-heart-of-noise",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Electronica 2: The Heart of Noise",
+  "year": 2016,
+  "label": "Columbia Records",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Dance",
+  "genreTags": [
+    "Electronic",
+    "Electronic Dance Music",
+    "Collaboration Album"
+  ],
+  "runtime": "1:14:17",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/f/f9/Jmjelectronica2.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Electronica_2%3A_The_Heart_of_Noise",
+  "overview": "Released on 6 May 2016 by Columbia Records and produced by Jarre, the album is the second half of a two-album project with Electronica 1: The Time Machine (2015). Wikipedia dates the recording to 2011–2016 and gives the project about 30 collaborators; the name, artwork and full track and collaborator list were revealed on 19 February 2016. Fifteen of the 18 tracks credit a featured artist; Part 2, \"Falling Down\" and \"The Origin\" do not. The guests range from other electronic acts (Pet Shop Boys, The Orb, Yello, Jeff Mills, Gary Numan, Primal Scream) to Hans Zimmer, Cyndi Lauper, Peaches and Julia Holter. Wikipedia credits the track \"Exit\" to Edward Snowden.\n\nThe singles were \"The Heart of Noise, Pt. 1\" and \"Pt. 2\" (February 2016), \"What You Want\" (March), \"Exit\" (15 April) and \"As One\" (29 April). The album reached No. 8 in the UK, No. 9 in France, No. 12 in Germany and No. 5 in Switzerland, and was nominated for the 2017 Victoires de la musique in the electronic or dance album category. Critics were mixed: Metacritic lists 58/100, with 4/5 from The Guardian and the Evening Standard and 2/5 from Q, and one review calls the album uneven. The timeline below comes from measuring the owner's rip for rough section boundaries; the notes on level and beat describe that measurement, not a close listening.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "The Heart of Noise, Pt. 1",
+      "duration": "4:26",
+      "energy": "high",
+      "tags": [
+        "Rone",
+        "Album Opener",
+        "February Single",
+        "Steady Beat"
+      ],
+      "role": "Album role: The opener and first single, a collaboration with Rone that sets up the album's beat-driven electronic sound and leads into Part 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start; the full sound arrives within the first seconds.",
+          "detail": "Wikipedia lists Rone as the featured artist and Erwan Castex as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Bright entry",
+          "description": "The top end opens and the harmony settles in a minor key."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Beat entry",
+          "description": "A steady beat takes hold and runs through the middle of the track."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Break",
+          "description": "The beat thins for about fifteen seconds before the full sound returns."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, with a heavier low end and a brighter harmony."
+        },
+        {
+          "timestamp": "4:16",
+          "section": "Outro",
+          "description": "The low end and beat drop out and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Heart of Noise, Pt. 2",
+      "duration": "4:10",
+      "energy": "high",
+      "tags": [
+        "Second Single",
+        "Loud Middle",
+        "Beat Drop",
+        "No Guest"
+      ],
+      "role": "Album role: The continuation of the opener and the album's other February single, without a credited guest.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts at a moderate level, without a steady beat.",
+          "detail": "Wikipedia lists Jarre as the only writer."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "A beat enters and the level rises."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the part, held for more than a minute."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Step down",
+          "description": "The level falls back a notch."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Breakdown",
+          "description": "The beat stops and a quieter passage follows, with the beat returning in a lighter form from about 3:15."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Outro",
+          "description": "The sound falls away to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Brick England",
+      "duration": "4:01",
+      "energy": "high",
+      "tags": [
+        "Pet Shop Boys",
+        "Steady Beat",
+        "Hard Stop"
+      ],
+      "role": "Album role: The first full guest song, a collaboration with Pet Shop Boys placed straight after the two-part opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, quieter opening of about ten seconds.",
+          "detail": "Wikipedia credits Neil Tennant and Chris Lowe as co-writers with Jarre."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Full beat",
+          "description": "The full beat arrives and keeps the same level for most of the song."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Brief drop",
+          "description": "A short drop in level, then the groove returns."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Ending",
+          "description": "The song stops dead, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "These Creatures",
+      "duration": "3:41",
+      "energy": "mid",
+      "tags": [
+        "Julia Holter",
+        "Slow Build",
+        "Softer Ending"
+      ],
+      "role": "Album role: A slower-building guest piece with Julia Holter that a reviewer cited as sounding out of place beside the club tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds into a steady beat within fifteen seconds.",
+          "detail": "Wikipedia credits Julia Holter as co-writer with Jarre; one review quoted there says this track and \"Swipe to the Right\" sound as if they belong on different albums."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Lift",
+          "description": "The level rises as more layers join."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Lighter section",
+          "description": "The beat becomes less prominent for the rest of the track."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Outro",
+          "description": "The level falls away to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "As One",
+      "duration": "3:59",
+      "energy": "high",
+      "tags": [
+        "Primal Scream",
+        "Late Beat Entry",
+        "April Single",
+        "Come Together Sample"
+      ],
+      "role": "Album role: The fifth single and the album's collaboration with Primal Scream, with a late-arriving beat.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A long, quiet, beatless opening of about a minute.",
+          "detail": "Wikipedia credits Andrew Innes, Bobby Gillespie and Robert Young as co-writers with Jarre and notes samples from Primal Scream's \"Come Together\"."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Beat entry",
+          "description": "A beat enters and the level rises sharply."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Full section",
+          "description": "The full arrangement holds a steady loud level."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Dip",
+          "description": "A short dip in level and beat before the final section."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Final section",
+          "description": "The beat returns and the song runs at full level to the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Here for You",
+      "duration": "3:59",
+      "energy": "high",
+      "tags": [
+        "Gary Numan",
+        "Steady Beat",
+        "Even Level"
+      ],
+      "role": "Album role: A guest song with Gary Numan whose beat and level change little from start to finish.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, beatless start.",
+          "detail": "Wikipedia credits Gary Numan as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Beat entry",
+          "description": "A steady beat enters and the level rises."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Dip",
+          "description": "The level eases briefly, then returns."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Peak",
+          "description": "The loudest stretch of the song, held until about 3:20."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Outro",
+          "description": "The level eases for the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Electrees",
+      "duration": "4:10",
+      "energy": "mid",
+      "tags": [
+        "Hans Zimmer",
+        "Steady Build",
+        "Quiet Ending"
+      ],
+      "role": "Album role: The collaboration with Hans Zimmer, a steady build that closes quietly.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening.",
+          "detail": "Wikipedia credits Hans Zimmer as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "A beat enters and the level rises."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Lift",
+          "description": "A second rise in level."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Peak",
+          "description": "The loudest passage, with a brief gap in the pulse around 3:15."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Outro",
+          "description": "The level falls to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Exit",
+      "duration": "6:19",
+      "energy": "high",
+      "tags": [
+        "Edward Snowden",
+        "April Single",
+        "Longest Track",
+        "Long Breakdown"
+      ],
+      "role": "Album role: The longest track, the fourth single and the centrepiece of the album, credited to Edward Snowden.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sparse, quiet opening that stays low for the first three-quarters of a minute.",
+          "detail": "Wikipedia lists Edward Snowden as the featured artist and Jarre as the only writer; the file is tagged with the initials E.S."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full entry",
+          "description": "The level jumps and a steady beat starts."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Short break",
+          "description": "A brief pause in the pulse before the groove returns."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Breakdown",
+          "description": "The beat falls away and a long, quieter passage follows."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Final peak",
+          "description": "The full beat and level return and hold to the last minute."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Outro",
+          "description": "The sound fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "What You Want",
+      "duration": "3:27",
+      "energy": "peak",
+      "tags": [
+        "Peaches",
+        "March Single",
+        "Loud and Dense",
+        "Stop-Start Beat"
+      ],
+      "role": "Album role: The third single, a collaboration with Peaches and one of the loudest tracks on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start of about ten seconds.",
+          "detail": "Wikipedia credits Merrill Nisker (Peaches) as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Full beat",
+          "description": "A loud beat arrives and the level stays high."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Dip",
+          "description": "A short drop in level before the groove returns at about 1:15."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Peak",
+          "description": "The loudest moment of the track."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Lighter section",
+          "description": "The beat eases for a short passage before the last peak."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Final peak",
+          "description": "The track returns to its loudest level and ends."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Gisele",
+      "duration": "3:44",
+      "energy": "high",
+      "tags": [
+        "Sebastien Tellier",
+        "Steady Beat",
+        "Quiet Middle"
+      ],
+      "role": "Album role: A guest song with Sébastien Tellier placed after the Peaches single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start of about ten seconds.",
+          "detail": "Wikipedia credits Sébastien Tellier as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Full beat",
+          "description": "A steady, loud beat starts."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Quieter section",
+          "description": "The level drops for about half a minute."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Peak",
+          "description": "The full beat and level return and hold to about 3:10."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Outro",
+          "description": "The level falls away over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Switch On Leon",
+      "duration": "4:43",
+      "energy": "high",
+      "tags": [
+        "The Orb",
+        "Light Pulse",
+        "Long Middle Dip"
+      ],
+      "role": "Album role: The collaboration with The Orb, with a lighter pulse and more dynamic movement than the songs around it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening that stays low for about half a minute.",
+          "detail": "Wikipedia credits Alex Paterson and Thomas Fehlmann as co-writers with Jarre."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Main section",
+          "description": "The level jumps to a loud section with a lighter pulse."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Dip",
+          "description": "A short drop before a stronger beat returns at about 1:45."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Quieter passage",
+          "description": "A long, quieter stretch of about three-quarters of a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Final section",
+          "description": "The loud section returns."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The beat stops and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Circus",
+      "duration": "3:09",
+      "energy": "high",
+      "tags": [
+        "Siriusmo",
+        "Shortest Guest Track",
+        "Gradual Build"
+      ],
+      "role": "Album role: The shortest track with a credited guest, a collaboration with Siriusmo.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds slowly over the first half minute.",
+          "detail": "Wikipedia credits Moritz Friedrich (Siriusmo) as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "A steady beat takes hold."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Build",
+          "description": "The level rises to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Lighter turn",
+          "description": "The pulse eases for about half a minute."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Full section",
+          "description": "The full beat returns and runs to the end, with a lighter moment near 2:15."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Why This, Why That and Why",
+      "duration": "3:58",
+      "energy": "high",
+      "tags": [
+        "Yello",
+        "Steady Beat",
+        "Constant Level"
+      ],
+      "role": "Album role: The collaboration with Yello, with a steady loud level from the half-minute mark to the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening of about half a minute.",
+          "detail": "Wikipedia credits Dieter Meier and Boris Blank as co-writers with Jarre."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "The loud section begins with a lighter pulse."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Beat firms",
+          "description": "The pulse firms up and the level settles."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Full section",
+          "description": "A steady beat and level run unchanged to the end."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "The Architect",
+      "duration": "4:43",
+      "energy": "high",
+      "tags": [
+        "Jeff Mills",
+        "Slow Build",
+        "Long Loud Stretch"
+      ],
+      "role": "Album role: The collaboration with Jeff Mills, a slow build into a long loud stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sparse, quiet start.",
+          "detail": "Wikipedia credits Jeff Mills as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Beat entry",
+          "description": "A steady beat enters at a low level."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Build",
+          "description": "The level rises in steps."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Peak",
+          "description": "The loudest section starts and is held for over two minutes."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The level falls away to the end."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Swipe to the Right",
+      "duration": "4:54",
+      "energy": "high",
+      "tags": [
+        "Cyndi Lauper",
+        "Steady Beat",
+        "Long Track"
+      ],
+      "role": "Album role: The collaboration with Cyndi Lauper, which a reviewer cited as sounding out of place beside the electronic tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a moderate level and a beat enters within the first half minute.",
+          "detail": "Wikipedia credits Cyndi Lauper and Carmen Cacciatore as co-writers with Jarre."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full section",
+          "description": "The level rises to the main section."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Dip",
+          "description": "A short drop before the groove returns at about 2:00."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The level falls and the track thins out over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Walking the Mile",
+      "duration": "4:52",
+      "energy": "high",
+      "tags": [
+        "Christophe",
+        "Light Pulse",
+        "Late Peak"
+      ],
+      "role": "Album role: The collaboration with Christophe, with the album's loudest stretch near the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A light beat and a moderate level from the start.",
+          "detail": "Wikipedia credits Daniel Bevilacqua (Christophe) as co-writer with Jarre."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full beat",
+          "description": "A louder, steadier beat enters."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Lighter section",
+          "description": "The pulse eases for about half a minute."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Full section",
+          "description": "The full beat returns, with a short gap in the pulse around 2:30."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Ending",
+          "description": "The beat stops and the track closes."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Falling Down",
+      "duration": "3:23",
+      "energy": "high",
+      "tags": [
+        "No Guest",
+        "Steady Beat",
+        "Solo Jarre"
+      ],
+      "role": "Album role: A track written by Jarre alone, placed before the closing piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, beatless opening.",
+          "detail": "Wikipedia lists Jarre as the only writer."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Beat entry",
+          "description": "A steady beat enters and the level rises."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Main section",
+          "description": "The level rises again and stays high with small changes."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch, before a slightly quieter close."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "The Heart of Noise (The Origin)",
+      "duration": "2:40",
+      "energy": "mid",
+      "tags": [
+        "No Guest",
+        "Album Closer",
+        "Shortest Track",
+        "Gradual Build"
+      ],
+      "role": "Album role: The shortest track and the album's closer, written by Jarre alone.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds slowly over the first half minute.",
+          "detail": "Wikipedia lists Jarre as the only writer."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "A steady beat takes hold and the level rises."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Outro",
+          "description": "The level falls sharply and the album ends."
+        }
+      ]
+    }
+  ]
+}

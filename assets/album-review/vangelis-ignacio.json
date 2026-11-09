@@ -1,0 +1,158 @@
+{
+  "id": "vangelis-ignacio",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Ignacio",
+  "year": 1977,
+  "label": "Egg",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Progressive Electronic"
+  ],
+  "runtime": "39:52",
+  "isSoundtrack": true,
+  "coverUrl": "https://coverartarchive.org/release/1e4d992a-3069-4592-9527-3b842c9b59ba/36569674722.jpg",
+  "coverSource": "https://musicbrainz.org/release/1e4d992a-3069-4592-9527-3b842c9b59ba",
+  "overview": "Ignacio is the soundtrack to François Reichenbach's 1975 film Entends-tu les chiens aboyer ? (Do You Hear the Dogs Barking?, also known as Ignacio), a Mexican-French drama after Juan Rulfo's short story that was entered in the 1975 Cannes Film Festival; Vangelis composed, performed and produced the score. The album first appeared in 1975 under the film's title on Barclay and was reissued in 1977 as Ignacio on Egg, as two long parts of roughly 21 and 18 minutes, alongside a two-part 7-inch single on Egg.\n\nThe rip is the 1989 Barclay CD (813 042-2, US), which holds the whole album as one 39:52 track instead of the two LP parts; this review follows the two parts of the original LP and places the break between them at about 21:26. Part 1 has no steady beat and moves between quiet passages, sudden cuts to near silence and long loud stretches. Part 2 opens on a steady pulse, spends its middle in sparse and beatless sound, and returns to pulse-driven passages before it fades out.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Ignacio, Part 1",
+      "duration": "21:26",
+      "energy": "mid",
+      "tags": [
+        "Film Score",
+        "Long-Form",
+        "Beatless",
+        "Abrupt Dynamics"
+      ],
+      "role": "Album role: The first and longer part, a beatless span of quiet passages, sudden cuts to near silence and loud stretches that closes on a long loud one and sets up the pulse-driven Part 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The sound enters very quietly after a short silence and rises slowly for about a minute and a half."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Build",
+          "description": "The sound grows fuller, then louder and brighter, over the next minute."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Fade",
+          "description": "The opening section fades almost to nothing, leaving a few seconds of silence before the next one."
+        },
+        {
+          "timestamp": "4:29",
+          "section": "Restart",
+          "description": "A new section begins abruptly at a higher level, with a darker sound that holds a steady level for about two and a half minutes."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Bright flares",
+          "description": "Brighter, higher-pitched material comes and goes in bursts for about a minute."
+        },
+        {
+          "timestamp": "8:33",
+          "section": "Surges",
+          "description": "Loud surges alternate with sudden drops in level for about two minutes."
+        },
+        {
+          "timestamp": "10:45",
+          "section": "Loud stretch",
+          "description": "A long loud stretch of nearly four minutes follows, interrupted by a few brief lulls."
+        },
+        {
+          "timestamp": "14:30",
+          "section": "Quiet passage",
+          "description": "The sound cuts abruptly from loud to quiet and stays sparse for about a minute and a half."
+        },
+        {
+          "timestamp": "16:00",
+          "section": "Short peak",
+          "description": "A sudden loud passage cuts in for about half a minute and stops abruptly."
+        },
+        {
+          "timestamp": "17:20",
+          "section": "Slow return",
+          "description": "After several seconds of silence, quiet sound returns and thickens gradually."
+        },
+        {
+          "timestamp": "18:08",
+          "section": "Final peak",
+          "description": "A sudden swell opens a loud, bright, sustained passage that lasts about three minutes."
+        },
+        {
+          "timestamp": "21:15",
+          "section": "Outro",
+          "description": "The sound fades out to silence, ending the first part."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Ignacio, Part 2",
+      "duration": "18:26",
+      "energy": "high",
+      "tags": [
+        "Film Score",
+        "Long-Form",
+        "Steady Pulse",
+        "Alternating Pulse"
+      ],
+      "role": "Album role: The second part, the more rhythmic half: it opens straight on a steady pulse, passes through a long beatless middle, and returns to pulse-driven passages before the fade-out that closes the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat entry",
+          "description": "The part opens at once on a steady pulse that runs for nearly four minutes.",
+          "detail": "On the rip, a short silence of about two seconds separates the two parts."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Breakdown",
+          "description": "The pulse stops abruptly and the sound drops to near silence; what follows is quiet and sparse, without a steady beat, for about three minutes."
+        },
+        {
+          "timestamp": "6:43",
+          "section": "Light pulse",
+          "description": "A light, high-pitched pulse returns quietly and builds in level until it reaches a louder, fuller passage about a minute later."
+        },
+        {
+          "timestamp": "8:08",
+          "section": "Alternating blocks",
+          "description": "Short blocks of low, pulsing sound alternate with brighter, louder bursts for just over a minute."
+        },
+        {
+          "timestamp": "9:33",
+          "section": "Slow build",
+          "description": "Quiet, mid-range sound without a pulse builds gradually for more than three minutes."
+        },
+        {
+          "timestamp": "13:13",
+          "section": "Beat entry",
+          "description": "After a short silence a slower steady pulse enters at full level and runs for about two and a half minutes."
+        },
+        {
+          "timestamp": "15:43",
+          "section": "Beat drops out",
+          "description": "The pulse drops out while the loud, sustained sound continues for about a minute."
+        },
+        {
+          "timestamp": "16:48",
+          "section": "Beat returns",
+          "description": "The pulse returns at full level, with a brief gap along the way, and carries the part toward its close."
+        },
+        {
+          "timestamp": "18:10",
+          "section": "Outro",
+          "description": "The pulse and the sound fade out to silence, ending the album."
+        }
+      ]
+    }
+  ]
+}

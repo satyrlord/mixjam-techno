@@ -1,0 +1,606 @@
+{
+  "id": "vangelis-chariots-of-fire-the-play",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Chariots of Fire: The Play",
+  "year": 2012,
+  "label": "Decca",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Incidental Music"
+  ],
+  "runtime": "58:31",
+  "isSoundtrack": true,
+  "coverUrl": "https://coverartarchive.org/release/44754193-dd8d-41ca-bd91-475e51f57d69/26672514416.jpg",
+  "coverSource": "https://musicbrainz.org/release/44754193-dd8d-41ca-bd91-475e51f57d69",
+  "overview": "Chariots of Fire: The Play is the music for the 2012 stage play of Chariots of Fire, adapted by Mike Bartlett from Colin Welland's screenplay for the 1981 film and directed by Ed Hall; it opened at Hampstead Theatre in May 2012 and transferred to the Gielgud Theatre in the West End in June, where it ran until 5 January 2013. It is a separate release from the 1981 film soundtrack, which has its own review in this collection. The liner notes credit the music as composed, arranged, produced and performed by Vangelis, except \"Jerusalem\", which Harry Rabinowitz arranged and the Ambrosian Singers perform, and credit Vangelis Saitis as engineer of the new pieces. Decca released the CD in the UK on 23 July 2012, and it reached No. 11 on the UK Official Classical Artist Albums Chart in August 2012.\n\nThe play uses the film score and adds new pieces by Vangelis. Wikipedia counts three film tracks (two of them slightly updated), eleven pieces composed for the play and \"Jerusalem\"; the liner notes date \"Chariots of Fire\" and \"Eric's Theme\" to 2012 and \"Abraham's Theme\" and \"Jerusalem\" to 1981. The album opens with the title theme, places the two other film themes among the new pieces, and closes with the hymn, and \"Aspiration\" at 8:09 is the longest track by about three minutes.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Chariots of Fire",
+      "duration": "3:29",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Film Theme",
+        "Updated Version",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Opener, an updated recording of the film's title theme that ties the stage score to the 1981 film score.",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Intro",
+          "description": "The track fades in from silence, with a steady pulse underneath from the first seconds.",
+          "detail": "The liner notes date this recording to 2012, and Wikipedia lists it as a slightly updated version of the film's title theme."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Full entry",
+          "description": "The low end and the top end open together and the level jumps up."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Build",
+          "description": "The music grows louder and denser and keeps that fuller level to the end."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Outro",
+          "description": "The track stops within the last two seconds, with the top end falling away first."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Physical Energy",
+      "duration": "3:13",
+      "energy": "high",
+      "tags": [
+        "New Composition",
+        "Alternating Brightness",
+        "Loud Finish"
+      ],
+      "role": "Album role: First of the new pieces, following the opening film theme at a higher overall level.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a strong level with no fade-in, and the top end is held back."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Bright section",
+          "description": "The top end opens up and the sound turns much brighter for about 15 seconds."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Darker return",
+          "description": "The brightness drops away and the low end carries the texture again."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Second bright section",
+          "description": "The top end opens again and the bright sound returns."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins and the sound falls away in the last few seconds.",
+          "detail": "The Sonic Immersion review of the album calls this an energetic track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Home in the Glen",
+      "duration": "3:53",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Quiet Opening",
+        "Mid-Track Pulse"
+      ],
+      "role": "Album role: Quiet new piece that slows the album after the two opening tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, slowly moving opening with no clear pulse.",
+          "detail": "The Sonic Immersion review of the album says Scottish bagpipes feature on this track; it does not say where they enter."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Swell",
+          "description": "The low end and the level rise for a short stretch before the music settles again."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Pulse entry",
+          "description": "A clear rhythmic pulse appears and the top end briefly drops away before the sound fills out again."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Quiet passage",
+          "description": "The level falls to a quieter closing passage."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Final lift",
+          "description": "The low end and the level rise in the last few seconds, and the track ends louder than the passage before it."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Eric's Theme",
+      "duration": "4:06",
+      "energy": "mid",
+      "tags": [
+        "Film Theme",
+        "Updated Version",
+        "Sparse Passage",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: Second updated film theme, placed fourth after the new pieces Physical Energy and Home in the Glen.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts directly at a moderate level with no fade-in and settles within seconds.",
+          "detail": "The liner notes date this recording to 2012, and Wikipedia lists it as a slightly updated version of the film's theme."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Fuller section",
+          "description": "The sound grows fuller and the level rises."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Thin passage",
+          "description": "The low end and the top end drop away and the music thins to a sparse passage for about half a minute."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Full return",
+          "description": "The full sound returns with a jump in level, the strongest moment so far."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Fade-out",
+          "description": "The music fades out over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Abraham's Theme",
+      "duration": "3:03",
+      "energy": "low",
+      "tags": [
+        "Film Theme",
+        "1981 Recording",
+        "Slow Build",
+        "Quiet Opening"
+      ],
+      "role": "Album role: Third film cue on the album, kept in its 1981 recording and set between the updated Eric's Theme and the new Harold's Despair.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "The track fades in from near silence and stays very quiet, with no clear pulse, for about half a minute.",
+          "detail": "The liner notes date this track to 1981, and Wikipedia lists it as a previously released film track."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Low-end entry",
+          "description": "The low end enters and the level rises clearly."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Fuller section",
+          "description": "The level and the brightness rise again for the fullest stretch of the track so far."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Deep low end",
+          "description": "A deep low-end layer enters and the sound grows heavier."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Harold's Despair",
+      "duration": "2:25",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Character Cue",
+        "Short Cue"
+      ],
+      "role": "Album role: Short, quiet new cue that opens the run of new pieces on tracks 6 to 14.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at once at a quiet, steady level with no clear pulse.",
+          "detail": "The Sonic Immersion review of the album groups this track with the soft, intimate pieces."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Quieter passage",
+          "description": "The level and the top end fall, and the music stays quieter for the rest of the track."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Ending",
+          "description": "The sound stops and leaves a short silence before the track ends."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Belief",
+      "duration": "4:12",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Fade-In Opening",
+        "Late Peak"
+      ],
+      "role": "Album role: Quiet new piece in the run of slower tracks that leads to the album's longest track.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "The track fades in from silence in the first seconds and settles at a quiet level.",
+          "detail": "The Sonic Immersion review of the album groups this track with the soft, intimate pieces."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Fuller section",
+          "description": "The level and the brightness rise."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Pull-back",
+          "description": "The brightness drops away and the music thins for a short stretch."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Second rise",
+          "description": "The sound brightens and grows louder again."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins and lasts for about 20 seconds."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Outro",
+          "description": "The sound falls back to a quiet closing passage, and the track fades out at the end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Ballad",
+      "duration": "3:11",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Quiet Piece",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: Last of the three quiet new pieces before the album's longest track, Aspiration.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in over the first seconds to a quiet level.",
+          "detail": "The Sonic Immersion review of the album groups this track with the soft, intimate pieces."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Brighter section",
+          "description": "The sound brightens and the level rises for about 25 seconds."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Fuller section",
+          "description": "The level rises clearly above the earlier part and stays higher until the fade-out."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Fade-out",
+          "description": "The music fades out over the last ten seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Aspiration",
+      "duration": "8:09",
+      "energy": "mid",
+      "tags": [
+        "New Composition",
+        "Longest Track",
+        "Multiple Builds",
+        "Quiet Middle"
+      ],
+      "role": "Album role: The album's longest track, about three minutes longer than the next longest, with three separate builds.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening swell",
+          "description": "The track fades in from silence and rises to a short loud opening before it drops to a quieter level."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Quiet passage",
+          "description": "The level and the top end fall to the quietest stretch of the track, which stays quiet for more than a minute."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "First build",
+          "description": "The level builds over about 40 seconds into the first full-level stretch."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Drop to quiet",
+          "description": "The level falls sharply to a quiet, thinner texture that lasts for more than a minute."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins and lasts for about 40 seconds."
+        },
+        {
+          "timestamp": "7:32",
+          "section": "Final rise",
+          "description": "The level climbs again and the track ends at a high level with only a very short tail."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Eric's Pleasure",
+      "duration": "5:07",
+      "energy": "mid",
+      "tags": [
+        "New Composition",
+        "Dynamic Contrast",
+        "Loud Ending"
+      ],
+      "role": "Album role: Second longest track on the album, following the long Aspiration.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level with no fade-in."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "First lift",
+          "description": "The level and the brightness rise for a short stretch."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Louder stretch",
+          "description": "A short, louder stretch, the highest level so far."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Low-end drop",
+          "description": "The low end drops out and the level falls for about half a minute."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Short dip",
+          "description": "The level dips for a few seconds, then returns and builds."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Loudest stretch",
+          "description": "The loudest and brightest part of the track runs to the end, which comes without a fade."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Lord Lindsay",
+      "duration": "1:37",
+      "energy": "mid",
+      "tags": [
+        "New Composition",
+        "Shortest Track",
+        "Rhythmic Pulse",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: Shortest track on the album, a brief rhythmic cue after the two long pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A rhythmic pulse runs under the music from the first seconds."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Lift",
+          "description": "The level and the brightness rise and then hold."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Pulse stops",
+          "description": "The rhythmic pulse stops and the sound holds at a steady level."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Fade-out",
+          "description": "The music fades out quickly over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "At the Starting Blocks",
+      "duration": "3:57",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Sparse Opening",
+        "Low-End Entry",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: First of the three closing new pieces, which lead to the final track, Jerusalem.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "The track fades in from silence to a very quiet, sparse texture with almost no low end."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Low-end entry",
+          "description": "The low end enters and the level steps up to the main level of the track."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Drop back",
+          "description": "The low end and the level fall away to the sparse texture again."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Return",
+          "description": "A lighter low end returns at a quieter level than before."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Fade-out",
+          "description": "The music fades out over the last quarter of a minute."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Epilogue",
+      "duration": "4:26",
+      "energy": "low",
+      "tags": [
+        "New Composition",
+        "Closing Cue",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: The epilogue, the second of the three closing new pieces before Jerusalem.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track fades in over the first seconds to a quiet, steady level."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Lift",
+          "description": "The sound grows slightly louder and brighter."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Quiet section",
+          "description": "The level and the top end fall to a quieter section."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Quietest section",
+          "description": "The level falls to the quietest part of the track, which lasts for about half a minute."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Final section",
+          "description": "The pulse becomes clearer and the level rises.",
+          "detail": "The Sonic Immersion review of the album says this track returns to the Chariots of Fire theme that opens the album."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Fade-out",
+          "description": "The sound falls away over the last 15 seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "After the Race",
+      "duration": "4:37",
+      "energy": "mid",
+      "tags": [
+        "New Composition",
+        "Steady Pulse",
+        "Closing Cue",
+        "Quiet Outro"
+      ],
+      "role": "Album role: The last new composition on the album, a pulsing piece that runs into a quiet closing stretch before Jerusalem.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track fades in over the first second and quickly reaches a bright, full level."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Pulse",
+          "description": "A steady rhythmic pulse settles in and runs under the music for about three minutes.",
+          "detail": "The Sonic Immersion review of the album says this track returns to the Chariots of Fire theme and calls it the weakest track on the album."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Wind-down",
+          "description": "The pulse stops and the top end falls away as the level drops."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Quiet outro",
+          "description": "A much quieter closing stretch runs to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Jerusalem",
+      "duration": "3:06",
+      "energy": "mid",
+      "tags": [
+        "Hymn",
+        "Ambrosian Singers",
+        "1981 Recording",
+        "Album Closer"
+      ],
+      "role": "Album role: Closer, Parry's hymn in its 1981 recording and the only track not composed by Vangelis.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track fades in from near silence and builds steadily in level and brightness for about 45 seconds.",
+          "detail": "The liner notes credit Jerusalem (Parry), arranged by Harry Rabinowitz, performed by the Ambrosian Singers and directed by John McCarthy, and date it to 1981."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full level",
+          "description": "The track reaches its full level, which holds almost unchanged for nearly two minutes."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Final rise",
+          "description": "The level rises to its highest point of the track."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Ring-out",
+          "description": "The sound falls away over the last ten seconds."
+        }
+      ]
+    }
+  ]
+}

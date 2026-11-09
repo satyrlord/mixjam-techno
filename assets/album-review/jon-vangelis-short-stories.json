@@ -1,0 +1,399 @@
+{
+  "id": "jon-vangelis-short-stories",
+  "kind": "reference",
+  "artist": "Jon & Vangelis",
+  "title": "Short Stories",
+  "year": 1980,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Vocal",
+  "genreTags": [
+    "Electronic",
+    "Vocal"
+  ],
+  "runtime": "45:06",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/7/79/Shortstoriesjonvangelis.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Short_Stories_(Jon_and_Vangelis_album)",
+  "overview": "Short Stories is the first album by Jon and Vangelis, the duo of the Yes singer Jon Anderson and Vangelis, released by Polydor in January 1980 and produced by Vangelis. Discogs lists Nemo Studios in London as the recording studio, and Wikipedia gives February 1979 for the original sessions and September–October 1979 for post-production. Anderson sings all the vocals and wrote the lyrics, Vangelis is credited with keyboards, drums, percussion and electronics, and the engineer Raphael Preston plays acoustic guitars on \"The Road\". Wikipedia, citing a Sounds interview of 16 February 1980, says that apart from overdubs the pieces were improvised one-take tape recordings, hence a working title of Spontaneous Music, and Vangelis told Sounds that the whole album took about two and a half weeks, not worked consecutively.\n\nThe album reached UK No. 4, Netherlands No. 1 and France No. 13, and was certified Gold in the Netherlands in 1980 and in the United Kingdom in 1981; its single \"I Hear You Now\" (December 1979) reached UK No. 8. Reviews were mixed, from Record Mirror's 4 out of 5 to Smash Hits' 3 out of 10 and AllMusic's 1.5 out of 5. The 1980 LP has ten tracks, five on each side; the 1983 Polydor CD that this review follows lists the same ten titles in its insert but is divided into eight tracks, joining \"Each and Everyday\" with \"Bird Song\" and \"Far Away in Baagad\" with \"Love Is\", and the review follows those eight.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Curious Electric",
+      "duration": "6:41",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Near-Silent Gap",
+        "Late Full Return",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Opening track on both the LP, where it is the first of side one, and the CD; a long piece whose sound falls to near silence in the middle before a full-strength return.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, light-bodied opening with a regular pulse and the low end appearing only in short bursts.",
+          "detail": "Wikipedia, citing a Sounds interview of 16 February 1980, says that apart from overdubs the album's pieces were improvised one-take tape recordings; no source describes the structure of this track."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Full entry",
+          "description": "The low end and the level rise abruptly, and the sound stays full for about two minutes."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Brighter stretch",
+          "description": "The top end opens up and the pulse firms as the sound grows brighter for about a minute."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Drop-out",
+          "description": "The level falls abruptly into a thin, sparse stretch of almost two minutes that dips close to silence more than once."
+        },
+        {
+          "timestamp": "4:32",
+          "section": "Full return",
+          "description": "The full sound comes back abruptly after an almost silent gap, and the track builds to its loudest, brightest stretch."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Outro",
+          "description": "A brief dip is followed by a last full-level stretch, and the sound fades out with the top end falling away first."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Each and Everyday / Bird Song",
+      "duration": "5:07",
+      "energy": "mid",
+      "tags": [
+        "Two LP Tracks Joined",
+        "Quiet Opening",
+        "Mid-Track Drop-Out"
+      ],
+      "role": "Album role: The CD's second track, joining the LP's second and third tracks, \"Each and Everyday\" (3:43) and \"Bird Song\" (1:26), into one five-minute piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Almost silent at first, then a quiet, dark texture fades in."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Texture opens",
+          "description": "The level and the top end rise, and the sound settles at a moderate level."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Surge",
+          "description": "The low end and the level jump for about ten seconds, then ease back."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Full stretch",
+          "description": "The sound reaches its fullest level so far and holds it for about forty seconds, with a clearer pulse."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Drop-out",
+          "description": "The level falls sharply into a quiet, sparse passage of about half a minute."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Second piece",
+          "description": "The sound returns and builds again.",
+          "detail": "The 1980 LP lists \"Each and Everyday\" at 3:43 and \"Bird Song\" as its own track; the CD joins them, so \"Bird Song\" starts at about this point."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Bright lift",
+          "description": "The top end brightens and the level rises for about fifteen seconds, the brightest passage of the track."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Outro",
+          "description": "The level falls back and the texture thins before the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "I Hear You Now",
+      "duration": "5:12",
+      "energy": "mid",
+      "tags": [
+        "Single",
+        "UK No. 8",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Single released in December 1979, the CD's third track and the fourth track of the LP's side one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, dark opening in which the sound grows slowly and a pulse starts to form.",
+          "detail": "Wikipedia's article on the single lists the album version and two shorter single versions, a long edit and a short edit."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Pulse settles",
+          "description": "A steady, slow pulse settles in with a fuller sound, and it runs with little change for nearly four minutes."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Brightening",
+          "description": "The top end opens up and the sound brightens."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Pull-back",
+          "description": "The low end and the top end drop and the level dips for about fifteen seconds."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Final stretch",
+          "description": "The fuller sound returns, but the regular pulse that ran through the track loosens."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Outro",
+          "description": "The level falls away and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Road",
+      "duration": "4:31",
+      "energy": "mid",
+      "tags": [
+        "Raphael Preston",
+        "Acoustic Guitars",
+        "Pulse Drop-Out"
+      ],
+      "role": "Album role: The CD's fourth track, with the engineer Raphael Preston credited on acoustic guitars.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start in which a regular pulse forms within the first ten seconds and the sound grows."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Pulse loosens",
+          "description": "The regular pulse becomes unsteady as the level climbs toward a first crest."
+        },
+        {
+          "timestamp": "2:26",
+          "section": "Drop-out",
+          "description": "The level and the top end fall abruptly, leaving a dark, quiet stretch of about twenty seconds."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Return",
+          "description": "The full sound returns at a fairly high level and holds for about half a minute."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Settled stretch",
+          "description": "The level eases and the track settles into a steady, moderate-level pulse that runs to the end.",
+          "detail": "Wikipedia's personnel list credits Raphael Preston with acoustic guitars on this track; no source says where the guitars sit, and the measurement cannot show it."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Outro",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Far Away in Baagad / Love Is",
+      "duration": "8:02",
+      "energy": "mid",
+      "tags": [
+        "Two LP Tracks Joined",
+        "Longest CD Track",
+        "Low-End Gap"
+      ],
+      "role": "Album role: The CD's longest track, joining the first two tracks of the LP's side two, \"Far Away in Baagad\" (2:18) and \"Love Is\" (5:46).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The sound starts at once with a held, low-level texture; the low end arrives within about ten seconds and the level rises."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Loud stretch",
+          "description": "The top end brightens and the sound reaches a loud, full stretch of about three-quarters of a minute."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Fall-away",
+          "description": "The level falls sharply to a quiet, dark stretch.",
+          "detail": "On the 1980 LP \"Far Away in Baagad\" runs 2:18 and \"Love Is\" is a separate track; the CD joins them, and by those lengths \"Love Is\" begins inside this quiet stretch."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Rebuild",
+          "description": "The sound slowly builds back to a moderate level with a brighter top end."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Lift",
+          "description": "The level and the top end rise abruptly for a short, fuller stretch."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Low-end drop-out",
+          "description": "The low end disappears for almost a minute, leaving a light, high texture."
+        },
+        {
+          "timestamp": "6:25",
+          "section": "Low end returns",
+          "description": "The low end returns abruptly and the track builds to a loud, bright passage."
+        },
+        {
+          "timestamp": "7:05",
+          "section": "Outro",
+          "description": "The level falls back to a darker sound that fades out."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "One More Time",
+      "duration": "6:17",
+      "energy": "mid",
+      "tags": [
+        "US Single",
+        "No Clear Pulse",
+        "Bright Coda"
+      ],
+      "role": "Album role: The LP's third track of side two and the CD's sixth, released as a single in the United States in 1980.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, light opening with no low end and no clear pulse.",
+          "detail": "Wikipedia's Jon and Vangelis article lists \"One More Time\" as a 1980 single from the album released in the United States."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Low end enters",
+          "description": "A low end appears and the sound slowly thickens, still without a clear pulse."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Uneven stretch",
+          "description": "The sound alternates between darker, muted passages and brighter, louder ones for about a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Louder stretch",
+          "description": "The top end brightens and the level builds over about a minute to a long, loud stretch with a heavy low end."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Final stretch",
+          "description": "The top end opens up again and the sound stays full for over a minute."
+        },
+        {
+          "timestamp": "5:49",
+          "section": "Coda",
+          "description": "The low end drops out entirely, leaving a bright, high texture that fades out."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Thunder",
+      "duration": "2:13",
+      "energy": "mid",
+      "tags": [
+        "Single B-Side",
+        "Shortest CD Track"
+      ],
+      "role": "Album role: The shortest track on the CD and the B-side of the \"I Hear You Now\" single, placed on the LP between \"One More Time\" and the closing \"A Play Within a Play\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start in which the level creeps up.",
+          "detail": "Wikipedia's article on the single lists \"Thunder\" as its B-side, at 2:12 in the single version."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Build",
+          "description": "The level and the low end rise and the sound thickens."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Peak",
+          "description": "The level and the brightness jump to the loudest stretch of the track, which lasts about half a minute."
+        },
+        {
+          "timestamp": "1:34",
+          "section": "Fall-away",
+          "description": "The level falls abruptly to a much quieter, darker passage, and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "A Play Within a Play",
+      "duration": "7:02",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Strong Pulse",
+        "Longest LP Track"
+      ],
+      "role": "Album role: The closing track on both the LP and the CD, and the longest track of the ten on the LP.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Near silence at first, then a slow fade-in to a quiet, dark texture."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Opening out",
+          "description": "The sound opens up and the level climbs for about forty seconds as the low end and the top end arrive."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Pull-back",
+          "description": "The level and the top end fall to a thinner, more fragmented stretch with only a faint pulse."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Peak",
+          "description": "A sudden jump in level and brightness starts the loudest stretch of the track, which lasts nearly a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Drop-out",
+          "description": "The level and the low end fall abruptly for about fifteen seconds."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Settled stretch",
+          "description": "The sound returns at a moderate level and stays loose and even for well over a minute, without a firm pulse."
+        },
+        {
+          "timestamp": "5:56",
+          "section": "Pulse returns",
+          "description": "The level rises and the regular pulse returns for the last stretch of the track."
+        },
+        {
+          "timestamp": "6:51",
+          "section": "Outro",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    }
+  ]
+}

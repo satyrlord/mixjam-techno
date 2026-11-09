@@ -1,0 +1,292 @@
+{
+  "id": "pink-floyd-animals",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Animals",
+  "year": 1977,
+  "label": "Harvest / Columbia",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Concept Album",
+    "Rock"
+  ],
+  "runtime": "41:41",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/7/74/Pink_Floyd-Animals-Frontal.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Animals_(Pink_Floyd_album)",
+  "overview": "Pink Floyd's tenth studio album, produced by the band, was recorded at Britannia Row Studios, a converted church hall block at 35 Britannia Row in Islington, London, from April 1976 into early 1977 (the Wikipedia infobox gives April to December 1976), with Brian Humphries as engineer and Nick Griffiths as assistant. Harvest released it in the UK on 21 January 1977 and Columbia in the US on 12 February. The concept is loosely based on George Orwell's Animal Farm but aimed at capitalism rather than Stalinism, with dogs, pigs and sheep standing for social classes. Three long songs, \"Dogs\" (Waters and Gilmour), \"Pigs (Three Different Ones)\" and \"Sheep\" (both Waters), are framed by the two halves of \"Pigs on the Wing\" as bookends; \"Dogs\" and \"Sheep\" were reworked from songs performed live earlier, \"You've Got to Be Crazy\" and \"Raving and Drooling\". The personnel list gives Roger Waters lead vocals, guitars, bass and EMS VCS 3, David Gilmour lead guitar, bass and, on \"Dogs\", lead vocals, Richard Wright keyboards (Hammond organ, ARP Solina, piano, Clavinet and Minimoog on \"Pigs\") and Nick Mason drums.\n\nThe album reached UK No. 2 and US No. 3, and No. 1 in Germany, the Netherlands, France, Italy, Spain and New Zealand; it is certified 4× Platinum in the US (31 January 1995) and Platinum in the UK. The cover shows the 12-metre pig balloon \"Algie\" between the chimneys of Battersea Power Station; Hipgnosis offered three ideas, and the final concept was Waters' design. A Snowy White guitar solo on \"Pigs on the Wing\" was left off the vinyl release but is on the 8-track cartridge version.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Pigs on the Wing (Part 1)",
+      "duration": "1:24",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Bookend Pair",
+        "Waters Vocal",
+        "Acoustic Guitar"
+      ],
+      "role": "Album role: The first half of the two-part \"Pigs on the Wing\" that frames the album, a short, quiet opener before the 17-minute \"Dogs\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, steady opening at a low level.",
+          "detail": "Wikipedia's personnel list credits Roger Waters with lead vocals and acoustic guitar on this track and on the closing \"Pigs on the Wing (Part 2)\"."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "Louder passage",
+          "description": "The level steps up for about 20 seconds."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Quiet return",
+          "description": "The level falls back to that of the opening."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Ending",
+          "description": "The track dies away into silence by about 1:23."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Dogs",
+      "duration": "17:05",
+      "energy": "high",
+      "tags": [
+        "Side One Epic",
+        "Longest Track",
+        "Gilmour Lead Vocal",
+        "Reworked Live Song"
+      ],
+      "role": "Album role: The album's longest track and the first of the three long songs, closing side one; it is the only track with a lead vocal by David Gilmour.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A quiet opening whose level rises gradually over about the first 35 seconds, with the top end still subdued.",
+          "detail": "Wikipedia's personnel list credits Gilmour with lead vocals, acoustic, rhythm and electric lead guitar, Waters with bass, Wright with keyboards and Mason with drums on this track, without placing them in time. The song was reworked from \"You've Got to Be Crazy\", which the band had played live."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Fuller texture",
+          "description": "The level and the top end rise clearly and the texture fills out."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Main body",
+          "description": "The level rises again and holds steady and high until about 3:00."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Quieter section",
+          "description": "The level and the top end fall back for about 35 seconds."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Fuller return",
+          "description": "The weight and the top end come back and the level rises again, holding to about 4:45."
+        },
+        {
+          "timestamp": "4:46",
+          "section": "Drop",
+          "description": "The level falls abruptly and the texture thins for about 45 seconds."
+        },
+        {
+          "timestamp": "5:32",
+          "section": "Rebuild",
+          "description": "The texture brightens and the music climbs to a loud crest at about 6:10."
+        },
+        {
+          "timestamp": "7:13",
+          "section": "Brightest stretch",
+          "description": "After a short thinner moment, the top end opens sharply and the level jumps: the largest brightness change in the track, lasting to about 7:55."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Sparse middle",
+          "description": "The level and the low end fall away and the track stays at its lowest level for about two minutes."
+        },
+        {
+          "timestamp": "10:03",
+          "section": "Slow rebuild",
+          "description": "The level creeps upward over about three minutes, reaching a fuller stretch from about 13:25."
+        },
+        {
+          "timestamp": "15:19",
+          "section": "Final section",
+          "description": "After a brief dip, the music returns at one of the loudest levels of the track and holds it to about 16:45."
+        },
+        {
+          "timestamp": "16:50",
+          "section": "Ending",
+          "description": "The level falls and the track ends within about ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Pigs (Three Different Ones)",
+      "duration": "11:26",
+      "energy": "high",
+      "tags": [
+        "Side Two Opener",
+        "Pig Portraits",
+        "Keyboard Layers",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: The second of the three long songs, opening side two and giving the album's pig portraits, placed between \"Dogs\" and \"Sheep\".",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A dark opening in which the top end stays muted and the level rises at about 0:10.",
+          "detail": "Wikipedia's personnel list credits Gilmour with electric lead guitar, bass and sound effects, Waters with rhythm guitar and EMS VCS 3, Wright with Hammond organ, ARP Solina, piano, Clavinet, Minimoog and EMS VCS 3, and Mason with drums and cowbell on this track, without placing them in time."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Top end opens",
+          "description": "The top end opens and the music brightens."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Fuller section",
+          "description": "The level rises and the texture fills out, with some short dips along the way.",
+          "detail": "Wikipedia compares the track to \"Have a Cigar\" (1975), citing its bluesy guitar fills and elaborate bass lines."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Drop",
+          "description": "The level falls for about 14 seconds."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Heavier return",
+          "description": "The low end returns with much more weight and the level jumps."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Loud plateau",
+          "description": "The music brightens and holds a steady, loud level until about 7:05."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Quiet passage",
+          "description": "The level falls abruptly and the track stays low and dark for about 40 seconds."
+        },
+        {
+          "timestamp": "7:53",
+          "section": "Return",
+          "description": "The top end opens again and the level rises, with short dips at about 8:16 and 9:24."
+        },
+        {
+          "timestamp": "9:37",
+          "section": "Loudest stretch",
+          "description": "The level and the brightness jump to the highest point of the track, which lasts to about 10:35."
+        },
+        {
+          "timestamp": "10:40",
+          "section": "Fade-out",
+          "description": "The level falls gradually and the track fades to silence by about 11:20."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Sheep",
+      "duration": "10:19",
+      "energy": "high",
+      "tags": [
+        "Side Two Closer",
+        "Electric Piano Intro",
+        "Reworked Live Song",
+        "Fade-Out"
+      ],
+      "role": "Album role: The last of the three long songs, closing the main body of side two before the closing \"Pigs on the Wing (Part 2)\".",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Quiet opening",
+          "description": "A quiet, low-register opening with almost no top end, rising slowly in level to about 1:25.",
+          "detail": "Wikipedia states that Wright played the introduction unaccompanied on electric piano and received no writing credit; the measurement does not show how long that part lasts. The song was reworked from \"Raving and Drooling\", which the band had played live. The personnel list credits Gilmour with electric lead guitar and bass, Waters with rhythm guitar and EMS VCS 3, and Mason with drums and vocoder on this track, without placing them in time."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Full entry",
+          "description": "The top end opens and the level jumps, beginning the long, steady main body of the track."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Quiet passage",
+          "description": "The level and the top end fall away sharply for about 45 seconds.",
+          "detail": "Wikipedia says the song incorporates a modified version of Psalm 23; the sources do not say where in the track it falls."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Return",
+          "description": "The top end returns and the level rises again."
+        },
+        {
+          "timestamp": "5:34",
+          "section": "Lower stretch",
+          "description": "The level falls sharply and the top end is muted, and the track stays at a lower level until about 7:00."
+        },
+        {
+          "timestamp": "7:09",
+          "section": "Build",
+          "description": "The top end opens again and the music builds back to a full level."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Loudest stretch",
+          "description": "The loudest and fullest passage of the track, with a heavy low end, lasts to about 9:10."
+        },
+        {
+          "timestamp": "9:41",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades to silence by about 10:15."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Pigs on the Wing (Part 2)",
+      "duration": "1:27",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Bookend Pair",
+        "Waters Vocal",
+        "Acoustic Guitar"
+      ],
+      "role": "Album role: The second half of the two-part \"Pigs on the Wing\", closing the album after \"Sheep\" and returning to the quiet scale of the opening track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, steady opening at a low level, close in character to the first part."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "Louder passage",
+          "description": "The level steps up for about 20 seconds, at the same point as in the first part."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Quiet return",
+          "description": "The level falls back to that of the opening."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Ending",
+          "description": "The album dies away into silence by about 1:25."
+        }
+      ]
+    }
+  ]
+}

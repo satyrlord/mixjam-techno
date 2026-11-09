@@ -5,7 +5,7 @@ python -I tools/song/render.py SONG.mixjam OUT_DIR [--fit-gain DBFS] [--jobs N] 
 
 The tool renders each lane with its twin and its FX returns, without the board.
 It writes each lane to OUT_DIR/lane-NN.wav. The default is half the number of
-processors, with a maximum of 8 concurrent renders. From these files, it makes
+processors, with a maximum of 4 concurrent renders. From these files, it makes
 OUT_DIR/premaster.wav, one OUT_DIR/stem-ROLE.wav per named role, and
 OUT_DIR/audible.txt (see audible.py). It also renders OUT_DIR/master.wav with
 the board. --no-master skips the master render.
@@ -36,6 +36,8 @@ conflict dependencies use the cache. The cache keeps the most recently used
 
 The renderer is the release build in target/release. It runs headless and plays
 no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.
+Renders run below normal priority, so a game or a playing application keeps the
+processor. On Windows, they stop when the tool stops, even when it is killed.
 """
 import hashlib
 import json
@@ -44,6 +46,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import wave
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -59,14 +62,91 @@ from mixjam import (MAX_BARS, MAX_SECTION_NAME, TICKS_PER_BAR,
 # Lane renders kept for later rounds; the lanes of a 7-minute song take about 1.6 GB.
 CACHE_LIMIT = 4 * 2 ** 30
 CACHE_VERSION = 'lanes-v2'
+# Concurrent lane renders at most; each render starts its own worker threads.
+MAX_JOBS = 4
+# Windows BELOW_NORMAL_PRIORITY_CLASS and job-object values (winbase.h, winnt.h).
+BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+POSIX_NICENESS = 10
+
+_contain_lock = threading.Lock()
+_contained = False
+_job = None  # kept open for the life of the process; closing it kills the renders
+
+
+def kill_on_close_job():
+    """Put this process in a new job object that kills every process in it when its last handle closes.
+
+    The handle is not inheritable, so only this process holds it: when the process ends, even when it
+    is killed, the renders it started end with it. Children join their parent's job by default.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = [('PerProcessUserTimeLimit', ctypes.c_int64), ('PerJobUserTimeLimit', ctypes.c_int64),
+                    ('LimitFlags', wintypes.DWORD), ('MinimumWorkingSetSize', ctypes.c_size_t),
+                    ('MaximumWorkingSetSize', ctypes.c_size_t), ('ActiveProcessLimit', wintypes.DWORD),
+                    ('Affinity', ctypes.c_size_t), ('PriorityClass', wintypes.DWORD),
+                    ('SchedulingClass', wintypes.DWORD)]
+
+    class Extended(ctypes.Structure):
+        _fields_ = [('BasicLimitInformation', Basic), ('IoInfo', ctypes.c_uint64 * 6),
+                    ('ProcessMemoryLimit', ctypes.c_size_t), ('JobMemoryLimit', ctypes.c_size_t),
+                    ('PeakProcessMemoryUsed', ctypes.c_size_t), ('PeakJobMemoryUsed', ctypes.c_size_t)]
+
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+    kernel32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+    kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())
+    info = Extended()
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not (kernel32.SetInformationJobObject(job, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION, ctypes.byref(info),
+                                             ctypes.sizeof(info))
+            and kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess())):
+        error = ctypes.WinError(ctypes.get_last_error())
+        kernel32.CloseHandle(job)
+        raise error
+    return job
+
+
+def contain():
+    """Once per process, before the first render: tie the renders to this process (Windows) or lower
+    this process's priority, which the renders inherit (elsewhere). A failure leaves renders working
+    without the safeguard and says so."""
+    global _contained, _job
+    with _contain_lock:
+        if _contained:
+            return
+        _contained = True
+        try:
+            if sys.platform == 'win32':
+                _job = kill_on_close_job()
+            else:
+                os.nice(POSIX_NICENESS)
+        except OSError as error:
+            print(f'render.py: renders are not tied to this process or not lowered in priority: {error}',
+                  file=sys.stderr)
+
+
+def native(command, environment):
+    """Run the release build below normal priority, tied to this process."""
+    contain()
+    options = {'creationflags': BELOW_NORMAL_PRIORITY_CLASS} if sys.platform == 'win32' else {}
+    return subprocess.run(command, capture_output=True, text=True, env=environment, **options)
 
 
 def run(song_path, wav_path, data=None):
     """Render one song file to a WAV with the release build; `data` is its scan-cache folder."""
     data = data or Path(wav_path).resolve().parent / '.data'
     environment = dict(os.environ, MIXJAM_TECHNO_DATA_DIR=str(data))
-    result = subprocess.run([str(env.exe()), 'render', '--mix', str(song_path), '--output', str(wav_path)],
-                            capture_output=True, text=True, env=environment)
+    result = native([str(env.exe()), 'render', '--mix', str(song_path), '--output', str(wav_path)], environment)
     if result.returncode != 0:
         raise SystemExit(f'Cannot render {song_path}: {result.stdout}{result.stderr}')
 
@@ -74,8 +154,7 @@ def run(song_path, wav_path, data=None):
 def run_stems(song_path, folder, data):
     """Render track and FX parts with complete key context; False when no track sounds."""
     environment = dict(os.environ, MIXJAM_TECHNO_DATA_DIR=str(data))
-    result = subprocess.run([str(env.exe()), 'render', '--mix', str(song_path), '--stems', str(folder)],
-                            capture_output=True, text=True, env=environment)
+    result = native([str(env.exe()), 'render', '--mix', str(song_path), '--stems', str(folder)], environment)
     if result.returncode != 0:
         if result.stderr.strip() == 'No track sounds: add clips, or check Mute, Solo, and L/R.':
             return False
@@ -370,7 +449,7 @@ def render_lanes(document, groups, out, jobs=None, cache=None):
     With a `cache` folder, a lane whose render inputs did not change since an earlier render
     comes from the cache instead of a new render.
     """
-    jobs = jobs or max(1, min(8, (os.cpu_count() or 2) // 2))
+    jobs = jobs or max(1, min(MAX_JOBS, (os.cpu_count() or 2) // 2))
     fingerprints = source_fingerprints(document) if cache else None
 
     def one(item):
@@ -398,6 +477,8 @@ def render_lanes(document, groups, out, jobs=None, cache=None):
             to_cache(cache, key, wav)
         return name, wav
 
+    # Lower the calling thread before workers inherit its priority on Linux.
+    contain()
     with ThreadPoolExecutor(jobs) as pool:
         lanes = dict(pool.map(one, groups.items()))
     if cache:

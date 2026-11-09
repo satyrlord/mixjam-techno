@@ -42,7 +42,6 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Brian Eno** — *The Ship* (—) — Ambient Ac
 - **Global Communication** — *Pentamerous Metamorphosis* (1998) — Ambient Techno R#17
 - **Brian Eno** — *Another Green World* (1975) — Electronic / Art Rock A#8, R#33, Re
-- **Jean-Michel Jarre** — *Zoolook* (1984) — Electronic / Experimental —
 - **Brian Eno** — *Another Day on Earth* (2005) — Electronic / Art Pop —
 - **Ashra** — *New Age of Earth* (1976) — Berlin School / Ambient P#31, S#22, Re
 - **Manuel Göttsching** — *Inventions for Electric Guitar* (1975) — Kosmische / Ambient O

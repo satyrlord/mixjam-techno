@@ -1,0 +1,418 @@
+{
+  "id": "jean-michel-jarre-geometry-of-love",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Geometry of Love",
+  "year": 2003,
+  "label": "EastWest · Aero Productions",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Lounge",
+  "genreTags": [
+    "Electronic",
+    "Lounge",
+    "Ambient",
+    "Downtempo"
+  ],
+  "runtime": "42:13",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/4e/Geometry_of_Love.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Geometry_of_Love",
+  "youtubeUrl": "https://www.youtube.com/playlist?list=OLAK5uy_lBZWra6BR4L8YhTXN9fiJL8WZ-B8X9upA",
+  "overview": "Jarre's fifteenth studio album, commissioned by Jean-Roch as the soundtrack for the chill-out area of his VIP Room nightclub in Paris and released in 2003 on EastWest (catalogue 2564 60693-2); the sleeve reads \"Project by Jarre for VIP Room\". The first run was planned as 2,000 copies sold at the club's wardrobe, and Jarre's own site says the music was meant to be played in the background rather than listened to head-on. Discogs lists Joachim Garraud as mixer, David Perreau as mastering engineer, Francis Rimbert as artistic collaborator and Patrick Pelamourgues as technical assistant, none of them credited on the sleeve; the cover is a pixelated photograph of the actress Isabelle Adjani, processed by Ora-Ïto. The fan site Aerozone JMJ lists the equipment for this album and Sessions 2000 together: ARP 2600, Eminent 310 U, EMS Synthi AKS, EMS VCS 3, Minimoog, RMI Harmonic Synthesizer, Korg Karma, Korg microKORG, Korg Mini Pops 7, Novation Supernova II, Roland JP-8000, Roland XP-80, Roland HandSonic, E-mu XL7, the Geiss Digisequencer and Pro Tools. Wikipedia places it closer to Sessions 2000 (2002) than to Jarre's earlier albums, but more electronica than jazz, and notes that some of its sounds were used earlier on Interior Music (2001).\n\nThe album issued no singles, and Aerozone JMJ says it passed almost unnoticed; no chart position is documented. The physical CD was long out of print, and a remastered CD reissue from Columbia and Sony Music followed in 2018. The title track is split in two parts that frame the album at tracks 2 and 8. Six of the eight pieces have a steady beat for most of their length, \"Soul Intrusion\" holds its beat back until the middle, and \"Near Djaina\" has no steady beat at all.\n\nSection timestamps are measured on a CD rip and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Pleasure Principle",
+      "duration": "6:15",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Beatless Intro",
+        "Long Groove"
+      ],
+      "role": "Album role: The opening track and the album's second-longest, a near-silent start that builds into a long, steady groove.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening with almost no low end.",
+          "detail": "Wikipedia and Jarre's site describe the album as lounge music for the chill-out area of the VIP Room club, to be played in the background."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Bass entry",
+          "description": "The bass arrives and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Lighter passage",
+          "description": "The bass drops out and a clearer pulse leads for about 20 seconds."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Groove builds",
+          "description": "The low end returns and the groove builds, with a short dip at 1:25."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Main plateau",
+          "description": "The sub-bass grows and the track settles into its fullest stretch, which runs with a few short breaks to about 5:20."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Dip",
+          "description": "The level dips for about 20 seconds, with the highs cut at first, before the full groove returns at 3:55."
+        },
+        {
+          "timestamp": "5:27",
+          "section": "Wind-down",
+          "description": "The top end cuts briefly and the arrangement thins for the closing half-minute."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Outro",
+          "description": "The level drops and the track fades out by 6:08."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Geometry of Love, Part 1",
+      "duration": "3:51",
+      "energy": "mid",
+      "tags": [
+        "Title Track Part 1",
+        "Immediate Beat",
+        "Shortest Track"
+      ],
+      "role": "Album role: The first half of the two-part title track and the album's shortest piece, with a beat from the first seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The bass and a steady beat arrive within five seconds."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Brighter layer",
+          "description": "A brighter layer joins on top and the highs open."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Pull-back",
+          "description": "The highs recede for about 20 seconds while the beat carries on."
+        },
+        {
+          "timestamp": "1:34",
+          "section": "Bright section",
+          "description": "The top end opens again and stays open to about 2:20: the brightest stretch of the track, with the firmest beat from 1:50."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Break",
+          "description": "The highs and the bass thin out for about ten seconds."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Return",
+          "description": "The full arrangement returns, and the highs open again at 3:02."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Outro",
+          "description": "The highs fall away and the track fades out by 3:44."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Soul Intrusion",
+      "duration": "4:45",
+      "energy": "mid",
+      "tags": [
+        "Late Beat Entry",
+        "Bass-Led Intro",
+        "Dark Opening"
+      ],
+      "role": "Album role: A bass-led piece that holds its beat back until the middle, placed after the two opening beat-led tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft, dark opening with the bass already present."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Low end grows",
+          "description": "The sub-bass swells and the low end gains weight over the next ten seconds."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Sub swell",
+          "description": "A deeper sub-bass layer enters and the texture fills out, still without a steady beat."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Beat entry",
+          "description": "A steady beat enters with a brighter top end: the biggest change in the track and its loudest stretch."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Outro",
+          "description": "The beat stops, the level drops and the track fades out by 4:38."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Electric Flesh",
+      "duration": "6:01",
+      "energy": "mid",
+      "tags": [
+        "Long Beatless Intro",
+        "Two Breakdowns",
+        "Short Fade-Out"
+      ],
+      "role": "Album role: A bass-led build in which the beat enters after one minute and two short breakdowns split the second half.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A beatless, bass-led opening whose level swells and dips in a slow cycle."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Beat entry",
+          "description": "A beat enters with a strong sub-bass."
+        },
+        {
+          "timestamp": "2:11",
+          "section": "Lighter passage",
+          "description": "The low end falls back for about 15 seconds before returning at 2:26."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Thinning",
+          "description": "The beat pulls back and the level falls for about half a minute, then rebuilds from 3:31."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Breakdown",
+          "description": "The bass and mids drop out for about 15 seconds while the highs stay."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Beat returns",
+          "description": "The beat returns with a brighter top end."
+        },
+        {
+          "timestamp": "5:06",
+          "section": "Final section",
+          "description": "The full arrangement returns at its fullest level and runs to the end."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Outro",
+          "description": "The track ends with a short fade of about five seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Skin Paradox",
+      "duration": "6:17",
+      "energy": "mid",
+      "tags": [
+        "Longest Track",
+        "Deep Breakdown",
+        "Full-Band Return"
+      ],
+      "role": "Album role: The longest track on the album, with its deepest drop in level in the middle and the sharpest return after it.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A soft opening with the low end present from the start while the highs open within the first 20 seconds."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Sub cut",
+          "description": "The sub-bass falls out for about ten seconds and a clearer pulse takes over, then returns at 0:39."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Brighter build",
+          "description": "The highs rise and the level steps up to the loudest stretch of the first half around 1:55."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Breakdown",
+          "description": "The highs and the beat fall away to the quietest point of the track at about 2:30."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Full return",
+          "description": "The full arrangement returns in one step, the biggest change in the track, with its steadiest beat from about 2:55; a loud stretch runs from 3:50 to 4:45 after a short dip."
+        },
+        {
+          "timestamp": "4:49",
+          "section": "Second breakdown",
+          "description": "The highs drop out for about 15 seconds."
+        },
+        {
+          "timestamp": "5:07",
+          "section": "Final section",
+          "description": "The full band returns for the last minute, with a short dip at 5:35."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Outro",
+          "description": "The track fades out by 6:10."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Velvet Road",
+      "duration": "5:55",
+      "energy": "mid",
+      "tags": [
+        "Children of Space Remake",
+        "Rendez-Vous in Space 2001",
+        "Steady Beat"
+      ],
+      "role": "Album role: A remake of \"Children of Space\", written for the Rendez-Vous in Space concert in Okinawa in 2001, and the last beat-led track before the beatless \"Near Djaina\".",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Intro",
+          "description": "A steady beat and the bass start within the first seconds.",
+          "detail": "Wikipedia names \"Children of Space\" as an unreleased piece Jarre composed for the Rendez-Vous in Space concert in Okinawa in 2001."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Brighter layer",
+          "description": "A brighter layer enters and the level rises."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Breakdown",
+          "description": "The sub-bass and the highs fall away and the beat stops for about 20 seconds."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Return",
+          "description": "The sub-bass and the beat return, and the highs lift again from 2:50."
+        },
+        {
+          "timestamp": "3:34",
+          "section": "Thin-bass section",
+          "description": "The bass drops back and the highs thin out until about 4:15."
+        },
+        {
+          "timestamp": "4:17",
+          "section": "Final section",
+          "description": "The bass returns with a bright top end, and the arrangement holds to the end."
+        },
+        {
+          "timestamp": "5:44",
+          "section": "Outro",
+          "description": "The level drops and the track fades out by 5:48."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Near Djaina",
+      "duration": "5:02",
+      "energy": "low",
+      "tags": [
+        "No Steady Beat",
+        "Ambient Texture",
+        "Penultimate Track"
+      ],
+      "role": "Album role: The album's one track without a steady beat, a quiet interlude between \"Velvet Road\" and the closing title-track Part 2.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A soft, dark opening with the bass present from the first seconds and no beat."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Lull and lift",
+          "description": "The level dips for a few seconds, then lifts at 0:45 as the highs open: the biggest change in the track."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Pull-back",
+          "description": "The highs recede and the texture quietens until about 1:35."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Low swell",
+          "description": "The sub-bass swells and the level rises, with a second swell at 2:15."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Middle stretch",
+          "description": "The texture stays at an even level through the middle, with the highs coming and going."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Last lift",
+          "description": "The highs lift and a faint pulse appears for about ten seconds."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Outro",
+          "description": "The level falls and the track fades out by 4:55."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Geometry of Love, Part 2",
+      "duration": "4:07",
+      "energy": "mid",
+      "tags": [
+        "Title Track Part 2",
+        "Album Closer",
+        "Immediate Beat",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: The closing track and second half of the title track, which mirrors Part 1 with a beat from the first seconds and a short break near the midpoint, then a fade over its last half-minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The bass and a steady beat are present from the first seconds."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brighter layer",
+          "description": "The highs lift and the arrangement brightens."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Bright section",
+          "description": "The top end opens further and the beat is at its firmest until about 2:05."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Short break",
+          "description": "The beat and the highs thin out for about ten seconds."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Return",
+          "description": "The full arrangement returns, and the highs lift again from 2:35."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Outro",
+          "description": "The level falls gradually and the album fades out by about 4:00."
+        }
+      ]
+    }
+  ]
+}

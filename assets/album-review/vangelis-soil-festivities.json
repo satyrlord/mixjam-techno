@@ -1,0 +1,307 @@
+{
+  "id": "vangelis-soil-festivities",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Soil Festivities",
+  "year": 1984,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Concept Album"
+  ],
+  "runtime": "48:21",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/4e/Soil_festivities_albumcover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Soil_Festivities",
+  "overview": "Soil Festivities (1984) is a five-movement electronic concept album by Vangelis, inspired by natural elements and the life processes on and beneath the Earth's surface. It was recorded at Nemo Studios, London, and released by Polydor on 5 October 1984, with Vangelis credited as composer, arranger, producer and keyboard player and Jess Sutcliffe as engineer. Electronics & Music Maker (December 1984) describes natural sounds sampled on an Emulator, mixed with conventional polysynth sounds and occasionally backed by Vangelis's acoustic percussion patterns, and Vangelis has named rain and thunder among the album's natural sounds.\n\nThe album has no vocals and no titles beyond the movement numbers. The first movement runs 18:33, more than a third of the 48-minute album, and is followed by four movements of between six and ten minutes. On the rip, the first and fourth movements are carried by a steady pulse, the second is the quietest, and the third and fifth change level abruptly with short drops to silence. It reached UK No. 55 and Netherlands No. 45, is the first of a loose group of three 1980s albums with Invisible Connections and Mask (both 1985), and received four of five stars from AllMusic, which described a subtle drone surrounded by heavy sequences and dense atmospheres.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Movement 1",
+      "duration": "18:33",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Longest Movement",
+        "Storm And Rain Effects",
+        "Steady Pulse",
+        "Long Quiet Tail"
+      ],
+      "role": "Album role: Opening movement and the longest by far, more than a third of the running time, alternating pulse-led and sparser stretches before a long, near-silent tail.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Slow low-frequency swells and a bright, diffuse high-register texture open the movement, with no steady pulse yet.",
+          "detail": "Ivar de Vries describes the movement as accompanied by storm and rain effects, and Vangelis has named rain and thunder among the album's natural sounds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Pulse entry",
+          "description": "A steady pulse settles in; the low register thins out for a short stretch, then returns in heavy swells that come and go."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Lift",
+          "description": "A louder, brighter passage opens and the pulse falls back briefly, then returns at full strength shortly afterwards."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Bright section",
+          "description": "A long bright stretch begins: sustained high-register material sits above a full low end, and the pulse is less forward than before."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Dark groove",
+          "description": "The top end falls away and the pulse becomes the strongest of the movement; a dark, bass-heavy groove runs for nearly three minutes."
+        },
+        {
+          "timestamp": "8:30",
+          "section": "Alternating sections",
+          "description": "Bright and dark sections trade places over the next few minutes, with the pulse continuing through both."
+        },
+        {
+          "timestamp": "11:15",
+          "section": "Breakdown",
+          "description": "The low register and the pulse fall away, leaving a thinner texture for about half a minute."
+        },
+        {
+          "timestamp": "11:45",
+          "section": "Full return",
+          "description": "The full range returns with a loud entry, followed by a bright stretch in which the pulse is less steady."
+        },
+        {
+          "timestamp": "13:15",
+          "section": "Dark section",
+          "description": "A loud, bass-heavy section with the top end removed, short compared with the earlier dark groove."
+        },
+        {
+          "timestamp": "14:05",
+          "section": "Quiet stretch",
+          "description": "The level falls and the texture thins; the pulse is largely absent for about a minute while the low register slowly rebuilds."
+        },
+        {
+          "timestamp": "16:05",
+          "section": "Final pulse",
+          "description": "The steady pulse returns for a last pulse-led section."
+        },
+        {
+          "timestamp": "17:15",
+          "section": "Outro",
+          "description": "A loud final swell cuts out within seconds, leaving about a minute of very quiet material with two brief, faint sounds before silence.",
+          "detail": "vangelis.online reports that the first track is cut short by about a minute on the 2017 remaster; this timeline follows the 1984 CD rip."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Movement 2",
+      "duration": "6:20",
+      "energy": "low",
+      "tags": [
+        "Slow Pulse",
+        "Quietest Movement",
+        "Gradual Swells",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: Quiet counterpart to the long opening movement, described by Ivar de Vries as the album's most tranquil piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening in which a slow pulse is present within seconds.",
+          "detail": "Ivar de Vries calls this movement the most tranquil piece on the album."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Upper layer",
+          "description": "A brighter, higher-register layer enters and widens the texture; the slow pulse continues underneath and carries the movement."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Low-register lift",
+          "description": "The low-middle register strengthens for about half a minute and darkens the texture slightly; the level stays soft."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Swell",
+          "description": "A brief, loud, low-weighted swell interrupts the soft level and is followed by a quieter, thinner stretch."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Breakdown",
+          "description": "The upper-bass and top end thin out and the pulse continues in a narrow, dark texture."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Outro",
+          "description": "A last swell builds and then dies away over the final ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Movement 3",
+      "duration": "6:10",
+      "energy": "high",
+      "tags": [
+        "Nature's Violent Side",
+        "Abrupt Dynamics",
+        "Silence Gap",
+        "Loudest Movement"
+      ],
+      "role": "Album role: The most abrupt movement, which Ivar de Vries reads as nature's violent side and the struggle to survive; it follows the quiet second movement with the loudest passages on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening gives way within seconds to loud, bright material that builds toward the first dense section."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Dense section",
+          "description": "Loud, full-range and bright, with a strong low end.",
+          "detail": "Ivar de Vries describes the movement as portraying nature's violent side and the struggle to survive."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Dropout",
+          "description": "A brief dropout to near silence leads into a darker, low-heavy section in which the top end is much reduced and no strong pulse is present."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Lighter section",
+          "description": "The texture brightens and lightens in the middle register, with the low end less dominant."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Sparse section",
+          "description": "The level falls and the texture thins to isolated sounds, including one bright flash, and ends in a few seconds of silence."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Hard return",
+          "description": "A sudden loud entry after the silence begins the longest loud stretch of the movement, bright and heavy in the low end throughout."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Outro",
+          "description": "The level falls and the texture darkens; the movement fades out by about 6:00, leaving a few seconds of silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Movement 4",
+      "duration": "9:57",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Dark Low Register",
+        "Gloomy Mood",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: The slow, dark fourth movement, described by Ivar de Vries as more contemplative and somewhat gloomy than the third; a steady pulse carries nearly all of its length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady low register and a slow pulse settle within the first ten seconds and then hold almost unchanged for the next seven minutes.",
+          "detail": "Ivar de Vries suggests the movement may evoke slowed nightlife."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Upper layers",
+          "description": "High-register sounds begin to come and go over the steady base, brightening the texture in short episodes."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Bright stretch",
+          "description": "A longer, mostly bright stretch of upper-register material, with the base and the pulse unchanged."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Stripped-back section",
+          "description": "The upper register disappears and the texture narrows to the dark base and the pulse."
+        },
+        {
+          "timestamp": "6:40",
+          "section": "Bright bursts",
+          "description": "Brighter, louder bursts return over the unchanged base."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Breakdown",
+          "description": "The low register and the pulse drop out abruptly; about a minute of sparse, quiet material follows and ends in near silence."
+        },
+        {
+          "timestamp": "9:05",
+          "section": "Return",
+          "description": "The steady low register and the pulse return with the character of the opening for the last stretch."
+        },
+        {
+          "timestamp": "9:45",
+          "section": "Outro",
+          "description": "The level fades to silence over the last ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Movement 5",
+      "duration": "7:21",
+      "energy": "mid",
+      "tags": [
+        "Loose Improvisation",
+        "Shifting Moods And Tempos",
+        "Dropouts To Silence",
+        "Closing Movement"
+      ],
+      "role": "Album role: Closing movement, which Ivar de Vries describes as a loose improvisation that moves through many moods and tempos before an emotional conclusion.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, spacious opening with no steady pulse; the level rises within seconds."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Dense section",
+          "description": "A louder, brighter, full-range passage in which low swells grow toward the loudest point of the movement."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Quiet passage",
+          "description": "The level falls to a darker, sparser passage; a loud rise follows and fades out abruptly."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Build",
+          "description": "A gradual rise leads to a loud, low-heavy hit, after which the level falls away."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Silence and return",
+          "description": "The material fades to about six seconds of silence, then re-enters loudly; a heavy low swell follows before another drop."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Thin section",
+          "description": "The low register is absent and the texture is thin and bright for the next 45 seconds or so."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Closing section",
+          "description": "The low register returns together with a steady pulse, darker than the preceding section; a brief dropout is followed by a loud return."
+        },
+        {
+          "timestamp": "7:12",
+          "section": "Outro",
+          "description": "The final passage fades out over the last few seconds."
+        }
+      ]
+    }
+  ]
+}

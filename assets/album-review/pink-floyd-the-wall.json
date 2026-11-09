@@ -1,0 +1,993 @@
+{
+  "id": "pink-floyd-the-wall",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Wall",
+  "year": 1979,
+  "label": "Harvest · Columbia",
+  "producer": "Bob Ezrin · David Gilmour · James Guthrie · Roger Waters",
+  "genre": "Progressive Rock / Art Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Art Rock",
+    "Rock Opera",
+    "Concept Album"
+  ],
+  "runtime": "1:20:59",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/13/PinkFloydWallCoverOriginalNoText.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Wall",
+  "overview": "Pink Floyd made The Wall between December 1978 and November 1979 in several studios: Britannia Row in London (the drums were tracked on its top floor), Super Bear near Nice, Studio Miraval at Correns for Waters's vocals, CBS 30th Street in New York for the orchestral sessions supervised by Michael Kamen in September 1979, and Cherokee, Producers Workshop and The Village Recorder in Los Angeles. Bob Ezrin, David Gilmour, James Guthrie and Roger Waters produced it, with engineers Nick Griffiths, Patrice Quef, Brian Christian, Rick Hart, John McClure and Guthrie; Doug Sax mastered it at The Mastering Lab. The keyboards named in the credits include the EMS VCS 3, Prophet-5, ARP Quadra and Minimoog synthesizers, Hammond organ, Fender Rhodes and Wurlitzer electric pianos and a clavinet.\n\nHarvest/EMI released the double album in the UK and Columbia/CBS in the US on 30 November 1979. It reached UK No. 3 and US No. 1, where it spent 15 weeks, and is certified 23 times platinum by the RIAA; \"Another Brick in the Wall, Part 2\" reached No. 1 in the UK and the US. The 26 tracks form a rock opera over four sides of 20:11, 18:43, 20:09 and 21:39, and this review numbers them continuously: Disc 01 holds tracks 1 to 13 (sides one and two) and Disc 02 tracks 14 to 26 (sides three and four). The three parts of \"Another Brick in the Wall\" and the two \"In the Flesh\" tracks (the first with a question mark) tie the album together.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "In the Flesh?",
+      "duration": "3:18",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Fred Mandel",
+        "Side One",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: The opener of side one and of Disc 01, its loud first track, ahead of \"The Thin Ice\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The first fifteen seconds are almost inaudible.",
+          "detail": "Wikipedia's personnel list credits Fred Mandel on Hammond organ on this track and on the later \"In the Flesh\"."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Full band",
+          "description": "A full, loud sound with a strong low end enters at once."
+        },
+        {
+          "timestamp": "1:32",
+          "section": "Quiet passage",
+          "description": "The level and the low end drop sharply for about half a minute."
+        },
+        {
+          "timestamp": "2:07",
+          "section": "Return",
+          "description": "The full sound comes back with a heavy low end."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Loudest stretch",
+          "description": "The loudest passage of the track runs to the end."
+        },
+        {
+          "timestamp": "3:16",
+          "section": "Ending",
+          "description": "The level drops sharply and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Thin Ice",
+      "duration": "2:26",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Side One",
+        "Late Full Band"
+      ],
+      "role": "Album role: A quiet, slowly growing track between the opener and the first part of \"Another Brick in the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Quiet opening",
+          "description": "A quiet, bass-led start with little treble."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Steadier pulse",
+          "description": "A clearer pulse takes hold while the level stays low."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Full section",
+          "description": "The level rises and the top end opens for the last forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Another Brick in the Wall, Part 1",
+      "duration": "3:12",
+      "energy": "mid",
+      "tags": [
+        "Steady Groove",
+        "Richard Wright",
+        "Side One",
+        "Three-Part Song"
+      ],
+      "role": "Album role: The first of the three \"Another Brick in the Wall\" parts, followed by Part 2 on side one and Part 3 on side two.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Groove",
+          "description": "A steady pulse runs from the first second through the track.",
+          "detail": "Wikipedia's personnel list credits Richard Wright with Prophet-5 and Minimoog on this track."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Dropout",
+          "description": "The low end falls away for a few seconds, then the groove resumes."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Final section",
+          "description": "The groove continues at a slightly lower level and a darker colour."
+        },
+        {
+          "timestamp": "3:11",
+          "section": "Ending",
+          "description": "The groove stops."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Happiest Days of Our Lives",
+      "duration": "1:51",
+      "energy": "mid",
+      "tags": [
+        "Short Link",
+        "Side One",
+        "Clavinet"
+      ],
+      "role": "Album role: A short link that leads into Part 2 of \"Another Brick in the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that swells over the first twenty seconds.",
+          "detail": "Wikipedia's personnel list credits Richard Wright with clavinet and James Guthrie with percussion on this track."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "First swell",
+          "description": "A louder, brighter passage with a clear pulse."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Drop back",
+          "description": "The level falls sharply and stays low for about twenty seconds."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Second build",
+          "description": "The pulse returns and the level builds to its loudest point near 1:35, then stays there to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Another Brick in the Wall, Part 2",
+      "duration": "3:59",
+      "energy": "mid",
+      "tags": [
+        "Disco Beat",
+        "UK No. 1 Single",
+        "Islington Green School",
+        "Side One"
+      ],
+      "role": "Album role: The album's hit single, which reached UK No. 1 and US No. 1, sung in part by pupils of Islington Green School.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat",
+          "description": "A steady beat starts at once and runs at the same level for the first minute.",
+          "detail": "Wikipedia describes the disco-style beat as a marked change from Pink Floyd's earlier records, suggested by Bob Ezrin and greeted with less enthusiasm by Gilmour than by Mason and Waters."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Brief drop",
+          "description": "The level falls for about ten seconds."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Main groove",
+          "description": "The full sound returns and the groove continues at a steady level for over two minutes."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out over its last forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Mother",
+      "duration": "5:35",
+      "energy": "mid",
+      "tags": [
+        "Jeff Porcaro",
+        "Slow Build",
+        "Side One Closer",
+        "Acoustic Guitars"
+      ],
+      "role": "Album role: The closer of side one, a long slow build in which Jeff Porcaro plays drums in place of Nick Mason.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A sparse, quiet opening with little low end.",
+          "detail": "Wikipedia's personnel list credits Waters and Gilmour on acoustic guitars and Bob Ezrin on piano, Hammond organ and harmonium on this track."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Full band",
+          "description": "A fuller sound with a heavy low end enters and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Louder section",
+          "description": "The track gets louder and brighter."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Ending",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Goodbye Blue Sky",
+      "duration": "2:47",
+      "energy": "mid",
+      "tags": [
+        "Harry Waters",
+        "Fade-In",
+        "Side Two",
+        "Acoustic Guitar"
+      ],
+      "role": "Album role: The opener of side two, which fades in from silence after the end of side one.",
+      "events": [
+        {
+          "timestamp": "0:10",
+          "section": "Fade-in",
+          "description": "The track comes in from near silence and rises over fifteen seconds.",
+          "detail": "Wikipedia's personnel list credits Gilmour with acoustic guitar and Harry Waters with the child's voice on this track."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Full level",
+          "description": "The level is firm and stays steady for the next half minute."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Brighter stretch",
+          "description": "The top end opens and the level reaches its highest point for about twenty seconds."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Low end drops out",
+          "description": "The sub-bass drops away for about twenty seconds, returns near 2:35, and the track fades down to its end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Empty Spaces",
+      "duration": "2:08",
+      "energy": "mid",
+      "tags": [
+        "Short Link",
+        "Side Two",
+        "EMS VCS 3",
+        "Segue to Young Lust"
+      ],
+      "role": "Album role: A short link that runs without a break into \"Young Lust\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A quiet, steady opening with a moderate pulse.",
+          "detail": "Wikipedia's personnel list includes the EMS VCS 3, Prophet-5 and ARP Quadra synthesizers on this track."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Full sound",
+          "description": "The low end and the level step up together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Short dip",
+          "description": "A brief dip before the full sound resumes."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Hand-off",
+          "description": "The track ends at full level and runs straight into \"Young Lust\"."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Young Lust",
+      "duration": "3:30",
+      "energy": "high",
+      "tags": [
+        "Gilmour Lead Vocal",
+        "Wurlitzer",
+        "Side Two",
+        "Telephone Voice"
+      ],
+      "role": "Album role: A hard rock track on side two with Gilmour as lead singer, credited as a Gilmour and Waters composition.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The full band starts at once at a steady level.",
+          "detail": "Wikipedia's personnel list credits Richard Wright with Wurlitzer electric piano and Chris Fitzmorris as the male telephone voice on this track."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller passage",
+          "description": "The top end opens and the level rises briefly."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Louder section",
+          "description": "The level rises again and stays high to about 2:40."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Fade",
+          "description": "The level falls steadily and the track fades out over its last forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "One of My Turns",
+      "duration": "3:37",
+      "energy": "mid",
+      "tags": [
+        "Lee Ritenour",
+        "Trudy Young",
+        "Sound Effects",
+        "Side Two"
+      ],
+      "role": "Album role: A song on side two that stays quiet and sparse for its first two minutes before the full band enters; per Wikipedia, its sound effects came from a television set that was destroyed and crockery that was smashed.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A very quiet opening.",
+          "detail": "Wikipedia credits Lee Ritenour on rhythm guitar and Trudy Young as the voice of the groupie on this track."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Low end grows",
+          "description": "The low end rises and the level creeps up over the first half minute."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Full band",
+          "description": "The full band enters with a heavy low end: the biggest change in the track."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Ending",
+          "description": "The level falls and the track ends quietly."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Don't Leave Me Now",
+      "duration": "4:16",
+      "energy": "mid",
+      "tags": [
+        "Dark Texture",
+        "Side Two",
+        "Piano",
+        "Late Brightening"
+      ],
+      "role": "Album role: A dark, bass-heavy song on side two, placed before the third part of \"Another Brick in the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, bass-heavy opening with almost no treble.",
+          "detail": "Wikipedia's personnel list credits Richard Wright with Hammond organ, piano and Prophet-5 and Gilmour with bass on this track."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Fuller section",
+          "description": "The level rises a little and a pulse becomes clear."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Pull-back",
+          "description": "The level falls and the pulse fades for about half a minute."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Brighter final section",
+          "description": "The top end opens and the level rises to its highest point."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Quiet ending",
+          "description": "The level falls and the track ends at a low level."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Another Brick in the Wall, Part 3",
+      "duration": "1:14",
+      "energy": "mid",
+      "tags": [
+        "Third Part",
+        "Steady Groove",
+        "Side Two"
+      ],
+      "role": "Album role: The last and shortest part of \"Another Brick in the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Groove",
+          "description": "A steady groove starts at once."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Upper layer",
+          "description": "The level rises and the top end opens."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Loudest stretch",
+          "description": "The loudest stretch runs to the end, where the track stops at full level."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Goodbye Cruel World",
+      "duration": "1:13",
+      "energy": "low",
+      "tags": [
+        "Side Two Closer",
+        "Disc 01 Closer",
+        "Sparse Texture"
+      ],
+      "role": "Album role: The closer of side two and of Disc 01, a very short, quiet piece that follows the loud third part of \"Another Brick in the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A quiet, sparse opening without a steady pulse."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Slight lift",
+          "description": "A slight rise in level and a little more treble."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Back to quiet",
+          "description": "The level falls back and the texture thins."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Ending",
+          "description": "The level falls further and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Hey You",
+      "duration": "4:38",
+      "energy": "high",
+      "tags": [
+        "Disc 02 Opener",
+        "Side Three",
+        "Fender Rhodes",
+        "Late Return"
+      ],
+      "role": "Album role: The opener of side three and of Disc 02, which starts quietly and builds to a loud middle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet start",
+          "description": "A quiet, sparse start that grows slowly.",
+          "detail": "Wikipedia's personnel list credits Gilmour on electric and acoustic guitars and bass, and Richard Wright on Hammond organ, ARP Quadra and Fender Rhodes on this track."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "First loud step",
+          "description": "The level and the low end step up sharply."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Louder section",
+          "description": "A second step brings the loudest stretch so far, which holds for about a minute."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Pull-back",
+          "description": "The level and the low end drop away for about half a minute."
+        },
+        {
+          "timestamp": "3:53",
+          "section": "Full return",
+          "description": "The full sound returns with a stronger low end."
+        },
+        {
+          "timestamp": "4:31",
+          "section": "Ending",
+          "description": "The level falls and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Is There Anybody Out There?",
+      "duration": "2:42",
+      "energy": "low",
+      "tags": [
+        "Classical Guitar",
+        "Quiet Opening",
+        "Side Three",
+        "Low-End Gaps"
+      ],
+      "role": "Album role: A short, quiet piece on side three; Wikipedia credits Joe di Blasi on classical guitar.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Near-silent opening",
+          "description": "The first fifteen seconds are almost silent."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Entry",
+          "description": "The music enters at a moderate level and the top end opens by 0:50."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Low end drops out",
+          "description": "The sub-bass falls away for about forty seconds."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Low end returns",
+          "description": "The low end comes back briefly, then leaves again near 2:30 until the end."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Nobody Home",
+      "duration": "3:23",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "New York Orchestra",
+        "EMS VCS 3",
+        "Side Three"
+      ],
+      "role": "Album role: A slow song on side three that begins very quietly and builds to a louder second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A very quiet opening.",
+          "detail": "Wikipedia's personnel list credits Bob Ezrin on piano, Waters on EMS VCS 3, Gilmour on bass and a New York orchestra on this track."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller",
+          "description": "The low end and the level rise slowly."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Short drop",
+          "description": "The level falls for about ten seconds."
+        },
+        {
+          "timestamp": "1:47",
+          "section": "Full section",
+          "description": "A louder, bass-heavy section enters and holds until near the end."
+        },
+        {
+          "timestamp": "2:59",
+          "section": "Pull-back",
+          "description": "The level and the top end fall, and the track continues at a slightly lower level to its end."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Vera",
+      "duration": "1:33",
+      "energy": "low",
+      "tags": [
+        "Acoustic Guitars",
+        "New York Orchestra",
+        "Slow Build",
+        "Side Three"
+      ],
+      "role": "Album role: A short, quiet piece on side three that grows in the second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Near-silent opening",
+          "description": "A near-silent start.",
+          "detail": "Wikipedia's personnel list credits Waters and Gilmour on acoustic guitars and a New York orchestra on this track."
+        },
+        {
+          "timestamp": "0:24",
+          "section": "Entry",
+          "description": "The mid and bass range enters and the level rises steeply."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Low end enters",
+          "description": "The sub-bass enters and the sound fills out."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Brighter finish",
+          "description": "The top end opens for the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Bring the Boys Back Home",
+      "duration": "1:27",
+      "energy": "mid",
+      "tags": [
+        "Joe Porcaro",
+        "New York City Opera",
+        "New York Orchestra",
+        "Side Three"
+      ],
+      "role": "Album role: A short, loud interlude on side three; Wikipedia credits the New York City Opera chorus and Joe Porcaro on snare drums.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "An opening at a moderate level, with a thin low end."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Loud section",
+          "description": "A large step in level and low end brings the loudest passage of the track."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Drop back",
+          "description": "The level falls sharply and stays low for about twenty seconds."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Return",
+          "description": "A bass-led return rises in level, and the track ends shortly after 1:24."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "Comfortably Numb",
+      "duration": "6:22",
+      "energy": "peak",
+      "tags": [
+        "Gilmour Guitar Solos",
+        "Michael Kamen",
+        "Orchestral Arrangement",
+        "Side Three Closer",
+        "Fade-Out"
+      ],
+      "role": "Album role: The closer of side three and the album's longest song, a slow song with an orchestral arrangement and two guitar solos.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The song starts at a firm, moderate level and holds a steady pulse.",
+          "detail": "Wikipedia credits Michael Kamen with the orchestral arrangement and Lee Ritenour with additional acoustic guitar; says Gilmour's recording was stripped-down and harder while Waters preferred Ezrin's grander orchestral version and the two compromised after an argument."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Fuller section",
+          "description": "The level rises and the top end opens."
+        },
+        {
+          "timestamp": "2:43",
+          "section": "Pull-back",
+          "description": "A short pull-back about ten seconds long, then a moderate stretch."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Return",
+          "description": "A louder level returns and stays high."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Highest stretch",
+          "description": "The loudest and brightest stretch of the track."
+        },
+        {
+          "timestamp": "6:08",
+          "section": "Final fade",
+          "description": "The level falls and the track fades out to silence by 6:20."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "The Show Must Go On",
+      "duration": "1:37",
+      "energy": "mid",
+      "tags": [
+        "Backing Vocals",
+        "Side Four",
+        "Short Interlude"
+      ],
+      "role": "Album role: The opener of side four, a short interlude with backing vocals by Bruce Johnston, Toni Tennille, Joe Chemay, Jon Joyce, Stan Farber and Jim Haas, per Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The full band starts at once at a steady level."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Lighter stretch",
+          "description": "The level and the top end fall briefly."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Low end drops",
+          "description": "The sub-bass falls away for the last ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "In the Flesh",
+      "duration": "4:16",
+      "energy": "high",
+      "tags": [
+        "Side Four",
+        "Fred Mandel",
+        "Title Echo",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: The counterpart of the opening track \"In the Flesh?\", placed on side four after \"The Show Must Go On\".",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Full band entry",
+          "description": "The full band enters with a heavy low end."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Lighter section",
+          "description": "The level and the low end fall for about a minute."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Fuller return",
+          "description": "A pulse and a louder level return."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Final section",
+          "description": "The level rises and the top end opens until the end."
+        },
+        {
+          "timestamp": "4:13",
+          "section": "Ending",
+          "description": "The level drops sharply and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 22,
+      "title": "Run Like Hell",
+      "duration": "4:24",
+      "energy": "high",
+      "tags": [
+        "Gilmour Co-Write",
+        "Bobbye Hall",
+        "Tyre Sound Effects",
+        "Steady Pulse",
+        "US Single"
+      ],
+      "role": "Album role: A driving track on side four with a steady, locked pulse; Wikipedia credits Bobbye Hall on congas and bongos, Phil Taylor with the tyre sound effects, and it was released as a single reaching US No. 53.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet intro",
+          "description": "A quiet, low-register intro."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Full groove",
+          "description": "The full band enters with a strong, steady pulse that stays locked to the end."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Louder",
+          "description": "The track gets louder and brighter."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Lighter passage",
+          "description": "The top end drops away for a short stretch before the full sound returns near 2:01."
+        },
+        {
+          "timestamp": "3:16",
+          "section": "Pull-back",
+          "description": "A lighter stretch of about twenty seconds."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Final stretch",
+          "description": "The level rises to the loudest passage of the track."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Ending",
+          "description": "The level drops sharply and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 23,
+      "title": "Waiting for the Worms",
+      "duration": "3:57",
+      "energy": "high",
+      "tags": [
+        "Side Four",
+        "EMS VCS 3",
+        "Backing Vocals",
+        "Late Build"
+      ],
+      "role": "Album role: A track on side four that builds to its highest level at the end, before the very short \"Stop\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a moderate level with a steady pulse.",
+          "detail": "Wikipedia's personnel list credits Waters on EMS VCS 3, Gilmour on bass and Richard Wright on Hammond organ and Prophet-5 on this track."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Steadier pulse",
+          "description": "The pulse becomes clearer while the level dips and the top end comes and goes."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Lift",
+          "description": "The level and the low end rise."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Build",
+          "description": "The level keeps rising."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Loudest stretch",
+          "description": "The loudest stretch of the track runs to its end."
+        }
+      ]
+    },
+    {
+      "num": 24,
+      "title": "Stop",
+      "duration": "0:31",
+      "energy": "low",
+      "tags": [
+        "Shortest Track",
+        "Piano",
+        "Side Four"
+      ],
+      "role": "Album role: The album's shortest track, a half-minute piece at a very low level between \"Waiting for the Worms\" and \"The Trial\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A very quiet passage with no strong pulse.",
+          "detail": "Wikipedia's personnel list credits Bob Ezrin on piano on this track."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Close",
+          "description": "The track ends at the same low level."
+        }
+      ]
+    },
+    {
+      "num": 25,
+      "title": "The Trial",
+      "duration": "5:19",
+      "energy": "high",
+      "tags": [
+        "Ezrin Co-Write",
+        "New York Orchestra",
+        "Vicki Brown",
+        "Clare Torry",
+        "Side Four"
+      ],
+      "role": "Album role: A long piece on side four, co-written by Bob Ezrin and Waters, placed between \"Stop\" and \"Outside the Wall\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The first ten seconds are near-silent, then the track starts at a low to moderate level.",
+          "detail": "Wikipedia credits Bob Ezrin with the orchestral arrangement, a New York orchestra, Vicki Brown and Clare Torry with backing vocals, and Nick Mason with percussion on this track."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Louder passage",
+          "description": "The level and the top end rise for about half a minute."
+        },
+        {
+          "timestamp": "1:53",
+          "section": "Quieter passage",
+          "description": "The level falls again and the texture thins."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Short dip",
+          "description": "A dip of about ten seconds before the build."
+        },
+        {
+          "timestamp": "3:26",
+          "section": "Full-level section",
+          "description": "A large step in level and low end begins the loudest stretch of the track, which runs to the end."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Highest point",
+          "description": "The loudest moment of the track, just before the final seconds."
+        }
+      ]
+    },
+    {
+      "num": 26,
+      "title": "Outside the Wall",
+      "duration": "1:44",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Concertina",
+        "Clarinet",
+        "Mandolin",
+        "Quiet Ending"
+      ],
+      "role": "Album role: The closing track, one of the quietest on the album, with a very low level for most of its length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "An opening at a moderate level.",
+          "detail": "Wikipedia's personnel list credits Frank Marocco on concertina, Larry Williams on clarinet and Trevor Veitch on mandolin on this track."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Very quiet passage",
+          "description": "The level falls and stays very low for most of the track."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Final fade",
+          "description": "The level falls further and the track fades out, ending at 1:42."
+        }
+      ]
+    }
+  ]
+}

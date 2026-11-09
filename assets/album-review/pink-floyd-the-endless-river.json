@@ -1,0 +1,785 @@
+{
+  "id": "pink-floyd-the-endless-river",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Endless River",
+  "year": 2014,
+  "label": "Parlophone / Columbia",
+  "producer": "David Gilmour · Phil Manzanera · Youth · Andy Jackson",
+  "genre": "Ambient / Progressive Rock",
+  "genreTags": [
+    "Ambient",
+    "Progressive Rock",
+    "Psychedelia",
+    "Instrumental"
+  ],
+  "runtime": "1:05:11",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/b/be/Pink_Floyd_-_The_Endless_River_%28Artwork%29.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Endless_River",
+  "overview": "Based on music recorded for The Division Bell in 1993 and 1994 at Britannia Row Studios in London and on Gilmour's Astoria boat studio. The engineer Andy Jackson edited that material into an hour-long ambient piece called The Big Spliff, which the band did not release. In 2013 Gilmour and Nick Mason returned to the recordings, re-recorded and added parts, and brought in Phil Manzanera, Youth, and Jackson. Manzanera, Jackson, and the engineer Damon Iddins spent six weeks assembling four 14-minute pieces, and further material was recorded in 2013 and 2014 at Astoria and at Medina Studios in Hove. Mason called the album a tribute to Richard Wright, who died in 2008, and \"Louder Than Words\" is its only track with a lead vocal.\n\nParlophone released it in Europe on 7 November 2014, with Columbia following in the rest of the world; the four assembled pieces became the four vinyl sides, and every format uses that 18-track running order. The rip reviewed here holds 21 tracks: the 18 album tracks plus the three bonus tracks of the deluxe edition, \"TBS9\", \"TBS14\", and \"Nervana\". The album reached UK No. 1 with 139,351 first-week sales and US No. 3, was certified Platinum in the UK and Gold in the US, and received mixed reviews (Metacritic 58).\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Things Left Unsaid",
+      "duration": "4:27",
+      "energy": "low",
+      "tags": [
+        "Side One Opener",
+        "EBow",
+        "Hammond Organ",
+        "Slow Fade-In",
+        "Voice Samples"
+      ],
+      "role": "Album role: Opens Side 1 and the album with a slow fade-in from silence; Wikipedia names it the most-played track of the album on Spotify.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Fade-in",
+          "description": "The track rises from silence and stays very quiet for about the first 30 seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Gilmour on guitars, EBow, and voice samples, Wright on Hammond organ, keyboards, synthesiser, and voice samples, Mason on voice samples, and Bob Ezrin on additional keyboards."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "First swell",
+          "description": "The level rises to a first fuller passage, then falls back."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Quiet passage",
+          "description": "A quieter, thinner stretch of about 45 seconds."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Main section",
+          "description": "The level rises sharply to the fullest sound so far."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Return",
+          "description": "After a pull-back from about 2:05, the fuller sound returns."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Drop",
+          "description": "The level and the low end fall for about 25 seconds."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Final section",
+          "description": "The low end comes back and the track runs at its fullest level to the end, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "It's What We Do",
+      "duration": "6:17",
+      "energy": "mid",
+      "tags": [
+        "Side One Centrepiece",
+        "Steady Groove",
+        "Synthesiser",
+        "Pre-Release Teaser"
+      ],
+      "role": "Album role: The centre of Side 1 and its longest track, a steady-level piece in which the colour of the keyboards changes more than the energy; a 30-second snippet was used as a pre-release teaser.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a moderate level, with a steady pulse building within the first half-minute.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Gilmour on guitars and bass guitar, and Wright on keyboards and synthesiser."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Lift",
+          "description": "The level rises and the top end opens: the largest single change in the track."
+        },
+        {
+          "timestamp": "2:18",
+          "section": "Thinner passage",
+          "description": "The level and the upper register fall back for about 15 seconds."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Brighter passage",
+          "description": "The upper register comes forward and stays prominent for about 25 seconds."
+        },
+        {
+          "timestamp": "4:57",
+          "section": "Dip",
+          "description": "The upper register drops away briefly."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Final section",
+          "description": "The brightness returns and the track runs at full level to the end."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Ebb and Flow",
+      "duration": "1:55",
+      "energy": "low",
+      "tags": [
+        "Side One Closer",
+        "Electric Piano",
+        "EBow",
+        "Fade to Silence"
+      ],
+      "role": "Album role: Closes Side 1 with a short, quiet piece that decays to near silence before Side 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, spare opening.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Wright on electric piano, Gilmour on guitars and EBow."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Brighter section",
+          "description": "The upper register opens for about ten seconds."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Decay",
+          "description": "The sound falls to near silence for the last 25 seconds, which closes the side."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Sum",
+      "duration": "4:48",
+      "energy": "mid",
+      "tags": [
+        "Side Two Opener",
+        "EMS VCS 3",
+        "Farfisa Organ",
+        "Mason Co-Write",
+        "Slow Build"
+      ],
+      "role": "Album role: Opens Side 2 with a long build to a steady pulse; one of two tracks with a writing credit for Nick Mason, the other being \"Skins\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Fade-in",
+          "description": "The track rises from silence and stays quiet for the first half-minute.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Gilmour on guitars, EMS VCS 3, and bass guitar, Wright on Farfisa organ and piano, and Damon Iddins on additional keyboards."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Slow build",
+          "description": "A slow rise in level and brightness lasts about a minute."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Pulse entry",
+          "description": "A steady low-register pulse enters and the level rises sharply: the largest change in the track."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Full texture",
+          "description": "The sound brightens and holds a steady full level."
+        },
+        {
+          "timestamp": "4:42",
+          "section": "Wind-down",
+          "description": "The level falls and the track fades toward the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Skins",
+      "duration": "2:37",
+      "energy": "mid",
+      "tags": [
+        "Drum Solo",
+        "Rototoms",
+        "Gong",
+        "Mason Co-Write"
+      ],
+      "role": "Album role: The drum feature of Side 2, described by The Observer's review as a two-and-a-half-minute drum solo and credited to Gilmour, Wright, and Mason.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens quietly and reaches full level within about 20 seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, rototoms, and gong, Wright on keyboards, and Andy Jackson on bass guitar."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Full level",
+          "description": "A steady full level with a strong pulse runs for about a minute and a half."
+        },
+        {
+          "timestamp": "1:47",
+          "section": "Fade-out",
+          "description": "The level falls and the track dies away to near silence by the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Unsung",
+      "duration": "1:07",
+      "energy": "low",
+      "tags": [
+        "Piano",
+        "EMS VCS 3",
+        "Farfisa Organ",
+        "Wright Composition"
+      ],
+      "role": "Album role: A one-minute keyboard interlude written by Wright alone, between the drum feature and \"Anisina\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet opening that grows in the first twenty seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Gilmour on piano and EMS VCS 3, and Wright on Farfisa organ and piano."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Louder passage",
+          "description": "The fullest level of the track, with a brief dip at 0:25."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Ending",
+          "description": "The level falls and the track dies away."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Anisina",
+      "duration": "3:17",
+      "energy": "mid",
+      "tags": [
+        "Tenor Saxophone",
+        "Clarinet",
+        "Gilad Atzmon",
+        "Side Two Closer"
+      ],
+      "role": "Album role: Closes Side 2, the only track with Gilad Atzmon's tenor saxophone and clarinet in the credits and written by Gilmour alone.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track enters almost at once, at a moderate level, and builds over the first minute.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Atzmon on tenor saxophone and clarinet, Mason on drums, and Gilmour on guitars, keyboards, piano, bass guitar, and backing vocals. This guide does not place the saxophone in the timeline."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Full level",
+          "description": "The level and brightness settle at a steady full sound."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Break",
+          "description": "The level falls for about 15 seconds."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Second half",
+          "description": "The sound builds back to the loudest stretch of the track, from about 2:00 to 2:40."
+        },
+        {
+          "timestamp": "2:48",
+          "section": "Fade",
+          "description": "The level falls steeply and the last half-minute dies away to near silence."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "The Lost Art of Conversation",
+      "duration": "1:43",
+      "energy": "low",
+      "tags": [
+        "Side Three Opener",
+        "Piano",
+        "Wright Composition",
+        "Fade-In"
+      ],
+      "role": "Album role: Opens Side 3 with a short piano and synthesiser piece credited to Richard Wright alone.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Fade-in",
+          "description": "The track rises from near silence and stays quiet.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Wright on piano and synthesiser, and Gilmour on percussion."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Fuller texture",
+          "description": "The low end enters and the sound fills out."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Closing swell",
+          "description": "A last swell takes the track to its fullest level at the end."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "On Noodle Street",
+      "duration": "1:42",
+      "energy": "mid",
+      "tags": [
+        "Rhodes Piano",
+        "Guy Pratt",
+        "Steady Groove"
+      ],
+      "role": "Album role: Second piece of Side 3, a short groove piece with Rhodes piano; the first on the side with Mason's drums and Guy Pratt's bass in the credits.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Groove",
+          "description": "A steady pulse starts within the first seconds and holds through the track.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Guy Pratt on bass guitar, Wright on Rhodes piano, Jon Carin on synthesisers, and Gilmour on guitars."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Brighter turn",
+          "description": "The upper register comes forward for about 20 seconds."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Ending",
+          "description": "The top end falls away and the track settles quieter to the end."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Night Light",
+      "duration": "1:42",
+      "energy": "low",
+      "tags": [
+        "EBow",
+        "Synthesiser",
+        "Slow Swells"
+      ],
+      "role": "Album role: Third piece of Side 3, a short, slowly swelling piece built on EBow guitar and synthesiser.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a fairly full level and recedes after about 15 seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Gilmour on guitars and EBow, and Wright on synthesiser."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Quiet passage",
+          "description": "A quieter, thinner stretch of about 20 seconds."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Swell",
+          "description": "The level rises to a first swell."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Second swell",
+          "description": "The sound builds again to a peak at about 1:20, then dies back toward the end."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Allons-y (1)",
+      "duration": "1:57",
+      "energy": "mid",
+      "tags": [
+        "Hammond Organ",
+        "Bob Ezrin",
+        "Percussion Loop",
+        "Pre-Release Download"
+      ],
+      "role": "Album role: The first of two Allons-y pieces on Side 3, the second following \"Autumn '68\"; released as a download on iTunes on 4 November 2014, three days before the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A short quiet opening gives way to the full band and a steady pulse by about 0:10.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Wright on Hammond organ, Bob Ezrin on bass guitar, Jon Carin on synthesisers and a percussion loop, and Gilmour as writer and guitarist."
+        },
+        {
+          "timestamp": "0:31",
+          "section": "Second section",
+          "description": "The arrangement changes and the sound brightens slightly."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Closing stretch",
+          "description": "The arrangement shifts once more and the level eases over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Autumn '68",
+      "duration": "1:35",
+      "energy": "low",
+      "tags": [
+        "Royal Albert Hall Organ",
+        "1969 Recording",
+        "Wright Composition",
+        "Gong"
+      ],
+      "role": "Album role: The Wright showcase of Side 3, built on a recording of Wright playing the Royal Albert Hall pipe organ at the rehearsal for the 26 June 1969 show; the title refers to Pink Floyd's 1970 song \"Summer '68\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A moderate-level opening that dips after about ten seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Wright on the Royal Albert Hall organ, Mason on gong, Damon Iddins on additional keyboards, and Gilmour on guitars."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "First swell",
+          "description": "The level rises to a fuller, bass-heavier passage."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Quieter passage",
+          "description": "The level falls and the upper register opens briefly."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Second swell",
+          "description": "The level and the low end rise again to the fullest sound of the track."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Allons-y (2)",
+      "duration": "1:32",
+      "energy": "mid",
+      "tags": [
+        "Hammond Organ",
+        "Percussion Loop",
+        "Second Allons-y Part"
+      ],
+      "role": "Album role: The second Allons-y piece, with the same credited band as the first, between \"Autumn '68\" and \"Talkin' Hawkin'\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a moderate level without a steady pulse.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Wright on Hammond organ, Bob Ezrin on bass guitar, Jon Carin on synthesisers and a percussion loop, and Gilmour on guitars."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Pulse entry",
+          "description": "A steady pulse and a fuller low end enter."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Wind-down",
+          "description": "The level and the top end fall until the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Talkin' Hawkin'",
+      "duration": "3:29",
+      "energy": "mid",
+      "tags": [
+        "Stephen Hawking Sample",
+        "British Telecom Sample",
+        "Farfisa Organ",
+        "Side Three Closer"
+      ],
+      "role": "Album role: Closes Side 3 and carries a sample of Stephen Hawking's speech from a British Telecom commercial, the same sample used on \"Keep Talking\" on The Division Bell (1994).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens almost at once at a moderate level and reaches full level by about 0:10.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Stephen Hawking as voice sample, Mason on drums, Guy Pratt on bass guitar, Wright on Farfisa organ, piano, and synthesiser, and Gilmour and Durga McBroom on backing vocals. This guide does not place the sample in the timeline."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Slow build",
+          "description": "The level climbs slowly to the loudest stretch of the track, at about 2:10."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Fall-back",
+          "description": "The level declines over about 25 seconds."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Quiet tail",
+          "description": "The level drops sharply and the last half-minute is a quiet tail that fades to silence, closing the side."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Calling",
+      "duration": "3:38",
+      "energy": "low",
+      "tags": [
+        "Side Four Opener",
+        "Anthony Moore",
+        "Keyboards",
+        "Slow Fade-In"
+      ],
+      "role": "Album role: Opens Side 4 with a slow fade-in; co-written by Gilmour and Anthony Moore.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Fade-in",
+          "description": "The track rises from silence over about 20 seconds.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Gilmour and Anthony Moore on keyboards, Gilmour on guitars, Mason on percussion, and Andy Jackson on effects."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Main section",
+          "description": "The level rises to the main body of the track."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Thinner passage",
+          "description": "The level eases for about 30 seconds."
+        },
+        {
+          "timestamp": "1:47",
+          "section": "Return",
+          "description": "The level rises again and stays steady."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Brighter section",
+          "description": "The upper register opens and holds for the rest of the track."
+        },
+        {
+          "timestamp": "3:28",
+          "section": "Ending",
+          "description": "The level falls over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Eyes to Pearls",
+      "duration": "1:51",
+      "energy": "mid",
+      "tags": [
+        "Hammond Organ",
+        "Farfisa Organ",
+        "Gong",
+        "Gradual Build"
+      ],
+      "role": "Album role: A short build between \"Calling\" and \"Surfacing\" on Side 4.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet opening that grows steadily.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums and gong, Wright on Hammond organ, Farfisa organ, and keyboards, Gilmour on guitars and keyboards, and Andy Jackson on bass guitar."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fuller section",
+          "description": "The level and the upper register rise to the fullest sound of the track, which runs to about 1:40."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Ending",
+          "description": "The sound falls away in the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Surfacing",
+      "duration": "2:46",
+      "energy": "mid",
+      "tags": [
+        "Backing Vocals",
+        "Durga McBroom",
+        "Gradual Build"
+      ],
+      "role": "Album role: Third piece of Side 4, a gradual build that ends quietly ahead of the vocal track \"Louder Than Words\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet opening that builds over the first minute.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Mason on drums, Gilmour on guitars, bass guitar, and backing vocals, Wright on keyboards and synthesiser, and Durga McBroom on backing vocals."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Full section",
+          "description": "The level and brightness settle at a steady full sound that runs for about 1:40."
+        },
+        {
+          "timestamp": "2:38",
+          "section": "Ending",
+          "description": "The level falls steeply and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Louder Than Words",
+      "duration": "6:37",
+      "energy": "mid",
+      "tags": [
+        "Only Lead Vocal",
+        "Polly Samson Lyrics",
+        "Escala Strings",
+        "Only Single",
+        "Album Closer"
+      ],
+      "role": "Album role: Closes the album and Side 4; the only track with a lead vocal (Gilmour, lyrics by Polly Samson) and the album's only single, released on 14 October 2014.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that grows over the first minute and a half.",
+          "detail": "Liner-note credits as transcribed on Wikipedia: Gilmour on lead vocals, guitars, and Hammond organ, Wright on piano, Rhodes piano, synthesiser, and voice samples, Mason on drums and percussion, Bob Ezrin on bass guitar, Durga McBroom, Louise Marshall, and Sarah Brown on backing vocals, and the Escala quartet (Chantal Leverton, Victoria Lyon, Helen Nash, Honor Watson) on strings."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Lift",
+          "description": "The level and the top end rise to the main body of the track."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Easing",
+          "description": "A slightly thinner passage, about a minute and a half long."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Final build",
+          "description": "After a short dip, the sound builds to the loudest stretch of the track, from about 4:30 to 5:30."
+        },
+        {
+          "timestamp": "5:36",
+          "section": "Outro",
+          "description": "The level falls and the track and the album's main sequence die away to near silence."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "TBS9",
+      "duration": "2:28",
+      "energy": "low",
+      "tags": [
+        "Bonus Track",
+        "TBS Series",
+        "Deluxe Edition"
+      ],
+      "role": "Album role: First of three bonus tracks on the deluxe edition, outside the four-side sequence; the TBS prefix matches the working title The Big Spliff.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that grows slowly."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Pulse",
+          "description": "A steadier pulse emerges in the low end."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Fuller section",
+          "description": "The level and the top end rise to the fullest sound of the track."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Ending",
+          "description": "The upper register falls and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "TBS14",
+      "duration": "4:11",
+      "energy": "mid",
+      "tags": [
+        "Bonus Track",
+        "TBS Series",
+        "Deluxe Edition"
+      ],
+      "role": "Album role: Second of the three deluxe bonus tracks, with the same TBS prefix as the first.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that reaches full level within about 20 seconds."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Main section",
+          "description": "The low end fills out and the track holds a steady full level."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Dip",
+          "description": "The level falls briefly."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Return",
+          "description": "The full sound returns and runs for about a minute."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Ending",
+          "description": "The level falls and the track fades out to silence."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "Nervana",
+      "duration": "5:31",
+      "energy": "mid",
+      "tags": [
+        "Bonus Track",
+        "Deluxe Edition"
+      ],
+      "role": "Album role: Last of the three deluxe bonus tracks and the final track on the rip, the longest of the three.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a moderate level and builds over the first minute."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Main section",
+          "description": "The top end opens and the track holds an almost constant level for the following minutes."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Shift",
+          "description": "A smaller change in the upper register while the level holds."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Late lift",
+          "description": "The level rises slightly for the last minute of the main body."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Ending",
+          "description": "The level falls over the last ten seconds."
+        }
+      ]
+    }
+  ]
+}

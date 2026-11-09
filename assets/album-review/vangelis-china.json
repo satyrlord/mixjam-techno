@@ -1,0 +1,448 @@
+{
+  "id": "vangelis-china",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "China",
+  "year": 1979,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Electronica",
+  "genreTags": [
+    "Electronic",
+    "Electronica",
+    "Concept Album"
+  ],
+  "runtime": "41:35",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/2/20/Vangelis_China.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/China_(Vangelis_album)",
+  "overview": "China is Vangelis's first album for Polydor, released in April 1979 after his RCA contract ended with Beaubourg (1978); it was produced by Vangelis and recorded in 1978 at Nemo Studios, London, with engineers Keith Spencer-Allen, Raphael Preston and Andy Hendriksen. It is a loose concept album drawn from Chinese culture, history and music: Vangelis said in a 1979 interview that he had never been to China and did not try to make Chinese folk music but something with its characteristic colour. The sleeve credits him with synthesisers and all instruments, apart from Michel Ripoche's violin solo on \"The Plum Blossom\" and recitation by Yeung Hak-Fun and Koon Fook Man on \"The Little Fete\"; Wikipedia, citing uDiscover Music, adds drum machines, electric piano, piano, Chinese flutes and plucked string instruments, and names electric piano on \"The Tao of Love\" and piano on \"The Long March\", \"The Plum Blossom\" and \"Himalaya\". The studio was refitted in 1978, with a Lyrec 24-track recorder and a Quad Eight Pacifica mixing desk replacing the API mixer and Scully 16-track used on Beaubourg. On the rip, the loudest tracks are \"Chung Kuo\", \"The Dragon\", \"Yin & Yang\" and the 10:54 \"Himalaya\", which holds a steady rhythmic pulse for most of its length; the other five tracks are quiet, and \"Summit\" closes the album with a long stretch that has no low end.\n\nThe album reached No. 31 in the Netherlands and No. 96 in Australia in 1979, was certified Silver by the BPI in 1985 for sales above 60,000, and received four and a half stars from John Bush at AllMusic. The single \"The Long March\" appeared on 1 June 1979, with \"The Long March Part 2\" on the B-side, sung by Vangelis and children of Orleans Infants School, Twickenham, with the proceeds going to UNICEF; Vangelis promoted the album with concerts in London, Brussels and Paris in spring 1979. This review follows the rip of the 1983 Polydor CD (813 653-2), where tracks 1 and 2 run 5:31 and 2:02. Wikipedia, citing the 1983 sleeve note, says the printed timings were never accurate and that the white-noise and effects intro is \"Chung Kuo\" while the long melodic synthesiser piece with its piano ending is \"The Long March\"; the Vangelis Movements discography lists 1:43 and 5:50 for that pair on the original LP, which add up to the same 7:33 as the CD's pair, so the break between the two tracks falls at a different point on the CD.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Chung Kuo",
+      "duration": "5:31",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Effects Intro",
+        "Steam Locomotive Effect",
+        "Sequenced Backing"
+      ],
+      "role": "Album role: Opener and the first of the album's loud, pulse-driven pieces, an effects-heavy start that settles into a long steady groove; on this CD it runs longer than the effects intro that the sources name as \"Chung Kuo\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A loud, bright opening with a repeating pulse starts almost at once.",
+          "detail": "Wikipedia, citing the 1983 sleeve note, calls the opening a white-noise and effects intro, and Synthtopia, quoted there, describes clashing percussive noises that give way to a melody over sequenced backing. Wikipedia, citing uDiscover Music, lists a steam-locomotive sound effect on the track; this review does not place it in time."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Build",
+          "description": "The top end brightens and the level climbs for about 20 seconds."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Drop-back",
+          "description": "The level falls sharply and the top end disappears, leaving a quiet passage with a faint repeating pulse."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Rebuild",
+          "description": "The low end returns and the level climbs again over about 25 seconds, with no clear pulse."
+        },
+        {
+          "timestamp": "1:54",
+          "section": "Groove entry",
+          "description": "A bright layer joins and a steady groove settles, running for more than three minutes.",
+          "detail": "Wikipedia, citing the 1983 sleeve note, assigns the long melodic synthesiser piece to \"The Long March\", so much of this track belongs to that title on the original release."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The top end brightens again and the level holds near its highest until the ending."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Fade-out",
+          "description": "The sound falls away over the last 20 seconds and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Long March",
+      "duration": "2:02",
+      "energy": "low",
+      "tags": [
+        "Piano",
+        "Neo-Classical",
+        "Long March 1934-1935",
+        "Red China Today Citation"
+      ],
+      "role": "Album role: A short, quiet piece after the loud opener and the album's first piano piece, named for the 1934-1935 Long March; on this CD it is the 2:02 piano ending of the piece that the sources call \"The Long March\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, sparse opening with no steady beat.",
+          "detail": "The sleeve note ties the track to the 1934-1935 Long March and cites Edgar Snow's Red China Today at length, according to Wikipedia. Wikipedia names piano on this track, and Synthtopia, quoted there, calls it a piano solo in a neo-classical manner."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Low-end rise",
+          "description": "The low register and the level rise for about 25 seconds, then ease back."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Peak",
+          "description": "A sudden rise makes the loudest and brightest passage of the track, lasting about 20 seconds."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Close",
+          "description": "The sound falls away to silence by the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "The Dragon",
+      "duration": "4:16",
+      "energy": "high",
+      "tags": [
+        "Dragon Symbolism",
+        "Pulse-Driven",
+        "Late Peak",
+        "Shanghai Expo 2010 Use"
+      ],
+      "role": "Album role: The second of the album's loud pieces and one of the three centrepieces that AllMusic names, with \"Chung Kuo\" and \"Himalaya\"; a four-minute piece on the Chinese dragon as a symbol of change.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright mid-range opening with no low end, lasting about 20 seconds.",
+          "detail": "According to Wikipedia, the sleeve note describes the dragon (Lung) as the spirit of change and the creative force of life."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Low-end entry",
+          "description": "A deep low layer enters and the level jumps."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Heavier section",
+          "description": "The low end grows heavier and the level rises for about 30 seconds."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Drop-back",
+          "description": "The low end withdraws for about 12 seconds and the level falls."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Low-end return",
+          "description": "The low layer returns and the level climbs again, with a deeper note joining shortly afterwards."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Peak",
+          "description": "The top end brightens strongly and the level reaches its highest for about 40 seconds.",
+          "detail": "Wikipedia reports that the track was used in the outdoor performances of the Shanghai Expo 2010 opening ceremonies."
+        },
+        {
+          "timestamp": "3:53",
+          "section": "Fade-out",
+          "description": "The sound fades to silence, leaving about ten seconds of silence at the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Plum Blossom",
+      "duration": "2:39",
+      "energy": "low",
+      "tags": [
+        "Michel Ripoche",
+        "Violin Solo",
+        "Piano",
+        "Plum Blossom Symbol"
+      ],
+      "role": "Album role: A short, quiet piece after the dragon, and the album's only credited guest instrumentalist, Michel Ripoche on violin.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, sparse opening with little low end, lasting about a minute.",
+          "detail": "According to Wikipedia, the sleeve ties the title to the plum blossom (Prunus mume) as a Chinese symbol of sexual vitality, and piano is listed on this track."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Low-end entry",
+          "description": "A deep low layer enters and the level steps up sharply.",
+          "detail": "Michel Ripoche's violin solo is credited on this track; the measurements do not separate it from the rest of the sound."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Low-end exit",
+          "description": "The deep layer leaves and the music returns to the earlier sparse texture."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Closing stretch",
+          "description": "The low content thins and the level drops slightly; the music stops and the rest of the track is silent."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The Tao of Love",
+      "duration": "2:46",
+      "energy": "low",
+      "tags": [
+        "Electric Piano",
+        "Zhuang Zhou Quote",
+        "Australian Single"
+      ],
+      "role": "Album role: A short, quiet piece with electric piano, built on a saying of Zhuang Zhou, between the violin piece and the recitation piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet opening in the mid range with no low end and a repeating pulse.",
+          "detail": "According to Wikipedia, the sleeve cites a saying of Zhuang Zhou about the unity of the one and the not-one, and electric piano is listed on this track. A fan discography lists it as the A-side of an Australian single, Polydor 2002 100, backed with \"The Dragon\"."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Low layer",
+          "description": "A low layer enters and stays under the music for the rest of the track."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Bright section",
+          "description": "The top end opens up and the level rises for about 40 seconds."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Outro",
+          "description": "The music thins and stops."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "The Little Fete",
+      "duration": "3:05",
+      "energy": "low",
+      "tags": [
+        "Li Bai Poem",
+        "Recitation",
+        "Yeung Hak-Fun",
+        "Koon Fook Man",
+        "Chanel No. 5 Advert"
+      ],
+      "role": "Album role: A quiet piece built on an eighth-century poem by Li Bai in J. C. Cooper's translation, the album's only recitation and the track that Ridley Scott used in the 1979 Chanel No. 5 advert.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening in the mid range with no low end.",
+          "detail": "Synthtopia, quoted on Wikipedia, hears orchestrated chinoiserie. Ridley Scott used part of the piece in the 1979 Chanel No. 5 advert \"Share the Fantasy\", and Scott hired Vangelis to score Blade Runner (1982), according to Wikipedia."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Low entry",
+          "description": "A low layer enters and sinks lower, followed by the quietest dip of the track."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Brighter passage",
+          "description": "The top end lifts and the low end builds beneath it for about 30 seconds."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Darker stretch",
+          "description": "The top end falls away and the sound turns darker for about 25 seconds."
+        },
+        {
+          "timestamp": "2:02",
+          "section": "Top end returns",
+          "description": "The top end returns for about 40 seconds before thinning again.",
+          "detail": "The credits name Yeung Hak-Fun and Koon Fook Man for the recitation, and the Vangelis Movements discography places a spoken voice near the end of the track; the measurements do not separate it from the music."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Ending",
+          "description": "The music thins and stops."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Yin & Yang",
+      "duration": "5:52",
+      "energy": "high",
+      "tags": [
+        "Yin And Yang Duality",
+        "Swelling Dynamics",
+        "Two-Peak Form",
+        "Pulse Passages"
+      ],
+      "role": "Album role: The second-longest track, with swells, quiet stretches, pulse passages and two dense peaks, leading into the long closing pair of \"Himalaya\" and \"Summit\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, low-heavy opening in which the level swells and falls back every few seconds, with little top end at first.",
+          "detail": "According to Wikipedia, the sleeve ties the title to the symbolic duality of yin and yang."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Quiet stretch",
+          "description": "The level drops and the music thins for about 35 seconds before swelling again."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Pulse entry",
+          "description": "A steady low-end pulse enters, the top end brightens and the level climbs over the next 20 seconds."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "A dense, bright, sustained stretch with almost no pulse holds near the loudest level of the track for about a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Pulse returns",
+          "description": "The level eases back and a clear rhythmic pulse returns for about 40 seconds."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Second peak",
+          "description": "Another dense, loud stretch without a pulse, reaching the loudest moment of the track."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Closing alternation",
+          "description": "A short pulse passage returns, followed by a final loud stretch without a pulse."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Outro",
+          "description": "The level falls quickly and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Himalaya",
+      "duration": "10:54",
+      "energy": "high",
+      "tags": [
+        "I Ching Hexagram 52",
+        "Longest Track",
+        "Steady Pulse",
+        "Piano",
+        "Cosmos Soundtrack Use"
+      ],
+      "role": "Album role: The centrepiece and longest track, named for the I Ching hexagram of the mountain and one of the three tracks that AllMusic names as centrepieces; a long, steady-pulse piece that rises to its loudest stretch past the seven-minute mark.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A low, dark opening fades in from silence over the first few seconds, led by the low and middle ranges.",
+          "detail": "According to Wikipedia, the title comes from hexagram 52 (Gen) of the I Ching, which the sleeve glosses as mountain, to ascend, solitude and the immovable. Wikipedia lists piano on this track."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Brightening",
+          "description": "The top end opens up and the level rises, still without a beat.",
+          "detail": "Synthtopia, quoted on Wikipedia, says the track uses washes of sound to evoke cold, windswept mountain spaces."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Pulse entry",
+          "description": "A steady rhythmic pulse enters and carries the track for more than six minutes, with the brightness shifting underneath.",
+          "detail": "AllMusic's John Bush names \"Himalaya\" with \"Chung Kuo\" and \"The Dragon\" as centrepieces that use \"bracing percussion and synthesizer effects\"."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Brighter passage",
+          "description": "The upper range brightens and the level lifts slightly for about 45 seconds while the pulse carries on."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Swell",
+          "description": "The level jumps and the low end fills out for about 30 seconds before settling back."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Peak",
+          "description": "The fullest and loudest stretch of the track begins, and the pulse recedes into a dense sustained mass for about 50 seconds.",
+          "detail": "Carl Sagan used the track in the second episode of Cosmos: A Personal Voyage (1980), during a DNA replication sequence, according to Wikipedia."
+        },
+        {
+          "timestamp": "8:10",
+          "section": "Pulse returns",
+          "description": "The level drops at once and the pulse returns clearly, carrying the track for over a minute."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Final rise",
+          "description": "The level and the low end rise for about 25 seconds, and the track stays at a high level until the final drop."
+        },
+        {
+          "timestamp": "10:30",
+          "section": "Outro",
+          "description": "The level drops and the top end disappears; a quiet, dark low tail holds to the end of the track, and \"Summit\" begins without a pause."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Summit",
+      "duration": "4:31",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Mountain Symbol",
+        "Bass-Free Stretch",
+        "Telenovela Villain Theme"
+      ],
+      "role": "Album role: The closing track, a quiet piece that follows \"Himalaya\" without a pause and is the quietest on the album by level, with a long stretch that has no low end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A low sustained sound is already present at the start and swells for about 25 seconds.",
+          "detail": "Wikipedia reads the title as the summit of a symbolic mountain, and reports its use as a villain's theme in the 1988 Mexican telenovela Amor en silencio."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Drop-back",
+          "description": "The level and the top end fall away and the low end sinks over the next half minute."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Bass-free stretch",
+          "description": "The low end disappears and only a thin, quiet texture in the mid and upper range remains, running for almost three minutes."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Thicker texture",
+          "description": "The mid range thickens and the level lifts a little, still with no low end."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Low-end return",
+          "description": "A deep low layer returns and the level rises for the closing section."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Outro",
+          "description": "The level falls and the sound fades away."
+        }
+      ]
+    }
+  ]
+}

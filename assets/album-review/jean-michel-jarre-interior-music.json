@@ -1,0 +1,140 @@
+{
+  "id": "jean-michel-jarre-interior-music",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Interior Music",
+  "year": 2001,
+  "label": "Bang & Olufsen",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Background Music"
+  ],
+  "runtime": "51:56",
+  "overview": "A promotional release of 2001 for Bang & Olufsen, the Danish audio maker, which commissioned Jarre to write background music for one of its stores. MusicBrainz lists it as a French promotion release of two tracks, and a fan site reports a run of only 1,000 copies and credits Jarre as producer. The same site notes that the sleeve says the music would be part of a new album, which never happened. No other credits or equipment are documented in the sources found.\n\nThe disc holds two pieces of almost the same length. \"Bonjour-Hello\" combines vocal snippets, nature sounds and short spoken sentences in French, Danish and English; \"Whispers of Life\" is its instrumental version. The timeline below is a rough guide taken from measuring the rip, not from a full listen: both pieces start very quietly, rise in sudden surges and drops, and keep to the same plan.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Bonjour-Hello",
+      "duration": "25:59",
+      "energy": "low",
+      "tags": [
+        "Background Music",
+        "Spoken Snippets",
+        "Nature Sounds",
+        "Store Commission"
+      ],
+      "role": "Album role: The first of the two long pieces, the version with voices, nature sounds and spoken sentences in three languages.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening with almost no low end.",
+          "detail": "A fan site describes the track as vocal snippets with nature sounds and short spoken sentences in French, Danish and English, for example \"You look handsome\"; it did not give times for them."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "First surge",
+          "description": "The low end and the middle range come in and the level rises sharply for the first time."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Low-end entry",
+          "description": "A deep low end enters and the level jumps to the first loud passage of the track."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Drop",
+          "description": "The level falls to near silence for a few seconds, then the low end returns at 3:05."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Low-end swell",
+          "description": "The low end swells suddenly, the largest change in this stretch of the piece."
+        },
+        {
+          "timestamp": "6:01",
+          "section": "Build",
+          "description": "A sudden low-end swell leads into a louder passage at about 7:15."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Loud stretch",
+          "description": "One of the louder passages of the piece, lasting under a minute."
+        },
+        {
+          "timestamp": "16:25",
+          "section": "Second loud stretch",
+          "description": "Another loud stretch, followed by a quieter passage from about 17:00."
+        },
+        {
+          "timestamp": "25:30",
+          "section": "Outro",
+          "description": "The level drops away and the piece fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Whispers of Life",
+      "duration": "25:57",
+      "energy": "low",
+      "tags": [
+        "Instrumental Version",
+        "Background Music",
+        "Mirrors Track 1"
+      ],
+      "role": "Album role: The second long piece, the instrumental version of \"Bonjour-Hello\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening like that of the first track.",
+          "detail": "A fan site states that this track is the instrumental version of \"Bonjour-Hello\"."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "First surge",
+          "description": "The low end comes in and the level rises sharply, at the same point as in the first track."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Drop",
+          "description": "The level falls to near silence, and the low end returns at 3:06."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Return",
+          "description": "The low end comes back strongly after the drop."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Step up",
+          "description": "A large step up in level and low end begins the next section."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Loud stretch",
+          "description": "The loudest passage of the album, a short stretch in which the level rises above anything else on the disc."
+        },
+        {
+          "timestamp": "13:35",
+          "section": "Brief peak",
+          "description": "A short, sharp rise in level that falls back within seconds."
+        },
+        {
+          "timestamp": "16:25",
+          "section": "Second loud stretch",
+          "description": "Another loud stretch, in the same place as in the first track."
+        },
+        {
+          "timestamp": "25:46",
+          "section": "Outro",
+          "description": "The piece fades to silence."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1016 @@
+{
+  "id": "vangelis-the-bounty",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "The Bounty",
+  "year": 1995,
+  "label": "One World Music",
+  "producer": "Unknown",
+  "genre": "Soundtrack / Electronic",
+  "genreTags": [
+    "Soundtrack",
+    "Electronic"
+  ],
+  "runtime": "1:56:43",
+  "isSoundtrack": true,
+  "overview": "This two-disc set, One World Music OWM-9503/4, collects music from Roger Donaldson's 1984 film The Bounty, scored by Vangelis, with Anthony Hopkins as Captain William Bligh and Mel Gibson as Fletcher Christian. It is an unofficial release: MusicBrainz lists it as a bootleg dated August 1995, limited to 2,000 hand-numbered copies and not licensed for public release, while other sources date it to 2000. Wikipedia states that the film's soundtrack was never officially released and that \"Opening Titles\" and \"Closing Titles\" were re-recorded for the 1989 compilation Themes; its Vangelis discography lists the film among his film scores but names no Bounty soundtrack album.\n\nThe set mixes Vangelis's own cues with the traditional pieces heard in the film: MusicBrainz credits seven tracks to or with Barry Dransfield, who appears in the film as the blind fiddler, and four tracks to Native Tahitians. A KQEK review of the 2010 BSX re-recording describes the score as eighties synthesiser gear, percussion and traditional fiddle music. Disc 1 holds 20 tracks, most under four minutes; disc 2 opens with the 11-minute \"Alternate Titles\", continues with nine shorter cues and closes with the 21-minute \"The Saga of H.M.S. Bounty\". The fan site elsew.com describes the sound quality of the set as mostly poor.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Main Titles",
+      "duration": "4:18",
+      "energy": "mid",
+      "tags": [
+        "Disc 1 Opener",
+        "Film Main Titles",
+        "Steady Pulse",
+        "Slow Fade"
+      ],
+      "role": "Album role: Opens disc 1 with the film's main title music.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The music starts from near silence and reaches full level within about fifteen seconds, with a regular pulse underneath."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Brighter stretch",
+          "description": "The top end opens and the sound brightens for about fifteen seconds before it settles back."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Second opening",
+          "description": "The top end opens again, the largest change in the track."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Louder stretch",
+          "description": "The level rises to the loudest part of the track for about half a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence over the last stretch."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Trial of Lt. William Bligh",
+      "duration": "2:22",
+      "energy": "low",
+      "tags": [
+        "Barry Dransfield",
+        "Beatless",
+        "Short Cue"
+      ],
+      "role": "Album role: A short, quiet cue after the main titles; the first track credited to Barry Dransfield.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening that swells slowly over the first minute.",
+          "detail": "MusicBrainz credits the track to Barry Dransfield; the sources do not say when his part plays."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Drop-back",
+          "description": "The level falls sharply and the music thins to a very quiet stretch."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Swell",
+          "description": "The level climbs to the loudest point of the track, still without a beat, then dies away."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "23rd December 1787",
+      "duration": "2:53",
+      "energy": "low",
+      "tags": [
+        "Beatless",
+        "Slow Build",
+        "Short Cue"
+      ],
+      "role": "Album role: A short cue that builds slowly to one louder stretch and falls back.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with no clear beat."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Build",
+          "description": "The level rises in steps to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Fall-back",
+          "description": "The level falls back and the music thins out to the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Water Is Wide",
+      "duration": "4:23",
+      "energy": "low",
+      "tags": [
+        "Barry Dransfield",
+        "Fiddle Credit",
+        "Low-End Entry",
+        "Slow Fade"
+      ],
+      "role": "Album role: A mid-length, slow-moving cue; the first track for which a source credits Barry Dransfield on fiddle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds slowly for the first half-minute.",
+          "detail": "On the track as a whole, MusicBrainz credits Barry Dransfield on fiddle; the sources do not say when it plays."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Low-end entry",
+          "description": "A deep low-end layer enters and the level jumps, the largest change in the track."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Louder stretch",
+          "description": "The level rises to the loudest part of the track."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "First Day at Sea",
+      "duration": "1:48",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Steady Level",
+        "Abrupt End"
+      ],
+      "role": "Album role: A brief cue at a steady level.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The music starts quietly and reaches its full level within about ten seconds, then holds steady."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Closing rise",
+          "description": "The level rises for the last half-minute and the track stops almost at once."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Bonnie Kate",
+      "duration": "2:07",
+      "energy": "mid",
+      "tags": [
+        "Barry Dransfield",
+        "Steady Pulse",
+        "Short Cue"
+      ],
+      "role": "Album role: A short cue credited to Barry Dransfield, carried by a regular pulse from the first seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A steady pulse is present from the first seconds and carries the whole track.",
+          "detail": "MusicBrainz credits the track to Barry Dransfield; the sources do not say when his part plays."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Louder stretch",
+          "description": "The level rises for about fifteen seconds before it settles back; the track ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Cape Horn",
+      "duration": "8:42",
+      "energy": "high",
+      "tags": [
+        "Long Cue",
+        "Quiet Opening",
+        "Loud Entry"
+      ],
+      "role": "Album role: The second-longest track on disc 1, a quiet opening that turns into a sustained loud section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A quiet, sparse start with near-silent gaps that lasts almost three minutes."
+        },
+        {
+          "timestamp": "2:57",
+          "section": "Loud entry",
+          "description": "The music jumps to a much louder level and stays near it for most of the rest of the track."
+        },
+        {
+          "timestamp": "7:18",
+          "section": "Low end drops out",
+          "description": "The low end falls away for about half a minute."
+        },
+        {
+          "timestamp": "7:47",
+          "section": "Low end returns",
+          "description": "The low end returns and the level rises again."
+        },
+        {
+          "timestamp": "8:08",
+          "section": "Closing stretch",
+          "description": "The low end falls away again and the track runs out over the last half-minute."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Memories of Home",
+      "duration": "1:17",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Quiet Close"
+      ],
+      "role": "Album role: A very short, quiet cue.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a moderate level and holds it for the first forty seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Quiet close",
+          "description": "The music falls to a very quiet level for the rest of the track and dies away."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Bligh's Fury",
+      "duration": "1:36",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Low-End Burst",
+        "Dynamic Swings"
+      ],
+      "role": "Album role: A short, sharply contrasted cue with one brief loud burst.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a moderate level and drops to a very quiet stretch within about fifteen seconds."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Low-end burst",
+          "description": "A heavy low-end layer enters and the level jumps to the loudest part of the track for about 25 seconds."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Fall-back",
+          "description": "The level drops back to a very quiet texture for the rest of the track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Burial at Sea, \"Land-Ho!\"",
+      "duration": "3:14",
+      "energy": "mid",
+      "tags": [
+        "Barry Dransfield",
+        "Two Credited Works",
+        "Low-End Entry",
+        "Abrupt End"
+      ],
+      "role": "Album role: A mid-length track that MusicBrainz lists as two works, credited to Vangelis and Barry Dransfield.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with no clear beat.",
+          "detail": "MusicBrainz lists two works on this track, \"Burial at Sea\" and \"Land-Ho!\", credited to Vangelis and Barry Dransfield; the sources do not say where one gives way to the other."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low-end entry",
+          "description": "A deep low-end layer enters and the level rises."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Peak",
+          "description": "The sound brightens and the level reaches the loudest part of the track."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Pull-back",
+          "description": "The level and the top end fall back for a quieter stretch."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Low-end swell",
+          "description": "A low-end swell lifts the level again and the track ends soon after."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "The Natives of Otahiti",
+      "duration": "1:38",
+      "energy": "mid",
+      "tags": [
+        "Native Tahitians",
+        "Steady Pulse",
+        "Short Cue",
+        "Abrupt End"
+      ],
+      "role": "Album role: The first of four tracks that MusicBrainz credits to Native Tahitians, a short, pulse-driven cue.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet first few seconds.",
+          "detail": "MusicBrainz credits the track to Native Tahitians."
+        },
+        {
+          "timestamp": "0:07",
+          "section": "Pulse and low end",
+          "description": "A heavy low end enters and a regular pulse settles in and holds to the end, where the track cuts off."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Longboat Approach",
+      "duration": "3:08",
+      "energy": "mid",
+      "tags": [
+        "Native Tahitians",
+        "Steady Pulse",
+        "Moderate Level"
+      ],
+      "role": "Album role: A mid-length, pulse-driven track credited to Native Tahitians.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet first second, then the music reaches a steady, moderate level.",
+          "detail": "MusicBrainz credits the track to Native Tahitians."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Loose pulse",
+          "description": "A quiet, steady stretch with a loosely marked pulse."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Pulse firms",
+          "description": "The pulse becomes steadier and holds for the rest of the track."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Brief dip",
+          "description": "The level dips for about ten seconds before it recovers."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Drowsy Maggie",
+      "duration": "1:38",
+      "energy": "mid",
+      "tags": [
+        "Barry Dransfield",
+        "Steady Pulse",
+        "Short Cue",
+        "Abrupt End"
+      ],
+      "role": "Album role: A short, pulse-driven track credited to Barry Dransfield, with a louder section that comes back once.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A steady pulse is present from the first seconds.",
+          "detail": "MusicBrainz credits the track to Barry Dransfield; the sources do not say when his part plays."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Louder section",
+          "description": "The level rises for about fifteen seconds and then falls back."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Louder section again",
+          "description": "The louder section returns for about fifteen seconds and the track cuts off near its end."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Ritual",
+      "duration": "3:06",
+      "energy": "mid",
+      "tags": [
+        "Native Tahitians",
+        "Steady Pulse",
+        "Low-End Entry"
+      ],
+      "role": "Album role: A mid-length track credited to Native Tahitians, carried by a regular pulse from its first seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Pulse and low end",
+          "description": "A low end and a regular pulse enter within the first seconds and carry the track.",
+          "detail": "MusicBrainz credits the track to Native Tahitians."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller stretch",
+          "description": "The level is at its highest for about the next half-minute."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Settled stretch",
+          "description": "The level eases slightly and the pulse stays regular."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Fall-back",
+          "description": "The level and the middle of the sound fall back for the last stretch, which ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Forbidden Love",
+      "duration": "8:45",
+      "energy": "mid",
+      "tags": [
+        "Two Credited Works",
+        "Barry Dransfield",
+        "Fiddle Credit",
+        "Steady Pulse",
+        "Long Cue"
+      ],
+      "role": "Album role: The longest track on disc 1, a loose opening stretch that turns into five minutes of unbroken pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, loosely pulsed opening.",
+          "detail": "MusicBrainz lists this track as \"Forbidden Love / A Sailor on the Sea\", with two works and Barry Dransfield on fiddle; the rip carries only \"Forbidden Love\", and the sources do not say where one work ends or when the fiddle plays."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Pulse emerges",
+          "description": "A regular pulse appears and the level falls."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Quiet passage",
+          "description": "The level falls to a quiet stretch with almost no pulse."
+        },
+        {
+          "timestamp": "3:41",
+          "section": "Steady pulse",
+          "description": "A very regular pulse enters and holds, almost unchanged, to the end."
+        },
+        {
+          "timestamp": "6:12",
+          "section": "Top-end changes",
+          "description": "The top end opens and closes several times while the pulse stays constant; the track ends with a quick fade."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "My Young Love",
+      "duration": "3:41",
+      "energy": "low",
+      "tags": [
+        "Barry Dransfield",
+        "Fiddle Credit",
+        "Beatless",
+        "Slow Fade"
+      ],
+      "role": "Album role: A mid-length, beatless track in which a source credits Barry Dransfield on fiddle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet, beatless opening.",
+          "detail": "On the track as a whole, MusicBrainz credits Barry Dransfield on fiddle; the sources do not say when it plays."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Brightening",
+          "description": "The top end opens and the sound brightens in steps through the middle of the track."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Fullest stretch",
+          "description": "The level reaches its highest point."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Slow fade",
+          "description": "The low end and the level fall and the track fades slowly over the last three-quarters of a minute."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "To Fletcher, A Wife",
+      "duration": "0:50",
+      "energy": "low",
+      "tags": [
+        "Shortest On Disc 1",
+        "Low-End Entry",
+        "Abrupt End"
+      ],
+      "role": "Album role: The shortest track on disc 1, a cue of under a minute that rises to the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet opening."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Low-end entry",
+          "description": "A deep low-end layer enters and the level rises until the track stops almost at once."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Deserters",
+      "duration": "5:05",
+      "energy": "mid",
+      "tags": [
+        "Dynamic Swings",
+        "Late Pulse",
+        "Abrupt End"
+      ],
+      "role": "Album role: A five-minute track whose level swings between louder and quieter stretches.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at a moderate level and falls quiet after about twenty seconds."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Louder stretch",
+          "description": "The level rises again and stays high for about a minute."
+        },
+        {
+          "timestamp": "1:41",
+          "section": "Drop-back",
+          "description": "The level falls and the music stays low and thin for much of the next minute and a half; this is the biggest change in the track."
+        },
+        {
+          "timestamp": "3:22",
+          "section": "Pulse stretch",
+          "description": "A regular pulse becomes audible for about half a minute."
+        },
+        {
+          "timestamp": "4:46",
+          "section": "Closing rise",
+          "description": "The level climbs for the last twenty seconds and the track stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "Native Dance",
+      "duration": "1:09",
+      "energy": "mid",
+      "tags": [
+        "Native Tahitians",
+        "Steady Pulse",
+        "Short Cue",
+        "Abrupt End"
+      ],
+      "role": "Album role: A short, loud, pulse-driven track credited to Native Tahitians, the last of the four on disc 1.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The music starts at full level at once, with a regular pulse.",
+          "detail": "MusicBrainz credits the track to Native Tahitians."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Fuller stretch",
+          "description": "The level rises a little and the track cuts off near its end."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "A Last Night Together",
+      "duration": "2:18",
+      "energy": "low",
+      "tags": [
+        "Disc 1 Closer",
+        "Low-End Swell",
+        "Short Fade"
+      ],
+      "role": "Album role: Closes disc 1 with a quiet, even cue.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A few quiet seconds, then the main texture enters and holds an even level."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Low-end swell",
+          "description": "A low-end layer swells in for about fifteen seconds."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Close",
+          "description": "The track ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "Alternate Titles",
+      "duration": "11:10",
+      "energy": "mid",
+      "tags": [
+        "Disc 2 Opener",
+        "Steady Pulse",
+        "Long Cue",
+        "Near-Silent Lead-In"
+      ],
+      "role": "Album role: Opens disc 2 with an 11-minute track carried by one steady pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Near-silent start",
+          "description": "The track begins with about seven seconds of near silence."
+        },
+        {
+          "timestamp": "0:07",
+          "section": "Pulse enters",
+          "description": "The music enters at full level with a steady pulse that continues without a break until the last minute."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Brighter stretch",
+          "description": "The top end opens and the sound brightens for the next half-minute."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Fuller stretch",
+          "description": "The level and the middle of the sound rise slightly."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Quieter stretch",
+          "description": "The level and the top end fall back."
+        },
+        {
+          "timestamp": "5:04",
+          "section": "Darker stretch",
+          "description": "The top end falls away and the sound darkens."
+        },
+        {
+          "timestamp": "6:32",
+          "section": "Fuller stretch again",
+          "description": "The level rises and the sound fills out."
+        },
+        {
+          "timestamp": "10:19",
+          "section": "Closing stretch",
+          "description": "The top end falls away again and the level eases through the last minute, ending with a fade."
+        }
+      ]
+    },
+    {
+      "num": 22,
+      "title": "Bligh's Madness",
+      "duration": "1:35",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Low-End Entry",
+        "Dynamic Swings"
+      ],
+      "role": "Album role: A short cue with a very quiet start and one loud stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet start",
+          "description": "A very quiet opening that lasts about twenty seconds."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Loud entry",
+          "description": "The level jumps and a low end enters, the loudest stretch of the track for about half a minute."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Fall-back",
+          "description": "The level eases to a middle level that holds to the end."
+        }
+      ]
+    },
+    {
+      "num": 23,
+      "title": "Mutiny on the Bounty",
+      "duration": "4:23",
+      "energy": "high",
+      "tags": [
+        "Dynamic Swings",
+        "Near-Silent Gaps",
+        "Low-End Entry"
+      ],
+      "role": "Album role: A four-minute track in which the level swings between near silence and loud entries.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The level stays low and uneven for the first minute and a half."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Low-end entry",
+          "description": "A heavy low end enters and the level jumps, the first loud stretch."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Near-silence",
+          "description": "The level falls to near silence for several seconds, then the music returns at full level."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Final loud section",
+          "description": "After a second brief near-silence the music returns brighter and louder and stays loud to the end."
+        }
+      ]
+    },
+    {
+      "num": 24,
+      "title": "Cast Adrift",
+      "duration": "8:07",
+      "energy": "low",
+      "tags": [
+        "Dark Texture",
+        "Beatless",
+        "Low-End Weight",
+        "Long Cue"
+      ],
+      "role": "Album role: A long, dark, mostly beatless track whose deep low end falls away in its second half, ending in a fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "About three seconds of near silence, then a dark, low-end-heavy texture at a steady level with no beat."
+        },
+        {
+          "timestamp": "4:44",
+          "section": "Low end drops out",
+          "description": "The deep low end falls away and the level drops to a thinner, quieter texture."
+        },
+        {
+          "timestamp": "5:59",
+          "section": "Pulse and surges",
+          "description": "A pulse becomes audible and the level swings, with louder and quieter bursts alternating for the next minute and a half."
+        },
+        {
+          "timestamp": "7:44",
+          "section": "Fade-out",
+          "description": "The level falls away and the track fades to silence over its last stretch."
+        }
+      ]
+    },
+    {
+      "num": 25,
+      "title": "Return to Otahiti",
+      "duration": "0:41",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Low-End Entry",
+        "Abrupt End"
+      ],
+      "role": "Album role: A cue of under a minute, the first of four such cues in a row on disc 2.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A quiet start."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Low-end entry",
+          "description": "A deep low end enters and the level jumps, and the track stops abruptly near its end."
+        }
+      ]
+    },
+    {
+      "num": 26,
+      "title": "Men Against the Sea",
+      "duration": "0:33",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Low-End Entry",
+        "Abrupt End"
+      ],
+      "role": "Album role: The shortest track in the set, a half-minute cue that stops abruptly.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Near-silent start",
+          "description": "About three seconds of near silence, then a quiet opening."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Low-end entry",
+          "description": "A deep low end enters and the level jumps to its loudest, and the track stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 27,
+      "title": "Log Entries",
+      "duration": "0:36",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Rising Level",
+        "Short Fade"
+      ],
+      "role": "Album role: A very short cue whose level rises to the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet start",
+          "description": "A quiet start that reaches a moderate level within the first seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Fuller close",
+          "description": "The level rises to its highest point for the rest of the track, which ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 28,
+      "title": "The Mutineers' Threats",
+      "duration": "0:47",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Low-End Swell",
+        "Short Fade"
+      ],
+      "role": "Album role: A very short cue with a quiet, thin ending.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "About two seconds of near silence, then the music enters quickly."
+        },
+        {
+          "timestamp": "0:18",
+          "section": "Low-end swell",
+          "description": "A low-end layer swells in for about twenty seconds and then falls away toward the end."
+        }
+      ]
+    },
+    {
+      "num": 29,
+      "title": "Civilized Men",
+      "duration": "1:36",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Quiet Opening",
+        "Low-End Entry"
+      ],
+      "role": "Album role: A short cue that stays very quiet for its first half-minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A very quiet opening that lasts about half a minute."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Low-end entry",
+          "description": "A deep low end enters and the level jumps and holds to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 30,
+      "title": "Limits of Endurance",
+      "duration": "2:02",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Low-End Swells",
+        "Short Fade"
+      ],
+      "role": "Album role: The last short cue before the closing 21-minute track, rising to a louder peak near its end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A few near-silent seconds, then the music enters and settles at a low level."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Low-end entry",
+          "description": "A low-end layer enters and the level rises."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Peak",
+          "description": "A second low-end swell lifts the level to the loudest point of the track for about half a minute, and the track ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 31,
+      "title": "The Saga of H.M.S. Bounty",
+      "duration": "21:15",
+      "energy": "mid",
+      "tags": [
+        "Disc 2 Closer",
+        "Longest Track",
+        "Long Cue",
+        "Pulse Stretches"
+      ],
+      "role": "Album role: Closes the set with its longest track, nearly twice the length of the next longest, the 11-minute disc 2 opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "About three seconds of near silence, then a quiet start that reaches a moderate level with a light pulse at first.",
+          "detail": "The fan site elsew.com describes a roughly 20-minute compilation of themes on this bootleg that does not seem to come from the master tapes and appears to have been mixed and edited by the bootleggers; it names no track, and this is the only track of about that length."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "First rise",
+          "description": "The level and the low end rise to the first fuller stretch."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Quiet passage",
+          "description": "The level falls to its lowest point so far and stays low for about a minute."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Fuller stretch",
+          "description": "The level rises and stays high, without a clear beat, for about a minute."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Pulse stretch",
+          "description": "A steady pulse settles in and carries the music for almost five minutes."
+        },
+        {
+          "timestamp": "10:09",
+          "section": "Break",
+          "description": "The pulse and the level fall away and a quieter, looser stretch begins that lasts more than seven minutes."
+        },
+        {
+          "timestamp": "17:49",
+          "section": "Pulse returns",
+          "description": "The pulse returns at a louder level and holds, with few changes, to the end."
+        },
+        {
+          "timestamp": "21:06",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    }
+  ]
+}

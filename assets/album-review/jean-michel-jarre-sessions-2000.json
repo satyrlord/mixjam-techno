@@ -1,0 +1,323 @@
+{
+  "id": "jean-michel-jarre-sessions-2000",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Sessions 2000",
+  "year": 2002,
+  "label": "Disques Dreyfus · Sony Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Lounge",
+    "Cool Jazz"
+  ],
+  "runtime": "42:51",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/0/04/Sessions_2000_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Sessions_2000",
+  "overview": "Jarre's fourteenth studio album, released in autumn 2002 by Disques Dreyfus, distributed by Sony Music (Wikipedia gives 4 November 2002; MusicBrainz lists the French release on 28 October 2002). It has six long tracks named after dates, all written and produced by Jarre. Wikipedia credits Jarre with keyboards, synthesizer and sound programming and Francis Rimbert with keyboards, sampler and additional programming; it was recorded at Jarre's Croissy studio and mixed at Square Prod by Joachim Garraud. The equipment list that Wikipedia takes from the Aerozone JMJ fan site includes the Roland XP-80, Eminent 310U, ARP 2600, Minimoog, Korg Karma, Novation Supernova II, Roland JP-8000, E-mu XL7, Roland Handsonic, EMS Synthi AKS and EMS VCS 3.\n\nWikipedia describes the sound as electronica, lounge, ambient and cool jazz, and says that the album was made quickly, as one half of a two-album plan to fulfil Jarre's contract with Dreyfus after a falling-out with Francis Dreyfus (the second album, Experimental 2001, was not released). The BBC review by Lorna Palmer hears acoustic instruments, live playing and samples over ambient electronics and soft trip-hop grooves. AllMusic (Amy Hanson) gave four stars and called it energetic, invigorating and smooth. Billboard compared its restrained jazz feel to the late work of Miles Davis, and PopMatters found it enjoyable and very listenable. The album reached No. 140 on the French albums chart (Lescharts.com).",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "January 24",
+      "duration": "5:57",
+      "energy": "mid",
+      "tags": [
+        "Slow Opening",
+        "Date Title",
+        "Soft Texture",
+        "Fade-In Start"
+      ],
+      "role": "Album role: The opening track, which starts out of silence and sets the soft, flowing tone of the album before the more pulsed tracks that follow.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "The track fades in out of silence and the low end builds over the first half-minute."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Fuller section",
+          "description": "The middle of the sound fills out and the level rises.",
+          "detail": "The BBC review describes the album as ambient electronics laced with acoustic instruments and samples."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Brighter passage",
+          "description": "The top end opens up for the first time."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Bright lift",
+          "description": "The highs open again and the level stays near its fullest until about 3:40."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Gap",
+          "description": "The sound drops almost to silence for a moment, then returns."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Darker stretch",
+          "description": "The highs fall away and the texture turns darker and quieter for the last minute."
+        },
+        {
+          "timestamp": "5:44",
+          "section": "Outro",
+          "description": "The music fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "March 23",
+      "duration": "8:02",
+      "energy": "high",
+      "tags": [
+        "Steady Beat",
+        "Long Build",
+        "Trip-Hop Groove",
+        "Date Title"
+      ],
+      "role": "Album role: The first long, beat-driven track, which brings in a steady pulse within the first minute and keeps it for most of its length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless opening of layered sounds, with the highs growing over the first half-minute."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Beat entry",
+          "description": "A steady pulse enters and holds for most of the track.",
+          "detail": "The BBC review mentions soft trip-hop grooves on the album."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Low end enters",
+          "description": "A strong low end joins the beat."
+        },
+        {
+          "timestamp": "2:38",
+          "section": "Highs cut",
+          "description": "The top end drops back for a short stretch before the beat continues."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The track reaches one of its loudest stretches, which returns around 5:00 and 6:20."
+        },
+        {
+          "timestamp": "6:50",
+          "section": "Breakdown",
+          "description": "The low end and level fall away and the beat thins out."
+        },
+        {
+          "timestamp": "7:53",
+          "section": "Outro",
+          "description": "The level drops to a quiet tail and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "May 1",
+      "duration": "4:50",
+      "energy": "mid",
+      "tags": [
+        "Steady Beat",
+        "Short Track",
+        "Date Title"
+      ],
+      "role": "Album role: The shortest track, a compact, beat-led piece between the long March and June tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening in which a pulse emerges within about 20 seconds."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Beat entry",
+          "description": "The beat settles in and the level rises."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Bright change",
+          "description": "The highs open sharply, the biggest change in the first half of the track."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Highs drop",
+          "description": "The highs fall back and the texture darkens."
+        },
+        {
+          "timestamp": "2:41",
+          "section": "Highs cut",
+          "description": "The bass and the highs drop away briefly, then the full texture returns by about 2:53."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Ending",
+          "description": "The beat thins and the track ends on a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "June 21",
+      "duration": "6:19",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Quiet Opening",
+        "Beat Builds Late",
+        "Date Title"
+      ],
+      "role": "Album role: The track with the quietest opening, which takes about a minute and a half to reach a pulse and then builds in several steps.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A very quiet start from near silence, growing slowly over the first minute."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "First lift",
+          "description": "The level and the brightness rise sharply, then fall back at 1:17."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Beat entry",
+          "description": "A steady pulse takes hold and stays for most of the rest of the track."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Low end",
+          "description": "A heavy low end joins the beat."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Low-end break",
+          "description": "The low end drops out for about ten seconds, then returns."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Breakdown",
+          "description": "The low end and the highs fall away for about 15 seconds."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Final section",
+          "description": "The beat and the low end return at full level, the track's last strong stretch."
+        },
+        {
+          "timestamp": "6:10",
+          "section": "Outro",
+          "description": "The track fades."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "September 14",
+      "duration": "9:31",
+      "energy": "high",
+      "tags": [
+        "Longest Track",
+        "Full Low End",
+        "Beat-Driven",
+        "Date Title"
+      ],
+      "role": "Album role: The longest and one of the loudest tracks, a sustained, full-bodied piece that holds a pulse and a heavy low end for most of nine minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once with a strong low end and builds within 20 seconds."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Thinner stretch",
+          "description": "The low end falls back and the level dips for a short time."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Beat gap",
+          "description": "The pulse stops for about ten seconds, then returns at 3:35."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Mid-range section",
+          "description": "The low end and the highs pull back and the middle of the sound comes forward."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Full return",
+          "description": "The low end and the highs return together, the biggest change in the track."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Quieter stretch",
+          "description": "The level and the low end dip, then rebuild into the pulsed final stretch."
+        },
+        {
+          "timestamp": "9:00",
+          "section": "Outro",
+          "description": "The beat falls away and the highs are cut as the album's longest track fades."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "December 17",
+      "duration": "8:12",
+      "energy": "mid",
+      "tags": [
+        "Closing Track",
+        "Soft Pulse",
+        "Dark Texture",
+        "Date Title"
+      ],
+      "role": "Album role: The closing track, the darkest-sounding of the six, with little high-frequency content and a gentle pulse; it ends the album with a long, quiet fade.",
+      "events": [
+        {
+          "timestamp": "0:06",
+          "section": "Intro",
+          "description": "A quiet opening that rises to full level within 20 seconds."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Brightness shifts",
+          "description": "Short bright elements come and go over a dark, steady base."
+        },
+        {
+          "timestamp": "2:43",
+          "section": "Low-end cut",
+          "description": "The low end drops away for about 25 seconds, leaving the middle of the sound."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Low end returns",
+          "description": "The low end returns with a clear rise in level."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Bright lift",
+          "description": "The highs open sharply for a short stretch."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Peak",
+          "description": "A short stretch with the strongest pulse and fullest low end of the track."
+        },
+        {
+          "timestamp": "7:20",
+          "section": "Outro",
+          "description": "The level and the low end fall away, and the album ends in a long fade."
+        }
+      ]
+    }
+  ]
+}

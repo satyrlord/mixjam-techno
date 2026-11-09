@@ -1,0 +1,384 @@
+{
+  "id": "irene-papas-vangelis-odes",
+  "kind": "reference",
+  "artist": "Irene Papas & Vangelis",
+  "title": "Odes",
+  "year": 1979,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Modern Classical",
+  "genreTags": [
+    "Electronic",
+    "Modern Classical",
+    "Greek Folk"
+  ],
+  "runtime": "50:51",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/f/ff/Vangelis_Odes.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Odes_(Irene_Papas_album)",
+  "overview": "Odes is a 1979 Polydor album by Irene Papas with Vangelis, made up of eight tracks: six traditional Greek songs arranged by Vangelis and two original Vangelis pieces, \"Fire Dance\" and \"The Roots\". Wikipedia says it was recorded at Nemo Studios, London, with Vangelis performing and producing all of it, Papas singing the lead vocals and a five-person choir added on the opening track; the Discogs credits and vangelis.online name Keith Spencer-Allen as engineer. Wikipedia dates the recording to 1979, while the Discogs sleeve credits and vangelis.online say 1978, and vangelis.online adds, citing a 1978 Greek magazine article, that the album was first presented in Athens in August 1978 before its general release across Europe in 1979. The lyrics on the six traditional tracks are credited to Papas and Arianna Stassinopoulos, and vangelis.online says Papas sings Greek lyrics.\n\nWikipedia lists a Gold certification in Greece, citing Billboard of 29 August 1981, and its ratings box gives four and a half stars from AllMusic and three out of five from Record Collector (Jonny Trunk, November 2007). The vangelis.online page adds that Papas promoted the album in Greece with a 48-minute television special and that some of the music was used in the 1989 film Russicum. The rip is the 2007 Universal remaster, which vangelis.online says Vangelis remastered himself; it carries English titles in place of the 1979 French ones and runs 50:51 against the 51:27 that Wikipedia lists. The sources do not say where the voice or any instrument is heard, so the timeline notes follow measured changes in level, brightness and pulse only.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "40 Braves",
+      "duration": "5:17",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Choir",
+        "Traditional Song",
+        "Loud Start"
+      ],
+      "role": "Album role: Opener and the track on which Wikipedia places the album's five-person choir, starting loud and bright and ending in a quiet tail; the 1979 sleeve titled it \"Les 40 Braves\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a loud level with a bright top end.",
+          "detail": "Wikipedia says a five-person choir appears on this track, and vangelis.online lists five choir members; neither says where in the track the choir sings. Vangelis.online adds that Vangelis played \"Les 40 Braves\" in a different arrangement at the 1988 Olympic Flame ceremony in Athens."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Drop-back",
+          "description": "The level falls sharply and the sound becomes less bright, staying lower for about a minute."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Brighter stretch",
+          "description": "The level rises and the top end opens up for about 20 seconds."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Quiet dip",
+          "description": "The level and the top end fall sharply for about ten seconds before the sound recovers."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Build",
+          "description": "The level climbs over about half a minute into a long, loud and full stretch."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Peak",
+          "description": "The top end opens further and the loud, full sound stays bright for about 40 seconds."
+        },
+        {
+          "timestamp": "4:36",
+          "section": "Outro",
+          "description": "The level falls sharply and the low end thins out, leaving a quiet, dark tail that fades to silence over the last ten seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Little Orange Tree",
+      "duration": "5:47",
+      "energy": "low",
+      "tags": [
+        "Traditional Song",
+        "Quiet Start",
+        "Dark Texture",
+        "Slow Fade"
+      ],
+      "role": "Album role: Second track, a traditional song that begins almost inaudibly and stays quiet and dark for its first minute and a half; the 1979 sleeve titled it \"Neranzoula (Le Petit Oranger)\".",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track fades in from near silence into a quiet, dark texture with almost no top end."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Deeper layer",
+          "description": "The low end grows stronger while the sound stays dark."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Brighter layer",
+          "description": "A brighter layer enters and the level rises, and the top end stays open for about a minute and a half."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Dark stretch",
+          "description": "The top end disappears again and the sound stays dark and steady for about a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Low-end surge",
+          "description": "The level and the low end jump suddenly, then fall back over about half a minute."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Second surge",
+          "description": "A second surge of the same kind follows and lasts about 25 seconds."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Outro",
+          "description": "The level falls away and the track fades to silence over about 20 seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Fire Dance",
+      "duration": "6:01",
+      "energy": "mid",
+      "tags": [
+        "Vangelis Composition",
+        "Loud First Half",
+        "Steady Pulse",
+        "Quiet Ending"
+      ],
+      "role": "Album role: The first of the album's two Vangelis compositions, a loud, pulse-driven first half that gives way to a very quiet second half; the 1979 sleeve titled it \"La Danse Du Feu\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in over a few seconds and reaches a loud, full sound almost at once.",
+          "detail": "Wikipedia, without a citation, describes the piece as a small trilogy: the first part introduces a Greek folk dance, the second and third parts describe rural Greek landscapes, and the third part features a flute-like sound. This review does not map those parts to timestamps."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Pulse entry",
+          "description": "A steady repeating pulse settles in and keeps going for about two minutes."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brighter section",
+          "description": "The top end opens up and the sound turns brighter, with the pulse still running."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Peak",
+          "description": "The sound is at its brightest for about half a minute, with the pulse still running."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Wind-down",
+          "description": "The pulse ends, the top end fades and the level sinks over about 15 seconds."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Quiet passage",
+          "description": "The level falls abruptly to a very quiet, dark passage with no clear pulse that lasts for about a minute and 40 seconds."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Closing section",
+          "description": "The level drops again to an almost bare, very quiet texture that carries on to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Kolokotronei",
+      "duration": "3:17",
+      "energy": "low",
+      "tags": [
+        "Traditional Song",
+        "Shortest Track",
+        "Short Phrases",
+        "Sparse Texture"
+      ],
+      "role": "Album role: The shortest track on the album, a quiet and sparse traditional song placed between the first Vangelis composition and \"The River\"; the 1979 sleeve titled it \"Les Kolokotronei\".",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening phrases",
+          "description": "Short phrases at a low level start after a short silence, separated by near-silent gaps."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Louder phrases",
+          "description": "The phrases reach a higher level and hold it for about a minute."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Quieter phrases",
+          "description": "The phrases turn quieter again and the level stays low to the end."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Outro",
+          "description": "The track fades to silence over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The River",
+      "duration": "6:42",
+      "energy": "mid",
+      "tags": [
+        "Traditional Song",
+        "Strong Low End",
+        "Long Form",
+        "Slow Fade"
+      ],
+      "role": "Album role: The longest of the first five tracks, a traditional song with a heavy, sustained low end and no clear repeating pulse; the 1979 sleeve titled it \"Le Fleuve\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in over a few seconds into a quiet, dark texture with a strong low end."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Louder section",
+          "description": "The level jumps, the sound brightens and the low end grows."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, with the strongest low end, lasts about 50 seconds."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Dark stretch",
+          "description": "The top end falls away and the sound holds a steady, dark level for about a minute and a half."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Brighter return",
+          "description": "The top end returns and the sound brightens again for about 45 seconds."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Quieter stretch",
+          "description": "The level settles lower and stays there for about a minute."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Outro",
+          "description": "The track fades to silence over about ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "The Roots",
+      "duration": "8:46",
+      "energy": "mid",
+      "tags": [
+        "Vangelis Composition",
+        "Quiet Opening",
+        "Late Low-End Entry",
+        "Long Form"
+      ],
+      "role": "Album role: The second of the two Vangelis compositions and the longest track on the album, with nearly three minutes of very quiet sound before a dark, full stretch takes over; the 1979 sleeve titled it \"Racines\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens very quietly with a thin, sparse sound and almost no low end.",
+          "detail": "Wikipedia, without a citation, calls this piece an expanded version of the rural landscape in \"Fire Dance\", with a similar arrangement that strongly resembles Vangelis's earlier \"We Were All Uprooted\" from the album Earth."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Quiet texture",
+          "description": "A thin, mid-range texture settles in and stays at a very low level for more than two minutes."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "Low-end entry",
+          "description": "The low end enters suddenly and the level jumps, and the sound becomes dark, full and steady."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Mid-range lift",
+          "description": "The middle of the sound brightens slightly while the low end stays full."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Top end opens",
+          "description": "A little top end appears and the sound stays slightly brighter for about a minute."
+        },
+        {
+          "timestamp": "8:20",
+          "section": "Outro",
+          "description": "The top end falls away again and the track ends with a short fade over its last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Lamento",
+      "duration": "8:26",
+      "energy": "high",
+      "tags": [
+        "Traditional Song",
+        "Long Form",
+        "Shifting Brightness",
+        "Slow Fade"
+      ],
+      "role": "Album role: Second-longest track, a traditional song placed before the closer, with a steady low end under brightness that opens and closes repeatedly; the 1979 sleeve and the rip both use the title \"Lamento\".",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track fades in over about ten seconds into a dark, low-lying texture with a strong low end."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Fuller sound",
+          "description": "The low end deepens and the level rises into a fuller sound that is still dark."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Bright passage",
+          "description": "The top end opens and the sound turns brighter, staying mostly bright for nearly two minutes."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Shifting brightness",
+          "description": "From here the top end opens and closes repeatedly while the level and the low end hold steady."
+        },
+        {
+          "timestamp": "7:05",
+          "section": "Dark stretch",
+          "description": "The top end stays mostly closed and the low end is at its strongest for about three quarters of a minute."
+        },
+        {
+          "timestamp": "7:50",
+          "section": "Outro",
+          "description": "The level begins to fall and the track fades out slowly over about half a minute."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Menousis",
+      "duration": "6:36",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Traditional Song",
+        "Steady Pulse",
+        "Bright Sound"
+      ],
+      "role": "Album role: Closer, a traditional song that keeps a steady pulse and a loud, bright sound for most of its length; the 1979 sleeve, Wikipedia and vangelis.online spell the title \"Menousis\", while the rip and the 2007 booklet spell it \"Menoussis\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a loud, bright level with a steady repeating pulse already running."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Fuller stretch",
+          "description": "The low end strengthens and the sound turns slightly darker for about 40 seconds before the brighter sound returns."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Pulse ends",
+          "description": "The pulse stops and the top end falls away, and the sound stays dark to the end."
+        },
+        {
+          "timestamp": "6:28",
+          "section": "Outro",
+          "description": "A short fade closes the track and the album over about six seconds."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,523 @@
+{
+  "id": "pink-floyd-more",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "More",
+  "year": 1969,
+  "label": "EMI Columbia · Tower Records",
+  "producer": "Pink Floyd",
+  "genre": "Psychedelic Rock / Soundtrack",
+  "genreTags": [
+    "Psychedelic Rock",
+    "Soundtrack",
+    "Acoustic Folk",
+    "Hard Rock",
+    "Avant-Garde"
+  ],
+  "runtime": "45:01",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/40/MoreCover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/More_(soundtrack)",
+  "overview": "Pink Floyd's first soundtrack album and third studio album, written for Barbet Schroeder's film More, his directorial debut, shot largely on location in Ibiza. It was recorded in January and February 1969 at Pye Studios in London with the engineer Brian Humphries, and it is the band's first album made without Syd Barrett, who left in 1968 during the sessions for A Saucerful of Secrets and was replaced by David Gilmour. Schroeder wanted songs that are heard inside the film, such as a record playing at a party, rather than a conventional background score. Most of the music was worked out in about two weeks, semi-improvised, and with no dubbing studio in the budget the band timed the film sequences with a stopwatch. The album is credited to Pink Floyd as producer, with Norman Smith keeping an executive producer credit, and Gilmour sings every lead vocal.\n\nEMI Columbia released it in the United Kingdom on 13 June 1969 and Tower Records, a division of Capitol Records, in the United States on 9 August 1969, and Harvest Records reissued it in the United States in 1973. It reached UK No. 9 and Netherlands No. 14 in 1969, US No. 153 on the 1973 reissue, and later received a gold certification in France; \"The Nile Song\" was issued as a single in July 1969. The thirteen tracks run in two sides of seven and six, with sung songs alternating with short instrumentals and the seven-minute instrumental \"Quicksilver\" as the longest piece, and several tracks are credited to the band as a whole instead of to a named writer.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Cirrus Minor",
+      "duration": "5:17",
+      "energy": "mid",
+      "tags": [
+        "Roger Waters Song",
+        "Hammond Organ",
+        "Acoustic Guitar",
+        "Side One Opener"
+      ],
+      "role": "Album role: The opener of side one, a sung piece credited to Waters that begins almost silent and builds slowly to its full level.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "The track starts almost silent and stays at a very low level for the first minute.",
+          "detail": "The credits list Gilmour on acoustic guitar and vocals, Waters on bass guitar, and Wright on Farfisa organ and Hammond organ. The song was later included on the 1971 compilation Relics."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Full entry",
+          "description": "The level jumps sharply and the low end and the midrange fill in."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Fuller section",
+          "description": "The level rises again and the sound becomes denser, opening a long stretch near the loudest part of the track."
+        },
+        {
+          "timestamp": "4:41",
+          "section": "Closing section",
+          "description": "The level and the highs fall back and the sound thins over the last minute."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Ending",
+          "description": "The track dies away to silence over a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "The Nile Song",
+      "duration": "3:27",
+      "energy": "high",
+      "tags": [
+        "Hard Rock",
+        "Single",
+        "Roger Waters Song",
+        "Heavy Drums"
+      ],
+      "role": "Album role: The album's hard-rock song, second on side one and issued as a single in July 1969.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a high level, with no lead-in."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Main section",
+          "description": "The sound brightens and settles into a loud, even level that barely changes.",
+          "detail": "The credits list Gilmour on electric guitar and vocals, Mason on drums and Waters on bass guitar. Besides the single in July 1969, the song appeared on the compilation Relics in 1971."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Brighter section",
+          "description": "The top end rises noticeably for the last minute."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Ending",
+          "description": "The sound stops within a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Crying Song",
+      "duration": "3:33",
+      "energy": "mid",
+      "tags": [
+        "Roger Waters Song",
+        "Vibraphone",
+        "Classical Guitar",
+        "Radio Scene"
+      ],
+      "role": "Album role: A slow-building song credited to Waters, third on side one, heard in the film coming from a transistor radio.",
+      "events": [
+        {
+          "timestamp": "0:08",
+          "section": "Intro",
+          "description": "A very quiet start, with the first sound at about eight seconds and the level rising slowly.",
+          "detail": "In the film the song plays from the transistor radio in Mimsy Farmer's apartment. The credits list Gilmour on electric guitar, classical guitar and vocals, Wright on vibraphone, Mason on drums and Waters on bass guitar."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Build",
+          "description": "The low end and the level climb over about 25 seconds to a steady level."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Main section",
+          "description": "The track holds a steady level while the highs fall back and return about every half minute."
+        },
+        {
+          "timestamp": "2:49",
+          "section": "Final section",
+          "description": "The top end rises to its brightest stretch of the track."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Ending",
+          "description": "The level and the low end fall away and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Up the Khyber",
+      "duration": "2:13",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "Mason And Wright",
+        "Farfisa Organ",
+        "Piano"
+      ],
+      "role": "Album role: A short instrumental that is the only track credited to Nick Mason and Richard Wright alone, fourth on side one.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A quiet opening for about ten seconds.",
+          "detail": "The credits list Mason on drums and Wright on Farfisa organ and piano, with Waters on bass guitar. It is a studio take of a Wright and Mason segment that appeared in live performances of Interstellar Overdrive, and in the film it plays to on-screen action."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Main section",
+          "description": "The level jumps and the track holds a steady, firm level to the end."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Ending",
+          "description": "The sound stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Green Is the Colour",
+      "duration": "2:59",
+      "energy": "low",
+      "tags": [
+        "Roger Waters Song",
+        "Tin Whistle",
+        "Piano",
+        "Live Medley With Careful With That Axe, Eugene"
+      ],
+      "role": "Album role: A short, quiet song credited to Waters, fifth on side one, that later served as the opening half of The Journey in live shows.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft opening that builds to a steady level over about 30 seconds.",
+          "detail": "The credits list Gilmour on acoustic guitar and vocals, Wright on Farfisa organ and piano, Waters on bass guitar, and Lindy Mason on tin whistle."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Middle section",
+          "description": "The texture brightens a little and the level stays even."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Final section",
+          "description": "The level rises slightly for the loudest stretch of the track.",
+          "detail": "In live performance the song was medleyed with Careful With That Axe, Eugene as part of The Journey, and it stayed in the set for about two years."
+        },
+        {
+          "timestamp": "2:49",
+          "section": "Ending",
+          "description": "The sound stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Cymbaline",
+      "duration": "4:50",
+      "energy": "mid",
+      "tags": [
+        "Roger Waters Song",
+        "Bongos",
+        "Classical Guitar",
+        "Live Quadraphonic Effects"
+      ],
+      "role": "Album role: A sung song, sixth on side one and the last before the short instrumental that closes the side; the album version differs from the film version.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds over about fifteen seconds to a firm, steady level.",
+          "detail": "In the film the song plays from the radio in Mimsy Farmer's apartment. The credits list Gilmour on classical guitar and vocals, Mason on bongos, Waters on bass guitar, and Wright on Farfisa organ and piano."
+        },
+        {
+          "timestamp": "0:51",
+          "section": "First dip",
+          "description": "The level and the highs fall back briefly, then return; similar dips follow about every 45 seconds, near 1:35, 2:18 and 3:02."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Louder section",
+          "description": "The level and the top end rise for the loudest and brightest stretch of the track."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Ending",
+          "description": "The level falls and the track dies away over about ten seconds.",
+          "detail": "Live, the song was played as Nightmare until the end of 1971, with the band leaving the stage while a quadraphonic tape of effects played."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Party Sequence",
+      "duration": "1:09",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "Bongos",
+        "Tin Whistle",
+        "Side One Closer"
+      ],
+      "role": "Album role: A one-minute instrumental that closes side one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a moderate level and settles within ten seconds.",
+          "detail": "The credits list Mason on bongos and Lindy Mason on tin whistle. The track listing names no individual writer."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Ending",
+          "description": "The level falls and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Main Theme",
+      "duration": "5:26",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "Farfisa Organ",
+        "Electric Guitar",
+        "Side Two Opener"
+      ],
+      "role": "Album role: The instrumental that opens side two; a tempo variation of it, Theme (Beat), is in the film but not on the album.",
+      "events": [
+        {
+          "timestamp": "0:10",
+          "section": "Intro",
+          "description": "After a near-silent start, the first minute alternates between loud, bright bursts and quieter gaps of about ten seconds.",
+          "detail": "The credits list Gilmour on electric guitar, Mason on drums, Waters on bass guitar and Wright on Farfisa organ. The track listing names no individual writer, and the piece was played briefly in live shows in 1970."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Steady section",
+          "description": "The bursts and gaps give way to a sustained, firm level with a heavy low end."
+        },
+        {
+          "timestamp": "2:31",
+          "section": "Highs fall back",
+          "description": "The top end drops away for about fifteen seconds."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Highs return",
+          "description": "The highs come back and the level rises."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Thinner section",
+          "description": "The top end falls back again for about 40 seconds."
+        },
+        {
+          "timestamp": "4:07",
+          "section": "Final section",
+          "description": "The highs return for a long closing stretch that holds a high level."
+        },
+        {
+          "timestamp": "4:57",
+          "section": "Ending",
+          "description": "The level and the highs fall and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Ibiza Bar",
+      "duration": "3:19",
+      "energy": "high",
+      "tags": [
+        "Hard Rock",
+        "Bar Scene",
+        "Electric Guitar",
+        "Farfisa Organ"
+      ],
+      "role": "Album role: The loud, dense song second on side two, heard in the film as music playing in a bar.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a very high level and holds that level for almost the whole song.",
+          "detail": "The credits list Gilmour on electric guitar and vocals, Mason on drums, Waters on bass guitar and Wright on Farfisa organ and piano. The track listing names no individual writer."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low-end change",
+          "description": "The low end swells while the overall level stays about the same."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Second low-end change",
+          "description": "The low end swells again; further swells follow at about 1:29 and 1:59."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Final low-end change",
+          "description": "The last swell of the low end before the close."
+        },
+        {
+          "timestamp": "2:54",
+          "section": "Ending",
+          "description": "The level falls and the track dies away over about fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "More Blues",
+      "duration": "2:13",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "Blues",
+        "Electric Guitar",
+        "Alternative Version On The Early Years"
+      ],
+      "role": "Album role: A short instrumental blues, third on side two, at a lower level than the tracks around it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with no clear pulse.",
+          "detail": "The credits list Gilmour on electric guitar, Mason on drums and Waters on bass guitar. An alternative version appeared on The Early Years 1965–1972 in 2016."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Pulse enters",
+          "description": "A clear pulse appears and the low end comes in."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Louder section",
+          "description": "The highs open and the level settles higher for the rest of the track."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Ending",
+          "description": "The sound stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Quicksilver",
+      "duration": "7:14",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "Vibraphone",
+        "Sound Textures",
+        "Longest Track"
+      ],
+      "role": "Album role: The album's longest track, a seven-minute instrumental of sound textures, fourth on side two.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sparse, very quiet opening that stays at a low level for the first 45 seconds.",
+          "detail": "The credits list Gilmour on electric guitar, Wright on vibraphone and Farfisa organ, and Mason on percussion. Live, the piece was played as Sleeping in the 1969 show The Man, and the track Seabirds on The Early Years 1965–1972 is an alternative take of it."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "First swell",
+          "description": "The low end and the level rise for about half a minute, then fall back."
+        },
+        {
+          "timestamp": "1:51",
+          "section": "Fuller section",
+          "description": "The bass and the level rise into the first long, fuller stretch."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Quiet passage",
+          "description": "The level and the highs fall back for about 25 seconds."
+        },
+        {
+          "timestamp": "3:51",
+          "section": "Louder section",
+          "description": "The sound fills out again and the level rises for about half a minute."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Low end drops out",
+          "description": "The low end disappears and only quiet, higher sounds remain for about 45 seconds."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Return",
+          "description": "The level and the highs rise again, and the bass returns later in the passage."
+        },
+        {
+          "timestamp": "6:22",
+          "section": "Fade",
+          "description": "The level falls gradually and the last half minute is nearly silent."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "A Spanish Piece",
+      "duration": "1:05",
+      "energy": "low",
+      "tags": [
+        "Gilmour Composition",
+        "Classical Guitar",
+        "Percussion"
+      ],
+      "role": "Album role: A one-minute piece credited to Gilmour alone, the only individual writing credit on side two.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that reaches a steady level within about ten seconds.",
+          "detail": "The credits list Gilmour on classical guitar and percussion, and the writing credit is Gilmour's."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Final seconds",
+          "description": "The level rises slightly just before the close."
+        },
+        {
+          "timestamp": "0:56",
+          "section": "Ending",
+          "description": "The sound stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Dramatic Theme",
+      "duration": "2:16",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "Farfisa Organ",
+        "Electric Guitar",
+        "Closing Instrumental"
+      ],
+      "role": "Album role: The closing instrumental of side two and of the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with a pulse from the first seconds.",
+          "detail": "The credits list Gilmour on electric guitar, Mason on drums, Waters on bass guitar and Wright on Farfisa organ. The track listing names no individual writer."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Build",
+          "description": "The level rises over the next 40 seconds to a steady, firm level."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Easing",
+          "description": "The highs and the low end ease and the level falls slightly."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Ending",
+          "description": "The level falls away and the track ends."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,416 @@
+{
+  "id": "vangelis-the-city",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "The City",
+  "year": 1990,
+  "label": "East West (Europe) · Atlantic (USA)",
+  "producer": "Vangelis",
+  "genre": "Electronic / New Age",
+  "genreTags": [
+    "Electronic",
+    "New Age",
+    "Ambient",
+    "Concept Album"
+  ],
+  "runtime": "43:12",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/8/8c/Vangelis-The_City.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_City_(Vangelis_album)",
+  "overview": "The City is a 1990 Vangelis album released by East West in Europe and by Atlantic in the United States. Wikipedia describes it as a concept album that cites concepts from urban life, and reports that it was made entirely in a Rome hotel room while Vangelis was there for the filming of Roman Polanski's Bitter Moon, a film he had been commissioned to score. Discogs lists the CD's recording notes as Hotel De La Ville in Rome and Mega Studios in Paris, and credits Vangelis as composer, arranger, producer and performer, with Frédérick Rousseau and Philippe Colonna as engineers. Wikipedia states that Vangelis plays all instruments, exclusively synthesisers and drum machines, and credits guest voices to Kathy Hill on \"Good to See You\" and to Mikamo Yuko and Kimura Rieko on \"Twilight\" and \"Red Lights\", with footsteps and voices from Roman Polanski and Emmanuelle Seigner at points on the album.\n\nOn the rip, two beatless pieces, \"Dawn\" and \"Twilight\", sit among six beat-driven tracks, and the longest track, \"Procession\", closes the album with a long steady build, a late peak and a quiet coda. Wikipedia lists a four-star AllMusic rating and a peak at No. 3 on the Billboard New Age Albums chart.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Dawn",
+      "duration": "4:16",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Beatless",
+        "Slow Drift"
+      ],
+      "role": "Album role: Beatless opener, a quiet and slowly shifting piece that sets up the beat-driven tracks that follow.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts very quietly with no beat.",
+          "detail": "Wikipedia's note on the album's style lists a synthesised trumpet patch on this track and gives no time for it."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Upper layer",
+          "description": "A brighter layer in the upper register joins and the level rises slightly."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Low end eases",
+          "description": "The low end falls back while the top end stays bright, thinning the sound for a stretch."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Fuller texture",
+          "description": "The texture turns brighter and fuller, the largest change in the track, and no beat arrives."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Low swell",
+          "description": "The low register swells for about fifteen seconds as the upper layers recede."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Outro",
+          "description": "The level falls and a noise-like high texture appears over the last fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Morning Papers",
+      "duration": "3:56",
+      "energy": "mid",
+      "tags": [
+        "Mid-Tempo Groove",
+        "Bright Rhythm",
+        "Late Break"
+      ],
+      "role": "Album role: First beat-driven track, a beatless start that gives way to a steady mid-tempo groove holding for most of the track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts quietly and rises within seconds to a low-register opening with no clear beat.",
+          "detail": "Wikipedia's note on the album's style lists jazz for this track."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Beat entry",
+          "description": "A bright high-frequency rhythm starts and a steady mid-tempo pulse begins."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Groove",
+          "description": "A pulse in the low register joins, and the groove holds steadily from here for most of the track."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "New layer",
+          "description": "A layer in the middle register enters after a short dip in that register and brightens the arrangement."
+        },
+        {
+          "timestamp": "2:42",
+          "section": "Fuller stretch",
+          "description": "The bass register grows and the level rises for a short, fuller stretch."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Short break",
+          "description": "The beat weakens for roughly fifteen seconds while the middle register stays prominent."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Outro",
+          "description": "The beat returns, then the low end drops out and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Nerve Centre",
+      "duration": "5:30",
+      "energy": "high",
+      "tags": [
+        "Loudest Track",
+        "Heavy Groove",
+        "Noisy Intro",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: The loudest track on the rip, a slow, low-end-heavy groove that stops abruptly.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Short, noisy hits open the track at a very low level, with little else."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Build",
+          "description": "The hits turn into a continuous, noisy rhythmic pattern and the level climbs for about twenty-five seconds."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Groove",
+          "description": "The low end enters with force and the track locks into a slow, heavy groove that stays loud for most of its length.",
+          "detail": "Wikipedia's note on the album's style lists rock for this track and a synthesised guitar patch, and gives no time for it."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Low-end dip",
+          "description": "The low end drops away for about ten seconds, then the groove returns with a brighter accent."
+        },
+        {
+          "timestamp": "4:14",
+          "section": "Breakdown",
+          "description": "The low end falls away for about ten seconds while the upper layers continue."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Final section",
+          "description": "The groove returns with a strong accent and the track reaches its loudest and brightest stretch, which lasts to the end."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Outro",
+          "description": "The track stops abruptly, with a short decay of a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Side Streets",
+      "duration": "4:13",
+      "energy": "mid",
+      "tags": [
+        "Bass-Led Intro",
+        "Mid-Tempo Groove",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: Beat-driven track after the loudest piece, opening on a bass-led passage and ending on an abrupt stop.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens quietly on a bass-led passage with no beat."
+        },
+        {
+          "timestamp": "0:18",
+          "section": "Beat entry",
+          "description": "A steady mid-tempo beat starts with a brighter high-frequency layer and a deeper low end."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Build",
+          "description": "The whole arrangement fills out and the level steps up."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Peak",
+          "description": "A new part in the middle register arrives and the track reaches its loudest stretch, which lasts about 40 seconds."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Lighter stretch",
+          "description": "The deepest low end lightens and the level eases for about twenty-five seconds before the low end returns."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Thinning",
+          "description": "The middle register thins and the brighter top end comes forward as the track heads toward its end."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Outro",
+          "description": "The steady beat falls away, the low end drops out and the track stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Good to See You",
+      "duration": "6:51",
+      "energy": "mid",
+      "tags": [
+        "Kathy Hill",
+        "Spoken Voice",
+        "Steady Groove",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: The album's second-longest track, a steady groove carrying the credited spoken voice of Kathy Hill and ending in a long fade-out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet low register rises gently with no beat.",
+          "detail": "Kathy Hill is credited with a spoken voice on this track; the measurements do not show where the voice enters. Wikipedia's note on the album's style lists new age for this track."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "High layer",
+          "description": "A bright high-frequency layer enters."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Beat entry",
+          "description": "A steady groove starts with a deeper low end and the level rises."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "Fuller stretch",
+          "description": "The low end grows and the level rises, keeping the track at its fullest for about a minute."
+        },
+        {
+          "timestamp": "3:46",
+          "section": "Stripped passage",
+          "description": "The middle and high registers fall back and leave a thinner groove for about thirty-five seconds, the biggest change in the track."
+        },
+        {
+          "timestamp": "4:23",
+          "section": "Return",
+          "description": "The middle register returns and the arrangement fills out again."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Fade-out",
+          "description": "The track fades gradually over its last fifty seconds, with the groove continuing under the fade."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Twilight",
+      "duration": "4:57",
+      "energy": "low",
+      "tags": [
+        "Beatless",
+        "Japanese Voices",
+        "Sparse",
+        "Recurring Accents"
+      ],
+      "role": "Album role: The album's second beatless piece, a sparse and quiet track between the long groove of \"Good to See You\" and the beat-driven \"Red Lights\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start with no beat, and a higher layer joins after a few seconds.",
+          "detail": "Mikamo Yuko and Kimura Rieko are credited with Japanese voices on this track and on \"Red Lights\"; the measurements do not show where the voices enter. Wikipedia's note on the album's style lists new age for this track."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Accents begin",
+          "description": "Louder, brighter accents start to recur every few seconds over the quiet bed and continue for most of the track."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Louder accents",
+          "description": "The accents become louder and brighter."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Peak",
+          "description": "The loudest accent of the track falls here, and the accents then gradually weaken."
+        },
+        {
+          "timestamp": "4:18",
+          "section": "Wind-down",
+          "description": "The accents stop and the track drops to a very quiet level."
+        },
+        {
+          "timestamp": "4:44",
+          "section": "Coda",
+          "description": "A brighter, quiet high-register layer returns for the last fifteen seconds, and the track ends at a quiet level."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Red Lights",
+      "duration": "3:55",
+      "energy": "high",
+      "tags": [
+        "Beat From the Start",
+        "Japanese Voices",
+        "Bright Top Layer"
+      ],
+      "role": "Album role: Beat-driven penultimate track that starts at full level with no build-up, at a tempo close to that of \"Morning Papers\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a loud level with no build-up.",
+          "detail": "Mikamo Yuko and Kimura Rieko are credited with Japanese voices on this track and on \"Twilight\"; the measurements do not show where the voices enter."
+        },
+        {
+          "timestamp": "0:05",
+          "section": "Groove",
+          "description": "A steady groove with a clear low-register pulse settles in within the first seconds."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Bridge",
+          "description": "The pulse weakens slightly and the middle and upper registers get fuller for about twenty seconds."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Breakdown",
+          "description": "The pulse weakens for about ten seconds as the low register swells."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Bright layer",
+          "description": "A bright high-frequency layer joins and stays for about three-quarters of a minute."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Peak",
+          "description": "The bright layer is at its strongest, the brightest stretch of the track, for about 20 seconds."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Outro",
+          "description": "The low end drops out and a short, thin tail lasts to the end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Procession",
+      "duration": "9:34",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Longest Track",
+        "Long Crescendo",
+        "Quiet Coda"
+      ],
+      "role": "Album role: The longest track and the closer, a steady-pulse build to a late peak that fades to near silence, returns as a quiet coda and then fades out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens on an accent and settles within seconds into a steady mid-tempo pulse at a moderate level.",
+          "detail": "Wikipedia's note on the album's style lists a synthesised cello patch on this track and gives no time for it."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Repeating lifts",
+          "description": "The level stays steady, and short, brighter lifts in the upper registers recur through the first four and a half minutes."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Build",
+          "description": "The pulse firms and the level rises in steps over the next ninety seconds.",
+          "detail": "A 2015 blog review (ET Reviews) describes the track as built on a repeated melody, with more instruments layered as it grows more intense."
+        },
+        {
+          "timestamp": "6:15",
+          "section": "Peak",
+          "description": "The level keeps climbing and the loudest stretch of the track begins and lasts about eighty seconds."
+        },
+        {
+          "timestamp": "7:40",
+          "section": "Fade-down",
+          "description": "The level falls steadily to near silence."
+        },
+        {
+          "timestamp": "8:40",
+          "section": "Coda",
+          "description": "A quiet texture without a clear beat rises from near silence and holds for about half a minute."
+        },
+        {
+          "timestamp": "9:15",
+          "section": "Outro",
+          "description": "The coda fades to silence."
+        }
+      ]
+    }
+  ]
+}

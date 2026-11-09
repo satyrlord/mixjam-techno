@@ -1,0 +1,354 @@
+{
+  "id": "vangelis-opera-sauvage",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Opéra sauvage",
+  "year": 1979,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Nature Documentary"
+  ],
+  "runtime": "42:35",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/6/65/Opera_Sauvage.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Op%C3%A9ra_sauvage",
+  "overview": "Opéra sauvage (1979) collects music Vangelis composed for Frédéric Rossif's French television nature documentary series of the same name, after the Rossif scores L'Apocalypse des animaux and La Fête sauvage. It was recorded in 1978 and 1979 at Nemo Studios in London, with Vangelis credited as producer and arranger and Keith Spencer-Allen, Raphael Preston and Marlis Duncklau credited as engineers. Vangelis is credited with the synthesisers and all other instruments, with Jon Anderson of Yes playing harp on \"Flamants Roses\"; the orchestral sound draws on the Yamaha CS-80, and the credited instruments include Fender Rhodes electric piano, piano, drums, percussion, xylophone, and acoustic and bass guitar.\n\nThe original LP has four pieces on the first side (\"Hymne\", \"Rêve\", \"L'Enfant\", \"Mouettes\") and three on the second (\"Chromatique\", \"Irlande\", \"Flamants Roses\"), with two long pieces, \"Rêve\" and \"Flamants Roses\", of about twelve minutes each; the rip, a 1987 Polydor CD pressing, has the same seven tracks in the same order. \"Hymne\" and \"L'Enfant\" were issued as singles in 1979, in the Netherlands and the EU respectively, and both pieces later appeared in Hugh Hudson's film Chariots of Fire (1981), \"Hymne\" in a re-recording. The album reached No. 42 on the US Billboard 200 in 1986–87, after a Gallo wine commercial used its music, and stayed on that chart for 39 weeks.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Hymne",
+      "duration": "2:42",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Single (Netherlands)",
+        "Re-Recorded in Chariots of Fire",
+        "Barilla Advert Theme"
+      ],
+      "role": "Album role: Short opening theme, released as a single in the Netherlands in 1979, whose re-recorded version later scored a race in Chariots of Fire (1981).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a low level and rises to a steady level within seconds.",
+          "detail": "A re-recorded version scores Eric Liddell's first race in the Scottish Highlands in Chariots of Fire; the tune was also used in Barilla pasta advertisements in Italy in the 1980s."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Build",
+          "description": "The sound brightens and widens as the theme continues."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Peak",
+          "description": "Level and brightness reach their highest point and stay there to the close.",
+          "detail": "uDiscover Music describes the theme as having an incessant hook."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Outro",
+          "description": "A short fade ends the piece."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Rêve",
+      "duration": "12:27",
+      "energy": "mid",
+      "tags": [
+        "Fender Rhodes",
+        "Extended Piece",
+        "Slow Build",
+        "Sampled in Solarcoaster"
+      ],
+      "role": "Album role: The album's first long piece, a calm, dreamy build of about twelve minutes on the first side, with Fender Rhodes electric piano featured extensively.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening with no rhythmic pulse.",
+          "detail": "The piece is described as dreamy and calm; the Fender Rhodes electric piano is featured extensively on it."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Build",
+          "description": "A fuller, brighter layer enters and the level rises."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Pulse entry",
+          "description": "A steady low pulse begins and continues for about nine minutes."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Build",
+          "description": "The upper range brightens sharply and the sound grows louder."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Breakdown",
+          "description": "The upper range drops away briefly while the pulse continues."
+        },
+        {
+          "timestamp": "6:40",
+          "section": "Peak",
+          "description": "Level and brightness reach their highest stretch, which lasts about two and a half minutes.",
+          "detail": "uDiscover Music notes a hint of jazz as the piece builds to its climax."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Release",
+          "description": "The level steps down and the upper range softens."
+        },
+        {
+          "timestamp": "11:20",
+          "section": "Outro",
+          "description": "The pulse stops and the sound thins into a long fade.",
+          "detail": "A sample of the piece appears in Solarstone's \"Solarcoaster\" (2002)."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "L'Enfant",
+      "duration": "4:58",
+      "energy": "mid",
+      "tags": [
+        "Single (EU)",
+        "Chariots of Fire Source Music",
+        "The Year of Living Dangerously",
+        "Melodic Theme"
+      ],
+      "role": "Album role: Melodic single after the long \"Rêve\" on the first side, released in the EU in 1979 and later used in two films.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a regular rhythmic pulse and no low end.",
+          "detail": "Director Hugh Hudson meant to open Chariots of Fire (1981) with this piece, but Vangelis persuaded him to accept a new main theme; Hudson then used it in the film as music played by a brass band. It also plays in two romantic scenes of The Year of Living Dangerously (1982)."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Low-end entry",
+          "description": "The low end enters and the level rises clearly."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Build",
+          "description": "The sound brightens as the upper range opens up."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Breakdown",
+          "description": "A brief dip in level and brightness lasts about ten seconds, then the full sound returns."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Peak",
+          "description": "The loudest stretch of the piece."
+        },
+        {
+          "timestamp": "4:48",
+          "section": "Outro",
+          "description": "A fade of about ten seconds ends the piece."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Mouettes",
+      "duration": "2:28",
+      "energy": "low",
+      "tags": [
+        "Short Theme",
+        "Side One Closer"
+      ],
+      "role": "Album role: Short closing piece of the first side, built on a simple theme developed instrumentally.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Fades in from silence at a low level."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low-end entry",
+          "description": "A low end enters beneath the theme and the sound fills out."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Peak",
+          "description": "The sound grows markedly louder and fuller, the loudest passage of the piece."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Outro",
+          "description": "A short fade ends the piece."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Chromatique",
+      "duration": "3:26",
+      "energy": "mid",
+      "tags": [
+        "Chromatic Line",
+        "Acoustic Guitar",
+        "Bass Guitar",
+        "Side Two Opener"
+      ],
+      "role": "Album role: Opens the second side with a steady rhythmic piece built on a chromatic instrumental line over acoustic guitar chords.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a moderate level and a regular rhythmic pulse settles within seconds.",
+          "detail": "The piece is described as a chromatic instrumental line with chords on acoustic guitar, and bass guitar is credited on this track."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Build",
+          "description": "The upper range brightens and the level rises a little."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Peak",
+          "description": "The sound reaches its brightest and loudest stretch, which continues to the close."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Outro",
+          "description": "A fade of under ten seconds ends the piece."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Irlande",
+      "duration": "4:43",
+      "energy": "mid",
+      "tags": [
+        "Simple Theme",
+        "Distant Bell",
+        "Alternating Passages"
+      ],
+      "role": "Album role: Second piece of the second side, a simple theme developed instrumentally that alternates quiet and full passages before the closing long piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Fades in quietly and settles at a moderate level.",
+          "detail": "uDiscover Music hears an air of Celtic mystery in the piece and the incessant tolling of a distant bell."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Sparse passage",
+          "description": "The sound thins: the level falls and the low end drops away for about half a minute."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Full passage",
+          "description": "The level and the low end return for the first full passage, which lasts about half a minute."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Quiet passage",
+          "description": "The full sound falls back to a quiet, thin passage."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Full passage",
+          "description": "The full sound returns, again for about half a minute."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Quiet passage",
+          "description": "The level drops once more and stays low for about forty seconds."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Final passage",
+          "description": "The sound returns to a moderate, fuller level for the last passage."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "A fade of about ten seconds ends the piece."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Flamants Roses",
+      "duration": "11:51",
+      "energy": "high",
+      "tags": [
+        "Jon Anderson",
+        "Harp",
+        "Multi-Part Piece",
+        "Bluesy Finale"
+      ],
+      "role": "Album role: The closing long piece of about twelve minutes, in several parts that move from slow to upbeat and end in a bluesy finale, with Jon Anderson of Yes on harp.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Fades in from silence; the opening is quiet, in the middle range, with almost no low end.",
+          "detail": "Jon Anderson of Yes is credited with harp on this track."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Build",
+          "description": "A brighter, louder layer enters."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Pause",
+          "description": "The sound drops out for a few seconds before resuming."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Low-end entry",
+          "description": "The low end enters and the level rises."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Breakdown",
+          "description": "The sound falls to near-silence for about ten seconds."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Swell",
+          "description": "The first loud passage arrives as a short swell that falls away again."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Peak",
+          "description": "A deep low end and a steady pulse enter, and the piece reaches its loudest and brightest section, which lasts about three minutes."
+        },
+        {
+          "timestamp": "7:55",
+          "section": "Interlude",
+          "description": "The loud section stops abruptly and a much quieter section follows."
+        },
+        {
+          "timestamp": "10:25",
+          "section": "Final section",
+          "description": "The low end returns for the closing section.",
+          "detail": "The piece is described as moving from slow to upbeat and ending with a bluesy finale."
+        },
+        {
+          "timestamp": "11:20",
+          "section": "Outro",
+          "description": "The sound thins and fades out over about half a minute."
+        }
+      ]
+    }
+  ]
+}

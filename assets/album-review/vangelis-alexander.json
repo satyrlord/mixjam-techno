@@ -1,0 +1,686 @@
+{
+  "id": "vangelis-alexander",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Alexander",
+  "year": 2004,
+  "label": "Sony Classical",
+  "producer": "Vangelis",
+  "genre": "Electronic / Classical",
+  "genreTags": [
+    "Electronic",
+    "Classical",
+    "Soundtrack",
+    "Orchestral"
+  ],
+  "runtime": "56:22",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/1f/Alexander_cover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Alexander_(soundtrack)",
+  "overview": "Alexander is Vangelis's score for Oliver Stone's 2004 film Alexander, about Alexander the Great; he began composing in September 2003 and worked for almost a year while the film was re-edited, writing some of the dance music before the scenes were shot. He puts the music at about 60 percent synthesiser and 40 percent live, and says the orchestra had to be recorded separately. Nic Raine orchestrated and conducted the orchestra and choir, which were recorded at Studio Guillaume Tell in Paris, and Philippe Colonna mixed; Wikipedia puts the orchestra at around 200 players. Vangelis says he recorded more than twice as much music as the CD holds, and the fan site Elsewhere lists several CD cues as different recordings or edits of the film versions.\n\nFilmtracks divides the score between large ensemble-and-electronics cues and subtler, source-like cues for the erotic and Eastern sequences, clustered from \"One Morning at Pella\" to \"Bagoas' Dance\", and counts the run from \"Across the Mountains\" to \"Eternal Alexander\" as over 16 minutes of ambient mass. Sony Classical issued the album in 2004, and this review follows the 18-track CD (catalogue 0929422001, Europe and the UK) that the rip matches; the German and US editions add a nineteenth track, \"Bizarre Bazar\", which Wikipedia says was not used in the film. It reached No. 5 on the US Billboard New Age Albums chart, was certified Platinum in Hungary in 2005, and won the Public Choice Award from the World Soundtrack Academy in 2005. Ratings varied widely; as Wikipedia's rating box lists them, AllMusic gave two and a half stars out of five, Film Score Monthly one, Soundtrack.Net four and Filmtracks five.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Introduction",
+      "duration": "1:31",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Quiet Lead-In",
+        "Differs From Film"
+      ],
+      "role": "Album role: A quiet lead-in of about a minute and a half that opens the album before the first full-level cue.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent start from which the sound rises within the first few seconds.",
+          "detail": "The fan site Elsewhere lists the album recording of this cue among those that differ from the version heard in the film."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Build",
+          "description": "The top end opens and the level rises."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins and lasts about 15 seconds."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Outro",
+          "description": "The level falls away and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Young Alexander",
+      "duration": "1:36",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Quiet Break",
+        "Filmtracks Highlight"
+      ],
+      "role": "Album role: The first full-level cue, after the quiet \"Introduction\"; Filmtracks counts it with \"Titans\" among the album's highlights.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening whose level rises within the first ten seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Full sound",
+          "description": "The top end opens and the level stays high for about 40 seconds."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Quiet passage",
+          "description": "The level drops sharply and the texture thins for about 15 seconds."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Return",
+          "description": "The full sound returns and holds until the closing seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Titans",
+      "duration": "3:59",
+      "energy": "high",
+      "tags": [
+        "Choral Cue",
+        "Steady Pulse",
+        "War Theme",
+        "Edited For Album"
+      ],
+      "role": "Album role: The first large choral cue and, according to the fan site Elsewhere, probably the most recognisable melody on the album; Filmtracks calls its theme a theme of war.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with a steady pulse audible from the first seconds.",
+          "detail": "Elsewhere lists the album edit of this cue among those edited differently from the film."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Build",
+          "description": "The level climbs gradually for about a minute while the pulse continues."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Lift",
+          "description": "The top end opens and the sound grows brighter and fuller.",
+          "detail": "Filmtracks calls the interlude in this stretch the best moment of the track."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Pull-back",
+          "description": "The top end and the level ease back for about 25 seconds before the sound fills out again."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch begins and holds to a clean stop at the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Drums of Gaugamela",
+      "duration": "5:20",
+      "energy": "peak",
+      "tags": [
+        "Heavy Percussion",
+        "Chanting",
+        "Epirus Polyphonic Ensemble",
+        "Edited For Album"
+      ],
+      "role": "Album role: A large-scale percussion and chanting cue that the fan site Elsewhere calls probably the most filmic piece on the album, placed directly after \"Titans\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A moderate-level opening without a steady beat.",
+          "detail": "The release credits name the Epirus Polyphonic Ensemble for vocals on this track, and Elsewhere lists the album edit among those edited differently from the film."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Beat entry",
+          "description": "A driving pulse enters and the level jumps.",
+          "detail": "Elsewhere describes the track as a driving rhythm of heavy percussion, with brasses and strings doing battle under exotic chanting."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Lift",
+          "description": "The top end opens and the sound grows brighter and fuller while the pulse carries on."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Pull-back",
+          "description": "The top end falls back for a short stretch."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Peak",
+          "description": "The sound brightens again and the loudest stretch of the track begins, lasting about half a minute."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Outro",
+          "description": "The pulse and the full sound stop together, leaving a short tail."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "One Morning at Pella",
+      "duration": "2:11",
+      "energy": "low",
+      "tags": [
+        "Interlude",
+        "Quiet Cue",
+        "Added In Final Cut"
+      ],
+      "role": "Album role: A quiet interlude after the two large cues \"Titans\" and \"The Drums of Gaugamela\", starting the subtler cluster that Filmtracks places between this track and \"Bagoas' Dance\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, thin opening that stays low for over a minute.",
+          "detail": "Wikipedia says this is the one track that was not heard in the film at all until the Final Cut version; Elsewhere lists it as appearing in the Final Cut."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Entry",
+          "description": "The level and the top end rise sharply and the texture fills out for about 45 seconds."
+        },
+        {
+          "timestamp": "2:07",
+          "section": "Outro",
+          "description": "The level falls away to the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Roxane's Dance",
+      "duration": "3:25",
+      "energy": "mid",
+      "tags": [
+        "Dance Cue",
+        "Violin And Harp",
+        "Steady Groove"
+      ],
+      "role": "Album role: The first of the album's two dance-titled cues, after \"One Morning at Pella\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent start that settles into a quiet opening."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Build",
+          "description": "The level and the top end climb quickly."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Beat entry",
+          "description": "A steady pulse settles in and the bright, full sound holds almost unchanged for about two and a half minutes.",
+          "detail": "Wikipedia, citing Gramophone, lists violin, harp and percussion for this track and \"Gardens of Delight\". Vangelis told Soundtrack.Net in 2004 that he wrote some of the dance music before the scenes were shot, working with the choreographer."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Break",
+          "description": "The beat and the top end drop out and a quiet tail closes the track."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Eastern Path",
+      "duration": "2:58",
+      "energy": "mid",
+      "tags": [
+        "Duduk",
+        "Vahan Galstian",
+        "Eastern Cue"
+      ],
+      "role": "Album role: A cue inside the cluster that Filmtracks describes as source-like underscore for the erotic and Eastern sequences, with duduk by Vahan Galstian according to the release credits.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening whose level rises within the first ten seconds."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brightening",
+          "description": "The top end opens and the sound grows brighter."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch begins and lasts about half a minute."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Outro",
+          "description": "The level falls and the track ends in a short tail."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Gardens of Delight",
+      "duration": "5:24",
+      "energy": "mid",
+      "tags": [
+        "Vocals",
+        "Violin And Harp",
+        "Late Beat Entry",
+        "Longest Track"
+      ],
+      "role": "Album role: The longest track on the album, inside the cluster of subtler, source-like cues that Filmtracks places between \"One Morning at Pella\" and \"Bagoas' Dance\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening at a low level.",
+          "detail": "Wikipedia, citing Gramophone, lists violin, harp and percussion for this track and \"Roxane's Dance\"."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Lift",
+          "description": "The level and the top end rise."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Beat entry",
+          "description": "A steady pulse enters and the sound settles into one groove for over three minutes.",
+          "detail": "The release credits name Irina Valentinova-Karpouchina for vocals on this track."
+        },
+        {
+          "timestamp": "5:02",
+          "section": "Outro",
+          "description": "The beat and the level fall away and the track fades to silence over about 20 seconds."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Roxane's Veil",
+      "duration": "4:40",
+      "energy": "mid",
+      "tags": [
+        "Vanessa-Mae",
+        "Violin",
+        "Konstantinos Paliatsaras",
+        "Love-Scene Theme"
+      ],
+      "role": "Album role: The track credited to Vanessa-Mae on violin, with vocals by Konstantinos Paliatsaras and Irina Valentinova-Karpouchina according to the release credits; Elsewhere says it was originally composed for her album Choreography and that its melody was used in the film for a love scene between Alexander and Roxane.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening.",
+          "detail": "Elsewhere says the CD uses the recording made with Vanessa-Mae, not the harp-and-strings version that Vangelis recorded for the film."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Beat entry",
+          "description": "A steady pulse and a deep low end enter."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Lift",
+          "description": "The level rises and the sound brightens and fills out."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch begins and runs to the ending."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The sound stops abruptly, leaving a short tail."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Bagoas' Dance",
+      "duration": "2:29",
+      "energy": "mid",
+      "tags": [
+        "Dance Cue",
+        "Strong Beat",
+        "Low-End Entry"
+      ],
+      "role": "Album role: The second dance-titled cue and the last of the cluster that Filmtracks describes as moving from exotic dance pieces to straight new-age and rock rhythms.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening without a steady beat."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Low-end entry",
+          "description": "A deep low end enters beneath the quiet opening."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Beat entry",
+          "description": "A strong, steady beat enters and the sound becomes brighter and louder for the rest of the track."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Outro",
+          "description": "The beat stops at once and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "The Charge",
+      "duration": "1:41",
+      "energy": "high",
+      "tags": [
+        "Short Cue",
+        "Rhythmic Pulse",
+        "Edited For Album"
+      ],
+      "role": "Album role: A short cue that follows the subtler middle cluster and leads toward the album's closing run.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that climbs in level and brightness for about half a minute.",
+          "detail": "Elsewhere lists the album edit of this cue among those edited differently from the film."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Full sound",
+          "description": "The sound reaches its full, bright level."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Beat entry",
+          "description": "A rhythmic pulse emerges as the top end eases back."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Drop-back",
+          "description": "The level and the low end fall back for the closing stretch."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Preparation",
+      "duration": "1:42",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Steady Pulse",
+        "Fade Ending"
+      ],
+      "role": "Album role: A short, pulse-driven cue that leads into the closing run of five cues, from \"Across the Mountains\" to \"Eternal Alexander\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulsing, moderate-level cue starts at once, without a quiet lead-in."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brightening",
+          "description": "The top end opens and the sound brightens for about half a minute."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Thinning",
+          "description": "The top end drops out and the sound darkens."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Outro",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Across the Mountains",
+      "duration": "4:12",
+      "energy": "mid",
+      "tags": [
+        "Closing Run",
+        "Long Build",
+        "Differs From Film"
+      ],
+      "role": "Album role: The start of the closing run of five cues, from \"Across the Mountains\" to \"Eternal Alexander\", which Filmtracks counts as over 16 minutes of ambient mass.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that builds in level over the first twenty seconds."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Brightening",
+          "description": "The top end opens and the sound brightens.",
+          "detail": "Elsewhere lists the album recording of this cue among those that differ from the version heard in the film."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Lift",
+          "description": "The level and the low end rise."
+        },
+        {
+          "timestamp": "2:54",
+          "section": "Pull-back",
+          "description": "The level and the top end fall back for about 35 seconds."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch of the track begins."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Outro",
+          "description": "The sound stops with a short tail."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Chant",
+      "duration": "1:38",
+      "energy": "low",
+      "tags": [
+        "Closing Run",
+        "Short Cue",
+        "Low Level"
+      ],
+      "role": "Album role: A short, low-level cue in the closing run, ahead of \"Immortality\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level with a dark tone."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Lift",
+          "description": "The level and the low end rise a little."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Closing stretch",
+          "description": "The level rises slightly again, to the loudest point of the track."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Immortality",
+      "duration": "3:18",
+      "energy": "low",
+      "tags": [
+        "Closing Run",
+        "Slow Build",
+        "Longer Promo Version"
+      ],
+      "role": "Album role: A slow-building cue in the closing run; the fan site Elsewhere lists a longer version on the \"For Your Consideration\" promotional CD-R.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, dark-toned opening."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Swell",
+          "description": "A short swell lifts the level for about ten seconds before the sound settles back."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Lift",
+          "description": "The level and the top end rise for a moment and then fall back."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Build",
+          "description": "The level jumps and then builds for about a minute toward the loudest point."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Outro",
+          "description": "The sound stops abruptly at its loudest, leaving a short tail."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Dream of Babylon",
+      "duration": "2:41",
+      "energy": "mid",
+      "tags": [
+        "Closing Run",
+        "Titans Reprise",
+        "Quiet Tail"
+      ],
+      "role": "Album role: A pulse-driven cue ahead of the closing pair \"Eternal Alexander\" and \"Tender Memories\"; Filmtracks hears a phrase of the \"Titans\" theme reprised near its end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that rises over about 20 seconds."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Beat entry",
+          "description": "A pulse and a fuller, brighter sound enter and hold for about 50 seconds."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Drop-out",
+          "description": "The pulse stops and the level dips briefly before the full sound returns."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Quiet tail",
+          "description": "The level drops sharply and the track runs on quietly for almost a minute.",
+          "detail": "Filmtracks reports the sound of a solid wind blowing between this track and \"Eternal Alexander\"."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Eternal Alexander",
+      "duration": "4:37",
+      "energy": "high",
+      "tags": [
+        "Closing Run",
+        "Chorus And Orchestra",
+        "Guitar",
+        "Folk-Tune Opening"
+      ],
+      "role": "Album role: The finale of the closing run; Wikipedia, citing Gramophone, groups it with \"Tender Memories\" as the album's more reflective tracks, with an exotic oriental flavour and a chorus, symphony orchestra and guitar.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that stays at a low level for about 50 seconds.",
+          "detail": "Wikipedia, citing Gramophone, says this track and \"Tender Memories\" begin with a folk tune."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Beat entry",
+          "description": "A steady pulse becomes audible while the level stays moderate."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Build",
+          "description": "The level and the top end start to climb and keep rising for over a minute."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Drop-back",
+          "description": "The level and the top end fall away sharply for about 20 seconds."
+        },
+        {
+          "timestamp": "3:03",
+          "section": "Peak",
+          "description": "The full sound returns and builds to the loudest stretch of the track, which runs to the ending."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The sound stops abruptly, leaving a very short tail."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "Tender Memories",
+      "duration": "2:59",
+      "energy": "low",
+      "tags": [
+        "Closing Cue",
+        "Guitar And Harp",
+        "Folk-Tune Opening",
+        "Differs From Film"
+      ],
+      "role": "Album role: The closing cue; Filmtracks describes a modern, romantic guitar-and-harp sound, and Adrian Edwards of Gramophone, quoted on Wikipedia, says it and \"Eternal Alexander\" could become the album's most frequently aired themes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening whose level rises within the first few seconds.",
+          "detail": "Elsewhere lists the album recording of this cue among those that differ from the version heard in the film."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brightening",
+          "description": "The top end opens a little and the level rises slightly for the rest of the track."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Fade-out",
+          "description": "The sound fades out and the last stretch of the track is silent."
+        }
+      ]
+    }
+  ]
+}

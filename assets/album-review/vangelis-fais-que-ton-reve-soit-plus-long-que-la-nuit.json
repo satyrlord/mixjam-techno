@@ -1,0 +1,227 @@
+{
+  "id": "vangelis-fais-que-ton-reve-soit-plus-long-que-la-nuit",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Fais que ton rêve soit plus long que la nuit",
+  "year": 1972,
+  "label": "Reprise Records",
+  "producer": "Vangelis",
+  "genre": "Musique concrète / Sound collage",
+  "genreTags": [
+    "Musique Concrète",
+    "Sound Collage",
+    "Avant-garde",
+    "Experimental"
+  ],
+  "runtime": "35:50",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/8/81/Fais_que_ton_reve_soit_plus_long_que_la_nuit_cover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Fais_que_ton_r%C3%AAve_soit_plus_long_que_la_nuit",
+  "overview": "Fais que ton rêve soit plus long que la nuit, subtitled \"poème symphonique\", was released in 1972 on Reprise (54009) in France and Greece only, and Wikipedia's article on Vangelis calls it his first solo album. It was recorded in 1971 at Europa-Sonor studio in Paris with Charles Raucher as engineer, and Discogs and the official Vangelis site credit Vangelis Papathanassiou with composition, arrangement and production. The subject is the May 1968 student protests in France: Wikipedia describes a collage of music, field recordings, news snippets and protest songs, the elsew.com discography adds piano themes and a few early synthesizers, the words come from inscriptions on the walls of Paris, and the sleeve credits unreleased stereo recordings made in May 1968 by Luc Périni. The sleeve lists 22 named participants and the fanfare La Gerbe des Mandolines, and Wikipedia says that, apart from the violinist Michel Ripoche, none of them seem to be professional musicians or singers. Some early copies include a small pink insert, signed Vangelis P., that advises listening in silence and at high volume (Discogs).\n\nEach side of the LP carries one continuous piece (15:32 and 15:25 listed, 30:57 in all); Wikipedia lists six titled parts on side one and four on side two, the official Vangelis site lists no separate tracks, and the rip keeps each side as one track. The rip has four tracks of 35:50 in all: Parts 1 and 2 run 15:22 and 15:23, close to the two sides, and Parts 3 and 4, at 2:39 and 2:25, have no counterpart in the LP listings, although the official site lists a 1972 single of about 2:30 (Reprise 14226) that no source ties to them. None of the sources says where in the pieces any of the elements above is heard, so the track notes describe only the level, brightness, low end and pulse measured on the rip.\n\nSection timestamps are measured on a rip of the record and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Fais que ton rêve soit plus long que la nuit, Part 1",
+      "duration": "15:22",
+      "energy": "mid",
+      "tags": [
+        "Sound Collage",
+        "May 1968",
+        "Long Continuous Part",
+        "Steady Pulse Stretch"
+      ],
+      "role": "Album role: The first long part, within ten seconds of the 15:32 listed for side A of the LP; it opens quietly, builds to a loud plateau and a steady pulse in its first half, and then alternates quiet stretches with sudden loud returns.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a low level with dark, sparse sound and stays quiet for most of the first minute."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Burst",
+          "description": "The top end jumps and the level rises for about ten seconds, then falls back."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Plateau",
+          "description": "The sound reaches its loudest sustained level so far and holds it for about a minute and a quarter."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Beat entry",
+          "description": "A steady, bass-heavy pulse sets in and holds for about a minute and a half."
+        },
+        {
+          "timestamp": "6:03",
+          "section": "Break",
+          "description": "The pulse stops and the top end drops briefly; the level then rises and falls unevenly for about a minute."
+        },
+        {
+          "timestamp": "7:38",
+          "section": "Sudden burst",
+          "description": "After a brief near-silent dip, a loud, bass-heavy burst breaks in for several seconds, one of the sharpest jumps in this part."
+        },
+        {
+          "timestamp": "8:20",
+          "section": "Quiet stretch",
+          "description": "The level falls to one of the quietest stretches of the part, with almost no top end, for about twenty seconds."
+        },
+        {
+          "timestamp": "9:32",
+          "section": "Plateau",
+          "description": "The full sound returns after a second quiet drop and holds a steady, moderately loud level with a heavy low end for nearly three minutes."
+        },
+        {
+          "timestamp": "12:25",
+          "section": "Sparse stretch",
+          "description": "The level drops and the sound turns thin and uneven for nearly two minutes."
+        },
+        {
+          "timestamp": "14:20",
+          "section": "Final build",
+          "description": "The level rises and the tone moves higher for about half a minute, then the level begins to fall."
+        },
+        {
+          "timestamp": "15:08",
+          "section": "Outro",
+          "description": "The sound falls away over about twelve seconds and the track ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Fais que ton rêve soit plus long que la nuit, Part 2",
+      "duration": "15:23",
+      "energy": "high",
+      "tags": [
+        "Sound Collage",
+        "May 1968",
+        "Long Continuous Part",
+        "Loud Mid-Section",
+        "Long Quiet Stretches"
+      ],
+      "role": "Album role: The second long part, within two seconds of the 15:25 listed for side B of the LP; it opens louder and brighter than Part 1, has its loudest stretch about halfway through, and closes with a short build after long quiet passages.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The sound rises from silence within about two seconds to a moderate level, brighter than the opening of Part 1."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Plateau",
+          "description": "The level and the low end rise to a loud, steady stretch of about a minute and a half."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Drop",
+          "description": "The level falls sharply and the top end thins out; the sound stays lower and darker for about half a minute."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Brighter passage",
+          "description": "The tone suddenly brightens and the sound stays brighter and moderately loud for about a minute and a half, with a few dips in level."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Thin passage",
+          "description": "A sharp dip lowers the level, and the low end then stays thin for about a minute as the level recovers."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Low stretch",
+          "description": "The top end falls well down and the level stays low and uneven for nearly two minutes, with brief surges in the low end."
+        },
+        {
+          "timestamp": "7:48",
+          "section": "Peak",
+          "description": "The sound jumps to the loudest stretch of the part, with a heavy low end, and holds a loud level for about a minute and a half."
+        },
+        {
+          "timestamp": "9:33",
+          "section": "Breakdown",
+          "description": "The level falls and stays very low, with almost no top end, for about a minute and a half."
+        },
+        {
+          "timestamp": "11:10",
+          "section": "Build",
+          "description": "The level and the top end climb to a loud, bright stretch of about three-quarters of a minute."
+        },
+        {
+          "timestamp": "11:58",
+          "section": "Drop",
+          "description": "The sound falls abruptly to a nearly empty, thin sound, and the level stays low and uneven for over two minutes."
+        },
+        {
+          "timestamp": "14:10",
+          "section": "Final build",
+          "description": "The level and the top end rise again for about half a minute before falling back to a lower level."
+        },
+        {
+          "timestamp": "15:14",
+          "section": "Outro",
+          "description": "The level lifts for a few seconds near the end, then the sound drops away in a quick fade."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Fais que ton rêve soit plus long que la nuit, Part 3",
+      "duration": "2:39",
+      "energy": "high",
+      "tags": [
+        "Extra Short Part",
+        "Loud Dense Level",
+        "Fast Steady Pulse",
+        "Not In LP Listings"
+      ],
+      "role": "Album role: The first of two short extra parts; it has no counterpart in the LP listings, holds a loud, dense level with a fast steady pulse for almost its whole length, and fades out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts almost at once at a high level, with a very heavy low end, a dense sound and a fast steady pulse."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Brighter patch",
+          "description": "The tone turns slightly brighter for about twenty seconds at an unchanged level, then settles back."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Outro",
+          "description": "The level falls away over about nine seconds and the track ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Fais que ton rêve soit plus long que la nuit, Part 4",
+      "duration": "2:25",
+      "energy": "high",
+      "tags": [
+        "Extra Short Part",
+        "Loud Dense Level",
+        "Not In LP Listings"
+      ],
+      "role": "Album role: The second short extra part; it has no counterpart in the LP listings, runs at a loud, dense level with a less regular pulse than Part 3, and fades out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts at once at a high level with a heavy low end; the level is slightly lower for the first fifteen seconds before the sound fills out."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Dip",
+          "description": "The level eases back for about half a minute and then returns to a loud level."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Outro",
+          "description": "The sound falls away over about eight seconds and the track ends in silence."
+        }
+      ]
+    }
+  ]
+}

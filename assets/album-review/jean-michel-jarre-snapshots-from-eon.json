@@ -1,0 +1,240 @@
+{
+  "id": "jean-michel-jarre-snapshots-from-eon",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Snapshots From EōN",
+  "year": 2019,
+  "label": "Columbia · Sony Music",
+  "producer": "Unknown",
+  "genre": "Electronic / Generative",
+  "genreTags": [
+    "Electronic",
+    "Generative"
+  ],
+  "runtime": "2:10:10",
+  "coverUrl": "https://coverartarchive.org/release/7ae0462a-289d-4bb1-bfd9-a3942b6292bf/front",
+  "coverSource": "https://musicbrainz.org/release/7ae0462a-289d-4bb1-bfd9-a3942b6292bf",
+  "overview": "Snapshots From EōN is a set of three long pieces from Jarre's EōN project, released by Columbia and Sony Music on 13 December 2019 under catalogue number 19439704931 (MusicBrainz). EōN began as an iOS application that Jarre announced on 7 November 2019: it pairs morphing graphics, made with an algorithm by Alexis André of Sony Computer Science Laboratories, with music generated from about seven hours of material that Jarre recorded. The music is different on every device, and the algorithm that composes it on the fly under rules set by Jarre was developed by BLEASS (Wikipedia, Jean-Michel Jarre). The same article says a limited deluxe box set was later released with excerpts from the application. No source consulted states whether this release is that box set, so the pieces are described here only as excerpts of generated music. The owner's rip holds the three pieces as Snapshot 1 and Snapshot 2 on the first disc and Snapshot 3 on the second.\n\nThe sources name no producer, so none is given here. The notes below come from measuring the owner's rip rather than from listening notes: each piece is a long, continuous stream that moves between quiet, low-pulse passages and fuller, bass-heavy ones, with abrupt changes of level and brightness between sections. Because the music was generated from recorded material, the section boundaries are rough marks of where the sound changes, not composed movements.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Snapshot 1 From EōN",
+      "duration": "39:29",
+      "energy": "mid",
+      "tags": [
+        "Generative Excerpt",
+        "Long Form",
+        "Pulsed Passages",
+        "Abrupt Changes"
+      ],
+      "role": "Album role: The opening piece of the set and of the first disc; a long stream that alternates pulsed, full-sounding stretches with quiet, pulse-free ones.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "The sound fades in from silence and reaches a full texture within seconds."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Sudden entry",
+          "description": "A much louder, brighter and fuller sound arrives in one step."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Pulse",
+          "description": "A pulsed low end enters and carries the music for the next stretch."
+        },
+        {
+          "timestamp": "5:03",
+          "section": "Pulse eases",
+          "description": "The pulse thins and the highest layers drop back."
+        },
+        {
+          "timestamp": "9:49",
+          "section": "Open passage",
+          "description": "The pulse falls away and the texture turns brighter and looser."
+        },
+        {
+          "timestamp": "11:26",
+          "section": "Pulse returns",
+          "description": "A strong pulse comes back with a brighter top end."
+        },
+        {
+          "timestamp": "15:24",
+          "section": "Quiet dip",
+          "description": "The whole sound drops sharply in level."
+        },
+        {
+          "timestamp": "20:07",
+          "section": "Low passage",
+          "description": "The bass falls out and the music becomes much quieter, with a weak pulse."
+        },
+        {
+          "timestamp": "25:45",
+          "section": "Bright change",
+          "description": "The sound brightens suddenly while the pulse stays faint."
+        },
+        {
+          "timestamp": "27:27",
+          "section": "Pulse-free stretch",
+          "description": "A long passage with almost no pulse and a thinner low end."
+        },
+        {
+          "timestamp": "33:00",
+          "section": "Late pulse",
+          "description": "A steadier pulse returns for the closing stretch."
+        },
+        {
+          "timestamp": "39:19",
+          "section": "Outro",
+          "description": "The sound fades out."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Snapshot 2 From EōN",
+      "duration": "38:47",
+      "energy": "mid",
+      "tags": [
+        "Generative Excerpt",
+        "Long Form",
+        "Bass-Heavy Stretches",
+        "Abrupt Changes"
+      ],
+      "role": "Album role: The second piece on the first disc; it starts at once with a full, bright sound and spends more of its length on bass-heavy, pulsed material than the first.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Opening",
+          "description": "The music starts almost at once with a full, bright, wide texture and no gradual build."
+        },
+        {
+          "timestamp": "4:06",
+          "section": "Pulse enters",
+          "description": "A strong low-end pulse enters."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Drop",
+          "description": "The level falls and the bass drops away."
+        },
+        {
+          "timestamp": "7:43",
+          "section": "Bass returns",
+          "description": "The bass and the pulse come back together."
+        },
+        {
+          "timestamp": "16:26",
+          "section": "Heavier low end",
+          "description": "The low end grows heavier and fuller."
+        },
+        {
+          "timestamp": "17:00",
+          "section": "Break",
+          "description": "The pulse almost stops for a moment, the sharpest change in the piece."
+        },
+        {
+          "timestamp": "17:16",
+          "section": "Bass-led return",
+          "description": "The sound returns bass-heavy and bright."
+        },
+        {
+          "timestamp": "22:44",
+          "section": "Louder stretch",
+          "description": "A louder, bass-led stretch with a strong pulse."
+        },
+        {
+          "timestamp": "27:00",
+          "section": "Quiet passage",
+          "description": "The music thins to one of its quietest stretches."
+        },
+        {
+          "timestamp": "36:00",
+          "section": "Wind-down",
+          "description": "The sound grows quieter and sparser toward the end."
+        },
+        {
+          "timestamp": "38:15",
+          "section": "Outro",
+          "description": "The sound fades out."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Snapshot 3 From EōN",
+      "duration": "51:54",
+      "energy": "high",
+      "tags": [
+        "Generative Excerpt",
+        "Long Form",
+        "Sustained Peak",
+        "Disc Two"
+      ],
+      "role": "Album role: The whole second disc and the longest piece; it opens quietly in the mid range and holds the loudest, most continuously pulsed stretch of the set in its middle.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A quiet, mid-range opening with a soft entry."
+        },
+        {
+          "timestamp": "4:16",
+          "section": "Low end swells",
+          "description": "A deep low end swells in under the mid-range texture."
+        },
+        {
+          "timestamp": "6:48",
+          "section": "Low-end gap",
+          "description": "The deep low end drops out, then returns within about half a minute."
+        },
+        {
+          "timestamp": "9:00",
+          "section": "Fuller section",
+          "description": "The sound grows louder and the low end becomes strong."
+        },
+        {
+          "timestamp": "12:12",
+          "section": "Pulse arrives",
+          "description": "A steadier pulse appears for the first time."
+        },
+        {
+          "timestamp": "15:14",
+          "section": "Bass swell",
+          "description": "A swell of bass and mid-range lifts the level."
+        },
+        {
+          "timestamp": "21:00",
+          "section": "Peak",
+          "description": "A long stretch with a strong low end and a steady pulse, the loudest of the three pieces, lasts to about 30 minutes."
+        },
+        {
+          "timestamp": "33:00",
+          "section": "Low-end drop",
+          "description": "The low end falls away and the pulse weakens."
+        },
+        {
+          "timestamp": "36:00",
+          "section": "Second rise",
+          "description": "The sound grows louder and fuller again."
+        },
+        {
+          "timestamp": "39:00",
+          "section": "Sparse passage",
+          "description": "The texture thins and the pulse fades."
+        },
+        {
+          "timestamp": "45:00",
+          "section": "Fuller return",
+          "description": "The low end returns and the sound fills out for the late part of the piece."
+        },
+        {
+          "timestamp": "51:18",
+          "section": "Outro",
+          "description": "The sound fades out."
+        }
+      ]
+    }
+  ]
+}

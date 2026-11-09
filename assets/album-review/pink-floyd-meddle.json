@@ -1,0 +1,323 @@
+{
+  "id": "pink-floyd-meddle",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Meddle",
+  "year": 1971,
+  "label": "Harvest",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock / Psychedelic Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Psychedelic Rock",
+    "Psychedelia"
+  ],
+  "runtime": "46:46",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/d/d4/MeddleCover.jpeg",
+  "coverSource": "https://en.wikipedia.org/wiki/Meddle",
+  "overview": "Pink Floyd's sixth studio album, produced by the band and released by Harvest Records on 30 October 1971 in the United States and on 5 November 1971 in the United Kingdom, was recorded between 4 January and 11 September 1971 at EMI Studios (now Abbey Road Studios), AIR and Morgan Studios in London, in the gaps between concert dates. EMI had only eight-track equipment, so the band moved its best material to 16-track tape at AIR and Morgan; John Leckie and Peter Bown engineered the EMI and AIR sessions, and Rob Black and Roger Quested the minor work at Morgan. After weeks of unproductive experiments called Nothings and Son of Nothings, the working title Return of the Son of Nothings grew into \"Echoes\", a 23-minute piece built in stages over about three months in three studios, with an opening ping made by feeding a single piano note from Richard Wright through a Leslie speaker and a guitar plugged into a wah-wah pedal back to front. Side one holds five shorter tracks, ending with the humorous \"Seamus\", and \"Echoes\" fills the whole of side two.\n\nThe album reached UK No. 3 and US Billboard 200 No. 70, with the Netherlands at No. 2, and Wikipedia attributes the weak US sales to poor publicity from Capitol Records, the band's American label. The RIAA certified it Gold on 29 October 1973 and 2× Platinum on 11 March 1994. \"One of These Days\" was issued as a US single on 29 November 1971 with \"Fearless\" on the B-side. Hipgnosis designed the sleeve, an ear underwater photographed by Bob Dowling, and its designer Storm Thorgerson later said he thought Meddle a much better album than its cover.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "One of These Days",
+      "duration": "5:55",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Ostinato Bassline",
+        "Binson Echorec",
+        "US Single"
+      ],
+      "role": "Album role: Side one's opener, a largely instrumental piece built on a bass ostinato; it was the A-side of the US single released on 29 November 1971.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening that grows slowly for about 40 seconds."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Bass pulse",
+          "description": "A steady, heavy low pulse enters and the level jumps: the first clear rhythmic element of the track.",
+          "detail": "Wikipedia says the track was developed around an ostinato bassline created by David Gilmour by feeding the output through a Binson Echorec, and that Gilmour and Roger Waters played it on two bass guitars, one with old strings; the sleeve notes credit both on bass guitar in unison on this track."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Full entry",
+          "description": "The level rises sharply and the sound opens in every register: the biggest change in the track before the ending.",
+          "detail": "Wikipedia says Nick Mason's single vocal phrase on this track was recorded in falsetto at double speed and replayed at normal speed; it gives no time for it."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Heavier stretch",
+          "description": "The top end falls away, the low-mid weight grows and the pulse settles into a slower, heavier pattern."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Brighter stretch",
+          "description": "The top end opens again, the pulse speeds up and the track stays bright until the end."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Ending",
+          "description": "The music stops sharply and a very quiet tail of about 20 seconds follows.",
+          "detail": "Wikipedia says this track and \"A Pillow of Winds\" segue into each other across windy sound effects; the measurements show the quiet tail but cannot identify the sounds in it."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "A Pillow of Winds",
+      "duration": "5:13",
+      "energy": "low",
+      "tags": [
+        "Acoustic Love Song",
+        "Windy Sound Effects Link",
+        "Mahjong Title",
+        "Fade-Out"
+      ],
+      "role": "Album role: A quiet, acoustic love song, one of few in the Pink Floyd catalogue, following the opener with the two tracks linked across windy sound effects.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that reaches the full level of the track within about 15 seconds.",
+          "detail": "Wikipedia says the title was inspired by games of Mahjong that Roger Waters, Nick Mason and their wives Judith Trim and Lindy Rutter played in the south of France."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Lighter passage",
+          "description": "The low end and the top end fall back and the texture thins for about 20 seconds."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Fuller stretch",
+          "description": "The level and the top end rise and the track settles into a fuller texture."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Loudest stretch",
+          "description": "The loudest and brightest stretch of the track, lasting about 15 seconds."
+        },
+        {
+          "timestamp": "4:37",
+          "section": "Fade-out",
+          "description": "The level falls and the music ends by about 4:55, leaving a short silence before the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Fearless",
+      "duration": "6:08",
+      "energy": "mid",
+      "tags": [
+        "Field Recording",
+        "Liverpool Kop Crowd",
+        "US Single B-Side",
+        "Closing Fade-Out"
+      ],
+      "role": "Album role: Side one's third track, a song that closes with a field recording of Liverpool F.C. fans on the Anfield Kop; it was the B-side of the US single.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "The music starts almost at once and reaches its full level within about 15 seconds.",
+          "detail": "The sleeve notes credit Roger Waters with acoustic guitar on this track and on \"San Tropez\", without saying how it is used."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Lighter passage",
+          "description": "The low end and the top end fall back and the texture thins for about a minute."
+        },
+        {
+          "timestamp": "1:51",
+          "section": "Brighter turn",
+          "description": "The top end opens, the pulse becomes more regular and the level rises."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Low-end drop-out",
+          "description": "The level and the low end fall away and the texture stays light for about half a minute."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Loud return",
+          "description": "The low end returns and the track reaches its loudest and brightest stretch, which lasts about a minute."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Closing section",
+          "description": "The bass and low end fall away while the midrange stays prominent, and the level eases for the last minute.",
+          "detail": "Wikipedia says the recording of Liverpool F.C. fans on the Anfield Kop singing a club anthem brings the song to an end in a heavily reverberated fade-out; the placement here follows from that order, not from identifying the crowd by ear."
+        },
+        {
+          "timestamp": "5:58",
+          "section": "Ending",
+          "description": "The music ends at about 5:58, followed by a short silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "San Tropez",
+      "duration": "3:43",
+      "energy": "mid",
+      "tags": [
+        "Jazz-Inflected Pop",
+        "Shuffle Tempo",
+        "Waters Song",
+        "Fade-Out"
+      ],
+      "role": "Album role: A light, shuffle-tempo song on side one that follows \"Fearless\" and contrasts with it, written by Roger Waters.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "A quiet start that reaches the full level of the track within about 15 seconds.",
+          "detail": "Wikipedia describes the song as jazz-inflected pop with a shuffle tempo, written by Roger Waters in a breezy, off-the-cuff style and inspired by the band's 1970 trip to the south of France."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Fuller midrange",
+          "description": "The midrange and the upper midrange fill in for about 15 seconds."
+        },
+        {
+          "timestamp": "1:53",
+          "section": "Thinner top end",
+          "description": "The top end falls back and the groove thins slightly."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Lighter stretch",
+          "description": "The midrange and the level fall back for the next 15 seconds, and the track stays lighter until about 2:40."
+        },
+        {
+          "timestamp": "3:22",
+          "section": "Fade-out",
+          "description": "The level falls and the music ends by about 3:35."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Seamus",
+      "duration": "2:15",
+      "energy": "low",
+      "tags": [
+        "Pseudo-Blues Novelty",
+        "Dog Vocals",
+        "Harmonica",
+        "Pompeii Film Remake"
+      ],
+      "role": "Album role: The short humorous piece that ends side one, set against the 23-minute track that fills side two.",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Opening",
+          "description": "A very quiet start, and the level and the low end rise at about 0:07.",
+          "detail": "Wikipedia calls the track a pseudo-blues novelty featuring Steve Marriott's dog Seamus, whom David Gilmour was dog-sitting, howling along to the music; the sleeve notes credit Gilmour with harmonica on this track and Seamus the Dog with vocals."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Lighter stretch",
+          "description": "The level and the midrange fall back for about 15 seconds."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Fuller return",
+          "description": "The level and the top end rise again and the texture fills in."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Louder close",
+          "description": "The level rises again and the track runs to its end at about 2:08, followed by a short silence.",
+          "detail": "Wikipedia says the track was remade as \"Mademoiselle Nobs\", with a different dog and no lyrics, in the 1972 film Pink Floyd: Live at Pompeii."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Echoes",
+      "duration": "23:32",
+      "energy": "mid",
+      "tags": [
+        "Side Two Suite",
+        "Leslie Piano Ping",
+        "Backwards Wah-Wah",
+        "Three Studios",
+        "Built in Stages"
+      ],
+      "role": "Album role: The whole of side two, a 23-minute piece built in stages across three studios from the band's early experiments.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening; the first minute stays at a very low level.",
+          "detail": "Wikipedia says the track began as a studio experiment in which Richard Wright fed a single piano note through a Leslie speaker, giving a submarine-like ping; the band could not recreate the sound, so the demo was used. The article on the song adds that the piano was also sent through a Binson Echorec."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Slow rise",
+          "description": "The level and the midrange climb steadily for the next minute, with no beat.",
+          "detail": "The article on the song says that after several pings, David Gilmour's slide guitar gradually joins; the measurements show the rise but cannot identify the instrument."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Low end enters",
+          "description": "A deep low end enters and the level steps up, with a second jump at about 1:55: the biggest change in the track.",
+          "detail": "The article on the song says the verses are sung in harmony by Gilmour and Wright, joined by a riff that Gilmour and Roger Waters play in unison, followed by a Gilmour guitar solo on a Fender Stratocaster through a Fuzz Face; it gives no times, so the sections cannot be placed from the measurements."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Louder stretch",
+          "description": "The level, the midrange and the top end reach the loudest stretch so far and stay high until about 7:00."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Lighter passage",
+          "description": "The level and the top end fall for about 40 seconds and a clearer pulse appears."
+        },
+        {
+          "timestamp": "7:40",
+          "section": "Pulsed stretch",
+          "description": "The midrange and the top end return and the track holds a steady, strongly pulsed level for about three minutes.",
+          "detail": "The article on the song names a funk-influenced jam after the guitar solo and the repeat of the riff; the steady pulse measured here is consistent with it, but the placement follows from the order of sections, not from listening."
+        },
+        {
+          "timestamp": "11:00",
+          "section": "Drop-out",
+          "description": "The low end falls away and the pulse disappears, leaving a beatless passage with a thin low end that runs to about 14:40.",
+          "detail": "The article on the song says the middle section features Waters on slide guitar with a Binson Echorec, and that Gilmour's high-pitched screech came from a wah-wah pedal plugged in backwards, with the guitar connected to the pedal's output and the pedal's input to the amplifier; the order of sections places them near this passage."
+        },
+        {
+          "timestamp": "15:00",
+          "section": "Quiet stretch",
+          "description": "The level falls to its lowest since the opening and the low end is thin for about 90 seconds.",
+          "detail": "The article on the song says the opening piano pings repeat before a Farfisa organ solo by Wright, which it says was influenced by the Beach Boys' \"Good Vibrations\"; the order of sections places the repeat here."
+        },
+        {
+          "timestamp": "16:20",
+          "section": "Rebuild",
+          "description": "The low end returns and the level climbs steadily for about two minutes."
+        },
+        {
+          "timestamp": "18:20",
+          "section": "Loud stretch",
+          "description": "The top end opens and the track reaches a loud, full stretch, loudest from about 20:00 to 21:00."
+        },
+        {
+          "timestamp": "21:20",
+          "section": "Last section",
+          "description": "The level dips, then swells again to a last full stretch at about 22:40."
+        },
+        {
+          "timestamp": "23:00",
+          "section": "Ending",
+          "description": "The low end falls away and the music ends at about 23:15, followed by a few seconds of silence.",
+          "detail": "The article on the song says the ending uses a choral-sounding Shepard tone, made with two tape recorders in opposite corners of a room, one playing the main chord tapes while recording and the other playing back what was being recorded, which created a delay between the two."
+        }
+      ]
+    }
+  ]
+}

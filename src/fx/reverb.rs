@@ -2,20 +2,24 @@
 //!
 //! The input passes the pre-delay. From there, model-specific early
 //! reflections run beside a chain of input all-passes that blur the sound.
-//! The blurred sound feeds an eight-line feedback delay network with a
-//! Householder matrix. Each line has its tone filters, the character's
-//! colouring, and an all-pass inside the loop, so damping builds with every
-//! circulation. A pitch shifter can feed the tail back an interval higher:
-//! the shimmer. The early and late sounds then blend at equal power, and
-//! the output is widened, ducked, and trimmed.
+//! The blurred sound passes the low and high cut once and feeds an
+//! eight-line feedback delay network with a Householder matrix. Each line
+//! has its damping, the character's colouring, and an all-pass inside the
+//! loop. A pitch shifter can feed the tail back an interval higher: the
+//! shimmer. The early and late sounds then blend at equal power, and the
+//! output is widened, ducked, and trimmed.
 //!
 //! A line's gain is `10^(-3 t / decay)` for its length `t` in seconds, so
-//! every line falls by 60 dB in the decay time whatever the size. Size,
-//! model, and pre-delay changes crossfade between old and new read
-//! positions, never glide, so the pitch never bends.
+//! every line falls by 60 dB in the decay time whatever the size. The cuts
+//! stay out of the loop: inside it they would cut again on every
+//! circulation, and a hall would die in a fraction of its decay. The
+//! damping is designed per line from its length, so the tail falls by
+//! 60 dB at the high cut in a fixed share of the decay and in the decay
+//! below it. Size, model, and pre-delay changes crossfade between old and
+//! new read positions, never glide, so the pitch never bends.
 use super::parts::{AllPass, Ducker, Glide, Lfo, Line, OnePole, Tone, bound, drive, widen};
 use super::{Aetherform, ReverbCharacter, SpaceModel};
-use crate::master::dsp::{RATE, db_to_gain};
+use crate::master::dsp::{RATE, db_to_gain, flush};
 use std::f64::consts::{FRAC_PI_2, PI};
 
 const LINES: usize = 8;
@@ -27,6 +31,23 @@ const WINDOW: f64 = 2646.0;
 const WANDER_HZ: f64 = 0.07;
 /// The lengths of the all-passes inside the loop, one per line.
 const INNER_MS: [f64; LINES] = [2.31, 3.07, 3.71, 4.39, 2.73, 3.41, 4.13, 4.87];
+/// The share of the decay in which the tail falls by 60 dB at the high cut.
+const HIGH_CUT_DECAY: f64 = 0.6;
+/// The vintage character's darker share.
+const VINTAGE_HIGH_CUT_DECAY: f64 = 0.4;
+
+/// The pole `b` of a line's damping, `y = (1 - b) x + b y'`, unity at 0 Hz.
+/// Its gain at the high cut, whose cosine of the angular frequency is
+/// `cosine`, adds the loss that makes the line fall 60 dB there in `share`
+/// of the decay instead of the whole decay.
+fn damping(circulation: f64, decay: f64, share: f64, cosine: f64) -> f64 {
+    let squared = 10f64.powf(-6.0 * circulation / decay * (1.0 / share - 1.0));
+    if squared >= 1.0 - 1e-12 {
+        return 0.0;
+    }
+    let a = (1.0 - squared * cosine) / (1.0 - squared);
+    a - (a * a - 1.0).sqrt()
+}
 
 /// Line lengths in milliseconds at full size, by model.
 fn base_lengths(model: SpaceModel) -> [f64; LINES] {
@@ -179,9 +200,11 @@ pub(super) struct Core {
     lines: [Line; LINES],
     lengths: [Retime; LINES],
     gains: [f64; LINES],
-    tone: [Tone; LINES],
-    /// The vintage character's extra damping.
-    soften: [OnePole; LINES],
+    /// The low and high cut, once on the sound that enters the network.
+    input_tone: [Tone; 2],
+    /// Each line's damping pole, and its last output.
+    damping: [f64; LINES],
+    damped: [f64; LINES],
     inner: [AllPass; LINES],
     /// Frames left of the crossfade after a retime.
     fade: usize,
@@ -241,8 +264,9 @@ impl Core {
                 previous: 1000.0,
             }; LINES],
             gains: [0.0; LINES],
-            tone: [Tone::default(); LINES],
-            soften: [OnePole::default(); LINES],
+            input_tone: [Tone::default(); 2],
+            damping: [0.0; LINES],
+            damped: [0.0; LINES],
             inner: INNER_MS.map(|ms| AllPass::new(ms / 1000.0)),
             fade: 0,
             lfo: Lfo::default(),
@@ -278,6 +302,7 @@ impl Core {
         let factor = size_factor(size);
         let mut retimed = false;
         let mut total = 0.0;
+        let mut circulations = [0.0; LINES];
         for (i, ms) in base_lengths(s.space_model).into_iter().enumerate() {
             let seconds = (ms * factor).max(5.0) / 1000.0;
             let frames = prime_frames(seconds) as f64;
@@ -288,6 +313,7 @@ impl Core {
             }
             // A circulation also passes the line's inner all-pass.
             let circulation = frames / RATE + INNER_MS[i] / 1000.0;
+            circulations[i] = circulation;
             self.gains[i] = 10f64.powf(-3.0 * circulation / decay);
             total += self.gains[i] * self.gains[i];
         }
@@ -313,15 +339,19 @@ impl Core {
         }
         let (low_cut, high_cut) = (f64::from(s.low_cut_hz), f64::from(s.high_cut_hz));
         self.high_cut = high_cut;
-        self.tone
+        self.input_tone
             .iter_mut()
+            .chain(&mut self.early_tone)
             .for_each(|tone| tone.tune(low_cut, high_cut));
-        self.early_tone
-            .iter_mut()
-            .for_each(|tone| tone.tune(low_cut, high_cut));
-        self.soften
-            .iter_mut()
-            .for_each(|pole| pole.tune(0.55 * high_cut));
+        let share = if s.character == ReverbCharacter::Vintage {
+            VINTAGE_HIGH_CUT_DECAY
+        } else {
+            HIGH_CUT_DECAY
+        };
+        let cosine = (2.0 * PI * high_cut.min(0.49 * RATE) / RATE).cos();
+        for (pole, circulation) in self.damping.iter_mut().zip(circulations) {
+            *pole = damping(circulation, decay, share, cosine);
+        }
         let bloom = s.character == ReverbCharacter::Bloom;
         self.vintage
             .set(f64::from(u8::from(s.character == ReverbCharacter::Vintage)));
@@ -392,9 +422,9 @@ impl Core {
         self.lines.iter_mut().for_each(Line::clear);
         self.early_tone
             .iter_mut()
-            .chain(&mut self.tone)
+            .chain(&mut self.input_tone)
             .for_each(Tone::clear);
-        self.soften.iter_mut().for_each(OnePole::clear);
+        self.damped = [0.0; LINES];
         self.diffusers.iter_mut().flatten().for_each(AllPass::clear);
         self.bloom.iter_mut().flatten().for_each(AllPass::clear);
         self.inner.iter_mut().for_each(AllPass::clear);
@@ -481,7 +511,7 @@ impl Core {
                 let smeared = b.process(a.process(x, 0.6), 0.6);
                 x += (smeared - x) * bloom;
             }
-            feed[side] = x + shimmer * self.shimmer[side];
+            feed[side] = self.input_tone[side].process(x) + shimmer * self.shimmer[side];
         }
         // The network.
         let depth = self.depth.next();
@@ -499,9 +529,11 @@ impl Core {
             } else {
                 now
             };
-            x = self.tone[i].process(x);
+            let pole = self.damping[i];
+            x = flush((1.0 - pole) * x + pole * self.damped[i]);
+            self.damped[i] = x;
             if vintage > 0.0 {
-                let warm = (1.4 * self.soften[i].low(x)).tanh() / 1.4;
+                let warm = (1.4 * x).tanh() / 1.4;
                 x += (warm - x) * vintage;
             }
             *tap = self.inner[i].process(x, density);
@@ -632,6 +664,69 @@ mod tests {
                 "{model:?}: {measured:.2} s for {decay} s"
             );
         }
+    }
+
+    /// Energy in 50 ms windows during and after a 2 s sine of `hz`, in dB.
+    fn burst_curve(core: &mut Core, hz: f64, seconds: f64) -> Vec<f64> {
+        let window = 2205;
+        let burst = (2.0 * RATE) as usize;
+        let mut curve = Vec::new();
+        let mut sum = 0.0;
+        for i in 0..(seconds * RATE) as usize {
+            let x = if i < burst {
+                0.1 * (2.0 * PI * hz * i as f64 / RATE).sin()
+            } else {
+                0.0
+            };
+            let (l, r) = core.process(x, x);
+            sum += l * l + r * r;
+            if (i + 1) % window == 0 {
+                curve.push(10.0 * (sum + 1e-30).log10());
+                sum = 0.0;
+            }
+        }
+        curve
+    }
+
+    #[test]
+    fn the_cuts_keep_the_decay_inside_the_band() {
+        // A low and high cut inside the loop once cut on every circulation:
+        // a 7.5 s hall cut at 260 Hz died in 0.5 s at 110 Hz.
+        for character in [ReverbCharacter::Natural, ReverbCharacter::Vintage] {
+            for hz in [110.0, 440.0, 1760.0] {
+                let settings = Aetherform {
+                    space_model: SpaceModel::Hall,
+                    decay_seconds: 6.0,
+                    late_balance_percent: 100.0,
+                    low_cut_hz: 260.0,
+                    high_cut_hz: 4800.0,
+                    character,
+                    ..neutral()
+                };
+                let measured = rt60(&burst_curve(&mut reverb(&settings), hz, 12.5));
+                assert!(
+                    (measured / 6.0 - 1.0).abs() < 0.25,
+                    "{character:?} at {hz} Hz: {measured:.2} s for 6 s"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_high_cut_shortens_the_decay_above_it() {
+        let settings = Aetherform {
+            space_model: SpaceModel::Hall,
+            decay_seconds: 6.0,
+            late_balance_percent: 100.0,
+            high_cut_hz: 4800.0,
+            ..neutral()
+        };
+        let low = rt60(&burst_curve(&mut reverb(&settings), 1000.0, 12.5));
+        let high = rt60(&burst_curve(&mut reverb(&settings), 4800.0, 12.5));
+        assert!(
+            high < 0.8 * low && high > 0.4 * low,
+            "{high:.2} s at the high cut, {low:.2} s at 1 kHz"
+        );
     }
 
     #[test]

@@ -1,0 +1,722 @@
+{
+  "id": "jean-michel-jarre-aero",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "AERO",
+  "year": 2004,
+  "label": "Warner Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Synthesizer",
+  "genreTags": [
+    "Electronic",
+    "Synthesizer",
+    "Ambient",
+    "Compilation",
+    "Surround Sound"
+  ],
+  "runtime": "1:13:42",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/d/d5/AERO_album_cover.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/AERO",
+  "overview": "AERO (Anthology of Electronic Revisited Originals) was released by Warner Music on 20 September 2004 as a CD in stereo and a DVD in 5.1 surround, with Dolby Digital and DTS audio and a picture of the actress Anne Parillaud's eyes as she listens, filmed in one unbroken take of about 75 minutes. Jarre produced it at his Croissy studio in 2004, recorded it at 96 kHz and 24 bit, and mixed it himself, with David Perreau mastering and Francis Rimbert credited with sound design; Safri Duo appear as guests on the live bonus track. He presented it as the step after mono and stereo, from one speaker to two to five, and said he had performed the old pieces again \"note for note\" and rebuilt each track entirely. A fan site's equipment list names the Roland JP-8000, Yamaha CS-80, Akai S6000, Roland TR-909 and Lexicon PCM 91 without assigning them to tracks. The pieces come from Oxygène (1976), Équinoxe (1978), Les Chants Magnétiques (1981), The Concerts in China (1982), Zoolook (1984), Rendez-Vous (1986) and Chronologie (1993); the title track reworks \"Je Me Souviens\" from Métamorphoses (2000) without the vocals, and the sources count three or four new compositions, plus a live version of \"Rendez-Vous 4\" from the 2002 AERO concert in Denmark as a hidden bonus track.\n\nThe album reached France No. 2, UK No. 14, Germany No. 37, Netherlands No. 33, Austria No. 60 and Switzerland No. 61, and is certified Gold in France. Release Music Magazine gave it 7 out of 10 as a good introduction to Jarre's music with new tracks of little weight. On the CD the fourteen pieces run in sequence, two of them much shorter than their originals, and the live track follows a gap of silence. This review covers the CD audio only; the DVD surround mix was not heard or measured. Timestamps come from measurements of the stereo CD audio and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Aero Opening",
+      "duration": "0:51",
+      "energy": "low",
+      "tags": [
+        "Short Opener",
+        "Beatless",
+        "Surround Scene 1"
+      ],
+      "role": "Album role: A 51-second opener that leads into \"Oxygene 2\"; Wikipedia lists it with the first of the linking surround \"Scenes\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening swell",
+          "description": "A short, louder burst that dies away within about fifteen seconds.",
+          "detail": "Wikipedia says the DVD links the pieces with short surround \"Scenes\"; this track is listed with Scene 1."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Dark texture",
+          "description": "A quieter, darker texture takes over, with almost no treble."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Highs return",
+          "description": "The top end comes back and the level holds until the track ends."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Oxygene 2",
+      "duration": "7:42",
+      "energy": "high",
+      "tags": [
+        "Oxygène Part II Rework",
+        "Longest Track",
+        "Beat-Driven",
+        "Late Fade"
+      ],
+      "role": "Album role: The first full-length piece and the longest track on the CD, a beat-driven reworking of \"Oxygène (Part II)\" from 1976.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening that builds in level over the first twenty seconds.",
+          "detail": "Wikipedia lists \"Oxygène (Part II)\" at 7 minutes 49 seconds on the 1976 album, close to the length of this version."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Low end drops",
+          "description": "The low end falls back and the texture stays lighter and without a firm pulse for about a minute."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Highs open",
+          "description": "The top end opens and the level begins to climb."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Beat entry",
+          "description": "A firm beat enters with full bass and a bright top end: the biggest change in the track."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Break and final section",
+          "description": "A short break of a few seconds, then the beat returns a little louder, the loudest stretch of the track."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Thinning",
+          "description": "The highs and then the bass thin out while the beat carries on."
+        },
+        {
+          "timestamp": "6:26",
+          "section": "Beat stops",
+          "description": "The level falls sharply and the beat stops."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Quiet coda",
+          "description": "A quiet, high-pitched texture without bass or beat closes the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Aero",
+      "duration": "3:10",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "Je Me Souviens Rework",
+        "No Vocals",
+        "Beat-Driven"
+      ],
+      "role": "Album role: The title track, a vocal-less rework of \"Je Me Souviens\" from Métamorphoses (2000), placed after \"Oxygene 2\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless opening at moderate level with little bass.",
+          "detail": "Wikipedia describes the track as a rework of \"Je Me Souviens\" from Métamorphoses (2000), with the same main melody and no vocals."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Beat entry",
+          "description": "The bass and a steady beat enter together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Break",
+          "description": "The bass and beat drop out for about ten seconds."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Beat returns",
+          "description": "The beat and low end return and the track runs at full level."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Ending",
+          "description": "The track stops with a short drop in level at the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Equinoxe 8",
+      "duration": "1:24",
+      "energy": "mid",
+      "tags": [
+        "Équinoxe Part 8 Rework",
+        "Interlude-Length",
+        "Short Version"
+      ],
+      "role": "Album role: A 1:24 reworking of Part 8 of Équinoxe (1978), placed between the title track and \"Oxygene 4\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens at a higher level that settles within about ten seconds.",
+          "detail": "Wikipedia lists \"Equinoxe Part 8\" at 5 minutes 2 seconds on the 1978 album, so this version is about a quarter of its length."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Low end enters",
+          "description": "A low-end layer enters under a quiet top texture."
+        },
+        {
+          "timestamp": "0:41",
+          "section": "Louder passage",
+          "description": "The level rises and the low end grows for the middle of the track."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Fade",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Oxygene 4",
+      "duration": "5:05",
+      "energy": "mid",
+      "tags": [
+        "Oxygène Part IV Rework",
+        "Slow Build",
+        "Bass Drop-Out Ending"
+      ],
+      "role": "Album role: The second Oxygène rework on the CD, after \"Oxygene 2\" and before \"Souvenir of China\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening, mostly low in register, rising slowly in level.",
+          "detail": "Wikipedia lists \"Oxygène (Part IV)\" at 4:14 on the 1976 album; this version runs about a minute longer."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Full entry",
+          "description": "The bass and the level rise to the main body of the track."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Highs open",
+          "description": "The top end opens and stays present for most of the rest of the track."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Short dip",
+          "description": "The level dips for about ten seconds, then returns to full."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Winding down",
+          "description": "The level falls and the texture thins."
+        },
+        {
+          "timestamp": "4:17",
+          "section": "Bass drops out",
+          "description": "The low end drops out, leaving a lighter texture."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Quiet ending",
+          "description": "Only a quiet, bass-free texture remains until the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Souvenir Of China",
+      "duration": "4:46",
+      "energy": "mid",
+      "tags": [
+        "Concerts in China Rework",
+        "Soft Pulse",
+        "Near-Silent Gap",
+        "Quiet Coda"
+      ],
+      "role": "Album role: A reworking of the one new studio track on The Concerts in China (1982), placed in the middle of the CD.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a pulse that stays soft and irregular.",
+          "detail": "Wikipedia says The Concerts in China mixes live recordings, ambient sound, earlier tracks and one new studio track, \"Souvenir of China\"."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Bass entry",
+          "description": "The low end and the level rise to the main body of the track."
+        },
+        {
+          "timestamp": "0:56",
+          "section": "Highs open",
+          "description": "The top end opens and a brighter layer joins."
+        },
+        {
+          "timestamp": "3:53",
+          "section": "Stop",
+          "description": "The level falls away and the music stops, leaving near-silence at about 4:00."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Quiet coda",
+          "description": "A much quieter passage returns and runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Aerology",
+      "duration": "3:40",
+      "energy": "high",
+      "tags": [
+        "Beat-Driven",
+        "Surround Scene 5",
+        "Late Drop"
+      ],
+      "role": "Album role: A beat-driven mid-album piece, listed with the fifth \"Scene\", between \"Souvenir of China\" and the pair \"Equinoxe 3\" and \"Equinoxe 4\".",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Beat entry",
+          "description": "The bass and a steady beat arrive within the first seconds."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Highs open",
+          "description": "The top end opens and the beat stays steady."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Break",
+          "description": "The bass cuts out for about ten seconds."
+        },
+        {
+          "timestamp": "1:32",
+          "section": "Return",
+          "description": "The bass returns louder and the beat carries on."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Drop",
+          "description": "The level and the bass fall away and the pulse weakens."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Final lift",
+          "description": "The level rises again for the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Equinoxe 3",
+      "duration": "6:34",
+      "energy": "mid",
+      "tags": [
+        "Équinoxe Part 3 Rework",
+        "Slow Build",
+        "Slow Pulse",
+        "Extended Version"
+      ],
+      "role": "Album role: Reworking of Part 3 of Équinoxe (1978), the first of two consecutive Équinoxe parts on the CD.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that rises gradually over the first minute.",
+          "detail": "Wikipedia lists \"Equinoxe Part 3\" at 5:11 on the 1978 album; this version runs about a minute and a half longer."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Build",
+          "description": "The low end and the top end both rise and a slow pulse takes hold."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Short drop",
+          "description": "The bass cuts out for about ten seconds."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Full body",
+          "description": "The bass returns at full strength and the slow pulse settles."
+        },
+        {
+          "timestamp": "4:21",
+          "section": "Lighter section",
+          "description": "The bass drops out and the track runs at a lower level with a softer pulse for about a minute."
+        },
+        {
+          "timestamp": "5:22",
+          "section": "Low end returns",
+          "description": "The low end comes back and the level rises again."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Quiet ending",
+          "description": "The level falls and the highs disappear in the last quarter-minute."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Equinoxe 4",
+      "duration": "6:47",
+      "energy": "mid",
+      "tags": [
+        "Équinoxe Part 4 Rework",
+        "Slow Pulse",
+        "Near-Silent Dip",
+        "Bass-Heavy Finale"
+      ],
+      "role": "Album role: Reworking of Part 4 of Équinoxe (1978), the second of two consecutive Équinoxe parts on the CD.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a steady slow pulse from the start.",
+          "detail": "Wikipedia lists \"Equinoxe Part 4\" at 6 minutes 52 seconds on the 1978 album, almost the length of this version."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Brighter layer",
+          "description": "A brighter layer joins and the level rises."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Full level",
+          "description": "The bass fills out and the track reaches the first loud stretch."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Lighter section",
+          "description": "The level dips for about half a minute."
+        },
+        {
+          "timestamp": "3:04",
+          "section": "Break",
+          "description": "The low end and the pulse fall away for about half a minute."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Return",
+          "description": "The full beat returns at the loudest level so far and holds for about a minute and a half."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Fade",
+          "description": "The level falls to near-silence by 5:40."
+        },
+        {
+          "timestamp": "5:47",
+          "section": "Final section",
+          "description": "A louder, bass-heavy section runs until the bass cuts out and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Last Rendez-Vous",
+      "duration": "5:08",
+      "energy": "mid",
+      "tags": [
+        "Ron's Piece Rework",
+        "Slow Tempo",
+        "Soft Pulse",
+        "Rendez-Vous Rework"
+      ],
+      "role": "Album role: Reworking of \"Dernier Rendez-Vous (Ron's Piece)\", the closing track of Rendez-Vous (1986), later dedicated to the astronaut Ron McNair and six other astronauts.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that rises in level over the first half-minute.",
+          "detail": "Wikipedia says a saxophone part by Ron McNair was planned for the Challenger flight; Pierre Gossez played the saxophone part on the 1986 album."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Bass entry",
+          "description": "A low-end layer enters and the top end opens."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Build",
+          "description": "The level rises and the texture fills out."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Deeper section",
+          "description": "The low end deepens and the main section begins, with a slow, soft pulse."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Fall",
+          "description": "The level falls and the low end thins."
+        },
+        {
+          "timestamp": "4:58",
+          "section": "Final lift",
+          "description": "The bass returns at full level for the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Zoolookology",
+      "duration": "3:55",
+      "energy": "high",
+      "tags": [
+        "Zoolookologie Rework",
+        "Steady Beat",
+        "Short Breaks",
+        "Zoolook Rework"
+      ],
+      "role": "Album role: Reworking of \"Zoolookologie\" from Zoolook (1984), the first steady-beat track after the slow \"Last Rendez-Vous\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening for about fifteen seconds.",
+          "detail": "Wikipedia says Zoolook is built largely from samples of singing and speech in 25 languages and that \"Zoolookologie\" was a single in 1985."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat entry",
+          "description": "The beat and bass enter together and hold a steady pulse through most of the track."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Break",
+          "description": "The low end drops out for about ten seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Second break",
+          "description": "After a short bass cut, the beat returns louder and brighter."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Final section",
+          "description": "The loudest stretch of the track, at full bass."
+        },
+        {
+          "timestamp": "3:34",
+          "section": "Wind-down",
+          "description": "The highs and the level fall away until the track ends."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Aerozone",
+      "duration": "4:57",
+      "energy": "high",
+      "tags": [
+        "Debut On AERO",
+        "Beat-Driven",
+        "Multiple Breaks",
+        "Surround Scene 10"
+      ],
+      "role": "Album role: A piece Jarre's discography lists as first appearing on AERO, between \"Zoolookology\" and \"Magnetic Fields 1\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, low-register opening with no treble and a soft pulse.",
+          "detail": "Wikipedia's Jarre discography lists \"Aerozone\" among non-album tracks with AERO as its first appearance."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Highs open",
+          "description": "The top end opens and the pulse firms up."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Dropout",
+          "description": "The bass and top end fall away for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Full entry",
+          "description": "The full arrangement enters with a bright top end: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Short break",
+          "description": "A break of about ten seconds, then the beat returns."
+        },
+        {
+          "timestamp": "3:16",
+          "section": "Long break",
+          "description": "The low end and top end drop out for about twenty seconds."
+        },
+        {
+          "timestamp": "3:36",
+          "section": "Return",
+          "description": "The arrangement returns at full level and the beat tightens."
+        },
+        {
+          "timestamp": "4:19",
+          "section": "Ending",
+          "description": "The level falls and the track fades to near-silence."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Magnetic Fields 1",
+      "duration": "5:59",
+      "energy": "high",
+      "tags": [
+        "Les Chants Magnétiques Part 1 Rework",
+        "Shortened Version",
+        "Late Beat Entry",
+        "Breakdowns"
+      ],
+      "role": "Album role: A shortened reworking of \"Les Chants Magnétiques Part 1\" (1981), which fills side one of the original at 17:50; this version runs 5:59.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, beatless opening with no top end, rising slowly in level.",
+          "detail": "Wikipedia says the original Part 1 is divided into three movements."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Beat entry",
+          "description": "A strong beat enters with a bright top end: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:58",
+          "section": "Beat drops out",
+          "description": "The beat and the highs drop out for about twenty seconds while the bass continues."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Beat returns",
+          "description": "The beat and the top end come back at full level."
+        },
+        {
+          "timestamp": "4:14",
+          "section": "Bass cut",
+          "description": "The low end cuts out for about twenty-five seconds."
+        },
+        {
+          "timestamp": "4:57",
+          "section": "Final stretch",
+          "description": "The bass returns hard and the beat is at its strongest."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Ending",
+          "description": "The beat stops and the level falls for the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Chronology 6",
+      "duration": "6:10",
+      "energy": "high",
+      "tags": [
+        "Chronologie Part 6 Rework",
+        "Steady Beat",
+        "Ends in Silence"
+      ],
+      "role": "Album role: Reworking of Part 6 of Chronologie (1993), the last studio piece on the CD; it ends in silence ahead of the hidden live bonus track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with no low end."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat entry",
+          "description": "The bass and beat enter at once and a pulse runs through the rest of the track."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Stronger pulse",
+          "description": "The level and the pulse strengthen."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Short break",
+          "description": "The bass and beat drop out for about ten seconds."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Final run",
+          "description": "The full beat returns and holds a steady, loud level for about two minutes."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Fade",
+          "description": "The level eases down."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "End of music",
+          "description": "The music stops and silence runs to the end of the track.",
+          "detail": "Wikipedia lists \"Rendez-Vous 4 (Live Version)\" as a hidden bonus track after \"Chronology 6\"."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Rendez-Vous 4 (Live Version)",
+      "duration": "7:34",
+      "energy": "high",
+      "tags": [
+        "Hidden Bonus Track",
+        "Safri Duo",
+        "AERO Concert 2002",
+        "Live Version"
+      ],
+      "role": "Album role: The hidden bonus track, a live version of \"Quatrième Rendez-Vous\" (1986) with Safri Duo, recorded at the 2002 AERO concert.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track rises out of silence and builds over the first twenty seconds.",
+          "detail": "Jarre's site says the AERO concert took place among wind turbines at Gl. Vraa Enge, Denmark, in 2002; Wikipedia lists Safri Duo as guests on this track."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Beat entry",
+          "description": "A firm beat enters and the low end fills out."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Full groove",
+          "description": "The pulse tightens and the top end brightens; the level then holds almost unchanged for about five minutes."
+        },
+        {
+          "timestamp": "4:51",
+          "section": "Short dip",
+          "description": "The level dips for about ten seconds before the full groove returns."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Bright final stretch",
+          "description": "The top end becomes brighter for the last stretch."
+        },
+        {
+          "timestamp": "6:50",
+          "section": "Ending",
+          "description": "The bass drops out and the track fades away."
+        }
+      ]
+    }
+  ]
+}

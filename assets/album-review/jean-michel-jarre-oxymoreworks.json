@@ -1,0 +1,474 @@
+{
+  "id": "jean-michel-jarre-oxymoreworks",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Oxymoreworks",
+  "year": 2023,
+  "label": "Columbia / Sony Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Remix",
+  "genreTags": [
+    "Electronic",
+    "Remix Album",
+    "Dance",
+    "Ambient"
+  ],
+  "runtime": "44:15",
+  "overview": "A remix album released on 3 November 2023 by Sony Music and Columbia on CD, vinyl, streaming and download. Each of its nine tracks reworks a song from Jarre's 2022 studio album Oxymore with one guest artist, and every title carries the guest's name in the credit \"JMJ x ...\": Martin Gore of Depeche Mode on \"Brutalism Take 2\", Brian Eno on \"Epica Extension\", Deathpact on \"Brutalism (reprise)\", French 79 on \"Epica Take 2\", Adiescar Chase on \"Synthy Sisters Take 2\", Armin van Buuren on \"Epica Maxima\", Nina Kraviz on \"Sex in the Machine Take 2\", NSDOS on \"Zeitgeist Take 2\" and Irene Dresel on \"Zeitgeist Botanica\". The Spanish Wikipedia article credits Jarre as producer and notes that van Buuren had already worked with him on \"Stardust\" from Electronica 1: The Time Machine (2015). The English Wikipedia article on Oxymore says that Gore and Deathpact each produced a remix, and that Jarre built Oxymore partly on sound recordings by the composer Pierre Henry, who died in 2017.\n\nThe nine tracks draw on five songs of Oxymore: \"Brutalism\" and \"Zeitgeist\" are reworked twice, \"Epica\" three times, and \"Synthy Sisters\" and \"Sex in the Machine\" once each, so the album is a set of variations rather than a single arc. Measured on the rip, most remixes run on a steady pulse with one loud stretch and one breakdown. The Eno version is the quietest, the Deathpact version starts at full force, and the album ends on its longest track.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Brutalism Take 2",
+      "duration": "5:02",
+      "energy": "high",
+      "tags": [
+        "Martin Gore",
+        "Remix",
+        "Beat Entry",
+        "Fade Out"
+      ],
+      "role": "Album role: The opener, a reworking of \"Brutalism\" with Martin Gore of Depeche Mode, which begins from near silence and sets the album's pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent opening that swells within seconds.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Martin Gore, and the English Wikipedia article on Oxymore names Gore as one of two remixers on the source album."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Beat entry",
+          "description": "The low end and a steady pulse arrive together: the biggest early change."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "High layer",
+          "description": "The top end opens and the arrangement settles into its groove."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Short dip",
+          "description": "The low end drops out for a few seconds, then returns at 1:35."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Breakdown",
+          "description": "The level falls and the pulse thins for about 25 seconds."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Final peak",
+          "description": "The full beat returns and holds the loudest level of the track to the outro."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Outro",
+          "description": "The bass and the beat leave and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Epica Extension",
+      "duration": "4:30",
+      "energy": "mid",
+      "tags": [
+        "Brian Eno",
+        "Remix",
+        "Low Level",
+        "Late Lift"
+      ],
+      "role": "Album role: The quietest track of the album, an extension of \"Epica\" with Brian Eno, placed second as a slower contrast to the opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A low-level, dark texture with almost no top end and only a faint pulse.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Brian Eno."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "High layer",
+          "description": "A bright layer enters on top of the same low texture."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Fuller section",
+          "description": "The low end grows and the level rises, building to the first full stretch by about 2:05."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Drop",
+          "description": "The track falls back to a quiet, dark texture for about 15 seconds."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Return",
+          "description": "The full texture returns with a wide, bright top end."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Final stretch",
+          "description": "The level rises again after a quieter spell and holds to the end."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Ending",
+          "description": "The music stops, leaving the last few seconds silent."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Brutalism (reprise)",
+      "duration": "4:31",
+      "energy": "high",
+      "tags": [
+        "Deathpact",
+        "Remix",
+        "Straight Entry",
+        "Beatless Coda"
+      ],
+      "role": "Album role: A second reworking of \"Brutalism\", with Deathpact, which opens at full force straight after the quiet Eno track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The full beat and bass start at once with no build-up.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Deathpact, and the English Wikipedia article on Oxymore names Deathpact as one of two remixers on the source album."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Main groove",
+          "description": "The low end grows heavier and the track reaches its first loud stretch."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Breakdown",
+          "description": "The low end drops out and the level falls sharply; the bass stays absent until about 1:30."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Sparse passage",
+          "description": "A thin, quiet section with a weak pulse."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Return",
+          "description": "The full beat and the bass come back at the loudest level of the track."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Coda",
+          "description": "The beat stops and a quiet, beatless close runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Epica Take 2",
+      "duration": "5:34",
+      "energy": "high",
+      "tags": [
+        "French 79",
+        "Remix",
+        "Long Build",
+        "Bass Entry"
+      ],
+      "role": "Album role: The longest build on the album, a second reworking of \"Epica\", with French 79, that rises from a very quiet start to a loud final stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening without bass, with a faint pulse.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x French 79."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Bass entry",
+          "description": "The low end arrives and the pulse firms up."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Peak",
+          "description": "The bass grows much heavier and the level steps up: the biggest change in the track."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Break",
+          "description": "The pulse thins for about 20 seconds."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Beat returns",
+          "description": "The beat comes back and the groove rebuilds."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Final section",
+          "description": "The top end opens and the track reaches its loudest stretch."
+        },
+        {
+          "timestamp": "5:09",
+          "section": "Outro",
+          "description": "The beat falls away and the level fades to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Synthy Sisters Take 2",
+      "duration": "3:12",
+      "energy": "mid",
+      "tags": [
+        "Adiescar Chase",
+        "Remix",
+        "Shortest Track",
+        "Soft Pulse"
+      ],
+      "role": "Album role: The shortest track and the end of the first half, a lighter reworking of \"Synthy Sisters\" with Adiescar Chase.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft, quiet opening with a weak pulse and little low end.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Adiescar Chase."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Bass entry",
+          "description": "The low end enters and the pulse gains weight."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, about 20 seconds long."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Lower section",
+          "description": "The level falls back and the pulse softens again."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Final build",
+          "description": "The pulse and the low end rise towards a last lift."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Outro",
+          "description": "The beat stops and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Epica Maxima",
+      "duration": "5:18",
+      "energy": "peak",
+      "tags": [
+        "Armin Van Buuren",
+        "Remix",
+        "Club Beat",
+        "Second Half Opener"
+      ],
+      "role": "Album role: The opener of the second half and its biggest dance track, a third reworking of \"Epica\", with Armin van Buuren.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse starts at once at a moderate level, with a light low end.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Armin Van Buuren, and notes that he had worked with Jarre on \"Stardust\" from Electronica 1: The Time Machine (2015)."
+        },
+        {
+          "timestamp": "0:31",
+          "section": "Full beat",
+          "description": "The bass and the top end rise together and the beat reaches full level: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Short dip",
+          "description": "The level drops briefly before the groove resumes."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Breakdown",
+          "description": "The beat and the bass thin out and fall away until about 2:50."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Rebuild",
+          "description": "The pulse returns and the groove builds in steps."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Peak",
+          "description": "The track climbs to its loudest stretch and holds it to the end."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Ending",
+          "description": "The music cuts out, leaving a few silent seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Sex in the Machine Take 2",
+      "duration": "5:05",
+      "energy": "high",
+      "tags": [
+        "Nina Kraviz",
+        "Remix",
+        "Late Beat Entry",
+        "Long Peak"
+      ],
+      "role": "Album role: A reworking of \"Sex in the Machine\" with Nina Kraviz, placed seventh, whose beat enters late and then runs through a long loud stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A low-level, beatless texture with a soft low end.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Nina Kraviz."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Thinning",
+          "description": "The level falls to its quietest point before the beat."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Beat entry",
+          "description": "A steady pulse and a bright top end enter together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Break",
+          "description": "The highs drop away and the pulse eases for about half a minute."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Rebuild",
+          "description": "The low end grows and the pulse strengthens."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins and runs for about a minute and a half."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Outro",
+          "description": "The beat stops and a quiet, thin tail closes the track."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Zeitgeist Take 2",
+      "duration": "5:13",
+      "energy": "high",
+      "tags": [
+        "NSDOS",
+        "Remix",
+        "Sustained Groove",
+        "Quiet Middle"
+      ],
+      "role": "Album role: A reworking of \"Zeitgeist\" with NSDOS in which one groove runs unchanged for about three minutes before a quiet passage and a short return.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sparse, quiet opening with a soft low end.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x NSDOS."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Full entry",
+          "description": "The beat and the heavy bass land together, and the level stays high from here."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Top end opens",
+          "description": "The highs open over the groove, which then runs almost unchanged for about three minutes."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Drop",
+          "description": "The level falls and the beat loses weight."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Quiet passage",
+          "description": "A low-level section with a thin pulse and little top end lasts over a minute."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Final section",
+          "description": "The level returns to full for the last stretch."
+        },
+        {
+          "timestamp": "5:01",
+          "section": "Ending",
+          "description": "The music stops, leaving a few silent seconds."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Zeitgeist Botanica",
+      "duration": "5:50",
+      "energy": "high",
+      "tags": [
+        "Irene Dresel",
+        "Remix",
+        "Album Closer",
+        "Longest Track"
+      ],
+      "role": "Album role: The closer and longest track, a second reworking of \"Zeitgeist\", with Irene Dresel, that stays at a high level almost throughout.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start that lifts within seconds.",
+          "detail": "The Spanish Wikipedia track list credits the remix as JMJ x Irène Drésel."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat entry",
+          "description": "The bass and a steady pulse arrive and the track reaches full level by 0:25."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Top end opens",
+          "description": "The highs open and the arrangement settles into a long groove."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Short drop",
+          "description": "The low end vanishes for a few seconds, then comes back."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Bright passage",
+          "description": "The top end rises and stays bright for about a minute and a half."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Breakdown",
+          "description": "The level falls for about 20 seconds with a weak pulse."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Final section",
+          "description": "The full beat returns with heavy low end and runs to the end."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Ending",
+          "description": "The music stops and the album ends on a short silence."
+        }
+      ]
+    }
+  ]
+}

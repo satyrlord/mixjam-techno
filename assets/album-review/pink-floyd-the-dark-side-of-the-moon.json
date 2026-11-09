@@ -1,0 +1,510 @@
+{
+  "id": "pink-floyd-the-dark-side-of-the-moon",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Dark Side of the Moon",
+  "year": 1973,
+  "label": "Harvest · Capitol",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock / Psychedelic Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Psychedelic Rock",
+    "Rock"
+  ],
+  "runtime": "43:04",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Dark_Side_of_the_Moon.png",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Dark_Side_of_the_Moon",
+  "overview": "Recorded at EMI Studios in London (now Abbey Road Studios) between 31 May 1972 and 9 February 1973 on Studer A80 16-track recorders, The Dark Side of the Moon was engineered by the staff engineer Alan Parsons and produced by Pink Floyd, with Chris Thomas hired as mix supervisor for the final mix. Wikipedia lists EMS VCS 3 and EMS Synthi AKS synthesisers, tape loops built from coins and a cash register for \"Money\", a heartbeat that opens and closes the album, recorded speech from road crew and studio staff, and a vocal improvised by the session singer Clare Torry on \"The Great Gig in the Sky\". Each vinyl side is one continuous piece of music with five tracks, and Hipgnosis and George Hardie designed the prism sleeve.\n\nThe album came out on 1 March 1973 in the US on Capitol and on 16 March 1973 in the UK on Harvest. It reached UK No. 2 and, for one week from 28 April 1973, US No. 1 on the Billboard Top LPs & Tape chart, and the single \"Money\" reached No. 13 on the Billboard Hot 100. The RIAA certified it 15x Platinum in 1998, Wikipedia cites an estimate of 45 million copies sold worldwide by 2013, and it entered the Grammy Hall of Fame in 1999; Parsons received a Grammy nomination for Best Engineered Recording, Non-Classical. Track durations here follow the CD rip used for the measurements and differ from the original listing by up to about twelve seconds.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Speak to Me",
+      "duration": "1:07",
+      "energy": "low",
+      "tags": [
+        "Sound Collage",
+        "Heartbeat",
+        "Tape Loops",
+        "Mason Credit"
+      ],
+      "role": "Album role: A sound-collage prologue of about one minute that opens the album and runs without a break into \"Breathe\".",
+      "events": [
+        {
+          "timestamp": "0:06",
+          "section": "Intro",
+          "description": "A quiet, low-register opening; the level stays low for about the first 20 seconds.",
+          "detail": "Wikipedia says the album begins with a heartbeat. Its article on the track lists a heartbeat, a ticking clock, the laughter of Peter Watts, a cash register, paper tearing, coins and conversation tapes among the sounds, plus a short snippet of Clare Torry's vocal from \"The Great Gig in the Sky\"; it credits Nick Mason with percussion, tape effects and tape loops and with a solo writing credit."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Rise",
+          "description": "The level and the low end rise steadily."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Top end opens",
+          "description": "The upper range brightens sharply: the biggest change in the track."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Crescendo",
+          "description": "The level climbs to the loudest stretch of the track, which runs straight into the next track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Breathe (In the Air)",
+      "duration": "2:50",
+      "energy": "mid",
+      "tags": [
+        "Gilmour Lead Vocal",
+        "Lap Steel Guitar",
+        "Uni-Vibe",
+        "Reprised in Time"
+      ],
+      "role": "Album role: The first song of the album, following \"Speak to Me\" without a break; a one-minute reprise of it closes \"Time\".",
+      "events": [
+        {
+          "timestamp": "0:06",
+          "section": "Groove entry",
+          "description": "A steady pulse and a fuller low end settle as the collage of the opening track ends.",
+          "detail": "Wikipedia credits the music to David Gilmour and Richard Wright and the lyrics to Roger Waters, with Gilmour on lead vocals, on electric guitar with a Uni-Vibe and on lap steel guitar with a volume pedal, and Wright on Fender Rhodes electric piano and Hammond organ."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Brighter stretch",
+          "description": "The upper midrange and treble open for about 20 seconds."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Softer stretch",
+          "description": "The treble falls away and the level dips for about 15 seconds."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Brighter return",
+          "description": "The level and the treble rise again and the full texture continues to about 1:50."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "On the Run",
+      "duration": "3:34",
+      "energy": "high",
+      "tags": [
+        "Instrumental",
+        "Sequenced Synthesiser",
+        "EMS Synthi AKS",
+        "Footsteps"
+      ],
+      "role": "Album role: An instrumental built on a sequenced synthesiser pattern between \"Breathe\" and \"Time\"; Wikipedia's album article says it evokes the stress and anxiety of modern travel.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Sequence",
+          "description": "The track opens at a higher level that settles within about ten seconds into a quieter, sequenced pulse.",
+          "detail": "Wikipedia's article on the track says it was made by entering an eight-note sequence into an EMS Synthi AKS and speeding it up, and that the sequencer's trigger pulse sent into a second channel creates the hi-hat sound. It credits Gilmour and Waters with the writing."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Heavier stretch",
+          "description": "The low end strengthens and the level rises for about 15 seconds."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Drop-back",
+          "description": "The treble and the level fall away sharply: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Return",
+          "description": "The low end and the level return and hold to about 1:45."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Bright passage",
+          "description": "The upper range opens and the texture brightens for about 20 seconds.",
+          "detail": "Wikipedia credits Peter James with footsteps and describes a public-address announcement and a Hammond B3 organ played through a Leslie speaker that swirls around the listener in the quadraphonic mix; these are listed for the track, not placed in time here."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Climax",
+          "description": "The loudest, brightest stretch of the track, with the fullest low end.",
+          "detail": "Wikipedia's article describes a chord over the explosion of a presumed aircraft near the end of the piece."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Aftermath",
+          "description": "The level drops abruptly and the treble disappears; a dark, low texture runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Time",
+      "duration": "7:05",
+      "energy": "mid",
+      "tags": [
+        "Alarm Clock Intro",
+        "Rototoms",
+        "Gilmour Guitar Solo",
+        "Breathe Reprise",
+        "Four-Member Credit"
+      ],
+      "role": "Album role: Side one's longest track and the only song on the album with a writing credit for all four members; it ends with a reprise of \"Breathe\" before \"The Great Gig in the Sky\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with very little treble.",
+          "detail": "Wikipedia says the clocks of the introduction were each recorded separately in an antiques shop, as a quadraphonic test by Alan Parsons, and that the song is noted for its long introductory passage of clocks chiming and alarms ringing."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Alarm burst",
+          "description": "A sudden, much louder and brighter burst of high-pitched sound that decays over about 25 seconds."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Rhythm entry",
+          "description": "A low, steady rhythmic pulse and a heavy low end enter and the level jumps.",
+          "detail": "Wikipedia credits Nick Mason with drums and rototoms and says the drums on the track are rototoms."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Full band",
+          "description": "The top end opens and the full band texture settles for the main body of the song.",
+          "detail": "Wikipedia says female singers and Gilmour provide the backing vocals on the track."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Guitar solo",
+          "description": "The upper range rises and stays high for about a minute and a half: the solo section of the track.",
+          "detail": "Wikipedia says the first bridge leads to a guitar solo by Gilmour."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Reprise",
+          "description": "The level falls and the texture softens for the closing minute.",
+          "detail": "Wikipedia's article on \"Breathe\" says the one-minute reprise at the end of \"Time\" omits the slide guitar and uses Farfisa organ and Wurlitzer electric piano in place of the Hammond organ and Fender Rhodes."
+        },
+        {
+          "timestamp": "6:59",
+          "section": "Ending",
+          "description": "The level falls to near silence over the last few seconds before the next track."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The Great Gig in the Sky",
+      "duration": "4:49",
+      "energy": "high",
+      "tags": [
+        "Clare Torry",
+        "Improvised Vocal",
+        "Wright Composition",
+        "Side One Closer"
+      ],
+      "role": "Album role: Side one's closer and the album's feature for Clare Torry's improvised vocal, set over a keyboard piece by Richard Wright.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening in which the level builds slowly over about 30 seconds.",
+          "detail": "Wikipedia says Wright's chord progression was first called \"The Mortality Sequence\" or \"The Religion Song\" and that by September 1972 it had become a piano piece without vocals; it notes a spoken remark by a studio doorman at 0:38."
+        },
+        {
+          "timestamp": "0:18",
+          "section": "Low-end entry",
+          "description": "A strong low end enters and the level rises.",
+          "detail": "Wikipedia credits Wright with piano and Hammond organ and Gilmour with lap steel guitar."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Dip",
+          "description": "The level and the top end dip briefly."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Loud section",
+          "description": "A much louder, fuller and brighter section begins and holds for over a minute: the main peak of the track.",
+          "detail": "Wikipedia says the band played Torry the instrumental track and asked for an improvised vocal; she recorded two complete takes in a three-hour session on Sunday 21 January 1973 at Abbey Road for the standard £30 Sunday fee, and the final vocal was assembled from three takes. After a 2004 lawsuit and a 2005 settlement, pressings after 2005 credit Torry as well as Wright as writers."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Quiet stretch",
+          "description": "The level falls sharply and a quiet stretch of about 20 seconds follows."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "Second rise",
+          "description": "The level and the top end rise again, to a lower peak than the first."
+        },
+        {
+          "timestamp": "3:24",
+          "section": "Quiet close",
+          "description": "The level falls and the track thins out toward its end."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Fade-out",
+          "description": "The level falls to silence over the last 20 seconds."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Money",
+      "duration": "6:23",
+      "energy": "mid",
+      "tags": [
+        "Lead Single",
+        "Tape-Loop Intro",
+        "7/4 Metre",
+        "Tenor Saxophone",
+        "Guitar Solos"
+      ],
+      "role": "Album role: Side two's opener and the album's hit single, released on 7 May 1973; it opens with a tape loop of coins and a cash register and moves from an odd-metre groove to a straight four-beat solo.",
+      "events": [
+        {
+          "timestamp": "0:10",
+          "section": "Intro",
+          "description": "The track rises from near silence over the first half minute.",
+          "detail": "Wikipedia says the effects loop includes a ringing cash register and a jingle of coins, made by splicing together Waters's recordings of clinking coins."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Main groove",
+          "description": "A steady, bass-led pulse is established at a moderate level.",
+          "detail": "Wikipedia says much of the song is in 7/4 and quotes Adrian Ashton calling the bass riff one of the most memorable classic bass riffs ever recorded; it credits Wright with Wurlitzer electric piano."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Instrumental section",
+          "description": "The level and the midrange fall back and a long section of about 70 seconds begins.",
+          "detail": "Wikipedia says Dick Parry plays a blues-style tenor saxophone solo over a 20-bar instrumental section; the measured length of this section matches that."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Brighter stretch",
+          "description": "The upper midrange and treble rise within the long section."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Four-beat guitar solo",
+          "description": "The pulse changes to a straight four-beat feel and the level holds high.",
+          "detail": "Wikipedia says a two-bar 4/4 passage leads into a solo of 24 bars, and that Gilmour recorded three separate guitar solos."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Drop-back",
+          "description": "The level and the treble fall sharply: the biggest change in the track."
+        },
+        {
+          "timestamp": "4:17",
+          "section": "Louder section",
+          "description": "The level and the midrange rise and stay high to about 5:05."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Fade-out",
+          "description": "The level falls steadily over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Us and Them",
+      "duration": "7:50",
+      "energy": "mid",
+      "tags": [
+        "Zabriskie Point Origin",
+        "Piano and Hammond Organ",
+        "Tenor Saxophone",
+        "Second Single"
+      ],
+      "role": "Album role: Side two's longest track and the album's second single, released in the US on 4 February 1974 backed with \"Time\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, keyboard-led opening that stays low in level for almost three minutes.",
+          "detail": "Wikipedia says Wright wrote the tune on piano in 1969 for the film Zabriskie Point, as \"The Violent Sequence\", and that director Michelangelo Antonioni rejected it. It describes Wright introducing the song with Hammond organ harmonies, then adding piano chords and a short piano solo, with Dick Parry on tenor saxophone."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "Louder section",
+          "description": "The level, the top end and the low end rise sharply.",
+          "detail": "Wikipedia describes a louder secondary sequence with thick vocal harmonies, played twice between verses and working like a chorus. The rip shows four louder sections, and this review does not assign them to the lyric structure."
+        },
+        {
+          "timestamp": "3:18",
+          "section": "Quiet return",
+          "description": "The level falls back to the quiet texture for about a minute."
+        },
+        {
+          "timestamp": "4:16",
+          "section": "Second louder section",
+          "description": "The level and the top end rise again for about 30 seconds."
+        },
+        {
+          "timestamp": "4:47",
+          "section": "Quiet return",
+          "description": "The level falls back for about a minute."
+        },
+        {
+          "timestamp": "5:48",
+          "section": "Third louder section",
+          "description": "A third louder section of about 30 seconds."
+        },
+        {
+          "timestamp": "6:19",
+          "section": "Quiet return",
+          "description": "The level falls back for about a minute."
+        },
+        {
+          "timestamp": "7:16",
+          "section": "Final louder section",
+          "description": "The last and longest louder section runs to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Any Colour You Like",
+      "duration": "3:26",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "EMS VCS 3",
+        "Tape Loop",
+        "Uni-Vibe Guitars",
+        "Scat Vocals Added"
+      ],
+      "role": "Album role: A short instrumental on side two between \"Us and Them\" and \"Brain Damage\", the last instrumental before the closing pair of songs.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A steady, mid-heavy texture at a moderate level.",
+          "detail": "Wikipedia describes the track as a synthesised tune that leads into a guitar solo, credits Gilmour, Mason and Wright with the writing, and says Wright's EMS VCS 3 was fed through a long tape loop, which gives the keyboard solo its swelling rise and fall. It also says Gilmour used two guitars with the Uni-Vibe effect to make the harmonised guitar solo and that scat vocals were added later."
+        },
+        {
+          "timestamp": "0:13",
+          "section": "Fuller texture",
+          "description": "The midrange and treble rise and the texture fills out."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Brighter turn",
+          "description": "The upper midrange rises sharply for a short stretch."
+        },
+        {
+          "timestamp": "1:32",
+          "section": "Quieter stretch",
+          "description": "The level falls and the top end thins until about 1:58."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Heavier stretch",
+          "description": "The low end strengthens and the level stays high through the next minute."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Closing",
+          "description": "The level and the low end ease for the final seconds, running into the next track."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Brain Damage",
+      "duration": "3:47",
+      "energy": "mid",
+      "tags": [
+        "Syd Barrett Theme",
+        "Waters Lead Vocal",
+        "Backing Vocalists",
+        "EMS VCS 3",
+        "Segue Into Eclipse"
+      ],
+      "role": "Album role: The first of the album's two closing songs, ending with an instrumental that runs straight into \"Eclipse\".",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A sparse, quiet opening that stays at a low level for more than a minute.",
+          "detail": "Wikipedia says Waters has said the lyrics are based on the mental instability of Syd Barrett, the former frontman of Pink Floyd, and that the band called the song \"Lunatic\" at first. It credits Waters with bass and lead vocals, Gilmour with electric guitars and harmony vocals, Wright with Hammond organ and EMS VCS 3, and Mason with drums, tubular bells and tape effects."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Louder section",
+          "description": "The level, the midrange and the treble rise sharply for about 30 seconds.",
+          "detail": "Wikipedia names Lesley Duncan, Doris Troy, Barry St. John and Liza Strike as the backing vocalists on the album."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Quiet return",
+          "description": "The level falls back and stays low for about 40 seconds."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Rise",
+          "description": "The level and the low end rise."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Second louder section",
+          "description": "The loudest stretch of the track, with the fullest low end, runs to about 3:05."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Closing instrumental",
+          "description": "The level drops and a quieter instrumental close runs without a break into the next track.",
+          "detail": "Wikipedia dates the closing instrumental to about 3:02 and says that on some releases only the laughter of Peter Watts is heard in this section."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Eclipse",
+      "duration": "2:13",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Backing Vocalists",
+        "Heartbeat Return",
+        "Spoken Close"
+      ],
+      "role": "Album role: The closing track, running without a break from \"Brain Damage\" and ending the album on the heartbeat that opens \"Speak to Me\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The level rises over the first ten seconds and then holds high.",
+          "detail": "Wikipedia names Lesley Duncan, Doris Troy, Barry St. John and Liza Strike as backing singers who vary their parts, rise in volume and echo Waters's vocals as the piece builds."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Fullest stretch",
+          "description": "The level, the midrange and the treble rise to the loudest, brightest stretch, which holds to about 1:25."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Cut-off",
+          "description": "The whole band stops at once and only a very quiet tail remains.",
+          "detail": "Wikipedia says a fading heartbeat identical to the opening of \"Speak to Me\" returns when the main instrumentation stops at about 1:30, and that Abbey Road doorman Gerry O'Driscoll speaks a closing remark at about 1:37. It adds that a faint orchestral version of \"Ticket to Ride\" by the Hollyridge Strings is audible at the end, unintended, because music was playing in the studio during his recording."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Silence",
+          "description": "The tail fades to silence, with digital silence from about 2:10."
+        }
+      ]
+    }
+  ]
+}

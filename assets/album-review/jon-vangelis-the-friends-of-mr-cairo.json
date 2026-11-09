@@ -1,0 +1,365 @@
+{
+  "id": "jon-vangelis-the-friends-of-mr-cairo",
+  "kind": "reference",
+  "artist": "Jon & Vangelis",
+  "title": "The Friends of Mr Cairo",
+  "year": 1981,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Progressive Rock",
+  "genreTags": [
+    "Electronic",
+    "Progressive Rock",
+    "Pop"
+  ],
+  "runtime": "45:40",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/1a/TheFriendsOfMrCairo2FrontB.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Friends_of_Mr_Cairo",
+  "overview": "The Friends of Mr Cairo is the second album by Jon and Vangelis, released by Polydor on 3 July 1981 between Short Stories (1980) and Private Collection (1983). Wikipedia credits Vangelis as producer, composer, arranger and performer, Jon Anderson with the vocals, Roger Roche and Raine Shine as engineers, and Davout Studios in Paris and Nemo Studios in London as the studios; the guests it lists are Dick Morrissey (saxophone and flute), Dennis Clarke (saxophone), David Coker and Sally Grace (voices), and Claire Hamill and Carol Kenyon (backing vocals). The title track takes its name from Joel Cairo, the character Peter Lorre plays in the film noir The Maltese Falcon (1941), and Wikipedia says it incorporates sound effects and voice impressions of Lorre, Humphrey Bogart, Sydney Greenstreet and Jimmy Stewart, with screeching tyres sampled from the film Get Carter.\n\nThe album reached UK No. 6, Canada No. 2, the Netherlands No. 3, Austria No. 8, Australia No. 9, Germany No. 13 and US No. 64, and was certified Gold in the UK and Platinum in Canada and Australia. AllMusic gives it three stars out of five, and Record Business named the title track and \"State of Independence\" as outstanding in July 1981. A second edition of January 1982 added the single \"I'll Find My Way Home\", which Anderson says was added in response to poor initial sales. This review follows the rip, which has the seven-track order of that second edition; the July 1981 first edition had six tracks, without \"I'll Find My Way Home\", and opened with the title track.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "I'll Find My Way Home",
+      "duration": "4:31",
+      "energy": "mid",
+      "tags": [
+        "Second Edition Addition",
+        "Single",
+        "Steady Pulse",
+        "Vocal Song"
+      ],
+      "role": "Album role: Opener of the second edition and its late addition, the single released in November 1981.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse is in place within the first seconds and the music stays at a moderate level.",
+          "detail": "Wikipedia, citing a Jon Anderson interview, says Vangelis had a chord sequence in development and that he and Anderson finished the song in about three hours."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fuller sound",
+          "description": "The level and the top end rise a little and the sound becomes fuller."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Lift",
+          "description": "The top end opens up and the level rises again.",
+          "detail": "Cashbox, quoted on Wikipedia, called the whole song a \"dreamy duet\" with Vangelis's sparkling layers of keyboards and Anderson's floating falsetto."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Full level",
+          "description": "The low end and the level jump to the fullest sound so far, and the track holds that weight to the end."
+        },
+        {
+          "timestamp": "4:19",
+          "section": "Ending",
+          "description": "The music stops almost at once and leaves a short tail of a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "State of Independence",
+      "duration": "7:56",
+      "energy": "high",
+      "tags": [
+        "Second Single",
+        "Vocal Song",
+        "Covered By Donna Summer",
+        "Hard Stop And Coda"
+      ],
+      "role": "Album role: Long second track of side one in the second-edition order and the album's second single (31 July 1981); Donna Summer covered it in 1982 in a version produced by Quincy Jones.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quick, pulsing figure runs from the first seconds, with a heavy low end under it.",
+          "detail": "Wikipedia, citing Anderson in Vangelis: The Unknown Man (1994), says the lyrics were improvised for music conceived as spiritual and uplifting in a Byzantine style."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Brighter stretch",
+          "description": "The top end brightens and the sound grows busier."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Lift",
+          "description": "The sound brightens again and the level climbs to a fuller stretch."
+        },
+        {
+          "timestamp": "4:34",
+          "section": "Fullest stretch",
+          "description": "The top end opens once more and the middle of the track reaches its loudest stretch."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Groove stops",
+          "description": "The main groove stops abruptly and the level falls sharply."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Coda",
+          "description": "A quieter coda without the groove follows, with a near-silent pause partway through, and runs to the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Beside",
+      "duration": "4:12",
+      "energy": "mid",
+      "tags": [
+        "B-Side",
+        "Quiet Opening",
+        "Late Peak"
+      ],
+      "role": "Album role: Third track on side one in the second-edition order and the B-side of the \"State of Independence\" single, building from a quiet start.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, slow opening with a soft low end and no steady beat.",
+          "detail": "Wikipedia names \"Beside\" as the B-side of the \"State of Independence\" single, issued on 31 July 1981."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Brighter layer",
+          "description": "A brighter layer enters and the level rises slightly."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Drop-out",
+          "description": "The top end and the level fall away for about ten seconds."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Fuller section",
+          "description": "The level rises clearly and the sound becomes fuller and brighter."
+        },
+        {
+          "timestamp": "2:39",
+          "section": "Brief pause",
+          "description": "A thin, quiet moment lasts a few seconds, then the music returns at full brightness."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Peak",
+          "description": "The loudest stretch of the track begins."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Fade-back",
+          "description": "The level and the top end fall and the track thins out to a quiet close."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "The Mayflower",
+      "duration": "6:38",
+      "energy": "low",
+      "tags": [
+        "Slow Build",
+        "Quiet Opening",
+        "Side One Closer"
+      ],
+      "role": "Album role: Closer of side one in the second-edition order, a slow-building piece that starts from near-silence and ends the side quietly.",
+      "events": [
+        {
+          "timestamp": "0:12",
+          "section": "Intro",
+          "description": "The sound emerges slowly from near-silence with no beat.",
+          "detail": "The fan site vangelis.online credits David Coker with voices on this track."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Low-end entry",
+          "description": "A low-end layer enters and the level rises a little."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Pulse emerges",
+          "description": "A stronger low end enters and a slow, repeating pulse becomes noticeable in the quiet texture."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Build",
+          "description": "The level climbs steadily for about twenty seconds and the sound fills out."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The brightest and loudest stretch of the track begins."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Wind-down",
+          "description": "The level and the top end fall away to a quiet closing section."
+        },
+        {
+          "timestamp": "6:10",
+          "section": "Fade-out",
+          "description": "The level falls gradually and the track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The Friends of Mr. Cairo",
+      "duration": "12:09",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "First Single",
+        "Film Noir Reference",
+        "Longest Track"
+      ],
+      "role": "Album role: Title track and first single (22 May 1981), at over twelve minutes the longest piece; it opened side one in the first edition and opens side two in the second-edition order.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with no steady beat.",
+          "detail": "Wikipedia says the single was No. 1 on the Canadian singles chart for five weeks in late 1981, and that its video is an ode to Hollywood films of the 1930s and 1940s, including The Maltese Falcon."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat entry",
+          "description": "A steady pulse and a heavy low end enter and the track settles into a groove."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Fuller stretch",
+          "description": "The level and the low end rise and the sound becomes fuller."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Thinner stretch",
+          "description": "The mid range thins, the level dips and the sound turns brighter."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Drop-back",
+          "description": "The level and the top end fall away for about half a minute."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Loudest stretch",
+          "description": "The sound returns at greater strength with an open top end: the loudest and brightest stretch of the groove section."
+        },
+        {
+          "timestamp": "5:32",
+          "section": "Beat drops out",
+          "description": "The beat and the low end fall away and the music turns quiet and beatless."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "More active passage",
+          "description": "The level and the top end rise for a busier passage within the quiet section."
+        },
+        {
+          "timestamp": "9:40",
+          "section": "Very quiet stretch",
+          "description": "The level falls close to silence for about 40 seconds."
+        },
+        {
+          "timestamp": "10:20",
+          "section": "Quiet return",
+          "description": "The music returns at a low level, still without a steady beat."
+        },
+        {
+          "timestamp": "11:07",
+          "section": "Short swell",
+          "description": "The level swells to near its fullest for about ten seconds, then falls back."
+        },
+        {
+          "timestamp": "11:34",
+          "section": "Fade-out",
+          "description": "The level falls and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Back to School",
+      "duration": "5:09",
+      "energy": "high",
+      "tags": [
+        "B-Side",
+        "Steady Groove",
+        "Hard Stop"
+      ],
+      "role": "Album role: Second piece of side two in the second-edition order and the B-side of the \"I'll Find My Way Home\" single (November 1981), a steady groove from start to finish.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Groove entry",
+          "description": "A steady groove with a clear pulse starts almost at once and holds for nearly the whole track.",
+          "detail": "vangelis.online lists this piece as \"Back to School Boogie\" and credits it with saxophone by Dick Morrissey and with backing vocals."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Fuller sound",
+          "description": "The level and the top end rise and the sound becomes fuller."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Brighter top",
+          "description": "The top end brightens noticeably."
+        },
+        {
+          "timestamp": "4:49",
+          "section": "Hard stop",
+          "description": "The music stops abruptly and leaves a short decay of a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Outside of This (Inside of That)",
+      "duration": "5:03",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Quiet Build",
+        "Short Swells"
+      ],
+      "role": "Album role: Closer of the album, a mostly quiet piece with short swells that follows the steady groove of \"Back to School\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening with no steady beat; the sound stays low for about a minute.",
+          "detail": "Wikipedia lists the first-edition title as \"Outside And Inside\", and vangelis.online credits Dick Morrissey with flute on this piece."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Build",
+          "description": "The level rises sharply and the sound becomes fuller and brighter for about twenty seconds."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Drop-back",
+          "description": "The level falls sharply back to a quiet, thin texture."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Short swell",
+          "description": "A brief swell lifts the level and the top end for a few seconds."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Fuller section",
+          "description": "The level and the low end rise and the sound builds to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:31",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out."
+        }
+      ]
+    }
+  ]
+}

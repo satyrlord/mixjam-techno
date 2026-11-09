@@ -1,0 +1,349 @@
+{
+  "id": "vangelis-see-you-later",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "See You Later",
+  "year": 1980,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Experimental",
+  "genreTags": [
+    "Electronic",
+    "Electronica",
+    "Experimental",
+    "Concept Album"
+  ],
+  "runtime": "39:55",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/12/Vangelis_See_You_Later.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/See_You_Later",
+  "overview": "See You Later is a concept album that Vangelis recorded at Nemo Studios in London and Polydor released in November 1980. The Discogs entries for the 1980 pressings credit Vangelis with composing, arranging, producing, the lyrics and all instruments, with Raphael Preston and John Walker as engineers, and Wikipedia lists synthesizers, electric piano, grand piano and drums, with the Korg KR-55 drum machine used extensively. The guests are voices and one violin: Peter Marsh on the first two tracks, Cherry Vanilla and Andrew Hoy and Michel Ripoche's violin on the fourth, Krisma (Maurizio Arcieri and Christina Moser) on the fifth and Jon Anderson on the last two; Discogs marks all of these credits as uncredited on the sleeve. Wikipedia calls the album bleaker than most of his records, says the words are in English, French and Italian, and says \"Suffocation\" was inspired by the Seveso disaster.\n\nWikipedia says the album breaks quite violently with the style of his late-1970s work and relies much more on vocals, and Synthtopia (2004) calls it \"a very interesting work, but not the best introduction to Vangelis\" that is most similar to Earth and 666; Wikipedia lists AllMusic's rating as 1.5 out of 5. \"Memories of Green\" reappeared in his score for the 1982 film Blade Runner. The album was not released in the United States until the 2016 Delectus box set, whose three bonus tracks this review does not cover. The sources consulted give no chart positions or certifications, and the review follows the six tracks of the original album as they appear on the 1989 Polydor CD.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "I Can't Take It Any More",
+      "duration": "5:42",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Peter Marsh",
+        "Vocoder",
+        "Synthesizer Choir"
+      ],
+      "role": "Album role: Side one's opener and the first of two tracks with Peter Marsh's vocals, a track that builds in steps and ends in a long, very quiet coda.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse is running from the first seconds at a modest level, with the sound dark and the upper range subdued.",
+          "detail": "Wikipedia says Peter Marsh sings through a vocoder over a deep synthesizer glissando bass and a synthesizer choir; no source gives timings, so the measurement does not show where the voice enters."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "First lift",
+          "description": "The level and the mid-range rise abruptly for about 15 seconds, then fall back."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Second lift",
+          "description": "A longer lift begins, and the level and brightness grow for about half a minute."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Low-end swell",
+          "description": "The low end swells abruptly and the level stays high for about a minute, the loudest long stretch so far."
+        },
+        {
+          "timestamp": "3:29",
+          "section": "Drop-out",
+          "description": "The top end and the level fall away abruptly for about 10 seconds."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Full return",
+          "description": "The full sound returns and builds to the loudest stretch of the track, which lasts a little over half a minute."
+        },
+        {
+          "timestamp": "4:16",
+          "section": "Quiet coda",
+          "description": "The level falls sharply to a dark, very quiet coda that fades out."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Multi-Track Suggestion",
+      "duration": "5:37",
+      "energy": "high",
+      "tags": [
+        "Steady Pulse",
+        "Synth Beat",
+        "Eurodisco Elements",
+        "Peter Marsh"
+      ],
+      "role": "Album role: Second track, with a steady pulse that runs almost unbroken until the fade-out and the second of the two tracks with Peter Marsh's vocals.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "The track starts after a few seconds of silence and a steady pulse is established within seconds, growing in level over the first ten seconds.",
+          "detail": "uDiscover calls the track throbbing, with an almost Kraftwerk-style synth beat and elements of Eurodisco. Discogs lists Peter Marsh on vocals, but no source places the voice in the track."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "First lift",
+          "description": "The level and the mid-range step up and the groove becomes fuller while the pulse stays constant."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Fuller groove",
+          "description": "A second step up adds weight and presence, and the groove stays in this fuller form for about a minute."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Build",
+          "description": "The level climbs to a crest, eases briefly and is back at full strength within half a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Thinner pulse",
+          "description": "The upper-range rhythmic part thins for about 15 seconds while the low pulse carries on."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Peak",
+          "description": "The loudest and heaviest stretch of the track, with the low end at its strongest for about 10 seconds."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Fade-out",
+          "description": "The top end drops away and the whole sound fades gradually to silence."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Memories of Green",
+      "duration": "5:49",
+      "energy": "low",
+      "tags": [
+        "Piano Piece",
+        "Steinway Grand",
+        "Flanger Pedal",
+        "Reused in Blade Runner",
+        "Game Bleeps"
+      ],
+      "role": "Album role: Side one's slow piano piece and the quietest track of the album by measured level; Vangelis reused it in his score for Blade Runner (1982), in the scene where Deckard meets Rachael.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "The first sound arrives after a few seconds and the opening is quiet, sparse and dark.",
+          "detail": "Wikipedia and Raphael Preston, interviewed in Sound On Sound (1997), say the piano is a Steinway grand played through an Electro-Harmonix Electric Mistress flanger pedal. Synthtopia describes a sad piano melody treated to sound slightly distant, over sirens and strange synthesizer effects; none of the sources times these parts."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Fuller texture",
+          "description": "The texture fills out and the level and the low end rise for about 45 seconds."
+        },
+        {
+          "timestamp": "2:18",
+          "section": "Sparser stretch",
+          "description": "The level falls back and the texture thins for about 35 seconds."
+        },
+        {
+          "timestamp": "2:53",
+          "section": "Fullest stretch",
+          "description": "The fullest and loudest stretch of the track, lasting about half a minute.",
+          "detail": "Wikipedia and Sound On Sound say the electronic noises come from a hand-held Bambino UFO Master Blaster Station game, and Discogs credits Raphael Preston with those noises; no source gives their timing."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Settled middle",
+          "description": "The level drops and the track settles at a moderate level with a gently moving texture for nearly two minutes."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Fade-out",
+          "description": "The sound thins and fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Not a Bit - All of It",
+      "duration": "3:00",
+      "energy": "mid",
+      "tags": [
+        "Cherry Vanilla",
+        "Michel Ripoche",
+        "Spoken-Word Vocal",
+        "Shortest Track"
+      ],
+      "role": "Album role: Side one's closer and the shortest track, three minutes of spoken-word vocal and violin with alternating full and thin stretches.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A thin, quiet opening with little bass that stays low in level for about 33 seconds.",
+          "detail": "Discogs credits Cherry Vanilla and Andrew Hoy with voice, Michel Ripoche with violin and Vangelis with vocalese on this track, and uDiscover calls Cherry Vanilla's part largely spoken-word; no source gives timings."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Full entry",
+          "description": "The level jumps as the low end and the top end swell in over about three seconds, and the full sound holds for about half a minute."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Lighter stretch",
+          "description": "The low end and the steady pulse fall away, leaving a lighter texture that stays fairly loud for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Break",
+          "description": "A sudden drop with a brief gap, then a quieter, thinner stretch broken by a short loud burst and another gap."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Second full section",
+          "description": "The full sound returns and holds for about half a minute."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Pull-back",
+          "description": "The level falls and the texture thins, and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Suffocation",
+      "duration": "9:26",
+      "energy": "high",
+      "tags": [
+        "Jon Anderson",
+        "Krisma",
+        "Italian Narrative",
+        "Seveso Disaster",
+        "Side Two Opener"
+      ],
+      "role": "Album role: Side two's opener, a loud, driving first half with one dropout followed by a sparse, beatless second half that fades away.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Groove entry",
+          "description": "After a near-silent lead-in of about four seconds, a loud, full groove starts and stays steady.",
+          "detail": "Wikipedia says Jon Anderson sings on this track and that Krisma (Maurizio Arcieri and Christina Moser) supply a narrative in Italian, and that the track was inspired by the Seveso disaster; no source times the voices."
+        },
+        {
+          "timestamp": "1:58",
+          "section": "Bass drop-out",
+          "description": "The low end drops out and the mid-range carries the track for about 40 seconds."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Groove returns",
+          "description": "The low end and the full groove return."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch of the first half, lasting about a minute and a half."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Beat stops",
+          "description": "The steady pulse stops and the level falls within seconds to a much quieter, sparse mid-range texture; no steady beat returns for the rest of the track."
+        },
+        {
+          "timestamp": "6:25",
+          "section": "Darker passage",
+          "description": "The top end falls away and the texture turns darker and quieter."
+        },
+        {
+          "timestamp": "8:15",
+          "section": "Low-end drone",
+          "description": "The mid-range and the top end fall away and the low end rises, leaving a low drone."
+        },
+        {
+          "timestamp": "8:55",
+          "section": "Fade-out",
+          "description": "The sound fades gradually to the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "See You Later",
+      "duration": "10:22",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Electric Piano",
+        "Male Choir",
+        "French Narrative",
+        "Jon Anderson"
+      ],
+      "role": "Album role: The title track and the album's closer, its longest at just over ten minutes, with a slow, quiet start, a long stretch of steady pulse, a break and a late climax.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, dark opening with no clear beat that lasts for about 45 seconds.",
+          "detail": "Wikipedia says Vangelis plays electric piano on this track with a staccato, atonal male choir; no source times these parts."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Bright layer",
+          "description": "A brighter layer is added for about 12 seconds, and then the level falls to the quietest point of the track."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Beat entry",
+          "description": "The level jumps and a steady pulse begins, with the sound much fuller and brighter than the intro."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Fuller stretch",
+          "description": "The level rises again and the sound stays loud and full, with changing layers, for nearly three minutes."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Beat drop-out",
+          "description": "The steady pulse thins out for about 30 seconds while the rest of the sound carries on at a slightly lower level.",
+          "detail": "Wikipedia says a child's narrative in French comes about halfway through the track; the measurement cannot show where the voice sits."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Beat returns",
+          "description": "The pulse comes back with a brighter top end and holds for about half a minute."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Break",
+          "description": "The level falls suddenly to a dark, quiet stretch that lasts about twenty-five seconds."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Slow rebuild",
+          "description": "The level and the brightness climb gradually for over two minutes, without a clear beat."
+        },
+        {
+          "timestamp": "9:15",
+          "section": "Climax",
+          "description": "The loudest and brightest stretch of the track, lasting about half a minute.",
+          "detail": "Wikipedia says Jon Anderson's vocals are used in the finale."
+        },
+        {
+          "timestamp": "9:48",
+          "section": "Pull-back",
+          "description": "The level falls away and then partly recovers briefly."
+        },
+        {
+          "timestamp": "10:12",
+          "section": "Fade-out",
+          "description": "The level falls sharply and the track ends in silence."
+        }
+      ]
+    }
+  ]
+}

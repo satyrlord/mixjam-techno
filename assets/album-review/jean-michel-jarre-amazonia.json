@@ -1,0 +1,438 @@
+{
+  "id": "jean-michel-jarre-amazonia",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Amazônia",
+  "year": 2021,
+  "label": "Columbia / Sony Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Soundtrack"
+  ],
+  "runtime": "52:50",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/45/Jean-Michel_Jarre_-_Amaz%C3%B4nia.png",
+  "coverSource": "https://en.wikipedia.org/wiki/Amaz%C3%B4nia_(album)",
+  "overview": "Released on 9 April 2021 by Columbia and Sony Music, Amazônia is the musical score for the exhibition of Sebastião Salgado's Amazônia photographs, shown at the Philharmonie de Paris from May to October 2021. Wikipedia lists Jarre as writer, producer and mixer, with Patrick Pelamourgues as technical assistance and David Perreau as mastering engineer. It was recorded in 2021 at Jarre's JMJ Studio in Paris, and Wikipedia says electronic and orchestral instruments are combined with natural sounds, drawing on recordings that Jarre could use from the Museum of Ethnology in Geneva. The same source gives binaural and 5.1 surround versions as digital downloads beside the standard stereo CD and LP.\n\nThe album is one continuous work in nine untitled parts, from under three and a half minutes to ten minutes, and the longest parts open the album. It reached No. 5 in Germany and No. 4 in Scotland and Switzerland, and No. 21 in the UK. The listening guide below comes from measuring the loudness, low end and pulse of a stereo rip and is a rough guide to where each part changes; it names no instruments, since no source here identifies the sounds part by part.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Amazônia Part 1",
+      "duration": "7:43",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Quiet Start",
+        "Late Low-End Entry",
+        "Soundtrack Score"
+      ],
+      "role": "Album role: Opens the score with a slow build from near silence, ahead of the longer Parts 2 and 3 that complete the album's three longest parts.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A quiet, beatless opening that stays soft for over a minute.",
+          "detail": "Wikipedia describes the album as electronic and orchestral instruments combined with natural sounds; the measurement here cannot tell which sounds are which."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Low end enters",
+          "description": "The level and the low end jump together: the biggest change in the first half of the part."
+        },
+        {
+          "timestamp": "2:41",
+          "section": "Drop",
+          "description": "The low end and the level fall away for half a minute."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Full return",
+          "description": "The low end comes back with force and the part reaches its loudest stretch, which lasts to about 4:40."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Thinner passage",
+          "description": "The level dips and the low end becomes uneven for about a minute."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Final build",
+          "description": "A more regular pulse appears and the level builds again, staying high until about 6:50."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Outro",
+          "description": "The level falls and the part ends quietly."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Amazônia Part 2",
+      "duration": "10:00",
+      "energy": "mid",
+      "tags": [
+        "Longest Part",
+        "Pulsing Low End",
+        "Long Quiet Passage",
+        "Slow Evolution"
+      ],
+      "role": "Album role: The longest part of the album, with a clear pulse early on and a long, sparse middle before the low end returns.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that grows in a few seconds."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Pulse entry",
+          "description": "A regular pulse and a heavy low end enter: the biggest change in the part."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Breakdown",
+          "description": "The low end and the pulse stop, leaving a thin, quiet texture for over a minute."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Return",
+          "description": "The full level and the low end come back."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Pulse returns",
+          "description": "After a short dip, the pulse and the low end enter again."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fuller middle",
+          "description": "The middle of the sound grows louder and the pulse firms up."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Quietest stretch",
+          "description": "The level falls to its lowest in the second half, and the low end fills out again from about 8:30 to the end."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Amazônia Part 3",
+      "duration": "8:10",
+      "energy": "mid",
+      "tags": [
+        "Sparse Middle",
+        "Low End Withdrawn",
+        "Late Climax",
+        "Loudest Part"
+      ],
+      "role": "Album role: Holds the album's quietest middle and then its strongest climax, between the long Part 2 and the shorter, pulse-driven parts.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening in the low and middle range."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Step up",
+          "description": "The level rises in one step and holds as the biggest change of the first half."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Low end withdrawn",
+          "description": "The low end disappears and only the middle range is left."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Low end returns",
+          "description": "The low end comes back, then swells further at 3:32."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Sparse stretch",
+          "description": "The low end falls away again and the part thins out to its sparsest point around 5:30."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Build",
+          "description": "The low end returns strongly and the level climbs for a minute and a half."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Peak",
+          "description": "The loudest passage of the part, with a very heavy low end."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Outro",
+          "description": "The level and the low end fall away until the part ends."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Amazônia Part 4",
+      "duration": "3:17",
+      "energy": "high",
+      "tags": [
+        "Short Part",
+        "Fast Pulse",
+        "Immediate Start",
+        "Brief Break"
+      ],
+      "role": "Album role: The first short part and the first to start at full level with a strong pulse, after three long, slowly changing parts.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts at full level with a strong pulse and a firm low end."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Tighter pulse",
+          "description": "The pulse and the low end both tighten: the part's most regular stretch, which lasts to about 1:55."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Break",
+          "description": "The low end drops out for a few seconds, then returns at 2:04."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Last stretch",
+          "description": "After a slightly quieter spell, the level returns and runs to the end."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Outro",
+          "description": "The low end falls away and the level drops for the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Amazônia Part 5",
+      "duration": "6:04",
+      "energy": "mid",
+      "tags": [
+        "Early Pulse",
+        "Low End Recedes",
+        "Two-Stage Return",
+        "Quiet Ending"
+      ],
+      "role": "Album role: The midpoint of the album, a pulse-led part that thins out in the middle before it rebuilds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that grows in the first few seconds."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Pulse entry",
+          "description": "A regular pulse and a fuller low end enter."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Thinner passage",
+          "description": "The pulse weakens and the low end recedes for most of a minute."
+        },
+        {
+          "timestamp": "2:49",
+          "section": "Low end returns",
+          "description": "The low end comes back and the level rises."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Lower stretch",
+          "description": "The level drops for about a minute."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Final lift",
+          "description": "The level rises again and holds until the end approaches."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Outro",
+          "description": "The low end falls away and the part ends."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Amazônia Part 6",
+      "duration": "3:34",
+      "energy": "mid",
+      "tags": [
+        "Short Part",
+        "Slow Build",
+        "Top End Shifts",
+        "Late Peak"
+      ],
+      "role": "Album role: A short, slowly building part with no clear pulse, between the pulse-led Part 5 and the steadier Part 7.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, low-register opening."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Build",
+          "description": "The level and the low end rise and the part reaches its full level by about 1:00."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Top end falls",
+          "description": "The high frequencies drop away: the biggest change in the part."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Top end opens",
+          "description": "The highs open briefly, then close again at 1:29."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch, with the heaviest low end of the part."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Outro",
+          "description": "The level falls to a quiet ending."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Amazônia Part 7",
+      "duration": "4:18",
+      "energy": "high",
+      "tags": [
+        "Steady Pulse",
+        "Mid Dip",
+        "Late Low-End Entry",
+        "Strong Finish"
+      ],
+      "role": "Album role: A steady, pulse-led part that builds to one of the album's strongest endings, before the shorter Part 8.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A steady pulse starts at once at a moderate level and runs for the first minute and a half."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Dip",
+          "description": "The level drops for about half a minute."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Rebuild",
+          "description": "The level rises again over half a minute."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Low end enters",
+          "description": "A heavy low end enters: the biggest change in the part."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Peak",
+          "description": "The loudest stretch begins and lasts until the part ends, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Amazônia Part 8",
+      "duration": "3:20",
+      "energy": "mid",
+      "tags": [
+        "Short Part",
+        "Even Level",
+        "Gradual Change",
+        "Thinning Ending"
+      ],
+      "role": "Album role: The most even part of the album, a steady stretch of almost constant level before the final part.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quieter opening that settles within a few seconds."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Bass entry",
+          "description": "The bass comes in: the clearest change in the part."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Brighter turn",
+          "description": "The sound brightens slightly and the level stays almost constant."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Shift",
+          "description": "The texture shifts a little, with no change in level, until the end of the steady stretch at 3:00."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Outro",
+          "description": "The level and the low end fall and the part thins out to its end."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Amazônia Part 9",
+      "duration": "6:25",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Full-Level Start",
+        "Mid-Part Drop",
+        "Loudest Ending"
+      ],
+      "role": "Album role: The closing part, which starts at full level, falls away in its middle, and then reaches the loudest stretch of the album before a long quiet close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part starts at full level with the low end already present."
+        },
+        {
+          "timestamp": "2:07",
+          "section": "Drop",
+          "description": "The level and the low end fall away for most of a minute."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Rebuild",
+          "description": "The middle range returns and the level starts to rise."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Peak",
+          "description": "The low end and a clear pulse return at full level: the biggest change in the part, leading into the loudest stretch of the album."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fall",
+          "description": "The level falls well below the peak."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Outro",
+          "description": "A long, quiet close with a soft low end runs to the end of the album."
+        }
+      ]
+    }
+  ]
+}

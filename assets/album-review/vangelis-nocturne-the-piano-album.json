@@ -1,0 +1,752 @@
+{
+  "id": "vangelis-nocturne-the-piano-album",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Nocturne: The Piano Album",
+  "year": 2019,
+  "label": "Decca",
+  "producer": "Vangelis",
+  "genre": "Classical / Piano",
+  "genreTags": [
+    "Classical",
+    "Piano",
+    "Instrumental",
+    "New Age"
+  ],
+  "runtime": "1:16:02",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/9/96/Vangelis_-_Nocturne.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Nocturne%3A_The_Piano_Album",
+  "overview": "Nocturne: The Piano Album, released by Decca on 25 January 2019, is a night-themed record that Vangelis produced and recorded in 2018 with the engineer Philippe Colonna. Super Deluxe Edition reports that it marks the first time Vangelis has recorded on grand piano, and the Los Angeles Times calls it a collection of new works for mostly solo piano with some synthesiser accompaniment, while Kathy Parsons of Mainly Piano hears no track that is solo piano. The credits list Vangelis on piano and keyboards and Irina Valentinova-Karpouchina as guest pianist on \"Movement 9, Mythodea\", and the album's website collected moon photographs from the public for its artwork.\n\nEleven of the 17 tracks are new, and six are new arrangements of earlier themes: \"To the Unknown Man\" (from Spiral, 1977), \"Movement 9, Mythodea\" (from Mythodea, 2001), \"Love Theme, Blade Runner\" (from the 1982 film score), \"La Petite Fille de la Mer\" (from L'Apocalypse des animaux, 1973), \"Chariots of Fire\" (from the 1981 film score) and \"1492: Conquest of Paradise\" (from the 1992 film score). Vangelis told the Los Angeles Times that Decca pushed him to include the familiar themes and that he did not much want to use them. The reworked themes sit at tracks 2, 3, 7, 11, 13 and 16 between the new pieces, and the one-minute \"Pour Melia\" closes the album. It reached US New Age Albums (Billboard) No. 2, Poland No. 25, Flanders No. 18 and Switzerland No. 33, and Parsons judges it \"just not really a piano album!\"\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Nocturnal Promenade",
+      "duration": "5:51",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "First Single",
+        "Night Theme",
+        "Album Opener"
+      ],
+      "role": "Album role: Opener and the album's first single, a new piece that introduces the night-time theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, light opening that keeps the level low for the first minute and a half.",
+          "detail": "Wikipedia names this piece as the album's first single. Classical Candor reads the title as a nighttime stroll and finds the piece leisurely."
+        },
+        {
+          "timestamp": "1:23",
+          "section": "Fuller passage",
+          "description": "The level and low end rise and the top end opens up.",
+          "detail": "Classical Candor's review says strings appear suddenly in this piece, without giving a time."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Swell",
+          "description": "The loudest, brightest stretch of the first half, for about 20 seconds."
+        },
+        {
+          "timestamp": "2:42",
+          "section": "Quiet passage",
+          "description": "The level falls back to a low, light texture for about half a minute."
+        },
+        {
+          "timestamp": "3:17",
+          "section": "Second swell",
+          "description": "Another short swell, close to the first in level and brightness."
+        },
+        {
+          "timestamp": "4:07",
+          "section": "Sparse passage",
+          "description": "The quietest, thinnest stretch of the track, for about half a minute."
+        },
+        {
+          "timestamp": "5:04",
+          "section": "Closing passage",
+          "description": "The low end returns for a last passage at a moderate level."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Fade",
+          "description": "The sound thins out and decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "To the Unknown Man",
+      "duration": "5:15",
+      "energy": "mid",
+      "tags": [
+        "Reworked Theme",
+        "From Spiral",
+        "New Arrangement",
+        "Mid-Track Peak"
+      ],
+      "role": "Album role: First of the album's six reworked themes, a new arrangement of a piece from Spiral (1977), placed directly after the opening single.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, dark opening."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Rise",
+          "description": "The level and top end begin a gradual climb that lasts about a minute."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Peak",
+          "description": "The loudest, fullest stretch of the track, for about a minute, with the strongest low end."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Pull-back",
+          "description": "The level and low end fall away and stay low through the rest of the track."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Fade",
+          "description": "The sound decays to silence over the last 20 seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Movement 9, Mythodea",
+      "duration": "3:49",
+      "energy": "mid",
+      "tags": [
+        "Reworked Theme",
+        "From Mythodea",
+        "Guest Pianist",
+        "Piano With Orchestration"
+      ],
+      "role": "Album role: Second reworked theme, an edited piano version of the ninth movement of Mythodea (2001), with a guest pianist credit.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet lead-in of about ten seconds, then the main texture enters at a moderate level with a dark tone.",
+          "detail": "The credits list Irina Valentinova-Karpouchina as guest pianist on this track. Classical Candor says the opening sounds like a different instrument from the one Vangelis plays."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Fuller passage",
+          "description": "The level, low end and top end rise together and stay high for over two minutes.",
+          "detail": "Kathy Parsons describes the track as an acoustic piano with synthesiser symphonic orchestration, and Classical Candor says strings join after the opening."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Bright stretch",
+          "description": "The top end reaches its brightest point in the track while the level stays high."
+        },
+        {
+          "timestamp": "3:18",
+          "section": "Outro",
+          "description": "The level and the upper range fall away over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Moonlight Reflections",
+      "duration": "3:11",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Even Dynamics",
+        "Mid-Track Pause"
+      ],
+      "role": "Album role: First of three consecutive new pieces (tracks 4 to 6), a quiet, even piece after the two reworked themes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, even opening that stays at a low level for over a minute."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Short swell",
+          "description": "The level and low end rise for about 20 seconds."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Pause",
+          "description": "The sound drops to a much lower level for about ten seconds, then returns."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Second half",
+          "description": "The low, even level of the opening returns and holds to the end."
+        },
+        {
+          "timestamp": "3:03",
+          "section": "Outro",
+          "description": "The sound decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Through the Night Mist",
+      "duration": "5:13",
+      "energy": "mid",
+      "tags": [
+        "New Piece",
+        "Strings",
+        "Swelling Dynamics"
+      ],
+      "role": "Album role: Middle of the three consecutive new pieces (tracks 4 to 6), sustained at a higher level than its neighbours.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft opening whose level builds over the first 20 seconds.",
+          "detail": "Kathy Parsons calls the track very beautiful and dreamy with lots of romantic strings."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Steady passage",
+          "description": "The mid range fills out and the level holds steady for about a minute."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Swell",
+          "description": "A short swell with a brighter top end, for about 20 seconds."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Fuller passage",
+          "description": "A longer, louder and brighter stretch, for over half a minute."
+        },
+        {
+          "timestamp": "3:34",
+          "section": "Pull-back",
+          "description": "The level falls and the top end closes for about 20 seconds."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch of the track, for about half a minute."
+        },
+        {
+          "timestamp": "4:22",
+          "section": "Wind-down",
+          "description": "The level falls back and the track thins out to the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Early Years",
+      "duration": "3:33",
+      "energy": "mid",
+      "tags": [
+        "New Piece",
+        "Late Climax",
+        "Light Opening"
+      ],
+      "role": "Album role: Last of the three consecutive new pieces (tracks 4 to 6), leading into the Blade Runner love theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, light opening with little low end."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Gentle passage",
+          "description": "The level rises a little and the top end opens, while the low end stays light for about a minute."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Fuller passage",
+          "description": "The low end returns for about half a minute."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Lighter passage",
+          "description": "The low end drops out again while the top end stays open."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch of the track, with the low end back, for close to a minute."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Outro",
+          "description": "The level falls and the sound decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Love Theme, Blade Runner",
+      "duration": "6:05",
+      "energy": "low",
+      "tags": [
+        "Reworked Theme",
+        "From Blade Runner",
+        "Longest Track"
+      ],
+      "role": "Album role: Third reworked theme and the album's longest track, a new arrangement of the love theme from the Blade Runner film score (1982).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with no low end, for about half a minute.",
+          "detail": "The piece is a new version of the love theme from Blade Runner; the original recording appears on the Blade Runner soundtrack album, released in 1994."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Low end enters",
+          "description": "The low end arrives and the level rises for the main body of the piece."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Brighter passage",
+          "description": "The top end opens and the level rises for about 45 seconds."
+        },
+        {
+          "timestamp": "5:13",
+          "section": "Outro",
+          "description": "The level and low end fall and the sound thins out over the final minute."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Sweet Nostalgia",
+      "duration": "3:39",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Rising Close"
+      ],
+      "role": "Album role: First of three consecutive new pieces (tracks 8 to 10) after the Blade Runner love theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A moderate-level opening with a dark tone and a light low end."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Brighter passage",
+          "description": "The top end opens and the level rises for about 55 seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Quiet passage",
+          "description": "The level and top end fall back for about 40 seconds."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Closing build",
+          "description": "The low end strengthens and the level rises toward the close."
+        },
+        {
+          "timestamp": "3:24",
+          "section": "Outro",
+          "description": "The sound decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Intermezzo",
+      "duration": "3:46",
+      "energy": "mid",
+      "tags": [
+        "Interlude",
+        "Symphonic Texture",
+        "New Piece"
+      ],
+      "role": "Album role: Symphonic interlude in the middle of the three new pieces (tracks 8 to 10), in which two reviewers hear no piano.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bright, wide opening at a moderate level.",
+          "detail": "Kathy Parsons calls the piece very symphonic and hears no piano in it, and Classical Candor says there is no piano at all."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Swell",
+          "description": "A short, loud swell with the strongest low end and top end of the track, for about 20 seconds."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Break",
+          "description": "The level drops sharply for about 20 seconds, leaving a thin texture."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Second swell",
+          "description": "The level and top end return for about 25 seconds."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Outro",
+          "description": "The tone darkens and the level falls as the sound thins out to the end."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "To a Friend",
+      "duration": "5:24",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Even Dynamics",
+        "Late Brightening"
+      ],
+      "role": "Album role: Last of the three consecutive new pieces (tracks 8 to 10), a long, even piece and the longest of the three.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, dark opening."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Steady passage",
+          "description": "The level settles and the tone stays dark with little change for close to three minutes."
+        },
+        {
+          "timestamp": "3:29",
+          "section": "Brighter passage",
+          "description": "The top end opens and the level rises for about 20 seconds."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Lighter passage",
+          "description": "The low end thins out while the top end stays open, for about 20 seconds."
+        },
+        {
+          "timestamp": "4:58",
+          "section": "Outro",
+          "description": "The level falls and the track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "La Petite Fille de la Mer",
+      "duration": "4:45",
+      "energy": "low",
+      "tags": [
+        "Reworked Theme",
+        "From L'Apocalypse Des Animaux",
+        "Alternating Texture"
+      ],
+      "role": "Album role: Fourth reworked theme, a new arrangement of a piece from L'Apocalypse des animaux (1973).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A light, quiet opening with little low end."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Main passage",
+          "description": "The low end arrives and the level settles for about a minute and a half."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Lighter passage",
+          "description": "The low end drops out for about half a minute."
+        },
+        {
+          "timestamp": "2:33",
+          "section": "Fuller passage",
+          "description": "The loudest stretch of the track, with the low end and top end at their strongest, for close to a minute."
+        },
+        {
+          "timestamp": "3:26",
+          "section": "Closing passage",
+          "description": "The low end thins out again and the level eases toward the end."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Outro",
+          "description": "The level falls further and the sound decays to silence."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Longing",
+      "duration": "3:45",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Gradual Build",
+        "Final Peak"
+      ],
+      "role": "Album role: Single new piece between two reworked themes (tracks 11 and 13), building to its loudest stretch at the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening at a low, even level.",
+          "detail": "Wikipedia notes that this track is not based on the song of the same name from the Blade Runner Trilogy: 25th Anniversary set."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Low end enters",
+          "description": "The low end arrives and the level rises slightly."
+        },
+        {
+          "timestamp": "1:16",
+          "section": "Swell",
+          "description": "A short swell with a brighter top end, for about 20 seconds."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Dip",
+          "description": "The level drops back for about 20 seconds."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Final passage",
+          "description": "The loudest, fullest stretch of the track begins and holds to the end."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Chariots of Fire",
+      "duration": "5:27",
+      "energy": "mid",
+      "tags": [
+        "Reworked Theme",
+        "Film Theme",
+        "Strings And Piano"
+      ],
+      "role": "Album role: Fifth reworked theme, a new arrangement of the title theme from Chariots of Fire (1981), placed between two new pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece starts at once at a moderate level with a dark tone.",
+          "detail": "Kathy Parsons describes this version as mostly strings and piano without the powerful rhythm of the original."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Brighter passage",
+          "description": "The top end opens for the first time while the level stays high."
+        },
+        {
+          "timestamp": "2:38",
+          "section": "Fuller passage",
+          "description": "The level climbs and stays high for about 40 seconds.",
+          "detail": "Parsons notes that the second half of the piece has several variations."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch of the track, for about 25 seconds."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Pull-back",
+          "description": "The level and low end fall away for about half a minute."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Return",
+          "description": "The low end returns strongly for about 20 seconds."
+        },
+        {
+          "timestamp": "5:03",
+          "section": "Outro",
+          "description": "The top end falls away and the sound thins out to the end."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Unfulfilled Desire",
+      "duration": "4:24",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Sparse Texture",
+        "Mid-Track Dip"
+      ],
+      "role": "Album role: First of two consecutive new pieces (tracks 14 and 15) after the Chariots of Fire theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, thin opening with no low end."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Fuller passage",
+          "description": "The low end arrives and the level rises for about 35 seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Dip",
+          "description": "The level drops sharply and the low end vanishes for about 20 seconds."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Second fuller passage",
+          "description": "The low end returns and the level rises for about 30 seconds."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Lighter passage",
+          "description": "The low end thins again for about half a minute."
+        },
+        {
+          "timestamp": "3:36",
+          "section": "Closing passage",
+          "description": "A dark, low-end-heavy passage that runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Lonesome",
+      "duration": "5:51",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Classical Feel",
+        "Strings"
+      ],
+      "role": "Album role: Last full-length new piece, placed before the final reworked theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The piece starts at once at a moderate level with a full low end.",
+          "detail": "Kathy Parsons calls the piece very classical in feel and says the strings get a little overbearing in places."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Swell",
+          "description": "The level and top end rise for about 20 seconds."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Lighter passage",
+          "description": "The low end thins out for about a minute while the top end stays open."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Fuller passage",
+          "description": "The low end returns strongly and the level rises."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Peak",
+          "description": "The loudest, brightest stretch of the track, for about half a minute."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Thin passage",
+          "description": "The level and low end fall away for about 20 seconds."
+        },
+        {
+          "timestamp": "4:36",
+          "section": "Quiet passage",
+          "description": "The quietest stretch of the track, for about 25 seconds."
+        },
+        {
+          "timestamp": "5:01",
+          "section": "Closing passage",
+          "description": "A dark, low-end-heavy passage returns and runs to the fade."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "1492: Conquest of Paradise",
+      "duration": "4:52",
+      "energy": "mid",
+      "tags": [
+        "Reworked Theme",
+        "From 1492",
+        "Film Theme",
+        "Sustained Level"
+      ],
+      "role": "Album role: Sixth and final reworked theme, a new arrangement of the theme from 1492: Conquest of Paradise (1992).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening whose level rises steadily over the first half minute.",
+          "detail": "Classical Candor names this track and the Chariots of Fire arrangement as the best numbers on the disc."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Low end enters",
+          "description": "The low end arrives and the level rises."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Fuller passage",
+          "description": "The level and low end climb to their highest and stay there for the rest of the track."
+        },
+        {
+          "timestamp": "2:43",
+          "section": "Bright stretch",
+          "description": "The top end reaches its brightest point in the track, for about 50 seconds."
+        },
+        {
+          "timestamp": "3:56",
+          "section": "Closing passage",
+          "description": "The level eases slightly and holds steady."
+        },
+        {
+          "timestamp": "4:37",
+          "section": "Fade",
+          "description": "The sound thins out and decays to silence over the last 15 seconds."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Pour Melia",
+      "duration": "1:12",
+      "energy": "low",
+      "tags": [
+        "New Piece",
+        "Lullaby",
+        "Closing Coda",
+        "Shortest Track"
+      ],
+      "role": "Album role: Closing coda, at 1:12 the shortest track on the album, described by one reviewer as a short lullaby.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A thin, bright texture with no low end at a steady, moderate level.",
+          "detail": "Kathy Parsons describes the piece as a short lullaby played on what sounds like a toy piano."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Second half",
+          "description": "The level and the bright tone stay even through the second half."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Fade",
+          "description": "The sound decays to silence."
+        }
+      ]
+    }
+  ]
+}

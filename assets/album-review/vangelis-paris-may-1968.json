@@ -1,0 +1,397 @@
+{
+  "id": "vangelis-paris-may-1968",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Paris May 1968",
+  "year": 2008,
+  "label": "Ta Nea · Universal Music Greece",
+  "producer": "Vangelis",
+  "genre": "Experimental / Sound Collage",
+  "genreTags": [
+    "Experimental",
+    "Sound Collage",
+    "Musique Concrète"
+  ],
+  "runtime": "28:32",
+  "coverUrl": "https://coverartarchive.org/release/192f689f-92d2-48c3-9ba6-4e8c84fe4542/5802778871.jpg",
+  "coverSource": "https://musicbrainz.org/release/192f689f-92d2-48c3-9ba6-4e8c84fe4542",
+  "overview": "Paris May 1968 is a 2008 retitling of Vangelis's 1972 album Fais que ton rêve soit plus long que la nuit (\"Make your dream outlast the night\"), and its ten tracks carry the same titles in the same order as the LP. It was given away free as a \"Premium CD\" with the Greek newspaper Ta Nea on 31 May 2008, is marked not for sale and is issued under licence from Universal Music S.A. (Greece); the Discogs notes and the MusicBrainz annotation both call it the first official CD release of the album. The disc prints no track titles, so the titles used here are those of the LP, and Discogs credits the digital mastering to Frédérick Rousseau and Vangelis Saitis.\n\nThe original was recorded in 1971 at Europa-Sonor studios in Paris and released in 1972 on Reprise in France and Greece only, with the subtitle Poème symphonique; its subject is May 1968 in France and the student riots (Wikipedia). Wikipedia describes it as a sound collage of music, field recordings, news snippets, protest songs and words, and says the sleeve lists 22 participants and a fanfare, \"La gerbe des Mandolines\", of whom, apart from the violinist Michel Ripoche, a friend of Vangelis, none seems to be a professional musician or singer. Discogs adds that the lyrics are inscriptions from the walls of Paris in May 1968, that the LP's track titles came from the same graffiti, and that the original recordings from May 1968 were made in direct stereo, credited to Luc Périni. Vangelis spent six years in Paris, where, according to Wikipedia, the 1968 student riots moved him and he felt obliged to stay. The rip runs 28:32 against the 30:57 listed for the LP: the first six tracks add up to about the LP's 15:32 for side one, but the last four run about 13:00 against 15:25 for side two, and none of the sources checked explains the missing two and a half minutes.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "C'est une nuit verte",
+      "duration": "2:37",
+      "energy": "mid",
+      "tags": [
+        "Side One Opener",
+        "Sound Collage",
+        "Graffiti Title",
+        "Sudden Level Step"
+      ],
+      "role": "Album role: Opener, the first of the six pieces on the LP's side one.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, thin opening with no steady pulse.",
+          "detail": "The disc prints no titles; Discogs notes that the original LP's titles, used here, came from the graffiti of May 1968."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Full entry",
+          "description": "The level and the top end step up sharply to the fullest level of the track: the biggest change in it."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Outro",
+          "description": "The level and the low end ease down for the last stretch."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Celle des barricades",
+      "duration": "1:31",
+      "energy": "mid",
+      "tags": [
+        "Shortest Track",
+        "Steady Pulse",
+        "No Fade-Out"
+      ],
+      "role": "Album role: Second piece of side one and the shortest track on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Steady pulse",
+          "description": "A regular, strongly marked pulse runs from the first second to the last."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Swell",
+          "description": "The level and the top end rise for about 25 seconds."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Easing",
+          "description": "The level and the top end fall back to where the track began, and it ends at that level without a fade-out."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Nuit verte ou rouge ou bleue ou noire",
+      "duration": "4:15",
+      "energy": "low",
+      "tags": [
+        "Longest On Side One",
+        "Quiet And Loud Passages",
+        "Sharp Level Changes"
+      ],
+      "role": "Album role: Third piece of side one and its longest, at 4:15; its title extends \"nuit verte\" from the opening track's title.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens fuller, with a heavy low end, and thins out within about 15 seconds."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Brighter",
+          "description": "The level and the top end rise to a brighter passage."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Sinking",
+          "description": "The level sinks gradually for about ten seconds to the quietest point so far."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Surge",
+          "description": "The level and the low end jump sharply from that low point: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Low point",
+          "description": "The level drops to the quietest passage of the track for about 20 seconds."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Dark passage",
+          "description": "The top end falls away and the texture turns dull and quiet for about 25 seconds."
+        },
+        {
+          "timestamp": "3:32",
+          "section": "Return",
+          "description": "The level and the top end come back."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Qu'importe mon ami",
+      "duration": "1:57",
+      "energy": "low",
+      "tags": [
+        "Paired Title",
+        "Even Level",
+        "Quiet Opening"
+      ],
+      "role": "Album role: Fourth piece of side one; its title is paired with the next track, \"Cela importe mon ami\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start; the level rises over the first half minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Even stretch",
+          "description": "The level then stays steady for most of the track, with no large changes."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Low swell",
+          "description": "The low end swells and the top end falls away for about ten seconds before the track ends."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Cela importe mon ami",
+      "duration": "3:04",
+      "energy": "low",
+      "tags": [
+        "Paired Title",
+        "Quiet And Fuller Passages",
+        "Bright Finish"
+      ],
+      "role": "Album role: Fifth piece of side one; its title echoes the previous track's \"Qu'importe mon ami\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Opens at a fuller level for about 15 seconds."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Thin passage",
+          "description": "The level and the top end fall away, leaving a thin, quiet texture for about half a minute."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Fuller",
+          "description": "The level and the top end rise for about 15 seconds."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Second thin passage",
+          "description": "The level and the top end fall again for about 20 seconds."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Build",
+          "description": "The level and the low end rise, and the next minute or so stays louder with frequent small dips."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Thin low end",
+          "description": "The low end thins out and the sound turns brighter."
+        },
+        {
+          "timestamp": "2:47",
+          "section": "Bright finish",
+          "description": "The top end rises strongly for the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "L'espoir de la victoire",
+      "duration": "2:08",
+      "energy": "mid",
+      "tags": [
+        "Side One Closer",
+        "Steady Pulse",
+        "Fade-Out"
+      ],
+      "role": "Album role: Closer of side one on the LP, with a regular pulse for most of its length.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Steady pulse",
+          "description": "A regular pulse is present for most of the track, and the level climbs over the first 40 seconds."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Pulse stands out",
+          "description": "The top end falls away and the pulse becomes more prominent for the last stretch."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Fade-out",
+          "description": "The level drops and the track fades out over the last eight seconds."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Le rêve est réalité",
+      "duration": "2:33",
+      "energy": "low",
+      "tags": [
+        "Side Two Opener",
+        "Quiet Opening",
+        "Brighter Passages",
+        "Quiet Ending"
+      ],
+      "role": "Album role: Opener of side two on the LP, the first piece after the side break.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, soft opening with no steady pulse.",
+          "detail": "The CD's track lists (Discogs, MusicBrainz, the rip's tags) read \"La rêve est réalité\"; the LP listing (Discogs master, Wikipedia) reads \"Le rêve est réalité\"."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Bright burst",
+          "description": "The top end rises sharply for about 15 seconds."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Fuller",
+          "description": "The level and the top end rise, and the sound stays brighter and fuller for about half a minute."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Outro",
+          "description": "The level and the top end drop, and the track ends quietly."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Jouissez sans entraves",
+      "duration": "4:46",
+      "energy": "mid",
+      "tags": [
+        "Longest Track",
+        "Long Quiet Stretch",
+        "Low-End Swells",
+        "Late Full Entry",
+        "Long Fade-Out"
+      ],
+      "role": "Album role: Second piece of side two and the longest track on the album, at 4:46.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, uneven opening with no steady pulse and almost no deep low end."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Louder section",
+          "description": "The level jumps to a louder, fuller passage for about 25 seconds."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Dull stretch",
+          "description": "The top end drops away and the level falls; the texture stays dull, quiet and uneven for about two minutes."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Low swell",
+          "description": "A deep low-frequency swell lasts for about 15 seconds."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Full entry",
+          "description": "The level, the low end and the top end all jump: the biggest change in the track."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Vivez sans temps morts",
+      "duration": "2:17",
+      "energy": "low",
+      "tags": [
+        "Near-Silent Start",
+        "Rising Level",
+        "Sudden Drop-Off"
+      ],
+      "role": "Album role: Third piece of side two on the LP, a short track between the long \"Jouissez sans entraves\" and the closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts almost silent and rises gently."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Burst",
+          "description": "A short, heavier burst of about eight seconds with a strong low end, then the level drops back."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Rise",
+          "description": "The level and the top end rise to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Drop-off",
+          "description": "The full-level material falls away within a couple of seconds, leaving a quiet tail to the end."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Baisez sans carottes",
+      "duration": "3:22",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Pulsed Passages",
+        "Fade To Silence"
+      ],
+      "role": "Album role: Closer of side two and of the album, ending with a short fade and a couple of seconds of silence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Starts from near silence and settles at a quiet, thin level."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Gap",
+          "description": "The sound drops to a very faint level for about three seconds and then returns at the same quiet level."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Pulse",
+          "description": "A strongly regular pulse stands out for about 20 seconds as the level climbs."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Fullest stretch",
+          "description": "The level and the top end rise to the fullest stretch of the track, with one short dip, for about 30 seconds."
+        },
+        {
+          "timestamp": "2:42",
+          "section": "Pulse returns",
+          "description": "The level falls back and a regular pulse returns for about 15 seconds."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Fade-out",
+          "description": "A fade of about five seconds ends the album, followed by a couple of seconds of silence."
+        }
+      ]
+    }
+  ]
+}

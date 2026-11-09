@@ -1,0 +1,541 @@
+{
+  "id": "jean-michel-jarre-oxymore",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Oxymore",
+  "year": 2022,
+  "label": "Columbia / Sony Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Dance",
+    "Musique Concrète"
+  ],
+  "runtime": "49:05",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/f/fd/Jean-Michel_Jarre_-_Oxymore.png",
+  "coverSource": "https://en.wikipedia.org/wiki/Oxymore",
+  "overview": "Jarre's twenty-second studio album, recorded in 2021 and released by Columbia and Sony on 21 October 2022, produced by Jarre himself. The concept is immersive: the album was issued in stereo, binaural, 5.1 and Dolby Atmos mixes, and Jarre has said that its true sound is not stereo but can be heard in 360 degrees, best on headphones or an advanced sound system. The rip described here is the stereo mix, so this review covers the stereo balance, not the spatial image the album is designed around.\n\nOxymore is a tribute to Pierre Henry and Pierre Schaeffer and to French electroacoustic music and musique concrète, which Jarre studied at the GRM. He had planned a collaboration with Henry, who died in 2017 without finishing it; Henry had recorded sound bites for the project, and Jarre used them as raw material and added his own compositions on top. \"Brutalism\" was the first single, on 26 August 2022, and remixes followed, including one by Martin Gore of Depeche Mode and one by Deathpact. Jarre also performed the album in VR shows in the virtual world Oxyville, which opened to the public on 24 October 2022.\n\nPress reception was mixed: Classic Rock gave three stars out of five and called it \"an album that asks more questions than it offers answers\", while The Quietus praised its dark, tense songwriting. By this rip the album runs from a 95-second opener through a run of beat-driven tracks to a long closer; the beat-led pieces share a pattern of quiet openings, a late beat entry, one or more breaks and a final drop in level.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Agora",
+      "duration": "1:35",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Short Prelude",
+        "Beatless"
+      ],
+      "role": "Album role: A 95-second beatless opener that sets the tone before the title track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening."
+        },
+        {
+          "timestamp": "0:13",
+          "section": "Swell",
+          "description": "The texture fills out and the level rises clearly: the biggest change in the piece."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Pull back",
+          "description": "The level falls and the top end softens."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Ending",
+          "description": "The highs are cut away and the piece closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Oxymore",
+      "duration": "4:46",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "Pierre Henry Tribute",
+        "Breaks",
+        "Beat Driven"
+      ],
+      "role": "Album role: The title track, a tribute to Pierre Henry and Pierre Schaeffer and the album's first full beat-led piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, quiet opening without bass.",
+          "detail": "Jarre says he chose Pierre Henry's recorded sounds for the album precisely from one track to another (France Musique interview, quoted by Wikipedia); this review does not identify which sounds they are."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Low end entry",
+          "description": "The low end arrives under a loose pulse: the first big change in the track."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Pulse returns",
+          "description": "After a dip, the pulse comes back with a deep low end."
+        },
+        {
+          "timestamp": "1:19",
+          "section": "Break",
+          "description": "The low end drops away and the texture thins for about 20 seconds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Sparse passage",
+          "description": "A quieter, more open passage leads back to the beat."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Second break",
+          "description": "Another short drop before the beat returns."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Peak",
+          "description": "The beat returns with an open top end and runs as the loudest stretch of the track, until about 4:12."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Outro",
+          "description": "The beat stops and the level falls away."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Neon Lips",
+      "duration": "4:27",
+      "energy": "high",
+      "tags": [
+        "Beat Driven",
+        "Long Break",
+        "Heavy Low End"
+      ],
+      "role": "Album role: A second beat-led track straight after the title track, with a long mid-track break and a heavy final stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening."
+        },
+        {
+          "timestamp": "0:24",
+          "section": "Beat entry",
+          "description": "The full sound and a regular pulse enter together: the first big change."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Settle",
+          "description": "The pulse eases and the track runs on a steadier level."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Break",
+          "description": "The beat and the deep low end stop at once, leaving a much quieter passage."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Brighter return",
+          "description": "The sound opens up again with a brighter top end."
+        },
+        {
+          "timestamp": "3:36",
+          "section": "Peak",
+          "description": "The heavy low end returns: the loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:09",
+          "section": "Outro",
+          "description": "The beat and the low end drop out, and the track closes on a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Sonic Land",
+      "duration": "6:01",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Late Beat Entry",
+        "Long Track"
+      ],
+      "role": "Album role: The first long track after the opening run, built slowly and led by a late-arriving beat.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A slow, mostly beatless opening."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Low swell",
+          "description": "A deep low end swells in under the texture."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Pulse",
+          "description": "A steady pulse is established and the top end opens a little."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Beat entry",
+          "description": "A firm beat takes over from the lighter pulse."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Beat returns",
+          "description": "The beat returns with more bass and air and carries the track for over a minute."
+        },
+        {
+          "timestamp": "4:32",
+          "section": "Darker passage",
+          "description": "The top end falls away and the track turns darker."
+        },
+        {
+          "timestamp": "5:31",
+          "section": "Outro",
+          "description": "The level drops and the track winds down."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Animal Genesis",
+      "duration": "5:46",
+      "energy": "high",
+      "tags": [
+        "Abrupt Start",
+        "Breaks",
+        "Beat Driven"
+      ],
+      "role": "Album role: The middle of the album, a loud, sectional track that starts without a fade-in and drops its beat several times.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at full level, without a fade-in, with a pulse running."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Bright passage",
+          "description": "The sound opens up with a bright top end, then settles back at 0:26."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Thin section",
+          "description": "The top end and the pulse thin out."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Break",
+          "description": "The pulse stops for a short stretch."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Beat entry",
+          "description": "A beat with a heavy low end enters and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Dark passage",
+          "description": "The highs drop away, leaving a darker, low-register texture."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Beat returns",
+          "description": "A brighter pulse returns."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Final section",
+          "description": "The level falls and the track runs out in a lighter closing stretch."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Synthy Sisters",
+      "duration": "3:21",
+      "energy": "mid",
+      "tags": [
+        "Short Track",
+        "Steady Pulse",
+        "Gradual Build"
+      ],
+      "role": "Album role: A short, steadier track that follows the long middle pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Pulse entry",
+          "description": "A regular pulse starts and the low end grows."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Bright layer",
+          "description": "A bright layer enters on top: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Upper build",
+          "description": "The upper register builds further over the pulse."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Shift",
+          "description": "The arrangement shifts and the low end grows again."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Outro",
+          "description": "The level drops sharply and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Sex in the Machine",
+      "duration": "5:46",
+      "energy": "high",
+      "tags": [
+        "Steady Pulse",
+        "Heavy Low End",
+        "Single Break"
+      ],
+      "role": "Album role: A long, steady-pulse track in the second half, with one clear break and a long final stretch.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse is already running from the start."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Harmonic turn",
+          "description": "The harmony darkens and the top end eases."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Low rise",
+          "description": "The low end rises sharply: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:41",
+          "section": "Lift",
+          "description": "The arrangement shifts and the level stays high."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Break",
+          "description": "The pulse stops for about 15 seconds."
+        },
+        {
+          "timestamp": "3:17",
+          "section": "Beat returns",
+          "description": "The beat comes back with a heavy low end and holds for over a minute."
+        },
+        {
+          "timestamp": "4:37",
+          "section": "Outro",
+          "description": "The level and the low end fall as the track winds down."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Zeitgeist",
+      "duration": "3:07",
+      "energy": "mid",
+      "tags": [
+        "Short Track",
+        "Steady Pulse",
+        "Late Break"
+      ],
+      "role": "Album role: A short pulse-driven track that follows the long \"Sex in the Machine\" and leads into the quieter \"Crystal Garden\".",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Intro",
+          "description": "After a few seconds, a steady pulse starts."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Bright layer",
+          "description": "The top end opens and the pulse firms up."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Lift",
+          "description": "The low end grows and the track runs at a higher level."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Break",
+          "description": "The top end and the level drop for about 20 seconds."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Beat returns",
+          "description": "A heavier beat returns with a strong low end."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Outro",
+          "description": "The level and the low end fall away for the last seconds."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Crystal Garden",
+      "duration": "4:09",
+      "energy": "low",
+      "tags": [
+        "Soft Pulse",
+        "Gentle Build",
+        "Quiet Track"
+      ],
+      "role": "Album role: The quietest of the late tracks, a soft, light-pulsed pause between \"Zeitgeist\" and \"Brutalism\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a light, soft pulse."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low swell",
+          "description": "The low end swells gently under the texture."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Brighter turn",
+          "description": "The top end opens up and the track brightens."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Firmer pulse",
+          "description": "The pulse becomes firmer and steadier."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Open passage",
+          "description": "The top end opens again as the track reaches its fullest stretch."
+        },
+        {
+          "timestamp": "3:59",
+          "section": "Ending",
+          "description": "The pulse and the low end stop and the track fades to a quiet close."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Brutalism",
+      "duration": "4:41",
+      "energy": "high",
+      "tags": [
+        "First Single",
+        "Dense Low End",
+        "Steady Pulse",
+        "Martin Gore Remix"
+      ],
+      "role": "Album role: The first single, released on 26 August 2022 and placed tenth, with the densest, most constant low end on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The pulse and the heavy low end are present almost from the start."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Fuller section",
+          "description": "The sound fills out and the low end grows.",
+          "detail": "A remix of the track by Martin Gore of Depeche Mode was released (Grateful Web, via Wikipedia)."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Pulse shift",
+          "description": "The pulse changes character slightly while the low end stays constant."
+        },
+        {
+          "timestamp": "1:53",
+          "section": "Darker passage",
+          "description": "The highs fall away and the track turns darker."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Brighter return",
+          "description": "The top end opens up again for the last two minutes."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Outro",
+          "description": "The level and the low end drop together as the track ends."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Epica",
+      "duration": "5:26",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Long Track",
+        "Steady Pulse",
+        "Late Peak"
+      ],
+      "role": "Album role: The closing track, the second-longest on the album, with a drop in the middle and a long quiet tail.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse runs from the start at a moderate level."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Upper layer",
+          "description": "A brighter layer is added over the pulse."
+        },
+        {
+          "timestamp": "1:41",
+          "section": "Drop",
+          "description": "The low end and the level fall, and the top end stays."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Peak",
+          "description": "The low end returns with a large jump in level: the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:39",
+          "section": "Dark passage",
+          "description": "The highs drop away and the pulse thins out."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Brighter return",
+          "description": "The pulse and the top end return."
+        },
+        {
+          "timestamp": "5:13",
+          "section": "Outro",
+          "description": "The highs disappear and the album ends on a darker, quiet tail."
+        }
+      ]
+    }
+  ]
+}

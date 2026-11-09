@@ -1,0 +1,174 @@
+{
+  "id": "vangelis-beaubourg",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Beaubourg",
+  "year": 1978,
+  "label": "RCA Records",
+  "producer": "Vangelis",
+  "genre": "Electronic / Experimental",
+  "genreTags": [
+    "Electronic",
+    "Experimental",
+    "Avant-Garde"
+  ],
+  "runtime": "38:42",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/4/45/Beaubourg_%28album%29.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Beaubourg_(album)",
+  "overview": "Beaubourg is the fourth album Vangelis produced at Nemo Studios, London, and his last for RCA; it was released in July 1978, with Keith Spencer-Allen as recording engineer and Marlis Duncklau as assistant engineer. It is a concept album inspired by the Centre Georges Pompidou in Paris, the Beaubourg complex, which Vangelis visited in 1977; in a June 1979 interview he says he went back to London and recorded the album quickly and spontaneously, in a little less than a month. Wikipedia, citing Background Magazine and Synthtopia, says the music was improvised mainly on one or more Yamaha CS-80 synthesizers with a ring modulator used extensively, and Synthtopia hears pure tones turning into clangorous, distorted metallic noise, with brief melodies and a few quiet, plaintive tonal sections. The album is two long pieces, \"Beaubourg, Part I\" and \"Beaubourg, Part II\".\n\nAllMusic's Steve McDonald calls it \"difficult listening\" and a \"great dark synthesized tone poem\" and gives it 2.5 stars out of 5, and Background Magazine's Henri Stirk rated the 2013 Esoteric Recordings reissue 2 out of 5. In the 1979 interview Vangelis says the record caused a scandal, with some people returning the disc, that he needed courage to release it, and that RCA had not believed in any of his four albums; he had by then moved to Polydor, and he says the album sold well. He promoted the release with a live appearance at the Pavillon de Paris on 19 June 1978. The track durations here are those of the rip, 17:57 and 20:45; Wikipedia lists 18:09 and 21:05 and MusicBrainz 17:53 and 20:42.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Beaubourg, Part I",
+      "duration": "17:57",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Experimental",
+        "Improvised",
+        "Abrupt Re-entries",
+        "Closing Pulse"
+      ],
+      "role": "Album role: The first of the album's two long pieces, a continuous sequence of loud, dark stretches, thin passages and sudden breaks that ends on a fast repeating pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The sound starts after about a second and a half of silence, a mid-range texture at a moderate level that grows louder over the first half minute.",
+          "detail": "Synthtopia describes the album as an abstract electronic tone poem in which recognisable melodies last a few moments before drifting into distorted, clangorous noise."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Low-end stretch",
+          "description": "A loud, dark stretch led by a heavy low end, followed by a minute of alternating brighter and darker passages."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Thin passage",
+          "description": "The low end mostly drops out and the level falls for about 45 seconds, leaving a thin mid-range texture; a loud, bright passage returns afterwards."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Near-silence",
+          "description": "The sound fades away into about six seconds of near-silence, the first clear break in the piece; a full, loud texture then returns and builds."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Loud stretch",
+          "description": "The loudest stretch of Part I, about half a minute long, followed by a brief dip and a varied stretch of changing textures."
+        },
+        {
+          "timestamp": "9:00",
+          "section": "Steady passage",
+          "description": "A steadier, moderately loud stretch with the low end mostly present, leading into a darker, heavier stretch with a rising low end."
+        },
+        {
+          "timestamp": "12:00",
+          "section": "Quiet gap",
+          "description": "The level drops to a very quiet stretch of about 15 seconds that ends in about three seconds of near-total silence."
+        },
+        {
+          "timestamp": "12:18",
+          "section": "Re-entry",
+          "description": "The sound returns at full level within a fraction of a second, with a heavy low end, and grows darker and heavier over the next minute."
+        },
+        {
+          "timestamp": "13:35",
+          "section": "Mid-range texture",
+          "description": "After a short dip and a moment of silence, a steady, mid-range-led texture at an almost constant level holds for about 45 seconds before the low end returns."
+        },
+        {
+          "timestamp": "14:30",
+          "section": "Low-end bed",
+          "description": "A loud, dark bed with a heavy, steady low end carries the next two and a half minutes, with changing layers above it and a brief brighter burst; the level then falls."
+        },
+        {
+          "timestamp": "17:10",
+          "section": "Pulse passage",
+          "description": "After about two seconds of silence, a fast, steady repeating pulse runs through the rest of the piece; the low end is absent at first and returns with a louder level."
+        },
+        {
+          "timestamp": "17:46",
+          "section": "Outro",
+          "description": "The sound falls away over about six seconds and the piece ends, leaving a few seconds of silence at the end of the track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Beaubourg, Part II",
+      "duration": "20:45",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Experimental",
+        "Improvised",
+        "Near-Silent Breaks",
+        "Low-End Pulse"
+      ],
+      "role": "Album role: The closing half and the longer of the two pieces, nearly three minutes longer than Part I, more broken up by near-silent gaps and ending in a slow fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet mid-range texture opens; the low end thickens and the sound becomes loud and bright within the first two minutes."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Near-silence",
+          "description": "The loud passage fades into about eight seconds of near-silence, and the sound then returns abruptly at full level."
+        },
+        {
+          "timestamp": "2:23",
+          "section": "Mid-range passage",
+          "description": "A thin, mid-range-led passage with little low end, broken by a few short silent breaks; the low end then returns quietly and the texture stays at a moderate level."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Dark pulse passage",
+          "description": "A dark, low-heavy passage with almost no high frequencies, ending in a fast repeating low pulse and a few seconds of near-silence."
+        },
+        {
+          "timestamp": "5:41",
+          "section": "Peak",
+          "description": "The sound returns at full level and stays loud, bright and full for about a minute and a half, the loudest sustained stretch of Part II, then eases to a moderate level."
+        },
+        {
+          "timestamp": "8:40",
+          "section": "Fragmented passage",
+          "description": "The sound breaks into short fragments with brief silent gaps and stays quiet and mid-range-led for about three minutes, with a quiet return of the low end and one loud burst."
+        },
+        {
+          "timestamp": "11:55",
+          "section": "Thin passage",
+          "description": "A quiet, thin passage leaning to the high register, with almost no low end, followed by a short silence and a quiet low-end bed."
+        },
+        {
+          "timestamp": "13:20",
+          "section": "Pulse and gaps",
+          "description": "A short, steady pulse appears and the sound then thins to near-silence and returns quietly; the low end comes back at a louder level, with brief silent gaps."
+        },
+        {
+          "timestamp": "15:00",
+          "section": "Low pulse",
+          "description": "A steady, fast, dark low-register pulse with almost no highs runs for about half a minute, and a second, shorter pulse leads into a loud, full stretch."
+        },
+        {
+          "timestamp": "16:55",
+          "section": "Low-end bed",
+          "description": "The high frequencies drop away and a dark, steady low-end bed carries the next two minutes, falling to a quiet drone before a slow swell and a brief silence."
+        },
+        {
+          "timestamp": "19:10",
+          "section": "Low-end return",
+          "description": "After a fade to near-silence, the sound enters abruptly with a very heavy low end, and a steady, low-heavy passage holds for about a minute, with brighter mid-range layers appearing later."
+        },
+        {
+          "timestamp": "20:15",
+          "section": "Outro",
+          "description": "The level falls and the texture thins to a quiet, low-heavy sound that fades to silence by about 20:43."
+        }
+      ]
+    }
+  ]
+}

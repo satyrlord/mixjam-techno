@@ -1,0 +1,831 @@
+{
+  "id": "vangelis-juno-to-jupiter",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Juno to Jupiter",
+  "year": 2021,
+  "label": "Decca Records",
+  "producer": "Vangelis",
+  "genre": "Electronic / Classical",
+  "genreTags": [
+    "Electronic",
+    "Classical",
+    "Modern Classical",
+    "New Age"
+  ],
+  "runtime": "1:12:57",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/8/8e/Vangelis_-_Juno_to_Jupiter.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Juno_to_Jupiter",
+  "overview": "Juno to Jupiter is Vangelis's last studio album, released on 24 September 2021 on Decca Records and inspired by NASA's Juno mission to Jupiter, with NASA mission sounds on tracks 1 and 17. Wikipedia, citing the CD liner notes, credits Vangelis with composing, arranging, producing, performing and recording the whole album on keyboards, with Philippe Colonna as engineer and Planet Earth Studios as the studio. The title pairs Juno (Hera in Greek myth) with Jupiter (Zeus): Wikipedia reports that Vangelis chose to present Zeus and Jupiter through sound alone and to give Hera and Juno a voice, and the soprano Angela Gheorghiu, credited as Juno, sings on tracks 9, 13 and 16. Wikipedia calls it his third album inspired by space missions, after Mythodea (2001) and Rosetta (2016), and the album is dedicated to his brother Niko.\n\nThe album reached US Classical Crossover Albums No. 2, Belgium (Flanders) No. 14, Switzerland No. 21 and the Netherlands No. 25. AllMusic's Thom Jurek, who gave it four stars out of five, calls it \"a major late-career work from Vangelis\", while The Arts Desk, at three stars out of five, finds it \"sometimes over-opulent\". The 18 tracks run for about 73 minutes, the longest, \"Zeus Almighty\", lasts about 11 minutes, and the closing track fades out over more than a minute. This review follows the CD, since the 2022 double-vinyl edition adds a nineteenth track, \"Cosmos Autopator\".\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Atlas' Push",
+      "duration": "3:41",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "NASA Mission Sounds",
+        "Fade-In Opening"
+      ],
+      "role": "Album role: Opener, carrying NASA mission sounds that tie the album to the Juno mission from its first track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from silence and settles at a steady level within about five seconds.",
+          "detail": "Wikipedia marks spoken-word samples courtesy of NASA on this track; the sources do not say where they sit."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brightening",
+          "description": "The texture brightens."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Pull-back",
+          "description": "The top end falls back."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Pulse firms",
+          "description": "A rhythmic pulse becomes clearer and holds for about half a minute."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Low-end swell",
+          "description": "The level rises and the low end grows heavier while the top end drops away."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Peak",
+          "description": "The loudest and fullest stretch of the track arrives, bright and heavy, for about ten seconds."
+        },
+        {
+          "timestamp": "3:29",
+          "section": "Close",
+          "description": "The sound turns dark and low-heavy and the track ends without a long fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Inside Our Perspectives",
+      "duration": "3:32",
+      "energy": "high",
+      "tags": [
+        "Music Video",
+        "Steady Pulse",
+        "Bass-Led Close"
+      ],
+      "role": "Album role: Pulse-driven second track, with a music video, that drops its beat for the closing seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens quietly and a steady pulse sets in within seconds.",
+          "detail": "Wikipedia lists a music video for this track."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Top end opens",
+          "description": "The texture turns bright and the level rises; the pulse holds steady from here."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Top-end drop",
+          "description": "The top end drops away and the low end comes forward while the pulse continues."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Break",
+          "description": "The level falls sharply and the pulse stops."
+        },
+        {
+          "timestamp": "3:23",
+          "section": "Closing stretch",
+          "description": "The sound returns without a beat, dark and low-heavy, and the track ends without a long fade."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Out in Space",
+      "duration": "4:14",
+      "energy": "mid",
+      "tags": [
+        "No Clear Beat",
+        "Loud Opening",
+        "Quiet Close"
+      ],
+      "role": "Album role: A drifting piece without a clear beat after the pulse of track 2, opening loud and closing quiet.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts loud and heavy in the low end."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Pull-back",
+          "description": "The level and the low end fall sharply, leaving a lighter, more open texture."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Swell",
+          "description": "The level rises and stays higher for about half a minute."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Quiet passage",
+          "description": "The level drops to a quiet passage."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Return",
+          "description": "The sound grows louder and fuller again."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Final swell",
+          "description": "A brief, sudden rise in level."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Quiet close",
+          "description": "The level sinks to a quiet, low-lying close that runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Juno's Quiet Determination",
+      "duration": "5:18",
+      "energy": "mid",
+      "tags": [
+        "Gradual Build",
+        "Soft Pulse",
+        "Late Peak"
+      ],
+      "role": "Album role: The longest track so far, a soft pulse that grows over five minutes to a heavy low-end peak near the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening without a beat.",
+          "detail": "Thomas H Green's review in The Arts Desk cites this track, with \"Jupiter's Veil of Clouds\", as an example of the best of the album."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Pulse enters",
+          "description": "A soft pulse enters and the level lifts."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Lift",
+          "description": "The level and the top end rise and the texture opens out."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Drop-out",
+          "description": "The level drops almost to silence for a moment before the music resumes."
+        },
+        {
+          "timestamp": "2:41",
+          "section": "Fuller",
+          "description": "The sound grows louder and brighter."
+        },
+        {
+          "timestamp": "3:17",
+          "section": "Low-end swell",
+          "description": "The low end swells and takes the lead for about half a minute."
+        },
+        {
+          "timestamp": "4:09",
+          "section": "Peak",
+          "description": "The heaviest low end of the track arrives and carries it toward the close."
+        },
+        {
+          "timestamp": "5:02",
+          "section": "Close",
+          "description": "The level and the top end ease down to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Jupiter's Intuition",
+      "duration": "3:58",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Quiet Middle Passage",
+        "Full-Level Ending"
+      ],
+      "role": "Album role: A slow-building piece with a loud middle and a quiet passage before a full-level close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that lifts gradually."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Surge",
+          "description": "A short swell lifts the level and the low end."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Pull-back",
+          "description": "The level drops and the texture thins out."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Build",
+          "description": "The top end opens and the level climbs again."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Peak",
+          "description": "The loudest and heaviest stretch of the track begins and lasts about 30 seconds."
+        },
+        {
+          "timestamp": "2:54",
+          "section": "Quiet passage",
+          "description": "The level falls to a quiet, light passage with almost no low end, lasting about half a minute."
+        },
+        {
+          "timestamp": "3:28",
+          "section": "Return",
+          "description": "The sound returns loud and full and carries to the end, where the track stops without a fade."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Juno's Power",
+      "duration": "4:09",
+      "energy": "high",
+      "tags": [
+        "Steady Pulse",
+        "Full-Level Opening",
+        "Quiet Tail"
+      ],
+      "role": "Album role: A pulse piece that holds a high level for most of its length and winds down over its last minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at full level with a steady pulse that carries through most of it."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Fuller",
+          "description": "The sound fills out."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Lift",
+          "description": "The sound grows fuller and brighter, with a stronger low end."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Second lift",
+          "description": "The top end opens again for another brighter stretch."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Wind-down",
+          "description": "The level begins to ease down and the sound thins."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Quiet tail",
+          "description": "The sound drops to a much quieter, sparser close, and the track ends without a fade to silence."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Space's Mystery Road",
+      "duration": "4:18",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Moderate Level",
+        "Quiet Close"
+      ],
+      "role": "Album role: A moderate pulse that runs through most of the track, then a quiet close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady, moderate pulse is in place from the first seconds and stays through most of the track."
+        },
+        {
+          "timestamp": "1:54",
+          "section": "Fuller",
+          "description": "The sound grows slightly louder and fuller, with a stronger low end."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Wind-down",
+          "description": "The level begins to ease."
+        },
+        {
+          "timestamp": "3:54",
+          "section": "Quiet close",
+          "description": "The level falls, the low end thins out and the pulse weakens into a quiet close."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "In the Magic of Cosmos",
+      "duration": "2:07",
+      "energy": "mid",
+      "tags": [
+        "Preview Track",
+        "Music Video",
+        "Short Piece"
+      ],
+      "role": "Album role: A short piece, described by Synthtopia as the album's preview track, that rises from a quiet start to a full middle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from silence and settles at a steady level within about fifteen seconds.",
+          "detail": "Synthtopia calls it the preview track of the album. Wikipedia lists a music video for this track."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Low-end swell",
+          "description": "The low end swells and the level rises."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Brighter",
+          "description": "The top end opens up."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Close",
+          "description": "The level and the top end fall away and the track ends with a short ease."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Juno's Tender Call",
+      "duration": "3:42",
+      "energy": "mid",
+      "tags": [
+        "Angela Gheorghiu",
+        "Soprano Vocals",
+        "Gentle Swells"
+      ],
+      "role": "Album role: First of the three tracks with the soprano Angela Gheorghiu, credited as Juno, in a piece that swells in two stages and eases away at the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A soft opening at a moderate level, without a clear beat.",
+          "detail": "Wikipedia, from the CD liner notes, credits the soprano Angela Gheorghiu on this track; the sources do not say where she enters."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Lift",
+          "description": "The level and the brightness rise."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Swell",
+          "description": "A fuller swell with a stronger low end follows."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Second swell",
+          "description": "Another fuller swell with a stronger low end."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Easing",
+          "description": "The level and the top end begin to ease."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Closing stretch",
+          "description": "The sound ends quieter and darker."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Juno's Echoes",
+      "duration": "3:39",
+      "energy": "low",
+      "tags": [
+        "Quiet Texture",
+        "Soft Opening",
+        "Hushed Close"
+      ],
+      "role": "Album role: A quiet piece that follows the first soprano track, with two louder stretches in the middle and a hushed close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft opening at a moderate level, without a clear beat."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Hush",
+          "description": "The level dips to a quieter passage lasting about 20 seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Return",
+          "description": "The mid-range fills out and the level rises."
+        },
+        {
+          "timestamp": "1:34",
+          "section": "Louder",
+          "description": "The level climbs to one of the loudest stretches of the track."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Dip",
+          "description": "The level dips briefly, then rises again."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Second rise",
+          "description": "A second loud stretch follows, heavier in the low end."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Quiet close",
+          "description": "The level falls and the track settles into a quieter close that lasts to the end."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Juno's Ethereal Breeze",
+      "duration": "1:31",
+      "energy": "low",
+      "tags": [
+        "Short Interlude",
+        "Very Quiet",
+        "Rising Ending"
+      ],
+      "role": "Album role: A one-and-a-half-minute interlude, the shortest track on the album, very quiet and rising toward its end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, low-lying opening that holds a steady level."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Lift",
+          "description": "A slight lift in level and a heavier low end."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Rise",
+          "description": "The level climbs steadily and the track ends at its loudest point, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Jupiter's Veil of Clouds",
+      "duration": "5:18",
+      "energy": "high",
+      "tags": [
+        "Pulse-Driven",
+        "Long Build",
+        "Late Break"
+      ],
+      "role": "Album role: A pulse-driven piece with a quiet start, a loud middle and a late break, cited by The Arts Desk review as an example of the album at its best.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening in which a soft pulse sets in within seconds.",
+          "detail": "Thomas H Green's review in The Arts Desk cites this track, with \"Juno's Quiet Determination\", as an example of the best of the album."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Lift",
+          "description": "The level rises and the top end brightens while the pulse recedes."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Thinning",
+          "description": "The pulse returns while the level falls and the low end thins out."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Low point",
+          "description": "The quietest stretch of the track, with almost no low end, lasts about 20 seconds."
+        },
+        {
+          "timestamp": "2:06",
+          "section": "Build",
+          "description": "The pulse becomes strong and the level climbs steadily, with the top end opening wide."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Peak",
+          "description": "The loudest, fullest stretch begins, with a strong pulse and a heavy low end, and holds for about a minute and a half."
+        },
+        {
+          "timestamp": "4:06",
+          "section": "Break",
+          "description": "The level falls sharply and the pulse stops for about ten seconds."
+        },
+        {
+          "timestamp": "4:21",
+          "section": "Closing stretch",
+          "description": "The pulse returns at a lower level, and the sound settles into a quieter close that ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Hera / Juno Queen of the Gods",
+      "duration": "4:21",
+      "energy": "mid",
+      "tags": [
+        "Angela Gheorghiu",
+        "Soprano Vocals",
+        "Music Video",
+        "Slow Build"
+      ],
+      "role": "Album role: Second of the three tracks with the soprano Angela Gheorghiu, credited as Juno, with a music video; it rises slowly from near silence to a loud peak.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that lifts slowly over about 40 seconds.",
+          "detail": "Wikipedia, from the CD liner notes, credits the soprano Angela Gheorghiu on this track; the sources do not say where she enters. Wikipedia lists a music video for this track."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Quiet stretch",
+          "description": "The level falls back to a very quiet, sparse passage that lasts about a minute."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Build",
+          "description": "The level begins a slow, steady climb and the low end fills in."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Brightening",
+          "description": "The top end opens and the sound brightens while the climb continues."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Peak",
+          "description": "The loudest part of the track, full and bright, lasts about 25 seconds."
+        },
+        {
+          "timestamp": "3:41",
+          "section": "Drop-out",
+          "description": "The sound falls away suddenly to a very quiet, thin texture."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Final swell",
+          "description": "A last swell lifts the level before the track fades to silence in the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Zeus Almighty",
+      "duration": "11:01",
+      "energy": "high",
+      "tags": [
+        "Longest Track",
+        "Episodic Swells",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: The longest track, at about eleven minutes, titled for Zeus, the Greek counterpart of Jupiter; no soprano is credited on it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening burst",
+          "description": "The track opens with a loud, low-heavy burst that falls away within seconds.",
+          "detail": "Wikipedia reports that Vangelis chose to present Zeus and Jupiter through sound alone and gave Hera and Juno a voice."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Hush",
+          "description": "The level falls to a hushed, dark passage with little top end, lasting about 25 seconds."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Swell",
+          "description": "The sound returns, fuller and brighter, and swells for about half a minute."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Surge",
+          "description": "A loud surge with a strong low end."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Heavy stretch",
+          "description": "A louder, bass-heavy stretch lasts about 20 seconds."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Low point",
+          "description": "The level falls to one of the quietest points of the track, for about 15 seconds."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Loud passage",
+          "description": "A bright, loud passage lasts about 20 seconds."
+        },
+        {
+          "timestamp": "7:20",
+          "section": "Thin passage",
+          "description": "The quietest and thinnest stretch of the track: the low end disappears and the sound is sparse for about 45 seconds."
+        },
+        {
+          "timestamp": "9:30",
+          "section": "Plateau",
+          "description": "A steadier loud stretch with a strong low end lasts about 40 seconds."
+        },
+        {
+          "timestamp": "10:15",
+          "section": "Last hush",
+          "description": "The level falls to a quiet, dark passage for about 30 seconds."
+        },
+        {
+          "timestamp": "10:44",
+          "section": "Finale",
+          "description": "The loudest, heaviest and darkest passage of the track arrives and the track stops abruptly at full level."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Jupiter Rex",
+      "duration": "1:36",
+      "energy": "mid",
+      "tags": [
+        "Short Piece",
+        "Loud Opening",
+        "Fade-Out"
+      ],
+      "role": "Album role: A short piece after the eleven-minute \"Zeus Almighty\", loud at the start and fading out at the end.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track opens loud and full."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Pull-back",
+          "description": "The level drops by a clear step and the texture thins."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Close",
+          "description": "The sound turns dark and low-heavy and fades to near silence over the last fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "Juno's Accomplishments",
+      "duration": "4:23",
+      "energy": "mid",
+      "tags": [
+        "Angela Gheorghiu",
+        "Soprano Vocals",
+        "Late Peak",
+        "Short Fade"
+      ],
+      "role": "Album role: The third and last track with the soprano Angela Gheorghiu, credited as Juno, building to a loud peak late in the track before a short fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from near silence and reaches a moderate level within about fifteen seconds.",
+          "detail": "Wikipedia, from the CD liner notes, credits the soprano Angela Gheorghiu on this track; the sources do not say where she enters."
+        },
+        {
+          "timestamp": "0:31",
+          "section": "Lift",
+          "description": "The sound grows louder and brighter."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Pull-back",
+          "description": "The level drops back."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Surge",
+          "description": "The sound surges from a quiet dip to a loud, full passage."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Peak",
+          "description": "The loudest, heaviest stretch of the track arrives with a strong low end."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Easing",
+          "description": "The level falls and the top end thins."
+        },
+        {
+          "timestamp": "4:16",
+          "section": "Fade-out",
+          "description": "The track ends with a short fade over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Apo 22",
+      "duration": "1:54",
+      "energy": "low",
+      "tags": [
+        "NASA Command Audio",
+        "APO-22 Maneuver",
+        "Interlude"
+      ],
+      "role": "Album role: A brief, quiet interlude that Wikipedia describes as command audio from the Juno mission's APO-22 maneuver, placed just before the closing track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A very quiet, even texture without a beat.",
+          "detail": "Wikipedia's track table describes this track as command audio from the APO-22 maneuver, with the voices of four mission staff; the sources do not say where the voices sit in the track."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Brighter",
+          "description": "The top end brightens slightly."
+        },
+        {
+          "timestamp": "1:31",
+          "section": "Closing stretch",
+          "description": "The top end falls away and the track ends with a slight fade."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "In Serenitatem",
+      "duration": "4:15",
+      "energy": "low",
+      "tags": [
+        "Album Closer",
+        "Long Fade-Out",
+        "Quiet Texture"
+      ],
+      "role": "Album role: The closer, a quiet, low-lying piece that ends with a fade-out lasting more than a minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from near silence."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Lift",
+          "description": "The level lifts and the top end brightens while the low end is absent."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Low layer",
+          "description": "A low layer enters and the sound gains weight."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Dip",
+          "description": "The low layer drops out and the level dips for about 20 seconds."
+        },
+        {
+          "timestamp": "1:29",
+          "section": "Deepening",
+          "description": "A deeper low end returns."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Fade-out",
+          "description": "A long fade-out begins and takes the album down to silence over more than a minute."
+        }
+      ]
+    }
+  ]
+}

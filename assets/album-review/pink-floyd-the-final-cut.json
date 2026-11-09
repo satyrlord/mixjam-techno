@@ -1,0 +1,602 @@
+{
+  "id": "pink-floyd-the-final-cut",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Final Cut",
+  "year": 1983,
+  "label": "Harvest / Columbia",
+  "producer": "Roger Waters · James Guthrie · Michael Kamen",
+  "genre": "Art Rock",
+  "genreTags": [
+    "Art Rock",
+    "Concept Album",
+    "Rock"
+  ],
+  "runtime": "46:16",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/e/e4/FloydFC-Cover01.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Final_Cut_(album)",
+  "overview": "Recorded from July to December 1982 at Mayfair, RAK, Olympic, Abbey Road, Eel Pie, Audio International and Roger Waters's Billiard Room studio in East Sheen, plus Hook End Recording Studios in Oxfordshire, with Waters, James Guthrie and Michael Kamen as producers. Conceived as a soundtrack for the 1982 film Pink Floyd – The Wall under the working title Spare Bricks, it was rewritten after the Falklands War as an anti-war concept album about the betrayal of the soldiers who died in the Second World War, among them Waters's father. Waters wrote all of the songs, and it is the last Pink Floyd album with Waters and the only one without Richard Wright. Kamen arranged and conducted the National Philharmonic Orchestra, and the credits list the Holophonic system (Zuccarelli Labs) for three-dimensional sound effects, most notably on \"Get Your Filthy Hands Off My Desert\".\n\nReleased on 21 March 1983 by Harvest in the UK and Columbia in the US, it reached UK No. 1 and US No. 6, and was later certified 2× Platinum in the US and Gold in the UK. Critical reception was mixed, and the single \"Not Now John\" reached UK No. 30 in April 1983. Releases from 2004 onward add \"When the Tigers Broke Free\", first issued as a single in July 1982, as track 4; this review covers that thirteen-track edition, which is the rip measured here.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "The Post War Dream",
+      "duration": "2:59",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Recorded Announcement",
+        "Harmonium",
+        "National Philharmonic Orchestra"
+      ],
+      "role": "Album role: The opener, which sets the anti-war theme with a recorded announcement and a single climax before a quiet ending.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent start, with the first sound at about 0:04 and the level rising slowly.",
+          "detail": "Wikipedia states that the album opens with a recorded announcement about a replacement ship for the Atlantic Conveyor being built in Japan; the track features harmonium (Kamen) and the National Philharmonic Orchestra."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Build",
+          "description": "The texture fills out and the top end opens, with a steady, gradual rise in level."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Climax",
+          "description": "The low end and top end open together for the loudest stretch, about 30 seconds long."
+        },
+        {
+          "timestamp": "2:39",
+          "section": "Coda",
+          "description": "The level falls sharply and a quiet coda runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Your Possible Pasts",
+      "duration": "4:26",
+      "energy": "high",
+      "tags": [
+        "Rewritten Wall Outtake",
+        "Gilmour Guitar Solo",
+        "Hammond Organ",
+        "Ray Cooper Percussion"
+      ],
+      "role": "Album role: The first full-band song, rewritten from a song rejected for The Wall, with a long loud central section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening that swells gently toward 0:30."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "First burst",
+          "description": "A sudden loud passage of about 15 seconds, then the level falls back."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Quiet verse",
+          "description": "The track returns to a low level for about 40 seconds."
+        },
+        {
+          "timestamp": "2:01",
+          "section": "Build",
+          "description": "The level climbs steadily toward the main section."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Loud section",
+          "description": "The longest loud stretch of the track, sustained for about a minute with a full, bright sound.",
+          "detail": "Wikipedia credits David Gilmour on lead and rhythm guitars, Andy Bown on Hammond organ, Michael Kamen on electric piano and Ray Cooper on percussion for this track, and notes that critics praised Gilmour's guitar solo."
+        },
+        {
+          "timestamp": "3:19",
+          "section": "Quiet passage",
+          "description": "The level falls away and stays low for about 40 seconds."
+        },
+        {
+          "timestamp": "4:02",
+          "section": "Final burst",
+          "description": "A short loud return, as full as the main section."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Ending",
+          "description": "The level drops and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "One of the Few",
+      "duration": "1:17",
+      "energy": "low",
+      "tags": [
+        "Rejected Wall Song",
+        "Waters Acoustic Guitar",
+        "Short Interlude"
+      ],
+      "role": "Album role: A short interlude from a song rejected for The Wall, bridging \"Your Possible Pasts\" and \"When the Tigers Broke Free\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at once at a steady, low-lying level, without a build."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Lift",
+          "description": "The low end and the top end rise a little and hold.",
+          "detail": "Wikipedia credits Waters on acoustic guitar and synthesisers on this track."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Ending",
+          "description": "The level falls away to the close."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "When the Tigers Broke Free",
+      "duration": "3:12",
+      "energy": "high",
+      "tags": [
+        "Rejected Wall Song",
+        "Anzio 1944",
+        "Pontarddulais Male Voice Choir",
+        "1982 Single",
+        "2004 Reissue Track"
+      ],
+      "role": "Album role: The track added to the album in 2004, placed fourth between \"One of the Few\" and \"The Hero's Return\"; a song about the death of Waters's father at Anzio that was first issued as a single in July 1982.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start in which the level and the top end rise slowly over the first half minute.",
+          "detail": "Wikipedia says Waters wrote the song about the death of his father, Eric Fletcher Waters, at the Battle of Anzio on 18 February 1944, and that the other band members rejected it for The Wall as too personal."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Full section",
+          "description": "The level and the top end step up sharply: the biggest change in the track.",
+          "detail": "Wikipedia credits Michael Kamen with arranging and conducting the orchestra and names the Pontarddulais Male Voice Choir, led by Noel Davis, as the choir; it does not say where either enters."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Brighter stretch",
+          "description": "The top end opens further and the full sound holds at a steady level for over a minute."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Loudest stretch",
+          "description": "The level, the midrange and the top end rise to the loudest stretch of the track, which runs to about 3:05.",
+          "detail": "Wikipedia says the 1982 single was released on 26 July 1982 with \"Bring the Boys Back Home\" on the other side, reached No. 39 on the UK Singles Chart and was used twice in the film Pink Floyd – The Wall; the 2004 reissue carries an edited version of 3:16, while the rip measured here runs 3:12."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Ending",
+          "description": "The level falls sharply and the track ends within a few seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The Hero's Return",
+      "duration": "2:43",
+      "energy": "mid",
+      "tags": [
+        "Single B-Side",
+        "Gilmour Lead Guitar",
+        "Electric Piano",
+        "Waters Synthesiser"
+      ],
+      "role": "Album role: A short band song between \"When the Tigers Broke Free\" and \"The Gunner's Dream\", issued as the B-side of the \"Not Now John\" single with an extra verse not on the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The full group starts at once with a steady pulse, building slightly to 0:35.",
+          "detail": "Wikipedia credits Gilmour on lead guitar, Andy Bown on electric piano and Nick Mason on drums for this track."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Quiet passage",
+          "description": "The level falls sharply and the texture thins out for about half a minute."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Return",
+          "description": "The group returns at full level with a stronger low end."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Ending",
+          "description": "The level falls away and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "The Gunner's Dream",
+      "duration": "5:18",
+      "energy": "mid",
+      "tags": [
+        "Hyde Park Bombing Reference",
+        "Tenor Saxophone",
+        "Piano and Orchestra",
+        "Short Film Song"
+      ],
+      "role": "Album role: A slow-building piece with two climaxes, one of four songs in the 1983 short film that accompanied the album.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A brief, fairly loud start that falls away within 15 seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Sparse verse",
+          "description": "A very quiet, thin texture for about a minute, with a slight lift near 0:50."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Build",
+          "description": "The level and top end rise gradually and hold until 1:50."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Hush",
+          "description": "The level drops to the quietest point of the track for about 15 seconds."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "First climax",
+          "description": "A sudden jump to a loud, wide-spectrum passage that lasts about 50 seconds.",
+          "detail": "Wikipedia credits Michael Kamen on piano and electric piano, Andy Bown on piano, Raphael Ravenscroft on tenor saxophone and the National Philharmonic Orchestra on this track, and notes that the saxophone replaced a guitar solo; where the saxophone enters was not located in the measurement."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Come-down",
+          "description": "The level drops and stays moderate and uneven for about a minute."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Second climax",
+          "description": "A second loud passage, as full as the first, lasting about 25 seconds."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Fade",
+          "description": "The level decays into a long quiet tail that runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Paranoid Eyes",
+      "duration": "3:42",
+      "energy": "mid",
+      "tags": [
+        "Orchestra",
+        "Piano",
+        "Hammond Organ",
+        "Ray Cooper Percussion"
+      ],
+      "role": "Album role: A slow orchestral song, between \"The Gunner's Dream\" and the short \"Get Your Filthy Hands Off My Desert\", that depicts the teacher's descent into alcoholism.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "An almost silent start that rises over the first 30 seconds."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Verse",
+          "description": "The track settles at a steady, moderate level."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Lift",
+          "description": "The level and top end rise toward the loudest point of the first half, around 2:05.",
+          "detail": "Wikipedia credits Michael Kamen on piano, Andy Bown on Hammond organ, Ray Cooper on percussion and the National Philharmonic Orchestra on this track; Nick Mason is not credited with drums here."
+        },
+        {
+          "timestamp": "2:33",
+          "section": "Drop",
+          "description": "The level falls sharply into a quiet passage."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Second rise",
+          "description": "The track builds again and reaches its loudest point at about 3:05."
+        },
+        {
+          "timestamp": "3:21",
+          "section": "Ending",
+          "description": "The level falls away and the track fades out, leaving the last seconds silent."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Get Your Filthy Hands Off My Desert",
+      "duration": "1:17",
+      "energy": "mid",
+      "tags": [
+        "Holophonic Sound",
+        "No Bass Guitar",
+        "Short Interlude"
+      ],
+      "role": "Album role: A short interlude that is the album's showpiece for the Holophonic system and the only track without Waters on bass guitar.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent start; the level rises through the first 15 seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Burst",
+          "description": "A sudden, loud event after the near-silent start, the biggest jump in level on the album.",
+          "detail": "Wikipedia describes the Holophonic effect on this track as a rocket flying past and exploding."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Lift",
+          "description": "The track settles at a moderate level and lifts a little near 0:42."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Ending",
+          "description": "The level falls away to the close."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "The Fletcher Memorial Home",
+      "duration": "4:09",
+      "energy": "mid",
+      "tags": [
+        "Orchestra",
+        "Gilmour Guitar Solo",
+        "Political Fantasy",
+        "Short Film Song"
+      ],
+      "role": "Album role: A long song built on a fantasy about political leaders, with a sustained orchestral climax, and one of four songs in the 1983 short film.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with a short louder swell at about 0:17."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Verse",
+          "description": "The level falls back to a quiet, steady texture."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "First rise",
+          "description": "The level and top end rise and stay up for about 40 seconds."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Quiet passage",
+          "description": "The level falls to a low point for about 25 seconds."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Main climax",
+          "description": "The loudest sustained stretch of the track, about a minute long.",
+          "detail": "Wikipedia credits Gilmour with a guitar solo, Nick Mason on drums, Michael Kamen on piano and the National Philharmonic Orchestra on this track."
+        },
+        {
+          "timestamp": "3:13",
+          "section": "Come-down",
+          "description": "The level falls quiet for about 20 seconds, with a brief loud return at 3:30."
+        },
+        {
+          "timestamp": "3:42",
+          "section": "Ending",
+          "description": "The level falls and the track closes quietly."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Southampton Dock",
+      "duration": "2:13",
+      "energy": "low",
+      "tags": [
+        "War Lament",
+        "Piano",
+        "Orchestra"
+      ],
+      "role": "Album role: A short, quiet lament for the returning soldiers and those who did not return, placed before the title track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start that rises over about 20 seconds."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Verse",
+          "description": "The track holds a steady, modest level for about a minute.",
+          "detail": "Wikipedia credits Michael Kamen on piano, Waters on acoustic guitar and the National Philharmonic Orchestra on this track."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Lift",
+          "description": "The level and top end rise to the loudest point of the track."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Ending",
+          "description": "The level falls away to the close."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "The Final Cut",
+      "duration": "4:43",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "Harmonium",
+        "Tambourine",
+        "Orchestra"
+      ],
+      "role": "Album role: The title track, placed after \"Southampton Dock\", with a long loud final section, and one of four songs in the 1983 short film.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening for about half a minute."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "First lift",
+          "description": "The level jumps and reaches a short peak at about 0:50, then falls back."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Second section",
+          "description": "The level returns after a brief dip and holds high until about 2:00."
+        },
+        {
+          "timestamp": "2:02",
+          "section": "Quiet passage",
+          "description": "The quietest stretch of the track, lasting until about 2:35."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Build",
+          "description": "The level rises to a peak at about 2:55, followed by a short dip near 3:05.",
+          "detail": "Wikipedia credits Nick Mason on tambourine, Kamen on harmonium and piano, Waters on synthesisers, Gilmour on guitars and additional backing vocals, and the National Philharmonic Orchestra on this track."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Final section",
+          "description": "The loudest sustained stretch of the track, about 70 seconds long."
+        },
+        {
+          "timestamp": "4:19",
+          "section": "Ending",
+          "description": "The level falls away and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Not Now John",
+      "duration": "5:01",
+      "energy": "high",
+      "tags": [
+        "Album Single",
+        "Gilmour Lead Vocal",
+        "Chanter Sisters",
+        "Hammond Organ",
+        "Hard Rock"
+      ],
+      "role": "Album role: The album's driving hard-rock song and its single, the only track with lead vocals by Gilmour, placed between the title track and the closing piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A few seconds of a quiet start, then the full group arrives at about 0:04 with a steady, strong pulse.",
+          "detail": "Wikipedia describes the verses as sung by Gilmour and the refrains and interludes by Waters, with Doreen and Irene Chanter in call and response; the credits list Andy Bown on Hammond organ and Waters on twelve-string guitar."
+        },
+        {
+          "timestamp": "0:51",
+          "section": "Sparse interlude",
+          "description": "The top end recedes and the pulse weakens for about 20 seconds."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Band returns",
+          "description": "The full group and the steady pulse return."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Fuller section",
+          "description": "The sound gets fuller and slightly louder, and holds for about a minute."
+        },
+        {
+          "timestamp": "2:57",
+          "section": "Second interlude",
+          "description": "A second sparse stretch with a weaker pulse, lasting about 20 seconds."
+        },
+        {
+          "timestamp": "3:18",
+          "section": "Final section",
+          "description": "The group returns brighter and louder, and runs unchanged for over a minute."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Fade",
+          "description": "The level falls gradually and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Two Suns in the Sunset",
+      "duration": "5:15",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Andy Newmark Drums",
+        "Tenor Saxophone",
+        "Hammond Organ",
+        "Nuclear Holocaust Theme"
+      ],
+      "role": "Album role: The closing track, a nuclear-holocaust finale on which Andy Newmark replaced Nick Mason on drums.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start that builds in steps over the first 50 seconds.",
+          "detail": "Wikipedia says Nick Mason was replaced by Andy Newmark because he could not perform the song's complex time changes."
+        },
+        {
+          "timestamp": "0:56",
+          "section": "Quiet verse",
+          "description": "The level falls back to a quieter section for about 40 seconds."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Lift",
+          "description": "The level rises to a louder section that eases again after about ten seconds."
+        },
+        {
+          "timestamp": "2:13",
+          "section": "Build",
+          "description": "The level climbs steadily to the loudest point of the track at about 2:40.",
+          "detail": "Wikipedia credits Raphael Ravenscroft on tenor saxophone, Michael Kamen on piano and Andy Bown on Hammond organ on this track, and notes that the saxophone replaced a guitar solo; where the saxophone enters was not located in the measurement."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Quiet passage",
+          "description": "The level drops sharply and stays low until about 3:15."
+        },
+        {
+          "timestamp": "3:18",
+          "section": "Final section",
+          "description": "The level and top end return and hold, with some movement, until about 4:45."
+        },
+        {
+          "timestamp": "4:58",
+          "section": "Ending",
+          "description": "The level falls away and the album closes on a fade."
+        }
+      ]
+    }
+  ]
+}

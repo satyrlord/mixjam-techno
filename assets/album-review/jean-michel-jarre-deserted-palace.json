@@ -1,0 +1,549 @@
+{
+  "id": "jean-michel-jarre-deserted-palace",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Deserted Palace",
+  "year": 1973,
+  "label": "Sam Fox Records",
+  "producer": "Francis Dreyfus",
+  "genre": "Electronic / Library Music",
+  "genreTags": [
+    "Electronic",
+    "Library Music",
+    "Experimental",
+    "Minimalist"
+  ],
+  "runtime": "33:57",
+  "coverUrl": "https://f4.bcbits.com/img/a3517176456_5.jpg",
+  "coverSource": "https://transversales.bandcamp.com/album/deserted-palace-1972",
+  "overview": "Jarre's first solo album, written and performed in 1972 while he was at the Groupe de Recherches Musicales (GRM). In 1971 the producer Francis Dreyfus had commissioned soundscapes for public spaces such as airports and libraries and passed the project to Jarre, who had recently signed with his company. The fifteen pieces use two instruments, an EMS VCS 3 synthesizer and a Farfisa organ, in a minimalist, experimental style; Jarre has called it a \"crazy album, totally homemade\" and \"a pirate record in every sense of the word\".\n\nThe album was functional library music, made for licensing to television, advertising and film. It appeared in the United States in 1973 on Sam Fox Records (catalogue SF 1029, with Sam Fox Publishing and Editions Francis Dreyfus credited on the copyright line), was never sold at retail, and circulated mainly as a bootleg for decades. A selection of its tracks, including \"Deserted Palace\", appeared officially on the compilation Essentials & Rarities (Disques Dreyfus, 2011), and Transversales Disques issued the first official LP reissue, remastered and limited to 500 copies, on 2 May 2025, with the original fifteen-track sequence. Side A holds nine short cues, from 0:51 to 3:19, and Side B opens with the long \"Wind Swept Canyon\" before five more short cues; the pieces are loop-based cues that start almost at once and, for the most part, end abruptly.\n\nTimestamps are measured from the audio and are approximate to ±5 seconds. Descriptions are limited to what the measurements show; instrument and style names come from the cited sources.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Poltergeist Party",
+      "duration": "2:15",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Bleeping Pulse",
+        "EMS VCS 3"
+      ],
+      "role": "Album role: The album opener and first cue of Side A, built on a pulse that starts within the first seconds.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse starts almost at once, with a light low end.",
+          "detail": "Bandcamp Daily describes the opener as built on a bleeping pulse and compares it to the Doctor Who theme and early Human League."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Low end enters",
+          "description": "The sub-bass joins the pulse: the biggest change in the cue."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Thin passage",
+          "description": "The top end falls back briefly before the cue fills out again."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Ending",
+          "description": "The sound stops dead at about 2:10, and the file runs on in silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Music Box Concerto",
+      "duration": "2:45",
+      "energy": "low",
+      "tags": [
+        "Loose Pulse",
+        "Alternating Sections",
+        "Side A"
+      ],
+      "role": "Album role: A softer second cue of Side A with a loose pulse, between the opener and \"Rain Forest Rap Session\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with an uncertain pulse that firms up as the low end enters around 0:16."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Thin section",
+          "description": "The low end falls away and the level drops; the same dip returns at 1:34 and 2:06, and the low end comes back at 1:08 and 1:55."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Low end returns",
+          "description": "The sub-bass returns and the pulse steadies."
+        },
+        {
+          "timestamp": "2:22",
+          "section": "Ending",
+          "description": "The low end thins for the last stretch and the cue stops at about 2:40, with silence to the end of the file."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Rain Forest Rap Session",
+      "duration": "1:44",
+      "energy": "mid",
+      "tags": [
+        "Funk Licks",
+        "Sci-Fi Effects",
+        "Side A"
+      ],
+      "role": "Album role: The third cue of Side A, a groove-led piece that follows the two opening cues.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet first few seconds, then the pulse and the top end arrive together.",
+          "detail": "Bandcamp Daily describes the cue as funky licks mixed with sci-fi sound effects."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Low end enters",
+          "description": "The sub-bass joins and the cue holds an even level for the next minute."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Brighter finish",
+          "description": "The top end opens for the last stretch."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Ending",
+          "description": "The level drops and the cue ends by about 1:38."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "A Love Theme for Gargoyles",
+      "duration": "1:14",
+      "energy": "low",
+      "tags": [
+        "Short Cue",
+        "Thin Opening",
+        "Side A"
+      ],
+      "role": "Album role: A short, quiet cue with a bare opening, placed before the longer \"Bridge of Promises\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A thin, quiet opening with almost no low end."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Low end enters",
+          "description": "The sub-bass and bass arrive and the level rises: the biggest change in the cue."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Lighter passage",
+          "description": "The bass falls back for the rest of the middle section."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Ending",
+          "description": "The level drops and the cue ends by about 1:08, followed by silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Bridge of Promises",
+      "duration": "3:19",
+      "energy": "mid",
+      "tags": [
+        "Longest Side A Cue",
+        "Android Love Theme",
+        "Slow Build"
+      ],
+      "role": "Album role: The longest cue of Side A, a slower-moving piece after a run of short cues, with its loudest stretch in the last minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A strong pulse starts within the first seconds.",
+          "detail": "Bandcamp Daily calls the cue a love theme for androids."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Full band",
+          "description": "The sub-bass and bass fill out and the level rises."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Loose pulse",
+          "description": "The pulse becomes less regular and the texture drifts over a steady low end."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Louder section",
+          "description": "The level steps up and holds for about 20 seconds."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Final stretch",
+          "description": "The loudest stretch of the cue runs to about 3:05."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Ending",
+          "description": "The level falls away and the cue ends."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Exasperated Frog",
+      "duration": "0:51",
+      "energy": "mid",
+      "tags": [
+        "Shortest Cue",
+        "Sub-Minute Piece",
+        "Side A"
+      ],
+      "role": "Album role: The shortest cue on the album, a sub-minute piece between \"Bridge of Promises\" and \"Take Me to Your Leader\".",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Pulse starts",
+          "description": "The pulse begins after the first second, with a bright top end."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Fuller texture",
+          "description": "The low end fills out and the level rises."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Easing",
+          "description": "The level eases for the last few seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Ending",
+          "description": "The sound stops dead, and the file runs on in silence."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Take Me to Your Leader",
+      "duration": "1:59",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Side A",
+        "Hard Stop"
+      ],
+      "role": "Album role: The seventh cue of Side A, a steady-pulse piece that leads into the title track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, quiet start with almost no top end; the top end opens by 0:10."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low end enters",
+          "description": "The sub-bass joins and the level rises slightly."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Lighter passage",
+          "description": "The low end falls back for about 25 seconds, then returns."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Ending",
+          "description": "The sound stops dead."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Deserted Palace",
+      "duration": "2:27",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "Two Breaks",
+        "Essentials & Rarities"
+      ],
+      "role": "Album role: The title track, eighth of the nine cues on Side A and the only piece from the album named on the 2011 compilation Essentials & Rarities.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A lean opening without a low end, with a steady pulse from the first seconds.",
+          "detail": "Bandcamp Daily calls the title track poignant and hears Jarre's classical training in it; Essentials & Rarities lists it at 2:22."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Bass enters",
+          "description": "The bass joins the pulse and the cue gains weight."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "First break",
+          "description": "The top end and the pulse drop out for about 13 seconds, then return."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Second break",
+          "description": "A second break of the same kind, about 14 seconds long, before the final stretch."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Pogo Rock",
+      "duration": "1:08",
+      "energy": "high",
+      "tags": [
+        "Side A Closer",
+        "Bright Top End",
+        "Fast Pulse"
+      ],
+      "role": "Album role: The closing cue of Side A, a short, bright, driving piece before the long Side B opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A darker start with a loose pulse."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Top end opens",
+          "description": "The top end opens and the pulse locks into a steady, driving rhythm that holds to the end."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Ending",
+          "description": "The sound stops dead, and the file runs on in silence."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Wind Swept Canyon",
+      "duration": "7:42",
+      "energy": "mid",
+      "tags": [
+        "Side B Opener",
+        "Longest Track",
+        "Alternating Sections",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The opener of Side B and the longest piece on the album, more than twice the length of any other track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse from the first seconds over a light low end."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Low end enters",
+          "description": "The sub-bass enters and the level rises: the largest low-end change in the piece."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Top end opens",
+          "description": "The mid range and the top end open and the level rises again."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Thin section",
+          "description": "The top end falls away for about 45 seconds."
+        },
+        {
+          "timestamp": "2:59",
+          "section": "Full texture returns",
+          "description": "The top end comes back and the level rises."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Second thin section",
+          "description": "A second drop of the top end, about 45 seconds long."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Full texture returns",
+          "description": "The top end returns and the piece runs at full texture until its closing minutes."
+        },
+        {
+          "timestamp": "7:34",
+          "section": "Ending",
+          "description": "The level falls away and the piece ends."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "The Abominable Snowman",
+      "duration": "0:56",
+      "energy": "mid",
+      "tags": [
+        "Short Cue",
+        "Side B",
+        "Hard Stop"
+      ],
+      "role": "Album role: A sub-minute cue that follows the long Side B opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse starts after the first second with a light top end."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Top end opens",
+          "description": "The top end opens and the cue holds a steady level."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Ending",
+          "description": "The sound stops dead."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Iraqi Hitch-Hiker",
+      "duration": "2:32",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Proto Synth-Pop",
+        "Side B"
+      ],
+      "role": "Album role: The third cue of Side B, a steady-pulse piece that Bandcamp Daily hears as anticipating later synth-pop.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse and a full texture start together after about a second.",
+          "detail": "Bandcamp Daily says the cue, like \"Synthetic Jungle\", anticipates sounds that OMD and Depeche Mode developed several years later."
+        },
+        {
+          "timestamp": "0:26",
+          "section": "Low end thins",
+          "description": "The sub-bass falls back and the cue runs lighter."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Low end returns",
+          "description": "The sub-bass returns and the cue runs at full weight to the end."
+        },
+        {
+          "timestamp": "2:26",
+          "section": "Ending",
+          "description": "The sound stops dead, and the file runs on in silence."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Free Floating Anxiety",
+      "duration": "2:21",
+      "energy": "low",
+      "tags": [
+        "Beatless",
+        "Quietest Cue",
+        "Side B"
+      ],
+      "role": "Album role: The quietest and most beatless cue of the album, a drifting piece between the pulse-driven \"Iraqi Hitch-Hiker\" and \"Synthetic Jungle\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, beatless opening with no regular pulse anywhere in the cue."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Low end enters",
+          "description": "The sub-bass joins and the level rises."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "Thin passage",
+          "description": "The level, the low end and the top end fall away for about 12 seconds, then the texture fills out again from 0:56."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Closing",
+          "description": "The level and the low end fall for the last stretch of the cue."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Synthetic Jungle",
+      "duration": "1:45",
+      "energy": "mid",
+      "tags": [
+        "Steady Pulse",
+        "Proto Synth-Pop",
+        "Side B"
+      ],
+      "role": "Album role: The fifth cue of Side B, a steady-pulse piece before the closing \"Bee Factory\".",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A steady pulse starts after the first second.",
+          "detail": "Bandcamp Daily groups the cue with \"Iraqi Hitch-Hiker\" as anticipating sounds that OMD and Depeche Mode developed several years later."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Bass fills out",
+          "description": "The bass rises and the cue gains weight."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Ending",
+          "description": "The sound stops dead."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Bee Factory",
+      "duration": "1:00",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Short Cue",
+        "Hard Stop"
+      ],
+      "role": "Album role: The album closer, a one-minute cue that ends the record on a hard stop.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A pulse starts at once, with a light low end."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Low end locks in",
+          "description": "The bass rises and takes on a regular pulse, and the level rises."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Ending",
+          "description": "The sound stops dead, and the file runs on in silence."
+        }
+      ]
+    }
+  ]
+}

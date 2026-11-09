@@ -1,0 +1,227 @@
+{
+  "id": "vangelis-invisible-connections",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Invisible Connections",
+  "year": 1985,
+  "label": "Deutsche Grammophon",
+  "producer": "Vangelis",
+  "genre": "Electronic / Experimental",
+  "genreTags": [
+    "Electronic",
+    "Experimental",
+    "Space Music",
+    "Ambient"
+  ],
+  "runtime": "39:47",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/0/03/InvisibleConnections.JPG",
+  "coverSource": "https://en.wikipedia.org/wiki/Invisible_Connections",
+  "overview": "Invisible Connections is a 1985 album by Vangelis, released in March 1985 on Deutsche Grammophon (LP 415 196-1, CD 415 196-2), and the credits on Wikipedia and Discogs give Vangelis as composer, arranger, producer and performer. Wikipedia and Discogs name no recording studio, recording date or instruments. Wikipedia calls it one of his most experimental albums, gives its genres as electronic, experimental and space music, and places it very loosely in a trilogy of 1980s albums with Soil Festivities (1984) and Mask (1985), with a possible return to the minimalist style of Beaubourg (1978). AllMusic rates it 4.5 out of 5.\n\nThis review follows the track list of the original CD, as ripped: three tracks of 18:38, 7:50 and 13:19, titled \"Invisible Connections\", \"Atom Blaster\" and \"Thermo Vision\". Wikipedia reports, citing a 2016 review on the fan site Elsewhere, that the remasters in the Delectus box set showed the sides of the original release to have been reversed; the 2017 UMC remaster lists the pieces as \"Invisible Connections\" (21:03), \"Atom Blaster\" (8:37) and \"Thermo Vision\" (9:44), so track 1 of the CD holds the last two and its tracks 2 and 3 hold the title piece in two parts. The measurements on this rip fit that account: track 1 falls to near silence about eight and a half minutes in and restarts with a new piece, and tracks 2 and 3 together run 21:09, close to the remaster's 21:03. The measurements show no steady tempo in any track; the sound moves through swells, gaps and changes in the high end.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Invisible Connections",
+      "duration": "18:38",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Two Pieces In One Track",
+        "Silent Break",
+        "Low-End Swell",
+        "Longest Track"
+      ],
+      "role": "Album role: Opening track and the longest, holding two separate pieces joined in one track, which the 2017 remaster lists as \"Atom Blaster\" and \"Thermo Vision\" rather than the title piece that the CD names.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens in near silence; the first sound arrives after about two seconds and the level rises to a steady texture within seconds."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Bright bursts",
+          "description": "Short bursts of high-frequency sound come and go over a continuing low-to-mid texture."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Loud entry",
+          "description": "The level jumps and bright content is added; this is the loudest sustained stretch so far, lasting about a minute and a half."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Break",
+          "description": "The level drops sharply for a few seconds and then returns with a loud, bright passage, the largest sudden change of the first piece."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Bright stretch",
+          "description": "The high end is at its strongest of the first piece for about half a minute, with the level peaking inside it."
+        },
+        {
+          "timestamp": "8:10",
+          "section": "Fade-out",
+          "description": "The high end drops away and the level falls steadily to near silence."
+        },
+        {
+          "timestamp": "8:42",
+          "section": "Second piece",
+          "description": "A new piece starts abruptly after a few seconds of near silence, loud and dark with the weight in the low end; brighter sound returns about half a minute later.",
+          "detail": "The first piece runs about 8:35 and this one about 9:45, close to the 8:37 and 9:44 that Discogs lists for \"Atom Blaster\" and \"Thermo Vision\" on the 2017 remaster."
+        },
+        {
+          "timestamp": "11:25",
+          "section": "Peak",
+          "description": "The deep low end swells and the level climbs to the heaviest, loudest point of the track."
+        },
+        {
+          "timestamp": "12:15",
+          "section": "Dark passage",
+          "description": "The high end disappears and a steady, low-heavy sound continues for nearly a minute."
+        },
+        {
+          "timestamp": "13:15",
+          "section": "Bright return",
+          "description": "High-frequency sound returns and stays present, at a level similar to the preceding passage."
+        },
+        {
+          "timestamp": "15:34",
+          "section": "Recurring cycle",
+          "description": "The high end switches on and off in a slow, regular cycle that continues for about two and a half minutes."
+        },
+        {
+          "timestamp": "18:05",
+          "section": "Outro",
+          "description": "The cycle stops, the level falls steadily and the sound fades away; about nine seconds of silence close the track."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Atom Blaster",
+      "duration": "7:50",
+      "energy": "low",
+      "tags": [
+        "Title Piece Part One",
+        "Near-Silent Gaps",
+        "Abrupt Start",
+        "Fade-Out"
+      ],
+      "role": "Album role: Labelled \"Atom Blaster\" on the CD; in Wikipedia's account of the reversed sides it is the first part of the title piece, which continues in track 3.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Start",
+          "description": "The track starts at once at a moderate level, with no fade-in and the weight in the low end.",
+          "detail": "In Wikipedia's account of the reversed sides, this track and track 3 are the two parts of the title piece, which the 2017 remaster lists as one track of just over 21 minutes."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "First gap",
+          "description": "The level falls to near silence and stays very low for about ten seconds before the low end returns."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Bright burst",
+          "description": "A loud passage with a burst of high-frequency sound arrives, one of the brightest moments of the track."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Sparse stretch",
+          "description": "The sound stays quiet for about a minute and falls close to silence several times, with only short sounds between the dips."
+        },
+        {
+          "timestamp": "4:32",
+          "section": "Low-end swell",
+          "description": "The low end swells and the level climbs to a loud, bass-heavy point before falling away again."
+        },
+        {
+          "timestamp": "6:03",
+          "section": "Loud entry",
+          "description": "After near silence, a loud, low-heavy passage enters; it dips briefly, returns, and stays loud for about a minute."
+        },
+        {
+          "timestamp": "7:20",
+          "section": "Fade-out",
+          "description": "A short mid-range burst is followed by a steady fade to silence; the last eight seconds are silent."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Thermo Vision",
+      "duration": "13:19",
+      "energy": "mid",
+      "tags": [
+        "Title Piece Part Two",
+        "Album Closer",
+        "Loud-Quiet Alternation",
+        "Abrupt Start",
+        "Closing Fade"
+      ],
+      "role": "Album role: Closing track, labelled \"Thermo Vision\" on the CD; in the same account it is the second part of the title piece and ends the album with a fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Start",
+          "description": "The track starts at once at a low level and stays quiet for about fifteen seconds.",
+          "detail": "Tracks 2 and 3 together run just over 21 minutes on this rip, close to the length listed for the title piece on the 2017 remaster."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "First loud entry",
+          "description": "A loud, low-heavy passage enters, with a burst of high-frequency sound shortly after."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Quiet gap",
+          "description": "The level falls to near silence for about fifteen seconds, with only faint sounds."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Loud entry",
+          "description": "The low end returns and the level jumps; a bright burst follows before the sound drops back."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Loud peak",
+          "description": "The level climbs to one of the loudest moments of the track and then drops sharply."
+        },
+        {
+          "timestamp": "4:35",
+          "section": "Bright entry",
+          "description": "After a quieter stretch, a loud passage with strong high-frequency content enters."
+        },
+        {
+          "timestamp": "5:38",
+          "section": "Biggest change",
+          "description": "The largest sudden change of the track: the level and brightness rise, and a loud, full sound is held with small dips for about a minute."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Sustained loud stretch",
+          "description": "The sound stays loud and low-heavy for about a minute and a half, with the level peaking twice."
+        },
+        {
+          "timestamp": "9:15",
+          "section": "Dip and quiet stretch",
+          "description": "The level dips to near silence for a few seconds, and the sound then stays noticeably quieter for about forty seconds."
+        },
+        {
+          "timestamp": "10:15",
+          "section": "Last loud stretch",
+          "description": "The sound is loud again for about two minutes, with a bright moment and a short dip along the way."
+        },
+        {
+          "timestamp": "12:15",
+          "section": "Thinning",
+          "description": "The level falls and the mid-range thins, leaving a bass-heavy sound."
+        },
+        {
+          "timestamp": "13:00",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the sound is gone within about twenty seconds, so the album ends on the fade."
+        }
+      ]
+    }
+  ]
+}

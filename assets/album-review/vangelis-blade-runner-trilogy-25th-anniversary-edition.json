@@ -1,0 +1,1381 @@
+{
+  "id": "vangelis-blade-runner-trilogy-25th-anniversary-edition",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Blade Runner Trilogy, 25th Anniversary",
+  "year": 2007,
+  "label": "Universal Music TV",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Film Score",
+    "New Age"
+  ],
+  "runtime": "2:29:58",
+  "isSoundtrack": true,
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/f/f2/Brt25.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Blade_Runner_(soundtrack)",
+  "overview": "Blade Runner Trilogy, 25th Anniversary is a three-disc set issued on 10 December 2007 with the five-DVD edition marking the 25th anniversary of Ridley Scott's 1982 film Blade Runner. Disc 1 is the 1994 soundtrack album, Disc 2 holds previously unreleased music and two bonus tracks, and Disc 3 is new music by Vangelis inspired by the film. Vangelis recorded the original score at Nemo Studios, London, between December 1981 and April 1982, improvising to videotapes of the scenes according to Wikipedia; the Nemo Studios site lists him as composer, arranger, performer and producer, and Wikipedia names the Yamaha CS-80 as the most prominent synthesiser. The same site credits Dick Morrissey for saxophone on \"Love Theme\", Demis Roussos as performer on \"Tales of the Future\", Don Percival as performer and Peter Skellern as lyricist on \"One More Kiss, Dear\", and the English Chamber Choir on \"Dr Tyrell's Death\".\n\nOn Disc 1, tracks 1 to 4 and 8 to 12 are mixed into two seamless blocks, while every track on Discs 2 and 3 is a separate piece set off by silence; Wikipedia adds that the set still lacks some music heard in the film, and that AllMusic rated it 3.5 out of 5. The rip holds all 36 tracks in disc order with nothing extra, and the timeline numbers them 1 to 36 across the three discs. No source describes the individual cues, so the timeline notes follow measured changes in level, brightness and low end rather than named instruments.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Main Titles",
+      "duration": "3:42",
+      "energy": "mid",
+      "tags": [
+        "Yamaha CS-80",
+        "Film Dialogue Samples",
+        "Opening Track",
+        "Seamless Block"
+      ],
+      "role": "Album role: Opening track of the set and of the 1994 album; the first of four tracks that Wikipedia says are mixed into one seamless piece.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track rises from silence into a quiet, dark texture that stays low for about the first minute.",
+          "detail": "Wikipedia lists \"Main Titles\" among four tracks on the 1994 album with samples of film dialogue; the measurements do not show where the dialogue sits."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Full entry",
+          "description": "The level jumps and the top end opens wide at once, with the low end swelling alongside.",
+          "detail": "The Nemo Studios page says the Yamaha CS-80 played the long notes of the opening credits."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Brighter stretch",
+          "description": "The top end brightens further while the level holds steady."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Colour shift",
+          "description": "The low end eases back a little and the upper midrange comes forward."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Return",
+          "description": "The level lifts again and the low end regains weight for the closing stretch."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Outro",
+          "description": "The level, the low end and the top end all fall away over the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Blush Response",
+      "duration": "5:47",
+      "energy": "mid",
+      "tags": [
+        "Film Dialogue Samples",
+        "Seamless Block",
+        "Slow Build",
+        "Wide Plateau"
+      ],
+      "role": "Album role: Second track of the opening seamless block and one of the four 1994 tracks with film dialogue samples, per Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level in a dark texture with almost no low end.",
+          "detail": "Wikipedia says tracks 1 to 4 of the 1994 album are mixed together as one seamless piece, which fits a start with no silence."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Low end enters",
+          "description": "Low-end weight enters and the level stays modest for about a minute."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Full entry",
+          "description": "The top end opens wide and the low end grows, and the level climbs to a much fuller texture."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Plateau",
+          "description": "The level holds almost unchanged for about three minutes with no new entries."
+        },
+        {
+          "timestamp": "5:14",
+          "section": "Fade",
+          "description": "The level steps down and the sound fades gradually to the end."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Wait for Me",
+      "duration": "5:28",
+      "energy": "mid",
+      "tags": [
+        "Film Dialogue Samples",
+        "Seamless Block",
+        "Sustained Texture"
+      ],
+      "role": "Album role: Third track of the opening seamless block and one of the four 1994 tracks with film dialogue samples, per Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a modest level and rises over its first few seconds."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Fuller entry",
+          "description": "The midrange and upper midrange fill in, and the level settles into a steady, even plateau."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Brightening",
+          "description": "The top end slowly brightens and keeps rising through the second half of the track."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fade",
+          "description": "The level and the low end fall away together, and the sound fades to silence over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Rachel's Song",
+      "duration": "4:47",
+      "energy": "low",
+      "tags": [
+        "Seamless Block",
+        "Slow Build",
+        "Gradual Fade"
+      ],
+      "role": "Album role: Last track of the opening seamless block; after it the 1994 album separates the next three tracks by silence, per Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening: a thin, dim texture with almost no low end for about twenty-five seconds.",
+          "detail": "Wikipedia quotes the notes of the unofficial Esper Edition bootleg, which credit Mary Hopkin with vocals on \"Rachael's Song\"; the official album credits are not quoted there."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Low end enters",
+          "description": "The low end arrives and the level rises sharply into the main body of the piece."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Bright entry",
+          "description": "The top end opens and the level lifts again."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Peak",
+          "description": "The level reaches the fullest, loudest stretch of the track."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Fade",
+          "description": "The level drops step by step and the sound dies away to silence over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Love Theme",
+      "duration": "4:58",
+      "energy": "low",
+      "tags": [
+        "Saxophone",
+        "Dick Morrissey",
+        "Separated By Silence",
+        "Two Quiet Dips"
+      ],
+      "role": "Album role: First of the three 1994 tracks that Wikipedia says are separated by silence; the Nemo Studios page credits its saxophone to Dick Morrissey.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track rises from near silence into a mid-weight texture that brightens within the first ten seconds.",
+          "detail": "Wikipedia and the Nemo Studios page both credit saxophone by Dick Morrissey on \"Love Theme\"; the measurements do not show when the saxophone plays."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Dip",
+          "description": "The low end drops out and the level dips for about ten seconds before the full texture returns."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Peak",
+          "description": "The level reaches the highest point of the track."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Second dip",
+          "description": "The low end falls away again and the level drops for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:52",
+          "section": "Return",
+          "description": "The full texture returns and holds for about fifty seconds."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Outro",
+          "description": "The sound falls away quickly and the last ten seconds or so are silent."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "One More Kiss, Dear",
+      "duration": "3:58",
+      "energy": "mid",
+      "tags": [
+        "Don Percival",
+        "Peter Skellern",
+        "Song Form",
+        "Separated By Silence"
+      ],
+      "role": "Album role: Second of the three 1994 tracks separated by silence, and the track whose credits name a performer and a lyricist, Don Percival and Peter Skellern.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once in a narrow, mid-focused texture with almost no low end.",
+          "detail": "The Nemo Studios page credits the performance to Don Percival and the lyrics to Peter Skellern, and says it was recorded in Wembley, London."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Quieter stretch",
+          "description": "The level dips a little and stays lower for about fifteen seconds."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Late rise",
+          "description": "The level creeps up over the last half minute."
+        },
+        {
+          "timestamp": "3:52",
+          "section": "Outro",
+          "description": "The track stops within a few seconds of its highest level, with no long fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Blade Runner Blues",
+      "duration": "8:55",
+      "energy": "low",
+      "tags": [
+        "Slow Build",
+        "Sparse Texture",
+        "Longest Track Of Disc 1",
+        "Separated By Silence"
+      ],
+      "role": "Album role: Longest track of the 1994 album and the last of the three tracks separated by silence, before the second seamless block begins.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens from silence at a very low level, with almost no top end for about fifteen seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "First entry",
+          "description": "The level and the top end step up together into a sparse, quiet texture."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "Fuller entry",
+          "description": "A second step raises the level and brings the midrange forward."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Long steady stretch",
+          "description": "The level stays low and almost unchanged for more than four minutes, with small changes in brightness."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Slow rise",
+          "description": "The level and the top end creep upward over the following minute and a half."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Peak",
+          "description": "The track reaches its loudest and brightest stretch."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Easing",
+          "description": "The level eases back and the low end thins out."
+        },
+        {
+          "timestamp": "8:35",
+          "section": "Outro",
+          "description": "The sound fades to silence over the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Memories of Green",
+      "duration": "5:05",
+      "energy": "low",
+      "tags": [
+        "See You Later (1980)",
+        "Seamless Block",
+        "Quiet Texture"
+      ],
+      "role": "Album role: First track of the second seamless block (tracks 8 to 12); Wikipedia says the piece comes from Vangelis's 1980 album See You Later.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a very low level in a dark, low-weighted texture and stays near silence for about the first half minute.",
+          "detail": "Wikipedia says \"Memories of Green\" was taken from Vangelis's 1980 album See You Later."
+        },
+        {
+          "timestamp": "0:32",
+          "section": "First entry",
+          "description": "The level jumps and the midrange and upper midrange come forward."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Low end enters",
+          "description": "The low end and the level rise into a fuller stretch."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Peak",
+          "description": "The level reaches its highest stretch of the track, which lasts about half a minute."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Thinning",
+          "description": "The level falls back and the sound stays quiet and sparse for the rest of the track."
+        },
+        {
+          "timestamp": "4:50",
+          "section": "Outro",
+          "description": "The track ends at a low level without a long fade."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Tales of the Future",
+      "duration": "4:47",
+      "energy": "mid",
+      "tags": [
+        "Demis Roussos",
+        "Seamless Block",
+        "Steady Level",
+        "Gradual Fade"
+      ],
+      "role": "Album role: Second track of the second seamless block; the Nemo Studios page credits Demis Roussos as its performer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a modest level with a dark, low-weighted texture.",
+          "detail": "The Nemo Studios page credits Demis Roussos as performer on \"Tales of the Future\"; the measurements do not show where the voice sits."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Opening up",
+          "description": "The low end thins while the upper midrange and the top end open."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Bright entry",
+          "description": "The top end and the presence range open sharply and the level rises to a louder stretch."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Plateau",
+          "description": "From here the level stays within a narrow, high range for almost two minutes."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Fade",
+          "description": "The level drops and the track fades to silence over its last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Damask Rose",
+      "duration": "2:33",
+      "energy": "low",
+      "tags": [
+        "Seamless Block",
+        "Shortest Track Of Disc 1",
+        "Steady Level"
+      ],
+      "role": "Album role: Shortest track of the 1994 album, between \"Tales of the Future\" and \"Blade Runner (End Titles)\" in the second seamless block.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level in a dark texture."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Bright entry",
+          "description": "The level rises and the midrange and the top end open."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Fade",
+          "description": "The top end and the level fall away over the last forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Blade Runner (End Titles)",
+      "duration": "4:39",
+      "energy": "mid",
+      "tags": [
+        "Seamless Block",
+        "Slow Build",
+        "Bright Texture",
+        "End Titles"
+      ],
+      "role": "Album role: Penultimate track of the 1994 album, inside the second seamless block, and the loudest track of Disc 1 on average by measurement.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once and the top end opens within five seconds, so it is bright from the start."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Bright plateau",
+          "description": "The level settles and the top end stays bright and even for the next two minutes."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Louder stretch",
+          "description": "The level and the top end rise a step and the low end grows; the track holds this stronger level until the closing seconds."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Peak",
+          "description": "The track reaches its loudest moment."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The sound drops away quickly and the last ten seconds are nearly silent."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Tears in Rain",
+      "duration": "3:01",
+      "energy": "low",
+      "tags": [
+        "Film Dialogue Samples",
+        "Closing Track",
+        "Quiet Texture"
+      ],
+      "role": "Album role: Closing track of the 1994 album and of Disc 1, and the last of the four tracks with film dialogue samples.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a very low level and rises over the first half minute."
+        },
+        {
+          "timestamp": "0:25",
+          "section": "Low end enters",
+          "description": "The low end arrives and then comes and goes in short swells."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Swell",
+          "description": "The level swells with the low end and the top end together and reaches the loudest point of the track."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Outro",
+          "description": "The level drops at once and the track ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Longing",
+      "duration": "1:58",
+      "energy": "mid",
+      "tags": [
+        "Previously Unreleased",
+        "Disc 2 Opener",
+        "Late Swell"
+      ],
+      "role": "Album role: Opens Disc 2, the previously unreleased material; Wikipedia says every track on Discs 2 and 3 is a separate piece set off by silence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level with a full low end.",
+          "detail": "Wikipedia describes Disc 2 as previously unreleased material, including two bonus tracks, and notes that it still leaves out the \"Main Title\" track."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Level step",
+          "description": "The level steps up and the mid and upper midrange come forward."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Final swell",
+          "description": "The level and the low end swell to the highest point of the track, and it ends there without a fade."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Unveiled Twinkling Space",
+      "duration": "1:59",
+      "energy": "low",
+      "tags": [
+        "Previously Unreleased",
+        "Low-End Drop-Outs",
+        "Short Piece"
+      ],
+      "role": "Album role: Second track of Disc 2, a short piece whose low end drops out and returns.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once with a loud, full low end that fades away over the first twenty seconds."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Bright stretch",
+          "description": "The low end disappears and the top end opens for about half a minute, leaving a thin, bright texture."
+        },
+        {
+          "timestamp": "1:11",
+          "section": "Low surge",
+          "description": "A strong low-end surge returns with a jump in level, then falls away again."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Outro",
+          "description": "The low end disappears once more and the track ends quietly in a thin, dark texture."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "Dr. Tyrell's Owl",
+      "duration": "2:40",
+      "energy": "mid",
+      "tags": [
+        "Previously Unreleased",
+        "Bright Thin Texture",
+        "Late Low End"
+      ],
+      "role": "Album role: Third track of Disc 2, a short piece with almost no low end until near its close.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once in a bright, thin texture with almost no low end."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Level rise",
+          "description": "The level rises into a louder stretch that lasts about forty seconds."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Quieter stretch",
+          "description": "The level and the low-mid range drop away to a quieter stretch."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Low end enters",
+          "description": "A heavy low end enters for the first time and the level rises, then fades again within about twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "At Mr. Chew's",
+      "duration": "4:47",
+      "energy": "mid",
+      "tags": [
+        "Previously Unreleased",
+        "Gradual Build",
+        "Bright Opening"
+      ],
+      "role": "Album role: Fourth track of Disc 2 and the first piece on the disc longer than three minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, bright opening with a light low end that gradually thickens."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Full entry",
+          "description": "The level jumps and the low end grows into a loud, bright stretch."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Quieter stretch",
+          "description": "The level, the low end and the top end drop back and stay lower for about a minute."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Return",
+          "description": "The low end swells and the level rises to the fullest sustained stretch of the track, which lasts about a minute and a half."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Outro",
+          "description": "The level and the low end drop away and the track fades over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 17,
+      "title": "Leo's Room",
+      "duration": "2:21",
+      "energy": "low",
+      "tags": [
+        "Previously Unreleased",
+        "Printed Title Error",
+        "Low-End Surges"
+      ],
+      "role": "Album role: Fifth track of Disc 2; its title is printed \"Leo's Room\", which Wikipedia says is an error for \"Leon's Room\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a low level in a dim texture with almost no low end.",
+          "detail": "Wikipedia says the back of the CD cover prints this track as \"Leo's Room\" in error for \"Leon's Room\"."
+        },
+        {
+          "timestamp": "0:29",
+          "section": "Low entry",
+          "description": "A strong low-mid and low-end layer enters and the level jumps."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Low surge",
+          "description": "A second heavy low-end surge pushes the level up again."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Outro",
+          "description": "The sound drops away quickly and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 18,
+      "title": "One Alone",
+      "duration": "2:23",
+      "energy": "mid",
+      "tags": [
+        "Bonus Track",
+        "Dark Texture",
+        "Bright Ending"
+      ],
+      "role": "Album role: One of the two bonus tracks on Disc 2 (the other is \"Desolation Path\"), per Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a steady, mid-weight level in a dark, low-weighted texture."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Mid-range entry",
+          "description": "The upper midrange comes forward while the level stays steady."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Bright ending",
+          "description": "The top end opens and the level falls away over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 19,
+      "title": "Deckard and Roy's Duel",
+      "duration": "6:16",
+      "energy": "mid",
+      "tags": [
+        "Previously Unreleased",
+        "Loud And Quiet Contrasts",
+        "Low-End Bursts"
+      ],
+      "role": "Album role: Seventh track of Disc 2, a long piece that alternates loud, full stretches with very quiet, sparse ones.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once, loud, with a full low end that falls away within half a minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Drop-out",
+          "description": "The low end vanishes and the level falls sharply to a quiet, sparse stretch."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Bursts",
+          "description": "Short, heavy low-end bursts alternate with nearly empty gaps."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Quietest stretch",
+          "description": "The low end almost disappears and the level stays at its lowest for about a minute."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Loud stretch",
+          "description": "A loud, full stretch with a strong low end begins and holds almost to the end."
+        },
+        {
+          "timestamp": "6:08",
+          "section": "Outro",
+          "description": "The level drops and the track ends within the last few seconds."
+        }
+      ]
+    },
+    {
+      "num": 20,
+      "title": "Dr. Tyrell's Death",
+      "duration": "3:11",
+      "energy": "mid",
+      "tags": [
+        "Previously Unreleased",
+        "Swelling Texture",
+        "Long Fade"
+      ],
+      "role": "Album role: Eighth track of Disc 2; the Nemo Studios page credits the English Chamber Choir for a track of this name, without tying the credit to a disc.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a low level and rises over the first twenty seconds.",
+          "detail": "The Nemo Studios page credits the English Chamber Choir for \"Dr Tyrell's Death\" but does not tie the credit to a disc, and the measurements do not show a choir."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Full entry",
+          "description": "The level and the low end rise into the fullest stretch of the track, which stays steady for over two minutes."
+        },
+        {
+          "timestamp": "1:04",
+          "section": "Brighter stretch",
+          "description": "The top end brightens a little while the level stays high."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Fade",
+          "description": "The level and the low end fall away and the track fades to silence over its last half minute."
+        }
+      ]
+    },
+    {
+      "num": 21,
+      "title": "Desolation Path",
+      "duration": "5:45",
+      "energy": "mid",
+      "tags": [
+        "Bonus Track",
+        "Alternate Love Theme Version",
+        "Slow Build",
+        "Dark Opening"
+      ],
+      "role": "Album role: Second bonus track of Disc 2; Wikipedia calls it a slightly different version of \"Alternate Love Theme/I Dreamt Music\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level in a very dark texture with no top end.",
+          "detail": "Wikipedia says the piece was used in the film's workprint during the Deckard and Rachael love scene; the Nemo Studios page says the alternative love theme was played on a Yamaha CP-80."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Top end opens",
+          "description": "The top end opens and the level begins to climb."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Low end enters",
+          "description": "The low end and the level step up into a fuller stretch."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Peak",
+          "description": "The track reaches a first loud stretch that lasts about fifty seconds."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Dip",
+          "description": "The level drops for about fifteen seconds before the fuller texture returns."
+        },
+        {
+          "timestamp": "5:28",
+          "section": "Outro",
+          "description": "The level drops sharply and the sound ends within the last fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 22,
+      "title": "Empty Streets",
+      "duration": "6:17",
+      "energy": "low",
+      "tags": [
+        "Previously Unreleased",
+        "Sparse Texture",
+        "Dark Middle Section"
+      ],
+      "role": "Album role: Tenth track of Disc 2, a sparse piece that turns quieter and darker through its middle section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens from near silence and rises over the first twenty seconds."
+        },
+        {
+          "timestamp": "0:17",
+          "section": "Level step",
+          "description": "The level steps up and the midrange fills in."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Dark stretch",
+          "description": "The top end almost disappears and the level slowly falls, leaving a dark, sparse texture for about three minutes."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Bright entry",
+          "description": "The top end opens again and the level rises for the final stretch."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Outro",
+          "description": "The level drops and the track fades out over the last fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 23,
+      "title": "Mechanical Dolls",
+      "duration": "2:52",
+      "energy": "low",
+      "tags": [
+        "Previously Unreleased",
+        "Late Low End",
+        "Quiet Texture"
+      ],
+      "role": "Album role: Eleventh track of Disc 2, a quiet piece that gains its low end only in its last minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a very low level in a thin, dark texture with no low end."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low-mid entry",
+          "description": "A low-mid layer enters and the texture gains a little weight."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Low end enters",
+          "description": "The low end enters for the first time and the level rises to the loudest stretch of the track."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Outro",
+          "description": "The low end eases down and the track ends without a long fade."
+        }
+      ]
+    },
+    {
+      "num": 24,
+      "title": "Fading Away",
+      "duration": "3:32",
+      "energy": "low",
+      "tags": [
+        "Previously Unreleased",
+        "Closing Track Of Disc 2",
+        "Long Fade",
+        "Trailing Silence"
+      ],
+      "role": "Album role: Closing track of Disc 2, ending in about twenty seconds of silence after a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a quiet, mid-weight level with a dim top end."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Low end enters",
+          "description": "A low-end layer enters and the level rises a little."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Swell",
+          "description": "A short, heavy swell brings the loudest moment of the track."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Fade",
+          "description": "The top end falls away first and the level then fades out over about half a minute."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Silence",
+          "description": "The last twenty seconds or so of the file are silent."
+        }
+      ]
+    },
+    {
+      "num": 25,
+      "title": "Launch Approval",
+      "duration": "1:54",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Disc 3 Opener",
+        "Late Swell"
+      ],
+      "role": "Album role: Opens Disc 3, which Wikipedia and the Nemo Studios page describe as new music inspired by the film.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once and reaches a full low end and a steady level within five seconds.",
+          "detail": "Wikipedia describes Disc 3 as new material inspired by Blade Runner and the Nemo Studios page as entirely new music by Vangelis for the anniversary; neither gives per-track notes for it."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Mid-range entry",
+          "description": "The upper midrange comes forward while the level holds steady."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Final swell",
+          "description": "The level and the top end rise to the loudest stretch of the track, and it ends there."
+        }
+      ]
+    },
+    {
+      "num": 26,
+      "title": "Up and Running",
+      "duration": "3:09",
+      "energy": "high",
+      "tags": [
+        "New Music",
+        "Steady Level",
+        "Loud And Even",
+        "Slow Fade"
+      ],
+      "role": "Album role: Second track of Disc 3, a loud, steady piece that barely changes in level for about two and a half minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at full level with a strong low end."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Bright entry",
+          "description": "The top end and the presence range open up and the sound becomes brighter."
+        },
+        {
+          "timestamp": "1:45",
+          "section": "Brighter stretch",
+          "description": "The top end rises a little and stays brighter until the fade begins."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Fade",
+          "description": "The level and the low end fall away steadily over the last forty seconds."
+        }
+      ]
+    },
+    {
+      "num": 27,
+      "title": "Mail from India",
+      "duration": "3:28",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Slow Build",
+        "Bright Closing Stretch"
+      ],
+      "role": "Album role: Third track of Disc 3, a piece that builds slowly and brightens late.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level and builds into a fuller sound over the first half minute."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Presence entry",
+          "description": "The upper midrange comes forward while the level holds steady."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Bright entry",
+          "description": "The top end opens and stays open for the rest of the track while the level slowly rises."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Fade",
+          "description": "The level and the top end fall away over the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 28,
+      "title": "BR Downtown",
+      "duration": "2:27",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Short Piece",
+        "Dark And Bright Stretches"
+      ],
+      "role": "Album role: Fourth track of Disc 3, a short piece that alternates between dark and bright stretches.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once with a dark top end, and the level rises over the first fifteen seconds."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Bright entry",
+          "description": "The top end opens wide and the level rises; the track stays at its brightest for about forty seconds."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Dark stretch",
+          "description": "The top end falls away and the texture turns dark again."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Bright close",
+          "description": "The top end opens again for the last fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 29,
+      "title": "Dimitri's Bar",
+      "duration": "3:52",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Steady Level",
+        "Long Fade"
+      ],
+      "role": "Album role: Fifth track of Disc 3, a loud, even piece with a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level with no low end for the first ten seconds."
+        },
+        {
+          "timestamp": "0:11",
+          "section": "Low end enters",
+          "description": "A strong low end enters and the level rises to a loud, even level."
+        },
+        {
+          "timestamp": "1:17",
+          "section": "Bright stretch",
+          "description": "The top end opens and brightens a little, and stays that way for almost two minutes."
+        },
+        {
+          "timestamp": "3:03",
+          "section": "Fade",
+          "description": "The level and the low end fall away steadily and the sound fades over the last fifty seconds."
+        }
+      ]
+    },
+    {
+      "num": 30,
+      "title": "Sweet Solitude",
+      "duration": "6:57",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Slow Build",
+        "Dark Opening"
+      ],
+      "role": "Album role: Sixth track of Disc 3, a long slow build to its loudest stretch in the fifth minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a very low level in a dark texture with almost no low end."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low end enters",
+          "description": "The low end arrives and the level jumps."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Bright entry",
+          "description": "The top end opens wide and stays open for the rest of the track."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Gradual rise",
+          "description": "The level slowly rises over the next minute and a half."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Peak",
+          "description": "The track reaches its loudest stretch, which lasts about three-quarters of a minute."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Fade",
+          "description": "The level and the low end fall away and the track fades out over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 31,
+      "title": "No Expectation Boulevard",
+      "duration": "6:44",
+      "energy": "high",
+      "tags": [
+        "New Music",
+        "Steady Level",
+        "Long Plateau",
+        "Slow Fade"
+      ],
+      "role": "Album role: Seventh track of Disc 3, a loud, even piece that holds one level through its middle and then fades.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a moderate level and quickly gains weight."
+        },
+        {
+          "timestamp": "0:33",
+          "section": "Full entry",
+          "description": "The top end opens slightly and the level reaches a loud, even plateau."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Plateau",
+          "description": "From here the level and the brightness stay almost fixed for about two and a half minutes."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Final lift",
+          "description": "The level rises a little further and the low end reaches its fullest point."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Fade",
+          "description": "The low end and the level fall away step by step, and the sound fades over the last minute."
+        }
+      ]
+    },
+    {
+      "num": 32,
+      "title": "Vadavarot",
+      "duration": "4:14",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Steady Level",
+        "Bright Plateau"
+      ],
+      "role": "Album role: Eighth track of Disc 3, a steady piece that changes little after its first half minute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a modest level without a low end."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Low end enters",
+          "description": "A strong low end enters and the level jumps."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Plateau",
+          "description": "The level and the brightness stay almost fixed for over three minutes, with only small changes."
+        },
+        {
+          "timestamp": "3:52",
+          "section": "Outro",
+          "description": "The level drops in two steps and the track ends quietly over the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 33,
+      "title": "Perfume Exotico",
+      "duration": "5:19",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Slow Build",
+        "Bright Second Half"
+      ],
+      "role": "Album role: Ninth track of Disc 3, a slow build that brightens in its second half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a low level in a dark texture with little low end."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Low end enters",
+          "description": "The low end enters and the level rises into the main body of the track."
+        },
+        {
+          "timestamp": "1:52",
+          "section": "Level step",
+          "description": "The level and the midrange step up a little."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Bright entry",
+          "description": "The top end opens and stays brighter for the rest of the track."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fade",
+          "description": "The level falls away over the last twenty seconds."
+        }
+      ]
+    },
+    {
+      "num": 34,
+      "title": "Spotkanie z matką",
+      "duration": "5:09",
+      "energy": "mid",
+      "tags": [
+        "New Music",
+        "Low-End Build",
+        "Long Fade"
+      ],
+      "role": "Album role: Tenth track of Disc 3, a piece whose low end builds in steps and which ends in a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a quiet level with very little low end."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low end builds",
+          "description": "The low end builds in steps over the next minute."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Level step",
+          "description": "The level rises a step into the loudest, steadiest stretch of the track."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Dip",
+          "description": "The low end and the level dip for about fifteen seconds, then return."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Fade",
+          "description": "The level and the low end fall away steadily over the last forty-five seconds."
+        }
+      ]
+    },
+    {
+      "num": 35,
+      "title": "Piano in an Empty Room",
+      "duration": "3:37",
+      "energy": "low",
+      "tags": [
+        "New Music",
+        "Quiet Texture",
+        "Sparse Ending"
+      ],
+      "role": "Album role: Eleventh track of Disc 3, a quiet, sparse piece that follows the louder pieces before it.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a quiet level in a dark, thin texture."
+        },
+        {
+          "timestamp": "0:24",
+          "section": "Low-end entry",
+          "description": "A touch of low end enters while the level stays quiet and steady."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Quiet gap",
+          "description": "The level drops and the low end disappears for about forty seconds, leaving a very thin texture."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Short surge",
+          "description": "A brief, louder moment with some low end stands out against the quiet."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Outro",
+          "description": "The track settles to a very low, sparse level and ends without a long fade."
+        }
+      ]
+    },
+    {
+      "num": 36,
+      "title": "Keep Asking",
+      "duration": "1:29",
+      "energy": "low",
+      "tags": [
+        "New Music",
+        "Closing Track",
+        "Short Fade"
+      ],
+      "role": "Album role: Closing track of Disc 3 and of the set, and the shortest track in the set.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens at a very low level in a dark texture."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Presence entry",
+          "description": "The midrange and the presence range come forward and the level rises a little."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Fade",
+          "description": "The level and the low end fall away and the track fades to silence over the last half minute."
+        }
+      ]
+    }
+  ]
+}

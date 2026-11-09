@@ -1,0 +1,308 @@
+{
+  "id": "jean-michel-jarre-rendez-vous",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Rendez-Vous",
+  "year": 1986,
+  "label": "Disques Dreyfus · Polydor",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Synth-Pop",
+  "genreTags": [
+    "Electronic",
+    "Synth-Pop",
+    "Ambient"
+  ],
+  "runtime": "35:00",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/3/3c/Rendez-Vous_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Rendez-Vous_(Jean-Michel_Jarre_album)",
+  "overview": "Jarre's eighth studio album, recorded and mixed over about two months at his Croissy studio and released on 1 April 1986 by Disques Dreyfus under licence to Polydor, with Jarre as producer and cover art by Michel Granger. Heavy use of the Elka Synthex marks the sound; the liner notes also list the Fairlight CMI, Linn 9000, Roland TR-808, Prophet-5, Oberheim OB-X and EMS Synthi AKS for Jarre, the ARP 2600, Eminent BV and Matrisequencer for Michel Geiss, an E-mu Drumulator and percussion for Joe Hammer, a Memorymoog for Dominique Perrier and the Choir of Radio France, directed by Sylvain Durand, on \"Second Rendez-Vous\". The closing \"Last Rendez-Vous (Ron's Piece)\" was written for the astronaut Ron McNair to play on the Space Shuttle Challenger, which broke apart 73 seconds after launch on 28 January 1986; Pierre Gossez played the saxophone part and the album is dedicated to McNair and the six other astronauts. Jarre's site calls it his \"space album\", moving between hook-driven techno-pop, contrapuntal passages and melancholy. Six numbered pieces fill two sides: three on side one and three on side two, with the ten-minute \"Second Rendez-Vous\" as the centrepiece.\n\nThe album reached UK No. 9 and US Billboard 200 No. 52, was certified 2x Platinum in France and Gold in the UK, won Instrumental Album of the Year at the Victoires de la Musique and was nominated for Best New Age Album at the 1987 Grammy Awards. \"Fourth Rendez-Vous\" was the single, in May 1986. Jarre staged the Rendez-vous Houston concert on 5 April 1986, which drew about 1.5 million people, and the Rendez-Vous Lyon concert on 5 October 1986. Timestamps are measured on a CD rip and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "First Rendez-Vous",
+      "duration": "2:54",
+      "energy": "low",
+      "tags": [
+        "Album Opener",
+        "Elka Synthex",
+        "No Steady Beat",
+        "Slow Build"
+      ],
+      "role": "Album role: The short opening piece, a slow, mostly beatless build that leads into the ten-minute \"Second Rendez-Vous\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening whose level swells over the first twenty seconds.",
+          "detail": "Wikipedia notes heavy use of the Elka Synthex on the album; the liner notes credit Jarre with an extensive list of synthesizers, samplers and drum machines."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Low end enters",
+          "description": "The bass comes in and gives the texture a firmer base."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Bass returns",
+          "description": "The bass returns at full weight after a brief thinning: the fullest and heaviest stretch of the piece, which runs to the end, with the highs opening for the last half-minute."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Ending",
+          "description": "The level drops sharply and the piece stops."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Second Rendez-Vous",
+      "duration": "10:54",
+      "energy": "high",
+      "tags": [
+        "Choir of Radio France",
+        "Memorymoog",
+        "Clockwork Orange Influence",
+        "Laser Harp Showpiece",
+        "Longest Track"
+      ],
+      "role": "Album role: The centrepiece and longest track, a beat-driven piece for synthesizers and choir that Jarre often plays with the laser harp; Jarre says Pope John Paul II called it \"sacred music\" at the Lyon concert of 5 October 1986.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse runs from the first second, with the low end absent.",
+          "detail": "Wikipedia credits the Choir of Radio France (directed by Sylvain Durand) with vocals, Dominique Perrier with Memorymoog and Joe Hammer with percussion on this track, and says Jarre was inspired by Wendy Carlos's music for A Clockwork Orange."
+        },
+        {
+          "timestamp": "0:44",
+          "section": "Bass entry",
+          "description": "The full low end enters and the level steps up: the first big change in the track."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Bass cut",
+          "description": "The low end drops out for about a quarter of a minute before the full groove returns.",
+          "detail": "The same cut recurs at 2:11, 4:15 and 5:05, each time followed by a full return."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Dark passage",
+          "description": "The highs fall away and a darker, bass-led passage runs for about half a minute."
+        },
+        {
+          "timestamp": "3:09",
+          "section": "Full section",
+          "description": "A long, full-bodied stretch with the low end steady and the pulse feeling slower."
+        },
+        {
+          "timestamp": "5:29",
+          "section": "Dark passage",
+          "description": "The top end disappears again and the level falls: a low, muffled texture."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Slower pulse",
+          "description": "A more pronounced, slower pulse enters with a bright top end and carries the music for about two minutes."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Breakdown",
+          "description": "The level and the low end drop and the beat thins out for about a minute."
+        },
+        {
+          "timestamp": "8:59",
+          "section": "Final section",
+          "description": "The full low end returns, and the track plays at full level for the next minute and a half."
+        },
+        {
+          "timestamp": "10:45",
+          "section": "Outro",
+          "description": "The level falls and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Third Rendez-Vous",
+      "duration": "3:30",
+      "energy": "low",
+      "tags": [
+        "Beatless Texture",
+        "Slow Build",
+        "Side One Closer"
+      ],
+      "role": "Album role: The quieter piece that closes side one, with no steady beat, between the long \"Second Rendez-Vous\" and the side two opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A low-register opening with a dark, muted top end."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Bass rises",
+          "description": "The bass grows and the harmony starts to move."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Highs open",
+          "description": "The top end opens and the texture brightens: the biggest change in the piece."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Lift",
+          "description": "The level lifts a little and holds to the end."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Bright stretch",
+          "description": "The highs come forward again for about half a minute."
+        },
+        {
+          "timestamp": "3:25",
+          "section": "Ending",
+          "description": "The highs fade and the piece stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Fourth Rendez-Vous",
+      "duration": "3:58",
+      "energy": "high",
+      "tags": [
+        "Single",
+        "Constant Beat",
+        "Techno-Pop",
+        "Elka Synthex"
+      ],
+      "role": "Album role: The side two opener and the album's single, the most steadily rhythmic track, with a constant beat from the first seconds.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Beat entry",
+          "description": "A steady beat starts almost at once and runs without a break to the end.",
+          "detail": "Wikipedia gives the track as released as a single in May 1986 and says it grew from a discarded demo at the urging of Michel Geiss; an ITV remix titled \"Rendez-Vous 98\" credited to Apollo 440 was used for its 1998 World Cup coverage."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Full band",
+          "description": "The full arrangement arrives and the level steps up."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Brighter section",
+          "description": "The top end opens and the arrangement brightens."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Final lift",
+          "description": "A last brightening carries the track to its loudest stretch."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Ending",
+          "description": "The beat stops, a few seconds of silence follow, and a faint tail closes the track."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Fifth Rendez-Vous",
+      "duration": "7:41",
+      "energy": "mid",
+      "tags": [
+        "Musique Pour Supermarché Elements",
+        "Baby Korg",
+        "Quiet Build",
+        "Gérard Lenorman Themes"
+      ],
+      "role": "Album role: The second long piece, on side two, which alternates busy sequenced passages with a long quiet build before the closing tribute.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A bass-led opening with a pulse from the first seconds.",
+          "detail": "Wikipedia says the track contains elements of Jarre's Musique pour Supermarché and that several themes on the album were recycled from 1970s singles he wrote for Gérard Lenorman; the liner notes credit David Jarre with a Baby Korg keyboard on this track."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "High layer",
+          "description": "A bright layer enters above the bass and the pulse."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Lift",
+          "description": "The level rises and the texture becomes denser."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Bass cut",
+          "description": "The low end drops out for about twenty seconds, then returns with a jump in level."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Sparse passage",
+          "description": "The level falls and the texture thins while the pulse stands out."
+        },
+        {
+          "timestamp": "4:08",
+          "section": "Quiet build",
+          "description": "The highs vanish and a quiet passage climbs steadily for about fifty seconds."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Full return",
+          "description": "The bass and the full arrangement return at high level: the loudest and fullest section."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Ending",
+          "description": "The level falls, the low end goes, and a thin texture closes the track."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Last Rendez-Vous (Ron's Piece)",
+      "duration": "6:03",
+      "energy": "low",
+      "tags": [
+        "Challenger Tribute",
+        "Pierre Gossez Saxophone",
+        "Ambient Jazz",
+        "Album Closer"
+      ],
+      "role": "Album role: The closing piece, written for the astronaut Ron McNair to play on the Space Shuttle Challenger and dedicated to him and the six other astronauts killed on 28 January 1986.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that fades almost to silence before the main material begins.",
+          "detail": "The piece was meant to include a saxophone part recorded by McNair in orbit, which would have been the first music recorded in space; Wikipedia and Jarre's site name the French jazz reedist Pierre Gossez as the saxophonist on the album."
+        },
+        {
+          "timestamp": "0:18",
+          "section": "Main section",
+          "description": "The level jumps and a bass-led texture begins, slow-moving and without a steady beat."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Fuller stretch",
+          "description": "The level lifts a little and the texture fills out."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Low pulse",
+          "description": "A low pulse enters and the bass grows: the biggest change in the piece.",
+          "detail": "Jarre's site describes the album as closing with ambient jazz."
+        },
+        {
+          "timestamp": "5:50",
+          "section": "Ending",
+          "description": "The level falls away and the piece ends in near silence."
+        }
+      ]
+    }
+  ]
+}

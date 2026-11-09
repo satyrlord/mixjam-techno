@@ -1,0 +1,525 @@
+{
+  "id": "pink-floyd-the-division-bell",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "The Division Bell",
+  "year": 1994,
+  "label": "EMI Records · Columbia Records",
+  "producer": "David Gilmour · Bob Ezrin",
+  "genre": "Progressive Rock / New Age",
+  "genreTags": [
+    "Progressive Rock",
+    "New Age"
+  ],
+  "runtime": "1:06:25",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/6/6e/Pink_Floyd_-_Division_Bell.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Division_Bell",
+  "overview": "Recorded from January to December 1993 at the Astoria (David Gilmour's houseboat studio), Britannia Row, Abbey Road, Olympic Studios and Metropolis in London, and released by EMI on 28 March 1994 in the UK and by Columbia on 5 April 1994 in the US. Gilmour and Bob Ezrin produced, Andrew Jackson engineered and Chris Thomas made the final mix; Doug Sax and James Guthrie mastered it at the Mastering Lab in Los Angeles. It is the band's second studio album without Roger Waters: Gilmour sings lead on most tracks and Richard Wright on \"Wearing the Inside Out\", with Jon Carin, Guy Pratt, Gary Wallis, Tim Renwick, Dick Parry on tenor saxophone and Ezrin as additional musicians, Michael Kamen arranging the orchestra, and Stephen Hawking's synthesised voice on \"Keep Talking\". Carin and the guitar technician Phil Taylor found older Pink Floyd keyboards, including a Farfisa organ, whose samples were used on the album; Gilmour played a DigiTech Whammy pedal on \"Marooned\" and a Gibson J-200 with an EBow on \"Take It Back\".\n\nThe album reached No. 1 in the UK and the US, where it entered at the top of the Billboard 200 in the week of 23 April 1994 with more than 460,000 units, and in more than ten countries in all; it is triple platinum in both countries, and reviews at the time were mixed. \"Marooned\" won the Grammy for Best Rock Instrumental Performance in 1995. The eleven tracks run as one sequence: the instrumental \"Cluster One\" opens, a second instrumental, \"Marooned\", sits fourth, and \"High Hopes\" closes, followed by a short recorded telephone call.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Cluster One",
+      "duration": "5:56",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "Album Opener",
+        "Gilmour / Wright"
+      ],
+      "role": "Album role: Instrumental opener that fades up from near silence and sets the ambient tone before the first song.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades up slowly from near silence, with the first clearly audible sound after about ten seconds.",
+          "detail": "Wikipedia credits the music to Gilmour and Wright and cites Melody Maker's praise of the track as an ambient-style highlight of the album."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Full level",
+          "description": "The fade-up ends and the track settles at a steady level, with a heavy low end."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Warmer passage",
+          "description": "The midrange thickens and the top end recedes, giving a darker, warmer texture."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Pullback",
+          "description": "The level and the midrange fall back for a quieter, thinner passage."
+        },
+        {
+          "timestamp": "3:43",
+          "section": "Fuller section",
+          "description": "The low end and the midrange return together: the largest change in the second half."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Outro",
+          "description": "The level falls away and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "What Do You Want from Me",
+      "duration": "4:22",
+      "energy": "mid",
+      "tags": [
+        "Chicago Blues Influence",
+        "Gilmour / Wright",
+        "First Song"
+      ],
+      "role": "Album role: The first song of the album, arriving at full band level straight after the instrumental opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at a moderate level, already with a steady pulse.",
+          "detail": "Wikipedia credits the music to Gilmour and Wright, names Chicago blues as an influence, and notes that Rolling Stone singled the song out for Gilmour's engagement."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Fuller entry",
+          "description": "The midrange and the presence range step up: the arrangement fills out."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Brighter section",
+          "description": "The top end opens and stays open for most of the rest of the song."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Open passage",
+          "description": "The top end opens further for about ten seconds, then settles."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Change of colour",
+          "description": "The sound takes on a different, more unsettled colour that lasts for the next minute."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Ending",
+          "description": "The level drops sharply and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Poles Apart",
+      "duration": "7:03",
+      "energy": "mid",
+      "tags": [
+        "Gilmour / Samson / Laird-Clowes",
+        "Folk Overtones",
+        "Quiet Middle Section"
+      ],
+      "role": "Album role: The longest song before the closer, with a quiet middle section between two fuller passages.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that builds in level over the first half minute.",
+          "detail": "Wikipedia credits Gilmour, Polly Samson and Nick Laird-Clowes, describes folk overtones, and notes that fans and critics have read the song as a reference to Roger Waters."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Main body",
+          "description": "The low end enters and the song settles at a steady level."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Lift",
+          "description": "The level and the top end rise together: the biggest change in the first half."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Quiet middle",
+          "description": "The level drops, the top end falls away and the low end thins for about eighty seconds."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Full return",
+          "description": "The full arrangement returns at the loudest and brightest level of the song, and holds it for about two and a half minutes."
+        },
+        {
+          "timestamp": "6:40",
+          "section": "Outro",
+          "description": "The level falls and the song fades out."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Marooned",
+      "duration": "5:30",
+      "energy": "low",
+      "tags": [
+        "Instrumental",
+        "DigiTech Whammy",
+        "Grammy Winner",
+        "Improvised"
+      ],
+      "role": "Album role: The album's second instrumental, placed fourth, and the winner of the Grammy for Best Rock Instrumental Performance in 1995.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades up from near silence over about half a minute.",
+          "detail": "Wikipedia lists seagull and crashing-wave sounds among the effects that evoke an island setting, and says Wright's grand piano parts were played on a Kurzweil and recorded at Olympic Studios."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Low end enters",
+          "description": "A strong low end enters and the level rises.",
+          "detail": "Wikipedia credits Gilmour on guitars with a DigiTech Whammy pedal pitching notes up by whole octaves, Wright on piano, organ and Kurzweil synthesizer, Mason on drums and Guy Pratt on bass, and quotes Gilmour that nearly all of the piece is improvised."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Steadier pulse",
+          "description": "A more regular rhythmic pulse sets in and holds until about 4:45."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Open stretch",
+          "description": "The top end opens for about half a minute."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Settle",
+          "description": "The top end falls back and the level holds."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Outro",
+          "description": "The level drops and the track fades out."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "A Great Day for Freedom",
+      "duration": "4:17",
+      "energy": "mid",
+      "tags": [
+        "Berlin Wall Theme",
+        "Yugoslav Wars",
+        "Shortest Track"
+      ],
+      "role": "Album role: The album's shortest track, a mid-album song with one pullback and a long final section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The song opens at a moderate level with a quiet, spacious texture.",
+          "detail": "Wikipedia describes the song as contrasting the fall of the Berlin Wall with the wars and ethnic cleansing in Yugoslavia."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Lift",
+          "description": "The level rises and the top end opens."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Pullback",
+          "description": "The level and the top end fall back for about half a minute."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Fuller section",
+          "description": "The fullest and brightest section starts and runs to the end, with the largest change of the song at its start."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Ending",
+          "description": "The level drops and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Wearing the Inside Out",
+      "duration": "6:49",
+      "energy": "mid",
+      "tags": [
+        "Richard Wright Lead Vocal",
+        "Dick Parry Saxophone",
+        "Anthony Moore Lyrics"
+      ],
+      "role": "Album role: The one track with a lead vocal from Richard Wright, placed sixth, with a long slow build to its loudest passage.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, subdued opening with the top end held back.",
+          "detail": "Wikipedia credits the lyrics to Anthony Moore and the music to Wright, calls it Wright's first prominent lead vocal on a Pink Floyd album since The Dark Side of the Moon, and credits Dick Parry on saxophone."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Brighter entry",
+          "description": "The top end and the low end open together and the level rises: the largest change in the first half."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Lift",
+          "description": "The level rises for about half a minute, with the midrange and presence range stronger."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Settle",
+          "description": "The level falls back and the song holds a lower plateau for about two minutes."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Final build",
+          "description": "The low end grows and the level climbs to its highest stretch, from about 5:40."
+        },
+        {
+          "timestamp": "6:18",
+          "section": "Outro",
+          "description": "The top end drops away first, then the level, and the track dies out."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Take It Back",
+      "duration": "6:12",
+      "energy": "mid",
+      "tags": [
+        "EBow",
+        "Gibson J-200",
+        "Farfisa Samples",
+        "Single, 23 May 1994"
+      ],
+      "role": "Album role: The seventh track and a single, released on 23 May 1994, with a bright main section that returns after a thinner middle passage.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening at a low level for about twenty seconds.",
+          "detail": "Wikipedia credits the lyrics to Gilmour, Samson and Laird-Clowes and the music to Gilmour and Ezrin, and says Gilmour played a Gibson J-200 through a Zoom effects unit with an EBow; Jon Carin sampled an EBowed acoustic guitar part from an unfinished duet and used it as a loop here and on \"Keep Talking\"."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Band entry",
+          "description": "The low end enters and the level steps up to the song's working level."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Brighter section",
+          "description": "The top end opens widely and stays open for the next two minutes."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Thinner passage",
+          "description": "The top end falls away and the arrangement thins for about a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Bright return",
+          "description": "The bright section returns at its fullest and runs for about a minute and a quarter."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Closing section",
+          "description": "The top end drops back and a quieter closing section runs to the fade-out at about 5:55."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Coming Back to Life",
+      "duration": "6:19",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Late Rhythm Entry",
+        "Gilmour Composition"
+      ],
+      "role": "Album role: A slow build with a steady rhythm that enters in the second half, placed before \"Keep Talking\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sparse, quiet opening with no steady rhythm.",
+          "detail": "Wikipedia credits the track to Gilmour."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Fuller entry",
+          "description": "The level and the top end rise at once: the arrangement opens out, still without a steady rhythm."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Rhythm entry",
+          "description": "A steady rhythm enters with a stronger low end and the level climbs toward the loudest part of the song."
+        },
+        {
+          "timestamp": "3:47",
+          "section": "Pullback",
+          "description": "The level and the top end fall back for about half a minute, with the rhythm continuing."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Final stretch",
+          "description": "The rhythm and the full arrangement hold a constant level to the end."
+        },
+        {
+          "timestamp": "6:09",
+          "section": "Ending",
+          "description": "The top end drops away and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Keep Talking",
+      "duration": "6:11",
+      "energy": "high",
+      "tags": [
+        "Stephen Hawking Sample",
+        "Talk Box",
+        "Hammond Organ",
+        "US Album Rock No. 1"
+      ],
+      "role": "Album role: The first song from the album sent to US radio, in March 1994, and half of the double A-side single with \"High Hopes\" released on 10 October 1994.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that grows in level over the first fifty seconds.",
+          "detail": "Wikipedia credits Gilmour, Wright and Samson, describes a talk-box guitar effect played by Gilmour with an EBow, a Hammond organ part by Wright, and a sample of Stephen Hawking's synthesised voice taken from a BT television advertisement."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Rhythm entry",
+          "description": "The low end enters and the rhythm becomes firm: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Full band",
+          "description": "The arrangement fills out and the level keeps rising to about 1:30."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Steady plateau",
+          "description": "The track holds an almost constant, high level for the next three and a half minutes.",
+          "detail": "The song reached No. 1 on the US Album Rock Tracks chart for six weeks and No. 26 on the UK singles chart."
+        },
+        {
+          "timestamp": "5:22",
+          "section": "Outro",
+          "description": "The level eases and the track fades out from about 5:40."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Lost for Words",
+      "duration": "5:15",
+      "energy": "mid",
+      "tags": [
+        "Penultimate Track",
+        "Mid-Song Break",
+        "Gilmour / Samson"
+      ],
+      "role": "Album role: The penultimate track, a mid-tempo song with a short break before its loudest section.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, low-register opening with almost no treble.",
+          "detail": "Wikipedia notes that fans and critics have read the song as a reference to Roger Waters."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Brighter turn",
+          "description": "The upper midrange opens and the low end recedes."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Fuller section",
+          "description": "The top end and the level rise to a steady, fuller sound."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Break",
+          "description": "The rhythm stops briefly and the level and top end fall for about half a minute."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Final section",
+          "description": "The arrangement returns with a bright top end and holds the loudest level of the song to about 4:40."
+        },
+        {
+          "timestamp": "4:56",
+          "section": "Ending",
+          "description": "The level drops and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "High Hopes",
+      "duration": "8:31",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Church Bell",
+        "Lap Steel Guitar",
+        "Kurzweil Synthesisers",
+        "Hidden Phone Call"
+      ],
+      "role": "Album role: The album's longest track and closer, ending with a recorded telephone call after the music has faded out.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, low-register opening at the lowest level of the song.",
+          "detail": "Wikipedia says a church bell chimes a C throughout the song, except in a middle section; the bell came from a sound-effects record that was also used on \"Fat Old Sun\" on Atom Heart Mother, and Nick Mason is credited with the church bell."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Band entry",
+          "description": "The low end enters and the level rises sharply: the largest change of the song.",
+          "detail": "Wikipedia credits Gilmour on vocals, bass, classical guitar and lap steel guitars, Wright on Kurzweil synthesisers, Mason on drums and tambourine, Jon Carin on piano, and Kamen and Edward Shearmur on orchestrations."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Fuller section",
+          "description": "A steady pulse and a fuller sound arrive, with a brief dip around 1:30."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Lift",
+          "description": "The level and the low end rise again."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Short break",
+          "description": "The music drops almost to silence for about ten seconds."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Final stretch",
+          "description": "The track reaches its maximum level and holds it, with a bright top end, for about two and a half minutes.",
+          "detail": "Wikipedia says the album version's closing solo is played on lap steel guitar."
+        },
+        {
+          "timestamp": "7:10",
+          "section": "Fade-out",
+          "description": "The level falls and the music fades to near silence by about 7:30."
+        },
+        {
+          "timestamp": "8:10",
+          "section": "Closing sound",
+          "description": "After about forty seconds of near silence, a faint sound returns for the last twenty seconds.",
+          "detail": "Wikipedia identifies the hidden track after the chimes fade as a brief telephone call between the band's manager Steve O'Rourke and Gilmour's son Charlie."
+        }
+      ]
+    }
+  ]
+}

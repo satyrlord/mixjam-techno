@@ -1,0 +1,757 @@
+{
+  "id": "jean-michel-jarre-electronica-1-the-time-machine",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Electronica 1: The Time Machine",
+  "year": 2015,
+  "label": "Columbia Records",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Trip Hop / Dance",
+  "genreTags": [
+    "Electronic",
+    "Trip Hop",
+    "Dance",
+    "Collaborations"
+  ],
+  "runtime": "1:08:28",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/3/34/Jmj_eproject.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Electronica_1%3A_The_Time_Machine",
+  "overview": "Released by Columbia Records on 16 October 2015 and produced by Jarre, the album was recorded between 2011 and 2015 with 15 collaborators, one for each track except the two-part \"Automatic\" (Wikipedia, \"Electronica 1: The Time Machine\"). The collaborators are Boys Noize, M83, Air, Vince Clarke, Little Boots, Fuck Buttons, Moby, Gesaffelstein, Pete Townshend, Tangerine Dream, Laurie Anderson, Armin van Buuren, Robert \"3D\" Del Naja of Massive Attack, John Carpenter and Lang Lang. Every track is credited to Jarre and the guest; only \"The Train & The River\" has Jarre as sole writer.\n\nSix singles came from it: \"Glory\" (15 May 2015), \"Conquistador\", \"Zero Gravity\" and \"Watching You\" (all 10 July), \"Stardust\" (31 July) and \"If..!\" (28 August). The album reached No. 8 in the UK and No. 1 on the UK Dance Albums chart, No. 3 in France and Poland, No. 4 in Germany and No. 2 in Switzerland and in Wallonia; Metacritic gives it 63 out of 100. Wikipedia lists the genres as electronic, trip hop and dance.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "The Time Machine",
+      "duration": "3:52",
+      "energy": "high",
+      "tags": [
+        "Boys Noize",
+        "Album Opener",
+        "Steady Pulse",
+        "Abrupt Ending"
+      ],
+      "role": "Album role: Opens the album with a driving beat-led piece and sets the pattern of one guest per track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening; the first sound arrives within a couple of seconds.",
+          "detail": "Wikipedia's track listing credits Boys Noize (Alexander Ridha) as the collaborator and co-writer."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Beat entry",
+          "description": "A steady pulse and a heavy low end enter and the level rises in steps."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Full groove",
+          "description": "The pulse firms up and the track settles at a high level."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Breakdown",
+          "description": "The low end and the beat drop out for about twenty seconds, leaving a much quieter texture."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Beat returns",
+          "description": "The low end comes back and the track builds again."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Peak",
+          "description": "The pulse is at its firmest and the track reaches its loudest stretch."
+        },
+        {
+          "timestamp": "3:44",
+          "section": "Ending",
+          "description": "The sound cuts off abruptly and the last seconds fade to silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Glory",
+      "duration": "3:56",
+      "energy": "high",
+      "tags": [
+        "M83",
+        "Single",
+        "Breakdown And Return",
+        "Bright Top End"
+      ],
+      "role": "Album role: The first single, released in May 2015, and the second track after the opener.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that builds into a pulse over the first twenty seconds.",
+          "detail": "Wikipedia's track listing credits M83 (Anthony Gonzalez) as the collaborator and co-writer; \"Glory\" was the first single, released 15 May 2015."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Lift",
+          "description": "The upper register opens up and the pulse gets firmer."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Break",
+          "description": "The low end and most of the top end drop out for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Return",
+          "description": "Everything returns at once with a bright, full sound."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Peak",
+          "description": "The loudest, steadiest stretch of the track runs for about a minute and a half."
+        },
+        {
+          "timestamp": "3:39",
+          "section": "Outro",
+          "description": "The low end drops out and the track thins into its closing seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Close Your Eyes",
+      "duration": "6:25",
+      "energy": "mid",
+      "tags": [
+        "Air",
+        "Long Intro",
+        "Late Beat Entry",
+        "Longest Early Track"
+      ],
+      "role": "Album role: The longest track of the first half, built on a patient beatless opening before the groove arrives.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening that stays low for most of the first minute.",
+          "detail": "Wikipedia's track listing credits Air (Nicolas Godin and Jean-Benoit Dunckel) as the collaborator and co-writers."
+        },
+        {
+          "timestamp": "0:59",
+          "section": "Beat entry",
+          "description": "A steady beat and a full low end enter together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Second layer",
+          "description": "The arrangement thickens a little under the same pulse."
+        },
+        {
+          "timestamp": "2:56",
+          "section": "Section change",
+          "description": "A change in the harmony and texture without a change in the pulse."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Lull",
+          "description": "The level dips for a short stretch before the beat builds again."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Main groove",
+          "description": "The groove returns at full level and holds to the end of the beat."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Beat stops",
+          "description": "The pulse falls away and the track closes with a short, beatless tail."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Automatic (Part 1)",
+      "duration": "3:09",
+      "energy": "mid",
+      "tags": [
+        "Vince Clarke",
+        "Two-Part Piece",
+        "Steady Pulse",
+        "Bright Layers"
+      ],
+      "role": "Album role: The first half of a two-part piece with Vince Clarke, shorter than most of the first half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at its working level with no beat.",
+          "detail": "Wikipedia's track listing credits Vince Clarke as the collaborator and co-writer for both parts of \"Automatic\"."
+        },
+        {
+          "timestamp": "0:27",
+          "section": "Beat and top end",
+          "description": "A steady pulse takes hold and a brighter top layer enters."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Top end drops",
+          "description": "The brighter layer falls away for about ten seconds."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Bright return",
+          "description": "The top end returns brighter than before."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Lift",
+          "description": "A new high layer lifts the sound for the rest of the main section."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Ending",
+          "description": "The level eases and the pulse loosens as the track closes."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Automatic (Part 2)",
+      "duration": "2:59",
+      "energy": "high",
+      "tags": [
+        "Vince Clarke",
+        "Two-Part Piece",
+        "Heavy Low End",
+        "Short Break"
+      ],
+      "role": "Album role: The second half of the Vince Clarke piece, with a stronger low end and a firmer beat than Part 1.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Beat entry",
+          "description": "The beat and a heavy low end are in place within a few seconds."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Dip",
+          "description": "The low end falls back again before the groove rebuilds."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Break",
+          "description": "The level drops sharply for a few seconds while the beat keeps going."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Final stretch",
+          "description": "The track returns to full level and holds it to the end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "If..!",
+      "duration": "2:58",
+      "energy": "mid",
+      "tags": [
+        "Little Boots",
+        "Single",
+        "Light Pulse",
+        "Short Track"
+      ],
+      "role": "Album role: The sixth single, a short track with a light pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A deep low-end swell opens the track, then a light pulse settles in and the low end eases back.",
+          "detail": "Wikipedia's track listing credits Little Boots (Victoria Hesketh) as the collaborator and co-writer; \"If..!\" was the sixth single, released 28 August 2015."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Break",
+          "description": "The low end drops out for about ten seconds."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Return",
+          "description": "The low end comes back and the arrangement fills out."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Closing section",
+          "description": "The track builds to its loudest stretch and ends."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Immortals",
+      "duration": "4:30",
+      "energy": "peak",
+      "tags": [
+        "Fuck Buttons",
+        "Loud",
+        "Long Break",
+        "Heavy Low End"
+      ],
+      "role": "Album role: The loudest and heaviest piece of the first half, with a long break in the middle.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that grows into a full, heavy sound within about fifteen seconds.",
+          "detail": "Wikipedia's track listing credits Fuck Buttons (Benjamin Power and Andrew Hung) as the collaborator and co-writers."
+        },
+        {
+          "timestamp": "0:54",
+          "section": "Main section",
+          "description": "The low end and top end open together and the track holds a loud, dense level."
+        },
+        {
+          "timestamp": "2:14",
+          "section": "Break",
+          "description": "Almost everything drops out and the track stays quiet for about twenty-five seconds."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Return",
+          "description": "The full sound comes back at once and stays at the track's loudest level."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Fall",
+          "description": "The level falls and the sound thins as the track closes."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Outro",
+          "description": "A quiet, nearly beatless tail runs to the end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Suns Have Gone",
+      "duration": "5:47",
+      "energy": "high",
+      "tags": [
+        "Moby",
+        "Steady Beat",
+        "Long Build",
+        "Bright Top End"
+      ],
+      "role": "Album role: A long, steady-pulse track that builds across its length to a loud, sustained finish.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A moderate-level opening with a pulse already running.",
+          "detail": "Wikipedia's track listing credits Moby (Richard Melville Hall) as the collaborator and co-writer."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Layers",
+          "description": "A bright upper layer and a deeper low end enter in turn."
+        },
+        {
+          "timestamp": "1:28",
+          "section": "Fuller sound",
+          "description": "The arrangement fills out and the level rises."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Break",
+          "description": "The beat stops for about thirty seconds while the sound stays at a medium level."
+        },
+        {
+          "timestamp": "2:55",
+          "section": "Beat returns",
+          "description": "The pulse comes back and the track builds to a high, steady level."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Outro",
+          "description": "The level drops and the track ends with a short, quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Conquistador",
+      "duration": "3:07",
+      "energy": "mid",
+      "tags": [
+        "Gesaffelstein",
+        "Single",
+        "Short Track",
+        "Bright Top End"
+      ],
+      "role": "Album role: The second single, a short beat-led track placed after the longest stretch of the first half.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at its working level and a pulse is quickly established.",
+          "detail": "Wikipedia's track listing credits Gesaffelstein (Mike Levy) as the collaborator and co-writer; \"Conquistador\" was a single, released 10 July 2015."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Top end opens",
+          "description": "A bright top layer is added to the beat."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Thinner section",
+          "description": "The top end falls back for a short stretch."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Brighter section",
+          "description": "The top end returns and the sound opens up."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Final section",
+          "description": "The top end thins again as the last section begins."
+        },
+        {
+          "timestamp": "3:01",
+          "section": "Ending",
+          "description": "The sound stops and a short tail closes the track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Travelator (Part 2)",
+      "duration": "3:06",
+      "energy": "mid",
+      "tags": [
+        "Pete Townshend",
+        "Stop-Start Structure",
+        "Heavy Low End",
+        "Sparse Ending"
+      ],
+      "role": "Album role: A guest track built from alternating full and sparse sections.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that comes to full level within seconds.",
+          "detail": "Wikipedia's track listing credits Pete Townshend as the collaborator and co-writer."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Sparse section",
+          "description": "The low end drops out for about fifteen seconds."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Full section",
+          "description": "The low end returns and the level rises."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Second sparse section",
+          "description": "The low end falls out again for a short stretch."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Big return",
+          "description": "The heaviest low end of the track enters."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Fall",
+          "description": "The sound thins and the track runs down."
+        },
+        {
+          "timestamp": "3:03",
+          "section": "Ending",
+          "description": "Almost everything stops and the track closes on a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Zero Gravity",
+      "duration": "6:46",
+      "energy": "mid",
+      "tags": [
+        "Tangerine Dream",
+        "Single",
+        "Slow Build",
+        "Long Fade"
+      ],
+      "role": "Album role: The longest track of the second half, a slow build and release placed after two short tracks.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening that grows only slowly.",
+          "detail": "Wikipedia's track listing credits Tangerine Dream (Edgar Froese) as the collaborator and co-writer; \"Zero Gravity\" was a single, released 10 July 2015."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Rising layers",
+          "description": "The low end and the harmony strengthen and the level rises."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Pulse emerges",
+          "description": "A steady pulse takes hold and builds for about a minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Main section",
+          "description": "The pulse reaches its firmest and the track enters its loud stretch."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Loudest passage",
+          "description": "The loudest stretch of the track runs until about 4:30."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Release",
+          "description": "The level and the pulse slowly ease."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Outro",
+          "description": "The pulse thins out and the track runs down gradually."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Rely on Me",
+      "duration": "2:57",
+      "energy": "mid",
+      "tags": [
+        "Laurie Anderson",
+        "Short Track",
+        "Heavy Low End",
+        "Hard Stop"
+      ],
+      "role": "Album role: The shortest track of the second half, a compact guest piece before the run to the closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that grows over the first minute.",
+          "detail": "Wikipedia's track listing credits Laurie Anderson as the collaborator and co-writer."
+        },
+        {
+          "timestamp": "0:57",
+          "section": "Beat entry",
+          "description": "A heavy low end enters and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Drop and return",
+          "description": "The low end drops out for about ten seconds, then returns and holds its level."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Ending",
+          "description": "The sound stops abruptly."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Stardust",
+      "duration": "4:36",
+      "energy": "high",
+      "tags": [
+        "Armin Van Buuren",
+        "Single",
+        "Steady Pulse",
+        "Break And Return"
+      ],
+      "role": "Album role: The fifth single, released at the end of July 2015, and a high-level track with a steady pulse.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that comes up slowly over the first minute.",
+          "detail": "Wikipedia's track listing credits Armin van Buuren as the collaborator and co-writer; \"Stardust\" was a single, released 31 July 2015."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Beat entry",
+          "description": "The low end and a steady pulse enter."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Full level",
+          "description": "The track reaches a high, steady level."
+        },
+        {
+          "timestamp": "2:16",
+          "section": "Break",
+          "description": "The beat and most of the sound drop away for about half a minute."
+        },
+        {
+          "timestamp": "2:44",
+          "section": "Rebuild",
+          "description": "The top end opens and the pulse builds again."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Final section",
+          "description": "A stronger low end enters for the last main section."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Outro",
+          "description": "The level drops and the track fades to its end."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "Watching You",
+      "duration": "4:06",
+      "energy": "mid",
+      "tags": [
+        "Robert Del Naja",
+        "Massive Attack",
+        "Single",
+        "Slow Pulse"
+      ],
+      "role": "Album role: The fourth single, a slower track with a guest from Massive Attack.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A near-silent opening; the track comes in within about fifteen seconds.",
+          "detail": "Wikipedia's track listing credits Robert \"3D\" Del Naja of Massive Attack as the collaborator and co-writer with Euan Dickinson; \"Watching You\" was a single, released 10 July 2015."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Entry",
+          "description": "The full sound arrives at once with a deep low end and a slow pulse."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Second section",
+          "description": "A change of texture under the same slow pulse."
+        },
+        {
+          "timestamp": "2:04",
+          "section": "Duller passage",
+          "description": "The high frequencies disappear and the sound turns dull."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Low-level passage",
+          "description": "The level and the pulse both fall for about half a minute."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Return",
+          "description": "The full sound and pulse come back for the last main stretch."
+        },
+        {
+          "timestamp": "3:55",
+          "section": "Ending",
+          "description": "The sound drops away and the track ends with a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "A Question of Blood",
+      "duration": "3:00",
+      "energy": "mid",
+      "tags": [
+        "John Carpenter",
+        "Short Track",
+        "Heavy Low End",
+        "Break"
+      ],
+      "role": "Album role: A short guest track placed before the closer.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start with a pulse from the beginning.",
+          "detail": "Wikipedia's track listing credits John Carpenter as the collaborator and co-writer."
+        },
+        {
+          "timestamp": "0:38",
+          "section": "Low end entry",
+          "description": "A very heavy low end enters and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Lighter stretch",
+          "description": "The sound thins briefly."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Break",
+          "description": "The sound drops sharply for about ten seconds."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Final stretch",
+          "description": "The full sound returns and holds to the end."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "The Train & The River",
+      "duration": "7:14",
+      "energy": "mid",
+      "tags": [
+        "Lang Lang",
+        "Album Closer",
+        "Long Build",
+        "Gradual Fade"
+      ],
+      "role": "Album role: The longest track and the album closer, credited to Jarre alone as writer; a slow build, a loud climax and a long run-down.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with little pulse.",
+          "detail": "Wikipedia's track listing credits Lang Lang as the collaborator and gives Jarre alone as the writer."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Upper layer",
+          "description": "A bright upper layer enters over the quiet opening."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Build",
+          "description": "A pulse emerges and the level rises."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Lull",
+          "description": "The beat and the level fall for about half a minute."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Return",
+          "description": "The full sound comes back with a steadier pulse."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Climax",
+          "description": "The loudest stretch of the track begins."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Run-down",
+          "description": "The sound drops away and the track fades to its end."
+        }
+      ]
+    }
+  ]
+}

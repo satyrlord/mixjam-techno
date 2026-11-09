@@ -1,0 +1,404 @@
+{
+  "id": "vangelis-albedo-0-39",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "Albedo 0.39",
+  "year": 1976,
+  "label": "RCA Records",
+  "producer": "Vangelis",
+  "genre": "Electronic / Space Music",
+  "genreTags": [
+    "Electronic",
+    "Space Music",
+    "Concept Album",
+    "Synthesizer"
+  ],
+  "runtime": "42:05",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/9/93/Vangelis_Albedo.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Albedo_0.39",
+  "overview": "Albedo 0.39 is a concept album about space physics, recorded in 1976 at Nemo Studios in London and released by RCA Records on 24 September 1976; it was the second album Vangelis made at Nemo and the second he released through RCA. The title is a planet's reflecting power: the back cover of the LP gives the Earth's albedo as 39 percent, or 0.39. Vangelis plays all the instruments, among them synthesizers, acoustic drums, bass, percussion, a xylophone and a gamelan, and adds recordings of the speaking clock and of the Apollo Moon landings, and his engineer Keith Spencer-Allen narrates the title track. Side one opens with the single \"Pulstar\" and runs through \"Freefall\" and \"Mare Tranquillitatis\" to the long \"Main Sequence\" and \"Sword of Orion\"; side two holds \"Alpha\", the two-part \"Nucleogenesis\" suite and the title track.\n\nThe album reached UK No. 18 and was his first UK top 20 album; \"Pulstar\" was released as a single on 5 November 1976. AllMusic gave it 3 of 5 stars and described its rhythms as including elements of jazz and mild rock, and Wikipedia notes blues and jazz overtones in contrast to the classical, choral Heaven and Hell. Vangelis staged it at the Royal Albert Hall in 1977, and excerpts of \"Pulstar\" and \"Alpha\" were used in Carl Sagan's television series Cosmos.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Pulstar",
+      "duration": "5:45",
+      "energy": "high",
+      "tags": [
+        "Synthesizer Pulse Sequence",
+        "Synth Brass",
+        "Speaking Clock Ending",
+        "Lead Single"
+      ],
+      "role": "Album role: Side one's opener and the album's single, released on 5 November 1976; it states the pulse-driven synthesizer idiom of the album before the shorter pieces that follow.",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Intro",
+          "description": "A steady pulse starts after about three seconds of silence and holds a low level for the first minute.",
+          "detail": "Wikipedia describes the track as built on a synthesizer pulse sequence, a main line and several synthesizer brass lines, and lists it as the theme of the BBC children's programme Horses Galore and an early theme of ESPN's SportsCenter."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Low end enters",
+          "description": "A heavy low end joins the pulse and the level rises by a clear step."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Rise",
+          "description": "The top end brightens and the level climbs in stages over the next minute."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Fuller sound",
+          "description": "The low end grows again and the texture reaches a fuller shape."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Peak",
+          "description": "The loudest and steadiest stretch of the track, lasting about a minute."
+        },
+        {
+          "timestamp": "5:15",
+          "section": "Speaking-clock tail",
+          "description": "The music stops and the last half minute is far quieter than the rest.",
+          "detail": "Wikipedia states that the track ends with a recording of the speaking clock."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Freefall",
+      "duration": "2:16",
+      "energy": "mid",
+      "tags": [
+        "Gamelan Sequence",
+        "Synthesizer Line"
+      ],
+      "role": "Album role: A short rhythmic piece after the opener, built on a gamelan sequence and a synthesizer line, that keeps the pulse going at a smaller scale.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that starts at once, with no silence before it.",
+          "detail": "Wikipedia gives the basis of the track as a gamelan sequence and a synthesizer line, and its instrument list places the gamelan on this track."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Full texture",
+          "description": "The level makes a large step up as the low end and the top end fill in."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Dip",
+          "description": "The level falls briefly and then recovers."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Final passage",
+          "description": "The level and the low end step up again for the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Mare Tranquillitatis",
+      "duration": "1:47",
+      "energy": "low",
+      "tags": [
+        "Apollo Landing Recordings",
+        "Quiet Synthesizer Piece",
+        "Interlude"
+      ],
+      "role": "Album role: The quiet centre of side one, a short synthesizer piece that carries the Apollo Moon landing recordings and gives the space theme a documentary element.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening whose first sound arrives after about two seconds and grows slowly.",
+          "detail": "Wikipedia calls the piece a quiet synthesizer piece featuring recordings of several Apollo Moon landings; this review does not time those recordings."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Low end enters",
+          "description": "A strong low-frequency component enters and stays to the end."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Fullest point",
+          "description": "The level is at its highest, with the low end at its heaviest, for about twenty-five seconds."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Fade",
+          "description": "The level falls away and the track ends nearly silent."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Main Sequence",
+      "duration": "8:10",
+      "energy": "high",
+      "tags": [
+        "Pulsed Synthesizer Sequence",
+        "Drums-Based Jazz",
+        "Side One Centrepiece",
+        "Longest Track"
+      ],
+      "role": "Album role: Side one's long centrepiece and the longest track on the album, running a pulsed synthesizer sequence under a developing jazz drum track before it calms and leads into \"Sword of Orion\".",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Sequence entry",
+          "description": "A strongly pulsed figure starts after two seconds and sets the pace for the opening minutes.",
+          "detail": "Wikipedia says the track is propelled by a pulsed synthesizer sequence."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Sustained lines",
+          "description": "Sustained pitched lines appear over the pulse and come and go through the middle of the track.",
+          "detail": "Wikipedia also describes a drums-based jazz track that develops along the sequence; the rip's measurements show no single point where it enters."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Fullest stretch",
+          "description": "The level rises slightly and the top end grows; this fuller sound holds for about three minutes."
+        },
+        {
+          "timestamp": "6:20",
+          "section": "Calming",
+          "description": "The level drops, the low end falls back and the pulse thins as the long calming begins.",
+          "detail": "Wikipedia says the track calms down and flows into \"Sword of Orion\"."
+        },
+        {
+          "timestamp": "6:55",
+          "section": "Sparse passage",
+          "description": "The low end comes and goes and the pulse is no longer clear."
+        },
+        {
+          "timestamp": "7:55",
+          "section": "Closing",
+          "description": "The level falls to near silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Sword of Orion",
+      "duration": "1:55",
+      "energy": "low",
+      "tags": [
+        "Arpeggio Chord",
+        "Percussion",
+        "Side One Closer"
+      ],
+      "role": "Album role: Side one's closer, a short piece built on an arpeggio chord, a melody and percussion that follows the calm end of \"Main Sequence\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that picks up from the calm close of the previous track."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Step up",
+          "description": "The level rises and the low end and top end fill in.",
+          "detail": "Wikipedia gives the basis of the track as an arpeggio chord, a melody and percussion."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Drop",
+          "description": "The level and the top end fall back clearly."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Brighter texture",
+          "description": "The top end rises strongly while the low end falls away, and the low end returns shortly afterwards."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Alpha",
+      "duration": "5:44",
+      "energy": "high",
+      "tags": [
+        "Synthesizer Arpeggio",
+        "Synth Mallet Melody",
+        "Xylophone",
+        "Acoustic Drums",
+        "Cosmos Excerpt"
+      ],
+      "role": "Album role: Side two's opener, which develops a simple theme of a few bars through steadily more complex instrumentation.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A quiet opening with a thin, bright texture.",
+          "detail": "Wikipedia describes a simple theme of a few bars developed through increasingly complex instrumentation: a slow synthesizer arpeggio, a synthesizer mallet melody line, a xylophone, percussion and, later, acoustic drums."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Low end enters",
+          "description": "A heavy low end enters and the level rises by a large step."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Rhythmic pulse",
+          "description": "A steady rhythmic pulse sets in and the level rises further."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Peak",
+          "description": "The fullest sound of the track, with the brightest top end, held for about a minute and a quarter.",
+          "detail": "Wikipedia reports that \"Alpha\" was used in Cosmos over animation of evolutionary theory, with the music's climax timed to coincide with the appearance and achievements of humans."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Outro",
+          "description": "The level falls and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Nucleogenesis (Part One)",
+      "duration": "5:56",
+      "energy": "high",
+      "tags": [
+        "Nucleogenesis Suite",
+        "Collage",
+        "Suite Opener"
+      ],
+      "role": "Album role: The first half of the two-part \"Nucleogenesis\" suite, which turns side two from the melodic \"Alpha\" to a darker collage.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "A heavy low end is present from the first seconds and the level reaches its full height within five seconds.",
+          "detail": "Wikipedia describes the suite as a collage with a somewhat darker mood, using a church organ, an organ synthesizer pulse, lines of synthesizer brass, acoustic drums and basses, without assigning them to a part."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Pulse entry",
+          "description": "A strong, regular pulse enters with a very heavy low end while the top end falls back."
+        },
+        {
+          "timestamp": "1:43",
+          "section": "Brighter passage",
+          "description": "The top end rises for about fifteen seconds before the level drops back."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Heavier low end",
+          "description": "The low end grows heavier again and stays heavy to the end of the track."
+        },
+        {
+          "timestamp": "4:52",
+          "section": "Pulse drops out",
+          "description": "The regular pulse falls away and the sound becomes fuller and brighter, at the loudest point of the track."
+        },
+        {
+          "timestamp": "5:35",
+          "section": "Pulse returns",
+          "description": "The pulse returns and the level eases toward the end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Nucleogenesis (Part Two)",
+      "duration": "6:12",
+      "energy": "peak",
+      "tags": [
+        "Nucleogenesis Suite",
+        "Collage",
+        "Suite Close"
+      ],
+      "role": "Album role: The second half of the \"Nucleogenesis\" suite and the loudest stretch of the album, placed just before the quiet title track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "Opens at a full level with a strong pulse and a heavy low end."
+        },
+        {
+          "timestamp": "0:28",
+          "section": "Step up",
+          "description": "The level and the bass rise to the loudest stretch of the opening minutes, held for about half a minute."
+        },
+        {
+          "timestamp": "1:05",
+          "section": "Plateau",
+          "description": "The level and the top end ease back and the sound holds a steady plateau for more than two minutes."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Duller texture",
+          "description": "The top end falls and the pulse weakens."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Thinning",
+          "description": "The sound thins and the level falls to its lowest of the track."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Full return",
+          "description": "The full sound returns at once, with a heavy low end and a bright top, and holds for about forty seconds."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Outro",
+          "description": "The level falls over the last half minute and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Albedo 0.39",
+      "duration": "4:21",
+      "energy": "low",
+      "tags": [
+        "Title Track",
+        "Narration",
+        "Synthesizer Chords",
+        "Album Closer"
+      ],
+      "role": "Album role: The closing title track, a quiet piece of swelling synthesizer chords and the album's narrated track, in which a voice gives the Earth's physical properties and ends on its albedo.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Chords swell in from near-silence and the level stays low.",
+          "detail": "Wikipedia describes the track as built on waxing and waning synthesizer chords and arpeggios, with a voice narrating physical properties of the Earth such as its mass, the length of its year and, finally, its albedo; the credits give Keith Spencer-Allen the vocals. This review does not time the narration."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Fuller",
+          "description": "The low end thickens and the level rises a little."
+        },
+        {
+          "timestamp": "1:08",
+          "section": "Break",
+          "description": "The sound drops almost to silence for about eight seconds."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Rebuild",
+          "description": "The level climbs steadily for about three-quarters of a minute, with the low end gaining weight."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Loudest stretch",
+          "description": "The level and the top end rise to the highest point of the track, held for about twenty-five seconds."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Outro",
+          "description": "The level falls and the track ends, closing the album."
+        }
+      ]
+    }
+  ]
+}

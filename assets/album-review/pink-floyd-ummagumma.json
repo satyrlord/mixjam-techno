@@ -1,0 +1,739 @@
+{
+  "id": "pink-floyd-ummagumma",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Ummagumma",
+  "year": 1969,
+  "label": "Harvest",
+  "producer": "Pink Floyd · Norman Smith",
+  "genre": "Progressive Rock / Experimental",
+  "genreTags": [
+    "Progressive Rock",
+    "Experimental",
+    "Psychedelic Rock",
+    "Space Rock",
+    "Avant-Garde",
+    "Live Album"
+  ],
+  "runtime": "1:26:35",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/16/PinkFloyd-album-ummagummastudio-300.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Ummagumma",
+  "overview": "Ummagumma is a double album released by Harvest in the UK in late 1969, on 7 November in Wikipedia's album article and on 25 October in MusicBrainz and Wikipedia's article on \"Grantchester Meadows\". Wikipedia dates the live disc to Mothers Club, Birmingham (27 April 1969) and Manchester College of Commerce (2 May 1969), engineered by Brian Humphries, and the studio disc to sessions from September 1968 to July 1969 at EMI Studios in London, engineered by Peter Mew; Pink Floyd produced the live disc and Norman Smith the studio disc. The live disc holds \"Astronomy Domine\", \"Careful with That Axe, Eugene\", \"Set the Controls for the Heart of the Sun\" and \"A Saucerful of Secrets\". On the studio disc each member has a piece of his own: Richard Wright's \"Sysyphus\", Roger Waters's \"Grantchester Meadows\" and \"Several Species of Small Furry Animals Gathered Together in a Cave and Grooving with a Pict\", David Gilmour's \"The Narrow Way\" and Nick Mason's \"The Grand Vizier's Garden Party\"; Hipgnosis designed the sleeve.\n\nThe album reached UK No. 5, Netherlands No. 5, Germany No. 25 and US Billboard 200 No. 74, the band's first US top-100 entry, and is certified Gold in the UK, France and Italy and Platinum in the US. Retrospective reviews are mixed, and Waters later called it a \"disaster\" and Mason \"a failed experiment\". This review follows a 16-track edition that splits \"Sysyphus\" into four parts and \"The Narrow Way\" and \"The Grand Vizier's Garden Party\" into three each, and the part timings come from that edition.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Astronomy Domine",
+      "duration": "8:32",
+      "energy": "high",
+      "tags": [
+        "Live Recording",
+        "Syd Barrett Song",
+        "Piper Album Song",
+        "Side One Opener"
+      ],
+      "role": "Album role: Opens the live disc with the one Syd Barrett composition on the album, first issued on The Piper at the Gates of Dawn (1967).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening that rises to a steady, full level within the first minute.",
+          "detail": "Wikipedia credits the song to Syd Barrett and lists Gilmour on lead guitar and vocals, Mason on drums, Waters on bass and vocals, and Wright on keyboards and vocals for the live disc. Wikipedia dates the live disc to Mothers Club, Birmingham (27 April 1969) and Manchester College of Commerce (2 May 1969), on The Man and The Journey Tour."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Brief dip",
+          "description": "The level and the highs fall back for about ten seconds, then the full sound returns."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Louder stretch",
+          "description": "A louder, fuller section begins and runs until about 4:00."
+        },
+        {
+          "timestamp": "4:04",
+          "section": "Quiet passage",
+          "description": "The level falls sharply and stays low for almost two minutes, the quietest stretch of the track."
+        },
+        {
+          "timestamp": "5:55",
+          "section": "Return",
+          "description": "The full band returns and the level climbs back to the loud plateau by about 6:20."
+        },
+        {
+          "timestamp": "7:13",
+          "section": "Drop and final peak",
+          "description": "The level drops briefly, and from 7:24 the loudest and brightest passage of the track runs to the end."
+        },
+        {
+          "timestamp": "8:15",
+          "section": "Outro",
+          "description": "The sound thins out and fades to silence by about 8:28."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Careful with That Axe, Eugene",
+      "duration": "8:49",
+      "energy": "high",
+      "tags": [
+        "Live Recording",
+        "Quiet-Loud Dynamics",
+        "Single B-Side",
+        "All Four Credited"
+      ],
+      "role": "Album role: Closes side one of the live disc with a quiet-to-loud piece credited to all four members, first issued as the B-side of \"Point Me at the Sky\" (1968).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "A quiet start that rises slowly over the first minute.",
+          "detail": "Wikipedia describes the song as opening quietly with an organ improvisation over a repeated bass tone. It gives the Ummagumma version as recorded on 2 May 1969 at the Manchester College of Commerce, with Wright playing a Farfisa Compact Duo organ rather than a Hammond."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Quieter passage",
+          "description": "The level falls and stays low for about a minute, the lowest point of the first half."
+        },
+        {
+          "timestamp": "2:33",
+          "section": "Build",
+          "description": "The level rises steadily, with a louder, fuller sound entering at about 2:40."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Loud section",
+          "description": "The loudest passage of the track begins and stays loud for more than three minutes, peaking around 3:10.",
+          "detail": "Nick Mason later described the studio recording as \"quiet, loud, quiet, loud again\" (Wikipedia, song article)."
+        },
+        {
+          "timestamp": "6:25",
+          "section": "Decay",
+          "description": "The level falls gradually as the loud section winds down."
+        },
+        {
+          "timestamp": "8:20",
+          "section": "Fade-out",
+          "description": "The sound fades almost to silence."
+        },
+        {
+          "timestamp": "8:36",
+          "section": "Final burst",
+          "description": "A sudden short burst of sound after the music has faded closes the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Set the Controls for the Heart of the Sun",
+      "duration": "9:27",
+      "energy": "mid",
+      "tags": [
+        "Live Recording",
+        "Roger Waters Song",
+        "A Saucerful of Secrets (1968)",
+        "Slow Build"
+      ],
+      "role": "Album role: Opens side two of the live disc with a Roger Waters composition first recorded for A Saucerful of Secrets (1968), which the live version extends to more than nine minutes.",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Opening burst",
+          "description": "A short burst of sound at about 0:07 gives way to a quiet, sparse passage.",
+          "detail": "Wikipedia gives the studio version as 5:27 and credits Waters with vocals, bass guitar and gong, and Wright with Farfisa organ, vibraphone and celesta; no source lists the live parts one by one."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Quiet passage",
+          "description": "The level stays low and steady for more than two minutes."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Rise",
+          "description": "The level rises slowly toward a louder section."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Plateau",
+          "description": "A louder, steady plateau begins and runs to about 4:40."
+        },
+        {
+          "timestamp": "4:51",
+          "section": "Drop",
+          "description": "The level and the highs fall away sharply, and the track stays much quieter for the rest of the section."
+        },
+        {
+          "timestamp": "7:13",
+          "section": "Low-end swell",
+          "description": "The low end swells for about a minute while the treble falls back."
+        },
+        {
+          "timestamp": "8:08",
+          "section": "Final section",
+          "description": "A brighter section at a somewhat higher level runs until the fade-out."
+        },
+        {
+          "timestamp": "9:08",
+          "section": "Fade-out",
+          "description": "The sound fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "A Saucerful of Secrets",
+      "duration": "12:49",
+      "energy": "peak",
+      "tags": [
+        "Live Recording",
+        "Four-Part Suite",
+        "Composite of Two Gigs",
+        "Side Two Closer"
+      ],
+      "role": "Album role: Closes the live disc with a four-section piece credited to all four members, the album's longest live track and its sustained climax.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Something Else",
+          "description": "The first section opens at a low level and rises to a steadier, fuller sound by about 1:00.",
+          "detail": "Wikipedia lists four sections: \"Something Else\" (3:22), \"Syncopated Pandemonium\" (2:52), \"Storm Signal\" (0:58) and \"Celestial Voices\" (5:39). Wright said the live version is a composite of the two gigs."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Quiet passage",
+          "description": "The level and the highs fall back and the music has no clear regular pulse for about a minute."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Build",
+          "description": "The highs return and the level climbs to a loud passage by about 3:00."
+        },
+        {
+          "timestamp": "3:23",
+          "section": "Syncopated Pandemonium",
+          "description": "The level drops sharply, then rebuilds from about 4:10 to a loud plateau that lasts until about 5:50."
+        },
+        {
+          "timestamp": "6:14",
+          "section": "Storm Signal",
+          "description": "The level falls and the texture changes for a short section of about a minute."
+        },
+        {
+          "timestamp": "7:12",
+          "section": "Celestial Voices",
+          "description": "The final section starts at a low level and climbs from about 7:40.",
+          "detail": "Wikipedia gives this section a length of 5:39."
+        },
+        {
+          "timestamp": "8:20",
+          "section": "Sustained peak",
+          "description": "The loudest sustained stretch begins and holds a nearly constant level until about 12:10."
+        },
+        {
+          "timestamp": "9:42",
+          "section": "Brighter turn",
+          "description": "The top end opens a little within the loud stretch."
+        },
+        {
+          "timestamp": "12:12",
+          "section": "Ending",
+          "description": "The level holds until about 12:29, then drops and fades to silence by about 12:45."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Sysyphus, Pt. 1",
+      "duration": "1:08",
+      "energy": "mid",
+      "tags": [
+        "Richard Wright Piece",
+        "Disc Two Opener",
+        "Four-Part Suite",
+        "Keyboards"
+      ],
+      "role": "Album role: Opens the studio disc and the four-part Sysyphus suite, the piece credited to Richard Wright.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The part starts at a steady, loud level.",
+          "detail": "Wikipedia credits Wright with organ, piano, Mellotron and percussion on Sysyphus as a whole and gives the whole piece a length of about thirteen and a half minutes; it does not assign instruments to single parts. It dates the studio disc to September 1968 to July 1969 at EMI Studios in London."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Brighter turn",
+          "description": "The top end and the low end both rise, and the part continues at the same level to its end."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Sysyphus, Pt. 2",
+      "duration": "3:30",
+      "energy": "mid",
+      "tags": [
+        "Richard Wright Piece",
+        "Sysyphus Part 2",
+        "Level Swings"
+      ],
+      "role": "Album role: The second part of Sysyphus, a moderate-level section between the short opening part and the short third part.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The part starts at a moderate level."
+        },
+        {
+          "timestamp": "0:08",
+          "section": "Low end drops out",
+          "description": "The low end falls away within the first ten seconds."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Low end returns",
+          "description": "The low end comes back and the level rises slightly."
+        },
+        {
+          "timestamp": "1:07",
+          "section": "Fuller passage",
+          "description": "A fuller passage with more low end and upper midrange runs to about 1:40."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Loudest stretch",
+          "description": "The loudest stretch of the part begins and runs to the end."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Silence",
+          "description": "The music stops and the last ten seconds are silent."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Sysyphus, Pt. 3",
+      "duration": "1:50",
+      "energy": "low",
+      "tags": [
+        "Richard Wright Piece",
+        "Sysyphus Part 3",
+        "Short Rise"
+      ],
+      "role": "Album role: A short quiet-to-moderate rise that leads into the long fourth part of Sysyphus.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The part opens at a low level."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Rise",
+          "description": "The level climbs steadily to a moderate level by about 1:20."
+        },
+        {
+          "timestamp": "1:44",
+          "section": "Cut",
+          "description": "The music stops and the last seconds are silent."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Sysyphus, Pt. 4",
+      "duration": "7:00",
+      "energy": "high",
+      "tags": [
+        "Richard Wright Piece",
+        "Sysyphus Part 4",
+        "Longest Part",
+        "Sudden Burst"
+      ],
+      "role": "Album role: The last and longest part of Sysyphus, with a quiet start, a sudden loud burst and a long climb to the end of the suite.",
+      "events": [
+        {
+          "timestamp": "0:07",
+          "section": "Near-silent opening",
+          "description": "After about seven seconds of near silence the music enters at a very low level and rises slowly."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Low plateau",
+          "description": "The level settles at a low, steady point and holds it until about 2:40."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Drop",
+          "description": "The level falls to near silence by about 3:10."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Sudden burst",
+          "description": "A very loud burst of sound starts abruptly and lasts about 20 seconds."
+        },
+        {
+          "timestamp": "3:37",
+          "section": "Quiet return",
+          "description": "The level drops again, then climbs slowly from about 3:50."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Loud stretch",
+          "description": "The loudest and steadiest stretch of the part begins and runs to about 6:50."
+        },
+        {
+          "timestamp": "6:50",
+          "section": "Ending",
+          "description": "The sound stops, leaving silence at the end."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Grantchester Meadows",
+      "duration": "7:28",
+      "energy": "low",
+      "tags": [
+        "Roger Waters Piece",
+        "Acoustic Guitars",
+        "Tape Effects",
+        "Skylark Loop"
+      ],
+      "role": "Album role: The first piece after Sysyphus, a pastoral acoustic song credited to Roger Waters, who performs it alone according to Wikipedia.",
+      "events": [
+        {
+          "timestamp": "0:14",
+          "section": "Quiet start",
+          "description": "The first sounds enter at about 0:14, at a very low level that rises slowly.",
+          "detail": "Wikipedia says Waters wrote the song, plays acoustic guitars, sings and adds tape effects, and that a tape loop of a skylark runs throughout."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Level rises",
+          "description": "The level steps up clearly and reaches a first peak at about 1:30."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Fuller passage",
+          "description": "A fuller passage begins and holds a moderate level until about 3:20."
+        },
+        {
+          "timestamp": "3:23",
+          "section": "Quiet passage",
+          "description": "The level drops by a clear step and stays low for about 20 seconds."
+        },
+        {
+          "timestamp": "4:13",
+          "section": "Sound effect",
+          "description": "The texture changes at about this point.",
+          "detail": "Wikipedia places a honking Bewick's swan, followed by the sound of it taking off from water, around 4:13."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Louder stretch",
+          "description": "A louder stretch runs until about 6:10."
+        },
+        {
+          "timestamp": "6:10",
+          "section": "Drop",
+          "description": "The level drops and the song winds down."
+        },
+        {
+          "timestamp": "7:21",
+          "section": "Closing",
+          "description": "The level rises again briefly before the track ends.",
+          "detail": "Wikipedia says a fly buzzes through the song, that footsteps chase and swat it as the instrumental fades, and that the album then cuts to the next track."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Several Species of Small Furry Animals Gathered Together in a Cave and Grooving with a Pict",
+      "duration": "4:59",
+      "energy": "mid",
+      "tags": [
+        "Roger Waters Piece",
+        "Tape Manipulation",
+        "Voice Effects",
+        "Sound Collage"
+      ],
+      "role": "Album role: The tape-effects piece between Grantchester Meadows and The Narrow Way, credited to Roger Waters with voices by Waters and Gilmour.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The track opens at a low level.",
+          "detail": "Wikipedia credits Waters and Gilmour with voices and describes vocal and percussion effects sped up, slowed down, reversed and spliced together."
+        },
+        {
+          "timestamp": "0:24",
+          "section": "Low end enters",
+          "description": "The low end swells and a steadier pulse appears."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Level rises",
+          "description": "The level rises to a loud plateau by about 1:40."
+        },
+        {
+          "timestamp": "2:26",
+          "section": "Brighter passage",
+          "description": "The upper range opens and the level steps up."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Louder passage",
+          "description": "A louder, bass-heavier passage begins."
+        },
+        {
+          "timestamp": "4:12",
+          "section": "Low end drops out",
+          "description": "The low end drops away for the final minute."
+        },
+        {
+          "timestamp": "4:33",
+          "section": "Final burst",
+          "description": "A sudden loud burst closes the track, followed by near silence from about 4:46."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "The Narrow Way, Pt. 1",
+      "duration": "3:29",
+      "energy": "mid",
+      "tags": [
+        "David Gilmour Piece",
+        "Narrow Way Part 1",
+        "BBC Session Origin"
+      ],
+      "role": "Album role: Opens the three-part Narrow Way, the piece credited to David Gilmour.",
+      "events": [
+        {
+          "timestamp": "0:04",
+          "section": "Opening",
+          "description": "The part opens after a few seconds of silence at a moderate level.",
+          "detail": "Wikipedia credits Gilmour with acoustic and electric guitars, bass, keyboards, drums and vocals on The Narrow Way, and says Part 1 was played earlier as \"Baby Blue Shuffle in D Major\" in a December 1968 BBC session."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Low end enters",
+          "description": "The low end swells within the first fifteen seconds."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Steady passage",
+          "description": "The level stays steady for about a minute."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Open section",
+          "description": "The upper range opens and the sound brightens."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Louder passage",
+          "description": "A louder and brighter passage runs until about 3:15."
+        },
+        {
+          "timestamp": "3:19",
+          "section": "Closing",
+          "description": "The level and the highs fall away to the end."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "The Narrow Way, Pt. 2",
+      "duration": "2:53",
+      "energy": "mid",
+      "tags": [
+        "David Gilmour Piece",
+        "Narrow Way Part 2",
+        "Short Middle Part"
+      ],
+      "role": "Album role: The short middle part of The Narrow Way, a steady link between the opening and the long third part.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The part runs at a steady, fairly loud level from the first second."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Brighter turn",
+          "description": "The top end opens and the texture changes."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Fade",
+          "description": "The level falls gradually toward the end of the part."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "The Narrow Way, Pt. 3",
+      "duration": "5:58",
+      "energy": "mid",
+      "tags": [
+        "David Gilmour Piece",
+        "Narrow Way Part 3",
+        "Longest Narrow Way Part",
+        "Slow Build"
+      ],
+      "role": "Album role: The longest part of The Narrow Way, which builds from a quiet start to a loud plateau and then fades.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet opening",
+          "description": "The part opens at a low level."
+        },
+        {
+          "timestamp": "0:39",
+          "section": "Fuller sound",
+          "description": "The low end swells and the sound fills out."
+        },
+        {
+          "timestamp": "0:54",
+          "section": "Brighter passage",
+          "description": "The top end opens markedly."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Louder passage",
+          "description": "A brighter, louder passage begins and lasts for about a minute."
+        },
+        {
+          "timestamp": "3:22",
+          "section": "Loud plateau",
+          "description": "The level reaches a steady loud plateau that holds until about 5:20."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Fade-out",
+          "description": "The level falls and the sound fades to silence by about 5:50."
+        }
+      ]
+    },
+    {
+      "num": 14,
+      "title": "The Grand Vizier's Garden Party, Pt. 1 (Entrance)",
+      "duration": "1:00",
+      "energy": "mid",
+      "tags": [
+        "Nick Mason Piece",
+        "Entrance",
+        "Flute"
+      ],
+      "role": "Album role: Opens the three-part Grand Vizier's Garden Party, the piece credited to Nick Mason.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Entrance",
+          "description": "The part starts at once at a fairly loud level.",
+          "detail": "Wikipedia credits Mason with percussion and effects on Parts 1 and 2 and says Lindy Mason played flute, uncredited, on Parts 1 and 3."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Low end swells",
+          "description": "The low end swells for the last twenty seconds."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Cut",
+          "description": "The sound stops and the last seconds are silent."
+        }
+      ]
+    },
+    {
+      "num": 15,
+      "title": "The Grand Vizier's Garden Party, Pt. 2 (Entertainment)",
+      "duration": "7:06",
+      "energy": "mid",
+      "tags": [
+        "Nick Mason Piece",
+        "Entertainment",
+        "Percussion",
+        "Tape Effects"
+      ],
+      "role": "Album role: The long middle part of the Grand Vizier's Garden Party, the longest of its three parts and a showcase for percussion.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The part opens at a moderate level.",
+          "detail": "Wikipedia says Part 2 contains percussion, tape effects and a drum solo."
+        },
+        {
+          "timestamp": "1:35",
+          "section": "Low end grows",
+          "description": "The low end grows while the top end falls away."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Louder passage",
+          "description": "A louder passage runs until about 3:10."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Drop",
+          "description": "The level drops sharply."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Thin texture",
+          "description": "The low end disappears and only the upper range remains for several minutes."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Quiet stretch",
+          "description": "The level falls to its lowest point of the part."
+        },
+        {
+          "timestamp": "6:15",
+          "section": "Sudden loud passage",
+          "description": "A sudden, full-range loud passage begins and runs to the end."
+        },
+        {
+          "timestamp": "7:04",
+          "section": "Cut",
+          "description": "The sound stops."
+        }
+      ]
+    },
+    {
+      "num": 16,
+      "title": "The Grand Vizier's Garden Party, Pt. 3 (Exit)",
+      "duration": "0:40",
+      "energy": "mid",
+      "tags": [
+        "Nick Mason Piece",
+        "Exit",
+        "Flute",
+        "Album Closer"
+      ],
+      "role": "Album role: Closes the studio disc and the album with the shortest part of the Grand Vizier's Garden Party.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Exit",
+          "description": "The part opens at a moderate level.",
+          "detail": "Wikipedia says Lindy Mason plays flute, uncredited, on Part 3, with overdubbing."
+        },
+        {
+          "timestamp": "0:06",
+          "section": "Fuller sound",
+          "description": "The sound steps up to a louder, fuller level."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Cut",
+          "description": "The sound stops and the album ends."
+        }
+      ]
+    }
+  ]
+}

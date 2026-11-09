@@ -1,0 +1,211 @@
+{
+  "id": "vangelis-the-dragon",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "The Dragon",
+  "year": 1978,
+  "label": "Charly Records",
+  "producer": "Giorgio Gomelsky",
+  "genre": "Progressive Rock / Experimental Jazz",
+  "genreTags": [
+    "Progressive Rock",
+    "Experimental Jazz",
+    "Improvisation",
+    "Jam Session"
+  ],
+  "runtime": "36:38",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/e/ef/Vangelis_The_Dragon.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/The_Dragon_(album)",
+  "overview": "Recorded in June 1971 at Marquee Studios in London, The Dragon comes from sessions that BYG Records commissioned from producer Giorgio Gomelsky after the breakup of Aphrodite's Child, with Phil Dunne as engineer; Gomelsky described the aim as finding grooves that could lead into long, trance-like but evolving rhythmic patterns with a lot of improvisation on top. The credits list Vangelis on keyboards and percussion, Argyris Koulouris on guitar, Michel Ripoche on violin, Brian Odgers on bass guitar and Mick Waller on drums; they are album-level credits and name no instrument models. The tapes were unfinished and never meant for release, but after BYG went bankrupt Jean-Luc Young, a former BYG co-founder, started Charly Records and issued them in 1978 as The Dragon (catalogue CRL 5013) and as Hypothesis, a second album from the same sessions, without the performers' approval. Wikipedia and the fan site vangelis.online report that Vangelis went to court and won, though both records were already on the market; Gomelsky recalled only that Vangelis reached some agreement with Charly, and Vangelis later said the sessions were bad and that he does not agree with such music.\n\nAllMusic rated the album 2.5 out of 5; its reviewer Steven McDonald notes that it was released mainly to cash in on Vangelis's popularity yet contains elements of both Aphrodite's Child and his later solo work. It consists of three long improvisations, the 15-minute title track on side one and \"Stuffed Aubergine\" and \"Stuffed Tomato\" on side two; in Germany it was issued together with Hypothesis as the double album Portrait. This review follows a rip of a Hungarian CD reissue (West Line, WL 111) that runs 36:38 against the 36:07 listed for the LP, and the fan site elsew.com counts the Hungarian CDs of this album among the unlicensed releases.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "The Dragon",
+      "duration": "15:18",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "Side One",
+        "Jam Session",
+        "Steady Groove"
+      ],
+      "role": "Album role: Side one in full and the album's longest track, a 15-minute groove carried by a steady pulse from the first seconds to the fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once with a full-range sound and a steady, slow-to-mid pulse; there is no build-up.",
+          "detail": "Vangelis performed the title track on the French television programme Melody in April 1974, according to vangelis.online."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Lighter passage",
+          "description": "The low end thins for about 25 seconds and the level dips slightly; the pulse carries on unchanged."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Brighter section",
+          "description": "The upper mid-range steps up and the sound turns brighter and more present for over two minutes; this is the clearest change in the track before the fade."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Bright peak",
+          "description": "The upper mid-range climbs again and reaches its brightest point in the track, holding for about a minute."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Darker turn",
+          "description": "The top end falls back and the mid-range comes forward just after a loud, bass-heavy moment; the sound stays warmer for the next few minutes."
+        },
+        {
+          "timestamp": "9:40",
+          "section": "Quiet stretch",
+          "description": "The level eases and the low end lightens for about a minute, while the pulse continues."
+        },
+        {
+          "timestamp": "10:38",
+          "section": "Low end returns",
+          "description": "The low end comes back with more weight and the level rises again."
+        },
+        {
+          "timestamp": "12:05",
+          "section": "Loud stretch",
+          "description": "The level reaches a sustained high that holds for over a minute."
+        },
+        {
+          "timestamp": "13:00",
+          "section": "Firmer bass pulse",
+          "description": "The low-end pulse becomes more regular for about 50 seconds."
+        },
+        {
+          "timestamp": "14:30",
+          "section": "Final lift",
+          "description": "The mid-range comes forward and the level climbs to the last high point of the track."
+        },
+        {
+          "timestamp": "15:05",
+          "section": "Fade-out",
+          "description": "A fade of about ten seconds ends the audio, and the last few seconds of the track are silent."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Stuffed Aubergine",
+      "duration": "11:41",
+      "energy": "mid",
+      "tags": [
+        "Side Two",
+        "Slow Build",
+        "Late Beat Entry",
+        "Long Fade"
+      ],
+      "role": "Album role: Side two's first piece, a slow build from a quiet, beatless opening to a steady groove, closing on a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Quiet intro",
+          "description": "The track opens at a low level with a narrow, mid-range sound, no clear beat and almost nothing in the high end.",
+          "detail": "The sources give no track-level credits, so the players heard on this track are not documented."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Low end enters",
+          "description": "A low-end part enters and grows heavier over the next half minute."
+        },
+        {
+          "timestamp": "2:30",
+          "section": "Bass drop-out",
+          "description": "The deepest bass drops out abruptly and returns only gradually over the next half minute."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Fuller low end",
+          "description": "The low end and the level build slowly for about half a minute to a heavier, fuller sound."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Top end opens",
+          "description": "The high end opens within about ten seconds and keeps brightening for about half a minute, and a steady pulse emerges."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Build",
+          "description": "The level and the mid-range climb over about 20 seconds to a louder, denser plateau."
+        },
+        {
+          "timestamp": "6:00",
+          "section": "Rhythm shift",
+          "description": "The pulse loosens for a few seconds and re-forms in a different rhythmic pattern that lasts until the fade."
+        },
+        {
+          "timestamp": "7:25",
+          "section": "Peak groove",
+          "description": "The pulse is at its clearest of the track and holds for about a minute."
+        },
+        {
+          "timestamp": "10:55",
+          "section": "Fade-out",
+          "description": "A fade of about 40 seconds closes the track.",
+          "detail": "The LP is listed at 11:17 and the rip at 11:41; by 11:17 the rip has already faded far below its normal level, so the difference lies in the quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Stuffed Tomato",
+      "duration": "9:39",
+      "energy": "mid",
+      "tags": [
+        "Free Opening",
+        "Late Beat Entry",
+        "Rhythm Change",
+        "Album Closer"
+      ],
+      "role": "Album role: Album closer; a free, beatless first three minutes lead into a steady groove that shifts to a different rhythm for a stretch and ends on a short fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Free opening",
+          "description": "The opening has no steady pulse; the sound surges and falls back, with short gaps where the high end drops away."
+        },
+        {
+          "timestamp": "0:56",
+          "section": "Pause",
+          "description": "The sound almost disappears for about six seconds, with only low-frequency sound left, and returns at a higher level."
+        },
+        {
+          "timestamp": "2:40",
+          "section": "Quiet stretch",
+          "description": "The level falls for about 20 seconds before the music returns at full strength."
+        },
+        {
+          "timestamp": "3:16",
+          "section": "Beat entry",
+          "description": "After a few seconds with almost nothing in the high end, a steady pulse starts and the sound turns full-range and brighter."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Break",
+          "description": "The level and the low end fall away for about ten seconds before the music re-enters."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Rhythm change",
+          "description": "The music returns on a different rhythmic pattern, with a shorter repeating cycle, that lasts for about two and a half minutes."
+        },
+        {
+          "timestamp": "7:45",
+          "section": "Earlier groove returns",
+          "description": "The pulse falls back to the slower cycle heard before the rhythm change and stays there to the end."
+        },
+        {
+          "timestamp": "9:26",
+          "section": "Fade-out",
+          "description": "A quick fade of about seven seconds ends the track, followed by a few seconds of silence.",
+          "detail": "The LP is listed at 9:32; the rip's audio ends at about 9:33 and the last few seconds are silent."
+        }
+      ]
+    }
+  ]
+}

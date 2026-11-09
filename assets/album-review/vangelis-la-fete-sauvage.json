@@ -1,0 +1,173 @@
+{
+  "id": "vangelis-la-fete-sauvage",
+  "kind": "reference",
+  "artist": "Vangelis",
+  "title": "La Fête sauvage",
+  "year": 1976,
+  "label": "EMI / Pathé Marconi",
+  "producer": "Vangelis",
+  "genre": "Electronic / Soundtrack",
+  "genreTags": [
+    "Electronic",
+    "Soundtrack",
+    "Film Score",
+    "World Music"
+  ],
+  "runtime": "38:35",
+  "isSoundtrack": true,
+  "coverUrl": "https://coverartarchive.org/release/50262318-947a-453c-b9aa-a45aa3a7457e/front",
+  "coverSource": "https://musicbrainz.org/release/50262318-947a-453c-b9aa-a45aa3a7457e",
+  "overview": "La Fête sauvage is Vangelis's score for Frédéric Rossif's French wildlife documentary of the same name (released in 1976; English title The Wild Nation), recorded at Nemo Studios in London in December 1975 and released on LP in France in February 1976, at the same time as the film. Vangelis composed, arranged and produced it, with Keith Spencer-Allen as sound engineer; guest musicians he invited to the studio performed the chanting and percussion, and the credits name D. A. Adams King Potato, Lofty Amao, Idris Baba, Bendadoo, E. Lord Eric, Lartey Ottoo and Paul Jeffery, with Vana Veroutis as vocalist. Wikipedia calls it the most world-music-oriented of his soundtracks for Rossif, in contrast to the electronic and ambient L'Apocalypse des animaux and the melodic Opéra sauvage: part one mixes electronics, percussion, animal sounds and tribal chanting, and part two moves into lush electronic soundscapes and melodies.\n\nThe LP has no track titles and its music is divided into two parts, one per side; the film holds much more music than the album and does not include the vocal performance by Vana Veroutis that is on the album. The main theme, \"Générique\", was issued with \"Thème d'amour\" on a 1975 single in France and Canada, and in 1981 the SNCF used an adapted part of \"La Fête sauvage I\" to launch its TGV high-speed trains. AllMusic (Dave Connolly) rates the album 2.5 out of 5. The rip is the Polydor CD 841 198-2 as one 38:35 track, so this review follows the two LP sides and splits it at the silence at about 18:13.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "La Fête sauvage I",
+      "duration": "18:13",
+      "energy": "mid",
+      "tags": [
+        "Film Score",
+        "Main Theme",
+        "Tribal Chanting",
+        "Animal Sounds",
+        "Percussion"
+      ],
+      "role": "Album role: Side one of the LP and the first of its two parts, a chain of separate pieces divided by silences, beginning with the opening theme.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening theme",
+          "description": "A steady rhythmic pulse sets in within seconds and carries the opening piece at a full, even level.",
+          "detail": "Vangelis Movements calls the opening the main theme, \"Générique\", heard at the start of both the film and the album. The Elsewhere site describes the opening title piece as having a disco-like feel typical of the seventies."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "Fuller stretch",
+          "description": "The sound turns louder and brighter for about half a minute, then eases back."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Hard stop",
+          "description": "The opening piece stops abruptly and a gap of near silence follows."
+        },
+        {
+          "timestamp": "2:36",
+          "section": "Quiet passage",
+          "description": "A quiet mid-range texture with almost no low end takes over and slowly gains in level.",
+          "detail": "Wikipedia notes that Boards of Canada sampled seagull calls from this part for \"Happy Cycling\", on the album Music Has the Right to Children."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Low end returns",
+          "description": "The low end comes back and the level climbs into a heavier passage."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Heavy stretch",
+          "description": "The low end and the level rise to the fullest point since the opening piece."
+        },
+        {
+          "timestamp": "8:15",
+          "section": "Fade to silence",
+          "description": "The music fades out and a gap of near silence follows."
+        },
+        {
+          "timestamp": "8:45",
+          "section": "Sparse stretch",
+          "description": "A very quiet stretch of about three minutes follows: no low end, and the level repeatedly falls to near silence between short bursts of mid-range sound.",
+          "detail": "Wikipedia describes the first part as a mixture of electronics, percussion, animal sounds and tribal chanting, without saying where each appears."
+        },
+        {
+          "timestamp": "11:57",
+          "section": "Beat entry",
+          "description": "After a short silence a steady pulse sets in and the low end returns, holding an even level."
+        },
+        {
+          "timestamp": "14:00",
+          "section": "Low end thickens",
+          "description": "The low end thickens and the level lifts slightly until the piece stops."
+        },
+        {
+          "timestamp": "15:30",
+          "section": "Dark passage",
+          "description": "After another abrupt stop a darker passage begins, with a heavy low end and very little top end."
+        },
+        {
+          "timestamp": "17:40",
+          "section": "Outro",
+          "description": "The level falls away over about half a minute and the part ends in silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "La Fête sauvage II",
+      "duration": "20:22",
+      "energy": "low",
+      "tags": [
+        "Electronic Soundscapes",
+        "Love Theme",
+        "Vana Veroutis",
+        "Closing Part"
+      ],
+      "role": "Album role: Side two of the LP and the second part, with longer electronic soundscapes and short silences between pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The part opens quietly in the mid-range and reaches a full level within about ten seconds.",
+          "detail": "Vangelis Movements places the music of \"Thème d'amour\", the other side of the 1975 single, at the start of the second part, with a vocal by Vana Veroutis."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Build",
+          "description": "The level and the low end rise and the sound grows brighter."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Drop",
+          "description": "The level drops sharply and the music continues more quietly, with little low end, for about a minute."
+        },
+        {
+          "timestamp": "6:29",
+          "section": "Sustained stretch",
+          "description": "The level rises and holds a full, steady plateau for about two minutes."
+        },
+        {
+          "timestamp": "8:32",
+          "section": "Fall to silence",
+          "description": "The level falls away in steps and the music stops briefly."
+        },
+        {
+          "timestamp": "9:07",
+          "section": "Quiet restart",
+          "description": "The music restarts quietly in the mid-range with almost no low end, and the low end builds back over the next minute."
+        },
+        {
+          "timestamp": "11:07",
+          "section": "Low-end swell",
+          "description": "A swell of low end darkens the sound, with the top end almost gone; the loudest moment of the second part falls within it."
+        },
+        {
+          "timestamp": "14:52",
+          "section": "Low end returns",
+          "description": "After a short silence the music returns with a strong low end."
+        },
+        {
+          "timestamp": "16:16",
+          "section": "Dip",
+          "description": "The level fades to near silence for a few seconds and then rebuilds slowly."
+        },
+        {
+          "timestamp": "18:12",
+          "section": "Brighter close",
+          "description": "The top end opens and the sound stays brighter and fuller through to the fade-out."
+        },
+        {
+          "timestamp": "20:07",
+          "section": "Outro",
+          "description": "The sound fades to silence over about fifteen seconds, ending the album."
+        }
+      ]
+    }
+  ]
+}

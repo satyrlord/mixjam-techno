@@ -1,0 +1,586 @@
+{
+  "id": "jean-michel-jarre-teo-tea",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Téo & Téa",
+  "year": 2007,
+  "label": "Aero Productions · Warner Music",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic",
+  "genreTags": [
+    "Electronic",
+    "Concept Album"
+  ],
+  "runtime": "50:36",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/b/b3/Teoandtea.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/T%C3%A9o_%26_T%C3%A9a",
+  "overview": "Jarre's sixteenth studio album, released on CD in 2007 by Aero Productions and Warner Music, and also issued with a bonus DVD that holds the tracks in 5.1 surround sound and an HD video of the title track. The album describes the stages of a loving relationship and the unpredictable length of such relationships; it was a move away from the virtual instruments and computers that Jarre had used until then, towards a simplified set of devices that included several new prototype instruments. The liner notes list Jarre on keyboards, synthesizers and drum programming with a Korg Radias, Moog Voyager, Roland MC-808, Roland Fantom-X8, Roland V-Synth, Access Virus and Roland SH-201 and Pro Tools HD3, and credit him with vocoder-filtered vocals on \"In the Mood for You\". Claude Samard is credited with string arrangements, guitars and programming, Francis Rimbert with keyboards, Tim Hüfken with Groove Box programming and artistic collaboration on the MC-808, Bertrand Lajaudie with additional programming and Anne Parillaud with additional vocals on \"Beautiful Agony\". The cover was inspired by David Lynch's film Wild at Heart.\n\nThe album reached France No. 8, Wallonia No. 9, Hungary No. 8, Spain No. 45, Netherlands No. 46, Switzerland No. 43, Italy No. 84 and UK No. 103. Two singles followed: \"Téo & Téa\", first as a promotional release for clubs and radio and then as a general release, and \"Vintage\", a download-only single on 16 July 2007 with two remixes by ATB. The Guardian rated the album 1 out of 5 and called the melodies infantile, comparing them to a music-shop demonstration room in 1979, while AllMusic rated it 3.5 out of 5 and wrote that Jarre may be retro but is far from tired. Thirteen tracks run from 2:11 to 7:07.\n\nSection timestamps come from level and spectrum measurements of a digital copy of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Fresh News",
+      "duration": "2:45",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Immediate Pulse",
+        "Short Break"
+      ],
+      "role": "Album role: The opening track, a short piece that reaches full level within 15 seconds; IndieLondon described it as setting the tone for the tracks that follow.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start, with the pulse and the top end arriving within ten seconds."
+        },
+        {
+          "timestamp": "0:13",
+          "section": "Full section",
+          "description": "The low end and top end open to full level and stay there, apart from a short thinning of the top end at 1:15.",
+          "detail": "IndieLondon called the opening number incredibly lively and said that it sets the tone for the tracks that follow."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Break",
+          "description": "The music drops almost to silence for about ten seconds."
+        },
+        {
+          "timestamp": "2:25",
+          "section": "Ending",
+          "description": "The level falls to a quiet tail that runs to about 2:35, followed by silence."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Téo & Téa",
+      "duration": "3:29",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "Promotional Single",
+        "Computer-Generated Video",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The title track, second in the running order, released as a promotional single for clubs and radio and then generally.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at full level with a deep low end and no lead-in.",
+          "detail": "The video clip for the title track features two computer-generated characters, one male and one female, that Jarre described as like twins."
+        },
+        {
+          "timestamp": "0:21",
+          "section": "Groove",
+          "description": "After a short dip in the low end at 0:15, a fuller low end and a steady pulse settle in."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Brighter section",
+          "description": "The top end opens and the pulse becomes more defined."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Break",
+          "description": "The level and the low end fall away for about 15 seconds."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Return",
+          "description": "The full groove comes back with a heavier low end, and the track stays at this level to near the end."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Ending",
+          "description": "The top end thins and the track stops."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Beautiful Agony",
+      "duration": "4:40",
+      "energy": "mid",
+      "tags": [
+        "Anne Parillaud",
+        "Additional Vocals",
+        "Dark Mid-Section"
+      ],
+      "role": "Album role: The track with Anne Parillaud's additional vocals, placed before the long build of \"Touch to Remember\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that reaches full level within ten seconds.",
+          "detail": "The liner notes credit Anne Parillaud with additional vocals on this track; The Guardian and The Times describe them as wailing."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Main groove",
+          "description": "A steady groove with a bright top end holds for most of the first minute and a half."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Dip",
+          "description": "The level falls briefly for about ten seconds, then the groove returns."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Darker passage",
+          "description": "The top end falls away and the texture turns duller for about half a minute."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Bright return",
+          "description": "The top end returns and the track holds a high level for the next minute."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Break",
+          "description": "The level drops for about ten seconds, then the full arrangement returns."
+        },
+        {
+          "timestamp": "4:20",
+          "section": "Ending",
+          "description": "The top end and the low end thin out and the track closes on a quieter stretch."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Touch to Remember",
+      "duration": "6:09",
+      "energy": "mid",
+      "tags": [
+        "Slow Build",
+        "Late Beat Entry",
+        "Bass Swell",
+        "Longest Track Before Closer"
+      ],
+      "role": "Album role: The longest track before the closer, with a beatless opening of about 40 seconds before the groove begins.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, beatless opening with little top end."
+        },
+        {
+          "timestamp": "0:40",
+          "section": "Beat entry",
+          "description": "The beat and the top end enter together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:36",
+          "section": "Plateau",
+          "description": "A long, even stretch with a slightly darker top end."
+        },
+        {
+          "timestamp": "2:05",
+          "section": "Low-end drop",
+          "description": "The low end drops out for about 20 seconds, then returns at 2:25."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Darker stretch",
+          "description": "The top end dims for about half a minute while the groove continues."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Bass swell",
+          "description": "The sub-bass swells and the track reaches its loudest stretch around 4:00."
+        },
+        {
+          "timestamp": "5:05",
+          "section": "Late section",
+          "description": "A brighter, thinner section in which the sub-bass drops out at 5:40."
+        },
+        {
+          "timestamp": "5:59",
+          "section": "Ending",
+          "description": "The track stops."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "OK, Do It Fast",
+      "duration": "3:26",
+      "energy": "high",
+      "tags": [
+        "Driving Groove",
+        "Steady High Level",
+        "Fade-Out Ending"
+      ],
+      "role": "Album role: A loud, dense track that keeps its level for most of its length, placed straight after the slow build of \"Touch to Remember\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The low end opens the track and the top end arrives within ten seconds."
+        },
+        {
+          "timestamp": "0:09",
+          "section": "Full groove",
+          "description": "A loud, steady groove with a strong low end that holds almost to the end."
+        },
+        {
+          "timestamp": "0:47",
+          "section": "Second section",
+          "description": "The top end narrows and the texture turns more muffled."
+        },
+        {
+          "timestamp": "1:06",
+          "section": "Break",
+          "description": "The highs drop out for about ten seconds."
+        },
+        {
+          "timestamp": "1:39",
+          "section": "Bright stretch",
+          "description": "The top end opens wide and the track reaches its loudest stretch around 1:50."
+        },
+        {
+          "timestamp": "2:28",
+          "section": "Return",
+          "description": "A final cycle of the groove begins with a short change of texture."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Fade-out",
+          "description": "The highs thin out and the level falls steadily until the track ends."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Partners in Crime 1",
+      "duration": "3:39",
+      "energy": "mid",
+      "tags": [
+        "Two-Part Pair",
+        "Quiet Intro",
+        "Quiet Tail"
+      ],
+      "role": "Album role: The first half of a two-track pair at the middle of the album, with a quiet opening and a quiet ending.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with almost no low end."
+        },
+        {
+          "timestamp": "0:22",
+          "section": "Beat entry",
+          "description": "The low end and the beat enter together: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Break",
+          "description": "The level and the low end fall, and the track thins to a quiet stretch."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Beat returns",
+          "description": "The beat comes back with a full low end and holds until the final minute."
+        },
+        {
+          "timestamp": "3:11",
+          "section": "Quiet tail",
+          "description": "The low end drops out and the track ends on a quiet stretch."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Partners in Crime 2",
+      "duration": "3:35",
+      "energy": "mid",
+      "tags": [
+        "Two-Part Pair",
+        "Long Quiet Intro",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: The second half of the \"Partners in Crime\" pair, with a very quiet opening and a late beat entry.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening that stays low for the first 45 seconds."
+        },
+        {
+          "timestamp": "0:49",
+          "section": "Beat entry",
+          "description": "The full beat and low end enter at once: the largest jump in level in the track."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Dip",
+          "description": "A short pause in the top end and low end before the groove resumes."
+        },
+        {
+          "timestamp": "2:57",
+          "section": "Wind-down",
+          "description": "The low end drops away and the level falls."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Quiet tail",
+          "description": "A quiet tail carries the track to its end."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Chatterbox",
+      "duration": "2:17",
+      "energy": "mid",
+      "tags": [
+        "Short Track",
+        "Bass Swell",
+        "Low-End Drop Ending"
+      ],
+      "role": "Album role: A short track between the \"Partners in Crime\" pair and \"In the Mood for You\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet start that builds over the first half minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Full groove",
+          "description": "The track reaches its full level with a strong low end, which swells around 0:58."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Bright layer",
+          "description": "A bright top layer enters."
+        },
+        {
+          "timestamp": "2:02",
+          "section": "Ending",
+          "description": "The low end drops out and the track stops."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "In the Mood for You",
+      "duration": "4:20",
+      "energy": "mid",
+      "tags": [
+        "Vocoder Vocals",
+        "Jarre Vocal",
+        "Mid-Range Layers"
+      ],
+      "role": "Album role: The album's vocal feature, the track on which the liner notes credit Jarre's own vocoder-filtered vocals.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft opening that carries a low end from the start and builds over about 20 seconds."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Main section",
+          "description": "Mid-range layers enter over the pulse and the level rises.",
+          "detail": "The liner notes credit Jarre with vocoder-filtered vocals on this track."
+        },
+        {
+          "timestamp": "1:21",
+          "section": "Thinner passage",
+          "description": "The bass drops out for about 40 seconds."
+        },
+        {
+          "timestamp": "1:59",
+          "section": "Break",
+          "description": "The level and the mid-range fall to a quiet stretch."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Low-end passage",
+          "description": "A heavy low end plays briefly with the top end cut, and the bright top returns at 2:20."
+        },
+        {
+          "timestamp": "2:37",
+          "section": "Main section returns",
+          "description": "The mid-range layers come back and the track holds an even level."
+        },
+        {
+          "timestamp": "3:45",
+          "section": "Fade",
+          "description": "The level falls over the last half minute."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Gossip",
+      "duration": "2:11",
+      "energy": "mid",
+      "tags": [
+        "Shortest Track",
+        "Bass Drop-Outs",
+        "Pulsing Groove"
+      ],
+      "role": "Album role: The shortest track on the album, a pulsing groove in which the bass drops out twice.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet start that reaches the groove within 15 seconds."
+        },
+        {
+          "timestamp": "0:15",
+          "section": "Groove",
+          "description": "The bass and the pulse enter together."
+        },
+        {
+          "timestamp": "0:43",
+          "section": "Bass cut",
+          "description": "The bass drops out for about ten seconds, returns at 0:53, and drops out again at 1:13 for the same length."
+        },
+        {
+          "timestamp": "1:58",
+          "section": "Ending",
+          "description": "The level falls and the pulse fades."
+        }
+      ]
+    },
+    {
+      "num": 11,
+      "title": "Vintage",
+      "duration": "3:07",
+      "energy": "high",
+      "tags": [
+        "Second Single",
+        "Download-Only Single",
+        "ATB Remixes",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: The album's second single, released as a download on 16 July 2007, placed near the end of the running order.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A beatless, sparse opening that keeps a low level for about 35 seconds."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Beat entry",
+          "description": "The low end and the pulse enter, and the track is at full level by 0:45.",
+          "detail": "The download single of 16 July 2007 included two remixes by ATB."
+        },
+        {
+          "timestamp": "1:49",
+          "section": "Break",
+          "description": "The level and the low end drop for about 13 seconds."
+        },
+        {
+          "timestamp": "2:02",
+          "section": "Beat returns",
+          "description": "The full groove returns and holds until the last 10 seconds."
+        },
+        {
+          "timestamp": "3:02",
+          "section": "Ending",
+          "description": "The track drops to a quiet tail."
+        }
+      ]
+    },
+    {
+      "num": 12,
+      "title": "Melancholic Rodeo",
+      "duration": "3:51",
+      "energy": "high",
+      "tags": [
+        "Even Groove",
+        "Abrupt Start",
+        "Steady Level"
+      ],
+      "role": "Album role: The last track before the closing \"Téo & Téa 4:00 AM\", an even groove that keeps a steady level from its fifth second.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short quiet lead-in of about five seconds."
+        },
+        {
+          "timestamp": "0:05",
+          "section": "Full groove",
+          "description": "The full arrangement enters abruptly with a pulse and a full low end."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Layer change",
+          "description": "The mid-range changes and the top end narrows while the groove continues."
+        },
+        {
+          "timestamp": "2:11",
+          "section": "Steady stretch",
+          "description": "The arrangement changes only in small steps of layers until the end."
+        },
+        {
+          "timestamp": "3:41",
+          "section": "Ending",
+          "description": "The track stops."
+        }
+      ]
+    },
+    {
+      "num": 13,
+      "title": "Téo & Téa 4:00 AM",
+      "duration": "7:07",
+      "energy": "high",
+      "tags": [
+        "Album Closer",
+        "Longest Track",
+        "Shares Title-Track Name",
+        "Steady Pulse"
+      ],
+      "role": "Album role: The closing track and the longest on the album at 7:07, sharing the title track's name with a time of day added.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Opening",
+          "description": "The track starts at full level with a pulse and a low end and no lead-in."
+        },
+        {
+          "timestamp": "0:58",
+          "section": "Break",
+          "description": "The low end drops out and the beat thins for about 20 seconds."
+        },
+        {
+          "timestamp": "1:18",
+          "section": "Beat returns",
+          "description": "The low end returns and the groove builds, with a brighter top end from 1:32."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Section change",
+          "description": "The texture changes and the top end opens further at 2:46."
+        },
+        {
+          "timestamp": "4:18",
+          "section": "Late section",
+          "description": "Another change of layers, followed by a steady, bright stretch."
+        },
+        {
+          "timestamp": "5:34",
+          "section": "Second break",
+          "description": "The level falls for about 25 seconds, with the low end reduced."
+        },
+        {
+          "timestamp": "5:49",
+          "section": "Final section",
+          "description": "The full groove returns with a brighter top end and holds to the last few seconds."
+        },
+        {
+          "timestamp": "7:02",
+          "section": "Ending",
+          "description": "The level and the top end drop and the track closes."
+        }
+      ]
+    }
+  ]
+}

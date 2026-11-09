@@ -1,0 +1,350 @@
+{
+  "id": "jean-michel-jarre-zoolook",
+  "kind": "reference",
+  "artist": "Jean-Michel Jarre",
+  "title": "Zoolook",
+  "year": 1984,
+  "label": "Disques Dreyfus · Polydor",
+  "producer": "Jean-Michel Jarre",
+  "genre": "Electronic / Electropop",
+  "genreTags": [
+    "Electronic",
+    "Electropop",
+    "Sound Collage",
+    "New Age"
+  ],
+  "runtime": "38:01",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/1/16/Zoolook_Jarre_Album.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Zoolook",
+  "overview": "Jarre's seventh studio album, released in November 1984 by Disques Dreyfus, is built largely from samples of singing and speech in 25 languages, recorded and edited on the Fairlight CMI. Jarre says he treated voices as instruments and chose words for their phonetic and musical qualities rather than their meaning; the ethnologist Xavier Bellenger supplied tapes and research, and Wikipedia names Pierre Schaeffer's musique concrète as the main influence. It was recorded in 1983–1984 at Jarre's makeshift studio in Croissy-sur-Seine and at Clinton Studio in New York, where guests played: Adrian Belew (guitars, effects), Marcus Miller (bass guitar), Yogi Horton (drums) and Ira Siegel (additional guitars), with Frederick Rousseau on additional keyboards. Laurie Anderson sings an invented language on \"Diva\". The liner notes list the Moog 55, ARP 2600, EMS Synthi AKS, Oberheim OB-Xa, Prophet-5, Yamaha DX7 and EMS Vocoder beside the Linn LM-1, LinnDrum and Michel Geiss's Matrisequencer 250. David Lord mixed most of the album, starting at Trident Studios in London and finishing at Jarre's studio in France. Side one holds the two long tracks, \"Ethnicolor\" and \"Diva\"; side two has five shorter tracks, and \"Blah-Blah Cafe\" and the second half of \"Diva\" rework material from Jarre's 1983 album Musique pour Supermarché.\n\nThe album reached UK No. 47, Germany No. 24, Sweden No. 21, the Netherlands No. 27, Austria No. 28 and Switzerland No. 30, and received a UK Silver certification in 1985. It won the Grand Prix du Disque of the Académie Charles Cros in 1984 and the best instrumental album award at the Victoires de la Musique in April 1985. The singles were \"Zoolook\" (30 November 1984) and \"Zoolookologie\" (31 May 1985). Colin Larkin's Encyclopedia of Popular Music calls it a key moment in the history of sampling in popular music.\n\nThis review follows the original 1984 pressing. A second edition, issued in September 1985, replaces \"Zoolookologie\" with a remix by François Kevorkian and Ron St. Germain and \"Zoolook\" with a remix by René Ameline, and moves them to tracks 3 and 5; the other five tracks are unchanged. Section timestamps are measured on the 1984 CD and are approximate to about ten seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Ethnicolor",
+      "duration": "11:42",
+      "energy": "high",
+      "tags": [
+        "Album Opener",
+        "Longest Track",
+        "Eerie Build",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: Side one's opener and the album's longest track, a slow build of almost twelve minutes whose beat arrives only after the half-way point.",
+      "events": [
+        {
+          "timestamp": "0:05",
+          "section": "Intro",
+          "description": "A quiet, beatless opening that starts at about 0:05 and stays low in level.",
+          "detail": "A 1988 review in Le Devoir, quoted in English on Wikipedia, calls the beginning of the album \"a musical background both morbid and grandiose\"."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Low-end entry",
+          "description": "A deep low-end layer enters and the level rises."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Build",
+          "description": "The top end opens and the music climbs through changing layers for almost two minutes.",
+          "detail": "Jarre's official site describes the track as an eerie build."
+        },
+        {
+          "timestamp": "3:33",
+          "section": "Drop-back",
+          "description": "The highs and the level fall away abruptly, leaving a dark, quiet stretch of about 40 seconds."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Second build",
+          "description": "The low end returns with more weight and the music climbs to a louder crest than the first build."
+        },
+        {
+          "timestamp": "5:13",
+          "section": "Quiet passage",
+          "description": "The level drops and the texture thins for about 90 seconds, without a clear beat."
+        },
+        {
+          "timestamp": "6:45",
+          "section": "Pulse emerges",
+          "description": "A clear rhythmic pulse appears and the top end brightens; the groove settles by about 7:10.",
+          "detail": "The liner notes credit Yogi Horton on drums, Marcus Miller on bass guitar and Adrian Belew on guitars without naming tracks, so the sources do not say who plays on this track."
+        },
+        {
+          "timestamp": "7:40",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the track begins, a steady groove that runs for almost three minutes."
+        },
+        {
+          "timestamp": "10:40",
+          "section": "Fade-out",
+          "description": "The level falls gradually and the track fades to silence by about 11:38."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Diva",
+      "duration": "7:32",
+      "energy": "high",
+      "tags": [
+        "Laurie Anderson",
+        "Invented-Language Vocal",
+        "Side One Closer",
+        "Late Beat Entry"
+      ],
+      "role": "Album role: Side one's closer and the album's feature for Laurie Anderson, who is credited with the vocals; its second half reworks material from Musique pour Supermarché (1983), Jarre's previous album.",
+      "events": [
+        {
+          "timestamp": "0:01",
+          "section": "Intro",
+          "description": "A loose opening without a steady beat.",
+          "detail": "Electronics & Music Maker (February 1985) reports that Jarre asked Anderson to sing as if the words were written by aliens, so that she would convey emotion without a meaning to follow."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Rise",
+          "description": "The level and the top end rise, and the texture grows busier until about 3:00."
+        },
+        {
+          "timestamp": "3:17",
+          "section": "Beat entry",
+          "description": "A steady beat and a heavier low end enter and the top end brightens: the biggest change in the track."
+        },
+        {
+          "timestamp": "5:40",
+          "section": "Break",
+          "description": "The beat and the low end drop out for about 20 seconds."
+        },
+        {
+          "timestamp": "6:03",
+          "section": "Beat returns",
+          "description": "The beat and the bass return at full level."
+        },
+        {
+          "timestamp": "6:45",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades out by about 7:30."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Zoolook",
+      "duration": "3:52",
+      "energy": "high",
+      "tags": [
+        "Title Track",
+        "First Single",
+        "Steady Beat",
+        "Jeunet Video"
+      ],
+      "role": "Album role: The title track and the album's first single, opening side two as the first track with a beat from its opening seconds.",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Beat entry",
+          "description": "The beat is present from the first seconds and the full groove settles by about 0:15.",
+          "detail": "The single came out on 30 November 1984; its video was directed by Jean-Pierre Jeunet and featured twelve robots designed by Marc Caro."
+        },
+        {
+          "timestamp": "1:33",
+          "section": "Thinner stretch",
+          "description": "The low end thins for about 20 seconds."
+        },
+        {
+          "timestamp": "1:56",
+          "section": "Groove returns",
+          "description": "The full groove returns."
+        },
+        {
+          "timestamp": "2:46",
+          "section": "Break",
+          "description": "The top end falls away and the low end weakens for about 20 seconds."
+        },
+        {
+          "timestamp": "3:07",
+          "section": "Final stretch",
+          "description": "The top end returns at once and the final stretch runs at the highest level of the track."
+        },
+        {
+          "timestamp": "3:48",
+          "section": "Ending",
+          "description": "The track stops dead, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Wooloomooloo",
+      "duration": "3:19",
+      "energy": "mid",
+      "tags": [
+        "Beatless",
+        "Darker Side",
+        "Late Bass Entry",
+        "Fade-Out"
+      ],
+      "role": "Album role: A beatless, darker piece on side two, placed between the title track and \"Zoolookologie\".",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A beatless opening in the high register, without bass.",
+          "detail": "Jarre's official site places the track on the darker side of the album."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Low-end entry",
+          "description": "The bass enters and the level jumps: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:13",
+          "section": "Brighter turn",
+          "description": "The top end brightens a little over the sustained low end."
+        },
+        {
+          "timestamp": "1:40",
+          "section": "Loudest stretch",
+          "description": "The loudest part of the track, with the fullest low end, runs to about 2:05."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Fade-out",
+          "description": "The level falls slowly and the track fades out by about 3:18."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Zoolookologie",
+      "duration": "4:21",
+      "energy": "high",
+      "tags": [
+        "Second Single",
+        "Voice and Drum Samples",
+        "Steady Beat",
+        "Fade-Out"
+      ],
+      "role": "Album role: The album's second single, released on 31 May 1985, and the longest track of side two.",
+      "events": [
+        {
+          "timestamp": "0:03",
+          "section": "Beat entry",
+          "description": "The beat and a heavy low end arrive within the first ten seconds, and the groove holds a steady level.",
+          "detail": "Thom Holmes describes the track as a fascinating exploration of samples of both voice and drums."
+        },
+        {
+          "timestamp": "1:46",
+          "section": "Lighter section",
+          "description": "The low end drops out and the beat thins for about 40 seconds."
+        },
+        {
+          "timestamp": "2:27",
+          "section": "Groove returns",
+          "description": "The full groove returns."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Short dip",
+          "description": "The level dips for a few seconds before the groove resumes."
+        },
+        {
+          "timestamp": "3:10",
+          "section": "Final stretch",
+          "description": "A brighter final stretch carries the track to its loudest passage, around 3:40."
+        },
+        {
+          "timestamp": "4:05",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades out by about 4:19."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Blah-Blah Cafe",
+      "duration": "3:21",
+      "energy": "high",
+      "tags": [
+        "1983 Material Reworked",
+        "Early Beat Entry",
+        "Mid-Track Break",
+        "Hard Stop"
+      ],
+      "role": "Album role: A beat-driven track on side two that reworks material from Musique pour Supermarché (1983), placed before the closing \"Ethnicolor II\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, low opening with little treble until about 0:10.",
+          "detail": "Wikipedia, citing Michael Duguay's 2018 Jarre biography, lists the track among the parts of the album that rework material from Musique pour Supermarché."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Beat entry",
+          "description": "The beat and the bass enter at full level: the biggest change in the track."
+        },
+        {
+          "timestamp": "1:37",
+          "section": "Break",
+          "description": "The beat and the bass drop out for about 20 seconds, leaving a lighter midrange texture."
+        },
+        {
+          "timestamp": "1:57",
+          "section": "Beat returns",
+          "description": "The beat and the bass return at full level."
+        },
+        {
+          "timestamp": "2:20",
+          "section": "Brighter finish",
+          "description": "The top end opens and stays brighter until the end."
+        },
+        {
+          "timestamp": "3:19",
+          "section": "Ending",
+          "description": "The track stops dead, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Ethnicolor II",
+      "duration": "3:54",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Understated Rhythm",
+        "Late Bass Entry",
+        "Fade-Out"
+      ],
+      "role": "Album role: The closing track and the second piece titled \"Ethnicolor\", after the 11:42 opener, ending the album with a fade-out.",
+      "events": [
+        {
+          "timestamp": "0:02",
+          "section": "Intro",
+          "description": "A sparse opening with bright highs and no bass."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller texture",
+          "description": "The level rises and the mid register fills in."
+        },
+        {
+          "timestamp": "0:56",
+          "section": "Bass entry",
+          "description": "The bass enters while the highs recede, and the track settles into a heavier, steadier texture: the biggest change in the track."
+        },
+        {
+          "timestamp": "2:52",
+          "section": "Brighter stretch",
+          "description": "The top end rises again for the last minute of the track."
+        },
+        {
+          "timestamp": "3:20",
+          "section": "Fade-out",
+          "description": "The level falls and the track fades to silence by about 3:50."
+        }
+      ]
+    }
+  ]
+}

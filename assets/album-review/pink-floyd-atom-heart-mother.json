@@ -1,0 +1,313 @@
+{
+  "id": "pink-floyd-atom-heart-mother",
+  "kind": "reference",
+  "artist": "Pink Floyd",
+  "title": "Atom Heart Mother",
+  "year": 1970,
+  "label": "Harvest",
+  "producer": "Pink Floyd",
+  "genre": "Progressive Rock / Experimental Rock",
+  "genreTags": [
+    "Progressive Rock",
+    "Experimental Rock",
+    "Rock"
+  ],
+  "runtime": "52:04",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/2/2e/AtomHeartMotherCover.jpeg",
+  "coverSource": "https://en.wikipedia.org/wiki/Atom_Heart_Mother",
+  "overview": "Recorded between 1 March and 26 July 1970 at EMI Studios in London (now Abbey Road Studios), with Peter Bown and Alan Parsons as engineers and Pink Floyd as producer. The title suite was recorded on an eight-track one-inch tape machine and an EMI TG12345 transistorised mixing console. Because EMI forbade splicing the tape, Roger Waters and Nick Mason played the whole 23-minute backing track in one take, and the other parts were overdubbed later, according to Mason's account. Ron Geesin orchestrated the suite and co-composed it without a credit, with the 16-voice John Alldis Choir, brass and orchestral players and the cellist Hafliði Hallgrímsson. Side two holds three band songs, one each by Waters, Richard Wright and David Gilmour, and the three-part \"Alan's Psychedelic Breakfast\", built on the voice and kitchen sounds of the roadie Alan Styles.\n\nHarvest released the album in the UK on 2 October 1970 and in the US on 10 October 1970. It reached UK No. 1 and US No. 55 on the Billboard 200, and was certified Gold in the UK and the US. The suite is made of six sections, listed in the track listing as Father's Shout, Breast Milky, Mother Fore, Funky Dung, Mind Your Throats Please and Remergence, and fills the whole of side one.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Atom Heart Mother",
+      "duration": "23:41",
+      "energy": "high",
+      "tags": [
+        "Six-Part Suite",
+        "Ron Geesin",
+        "John Alldis Choir",
+        "Brass Section",
+        "Side One"
+      ],
+      "role": "Album role: The side-one title suite and the album's longest track, a six-section work for band, choir, brass and cello that alternates loud full-band passages with quiet ones.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track rises out of near silence, with the low end first, and reaches a steady level within about twenty seconds.",
+          "detail": "The suite grew from instrumental figures developed in rehearsal in early 1970 and was first performed live at Hull University on 17 January 1970; its working titles were \"The Amazing Pudding\" and \"Untitled Epic\" (Wikipedia). Mason and Waters are credited with sound effects on this track."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "First full passage",
+          "description": "The arrangement jumps to its full level with open highs, and stays there for half a minute.",
+          "detail": "Wikipedia says the choir takes most of the lead melody lines across the orchestral arrangement, with the rock band mostly providing the backing track, which reverses the usual 1960s practice of putting the band in front of the orchestra."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Quiet section",
+          "description": "The level falls sharply and the highs withdraw, leaving a thin, much quieter texture.",
+          "detail": "The track listing names the second section Breast Milky, which Wikipedia says was inspired by the album cover; its sourced start of 2:50 agrees with this boundary."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Loud stretch",
+          "description": "After a gradual rise from 3:55 the level reaches a sustained loud passage that runs to about 5:20."
+        },
+        {
+          "timestamp": "5:25",
+          "section": "Sudden drop",
+          "description": "The track cuts abruptly to a quiet, lower-level texture that stays steady for more than three minutes.",
+          "detail": "The track listing names the third section Mother Fore."
+        },
+        {
+          "timestamp": "9:10",
+          "section": "Build",
+          "description": "The level rises and the arrangement opens up into a second loud passage lasting about a minute."
+        },
+        {
+          "timestamp": "10:05",
+          "section": "Low-key section",
+          "description": "The loud passage ends and a quieter, darker stretch begins with weak highs, and it holds a steady medium level for more than four minutes."
+        },
+        {
+          "timestamp": "15:00",
+          "section": "Loud stretch",
+          "description": "A third loud passage, with the highs open, runs for about half a minute."
+        },
+        {
+          "timestamp": "15:27",
+          "section": "Sparse section",
+          "description": "The loud sound cuts off and the track drops to its quietest sustained stretch, growing slowly and reaching a loud swell at about 17:40.",
+          "detail": "The track listing names the fifth section Mind Your Throats Please. A swell that ends in a cut to near silence at 17:48 closes the section."
+        },
+        {
+          "timestamp": "17:50",
+          "section": "Last section",
+          "description": "The sound restarts from near silence and builds to a loud passage by about 19:00, which ends in a drop at 19:40.",
+          "detail": "The track listing names the sixth section Remergence. Wikipedia mentions a closing reprise of the main theme in the full-length suite, which the shorter later live version dropped."
+        },
+        {
+          "timestamp": "20:00",
+          "section": "Final build",
+          "description": "A long, steady build starts from a quiet level and rises toward the last loud stretch from about 21:40."
+        },
+        {
+          "timestamp": "23:35",
+          "section": "Ending",
+          "description": "The sound stops dead from full level, without a fade."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "If",
+      "duration": "4:31",
+      "energy": "low",
+      "tags": [
+        "Roger Waters Song",
+        "Folk Ballad",
+        "Acoustic Guitar",
+        "Side Two Opener"
+      ],
+      "role": "Album role: The side-two opener, a quiet Waters ballad after the 23-minute suite.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, sparse opening that starts almost at once and settles at a gentle level by 0:15.",
+          "detail": "Wikipedia describes the song as a folk ballad with acoustic guitar by Waters, who sings the lead vocal; the instrument list credits Waters with bass and classical guitar, Gilmour with electric and slide guitar, Mason with drums and Wright with piano and Hammond organ."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Fuller arrangement",
+          "description": "The arrangement grows and a steady low end appears."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Softer passage",
+          "description": "The highs fall back for a short, quieter stretch."
+        },
+        {
+          "timestamp": "2:39",
+          "section": "Brighter section",
+          "description": "The sound opens up with more top end and a fuller level."
+        },
+        {
+          "timestamp": "3:08",
+          "section": "Thinner passage",
+          "description": "The band falls back to a thinner, quieter texture, and the level returns to full at about 4:03.",
+          "detail": "Wikipedia notes that Pink Floyd rarely played the song live and that Waters performed it at solo shows."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Summer '68",
+      "duration": "5:29",
+      "energy": "mid",
+      "tags": [
+        "Richard Wright Song",
+        "Brass",
+        "Piano",
+        "Never Played Live"
+      ],
+      "role": "Album role: The second song of side two written and sung by Wright, with prominent brass in places and a louder, brighter middle than its opening.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening that rises to a moderate level in the first quarter-minute."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Build",
+          "description": "The bass strengthens and the band settles into a fuller level."
+        },
+        {
+          "timestamp": "1:12",
+          "section": "Bright section",
+          "description": "A much louder, brighter section enters with strong highs, and it holds for about a minute.",
+          "detail": "Wikipedia says the song has prominent brass in places and was the only track on the album never played in concert; it credits Wright with piano, Hammond organ and the lead vocal, Gilmour with acoustic and classical guitar, and Mason with drums and percussion."
+        },
+        {
+          "timestamp": "2:03",
+          "section": "Calmer passage",
+          "description": "The level and the highs drop for a calmer stretch."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Bright return",
+          "description": "The bright, loud sound returns and holds for most of the next minute."
+        },
+        {
+          "timestamp": "3:49",
+          "section": "Quieter passage",
+          "description": "The level falls again for a brief, lower passage."
+        },
+        {
+          "timestamp": "4:02",
+          "section": "Final section",
+          "description": "The low end grows and the band returns to a loud, full sound that lasts to the close."
+        },
+        {
+          "timestamp": "5:20",
+          "section": "Ending",
+          "description": "The low end and the pulse stop together, and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Fat Old Sun",
+      "duration": "5:24",
+      "energy": "mid",
+      "tags": [
+        "David Gilmour Song",
+        "Pedal Steel",
+        "Folk Rock",
+        "Slow Build"
+      ],
+      "role": "Album role: The last song of side two before the breakfast piece, a Gilmour song that builds from a quiet start to a loud, bright close.",
+      "events": [
+        {
+          "timestamp": "0:06",
+          "section": "Intro",
+          "description": "The track begins after about six seconds of near silence, and a gentle opening settles at a moderate level by 0:20.",
+          "detail": "Wikipedia credits Gilmour with the lead vocal, pedal steel, acoustic and electric guitar, bass and drums on this track, and Wright with Hammond and Farfisa organ. According to Mason, Gilmour had been told to stay at EMI until he wrote a suitable song."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Low-end dip",
+          "description": "The bass falls away for about twelve seconds, then returns at 1:58."
+        },
+        {
+          "timestamp": "2:41",
+          "section": "Second dip",
+          "description": "The bass drops out again, and the low end comes back strongly at 3:13."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Closing build",
+          "description": "The level and the highs rise steadily toward the loudest part of the song."
+        },
+        {
+          "timestamp": "4:00",
+          "section": "Loudest stretch",
+          "description": "The song reaches its fullest, brightest sound and holds it for about a minute."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fade-out",
+          "description": "The level falls away over the last 20 seconds until the track ends.",
+          "detail": "Wikipedia says the song was a live staple in 1970 and 1971 and became part of Gilmour's solo set in 2006."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Alan's Psychedelic Breakfast",
+      "duration": "12:59",
+      "energy": "high",
+      "tags": [
+        "Three-Part Piece",
+        "Alan Styles",
+        "Sound Effects",
+        "Album Closer"
+      ],
+      "role": "Album role: The closing piece, three segments joined by the speech and kitchen sounds of Alan Styles, with band passages between the near-silent stretches.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts very quietly and grows slowly over the first minute.",
+          "detail": "Wikipedia says the idea came from Waters experimenting with the rhythm of a dripping tap, combined with kitchen sounds recorded by Mason and music recorded at EMI; it credits Alan Styles with voice and sound effects, and Mason and Waters with sound effects."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Louder entry",
+          "description": "The level jumps by a wide margin and a bass-heavy texture starts, which holds a steady level to about 3:20.",
+          "detail": "Wikipedia lists the first of the three segments, Rise and Shine, at 3:33; the measured level falls to near silence at about 3:28."
+        },
+        {
+          "timestamp": "3:28",
+          "section": "Near silence",
+          "description": "The music stops and only a very quiet, noisy sound remains for about a minute."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Band entry",
+          "description": "The band returns from the quiet at a low level and builds to a full, steady sound by about 5:00.",
+          "detail": "Wikipedia lists Sunny Side Up, the second segment, as running from 3:33 to 7:45."
+        },
+        {
+          "timestamp": "7:40",
+          "section": "Cutaway",
+          "description": "The band drops out and a noisy, bright, much quieter passage runs for about a minute."
+        },
+        {
+          "timestamp": "8:42",
+          "section": "Full band",
+          "description": "The full band returns at a loud level, with a strong low end.",
+          "detail": "Wikipedia lists Morning Glory, the third segment, from 7:45 to the end of the track."
+        },
+        {
+          "timestamp": "10:55",
+          "section": "Loudest stretch",
+          "description": "The level rises to the loudest stretch of the track and holds it for about 45 seconds."
+        },
+        {
+          "timestamp": "11:40",
+          "section": "Fall",
+          "description": "The band stops and the level falls quickly."
+        },
+        {
+          "timestamp": "12:00",
+          "section": "Quiet tail",
+          "description": "A very quiet sound remains and fades to the end of the track.",
+          "detail": "Wikipedia says the original LP's inner groove keeps the tap sound playing."
+        }
+      ]
+    }
+  ]
+}

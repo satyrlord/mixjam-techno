@@ -1,0 +1,323 @@
+{
+  "id": "jon-vangelis-private-collection",
+  "kind": "reference",
+  "artist": "Jon & Vangelis",
+  "title": "Private Collection",
+  "year": 1983,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Vocal",
+  "genreTags": [
+    "Electronic",
+    "Vocal",
+    "Synthesizer"
+  ],
+  "runtime": "47:29",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/6/68/PrivateCollection.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Private_Collection_(Jon_and_Vangelis_album)",
+  "overview": "Private Collection, released in 1983 on Polydor, is the third album by Jon and Vangelis, after Short Stories (1980) and The Friends of Mr Cairo (1981). Vangelis composed, arranged and produced it and Jon Anderson wrote the lyrics. It was recorded at a studio in Paris and at Nemo Studios in London, with Raine Shine and Jerome van de Krugt as engineers, in spontaneous sessions in which both musicians improvised music and lyrics; Anderson's finished lyrics and any overdubs were added later, according to vangelis.online. Dick Morrissey plays saxophone on \"And When the Night Comes\", and the sleeve thanks Musicland, Paris, for providing synthesizers. Five songs of under seven minutes lead to \"Horizon\", a piece of nearly 23 minutes that fills the whole back side of the LP.\n\nThe album reached UK No. 22, Netherlands No. 15, Austria No. 18, Sweden No. 24, Germany No. 27, Australia No. 31 and US No. 148 on the Billboard 200, and AllMusic gave it four stars out of five. Singles from it included \"And When the Night Comes\" (UK No. 87) and \"He Is Sailing\" (UK No. 61), with \"Deborah\" issued in Spain and Brazil and \"Polonaise\" in France.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Italian Song",
+      "duration": "2:53",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Fantasy Lyrics",
+        "Short Song"
+      ],
+      "role": "Album role: Short opening song and the only track under three minutes, with invented Italian-sounding lyrics.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The song starts at once, quiet at first, and the level rises within a few seconds.",
+          "detail": "vangelis.online says the song has made-up, Italian-sounding fantasy lyrics and was not released as a single."
+        },
+        {
+          "timestamp": "0:36",
+          "section": "Opening up",
+          "description": "The low end and the top end rise together and the texture opens up."
+        },
+        {
+          "timestamp": "1:42",
+          "section": "Quieter stretch",
+          "description": "The level falls and the sound softens for about half a minute."
+        },
+        {
+          "timestamp": "2:19",
+          "section": "Bright peak",
+          "description": "The brightest and loudest moment of the song, after which it falls away and fades out."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "And When the Night Comes",
+      "duration": "4:35",
+      "energy": "mid",
+      "tags": [
+        "Single",
+        "Dick Morrissey Saxophone",
+        "Steady Pulse"
+      ],
+      "role": "Album role: Single from the album, with a credited guest saxophonist, Dick Morrissey.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track fades in from near-silence and a steady mid-tempo pulse is in place within seconds.",
+          "detail": "Released as a 1983 single (UK Polydor JV3, UK No. 87 per Wikipedia)."
+        },
+        {
+          "timestamp": "1:14",
+          "section": "Lift",
+          "description": "A louder, brighter passage begins as the top end opens up."
+        },
+        {
+          "timestamp": "2:08",
+          "section": "Big lift",
+          "description": "The largest step in the track: level, mid-range and top end rise together.",
+          "detail": "Wikipedia and vangelis.online credit Dick Morrissey with saxophone on this track; neither says where it plays."
+        },
+        {
+          "timestamp": "3:00",
+          "section": "Bright plateau",
+          "description": "The track holds its brightest level for about half a minute."
+        },
+        {
+          "timestamp": "3:27",
+          "section": "Pull-back",
+          "description": "The level and the top end drop, and the pulse carries on at a lower intensity."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Outro",
+          "description": "The level and the top end fall away to the end."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Deborah",
+      "duration": "4:55",
+      "energy": "low",
+      "tags": [
+        "Slow Pulse",
+        "Regional Single",
+        "Quiet Breakdown"
+      ],
+      "role": "Album role: Slow-paced middle song of side one, released as a single in Spain and Brazil.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A soft, low-key opening with a slow pulse.",
+          "detail": "vangelis.online lists 7-inch singles for Spain (with \"Song Is\") and Brazil (with \"And When the Night Comes\")."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Fuller section",
+          "description": "The level and the top end rise and the sound becomes fuller."
+        },
+        {
+          "timestamp": "1:38",
+          "section": "Pull-back",
+          "description": "The level eases and the texture thins."
+        },
+        {
+          "timestamp": "2:17",
+          "section": "Peak",
+          "description": "The loudest and brightest stretch of the song, held for about half a minute."
+        },
+        {
+          "timestamp": "2:58",
+          "section": "Breakdown",
+          "description": "The level and the low end fall sharply and the texture empties out for about 40 seconds."
+        },
+        {
+          "timestamp": "3:41",
+          "section": "Return",
+          "description": "The top end and the level come back for the closing section."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Outro",
+          "description": "The music falls away and the song ends."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Polonaise",
+      "duration": "5:24",
+      "energy": "mid",
+      "tags": [
+        "Regional Single",
+        "Quiet Opening",
+        "Two Climbs"
+      ],
+      "role": "Album role: Late side-one song with a dark, quiet start and two climbs, released as a single in France.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A dark, quiet opening with almost no top end; the level and brightness build over the first minute.",
+          "detail": "vangelis.online lists a French 7-inch single (with \"Song Is\"); the song is also the B-side of the UK \"He Is Sailing\" single (Polydor JV4)."
+        },
+        {
+          "timestamp": "0:55",
+          "section": "First lift",
+          "description": "The level and the top end rise for the first time."
+        },
+        {
+          "timestamp": "2:12",
+          "section": "Build",
+          "description": "A sustained climb in level and brightness begins."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "Peak",
+          "description": "The music reaches its loudest and brightest stretch and stays there for about a minute."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Breakdown",
+          "description": "The level and the low end fall away sharply and the texture empties."
+        },
+        {
+          "timestamp": "4:06",
+          "section": "Second climb",
+          "description": "The mid-range and the top end return and the level rises again."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Outro",
+          "description": "The level falls and the track winds down to the end."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "He Is Sailing",
+      "duration": "6:48",
+      "energy": "high",
+      "tags": [
+        "Single",
+        "Steady Pulse",
+        "Long Final Plateau"
+      ],
+      "role": "Album role: Closing song of side one and the longest of the five songs, issued as a single in 1983 (UK No. 61).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse is in place from the first seconds and the top end opens up within the first ten seconds.",
+          "detail": "Released as a UK 7-inch single (Polydor JV4, with \"Polonaise\" on the B-side); Wikipedia gives UK No. 61."
+        },
+        {
+          "timestamp": "1:02",
+          "section": "Lift",
+          "description": "The top end brightens and the level rises a little."
+        },
+        {
+          "timestamp": "2:21",
+          "section": "Pull-back",
+          "description": "The top end dims for about half a minute while the pulse continues."
+        },
+        {
+          "timestamp": "3:14",
+          "section": "Thin passage",
+          "description": "The pulse recedes and the low end thins for a short stretch."
+        },
+        {
+          "timestamp": "3:31",
+          "section": "Final plateau",
+          "description": "The low end returns with weight and the track holds its fullest, loudest level for about two and a half minutes."
+        },
+        {
+          "timestamp": "6:11",
+          "section": "Outro",
+          "description": "The level falls away and the track ends."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Horizon",
+      "duration": "22:53",
+      "energy": "mid",
+      "tags": [
+        "Side Two",
+        "Album Closer",
+        "Mid-Piece Break",
+        "Sparse Second Half"
+      ],
+      "role": "Album role: The whole of side two and the album's only long form, a piece of nearly 23 minutes whose steady first part gives way to a long, quiet, sparse second part.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady pulse is present from the opening, under a dark texture that is quiet at first and brightens over the first two minutes.",
+          "detail": "vangelis.online says the piece is nearly 23 minutes long and fills the entire back side of the LP."
+        },
+        {
+          "timestamp": "2:35",
+          "section": "First peak",
+          "description": "A loud, bright high point, after which the level falls back."
+        },
+        {
+          "timestamp": "7:05",
+          "section": "Long climb",
+          "description": "Another climb begins; from here the level stays high and bright until the break."
+        },
+        {
+          "timestamp": "8:35",
+          "section": "Peak",
+          "description": "One of the loudest and brightest stretches of the whole piece."
+        },
+        {
+          "timestamp": "9:35",
+          "section": "Break",
+          "description": "The steady pulse, the low end and most of the level drop away at once, ending the first part."
+        },
+        {
+          "timestamp": "11:05",
+          "section": "Quietest passage",
+          "description": "The texture is almost empty, with very little low end or top end, for about a minute."
+        },
+        {
+          "timestamp": "12:05",
+          "section": "Low end returns",
+          "description": "The bass comes back and the level rises for a short stretch before the music thins out again."
+        },
+        {
+          "timestamp": "13:15",
+          "section": "Sparse drift",
+          "description": "The level stays low and the texture drifts, with no clear beat and occasional swells of low end."
+        },
+        {
+          "timestamp": "18:25",
+          "section": "Bass swell",
+          "description": "A heavy swell of low end, the strongest in this part, is followed by a sudden fall in level."
+        },
+        {
+          "timestamp": "19:44",
+          "section": "Full return",
+          "description": "The mid-range and the top end come back together and the level rises sharply."
+        },
+        {
+          "timestamp": "21:20",
+          "section": "Closing peak",
+          "description": "A final loud, bright stretch."
+        },
+        {
+          "timestamp": "22:08",
+          "section": "Fade",
+          "description": "The level falls away and the piece fades out."
+        }
+      ]
+    }
+  ]
+}

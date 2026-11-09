@@ -1,0 +1,378 @@
+{
+  "id": "irene-papas-vangelis-rapsodies",
+  "kind": "reference",
+  "artist": "Irene Papas & Vangelis",
+  "title": "Rapsodies",
+  "year": 1986,
+  "label": "Polydor",
+  "producer": "Vangelis",
+  "genre": "Electronic / Modern Classical",
+  "genreTags": [
+    "Electronic",
+    "Modern Classical",
+    "Greek Orthodox",
+    "Liturgical"
+  ],
+  "runtime": "45:56",
+  "coverUrl": "https://upload.wikimedia.org/wikipedia/en/2/2d/Vangelis_Rapsodies.jpg",
+  "coverSource": "https://en.wikipedia.org/wiki/Rapsodies",
+  "overview": "Rapsodies (1986) is an album of Greek songs by Irene Papas and Vangelis, with music and texts based on or inspired by Greek Orthodox liturgical chant; it follows their earlier album Odes (1979). Wikipedia says it was recorded at Nemo Studios, London, in 1986, the last year Vangelis used that studio, and that Vangelis performed and produced the whole album, with Papas singing the lead vocals; the credits name Jess Sutcliffe as sound engineer and John Martin as assistant engineer. Two pieces are Vangelis's own compositions: the instrumental \"Rhapsody\" and \"Song of Songs\", which sets a modern Greek translation by Lefteris Papadopoulos of part of the Song of Solomon. The other five set liturgical texts that Wikipedia's track notes tie to the Virgin Mary, the parable of the wise and foolish virgins and the Easter hymn. The seven pieces run from under two minutes to over eleven, and the longest, \"Song of Songs\", closes the album.\n\nPolydor issued the album, and Wikipedia lists no chart positions or certifications for it; Record Collector gave it 3 out of 5 in a review by Jonny Trunk in November 2007. The rip is the 2007 Universal Music remaster of the 1986 album, which Wikipedia says Vangelis oversaw and which removes the clipping and distortion that Wikipedia reports on the original CD and LP. The sources do not name the instruments or say where the voice sings, so the timeline notes follow measured changes in level and brightness.\n\nSection timestamps are measured on a rip of the CD and are approximate to ±5 seconds.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "To My Champion and Commander",
+      "duration": "6:52",
+      "energy": "mid",
+      "tags": [
+        "Album Opener",
+        "Liturgical Text",
+        "Greek Orthodox",
+        "Quiet Start"
+      ],
+      "role": "Album role: Opener, a liturgical setting of almost seven minutes that begins the album with a slow swell from near silence.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens from near silence and swells to a steady, full level within about 15 seconds.",
+          "detail": "Wikipedia's track note says the text was composed by the patriarch of Constantinople to commemorate the legendary appearance of the Virgin Mary during a siege of the city in the 7th century."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Bright entry",
+          "description": "The top end opens abruptly and the sound turns noticeably brighter."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Second bright passage",
+          "description": "After a darker stretch the top end opens again and the level holds steady for about a minute."
+        },
+        {
+          "timestamp": "2:26",
+          "section": "Quiet passage",
+          "description": "The level falls and the texture thins into a quiet, sparse stretch that lasts about a minute and a half."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Loud attacks",
+          "description": "The level jumps sharply from a quiet bed to full level and falls back within seconds; a second jump of the same kind follows soon after."
+        },
+        {
+          "timestamp": "5:26",
+          "section": "Final swell",
+          "description": "The level and brightness rise again to a full, bright stretch that lasts about half a minute."
+        },
+        {
+          "timestamp": "6:05",
+          "section": "Outro",
+          "description": "The level drops at once into a darker, quieter tail and the track fades to silence over its last twenty seconds or so."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Oh, My Sweet Springtime",
+      "duration": "8:42",
+      "energy": "mid",
+      "tags": [
+        "Liturgical Text",
+        "Lament",
+        "Long Form",
+        "Alternating Passages"
+      ],
+      "role": "Album role: Second piece and the longest of the five liturgical settings; Wikipedia ties its text to the lament of the Virgin Mary, often sung on the Friday before Easter.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts at once at a low level in a dark, low-weighted texture and stays quiet and steady for about 80 seconds.",
+          "detail": "Wikipedia's track note describes the text as a lament of the Virgin Mary on seeing the body of her dead son, Jesus. MusicBrainz credits Irene Papas with vocals on this recording."
+        },
+        {
+          "timestamp": "1:22",
+          "section": "Bright entry",
+          "description": "The top end opens and the level rises; bright and darker passages then alternate for almost three minutes."
+        },
+        {
+          "timestamp": "4:15",
+          "section": "Quiet stretch",
+          "description": "The level falls and the top end thins out; the texture stays dark and sparse for about 50 seconds."
+        },
+        {
+          "timestamp": "5:08",
+          "section": "Low surge",
+          "description": "A short, heavy surge in the low end marks a change of section."
+        },
+        {
+          "timestamp": "5:54",
+          "section": "Long bright stretch",
+          "description": "The top end opens again and a long bright stretch with short dips begins and runs almost to the end of the track."
+        },
+        {
+          "timestamp": "8:30",
+          "section": "Outro",
+          "description": "The level drops at once and the track ends within about ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "I See Your Bridal Chamber All Bedecked",
+      "duration": "1:37",
+      "energy": "low",
+      "tags": [
+        "Liturgical Text",
+        "Interlude",
+        "Matthew 25",
+        "Short Track"
+      ],
+      "role": "Album role: Short interlude of under two minutes between the long second piece and the instrumental \"Rhapsody\"; the only piece on the album shorter than four minutes.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet, sparse opening that lasts about 20 seconds.",
+          "detail": "Wikipedia's track note says the text is taken from the parable of the wise and foolish virgins in Matthew 25 and relates to the second coming."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Louder passages",
+          "description": "Louder, brighter passages begin to break through the quiet bed and alternate with quieter ones."
+        },
+        {
+          "timestamp": "1:00",
+          "section": "Peak",
+          "description": "The loudest and fullest moment of the track arrives, strongest in the middle range."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Outro",
+          "description": "The level falls away and the track ends within about ten seconds."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Rhapsody",
+      "duration": "5:26",
+      "energy": "mid",
+      "tags": [
+        "Instrumental",
+        "Original Composition",
+        "Album Midpoint"
+      ],
+      "role": "Album role: The album's only instrumental, an original Vangelis composition placed at the centre of the seven tracks, after the first three liturgical settings and before the last three pieces.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens quietly and gains level and weight over its first 20 seconds.",
+          "detail": "Wikipedia's track note calls it an original instrumental composition by Vangelis."
+        },
+        {
+          "timestamp": "1:24",
+          "section": "Fuller section",
+          "description": "After a short dip the level jumps and the top end opens; the texture is fuller and louder from here."
+        },
+        {
+          "timestamp": "2:10",
+          "section": "Peak",
+          "description": "The loudest stretch of the track, with the most weight in the low end and the middle range, lasts about 20 seconds."
+        },
+        {
+          "timestamp": "2:29",
+          "section": "Sparse stretch",
+          "description": "The level falls and the low end drops out; the texture stays thin and quiet for about half a minute."
+        },
+        {
+          "timestamp": "3:06",
+          "section": "Return",
+          "description": "The low end comes back and the level rises to a steady, full stretch of about half a minute."
+        },
+        {
+          "timestamp": "3:58",
+          "section": "Final section",
+          "description": "The level rises and falls in short waves that stay below the peak of the middle of the track."
+        },
+        {
+          "timestamp": "5:06",
+          "section": "Outro",
+          "description": "The level falls and the track ends in a short tail of about fifteen seconds."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "The Beauty of Your Virginity and the Splendor of Your Purity",
+      "duration": "4:42",
+      "energy": "mid",
+      "tags": [
+        "Liturgical Text",
+        "Angel Gabriel Text",
+        "Alternating Passages"
+      ],
+      "role": "Album role: Liturgical setting that follows \"Rhapsody\" and opens the album's final run of three pieces; Wikipedia ties its text to words the angel Gabriel said to the Virgin Mary.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens quietly in a dark, low-weighted texture with almost no top end for about 20 seconds.",
+          "detail": "Wikipedia's track note says the text is something the angel Gabriel said to the Virgin Mary, and that the quoted statement is incomplete."
+        },
+        {
+          "timestamp": "0:23",
+          "section": "Bright entry",
+          "description": "The top end opens suddenly and the level rises to the first full stretch of the track."
+        },
+        {
+          "timestamp": "0:46",
+          "section": "Drop-back",
+          "description": "The level and brightness fall sharply after the first full stretch."
+        },
+        {
+          "timestamp": "1:01",
+          "section": "Alternating passages",
+          "description": "Fuller, brighter passages and thinner, quieter ones alternate for about two and a half minutes."
+        },
+        {
+          "timestamp": "3:32",
+          "section": "Final build",
+          "description": "The level and the weight in the low end rise to a full, bright stretch that lasts about 45 seconds."
+        },
+        {
+          "timestamp": "4:21",
+          "section": "Outro",
+          "description": "The level falls and the track fades to silence in a short tail."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Resurrection",
+      "duration": "7:23",
+      "energy": "high",
+      "tags": [
+        "Easter Hymn",
+        "Liturgical Text",
+        "Two Peaks",
+        "Quiet Middle"
+      ],
+      "role": "Album role: Penultimate piece, a setting of the Easter hymn that Wikipedia says is sung on Easter Sunday, the counterpart to the Friday-before-Easter lament of the second track.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track opens from near silence and stays low and gentle for the first minute, brightening gradually.",
+          "detail": "Wikipedia's track note describes the text as an Easter hymn sung on Easter Sunday and through the Eastern Orthodox Paschal season."
+        },
+        {
+          "timestamp": "0:52",
+          "section": "Brightening",
+          "description": "The top end opens and the level rises."
+        },
+        {
+          "timestamp": "1:27",
+          "section": "Low-end entry",
+          "description": "A low-frequency layer enters under the music and the level keeps rising."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Peak",
+          "description": "The loudest and fullest stretch of the track begins, with the low end at its strongest, and lasts for almost a minute."
+        },
+        {
+          "timestamp": "3:05",
+          "section": "Quiet stretch",
+          "description": "The level drops in one step and the low end disappears; the music stays thin and quiet for almost two minutes."
+        },
+        {
+          "timestamp": "4:57",
+          "section": "Low-end return",
+          "description": "The low end comes back and the level climbs."
+        },
+        {
+          "timestamp": "5:27",
+          "section": "Second peak",
+          "description": "A second full, bright stretch follows and lasts close to a minute."
+        },
+        {
+          "timestamp": "6:16",
+          "section": "Drop-back",
+          "description": "The level falls abruptly and the track settles into a thin, quiet close that ends with a short fade."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Song of Songs",
+      "duration": "11:13",
+      "energy": "low",
+      "tags": [
+        "Song of Solomon",
+        "Original Composition",
+        "Longest Track",
+        "Long Fade-Out",
+        "Modern Greek Translation"
+      ],
+      "role": "Album role: Closing piece and the longest on the album, Vangelis's setting of a modern Greek translation of part of the Song of Solomon, ending in a long fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The track starts almost silent and settles within about 30 seconds into a quiet, dark, low-weighted texture with no top end.",
+          "detail": "Wikipedia says the text is a modern Greek translation of part of the Song of Solomon, set to an original composition by Vangelis, and credits the translation to Lefteris Papadopoulos."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Lighter texture",
+          "description": "The texture lightens a little as upper content enters over the dark bed."
+        },
+        {
+          "timestamp": "1:26",
+          "section": "Opening out",
+          "description": "The top end opens further and the level rises slightly for about half a minute."
+        },
+        {
+          "timestamp": "2:34",
+          "section": "Fuller passage",
+          "description": "The sound fills out with more upper content and holds a steady level."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Swell",
+          "description": "A short, loud, bright swell breaks the steady level for a few seconds."
+        },
+        {
+          "timestamp": "4:47",
+          "section": "Quiet stretch",
+          "description": "The level and the upper content fall for about 25 seconds."
+        },
+        {
+          "timestamp": "5:13",
+          "section": "Bright return",
+          "description": "The upper content returns sharply and the texture brightens."
+        },
+        {
+          "timestamp": "6:30",
+          "section": "Loudest passage",
+          "description": "The loudest passage of the track begins, strong in the middle range and the top end, and lasts about 20 seconds before the level falls back."
+        },
+        {
+          "timestamp": "7:31",
+          "section": "Dark stretch",
+          "description": "The upper content drops away and the sound mostly returns to the dark, low-weighted texture of the opening for about a minute and a half."
+        },
+        {
+          "timestamp": "9:07",
+          "section": "Last bright passage",
+          "description": "The upper content returns and the level rises to a final full stretch of about 40 seconds."
+        },
+        {
+          "timestamp": "10:00",
+          "section": "Fade-out",
+          "description": "The level falls steadily and the track fades to silence over its last minute."
+        }
+      ]
+    }
+  ]
+}
