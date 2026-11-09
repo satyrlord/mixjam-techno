@@ -511,7 +511,9 @@ impl Core {
                 let smeared = b.process(a.process(x, 0.6), 0.6);
                 x += (smeared - x) * bloom;
             }
-            feed[side] = self.input_tone[side].process(x) + shimmer * self.shimmer[side];
+            // The shimmer's return passes the cuts too: each pass climbs an
+            // octave, and only the high cut keeps that climb from running away.
+            feed[side] = self.input_tone[side].process(x + shimmer * self.shimmer[side]);
         }
         // The network.
         let depth = self.depth.next();
@@ -842,6 +844,46 @@ mod tests {
         let without = level_at(&plain, 800.0) / level_at(&plain, 400.0);
         let with = level_at(&shimmering, 800.0) / level_at(&shimmering, 400.0);
         assert!(with > 4.0 * without, "{without} vs {with}");
+    }
+
+    #[test]
+    fn a_shimmering_hall_dies_away() {
+        // A long bloom hall with the shimmer on, as songs set it. With the
+        // cuts out of the loop, the shimmer's octave-up return must still
+        // pass them, or each pass climbs an octave and the tail runs away.
+        for amount in [38.0, 100.0] {
+            let settings = Aetherform {
+                space_model: SpaceModel::Hall,
+                decay_seconds: 9.5,
+                character: ReverbCharacter::Bloom,
+                low_cut_hz: 340.0,
+                high_cut_hz: 7200.0,
+                shimmer_enabled: true,
+                shimmer_amount_percent: amount,
+                ..neutral()
+            };
+            let mut core = reverb(&settings);
+            let mut seed = 1u32;
+            let (mut during, mut late) = (0.0, 0.0);
+            for i in 0..(30.0 * RATE) as usize {
+                let x = if i < (2.0 * RATE) as usize {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    0.3 * (f64::from(seed >> 8) / f64::from(1u32 << 24) - 0.5)
+                } else {
+                    0.0
+                };
+                let (l, r) = core.process(x, x);
+                let energy = l * l + r * r;
+                if i < (2.0 * RATE) as usize {
+                    during += energy;
+                } else if i >= (28.0 * RATE) as usize {
+                    late += energy;
+                }
+            }
+            // 2 s against 2 s, 26 s after the input stopped: far under.
+            let drop = 10.0 * (late / during + 1e-30).log10();
+            assert!(drop < -40.0, "shimmer {amount} %: {drop:.1} dB");
+        }
     }
 
     #[test]
