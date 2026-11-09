@@ -6712,6 +6712,18 @@ mod tests {
         // through its rounded dB label and change the saved sound.
         focus_control(&ctx, &mut app, &output, "Track 2 gain value");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        // The edit text has one decimal, like the label (0.3333 is -9.54 dB).
+        assert!(
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.value() == Some("-9.5")),
+            "The focused gain value reads -9.5."
+        );
         focus_control(&ctx, &mut app, &output, "Master gain value");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         focus_control(&ctx, &mut app, &output, "Track 1 left output");

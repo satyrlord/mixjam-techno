@@ -72,6 +72,17 @@ fn db_text(db: f32) -> String {
     }
 }
 
+/// The gain field's text while it is being edited: one decimal, like `db_text`, without the unit.
+fn db_edit_text(db: f32) -> String {
+    if db == f32::NEG_INFINITY {
+        "-inf".into()
+    } else if db.abs() < 0.05 {
+        "0.0".into()
+    } else {
+        format!("{db:.1}")
+    }
+}
+
 fn parse_db(text: &str) -> Option<f64> {
     let value = text.trim().to_lowercase();
     let value = value.trim_end_matches("db").trim();
@@ -1093,13 +1104,35 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
                         || input.num_accesskit_action_requests(id, Action::Increment) > 0
                         || input.num_accesskit_action_requests(id, Action::Decrement) > 0
                 });
+            // The edit text shows one decimal. Leaving the field without typing
+            // commits that text, which must not round the saved amplitude.
+            let typed_id = id.with("typed");
+            let typed = context.data(|data| data.get_temp::<bool>(typed_id)) == Some(true)
+                || has_focus
+                    && ui.input(|input| {
+                        input.events.iter().any(|event| {
+                            matches!(
+                                event,
+                                egui::Event::Text(_)
+                                    | egui::Event::Paste(_)
+                                    | egui::Event::Key {
+                                        key: egui::Key::Backspace | egui::Key::Delete,
+                                        pressed: true,
+                                        ..
+                                    }
+                            )
+                        })
+                    });
+            let shown = parse_db(&db_edit_text(db)).map(|shown| shown as f32);
             let response = ui.add(
                 egui::DragValue::from_get_set(|value| {
                     if let Some(value) = value {
                         let value = value as f32;
                         let lowering_silence =
                             before == 0.0 && relative_edit && value <= SILENCE_DB;
+                        let untouched_text = !typed && !relative_edit && Some(value) == shown;
                         if !lowering_silence
+                            && !untouched_text
                             && value != db
                             && (value.is_finite() || value == f32::NEG_INFINITY)
                         {
@@ -1126,13 +1159,20 @@ fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut 
                         value as f32
                     };
                     if context.memory(|memory| memory.has_focus(id)) {
-                        format!("{value}")
+                        db_edit_text(value)
                     } else {
                         db_text(value)
                     }
                 })
                 .custom_parser(parse_db),
             );
+            ui.ctx().data_mut(|data| {
+                if response.has_focus() {
+                    data.insert_temp(typed_id, typed);
+                } else {
+                    data.remove::<bool>(typed_id);
+                }
+            });
             response.widget_info(|| {
                 let mut info =
                     egui::WidgetInfo::drag_value(ui.is_enabled(), f64::from(db.max(SILENCE_DB)));
