@@ -2043,13 +2043,6 @@ impl MixJamApp {
                             Sense::hover(),
                         );
                         if add_track == Some(index) {
-                            ui.painter().text(
-                                rect.center(),
-                                Align2::CENTER_CENTER,
-                                format!("Add {}", index + 1),
-                                FontId::proportional(13.0),
-                                roles().text,
-                            );
                             let response = ui.interact(
                                 rect,
                                 ui.id().with(("add_track", index)),
