@@ -691,7 +691,7 @@ class MeasureTests(unittest.TestCase):
         song.ducker(2, 1)
         document = song.document()
         for index in (0, 1):
-            document['lanes'][index]['placements'] = [dict(id=index + 1)]
+            document['lanes'][index]['placements'] = [dict(id=index + 1, startTick=0, durationTicks=64)]
         document['lanes'][0]['sends'] = [0.5] * 4
         document['lanes'][0]['automation'] = {'volume': [{'tick': 0, 'value': -3}],
                                              'sends': [[{'tick': 0, 'value': 0.5}]] * 4}
@@ -806,6 +806,60 @@ class MeasureTests(unittest.TestCase):
             self.assertEqual(seen[-1], final_gain)
             self.assertGreater(len(seen), 1)
             np.testing.assert_allclose(pcm, 0.4 * math.sqrt(final_gain), atol=1 / 32768)
+
+    def test_keyed_repeat_keeps_song_end_and_cache_duration(self):
+        for repeated in (None, 1, 2):
+            with self.subTest(repeated=repeated):
+                song = mixjam.Song('keyed repeat duration')
+                song.ducker(2, 1)
+                document = song.document()
+                for index, lane in enumerate(document['lanes'][:3]):
+                    lane['placements'] = [dict(id=index + 1, sampleId=1_000_000,
+                                               startTick=0, durationTicks=64 if index < 2 else 256)]
+                document['samples'] = [dict(id=1_000_000, name='tone')]
+                if repeated is not None:
+                    document['lanes'][repeated - 1]['automation'] = {'repeat': [dict(tick=0, value=16)]}
+                original = json.dumps(document)
+                part = render.keyed_document(document, [2])
+                self.assertEqual(part['song']['loopRegion'], [0, 256])
+                self.assertEqual(json.dumps(document), original)
+                with mock.patch.object(render, 'exe_stamp', return_value='renderer'):
+                    before = render.lane_key(part, [2], True, {1_000_000: 'tone'})
+                    document['lanes'][2]['placements'][0]['durationTicks'] = 512
+                    after = render.lane_key(render.keyed_document(document, [2]), [2], True,
+                                            {1_000_000: 'tone'})
+                    self.assertNotEqual(before, after)
+                document['song']['loopRegion'] = [128, 768]
+                self.assertEqual(render.keyed_document(document, [2])['song']['loopRegion'], [128, 768])
+                document['song']['loopRegion'] = [128, 256]
+                self.assertEqual(render.keyed_document(document, [2])['song']['loopRegion'], [128, 512])
+
+    def test_keyed_lane_plays_only_its_tracks_and_direct_keys(self):
+        song = mixjam.Song('closure')
+        song.ducker(2, 1)
+        song.ducker(1, 3)
+        document = song.document()
+        for index in range(5):
+            document['lanes'][index]['placements'] = [dict(id=index + 1, sampleId=1_000_000 + index,
+                                                         startTick=0, durationTicks=64)]
+            document['lanes'][index]['automation'] = {'volume': [{'tick': 0, 'value': -3}]}
+            document['samples'].append(dict(id=1_000_000 + index, name=f'sound {index}'))
+        part = render.keyed_document(document, [2])
+        self.assertEqual([bool(lane['placements']) for lane in part['lanes'][:5]], [True, True, False, False, False])
+        self.assertNotIn('automation', part['lanes'][3])
+        # A change to a track outside the closure does not change the lane's cache key.
+        with mock.patch.object(render, 'exe_stamp', return_value='renderer'):
+            fingerprints = {1_000_000 + index: f'audio {index}' for index in range(5)}
+            original = render.lane_key(part, [2], True, fingerprints)
+            document['lanes'][4]['gain'] = 0.5
+            self.assertEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
+                             original)
+            document['lanes'][2]['gain'] = 0.5
+            self.assertEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
+                             original)
+            document['lanes'][0]['gain'] = 0.5
+            self.assertNotEqual(render.lane_key(render.keyed_document(document, [2]), [2], True, fingerprints),
+                                original)
 
     def test_fx_key_alone_uses_the_complete_key_context(self):
         song = mixjam.Song('fx key')

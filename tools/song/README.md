@@ -157,9 +157,13 @@ With track keys, gain fitting renders the lanes again after each gain change.
 It permits five changes and reports any remaining error above 0.05 dB. The
 saved gain, lane audio, premaster, and role stems use the same final render.
 Without track keys, gain fitting scales the premaster and role stems.
-Lane groups with external keys use native track and FX stems, with every key
-track retained and only the group's tracks feeding the FX buses. Key audio
-never mixes into that group's output. Native stem export rejects any track
+Lane groups with external keys use native track and FX stems. Only the group's
+tracks and its direct key tracks play, and only the group's tracks feed the FX
+buses. The engine measures each key before its own ducker, so keys do not chain.
+Other tracks do not contribute audio. The render keeps the full song's duration,
+including for Repeat on a selected track or a key track. That duration and global
+Solo state remain cache dependencies. Key audio never mixes into that group's
+output. Native stem export rejects any track
 or FX part outside the PCM16 range, including a key track. Lower the indicated
 gain before retrying. Each group's FX runs separately, so summed lane returns
 can differ from the full song's shared FX when an effect is nonlinear.

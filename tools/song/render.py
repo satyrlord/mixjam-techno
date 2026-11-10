@@ -23,8 +23,8 @@ writes. Each used track without a lane name is its own lane. Without the file,
 the tool writes no role stems. The premaster and stems are sums of separate
 lane renders. An FX return that limits or saturates can differ from a render of
 the whole mix. A group with external keys uses the native track/FX stem
-exporter. Key tracks stay separate from the output and remain in the full song
-context. Stem export rejects an out-of-range track or FX part. Lower that
+exporter. Direct key tracks stay separate from the output, and the render keeps
+the full song's duration. Stem export rejects an out-of-range track or FX part. Lower that
 part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
@@ -240,13 +240,27 @@ def ducker_keys(document, tracks):
 
 
 def keyed_document(document, tracks):
-    """The premaster with every track playing and only `tracks` feeding the FX buses."""
+    """The premaster with `tracks` and their key tracks playing, and only `tracks` feeding the FX buses.
+
+    Every other track is silent: it neither reaches the output nor drives a key.
+    """
     part = board_off(copy(document))
     part['song']['title'] = 'lane'
+    # Keys are measured before their own duckers: keys of keys do not contribute.
+    members = set(tracks) | ducker_keys(document, tracks)
     for index, lane in enumerate(part['lanes'], 1):
         if index not in tracks:
             lane['sends'] = [0.0] * 4
             lane.get('automation', {}).pop('sends', None)
+        if index not in members:
+            lane['placements'] = []
+            lane.pop('automation', None)
+    # Removing unrelated clips must not shorten Repeat on a selected or key track,
+    # or start the FX tail before the full song's end. This bound enters the cache key.
+    end = song_end_tick(document)
+    if song_end_tick(part) < end:
+        loop = part['song'].get('loopRegion')
+        part['song']['loopRegion'] = [loop[0] if loop else 0, end]
     return part
 
 
@@ -352,7 +366,8 @@ def lane_key(part, tracks, keyed, fingerprints=None):
     Placements name their sample by its record, not by its id, because the ids follow the
     order in which a script adds sounds. Global Solo and master gain also affect
     the output. Cached PCM cannot be rescaled after clipping or nonlinear FX.
-    A keyed lane depends on every track.
+    A keyed lane depends on its tracks and every track that still sounds in its
+    keyed document: its key tracks.
     """
     if fingerprints is None:
         fingerprints = source_fingerprints(part)
@@ -362,7 +377,7 @@ def lane_key(part, tracks, keyed, fingerprints=None):
     samples = {s['id']: {k: v for k, v in s.items() if k != 'id'} for s in part['samples']}
     lanes = {}
     for index, lane in enumerate(part['lanes'], 1):
-        if keyed or index in tracks:
+        if index in tracks or (keyed and (lane['placements'] or lane.get('automation'))):
             placements = [dict({k: v for k, v in p.items() if k not in ('id', 'sampleId')},
                                sample=samples[p['sampleId']], audio=fingerprints[p['sampleId']])
                           for p in lane['placements']]
