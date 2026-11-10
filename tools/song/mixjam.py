@@ -25,9 +25,11 @@ sections and the key. render.py, measure.py, audible.py and master.py read it.
 import hashlib
 import json
 import math
+import os
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 
@@ -65,13 +67,23 @@ def gain(decibels):
 
 
 def write_wav(path, rate, data):
-    """Write float samples (frames, channels) as a 16-bit PCM WAV, held to full scale."""
+    """Write float samples (frames, channels) as a 16-bit PCM WAV, held to full scale.
+
+    The file is replaced, not written into: another hard link to the earlier file keeps its audio.
+    """
     ints = np.clip(np.round(np.asarray(data) * 32768), -32768, 32767).astype('<i2')
-    with wave.open(str(path), 'wb') as w:
-        w.setnchannels(ints.shape[1])
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(ints.tobytes())
+    path = Path(path)
+    with NamedTemporaryFile(dir=path.parent, suffix='.tmp', delete=False) as temporary:
+        part = Path(temporary.name)
+    try:
+        with wave.open(str(part), 'wb') as w:
+            w.setnchannels(ints.shape[1])
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(ints.tobytes())
+        os.replace(part, path)
+    finally:
+        part.unlink(missing_ok=True)
 
 
 def read_wav(path):

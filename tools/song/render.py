@@ -33,6 +33,9 @@ not change since an earlier render comes from the cache. Only format-18 to 24 so
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
+A lane file and its cache entry are hard links to one file, so an unchanged
+lane takes no more disk space in a new OUT_DIR. The tools replace a lane file;
+they do not write into it. Copy a lane file before you edit it in another program.
 
 The renderer is the release build in target/release. It runs headless and plays
 no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.
@@ -375,47 +378,84 @@ def lane_key(part, tracks, keyed, fingerprints=None):
     return hashlib.sha256(blob.encode('utf-8')).hexdigest()[:32]
 
 
-def atomic_copy(source, destination, validate=False):
-    """Publish a complete independent copy. A failed copy leaves its destination intact."""
+def file_digest(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as source:
+        for block in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def check_lane_wav(path):
+    """Raise unless `path` is a complete stereo PCM16 WAV."""
+    with wave.open(str(path), 'rb') as audio:
+        if audio.getnchannels() != 2 or audio.getsampwidth() != 2 or audio.getnframes() <= 0:
+            raise ValueError('The cached lane is not a stereo PCM16 WAV.')
+        remaining = audio.getnframes() * 4
+        while remaining:
+            block = audio.readframes(min(262144, (remaining + 3) // 4))
+            if not block:
+                raise ValueError('The cached lane WAV is incomplete.')
+            remaining -= len(block)
+
+
+def share(source, destination, expected_digest=None):
+    """Publish `source` at `destination` as a hard link, so both names use one file on disk.
+
+    Where a link is not possible (another volume or file system), publish a copy.
+    With `expected_digest`, validate the staged WAV and its digest before publication.
+    A failure leaves the destination intact.
+    """
     with NamedTemporaryFile(dir=destination.parent, suffix='.tmp', delete=False) as temporary:
         path = Path(temporary.name)
     try:
-        shutil.copyfile(source, path)
-        if validate:
-            with wave.open(str(path), 'rb') as audio:
-                if audio.getnchannels() != 2 or audio.getsampwidth() != 2 or audio.getnframes() <= 0:
-                    raise ValueError('The cached lane is not a stereo PCM16 WAV.')
-                remaining = audio.getnframes() * 4
-                while remaining:
-                    block = audio.readframes(min(262144, (remaining + 3) // 4))
-                    if not block:
-                        raise ValueError('The cached lane WAV is incomplete.')
-                    remaining -= len(block)
+        path.unlink()
+        try:
+            os.link(source, path)
+        except OSError:
+            shutil.copyfile(source, path)
+        if expected_digest is not None:
+            check_lane_wav(path)
+            if file_digest(path) != expected_digest:
+                raise ValueError('The cached lane WAV does not match its digest.')
         os.replace(path, destination)
     finally:
         path.unlink(missing_ok=True)
 
 
 def from_cache(cache, key, wav):
-    """Copy a complete cached lane to `wav`; treat a missing or damaged entry as a miss."""
+    """Link a complete cached lane at `wav`; treat a missing or damaged entry as a miss.
+
+    An entry whose contents no longer match the digest recorded at publication is damaged:
+    a program wrote into a lane file that shares the entry's storage.
+    """
     entry = cache / CACHE_VERSION / f'{key}.wav'
     try:
-        atomic_copy(entry, wav, validate=True)
+        recorded = entry.with_suffix('.sha256')
+        share(entry, wav, expected_digest=recorded.read_text(encoding='ascii').strip())
     except (OSError, EOFError, ValueError, wave.Error):
         return False
     try:
         os.utime(entry)
     except OSError:
-        pass  # Another render can prune the entry after the copy.
+        pass  # Another render can prune the entry after the link.
     return True
 
 
 def to_cache(cache, key, wav):
-    """Publish one complete lane in the cache, without sharing its writable file."""
+    """Publish one complete lane in the cache. The entry shares the lane file's storage."""
     folder = cache / CACHE_VERSION
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        atomic_copy(wav, folder / f'{key}.wav')
+        digest = file_digest(wav)
+        entry = folder / f'{key}.wav'
+        share(wav, entry)
+        with NamedTemporaryFile('w', dir=folder, suffix='.tmp', delete=False, encoding='ascii') as temporary:
+            temporary.write(digest + '\n')
+        try:
+            os.replace(temporary.name, entry.with_suffix('.sha256'))
+        finally:
+            Path(temporary.name).unlink(missing_ok=True)
     except OSError:
         pass  # Cache failure must not discard a successful render.
 
@@ -438,6 +478,7 @@ def prune_cache(cache, limit=CACHE_LIMIT):
             break
         try:
             entry.unlink(missing_ok=True)
+            entry.with_suffix('.sha256').unlink(missing_ok=True)
             total -= size
         except OSError:
             continue
@@ -578,8 +619,8 @@ def main():
     if scale != 1.0:
         premaster *= scale
         stems = {role: stem * scale for role, stem in stems.items()}
-        # The lane files must match the premaster they sum to. They are copies, so the
-        # cache keeps its entries at the gain they were rendered with.
+        # The lane files must match the premaster they sum to. write_wav replaces a file, so
+        # the cache entry that shared its storage stays at the gain it was rendered with.
         for wav in lanes.values():
             lane_rate, data = read_wav(wav)
             write_wav(wav, lane_rate, data * scale)

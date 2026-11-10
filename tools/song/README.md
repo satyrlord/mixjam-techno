@@ -108,9 +108,15 @@ original. Retain any files that the converted copy needs in the data folder.
 The lane cache defaults to `lane-cache` beside the output folder. It retains
 the most recently used 4 GB in a versioned subfolder. Cache cleanup touches
 only its named entries; earlier cache versions and unrelated files remain.
-Cached audio is copied, so changing an output WAV does not change the cache.
-Missing or damaged entries are rendered again. Use `--no-cache` to render
-every lane.
+A lane WAV in an output folder and its cache entry are hard links to one file,
+so an unchanged lane takes no more disk space in each new output folder. On
+another volume, the lane is copied. The tools replace a lane WAV and do not
+write into it. If another program writes into a lane WAV, the cache entry no
+longer matches its recorded digest and is rendered again; copy a lane WAV
+before you edit it. A missing digest also requires a new render, including for
+entries from earlier tools. The staged link or copy must pass WAV and digest
+checks before it replaces an output. Missing or damaged entries are rendered
+again. Use `--no-cache` to render every lane.
 
 Repeat lane renders retain the whole song's duration, so captured audio can
 continue after the lane's last clip. Their cache keys include that duration.

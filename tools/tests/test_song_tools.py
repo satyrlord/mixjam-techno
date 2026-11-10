@@ -998,28 +998,139 @@ class MeasureTests(unittest.TestCase):
             document['sourceNotices'] = ['adapter provenance']
             self.assertNotEqual(render.lane_key(document, [1], False), original)
 
-    def test_cache_files_are_independent_and_damaged_entries_are_misses(self):
+    def test_cache_shares_storage_and_damaged_entries_are_misses(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             cache, source, output = root / 'cache', root / 'source.wav', root / 'output.wav'
             key = 'a' * 32
             mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
             render.to_cache(cache, key, source)
-            # Editing a delivered lane must not edit the cache, or vice versa.
+            entry = cache / render.CACHE_VERSION / f'{key}.wav'
+            self.assertTrue(os.path.samefile(entry, source))
+            # A tool that rewrites a delivered lane replaces it, so the cache keeps its audio.
             mixjam.write_wav(source, 44100, np.full((8, 2), 0.5))
             self.assertTrue(render.from_cache(cache, key, output))
+            self.assertTrue(os.path.samefile(entry, output))
             np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
             mixjam.write_wav(output, 44100, np.zeros((8, 2)))
             self.assertTrue(render.from_cache(cache, key, output))
             np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
-            entry = cache / render.CACHE_VERSION / f'{key}.wav'
-            entry.write_bytes(entry.read_bytes()[:-4])
-            self.assertFalse(render.from_cache(cache, key, output))
-            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            # A program that writes into the shared file changes the entry: it is a miss.
+            audio = output.read_bytes()
+            with output.open('r+b') as shared:
+                shared.seek(len(audio) - 4)
+                shared.write(b'\x01\x02\x03\x04')
+            other = root / 'other.wav'
+            self.assertFalse(render.from_cache(cache, key, other))
+            self.assertFalse(other.exists())
+            entry.write_bytes(audio[:-4])
+            self.assertFalse(render.from_cache(cache, key, other))
             entry.write_bytes(b'bad WAV')
-            self.assertFalse(render.from_cache(cache, key, output))
+            self.assertFalse(render.from_cache(cache, key, other))
             entry.unlink()
+            self.assertFalse(render.from_cache(cache, key, other))
+
+    def test_cache_requires_a_digest_and_preserves_the_output_on_a_miss(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, output = root / 'cache', root / 'output.wav'
+            key = 'a' * 32
+            folder = cache / render.CACHE_VERSION
+            folder.mkdir(parents=True)
+            mixjam.write_wav(folder / f'{key}.wav', 44100, np.full((8, 2), 0.25))
+            mixjam.write_wav(output, 44100, np.full((8, 2), 0.5))
             self.assertFalse(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.5)
+
+    def test_cache_rejects_a_first_publication_without_its_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, source = root / 'cache', root / 'source.wav'
+            key = 'a' * 32
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            replace = os.replace
+
+            def fail_digest(source, destination):
+                if Path(destination).suffix == '.sha256':
+                    raise OSError('digest publication failed')
+                return replace(source, destination)
+
+            with mock.patch.object(render.os, 'replace', side_effect=fail_digest):
+                render.to_cache(cache, key, source)
+            self.assertFalse(render.from_cache(cache, key, root / 'output.wav'))
+            self.assertEqual(list((cache / render.CACHE_VERSION).glob('*.tmp')), [])
+
+    def test_cache_validates_the_staged_file_before_replacing_the_output(self):
+        for fallback in (False, True):
+            for truncated in (False, True):
+                with self.subTest(fallback=fallback, truncated=truncated), \
+                        tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    cache, source, output = root / 'cache', root / 'source.wav', root / 'output.wav'
+                    key = 'a' * 32
+                    mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+                    render.to_cache(cache, key, source)
+                    mixjam.write_wav(output, 44100, np.full((8, 2), 0.125))
+                    replacement = root / 'replacement.wav'
+                    mixjam.write_wav(replacement, 44100, np.full((8, 2), 0.5))
+                    if truncated:
+                        replacement.write_bytes(replacement.read_bytes()[:-4])
+                    link = os.link
+
+                    def replace_before_link(source, destination):
+                        os.replace(replacement, source)
+                        if fallback:
+                            raise OSError('hard links unavailable')
+                        return link(source, destination)
+
+                    with mock.patch.object(render.os, 'link', side_effect=replace_before_link):
+                        self.assertFalse(render.from_cache(cache, key, output))
+                    np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.125)
+                    self.assertEqual(list(root.glob('*.tmp')), [])
+
+    def test_cache_uses_independent_copies_when_hard_links_are_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, source, output = root / 'cache', root / 'source.wav', root / 'output.wav'
+            key = 'a' * 32
+            mixjam.write_wav(source, 44100, np.full((8, 2), 0.25))
+            with mock.patch.object(render.os, 'link', side_effect=OSError('hard links unavailable')):
+                render.to_cache(cache, key, source)
+                self.assertTrue(render.from_cache(cache, key, output))
+            entry = cache / render.CACHE_VERSION / f'{key}.wav'
+            self.assertFalse(os.path.samefile(entry, source))
+            self.assertFalse(os.path.samefile(entry, output))
+            output.write_bytes(b'edited output')
+            self.assertTrue(render.from_cache(cache, key, output))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+
+    def test_failed_wav_replacement_preserves_existing_audio_and_cleans_the_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output, alias = root / 'output.wav', root / 'alias.wav'
+            mixjam.write_wav(output, 44100, np.full((8, 2), 0.25))
+            os.link(output, alias)
+            with mock.patch.object(mixjam.os, 'replace', side_effect=OSError('replacement failed')):
+                with self.assertRaisesRegex(OSError, 'replacement failed'):
+                    mixjam.write_wav(output, 44100, np.zeros((8, 2)))
+            np.testing.assert_array_equal(mixjam.read_wav(output)[1], 0.25)
+            self.assertTrue(os.path.samefile(output, alias))
+            self.assertEqual(list(root.glob('*.tmp')), [])
+
+    def test_cache_pruning_removes_the_digest_of_a_removed_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory)
+            source = cache / 'source.wav'
+            mixjam.write_wav(source, 44100, np.zeros((8, 2)))
+            old, new = 'a' * 32, 'b' * 32
+            render.to_cache(cache, old, source)
+            render.to_cache(cache, new, source)
+            folder = cache / render.CACHE_VERSION
+            os.utime(folder / f'{old}.wav', (1, 1))
+            os.utime(folder / f'{new}.wav')
+            render.prune_cache(cache, limit=source.stat().st_size)
+            self.assertFalse((folder / f'{old}.sha256').exists())
+            self.assertTrue((folder / f'{new}.sha256').exists())
 
     def test_cache_publication_failure_preserves_existing_entry(self):
         with tempfile.TemporaryDirectory() as directory:
