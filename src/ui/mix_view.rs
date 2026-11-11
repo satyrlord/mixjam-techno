@@ -158,7 +158,7 @@ pub(super) fn track_row(
         ui,
         span(rect, offset, PAN, 16.0),
         1.0,
-        index,
+        &format!("Track {}", index + 1),
         &mut track.pan,
         pan_automated,
     );

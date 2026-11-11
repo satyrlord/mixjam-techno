@@ -639,7 +639,7 @@ fn ducker_section(
 
 /// The EQ's magnitude response, on a frequency scale from 20 Hz to 20 kHz
 /// that spreads octaves evenly. An EQ that is off draws its curve faint.
-fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
+pub(super) fn response_curve(ui: &egui::Ui, rect: Rect, eq: &ChannelEq, name: &str) {
     controls::inset(ui, rect);
     let plot = Rect::from_min_max(
         rect.min + Vec2::new(30.0, 8.0),

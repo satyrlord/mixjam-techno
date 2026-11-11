@@ -3433,6 +3433,7 @@ mod tests {
             maximised: true,
             sounds: true,
             overview: false,
+            inspector: false,
         };
         session.set_layout(layout).unwrap();
         assert_eq!(crate::options::load_layout(&root), layout);

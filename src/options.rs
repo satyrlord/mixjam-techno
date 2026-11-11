@@ -314,11 +314,14 @@ pub struct WorkspaceLayout {
     /// and their own settings above are kept for when it is restored.
     pub maximised: bool,
     /// The Sounds panel at the left of the score is open; off, it folds to
-    /// a named strip. It never shows while the lower panel shows its own
-    /// Sounds module.
+    /// a named strip.
     pub sounds: bool,
     /// The song overview shows above the score; off, it folds to a named bar.
     pub overview: bool,
+    /// The Inspector at the right of the score is open; off, it folds to a
+    /// named strip. A window too narrow for it beside the Sounds panel
+    /// starts with it folded.
+    pub inspector: bool,
 }
 
 impl Default for WorkspaceLayout {
@@ -329,6 +332,7 @@ impl Default for WorkspaceLayout {
             maximised: false,
             sounds: false,
             overview: true,
+            inspector: true,
         }
     }
 }
@@ -545,12 +549,13 @@ mod tests {
             maximised: true,
             sounds: true,
             overview: false,
+            inspector: false,
         };
         save_layout(&root, layout).unwrap();
         assert_eq!(load_layout(&root), layout);
         fs::write(
             root.join(LAYOUT_FILE),
-            br#"{"toolNames":false,"inspector":true}"#,
+            br#"{"toolNames":false,"dock":true}"#,
         )
         .unwrap();
         assert_eq!(

@@ -486,7 +486,14 @@ fn strip(
             at(8.0, height / scale - 116.0),
             Vec2::new(92.0, 16.0) * scale,
         );
-        changed |= pan_slider(ui, pan_rect, scale, index, pan, pan_automated);
+        changed |= pan_slider(
+            ui,
+            pan_rect,
+            scale,
+            &format!("Track {}", index + 1),
+            pan,
+            pan_automated,
+        );
         if center_button(
             ui,
             Rect::from_center_size(
@@ -938,13 +945,13 @@ pub(super) fn center_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &st
     .clicked()
 }
 
-/// A track's pan in `rect`, styled for the strips: "Track N pan". Returns
+/// A track's pan in `rect`, styled for the strips: "{name} pan". Returns
 /// whether it changed.
 pub(super) fn pan_slider(
     ui: &mut egui::Ui,
     rect: Rect,
     scale: f32,
-    index: usize,
+    name: &str,
     pan: &mut f32,
     automated: bool,
 ) -> bool {
@@ -961,7 +968,7 @@ pub(super) fn pan_slider(
             state.bg_fill = roles().cap;
             state.fg_stroke = Stroke::new(1.5 * scale, roles().strip_slot);
         }
-        let response = pan_control(ui, index, pan, automated);
+        let response = pan_control(ui, name, pan, automated);
         changed = response.changed();
         focus_ring(ui, &response, rect, scale);
     });

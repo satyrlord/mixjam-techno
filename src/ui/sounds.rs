@@ -24,18 +24,20 @@ const WRAPPED_CHIPS_HEIGHT: f32 = 440.0;
 const THUMBNAIL_FLOOR: f32 = 0.05;
 
 impl MixJamApp {
-    /// Whether the open Sounds panel shows: chosen and not maximised.
+    /// Whether the open Sounds panel shows: chosen, not maximised, and given
+    /// the room it needs.
     pub(super) fn sounds_panel_open(&self) -> bool {
-        let layout = self.session.layout();
-        layout.sounds && !layout.maximised
+        self.room.sounds
     }
 
-    /// Open the Sounds panel.
+    /// Open the Sounds panel. In a small window the Inspector or the lower
+    /// panel's board folds to make room.
     pub(super) fn open_sounds_panel(&mut self) {
         self.set_layout(|layout| {
             layout.sounds = true;
             layout.maximised = false;
         });
+        self.claim(super::room::Panel::Sounds);
     }
 
     /// The Sounds panel at the left, or its folded strip. A maximised score
@@ -50,7 +52,16 @@ impl MixJamApp {
                 .resizable(false)
                 .frame(egui::Frame::new().fill(roles().panel))
                 .show(ctx, |ui| {
-                    if sounds_strip(ui).clicked() {
+                    if panel_strip(
+                        ui,
+                        "Show the Sounds panel",
+                        "SOUNDS",
+                        1.0,
+                        "Show the Sounds panel. In a small window the Inspector or the lower \
+                         panel's board folds to make room.",
+                    )
+                    .clicked()
+                    {
                         self.open_sounds_panel();
                     }
                 });
@@ -89,7 +100,7 @@ impl MixJamApp {
                     .color(roles().muted),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if fold_button(ui).clicked() {
+                if fold_button(ui, "Fold the Sounds panel", -1.0).clicked() {
                     self.set_layout(|layout| layout.sounds = false);
                 }
             });
@@ -478,9 +489,9 @@ fn paint_thumbnail(painter: &egui::Painter, rect: Rect, peaks: &PeakState, color
     painter.add(mesh);
 }
 
-/// The fold button at the Sounds panel's top right: a chevron toward the edge.
-fn fold_button(ui: &mut egui::Ui) -> Response {
-    let label = "Fold the Sounds panel";
+/// A side panel's fold button: a chevron toward its edge (`direction` -1.0
+/// for the left edge, 1.0 for the right).
+pub(super) fn fold_button(ui: &mut egui::Ui, label: &str, direction: f32) -> Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(24.0), Sense::click());
     if response.hovered() || response.has_focus() {
         ui.painter()
@@ -490,7 +501,7 @@ fn fold_button(ui: &mut egui::Ui) -> Response {
     chevron(
         ui.painter(),
         rect.center(),
-        -1.0,
+        direction,
         if response.hovered() {
             roles().text
         } else {
@@ -501,10 +512,15 @@ fn fold_button(ui: &mut egui::Ui) -> Response {
     response.hover_hint(label)
 }
 
-/// The folded panel: a strip with a chevron and the panel's name, read top
-/// to bottom. The whole strip opens the panel.
-fn sounds_strip(ui: &mut egui::Ui) -> Response {
-    let label = "Show the Sounds panel";
+/// A folded side panel: a strip with a chevron toward the score (`direction`)
+/// and the panel's `title`, read top to bottom. The whole strip opens it.
+pub(super) fn panel_strip(
+    ui: &mut egui::Ui,
+    label: &str,
+    title: &str,
+    direction: f32,
+    hint: &str,
+) -> Response {
     let rect = ui.max_rect();
     let response = ui.allocate_rect(rect, Sense::click());
     if response.hovered() || response.has_focus() {
@@ -520,21 +536,19 @@ fn sounds_strip(ui: &mut egui::Ui) -> Response {
     chevron(
         ui.painter(),
         Pos2::new(rect.center().x, rect.top() + 18.0),
-        1.0,
+        direction,
         color,
     );
-    let galley =
-        ui.painter()
-            .layout_no_wrap("SOUNDS".to_owned(), FontId::proportional(11.0), color);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(title.to_owned(), FontId::proportional(11.0), color);
     // A quarter turn clockwise turns the galley's top edge to the right.
     let at = Pos2::new(rect.center().x + galley.size().y / 2.0, rect.top() + 36.0);
     ui.painter().add(
         egui::epaint::TextShape::new(at, galley, color).with_angle(std::f32::consts::FRAC_PI_2),
     );
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
-    response.hover_hint(
-        "Show the Sounds panel. When the lower panel shows its Sounds module, it changes to Mixer.",
-    )
+    response.hover_hint(hint)
 }
 
 /// A chevron centred on `at`, pointing right for a positive `direction` and

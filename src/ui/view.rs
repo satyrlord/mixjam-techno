@@ -119,7 +119,7 @@ const POSITION_SIZE: Vec2 = Vec2::new(112.0, 42.0);
 const POSITION_SIZE_COMPACT: Vec2 = Vec2::new(76.0, 40.0);
 /// The top bar: the transport row inside its vertical margins.
 const TOP_BAR_MARGIN: i8 = 8;
-const TOP_BAR_HEIGHT: f32 = TRANSPORT_ROW_HEIGHT + 2.0 * TOP_BAR_MARGIN as f32;
+pub(super) const TOP_BAR_HEIGHT: f32 = TRANSPORT_ROW_HEIGHT + 2.0 * TOP_BAR_MARGIN as f32;
 /// Below this width the top bar packs tighter: a stacked brand, narrower
 /// buttons, and no bar and beat beside the position.
 const TOP_BAR_COMPACT_WIDTH: f32 = 1240.0;
@@ -426,8 +426,7 @@ impl MixJamApp {
 
     /// True when `module`'s board shows in an open lower panel.
     pub(super) fn board_shown(&self, module: BottomModule) -> bool {
-        let layout = self.session.layout();
-        self.bottom_module == module && layout.boards && !layout.maximised
+        self.bottom_module == module && self.room.boards
     }
 
     /// Show `module`'s board, or fold the lower panel when it already shows.
@@ -440,16 +439,32 @@ impl MixJamApp {
                 layout.boards = true;
                 layout.maximised = false;
             });
+            self.claim(room::Panel::Boards);
         }
     }
 
     /// Change the workspace layout and keep it for later sessions.
+    /// A panel that this change opens takes the room it shares first.
     pub(super) fn set_layout(&mut self, change: impl FnOnce(&mut WorkspaceLayout)) {
-        let mut layout = self.session.layout();
+        let before = self.session.layout();
+        let mut layout = before;
         change(&mut layout);
         if let Err(error) = self.session.set_layout(layout) {
             self.error(error);
         }
+        for (opened, panel) in [
+            (layout.boards && !before.boards, room::Panel::Boards),
+            (layout.sounds && !before.sounds, room::Panel::Sounds),
+            (
+                layout.inspector && !before.inspector,
+                room::Panel::Inspector,
+            ),
+        ] {
+            if opened {
+                self.claim(panel);
+            }
+        }
+        self.resolve_room();
     }
 
     /// Keep the status bar's row across the whole window, under the rail.
@@ -505,6 +520,8 @@ impl MixJamApp {
             + panel_switch_width(ui, "Sounds")
             + gap
             + panel_switch_width(ui, "Overview")
+            + gap
+            + panel_switch_width(ui, "Inspector")
             + gap
             + STATUS_VERSION_GAP
             + text_width(ui, &version);
@@ -602,16 +619,18 @@ impl MixJamApp {
                         layout.maximised = false;
                     });
                 }
-                if panel_switch(ui, "Boards", shown && layout.boards)
+                if panel_switch(ui, "Boards", self.room.boards)
                     .hover_hint("Lower panel: its board, or only its toolbar row")
                     .clicked()
                 {
-                    self.set_layout(|layout| {
-                        if shown {
-                            layout.boards = !layout.boards;
-                        }
-                        layout.maximised = false;
-                    });
+                    if !shown {
+                        self.set_layout(|layout| layout.maximised = false);
+                    } else if self.room.boards {
+                        self.set_layout(|layout| layout.boards = false);
+                    } else {
+                        self.set_layout(|layout| layout.boards = true);
+                        self.claim(room::Panel::Boards);
+                    }
                 }
                 if panel_switch(ui, "Sounds", self.sounds_panel_open())
                     .hover_hint("Sounds panel beside the score, or its folded strip")
@@ -633,6 +652,18 @@ impl MixJamApp {
                 {
                     self.set_layout(|layout| layout.overview = !layout.overview);
                 }
+                if panel_switch(ui, "Inspector", self.room.inspector)
+                    .hover_hint("Inspector beside the score, or its folded strip")
+                    .clicked()
+                {
+                    if !shown {
+                        self.set_layout(|layout| layout.maximised = false);
+                    } else if self.room.inspector {
+                        self.set_layout(|layout| layout.inspector = false);
+                    } else {
+                        self.open_inspector();
+                    }
+                }
                 ui.add_space(STATUS_VERSION_GAP);
                 ui.add(
                     egui::Hyperlink::from_label_and_url(
@@ -647,11 +678,10 @@ impl MixJamApp {
     }
 
     pub(super) fn bottom(&mut self, ctx: &egui::Context) {
-        let layout = self.session.layout();
-        if layout.maximised {
+        if self.session.layout().maximised {
             return;
         }
-        if layout.boards {
+        if self.room.boards {
             self.lower_panel(ctx);
         } else {
             // Folded: only the toolbar row, so the module choice and the
@@ -952,14 +982,16 @@ impl MixJamApp {
             occupied_tracks(self.session.project()).len(),
             self.session.project().clips.len()
         );
+        // Below this width, the heading would push actions behind a side panel.
+        let show_heading = ui.available_width() >= 600.0;
         ui.horizontal(|ui| {
-            if narrow {
+            if show_heading && narrow {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     ui.label(heading("Arrangement", 12.0));
                     ui.label(egui::RichText::new(&counts).size(10.0).color(roles().muted));
                 });
-            } else {
+            } else if show_heading {
                 ui.label(heading("Arrangement", 18.0));
                 ui.add_space(10.0);
                 ui.label(egui::RichText::new(&counts).size(12.0).color(roles().muted));
@@ -1077,7 +1109,7 @@ impl MixJamApp {
                 ui.spacing_mut().interact_size.y = TOOLBAR_HEIGHT;
                 let spacing = ui.spacing().item_spacing.x;
                 ui.spacing_mut().item_spacing.x = 2.0;
-                let boards = self.session.layout().boards;
+                let boards = self.room.boards;
                 for module in BottomModule::ALL {
                     let selected = self.bottom_module == module;
                     // Choosing a tab opens a folded lower panel.
@@ -1087,6 +1119,7 @@ impl MixJamApp {
                             self.mix_view = false;
                         }
                         self.set_layout(|layout| layout.boards = true);
+                        self.claim(room::Panel::Boards);
                     }
                 }
                 ui.spacing_mut().item_spacing.x = spacing;
@@ -1320,6 +1353,7 @@ impl MixJamApp {
                 layout.boards = true;
                 layout.maximised = false;
             });
+            self.claim(room::Panel::Boards);
             ui.ctx().request_repaint();
         }
         if let Some(track) = changes.eq {
@@ -1424,7 +1458,10 @@ impl MixJamApp {
 
     /// Exact values for one clip, in its context menu. Drags on the clip's
     /// edges, fade handles, and gain line change the same values.
-    fn clip_properties(&mut self, ui: &mut egui::Ui, id: u64) {
+    /// A clip's gain, trim, length, fades, pitch, and reverse, as a grid of
+    /// fields named "{prefix} gain" and so on: "Clip" in the clip menu,
+    /// "Inspector clip" in the Inspector, which also shows its start.
+    pub(super) fn clip_properties(&mut self, ui: &mut egui::Ui, id: u64, prefix: &str) {
         let Some(clip) = self
             .session
             .project()
@@ -1451,12 +1488,36 @@ impl MixJamApp {
         let mut length = clip.length_ticks;
         let mut pitch = clip.pitch_cents;
         let mut reverse = clip.reverse;
+        let mut start = clip.start_tick;
         let mut change = false;
         let mut fades = clip.fades;
         egui::Grid::new("clip_properties")
             .num_columns(2)
-            .spacing(Vec2::new(10.0, 6.0))
+            .spacing(Vec2::new(if prefix == "Clip" { 10.0 } else { 6.0 }, 6.0))
             .show(ui, |ui| {
+                if prefix != "Clip" {
+                    ui.label("Start (bar)");
+                    let mut bar = f64::from(start) / f64::from(TICKS_PER_BAR) + 1.0;
+                    if name_control(
+                        ui.add(
+                            egui::DragValue::new(&mut bar)
+                                .range(1.0..=f64::INFINITY)
+                                .speed(1.0 / 16.0)
+                                .max_decimals(3),
+                        ),
+                        &format!("{prefix} start (bar)"),
+                    )
+                    .hover_hint(
+                        "The bar the clip starts on; 1.5 is halfway through bar 1. Its lane \
+                         stays the same.",
+                    )
+                    .changed()
+                    {
+                        start = ((bar - 1.0) * f64::from(TICKS_PER_BAR)).round().max(0.0) as u32;
+                        change = true;
+                    }
+                    ui.end_row();
+                }
                 // The mixer shows dB, so the clip does too. An untouched value
                 // keeps its exact saved amplitude.
                 ui.label("Gain (dB)");
@@ -1483,7 +1544,7 @@ impl MixJamApp {
                                 }
                             }),
                     ),
-                    "Clip gain",
+                    &format!("{prefix} gain"),
                 )
                 .hover_hint("Clip gain in dB. 0 is unity; -inf is silence; the maximum is +6 dB.")
                 .changed()
@@ -1499,7 +1560,7 @@ impl MixJamApp {
                             .range(0..=max_frames.saturating_sub(1))
                             .speed(100),
                     ),
-                    "Clip trim start (frames)",
+                    &format!("{prefix} trim start (frames)"),
                 )
                 .hover_hint("Source frames that the clip skips. The clip does not move.")
                 .changed();
@@ -1512,7 +1573,7 @@ impl MixJamApp {
                             .range(1.0 / 16.0..=256.0)
                             .speed(1.0 / 16.0),
                     ),
-                    "Clip length (bars)",
+                    &format!("{prefix} length (bars)"),
                 )
                 .changed()
                 {
@@ -1524,26 +1585,29 @@ impl MixJamApp {
                 // constrain their individual ranges.
                 fades = fades.fit(length);
                 let room = length.saturating_sub(fades.fade_out.ticks);
-                change |= fade_controls(ui, "in", &mut fades.fade_in, room);
+                change |= fade_controls(ui, prefix, "in", &mut fades.fade_in, room);
                 ui.end_row();
                 let room = length.saturating_sub(fades.fade_in.ticks);
-                change |= fade_controls(ui, "out", &mut fades.fade_out, room);
+                change |= fade_controls(ui, prefix, "out", &mut fades.fade_out, room);
                 ui.end_row();
-                change |= pitch_controls(ui, &mut pitch);
+                change |= pitch_controls(ui, prefix, &mut pitch);
                 ui.end_row();
                 ui.label("Reverse");
-                change |= name_control(ui.checkbox(&mut reverse, "Play backwards"), "Clip reverse")
-                    .hover_hint(
-                        "Play the clip's sound backwards within the clip, for reversed swells \
+                change |= name_control(
+                    ui.checkbox(&mut reverse, "Play backwards"),
+                    &format!("{prefix} reverse"),
+                )
+                .hover_hint(
+                    "Play the clip's sound backwards within the clip, for reversed swells \
                          and risers. Its fades, pitch, and gain stay where they are.",
-                    )
-                    .changed();
+                )
+                .changed();
                 ui.end_row();
             });
         if change {
             let result = self.session.edit(EditCommand::SetClip {
                 id,
-                start_tick: clip.start_tick,
+                start_tick: start,
                 gain,
                 offset_frames: offset,
                 length_ticks: length,
@@ -1859,7 +1923,8 @@ impl MixJamApp {
         self.last_follow_position = Some(follow_position);
         // The song overview centres the view on the tick it was clicked at.
         if let Some(tick) = self.overview_target.take() {
-            let offset = tick / TICKS_PER_BAR as f32 * bar_width - visible_width / 2.0;
+            // Whole points, so the song's start is exactly 0.
+            let offset = (tick / TICKS_PER_BAR as f32 * bar_width - visible_width / 2.0).round();
             scroll_area = scroll_area
                 .horizontal_scroll_offset(offset.clamp(0.0, (width - visible_width).max(0.0)));
         }
@@ -2221,11 +2286,10 @@ impl MixJamApp {
                             let tick =
                                 self.position_tick(pos.x, rect, ui.input(|i| i.modifiers.ctrl));
                             self.place(sample, track, tick);
-                        } else {
+                        } else if !ui.input(|i| i.modifiers.shift) {
                             self.selected_clip = None;
-                            if !ui.input(|i| i.modifiers.shift) {
-                                self.selected_clips.clear();
-                            }
+                            self.selected_clips.clear();
+                            self.selected_track = None;
                         }
                     }
                     if response.secondary_clicked() {
@@ -2293,7 +2357,7 @@ impl MixJamApp {
                                         ui.close();
                                         self.delete_selection();
                                     }
-                                    self.clip_properties(ui, id);
+                                    self.clip_properties(ui, id, "Clip");
                                 }
                             });
                     }
@@ -2498,6 +2562,60 @@ impl MixJamApp {
                             index,
                         );
                         let (name_left, name_right) = lanes::NAME_SPAN;
+                        // The name selects the track for the Inspector.
+                        let name_rect = Rect::from_x_y_ranges(
+                            rect.left() + name_left - 4.0..=rect.left() + name_right,
+                            rect.top() + 1.0..=rect.bottom() - 1.0,
+                        );
+                        let pick = ui.interact(
+                            name_rect,
+                            ui.id().with(("lane-name", index)),
+                            Sense::click(),
+                        );
+                        let picked = self.selected_track == Some(index);
+                        let pick_label = format!("Show track {} in the Inspector", index + 1);
+                        pick.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::Button,
+                                ui.is_enabled(),
+                                picked,
+                                &pick_label,
+                            )
+                        });
+                        if picked || pick.hovered() || pick.has_focus() {
+                            ui.painter().rect_filled(
+                                name_rect,
+                                3.0,
+                                if picked {
+                                    roles().raised
+                                } else {
+                                    ui.visuals().widgets.hovered.weak_bg_fill
+                                },
+                            );
+                        }
+                        if picked {
+                            ui.painter().rect_filled(
+                                Rect::from_x_y_ranges(
+                                    name_rect.left()..=name_rect.left() + 2.0,
+                                    name_rect.y_range(),
+                                ),
+                                1.0,
+                                roles().accent,
+                            );
+                        }
+                        focus_outline(ui, &pick, roles().accent);
+                        if pick
+                            .hover_hint(
+                                "Show this track's level, pan, sends, and channel processing \
+                                 in the Inspector. The clip selection clears.",
+                            )
+                            .clicked()
+                        {
+                            self.select_track(index);
+                            if !self.room.inspector {
+                                self.open_inspector();
+                            }
+                        }
                         let name_size = if row_height < 30.0 { 11.0 } else { 12.0 };
                         let name_text = ui.painter().layout_job(elided(
                             &name,
@@ -2914,9 +3032,11 @@ impl MixJamApp {
         self.file_drop(ctx);
         self.header(ctx);
         let status = self.status_bar_space(ctx);
+        self.measure_room(ctx);
         self.side_rail(ctx);
         self.bottom(ctx);
         self.sounds_side(ctx);
+        self.inspector_side(ctx);
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
@@ -3550,26 +3670,23 @@ fn embedded_effect_dial(
 /// `automated`: the lane sets the pan while the song plays. The knob leaves
 /// the wheel to the view behind it, so a scroll over the strips never moves
 /// a pan.
+/// A pan slider named "{name} pan".
 pub(super) fn pan_control(
     ui: &mut egui::Ui,
-    index: usize,
+    name: &str,
     pan: &mut f32,
     automated: bool,
 ) -> Response {
     let response = ui.add(egui::Slider::new(pan, -1.0..=1.0).show_value(false));
     response.widget_info(|| {
-        let mut info = egui::WidgetInfo::slider(
-            ui.is_enabled(),
-            f64::from(*pan),
-            format!("Track {} pan", index + 1),
-        );
+        let mut info =
+            egui::WidgetInfo::slider(ui.is_enabled(), f64::from(*pan), format!("{name} pan"));
         info.current_text_value = Some(pan_description(*pan));
         info
     });
     response.hover_hint(format!(
-        "Track {} pan: {}. Drag or use the arrow keys; the wheel scrolls. Pan does not enable \
+        "{name} pan: {}. Drag or use the arrow keys; the wheel scrolls. Pan does not enable \
          a disabled L/R output.{}",
-        index + 1,
         pan_description(*pan),
         if automated {
             "\nAutomated: its automation lane sets the pan while the song plays."
@@ -3887,7 +4004,7 @@ fn stacked_brand(ui: &mut egui::Ui, compact: bool) {
 
 /// The song's length under its name: bars and minutes. None for an empty
 /// song.
-fn song_meta(project: &Project) -> Option<String> {
+pub(super) fn song_meta(project: &Project) -> Option<String> {
     let end = project.end_tick();
     if end == 0 {
         return None;
@@ -3939,9 +4056,10 @@ fn maximise_button(ui: &mut egui::Ui, on: bool) -> Response {
         )
     });
     response.hover_hint(if on {
-        "Restore the tool rail, the Sounds panel and the lower panel (F)"
+        "Restore the tool rail, the Sounds panel, the Inspector and the lower panel (F)"
     } else {
-        "Maximise the score: hide the tool rail, the Sounds panel and the lower panel (F)"
+        "Maximise the score: hide the tool rail, the Sounds panel, the Inspector and the lower \
+         panel (F)"
     })
 }
 
@@ -5115,7 +5233,7 @@ const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
 
 /// A clip fade's length in beats, at most `room` ticks, and its curve: one
 /// row of the clip properties grid.
-fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> bool {
+fn fade_controls(ui: &mut egui::Ui, prefix: &str, edge: &str, fade: &mut Fade, room: u32) -> bool {
     ui.label(format!("Fade {edge} (beats)"));
     ui.horizontal(|ui| {
         let mut beats = f64::from(fade.ticks) / f64::from(TICKS_PER_BEAT);
@@ -5127,7 +5245,7 @@ fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> b
                     .speed(1.0 / 16.0)
                     .max_decimals(3),
             ),
-            &format!("Clip fade {edge} (beats)"),
+            &format!("{prefix} fade {edge} (beats)"),
         )
         .hover_hint(if edge == "in" {
             "Fade in from the clip's start, in beats. 0 is no fade."
@@ -5141,7 +5259,7 @@ fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> b
             change = true;
         }
         // A submenu, because a combo box inside the context menu would close it.
-        let name = format!("Clip fade {edge} curve");
+        let name = format!("{prefix} fade {edge} curve");
         let response = ui
             .menu_button(fade.curve.label(), |ui| {
                 for curve in FadeCurve::ALL {
@@ -5167,7 +5285,7 @@ fn fade_controls(ui: &mut egui::Ui, edge: &str, fade: &mut Fade, room: u32) -> b
 
 /// A clip's pitch as semitones and cents: one row of the clip properties
 /// grid. Its timing does not change.
-fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
+fn pitch_controls(ui: &mut egui::Ui, prefix: &str, cents: &mut i32) -> bool {
     let mut semitones = *cents / 100;
     let mut fine = *cents % 100;
     ui.label("Pitch");
@@ -5180,7 +5298,7 @@ fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
                         .speed(0.1)
                         .suffix(" st"),
                 ),
-                "Clip pitch (semitones)",
+                &format!("{prefix} pitch (semitones)"),
             )
             .hover_hint("Transpose the clip in semitones. Its length and timing stay the same.")
             .changed();
@@ -5191,7 +5309,7 @@ fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
                         .speed(0.5)
                         .suffix(" ct"),
                 ),
-                "Clip pitch (cents)",
+                &format!("{prefix} pitch (cents)"),
             )
             .hover_hint("Fine-tune the clip in cents, hundredths of a semitone.")
             .changed();

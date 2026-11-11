@@ -18,6 +18,8 @@ mod effects;
 mod eq;
 #[path = "ui/fx.rs"]
 mod fx;
+#[path = "ui/inspector.rs"]
+mod inspector;
 #[path = "ui/lanes.rs"]
 mod lanes;
 #[path = "ui/libraries.rs"]
@@ -32,6 +34,8 @@ mod mixer;
 mod options;
 #[path = "ui/overview.rs"]
 mod overview;
+#[path = "ui/room.rs"]
+mod room;
 #[path = "ui/sample_editor.rs"]
 mod sample_editor;
 #[path = "ui/sounds.rs"]
@@ -379,6 +383,15 @@ pub struct MixJamApp {
     selected_sample: Option<u32>,
     selected_clip: Option<u64>,
     selected_clips: BTreeSet<u64>,
+    /// The track whose page the Inspector shows while no clip is selected.
+    selected_track: Option<usize>,
+    /// The panels that show this frame, and the space they were chosen for.
+    room: room::Room,
+    room_space: room::Space,
+    /// The folding panels, from the one opened last.
+    panel_order: [room::Panel; 3],
+    /// The Inspector was opened this session, so a narrow window shows it.
+    inspector_opened: bool,
     /// A click on an empty lane places the selected sound. Choosing a clip
     /// turns this off, so the next empty click only clears the selection.
     place_on_click: bool,
@@ -592,6 +605,7 @@ impl MixJamApp {
             layout.maximised = capture_view == "maximised";
             layout.sounds = matches!(capture_view.as_str(), "sounds-panel" | "sample-details");
             layout.overview = capture_view != "overview-folded";
+            layout.inspector = capture_view.starts_with("inspector");
             if let Err(error) = session.set_layout(layout) {
                 eprintln!("{error}");
             }
@@ -715,15 +729,54 @@ impl MixJamApp {
                 };
                 options::OptionsDraft::new(&session, page).for_capture(&capture_view)
             });
-        // Select the clip whose fades the capture demonstrates.
-        let capture_clip = (capture_view == "clip-fades")
-            .then(|| session.project().clips.first().map(|clip| clip.id))
-            .flatten();
-        Self {
+        // Select the clip whose fades the capture demonstrates, or the clips
+        // that the Inspector's pages describe.
+        let capture_clips: BTreeSet<u64> = match capture_view.as_str() {
+            "clip-fades" | "inspector-clip" => session
+                .project()
+                .clips
+                .first()
+                .map(|clip| clip.id)
+                .into_iter()
+                .collect(),
+            "inspector-clips" => session
+                .project()
+                .clips
+                .iter()
+                .take(6)
+                .map(|clip| clip.id)
+                .collect(),
+            _ => BTreeSet::new(),
+        };
+        let inspector_capture = capture_view.starts_with("inspector");
+        let mut app = Self {
             session,
             selected_sample,
-            selected_clip: capture_clip,
-            selected_clips: capture_clip.into_iter().collect(),
+            selected_clip: capture_clips.iter().next().copied(),
+            selected_clips: capture_clips,
+            selected_track: (capture_view == "inspector-track").then_some(0),
+            room: room::Room::default(),
+            room_space: room::Space::default(),
+            panel_order: if inspector_capture {
+                [
+                    room::Panel::Inspector,
+                    room::Panel::Boards,
+                    room::Panel::Sounds,
+                ]
+            } else if matches!(capture_view.as_str(), "sounds-panel" | "sample-details") {
+                [
+                    room::Panel::Sounds,
+                    room::Panel::Boards,
+                    room::Panel::Inspector,
+                ]
+            } else {
+                [
+                    room::Panel::Boards,
+                    room::Panel::Sounds,
+                    room::Panel::Inspector,
+                ]
+            },
+            inspector_opened: inspector_capture,
             place_on_click: true,
             discard_take_armed: false,
             context_missing_sample: None,
@@ -874,7 +927,9 @@ impl MixJamApp {
             agent: None,
             path_prompt: None,
             resume_save_changes: false,
-        }
+        };
+        app.resolve_room();
+        app
     }
 
     fn capture_view_is(&self, view: &str) -> bool {
@@ -886,6 +941,7 @@ impl MixJamApp {
         self.selected_sample = None;
         self.selected_clip = None;
         self.selected_clips.clear();
+        self.selected_track = None;
         // Project and library replacement invalidate every in-flight gesture.
         self.master_view_generation = self.master_view_generation.wrapping_add(1);
         self.drag = None;
@@ -915,6 +971,12 @@ impl MixJamApp {
                 .any(|clip| clip.id == *id)
         });
         self.selected_clip = self.selected_clips.iter().next().copied();
+        if self
+            .selected_track
+            .is_some_and(|track| track >= TRACK_COUNT)
+        {
+            self.selected_track = None;
+        }
         if self.selected_sample.is_some_and(|id| {
             self.session.library().sample_by_id(id).is_none()
                 && self.session.missing_sample(id).is_none()

@@ -70,8 +70,8 @@ file remains intact and receives no further writes. Invalid files load safe
 defaults with a visible error and need explicit Restore options defaults before
 replacement. A future schema remains intact and blocks preference writes.
 Library configuration and the last-used song folder retain their own storage.
-`WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, Sounds, and Overview
-switches and the Maximise state in `layout.json` beside `options.json`. `Session` adopts each
+`WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, Sounds, Overview,
+and Inspector switches and the Maximise state in `layout.json` beside `options.json`. `Session` adopts each
 layout change at once and saves it for the next launch. A failed write reports
 an error but keeps the current layout. Headless sessions do not save layouts.
 Layout changes do not change the Options revision, song data, or history.
@@ -95,6 +95,16 @@ catalog revision, or peak table. The catalog revision prevents a replacement
 sound from reusing a stale waveform when its peak table reuses an address.
 `src/ui/lanes.rs` owns the Arrange lane header's layout constants, the lane
 name derived from the first clip's sound family, and the lane fader.
+`src/ui/room.rs` decides each frame which of the Sounds panel, the Inspector,
+and the lower panel's board show: the saved layout says which are wanted, the
+measured window says which fit together, and the order they were opened in
+breaks a tie. It never changes the saved layout.
+`src/ui/inspector.rs` draws the Inspector. Its page follows the clip and track
+selection, and its fields reuse the Mixer's controls and the clip menu's
+fields under their own names, editing through `SetMixer` and `SetClip`.
+Its page and control identities include the selection and frontend generation,
+so pending value entries and held controls cannot edit another selection or a
+replacement project.
 `src/ui/overview.rs` draws the song overview above the score. It is laid out
 before the score toolbar, so a click moves this frame's scroll offset, and
 painted after the lanes from the offset they just used. Its clip lines are one

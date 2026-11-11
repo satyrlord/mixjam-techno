@@ -32,7 +32,7 @@ minutes beneath it. The whole name always shows: a long name wraps onto two
 lines or uses smaller text, and in a narrow window the transport buttons get
 narrower to make room. Above the lanes, the score toolbar holds Arrange and
 Mix, the Automation menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
-rail, the Sounds panel, and the lower panel so the score fills the window;
+rail, the Sounds panel, the Inspector, and the lower panel so the score fills the window;
 press **F** again, or use any status-bar switch, to restore them. Mixer,
 Mastering, FX returns, and Step synth share the lower panel; choose one with
 its tab on the left of the panel's top row. Sample categories, search, and
@@ -58,6 +58,17 @@ it at the playhead on the recording track, double-click to hear it, or drag it
 to a lane. The chevron at the panel's top folds it. These choices are kept for
 the next session. When Starting module is Sounds, the app opens with the panel
 open and the lower panel folded.
+
+The Inspector at the right of the score shows what is selected. With nothing
+selected it shows the song: its tempo and length, a clip count per category,
+and its sections; click a section to scroll the score there. Click a track's
+name in the lane header for that track's level, pan, outputs, sends, EQ curve,
+and processing switches; **EQ** there opens the channel EQ window. Select one
+clip for its start, gain, trim, length, fades, pitch, and Reverse, or several
+for a summary. Every change can be undone. The chevron at its top, or the
+**Inspector** switch in the status bar, folds it to a strip. In a small window
+the Sounds panel, the Inspector, and the lower board give way to each other:
+the one you opened last shows, and the others fold until there is room.
 
 The song overview above the score shows the whole song: its sections (with
 Sections on), a thin line for each clip in its category color, the loop, the
