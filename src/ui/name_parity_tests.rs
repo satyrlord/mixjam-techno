@@ -17,7 +17,28 @@ const BASELINE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/ui/ui-name
 const ALBUM_DATA: &[&str] = &["Open review: ", "Artist filter: ", "Genre filter: "];
 
 /// Approved renames: an old `role<TAB>name` line and the line that replaces it.
-const RENAMED: &[(&str, &str)] = &[];
+const RENAMED: &[(&str, &str)] = &[
+    // Phase 6, decision B: the board has no window; the rail button folds it.
+    ("button\tClose Step synth", "button\tStep synth"),
+    ("button\tCollapse Step synth", "button\tStep synth"),
+    // Phase 6: tabs replace the module selector.
+    ("combo_box\tBottom module", "button\tMixer tab"),
+    (
+        "label\tMastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "label\tMastering processes the whole mix after the tracks are summed. Choose its tab in the lower panel, or its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+    ),
+    // Decision L: Effects becomes FX returns.
+    ("other\tEffects board", "other\tFX returns board"),
+    // The window title becomes the board tab.
+    ("other\tSTEP SYNTH", "button\tStep synth tab"),
+    // Step synth's help describes its board and rail action.
+    (
+        "label\tThe upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
+        "label\tThe Step synth button in the tool rail folds the lower panel without changing the draft. Choose the Step synth tab to open it again. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the board.",
+    ),
+    // Phase 6c: the Sounds panel's count replaces the Sounds module's.
+    ("label\t4 sounds", "label\t4 of 4"),
+];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {
     Sample {
@@ -70,6 +91,9 @@ fn app(with_clips: bool) -> (egui::Context, MixJamApp) {
     app.capture_path = None;
     app.options = None;
     app.session.set_theme_fixture(theme::current());
+    // A default launch folds the lower panel (Starting module Sounds); the
+    // walk opens it to reach the boards.
+    app.set_layout(|layout| layout.boards = true);
     (context, app)
 }
 
@@ -163,16 +187,19 @@ fn every_name() -> BTreeSet<String> {
         app.bottom_module = module;
         names(&context, &mut app, &mut found);
     }
+    // Step synth with a source, as its former window was visited.
+    app.selected_sample = Some(1);
+    app.bottom_module = BottomModule::StepSynth;
+    names(&context, &mut app, &mut found);
+    app.selected_sample = None;
     app.bottom_module = BottomModule::Mixer;
     app.eq_track = Some(0);
     names(&context, &mut app, &mut found);
     app.eq_track = None;
-    app.bottom_module = BottomModule::Sounds;
 
     app.selected_sample = Some(1);
-    let windows: [fn(&mut MixJamApp) -> &mut bool; 11] = [
+    let windows: [fn(&mut MixJamApp) -> &mut bool; 10] = [
         |app| &mut app.show_effects,
-        |app| &mut app.show_step_synth,
         |app| &mut app.show_sample_edit,
         |app| &mut app.show_stretch,
         |app| &mut app.show_album_review,

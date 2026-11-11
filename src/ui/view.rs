@@ -1,4 +1,6 @@
 use super::*;
+use mixjam_techno::application::Track;
+use mixjam_techno::application::fx::{BUSES, FxBuses};
 /// Hover hints can be hidden without removing a control's accessible help.
 pub(super) trait HoverHints {
     fn hover_hint(self, text: impl Into<egui::WidgetText>) -> Self;
@@ -153,9 +155,6 @@ pub(super) fn clip_gain_from_db(db: f32) -> f32 {
     }
 }
 pub(super) const DEFAULT_STATUS: &str = "Ready";
-/// Fits the longest module name, MASTERING, in each theme's 16-point heading
-/// face beside the combo arrow.
-pub(super) const BOTTOM_MODULE_WIDTH: f32 = 168.0;
 /// The lower panel's margins. The bottom margin is smaller than the top one
 /// because the boards end in their own scroll bar or inset.
 const BOTTOM_PANEL_MARGIN: egui::Margin = egui::Margin {
@@ -368,23 +367,32 @@ impl MixJamApp {
             self.delete_selection();
         }
         rail_group(ui, "Tools", names, false);
-        // Each module button shows its module, or Sounds again when its
-        // module already shows. A folded lower panel opens again.
-        for (icon, module) in [
-            (RailIcon::Mixer, BottomModule::Mixer),
-            (RailIcon::Master, BottomModule::Mastering),
-        ] {
-            let shown = self.bottom_module == module && self.session.layout().boards;
-            if tool(ui, icon, shown).clicked() {
-                self.bottom_module = if shown { BottomModule::Sounds } else { module };
-                self.set_layout(|layout| layout.boards = true);
-            }
+        // Mixer switches the score between its Arrange and Mix views.
+        if tool(ui, RailIcon::Mixer, self.mix_view).clicked() {
+            self.set_mix_view(!self.mix_view);
+        }
+        // Mastering and Step synth open their tab, and fold the lower panel
+        // when their tab already shows.
+        if tool(
+            ui,
+            RailIcon::Master,
+            self.board_shown(BottomModule::Mastering),
+        )
+        .clicked()
+        {
+            self.toggle_board(BottomModule::Mastering);
         }
         if tool(ui, RailIcon::Effects, self.show_effects).clicked() {
             self.show_effects = !self.show_effects;
         }
-        if tool(ui, RailIcon::StepSynth, self.show_step_synth).clicked() {
-            self.show_step_synth = !self.show_step_synth;
+        if tool(
+            ui,
+            RailIcon::StepSynth,
+            self.board_shown(BottomModule::StepSynth),
+        )
+        .clicked()
+        {
+            self.toggle_board(BottomModule::StepSynth);
         }
         if tool(ui, RailIcon::Edit, self.show_sample_edit).clicked() {
             self.show_sample_edit = !self.show_sample_edit;
@@ -403,6 +411,35 @@ impl MixJamApp {
         }
         if tool(ui, RailIcon::AlbumReview, self.show_album_review).clicked() {
             self.show_album_review = !self.show_album_review;
+        }
+    }
+
+    /// Show the score's Mix view or its Arrange view. The Mix view and the
+    /// Mixer tab never show at once, so the lower panel leaves Mixer for
+    /// Mastering.
+    pub(super) fn set_mix_view(&mut self, on: bool) {
+        self.mix_view = on;
+        if on && self.bottom_module == BottomModule::Mixer {
+            self.bottom_module = BottomModule::Mastering;
+        }
+    }
+
+    /// True when `module`'s board shows in an open lower panel.
+    pub(super) fn board_shown(&self, module: BottomModule) -> bool {
+        let layout = self.session.layout();
+        self.bottom_module == module && layout.boards && !layout.maximised
+    }
+
+    /// Show `module`'s board, or fold the lower panel when it already shows.
+    fn toggle_board(&mut self, module: BottomModule) {
+        if self.board_shown(module) {
+            self.set_layout(|layout| layout.boards = false);
+        } else {
+            self.bottom_module = module;
+            self.set_layout(|layout| {
+                layout.boards = true;
+                layout.maximised = false;
+            });
         }
     }
 
@@ -577,10 +614,7 @@ impl MixJamApp {
                     });
                 }
                 if panel_switch(ui, "Sounds", self.sounds_panel_open())
-                    .hover_hint(
-                        "Sounds panel beside the score, or its folded strip. Opening it \
-                         changes the lower panel's Sounds module to Mixer.",
-                    )
+                    .hover_hint("Sounds panel beside the score, or its folded strip")
                     .clicked()
                 {
                     if !shown {
@@ -668,14 +702,12 @@ impl MixJamApp {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 self.bottom_toolbar(ui);
                 ui.spacing_mut().item_spacing.y = row_spacing;
-                if self.bottom_module != BottomModule::Sounds {
-                    ui.add_space(BOARD_GAP);
-                }
+                ui.add_space(BOARD_GAP);
                 match self.bottom_module {
                     BottomModule::Mixer => self.mixer(ui),
                     BottomModule::Mastering => self.mastering(ui),
-                    BottomModule::Effects => self.effects_module(ui),
-                    BottomModule::Sounds => self.palette(ui),
+                    BottomModule::FxReturns => self.effects_module(ui),
+                    BottomModule::StepSynth => self.step_synth_board(ui),
                 }
             });
         let grip = Rect::from_center_size(
@@ -914,7 +946,7 @@ impl MixJamApp {
     fn score_toolbar(&mut self, ui: &mut egui::Ui) {
         // Keep the toolbar in one row beside the Sounds panel, so its
         // controls do not take height from the lane viewport.
-        let narrow = ui.available_width() < 760.0;
+        let narrow = ui.available_width() < 840.0;
         let counts = format!(
             "{} tracks  /  {} clips",
             occupied_tracks(self.session.project()).len(),
@@ -933,12 +965,53 @@ impl MixJamApp {
                 ui.label(egui::RichText::new(&counts).size(12.0).color(roles().muted));
             }
             let compact = ui.available_width() < 700.0;
+            // A compact toolbar packs its controls closer.
+            if compact {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.spacing_mut().button_padding.x = 6.0;
+            }
             // The controls' width is measured in the previous pass; a change
             // redoes this pass before it is shown.
             let width_id = ui.id().with(("score-toolbar-width", compact));
             let width = ui.ctx().data(|data| data.get_temp::<f32>(width_id));
             ui.add_space((ui.available_width() - width.unwrap_or_default()).max(16.0));
             let start = ui.cursor().left();
+            let spacing = ui.spacing().clone();
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.spacing_mut().button_padding.x = 6.0;
+            for (mix, label, name, hint) in [
+                (
+                    false,
+                    "Arrange",
+                    "Arrange view",
+                    "Arrange view: lane headers with the track number, name, M, S, L, R, and a \
+                     short level fader beside the lanes.",
+                ),
+                (
+                    true,
+                    "Mix",
+                    "Mix view",
+                    "Mix view: each lane header widens into a mixer row with its level, exact \
+                     dB, pan, sends, EQ, outputs, and polarity; the Master and the FX returns \
+                     stay below the lanes. The tool rail's Mixer button switches views too.",
+                ),
+            ] {
+                let selected = self.mix_view == mix;
+                let response = ui.selectable_label(selected, label);
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::WidgetType::SelectableLabel,
+                        true,
+                        selected,
+                        name,
+                    )
+                });
+                if response.hover_hint(hint).clicked() {
+                    self.set_mix_view(mix);
+                }
+            }
+            *ui.spacing_mut() = spacing;
+            ui.add_space(if compact { 4.0 } else { 10.0 });
             self.automation_selector(ui, !narrow);
             ui.add_space(if compact { 4.0 } else { 10.0 });
             if ui
@@ -974,7 +1047,8 @@ impl MixJamApp {
                         .clamping(egui::SliderClamping::Always),
                 ),
                 "Zoom",
-            );
+            )
+            .hover_hint("Zoom: the width of a bar. The wheel over it zooms too.");
             // An egui slider ignores the wheel; each notch scales the zoom by
             // a tenth, as the other wheel-driven controls take one step.
             let turn = controls::wheel(ui, &zoom);
@@ -995,66 +1069,182 @@ impl MixJamApp {
         });
     }
 
+    /// The lower panel's tab row: one tab per board, then the shown board's
+    /// own controls.
     fn bottom_toolbar(&mut self, ui: &mut egui::Ui) {
-        let mut picked = false;
         ui.push_id("bottom-module-toolbar", |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().interact_size.y = TOOLBAR_HEIGHT;
-                let button_padding = ui.spacing().button_padding;
-                ui.spacing_mut().button_padding.y = 3.0;
-                // ComboBox width is a minimum. Bound its available space as
-                // well, so a longer module name cannot move adjacent controls.
-                let response = ui
-                    .allocate_ui(Vec2::new(BOTTOM_MODULE_WIDTH, 28.0), |ui| {
-                        egui::ComboBox::from_id_salt("bottom_module")
-                            .selected_text(heading(self.bottom_module.label(), 16.0))
-                            .width(BOTTOM_MODULE_WIDTH)
-                            .truncate()
-                            .show_ui(ui, |ui| {
-                                for module in BottomModule::ALL {
-                                    if ui
-                                        .selectable_value(
-                                            &mut self.bottom_module,
-                                            module,
-                                            module.label(),
-                                        )
-                                        .clicked()
-                                    {
-                                        picked = true;
-                                        ui.close();
-                                    }
-                                }
-                            })
-                            .response
-                    })
-                    .inner;
-                // Choosing a module opens a folded lower panel.
-                if picked {
-                    self.set_layout(|layout| layout.boards = true);
+                let spacing = ui.spacing().item_spacing.x;
+                ui.spacing_mut().item_spacing.x = 2.0;
+                let boards = self.session.layout().boards;
+                for module in BottomModule::ALL {
+                    let selected = self.bottom_module == module;
+                    // Choosing a tab opens a folded lower panel.
+                    if board_tab(ui, module, selected, boards).clicked() {
+                        self.bottom_module = module;
+                        if module == BottomModule::Mixer {
+                            self.mix_view = false;
+                        }
+                        self.set_layout(|layout| layout.boards = true);
+                    }
                 }
-                name_control(response, "Bottom module").hover_hint(
-                    "Choose the module shown in this section. Sounds selects source audio; Mixer \
-                     adjusts track levels, pan, EQ, sends, polarity and outputs; Mastering \
-                     processes the whole mix on the master pedalboard; Effects holds the four FX \
-                     buses that the sends feed.",
-                );
-                ui.spacing_mut().button_padding = button_padding;
+                ui.spacing_mut().item_spacing.x = spacing;
+                ui.add_space(4.0);
+                ui.separator();
                 match self.bottom_module {
-                    BottomModule::Sounds => self.palette_filters(ui),
                     BottomModule::Mastering => self.mastering_toolbar(ui),
                     BottomModule::Mixer => self.mixer_toolbar(ui),
-                    BottomModule::Effects => {}
+                    BottomModule::StepSynth => self.step_synth_toolbar(ui),
+                    BottomModule::FxReturns => {}
                 }
             });
         });
     }
 
+    /// The Step synth tab's status line, Import details for missing audio, and
+    /// its help at the row's end.
+    fn step_synth_toolbar(&mut self, ui: &mut egui::Ui) {
+        ui.scope(|ui| {
+            let (name, available, missing, explicit_file) = self.step_synth_source();
+            let action = step_synth::toolbar(
+                ui,
+                ui.available_width() - 40.0,
+                step_synth::Source {
+                    name: &name,
+                    available,
+                    missing,
+                    explicit_file,
+                },
+                step_synth::Feedback {
+                    message: self.step_synth_feedback.message.as_deref(),
+                    error: self.step_synth_feedback.error,
+                },
+                &self.step_synth,
+                self.step_synth_effects_expanded,
+            );
+            if matches!(action, step_synth::Action::Details) {
+                self.show_import_details = true;
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
+                if controls::header_button(
+                    ui,
+                    rect,
+                    "step-synth-help",
+                    "Step synth help",
+                    controls::HeaderIcon::Help,
+                )
+                .clicked()
+                {
+                    self.show_step_synth_help = true;
+                }
+            });
+            let area = ui.min_rect();
+            ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+                node.set_role(egui::accesskit::Role::Toolbar);
+                node.set_label("Step synth");
+                node.set_bounds(egui::accesskit::Rect {
+                    x0: area.left().into(),
+                    y0: area.top().into(),
+                    x1: area.right().into(),
+                    y1: area.bottom().into(),
+                });
+            });
+        });
+    }
+
+    /// The Step synth source: its name, and whether it is available, missing,
+    /// or an explicit file. A new palette source clears the old feedback.
+    fn step_synth_source(&mut self) -> (String, bool, bool, bool) {
+        let explicit_file = self.step_synth_file.is_some();
+        let source_id = self.source_id();
+        let palette_source = source_id.filter(|_| !explicit_file);
+        if self.step_synth_feedback.source != palette_source {
+            self.step_synth_feedback = StepSynthFeedback {
+                source: palette_source,
+                ..Default::default()
+            };
+        }
+        let name = self.step_synth_file.as_ref().map_or_else(
+            || self.source_name(),
+            |path| {
+                path.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            },
+        );
+        let missing =
+            !explicit_file && source_id.is_some_and(|id| self.session.missing_sample(id).is_some());
+        let available = explicit_file
+            || source_id.is_some_and(|id| self.session.library().sample_by_id(id).is_some());
+        (name, available, missing, explicit_file)
+    }
+
+    /// The Step synth board of the lower panel, and what its controls ask for.
+    fn step_synth_board(&mut self, ui: &mut egui::Ui) {
+        let (name, available, missing, explicit_file) = self.step_synth_source();
+        let action = step_synth::show(
+            ui,
+            step_synth::Source {
+                name: &name,
+                available,
+                missing,
+                explicit_file,
+            },
+            &mut self.step_synth,
+            &mut self.step_synth_bar,
+            &mut self.step_synth_effects_expanded,
+        );
+        match action {
+            step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
+            step_synth::Action::PaletteSource => {
+                self.step_synth_file = None;
+                self.step_synth_feedback = StepSynthFeedback::default();
+            }
+            step_synth::Action::Listen => {
+                match self.step_synth_pcm() {
+                    Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
+                    Err(error) => self.error(error),
+                }
+                self.step_synth_notice();
+            }
+            step_synth::Action::SaveSequence => match self.step_synth_pcm() {
+                Ok(pcm) => {
+                    self.step_synth_feedback.message =
+                        Some("Choose a WAV path to save the sequence.".into());
+                    self.step_synth_feedback.error = false;
+                    self.save_pcm(
+                        pcm,
+                        "Step synth sequence",
+                        "Step synth",
+                        self.step_synth.bpm,
+                    );
+                }
+                Err(error) => {
+                    self.error(error);
+                    self.step_synth_notice();
+                }
+            },
+            step_synth::Action::SavePattern => self.ask_path(FileRequest::SavePattern),
+            step_synth::Action::LoadPattern => self.ask_path(FileRequest::LoadPattern),
+            step_synth::Action::Details => self.show_import_details = true,
+            step_synth::Action::None => {}
+        }
+    }
+
     /// The Mixer's toolbar: Export tracks, which writes each track and FX
     /// return to its own WAV file for mixing elsewhere.
     fn mixer_toolbar(&mut self, ui: &mut egui::Ui) {
+        self.export_tracks_button(ui, 13.0);
+    }
+
+    /// Export tracks…, in the Mixer's toolbar and the Mix view's Master row.
+    fn export_tracks_button(&mut self, ui: &mut egui::Ui, size: f32) {
         let response = ui.add_enabled(
             !self.session.is_exporting(),
-            egui::Button::new(egui::RichText::new("Export tracks…").size(13.0)),
+            egui::Button::new(egui::RichText::new("Export tracks…").size(size)),
         );
         if name_control(response, "Export tracks")
             .hover_hint(
@@ -1069,95 +1259,6 @@ impl MixJamApp {
         {
             self.ask_path(FileRequest::ExportTracks);
         }
-    }
-
-    fn palette_filters(&mut self, ui: &mut egui::Ui) {
-        let (samples, groups) = self.palette_view();
-        self.sound_search(ui, 170.0);
-        self.library_filter(ui, 145.0, false);
-        self.category_filter(ui, 105.0, &groups, false);
-        self.sort_order(ui, 105.0);
-        self.sort_direction(ui);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(format!("{} sounds", samples.len()))
-                    .size(12.0)
-                    .color(roles().muted),
-            );
-        });
-    }
-
-    pub(super) fn palette(&mut self, ui: &mut egui::Ui) {
-        let (samples, _) = self.palette_view();
-        ui.add_space(7.0);
-        egui::ScrollArea::horizontal()
-            .id_salt("sound_categories")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if category_button(ui, "All", self.group.is_none()).clicked() {
-                        self.group = None;
-                    }
-                    for name in GROUPS {
-                        if category_button(ui, name, self.group.as_deref() == Some(name)).clicked()
-                        {
-                            self.group = Some(name.into());
-                        }
-                    }
-                });
-            });
-        ui.add_space(10.0);
-        if samples.is_empty() {
-            ui.add_space(12.0);
-            self.no_sounds(ui, 17.0);
-        }
-        // Tile width follows the bar count, so rows hold a varying number of tiles.
-        let row_width = ui.available_width();
-        let starts = {
-            let library = self.session.library().samples;
-            tile_rows(
-                samples
-                    .iter()
-                    .map(|&index| tile_width(library[index].bars, row_width)),
-                row_width,
-            )
-        };
-        let spacing =
-            std::mem::replace(&mut ui.spacing_mut().item_spacing, Vec2::new(TILE_GAP, 6.0));
-        egui::ScrollArea::vertical()
-            .id_salt("sample_palette")
-            .max_height(ui.available_height())
-            .show_rows(ui, 46.0, starts.len(), |ui, rows| {
-                for row in rows {
-                    let end = starts.get(row + 1).copied().unwrap_or(samples.len());
-                    ui.horizontal(|ui| {
-                        for &sample_index in &samples[starts[row]..end] {
-                            let (id, response) = {
-                                let sample = &self.session.library().samples[sample_index];
-                                let product = self.sample_product(sample.id);
-                                let response = ui
-                                    .push_id(sample.id, |ui| {
-                                        sample_button(
-                                            ui,
-                                            sample,
-                                            product,
-                                            self.selected_sample == Some(sample.id),
-                                            tile_width(sample.bars, row_width),
-                                        )
-                                    })
-                                    .inner;
-                                if self.capture_view_is("sample-details")
-                                    && self.selected_sample == Some(sample.id)
-                                {
-                                    response.show_tooltip_text(sample_details(sample, product));
-                                }
-                                (sample.id, response)
-                            };
-                            self.sound_actions(ui, id, &response);
-                        }
-                    });
-                }
-            });
-        ui.spacing_mut().item_spacing = spacing;
     }
 
     pub(super) fn mixer(&mut self, ui: &mut egui::Ui) {
@@ -1178,6 +1279,21 @@ impl MixJamApp {
                 )
             })
             .inner;
+        self.apply_mixer_changes(ui, changes, tracks, master, buses, board);
+    }
+
+    /// Applies what the Mixer's strips or the Mix view's rows changed: the
+    /// tracks and master level, the FX buses, the master bypass, a bus to
+    /// show on the FX returns board, and a track's EQ window to open.
+    pub(super) fn apply_mixer_changes(
+        &mut self,
+        ui: &egui::Ui,
+        changes: mixer::Changes,
+        tracks: Vec<Track>,
+        master: f32,
+        buses: FxBuses,
+        board: MasterChain,
+    ) {
         if changes.tracks {
             let result = self.session.edit(EditCommand::SetMixer {
                 tracks,
@@ -1197,8 +1313,13 @@ impl MixJamApp {
             ui.ctx().request_repaint();
         }
         if let Some(bus) = changes.open {
-            self.bottom_module = BottomModule::Effects;
+            self.bottom_module = BottomModule::FxReturns;
             self.fx_reveal = Some(bus);
+            // The Mix view's returns can open a folded lower panel.
+            self.set_layout(|layout| {
+                layout.boards = true;
+                layout.maximised = false;
+            });
             ui.ctx().request_repaint();
         }
         if let Some(track) = changes.eq {
@@ -1686,14 +1807,30 @@ impl MixJamApp {
         let bars =
             (project.end_tick().max(cursor_tick).max(last_section) / TICKS_PER_BAR + 16).max(64);
         let width = bars as f32 * bar_width;
-        let label_width = lanes::LANE_HEADER_WIDTH;
+        // The Mix view widens the lane headers into mixer rows and keeps the
+        // Master and the returns below the lanes.
+        let mix = self.mix_view;
+        let label_width = if mix {
+            mix_view::column_width(ui.available_width())
+        } else {
+            lanes::LANE_HEADER_WIDTH
+        };
+        let mix_offset = self
+            .mix_scroll
+            .clamp(0.0, mix_view::max_offset(label_width));
         let lane_inset = label_width + ui.spacing().item_spacing.x;
-        let viewport_height = (ui.available_height() - 26.0 - 8.0).max(80.0);
+        let viewport_height =
+            (ui.available_height() - 26.0 - 8.0 - if mix { mix_view::BLOCK_HEIGHT } else { 0.0 })
+                .max(80.0);
         let (ruler_strip, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
         let body_left = ruler_strip.left();
         let mut route_change = None;
         let mut gain_change = None;
+        let mut mix_tracks = mix.then(|| self.session.project().tracks.clone());
+        let mut mix_changes = mixer::Changes::default();
+        let mut mix_wheel = 0.0;
+        let any_solo = self.session.project().any_solo();
         let mut painted_offset_x = 0.0;
         let mut scroll_area = egui::ScrollArea::both()
             .id_salt("arrangement_scroll")
@@ -2227,7 +2364,7 @@ impl MixJamApp {
             ui.scope_builder(
                 egui::UiBuilder::new()
                     .max_rect(labels)
-                    .id_salt("track_labels"),
+                    .id_salt(("track_labels", self.master_view_generation)),
                 |ui| {
                     ui.set_clip_rect(labels.intersect(ui.clip_rect()));
                     ui.spacing_mut().item_spacing.y = 0.0;
@@ -2266,28 +2403,35 @@ impl MixJamApp {
                                 .hover_hint("Drop a sound on this row or select it for recording.");
                             continue;
                         }
-                        ui.painter()
-                            .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
+                        if mix {
+                            mixer::row_surface(ui, rect.shrink(1.0), false);
+                        } else {
+                            ui.painter()
+                                .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
+                        }
                         let project = self.session.project();
                         let silenced = !project.tracks[index].audible(project.any_solo());
+                        let (ink, quiet) = if mix {
+                            (roles().strip_text, roles().strip_text.gamma_multiply(0.55))
+                        } else {
+                            (roles().text, roles().muted)
+                        };
                         // From the left: the track number, the lane's name,
                         // M, S, L, R, and the level fader.
                         let number = Pos2::new(rect.left() + lanes::NUMBER_X, rect.center().y);
-                        ui.painter().rect_filled(
-                            Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
-                            0.0,
-                            roles().panel,
-                        );
+                        if !mix {
+                            ui.painter().rect_filled(
+                                Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
+                                0.0,
+                                roles().panel,
+                            );
+                        }
                         ui.painter().text(
                             number + Vec2::new(0.0, -1.0),
                             Align2::CENTER_CENTER,
                             format!("{}", index + 1),
                             FontId::proportional(14.0),
-                            if silenced {
-                                roles().muted
-                            } else {
-                                roles().text
-                            },
+                            if silenced { quiet } else { ink },
                         );
                         let arm = ui.interact(
                             Rect::from_center_size(number, Vec2::new(26.0, row_height)),
@@ -2322,6 +2466,27 @@ impl MixJamApp {
                             self.message(format!("Track {} is ready for recording.", index + 1));
                         }
                         arm.hover_hint("Select this track for recording");
+                        if let Some(tracks) = mix_tracks.as_mut() {
+                            let (summary, detail) = mixer_sample_summary(
+                                self.session.project(),
+                                self.session.library(),
+                                index,
+                            );
+                            let outcome = mix_view::track_row(
+                                ui,
+                                rect,
+                                mix_offset,
+                                index,
+                                (&summary, &detail),
+                                any_solo,
+                                &mut tracks[index],
+                            );
+                            mix_changes.tracks |= outcome.changed;
+                            if outcome.open_eq {
+                                mix_changes.eq = Some(index);
+                            }
+                            continue;
+                        }
                         let name = lanes::lane_name(
                             first_sounds[index],
                             self.session.library(),
@@ -2407,12 +2572,32 @@ impl MixJamApp {
                     }
                 },
             );
+            // The columns own horizontal wheel input over the headers. Take
+            // it after their controls, before the score's scroll area does.
+            if mix && ui.rect_contains_pointer(labels) {
+                mix_wheel = ui.input_mut(|input| std::mem::take(&mut input.smooth_scroll_delta.x));
+            }
         });
         self.score_view = Some(overview::ScoreView {
             offset: scroll.state.offset.x,
             visible: visible_width,
             bar_width,
         });
+        if let Some(tracks) = mix_tracks {
+            ui.push_id(self.master_view_generation, |ui| {
+                self.mix_block(
+                    ui,
+                    Rect::from_min_size(ruler_strip.min, Vec2::new(label_width, 26.0)),
+                    Rect::from_min_size(
+                        Pos2::new(body_left, scroll.inner_rect.bottom() + 6.0),
+                        Vec2::new(label_width, mix_view::BLOCK_ROW * 2.0 + 2.0),
+                    ),
+                    (mix_offset, occupied_count == 0, mix_wheel),
+                    tracks,
+                    mix_changes,
+                );
+            });
+        }
         if let Some(slot) = &overview {
             self.paint_overview(ui, slot);
         }
@@ -2533,6 +2718,99 @@ impl MixJamApp {
         }
     }
 
+    /// The Mix view's parts outside the lanes: the column captions in the
+    /// ruler strip, the Master and returns rows below the lanes, the "No
+    /// tracks" note, the columns' scrolling, and the rows' edits.
+    #[allow(clippy::too_many_arguments)]
+    fn mix_block(
+        &mut self,
+        ui: &mut egui::Ui,
+        captions: Rect,
+        block: Rect,
+        (offset, empty, wheel): (f32, bool, f32),
+        tracks: Vec<Track>,
+        mut changes: mixer::Changes,
+    ) {
+        let column = captions.width();
+        let mut new_offset = mix_view::captions(ui, captions, offset) - wheel;
+        let mut master = self.session.project().master_gain;
+        let mut buses = self.session.project().fx;
+        let mut board = self.session.project().master;
+        let automated: [bool; BUSES] =
+            std::array::from_fn(|bus| !self.session.project().return_automation[bus].is_empty());
+        let master_rect = Rect::from_min_size(block.min, Vec2::new(column, mix_view::BLOCK_ROW));
+        let returns_rect = master_rect.translate(Vec2::new(0.0, mix_view::BLOCK_ROW + 2.0));
+        let row = mix_view::master_row(ui, master_rect, offset, &mut master, &mut board.bypass);
+        changes.tracks |= row.changed;
+        changes.bypass = row.bypass;
+        let mut export = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(row.export)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        export.set_clip_rect(
+            Rect::from_min_max(
+                Pos2::new(master_rect.left() + mix_view::PINNED, master_rect.top()),
+                master_rect.max,
+            )
+            .intersect(ui.clip_rect()),
+        );
+        export.spacing_mut().interact_size.y = row.export.height();
+        self.export_tracks_button(&mut export, 12.0);
+        let (fx, open) = mix_view::returns_row(ui, returns_rect, offset, &mut buses, automated);
+        changes.fx = fx;
+        changes.open = open;
+        if empty {
+            let mut note = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(
+                captions.left_bottom() + Vec2::new(mix_view::PINNED + 4.0, 34.0),
+                Vec2::new((column - mix_view::PINNED - 8.0).max(80.0), 48.0),
+            )));
+            note.label(heading("No tracks", 15.0));
+            note.label("Place a sound in the arrangement.");
+        }
+        // Shift and the wheel over the rows scroll the columns, after any
+        // control under the pointer has taken the wheel.
+        let rows = Rect::from_min_max(
+            Pos2::new(captions.left(), captions.top()),
+            Pos2::new(captions.right(), block.bottom()),
+        );
+        if ui.rect_contains_pointer(rows) {
+            let delta = ui.input(|input| input.smooth_scroll_delta.x);
+            if delta != 0.0 {
+                new_offset -= delta;
+                ui.input_mut(|input| input.smooth_scroll_delta.x = 0.0);
+            }
+        }
+        // A control reached with the keyboard scrolls into view.
+        let focused = ui.memory(|memory| memory.focused());
+        if focused != self.mix_revealed {
+            self.mix_revealed = focused;
+            let visible = captions.left() + mix_view::PINNED..=captions.right();
+            if let Some(response) = focused.and_then(|id| ui.ctx().read_response(id))
+                && response.interact_rect != response.rect
+                && response.rect.width() < 200.0
+                && (rows.top()..=rows.bottom()).contains(&response.rect.center().y)
+            {
+                let content = response.rect.left() - captions.left() + offset;
+                if content >= mix_view::PINNED - 0.5
+                    && content + response.rect.width() <= mix_view::CONTENT_WIDTH + 0.5
+                {
+                    if response.rect.left() < *visible.start() {
+                        new_offset -= *visible.start() - response.rect.left() + 4.0;
+                    } else if response.rect.right() > *visible.end() {
+                        new_offset += response.rect.right() - *visible.end() + 4.0;
+                    }
+                }
+            }
+        }
+        let new_offset = new_offset.clamp(0.0, mix_view::max_offset(column));
+        if new_offset != self.mix_scroll {
+            self.mix_scroll = new_offset;
+            ui.ctx().request_repaint();
+        }
+        self.apply_mixer_changes(ui, changes, tracks, master, buses, board);
+    }
+
     /// Keys for the focused lanes: arrows choose a clip, Alt+arrows move the
     /// selection, Enter previews it, Delete removes it, and Shift+F10 opens
     /// its context menu.
@@ -2637,11 +2915,6 @@ impl MixJamApp {
         self.header(ctx);
         let status = self.status_bar_space(ctx);
         self.side_rail(ctx);
-        // The lower panel's Sounds module folds the Sounds panel, whichever
-        // way it was chosen, so the two never show at once.
-        if self.bottom_module == BottomModule::Sounds && self.session.layout().sounds {
-            self.set_layout(|layout| layout.sounds = false);
-        }
         self.bottom(ctx);
         self.sounds_side(ctx);
         egui::CentralPanel::default()
@@ -3855,6 +4128,57 @@ pub(super) fn panel_switch(ui: &mut egui::Ui, label: &str, on: bool) -> Response
     response
 }
 
+/// A tab of the lower panel's tab row. The shown board's tab is bright, on
+/// a raised face, and underlined in the accent. On a folded panel the chosen
+/// tab keeps its bright name only.
+fn board_tab(ui: &mut egui::Ui, module: BottomModule, selected: bool, open: bool) -> Response {
+    let label = module.label();
+    let color = if selected {
+        roles().text
+    } else {
+        roles().muted
+    };
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), egui::FontId::proportional(14.0), color);
+    let size = Vec2::new(galley.size().x + 20.0, TOOLBAR_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    if selected && open {
+        ui.painter().rect_filled(rect, 4.0, roles().raised);
+    } else if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    let text = Pos2::new(
+        rect.center().x - galley.size().x / 2.0,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(text, galley, color);
+    if selected && open {
+        ui.painter().rect_filled(
+            Rect::from_min_max(
+                Pos2::new(rect.left() + 6.0, rect.bottom() - 2.0),
+                Pos2::new(rect.right() - 6.0, rect.bottom()),
+            ),
+            1.0,
+            roles().accent,
+        );
+    }
+    focus_outline(ui, &response, roles().accent);
+    let name = module.tab_name();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, name)
+    });
+    response.hover_hint(match module {
+        BottomModule::Mixer => {
+            "Mixer: track levels, pan, EQ, sends, polarity and outputs, on mixer strips."
+        }
+        BottomModule::Mastering => "Mastering: the master pedalboard that processes the whole mix.",
+        BottomModule::FxReturns => "FX returns: the four FX buses that the sends feed.",
+        BottomModule::StepSynth => "Step synth: sequence a sound across up to four bars of notes.",
+    })
+}
+
 /// A group heading over the rail's tools: a short uppercase title with
 /// names on, a separator with icons only (none above the first group).
 pub(super) fn rail_group(ui: &mut egui::Ui, title: &str, names: bool, first: bool) {
@@ -3883,26 +4207,6 @@ pub(super) fn rail_group(ui: &mut egui::Ui, title: &str, names: bool, first: boo
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
 }
 
-pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {
-    // A category can have the name of a tool, such as Step synth.
-    let action = format!("Show {label} sounds");
-    let response = ui.add(
-        egui::Button::new(egui::RichText::new(label).color(if active {
-            roles().text
-        } else {
-            roles().muted
-        }))
-        .fill(if active { roles().hover } else { roles().panel })
-        .stroke(Stroke::new(
-            1.0_f32,
-            if active { roles().muted } else { roles().panel },
-        ))
-        .min_size(Vec2::new(40.0, 26.0)),
-    );
-    focus_outline(ui, &response, roles().accent);
-    name_control(response, &action).hover_hint(action)
-}
-
 pub(super) fn group_color(group: &str) -> Color32 {
     match group.to_ascii_lowercase().as_str() {
         "loop" => Color32::from_rgb(212, 193, 130),
@@ -3916,105 +4220,12 @@ pub(super) fn group_color(group: &str) -> Color32 {
     }
 }
 
-/// A sound tile's category tint over its fill.
+/// A sound row's category tint over its fill.
 pub(super) fn tile_tint(category: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(category.r(), category.g(), category.b(), 51)
 }
-/// The opacity of a sound tile's category and length line.
+/// The opacity of a sound row's category and length line.
 pub(super) const TILE_DETAIL_ALPHA: f32 = 0.9;
-
-/// Width of a one-bar sound tile and the gap between tiles.
-pub(super) const TILE_BAR: f32 = 96.0;
-pub(super) const TILE_GAP: f32 = 8.0;
-
-/// A tile spans one bar unit per bar plus the gaps between them, so tiles
-/// of different lengths align. A sound longer than a row fills the row.
-pub(super) fn tile_width(bars: u32, row_width: f32) -> f32 {
-    (bars.max(1) as f32 * (TILE_BAR + TILE_GAP) - TILE_GAP).min(row_width.max(TILE_BAR))
-}
-
-/// The index of the first tile in each row when tiles wrap at `row_width`.
-pub(super) fn tile_rows(widths: impl IntoIterator<Item = f32>, row_width: f32) -> Vec<usize> {
-    let mut starts = Vec::new();
-    let mut x = 0.0;
-    for (index, width) in widths.into_iter().enumerate() {
-        if index == 0 || x + width > row_width {
-            starts.push(index);
-            x = 0.0;
-        }
-        x += width + TILE_GAP;
-    }
-    starts
-}
-
-pub(super) fn sample_button(
-    ui: &mut egui::Ui,
-    sample: &Sample,
-    product: Option<Product>,
-    selected: bool,
-    width: f32,
-) -> Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click_and_drag());
-    let color = group_color(&sample.group_name);
-    let painter = ui.painter_at(rect);
-    let radius = roles().corner(5.0);
-    theme::surface(
-        &painter,
-        rect,
-        radius,
-        if response.hovered() || selected {
-            roles().tile_hover
-        } else {
-            roles().tile
-        },
-    );
-    painter.rect_filled(rect, radius, tile_tint(color));
-    if selected || response.has_focus() {
-        painter.rect_stroke(
-            rect.shrink(0.5),
-            radius,
-            Stroke::new(1.0_f32, color),
-            egui::StrokeKind::Inside,
-        );
-    }
-    let text = painter.layout_job(elided(
-        &sample.name,
-        12.0,
-        roles().text,
-        rect.width() - 16.0,
-        1,
-    ));
-    let clip = painter.with_clip_rect(rect.shrink2(Vec2::new(8.0, 3.0)));
-    clip.galley(rect.min + Vec2::new(8.0, 5.0), text, roles().text);
-    let bars = format!(
-        "{} bar{}",
-        sample.bars,
-        if sample.bars == 1 { "" } else { "s" }
-    );
-    let font = FontId::proportional(10.0);
-    let muted = roles().text.gamma_multiply(TILE_DETAIL_ALPHA);
-    let mut metadata = painter.layout_no_wrap(
-        format!("{}  /  {bars}", sample.group_name),
-        font.clone(),
-        muted,
-    );
-    // A narrow tile keeps the bar count; its tint still names the category.
-    if metadata.size().x > rect.width() - 16.0 {
-        metadata = painter.layout_no_wrap(bars, font, muted);
-    }
-    clip.galley(
-        rect.min + Vec2::new(8.0, 32.0 - metadata.size().y / 2.0),
-        metadata,
-        muted,
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &sample.name)
-    });
-    // Build the details only for the tile under the pointer.
-    response.hover_details(|ui| {
-        ui.label(sample_details(sample, product));
-    })
-}
 
 pub(super) fn sample_details(sample: &Sample, product: Option<Product>) -> String {
     let mut rows = vec![
@@ -4077,7 +4288,8 @@ impl MixJamApp {
         let mut choice = shown;
         let response = egui::ComboBox::from_id_salt("automation_lane")
             .selected_text(current)
-            .width(112.0)
+            // "Repeat gate" and "FX 1 return" still fit the narrow width.
+            .width(if show_label { 112.0 } else { 96.0 })
             .show_ui(ui, |ui| {
                 if ui.selectable_label(choice == (None, None), "Off").clicked() {
                     choice = (None, None);

@@ -1,4 +1,4 @@
-//! Effects module of the bottom section: the four FX buses that the mixer's
+//! FX returns board of the lower panel: the four FX buses that the mixer's
 //! sends feed, side by side as units on a board. Each unit holds its effect,
 //! the effect's preset and settings, the bus's input switch and return level,
 //! its safety limiter, and Clear Tail. The caller turns changed buses into an
@@ -329,7 +329,7 @@ pub(super) fn show(ui: &mut egui::Ui, buses: &FxBuses, reveal: Option<usize>) ->
     named(
         &board.interact(area, board.id().with("surface"), Sense::hover()),
         egui::WidgetType::Other,
-        "Effects board",
+        "FX returns board",
     );
     let mut content = board.new_child(
         egui::UiBuilder::new()

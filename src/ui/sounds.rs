@@ -1,7 +1,6 @@
 //! The Sounds panel at the left of the score: the library's sounds as a list
-//! with waveform thumbnails, and the filters the lower panel's Sounds module
-//! also shows. The two never show at once (owner answer P3), so every control
-//! keeps one name. The filter state and the sound actions are shared.
+//! with waveform thumbnails, their search, filters, category chips, and sort,
+//! and the sound actions.
 use super::view::{
     GROUPS, TILE_DETAIL_ALPHA, action_button, elided, focus_outline, group_color, heading,
     name_control, sample_details, tile_tint,
@@ -25,19 +24,14 @@ const WRAPPED_CHIPS_HEIGHT: f32 = 440.0;
 const THUMBNAIL_FLOOR: f32 = 0.05;
 
 impl MixJamApp {
-    /// Whether the open Sounds panel shows: chosen, not maximised, and the
-    /// lower panel not on its own Sounds module.
+    /// Whether the open Sounds panel shows: chosen and not maximised.
     pub(super) fn sounds_panel_open(&self) -> bool {
         let layout = self.session.layout();
-        layout.sounds && !layout.maximised && self.bottom_module != BottomModule::Sounds
+        layout.sounds && !layout.maximised
     }
 
-    /// Open the Sounds panel. The lower panel leaves its Sounds module for
-    /// Mixer, so the two never show at once.
+    /// Open the Sounds panel.
     pub(super) fn open_sounds_panel(&mut self) {
-        if self.bottom_module == BottomModule::Sounds {
-            self.bottom_module = BottomModule::Mixer;
-        }
         self.set_layout(|layout| {
             layout.sounds = true;
             layout.maximised = false;
@@ -178,7 +172,7 @@ impl MixJamApp {
             });
     }
 
-    /// What a sound tile or row does: a click selects it for placement,
+    /// What a sound row does: a click selects it for placement,
     /// Enter places it at the playhead on the armed track, a double-click
     /// previews it, and a drag carries it to a track.
     pub(super) fn sound_actions(&mut self, ui: &egui::Ui, id: u32, response: &Response) {
@@ -377,7 +371,7 @@ fn category_chip(ui: &mut egui::Ui, label: &str, color: Option<Color32>, active:
 /// One sound in the list: its name, its category and length, and its
 /// waveform, on the category's tint. It names itself after the sound, as a
 /// tile does.
-fn sound_row(
+pub(super) fn sound_row(
     ui: &mut egui::Ui,
     sample: &Sample,
     product: Option<Product>,

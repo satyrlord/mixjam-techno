@@ -27,7 +27,7 @@ pub(super) struct Roles {
     pub panel: Color32,
     pub raised: Color32,
     pub hover: Color32,
-    /// Sound tiles, at rest and hovered or selected. They carry small text
+    /// Sound rows, at rest and hovered or selected. They carry small text
     /// under a category tint, so plastic needs them darker than `raised`.
     pub tile: Color32,
     pub tile_hover: Color32,
@@ -828,7 +828,7 @@ mod tests {
                 let ratio = painted_contrast(r, text, fill);
                 assert!(ratio >= minimum, "{name} {what} {fill:?}: {ratio:.2}:1");
             }
-            // A sound tile adds its category tint, and its details line is
+            // A sound row adds its category tint, and its details line is
             // translucent.
             let over = |top: Color32, bottom: Color32, alpha: f32| {
                 let mix =

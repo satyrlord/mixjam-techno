@@ -36,6 +36,13 @@ mod tests {
         app.capture_path = None;
         // The fixture paints in the thread's theme; see `each_theme`.
         app.session.set_theme_fixture(theme::current());
+        // A default launch folds the lower panel and opens the Sounds panel
+        // (Starting module Sounds); the fixture keeps the stored defaults,
+        // as most tests use a board.
+        app.set_layout(|layout| {
+            layout.boards = true;
+            layout.sounds = false;
+        });
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         (context, app)
@@ -1722,7 +1729,7 @@ mod tests {
             );
         }
         // The window closes mid-drag, and the button lets go elsewhere.
-        app.bottom_module = BottomModule::Sounds;
+        app.bottom_module = BottomModule::Mixer;
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let away = Pos2::new(4.0, 500.0);
         pointer(&ctx, &mut app, away, false, egui::Modifiers::NONE);
@@ -1816,7 +1823,7 @@ mod tests {
                 );
             }
             // The toolbar holds the preset, the board's state, and its help.
-            let toolbar = effects_control_rect(&output, "Bottom module");
+            let toolbar = effects_control_rect(&output, "Step synth tab");
             let preset = effects_control_rect(&output, "Mastering preset");
             let status = text_rect(
                 &output,
@@ -2021,46 +2028,68 @@ mod tests {
     }
 
     #[test]
-    fn the_rail_mastering_button_shows_the_module_and_returns_to_sounds() {
+    fn the_rail_mastering_and_step_synth_buttons_show_their_tab_and_fold_the_lower_panel() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        for expected in [BottomModule::Mastering, BottomModule::Sounds] {
-            let button = accessible_node(&output, "Mastering").0;
-            frame(
-                &ctx,
-                &mut app,
-                vec![egui::Event::AccessKitActionRequest(
-                    egui::accesskit::ActionRequest {
-                        action: egui::accesskit::Action::Click,
-                        target: button,
-                        data: None,
-                    },
-                )],
-                egui::Modifiers::NONE,
+        let rail = |output: &egui::FullOutput, name: &str| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == egui::accesskit::Role::Button && node.label() == Some(name)
+                })
+                .map(|(id, node)| (*id, node.toggled()))
+                .unwrap_or_else(|| panic!("Missing rail button {name}"))
+        };
+        for (name, module) in [
+            ("Mastering", BottomModule::Mastering),
+            ("Step synth", BottomModule::StepSynth),
+        ] {
+            app.bottom_module = BottomModule::Mixer;
+            app.set_layout(|layout| layout.boards = true);
+            let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(rail(&output, name).1, Some(egui::accesskit::Toggled::False));
+            for (shown, boards) in [(true, true), (false, false), (true, true)] {
+                let target = rail(&output, name).0;
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![egui::Event::AccessKitActionRequest(
+                        egui::accesskit::ActionRequest {
+                            action: egui::accesskit::Action::Click,
+                            target,
+                            data: None,
+                        },
+                    )],
+                    egui::Modifiers::NONE,
+                );
+                output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                assert_eq!(app.bottom_module, module, "{name} keeps its tab chosen.");
+                assert_eq!(app.session.layout().boards, boards, "{name}");
+                assert_eq!(app.board_shown(module), shown, "{name}");
+                assert_eq!(
+                    rail(&output, name).1,
+                    Some(if shown {
+                        egui::accesskit::Toggled::True
+                    } else {
+                        egui::accesskit::Toggled::False
+                    }),
+                    "The {name} highlight follows its board."
+                );
+            }
+            // Its tab is selected while the board shows.
+            assert_eq!(
+                accessible_node(&output, module.tab_name()).1.toggled(),
+                Some(egui::accesskit::Toggled::True)
             );
-            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_eq!(app.bottom_module, expected);
         }
-        app.bottom_module = BottomModule::Mixer;
-        output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        let button = accessible_node(&output, "Mastering").0;
-        frame(
-            &ctx,
-            &mut app,
-            vec![egui::Event::AccessKitActionRequest(
-                egui::accesskit::ActionRequest {
-                    action: egui::accesskit::Action::Click,
-                    target: button,
-                    data: None,
-                },
-            )],
-            egui::Modifiers::NONE,
-        );
-        assert_eq!(
-            app.bottom_module,
-            BottomModule::Mastering,
-            "Mastering replaces the Mixer."
+        assert!(
+            !app.session.unsaved(),
+            "Rail navigation must not edit the project."
         );
     }
 
@@ -2109,12 +2138,12 @@ mod tests {
         assert!(app.session.layout().tool_names);
         accessible_node(&output, "Shrink the tool rail to icons");
         // Folded, the lower panel keeps its toolbar row and the rail keeps
-        // every tool; Mixer opens it again.
-        let open_top = effects_control_rect(&output, "Bottom module").top();
+        // every tool; the Mixer tab opens it again.
+        let open_top = effects_control_rect(&output, "Mixer tab").top();
         output = click_named(&ctx, &mut app, "Boards");
         assert!(!app.session.layout().boards);
         assert!(!selected(&output, "Boards"));
-        let folded_top = effects_control_rect(&output, "Bottom module").top();
+        let folded_top = effects_control_rect(&output, "Mixer tab").top();
         assert!(
             folded_top > open_top + 150.0,
             "Folded, only the toolbar row stays: {open_top} then {folded_top}."
@@ -2124,19 +2153,19 @@ mod tests {
                 accessible_node(&output, icon.label());
             }
         }
-        click_named(&ctx, &mut app, "Mixer");
+        click_named(&ctx, &mut app, "Mixer tab");
         assert!(app.session.layout().boards);
         assert_eq!(app.bottom_module, BottomModule::Mixer);
     }
 
     #[test]
-    fn folded_modules_reopen_from_their_rail_button_before_toggling_to_sounds() {
+    fn folded_boards_reopen_from_their_rail_button_and_a_second_press_folds_them() {
         each_theme(|_| {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
             for (name, module) in [
-                ("Mixer", BottomModule::Mixer),
                 ("Mastering", BottomModule::Mastering),
+                ("Step synth", BottomModule::StepSynth),
             ] {
                 click_named(&ctx, &mut app, name);
                 assert_eq!(app.bottom_module, module);
@@ -2146,7 +2175,10 @@ mod tests {
                 assert!(app.session.layout().boards);
                 assert_eq!(app.bottom_module, module, "Restore the folded {name}.");
                 click_named(&ctx, &mut app, name);
-                assert_eq!(app.bottom_module, BottomModule::Sounds);
+                // A second press folds the lower panel (R6, R7).
+                assert!(!app.session.layout().boards);
+                assert_eq!(app.bottom_module, module);
+                click_named(&ctx, &mut app, "Boards");
             }
         });
     }
@@ -2223,7 +2255,7 @@ mod tests {
         );
         assert_eq!(
             order.get(after + rail.len()).map(String::as_str),
-            Some("Bottom module"),
+            Some("Mixer tab"),
             "The lower panel follows the rail: {order:?}"
         );
         // The song overview leads the arrangement, then the score toolbar,
@@ -2231,6 +2263,8 @@ mod tests {
         let toolbar = [
             "Song overview",
             "Hide the song overview",
+            "Arrange view",
+            "Mix view",
             "Automation lane",
             "Follow",
             "Sections",
@@ -3080,15 +3114,6 @@ mod tests {
                 "Effect Studio",
                 44.0,
             ),
-            (
-                "step",
-                "STEP SYNTH",
-                "Collapse Step synth",
-                "Step synth help",
-                "Expand Step synth",
-                "Step synth",
-                44.0,
-            ),
         ] {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
@@ -3104,7 +3129,6 @@ mod tests {
             match tool {
                 "stretch" => app.show_stretch = true,
                 "effects" => app.show_effects = true,
-                "step" => app.show_step_synth = true,
                 _ => unreachable!(),
             }
             for _ in 0..3 {
@@ -3155,7 +3179,6 @@ mod tests {
             assert!(match tool {
                 "stretch" => app.show_stretch && app.show_stretch_help,
                 "effects" => app.show_effects && app.show_effects_help,
-                "step" => app.show_step_synth && app.show_step_synth_help,
                 _ => unreachable!(),
             });
             assert!(dialog::is_collapsed(&ctx, collapse_id));
@@ -4357,6 +4380,7 @@ mod tests {
             project,
         )
         .unwrap();
+        app.set_layout(|layout| layout.sounds = true);
         app.options = Some(options::OptionsDraft::new(
             &app.session,
             options::Page::Libraries,
@@ -4370,7 +4394,6 @@ mod tests {
             ("TECHNO", theme::brand_family()),
             ("STIINTA SI RITM", theme::heading_family()),
             ("ARRANGEMENT", theme::heading_family()),
-            ("SOUNDS", theme::heading_family()),
             ("OPTIONS", theme::heading_family()),
         ] {
             let text = output
@@ -4442,8 +4465,31 @@ mod tests {
         }
         app.session =
             Session::headless(Arc::new(Library::fixture(vec![sample.clone()])), project).unwrap();
+        app.set_layout(|layout| layout.sounds = true);
+        context.enable_accesskit();
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-        let tile = text_rect(&output, &sample.name);
+        // The Sounds panel's row, which elides the long name it is named by.
+        let tile = output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.role() == egui::accesskit::Role::Button
+                    && node.label() == Some(sample.name.as_str())
+            })
+            .filter_map(|(_, node)| node.bounds())
+            .map(|b| {
+                Rect::from_min_max(
+                    Pos2::new(b.x0 as f32, b.y0 as f32),
+                    Pos2::new(b.x1 as f32, b.y1 as f32),
+                )
+            })
+            .min_by(|a, b| a.left().total_cmp(&b.left()))
+            .expect("The Sounds panel must list the sound.");
         context.style_mut(|style| style.interaction.tooltip_delay = 0.0);
         frame(
             &context,
@@ -4489,7 +4535,7 @@ mod tests {
     }
 
     #[test]
-    fn sound_tiles_tint_the_full_surface_and_keep_metadata_and_selection_visible() {
+    fn sound_rows_tint_the_full_surface_and_keep_metadata_and_selection_visible() {
         let (_, app) = fixture();
         let sample = &app.session.library().samples[0];
         let category = group_color(&sample.group_name);
@@ -4500,7 +4546,15 @@ mod tests {
             let mut tile = Rect::NOTHING;
             let output = context.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    tile = sample_button(ui, sample, Some(Product::T2), selected, 148.0).rect;
+                    tile = sounds::sound_row(
+                        ui,
+                        sample,
+                        Some(Product::T2),
+                        &mixjam_techno::application::PeakState::Pending,
+                        selected,
+                        226.0,
+                    )
+                    .rect;
                 });
             });
             let tint_index = output
@@ -4512,7 +4566,7 @@ mod tests {
                         egui::Shape::Rect(rect) if rect.rect == tile && rect.fill == tint
                     )
                 })
-                .expect("The category tint must cover the full sound tile at 20% opacity.");
+                .expect("The category tint must cover the full sound row at 20% opacity.");
             assert!(
                 !output.shapes.iter().any(|shape| {
                     matches!(
@@ -4520,7 +4574,7 @@ mod tests {
                         egui::Shape::Circle(circle) if tile.contains(circle.center)
                     )
                 }),
-                "Sound tiles must not retain a category dot."
+                "Sound rows must not carry a category dot."
             );
             let metadata = output
                 .shapes
@@ -5513,6 +5567,8 @@ mod tests {
     #[test]
     fn missing_clip_keeps_full_span_label_selection_and_history() {
         let (context, mut app) = missing_fixture();
+        // The Mixer strips print the clip name as well.
+        app.bottom_module = BottomModule::Mastering;
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         let label = text_rect(&output, "Missing: Lost lead");
         let timeline = app.timeline_rect.unwrap();
@@ -5915,13 +5971,56 @@ mod tests {
         frame(context, app, vec![], egui::Modifiers::NONE)
     }
 
+    /// The Step synth board: the lower panel's tab panel named Step synth.
+    fn step_synth_board_node(
+        output: &egui::FullOutput,
+    ) -> (egui::accesskit::NodeId, &egui::accesskit::Node) {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("Accessibility must be enabled for this test.")
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == egui::accesskit::Role::TabPanel && node.label() == Some("Step synth")
+            })
+            .map(|(id, node)| (*id, node))
+            .expect("The Step synth board must show.")
+    }
+
+    fn step_synth_board_rect(output: &egui::FullOutput) -> Rect {
+        let bounds = step_synth_board_node(output).1.bounds().unwrap();
+        Rect::from_min_max(
+            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+        )
+    }
+
+    /// The rail's Step synth button, which opens and folds the board.
+    fn step_synth_rail_button(output: &egui::FullOutput) -> egui::accesskit::NodeId {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == egui::accesskit::Role::Button && node.label() == Some("Step synth")
+            })
+            .map(|(id, _)| *id)
+            .expect("The rail must have Step synth.")
+    }
+
+    /// A control of the Step synth board, or of the tab row when the board
+    /// has none of that name (its help).
     fn step_synth_accessible_node<'a>(
         output: &'a egui::FullOutput,
         label: &str,
     ) -> (egui::accesskit::NodeId, &'a egui::accesskit::Node) {
-        // The main menu also has Effects. Use tree ownership because the window
-        // bounds can still describe the collapsed size on the first expanded frame.
-        let window = accessible_node(output, "STEP SYNTH").0;
+        // The rail also has Effects. Use tree ownership.
+        let window = step_synth_board_node(output).0;
         let nodes = &output
             .platform_output
             .accesskit_update
@@ -5942,9 +6041,11 @@ mod tests {
         }
         nodes
             .iter()
-            .find(|(id, node)| descendants.contains(id) && node.label() == Some(label))
+            .find(|(id, node)| {
+                *id != window && descendants.contains(id) && node.label() == Some(label)
+            })
             .map(|(id, node)| (*id, node))
-            .unwrap_or_else(|| panic!("Missing Step synth control: {label}"))
+            .unwrap_or_else(|| accessible_node(output, label))
     }
 
     fn step_synth_control_rect(output: &egui::FullOutput, label: &str) -> Rect {
@@ -5959,14 +6060,15 @@ mod tests {
     }
 
     fn step_synth_text_mesh_bounds(output: &egui::FullOutput, label: &str) -> Rect {
-        let window = effects_control_rect(output, "STEP SYNTH");
+        // Glyphs that the board clips, whether or not they are scrolled into view.
+        let window = step_synth_board_rect(output);
         output
             .shapes
             .iter()
-            .filter_map(|shape| match &shape.shape {
+            .filter_map(|clipped| match &clipped.shape {
                 egui::Shape::Text(shape) if shape.galley.job.text == label => {
                     let bounds = shape.galley.mesh_bounds.translate(shape.pos.to_vec2());
-                    window.contains_rect(bounds).then_some(bounds)
+                    window.contains_rect(clipped.clip_rect).then_some(bounds)
                 }
                 _ => None,
             })
@@ -5983,7 +6085,7 @@ mod tests {
             style.scroll_animation = egui::style::ScrollAnimation::none();
         });
         app.selected_sample = Some(1);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         app.step_synth.steps[1] = Some(-36);
         app.step_synth.steps[16] = Some(-48);
         app.step_synth.steps[48] = Some(48);
@@ -6047,7 +6149,7 @@ mod tests {
                 );
             }
             app.selected_sample = Some(1);
-            app.show_step_synth = true;
+            app.bottom_module = BottomModule::StepSynth;
             app.step_synth.steps[63] = Some(-48);
             app.step_synth.effects.echo = Some(Default::default());
             let before = app.step_synth.clone();
@@ -6057,14 +6159,14 @@ mod tests {
             for _ in 0..4 {
                 output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
-            let window = effects_control_rect(&output, "STEP SYNTH");
-            let panel = window;
+            let window = step_synth_board_rect(&output);
             assert_folded_assets(&ctx, &output, density, "Olive");
             assert!(viewport.contains_rect(window));
+            // The status line sits in the tab row, above the board.
             let footer = step_synth_control_rect(&output, "Step synth status");
             assert!(
-                window.contains_rect(footer),
-                "Footer {footer:?} outside window {window:?} at {density}x"
+                viewport.contains_rect(footer) && footer.bottom() <= window.top(),
+                "Status {footer:?} must sit in the tab row above {window:?} at {density}x"
             );
             assert_eq!(
                 accessible_node(&output, "Step synth source sound")
@@ -6091,8 +6193,8 @@ mod tests {
             ] {
                 let bounds = step_synth_control_rect(&output, label);
                 assert!(
-                    panel.contains_rect(bounds),
-                    "{label} must fit the skin at {density}x."
+                    bounds.left() >= window.left() && bounds.top() >= window.top(),
+                    "{label} must start on the board at {density}x."
                 );
                 assert!(
                     !bounds.intersects(footer),
@@ -6109,8 +6211,38 @@ mod tests {
                 "Save pattern",
                 "Load pattern",
             ] {
+                // A short lower panel scrolls the board: the wheel brings
+                // the control in.
+                let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                for _ in 0..12 {
+                    let board = step_synth_board_rect(&output);
+                    let control = step_synth_control_rect(&output, label);
+                    if board.contains_rect(control) {
+                        break;
+                    }
+                    let down = control.bottom() > board.bottom();
+                    frame_at_size(
+                        &ctx,
+                        &mut app,
+                        vec![
+                            egui::Event::PointerMoved(board.center()),
+                            egui::Event::MouseWheel {
+                                unit: egui::MouseWheelUnit::Point,
+                                delta: Vec2::new(0.0, if down { -80.0 } else { 80.0 }),
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ],
+                        egui::Modifiers::NONE,
+                        size,
+                    );
+                    output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                }
                 let glyphs = step_synth_text_mesh_bounds(&output, label);
                 let button = step_synth_control_rect(&output, label);
+                assert!(
+                    step_synth_board_rect(&output).contains_rect(button),
+                    "{label} must scroll into view at {density}x."
+                );
                 assert!(
                     button.shrink(2.0).contains_rect(glyphs),
                     "{label} must have clear space inside its button at {density}x."
@@ -6125,16 +6257,26 @@ mod tests {
                 );
             }
             let bottom_note = "Step 16, -12 semitones";
-            focus_control(&ctx, &mut app, &output, bottom_note);
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Focus,
+                        target: step_synth_accessible_node(&output, bottom_note).0,
+                        data: None,
+                    },
+                )],
+                egui::Modifiers::NONE,
+                size,
+            );
             for _ in 0..4 {
                 frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             let cell = step_synth_control_rect(&output, bottom_note);
-            let note_view =
-                Rect::from_min_size(panel.min + Vec2::new(32.0, 198.0), Vec2::new(784.0, 306.0));
             assert!(
-                note_view.contains_rect(cell),
+                step_synth_board_rect(&output).contains_rect(cell),
                 "Keyboard focus must scroll the lowest pitch into view at {density}x."
             );
             assert!(!cell.intersects(step_synth_control_rect(&output, "Load pattern")));
@@ -6169,18 +6311,30 @@ mod tests {
                     "Numeric value must align below {name}."
                 );
             }
-            let before_collapse = effects_control_rect(&output, "STEP SYNTH");
-            let output = activate_control(&ctx, &mut app, &output, "Collapse Step synth");
-            let collapsed = effects_control_rect(&output, "STEP SYNTH");
-            assert_eq!(collapsed.min, before_collapse.min);
-            assert_eq!(collapsed.width(), window.width());
-            assert!((collapsed.height() - 44.0).abs() < 0.1);
-            for hidden in [
-                "Step synth source sound",
-                "Note grid",
-                "Load pattern",
-                "Step synth status",
-            ] {
+            // The rail folds the lower panel; the board's controls hide and
+            // come back with the chosen pane and the draft.
+            let rail = step_synth_rail_button(&output);
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Click,
+                        target: rail,
+                        data: None,
+                    },
+                )],
+                egui::Modifiers::NONE,
+                size,
+            );
+            let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            assert!(
+                !app.session.layout().boards,
+                "A second rail press folds the board."
+            );
+            // The status line stays in the folded tab row, as Mastering's does.
+            accessible_node(&output, "Step synth status");
+            for hidden in ["Step synth source sound", "Note grid", "Load pattern"] {
                 assert!(
                     !output
                         .platform_output
@@ -6190,28 +6344,40 @@ mod tests {
                         .nodes
                         .iter()
                         .any(|(_, node)| node.label() == Some(hidden)),
-                    "{hidden} must hide when collapsed."
+                    "{hidden} must hide when folded."
                 );
             }
-            let output = activate_control(&ctx, &mut app, &output, "Expand Step synth");
-            assert_eq!(effects_control_rect(&output, "STEP SYNTH"), before_collapse);
+            let rail = step_synth_rail_button(&output);
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(
+                    egui::accesskit::ActionRequest {
+                        action: egui::accesskit::Action::Click,
+                        target: rail,
+                        data: None,
+                    },
+                )],
+                egui::Modifiers::NONE,
+                size,
+            );
+            for _ in 0..3 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            assert!(app.board_shown(BottomModule::StepSynth));
             assert!(
                 app.step_synth_effects_expanded,
-                "Collapse must preserve the chosen pane."
+                "Folding must preserve the chosen pane."
             );
             assert_eq!(
                 app.step_synth, before,
-                "Pane changes, scrolling, and collapse must preserve the draft."
+                "Pane changes, scrolling, and folding must preserve the draft."
             );
             let output = activate_control(&ctx, &mut app, &output, "Note grid");
             assert!(!app.step_synth_effects_expanded);
             accessible_node(&output, "Step 16, -12 semitones");
             activate_control(&ctx, &mut app, &output, "Step synth help");
             assert!(app.show_step_synth_help);
-            app.show_step_synth_help = false;
-            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            activate_control(&ctx, &mut app, &output, "Close Step synth");
-            assert!(!app.show_step_synth);
             assert_eq!(app.step_synth, before);
         }
     }
@@ -6232,7 +6398,7 @@ mod tests {
             if !active {
                 state.active_bars.fill(false);
             }
-            let (mut open, mut view_bar, mut effects) = (true, 0, false);
+            let (mut view_bar, mut effects) = (0, false);
             let mut render = |events| {
                 let mut action = step_synth::Action::None;
                 let output = ctx.run(
@@ -6243,23 +6409,41 @@ mod tests {
                         ..Default::default()
                     },
                     |ctx| {
-                        action = step_synth::show(
-                            ctx,
-                            &mut open,
-                            step_synth::Source {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let source = || step_synth::Source {
                                 name: "Source",
                                 available,
                                 missing,
                                 explicit_file,
-                            },
-                            step_synth::Feedback {
-                                message: None,
-                                error: false,
-                            },
-                            &mut state,
-                            &mut view_bar,
-                            &mut effects,
-                        );
+                            };
+                            // The status line and Import details sit in the
+                            // tab row above the board.
+                            let bar = ui
+                                .horizontal(|ui| {
+                                    step_synth::toolbar(
+                                        ui,
+                                        800.0,
+                                        source(),
+                                        step_synth::Feedback {
+                                            message: None,
+                                            error: false,
+                                        },
+                                        &state,
+                                        effects,
+                                    )
+                                })
+                                .inner;
+                            action = step_synth::show(
+                                ui,
+                                source(),
+                                &mut state,
+                                &mut view_bar,
+                                &mut effects,
+                            );
+                            if matches!(bar, step_synth::Action::Details) {
+                                action = bar;
+                            }
+                        });
                     },
                 );
                 (output, action)
@@ -6297,7 +6481,6 @@ mod tests {
                 ("Use palette sound", step_synth::Action::PaletteSource),
                 ("Save pattern", step_synth::Action::SavePattern),
                 ("Load pattern", step_synth::Action::LoadPattern),
-                ("Step synth help", step_synth::Action::Help),
             ];
             if missing && !explicit_file {
                 assert_full_recovery_caption(&output);
@@ -6328,11 +6511,117 @@ mod tests {
     }
 
     #[test]
+    fn tool_status_text_scrolls_inside_a_short_footer() {
+        each_theme(|_| {
+            let ctx = egui::Context::default();
+            configure_style(&ctx);
+            ctx.enable_accesskit();
+            ctx.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
+            let rect = Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(250.0, 18.0));
+            let message = "Missing audio. Choose a source file or open Import details.";
+            let render = |events| {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 100.0))),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            controls::status_text(
+                                ui,
+                                rect,
+                                "short-status",
+                                message,
+                                12.5,
+                                false,
+                                message,
+                            );
+                        });
+                    },
+                )
+            };
+            for _ in 0..3 {
+                render(vec![]);
+            }
+            let before = render(vec![egui::Event::PointerMoved(rect.center())]);
+            accessible_label(&before, message);
+            let top = |output: &egui::FullOutput| {
+                output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == message => {
+                            Some(text.pos.y)
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+            };
+            render(vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: Vec2::new(0.0, -200.0),
+                modifiers: egui::Modifiers::NONE,
+            }]);
+            for _ in 0..30 {
+                render(vec![]);
+            }
+            let after = render(vec![]);
+            assert!(
+                top(&after) < top(&before),
+                "The last line must scroll into the short footer."
+            );
+            accessible_label(&after, message);
+        });
+    }
+
+    #[test]
+    fn agent_scopes_step_synth_toolbar_controls_with_its_board() {
+        let (ctx, mut app, port) = agent_fixture();
+        let (_, missing) = missing_fixture();
+        app.session = missing.session;
+        app.select_clip(1, false);
+        app.bottom_module = BottomModule::StepSynth;
+        let reply = agent(
+            &ctx,
+            &mut app,
+            &port,
+            &["ui", "all=true", "window=Step synth"],
+        );
+        let nodes = reply["nodes"].as_array().unwrap();
+        for name in [
+            "Step synth status",
+            "Step synth help",
+            "Import details",
+            "Step synth BPM",
+        ] {
+            assert!(nodes.iter().any(|node| node["label"] == name), "{name}");
+        }
+        let reply = agent(
+            &ctx,
+            &mut app,
+            &port,
+            &["click", "target=Step synth help", "window=Step synth"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.show_step_synth_help);
+        app.show_step_synth_help = false;
+        let reply = agent(
+            &ctx,
+            &mut app,
+            &port,
+            &["click", "target=Import details", "window=Step synth"],
+        );
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(app.show_import_details);
+    }
+
+    #[test]
     fn step_synth_options_apply_to_the_draft_without_starting_transport() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         app.selected_sample = Some(1);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
@@ -6379,7 +6668,7 @@ mod tests {
         let (ctx, mut app) = missing_fixture();
         ctx.enable_accesskit();
         app.select_clip(1, false);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         let draft = app.step_synth.clone();
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -6436,7 +6725,7 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         app.step_synth.bpm = 160.0;
         app.step_synth.active_bars = [true, false, true, false];
         app.step_synth.steps[1] = Some(-48);
@@ -6523,7 +6812,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         app.selected_sample = Some(1);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
@@ -6602,7 +6891,7 @@ mod tests {
         ctx.enable_accesskit();
         ctx.style_mut(|style| style.interaction.tooltip_delay = 0.0);
         app.selected_sample = Some(1);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
@@ -7831,7 +8120,9 @@ mod tests {
         ] {
             let (ctx, mut app) = fixture();
             ctx.enable_accesskit();
-            app.bottom_module = BottomModule::Mastering;
+            // Start from the tallest board: a shorter one keeps the panel,
+            // while a taller one grows it to show the whole board.
+            app.bottom_module = BottomModule::StepSynth;
             app.search = "grasp".into();
             app.group = Some("Loop".into());
             app.palette_sort = PaletteSort::Name;
@@ -7840,118 +8131,59 @@ mod tests {
                 frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
             let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            let selector_id = accessible_node(&output, "Bottom module").0;
-            let selector = effects_control_rect(&output, "Bottom module");
+            let tabs: Vec<(BottomModule, egui::accesskit::NodeId, Rect)> = BottomModule::ALL
+                .into_iter()
+                .map(|module| {
+                    (
+                        module,
+                        accessible_node(&output, module.tab_name()).0,
+                        effects_control_rect(&output, module.tab_name()),
+                    )
+                })
+                .collect();
             let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
                 .unwrap()
                 .rect;
             assert!(panel.height() >= 370.0);
-            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(selector));
-            assert!(
-                (selector.width() - view::BOTTOM_MODULE_WIDTH).abs() <= 1.0,
-                "The selector must reserve the same fixed width for every module: {selector:?}."
-            );
-            assert_eq!(
-                accessible_node(&output, "Bottom module").1.role(),
-                egui::accesskit::Role::ComboBox
-            );
-            accessible_node(&output, "Trim");
-
-            // Choose Sounds with the pointer, Mixer with focus and Enter,
-            // then Mastering and Sounds with the accessibility actions used by agents.
-            for (method, module) in [
-                (0, BottomModule::Sounds),
-                (1, BottomModule::Mixer),
-                (2, BottomModule::Mastering),
-                (2, BottomModule::Sounds),
-            ] {
-                let known: std::collections::HashSet<_> = output
-                    .platform_output
-                    .accesskit_update
-                    .as_ref()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .map(|(id, _)| *id)
-                    .collect();
-                match method {
-                    0 => {
-                        frame_at_size(
-                            &ctx,
-                            &mut app,
-                            pointer_events(selector.center(), true),
-                            egui::Modifiers::NONE,
-                            size,
-                        );
-                        frame_at_size(
-                            &ctx,
-                            &mut app,
-                            pointer_events(selector.center(), false),
-                            egui::Modifiers::NONE,
-                            size,
-                        );
-                    }
-                    1 => {
-                        frame_at_size(
-                            &ctx,
-                            &mut app,
-                            vec![action(egui::accesskit::Action::Focus, selector_id)],
-                            egui::Modifiers::NONE,
-                            size,
-                        );
-                        frame_at_size(
-                            &ctx,
-                            &mut app,
-                            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
-                            egui::Modifiers::NONE,
-                            size,
-                        );
-                    }
-                    _ => {
-                        frame_at_size(
-                            &ctx,
-                            &mut app,
-                            vec![action(egui::accesskit::Action::Click, selector_id)],
-                            egui::Modifiers::NONE,
-                            size,
-                        );
-                    }
-                }
-                for _ in 0..2 {
-                    output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-                }
+            for pair in tabs.windows(2) {
                 assert!(
-                    egui::Popup::is_any_open(&ctx),
-                    "The selector must open with method {method}."
+                    pair[0].2.right() <= pair[1].2.left(),
+                    "Tabs run left to right in their order at {size:?}."
                 );
-                let (option_id, option) = output
-                    .platform_output
-                    .accesskit_update
-                    .as_ref()
-                    .unwrap()
-                    .nodes
+            }
+            for (module, _, rect) in &tabs {
+                assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(*rect));
+                assert!(panel.contains_rect(*rect), "{module:?} tab at {size:?}");
+            }
+            accessible_node(&output, "Step synth BPM");
+
+            // Choose Mixer with the pointer, Mastering with focus and Enter,
+            // then the others with the accessibility actions used by agents.
+            for (method, module) in [
+                (0, BottomModule::Mixer),
+                (1, BottomModule::Mastering),
+                (2, BottomModule::FxReturns),
+                (0, BottomModule::StepSynth),
+                (2, BottomModule::Mixer),
+            ] {
+                let (_, tab_id, tab) = tabs
                     .iter()
-                    .find(|(id, node)| !known.contains(id) && node.label() == Some(module.label()))
-                    .unwrap_or_else(|| panic!("Missing {} module choice.", module.label()));
-                let option_id = *option_id;
-                let bounds = option.bounds().unwrap();
-                let center = Pos2::new(
-                    (bounds.x0 + bounds.x1) as f32 / 2.0,
-                    (bounds.y0 + bounds.y1) as f32 / 2.0,
-                );
+                    .copied()
+                    .find(|(candidate, _, _)| *candidate == module)
+                    .unwrap();
                 match method {
                     0 => {
                         frame_at_size(
                             &ctx,
                             &mut app,
-                            pointer_events(center, true),
+                            pointer_events(tab.center(), true),
                             egui::Modifiers::NONE,
                             size,
                         );
                         frame_at_size(
                             &ctx,
                             &mut app,
-                            pointer_events(center, false),
+                            pointer_events(tab.center(), false),
                             egui::Modifiers::NONE,
                             size,
                         );
@@ -7960,7 +8192,7 @@ mod tests {
                         frame_at_size(
                             &ctx,
                             &mut app,
-                            vec![action(egui::accesskit::Action::Focus, option_id)],
+                            vec![action(egui::accesskit::Action::Focus, tab_id)],
                             egui::Modifiers::NONE,
                             size,
                         );
@@ -7976,7 +8208,7 @@ mod tests {
                         frame_at_size(
                             &ctx,
                             &mut app,
-                            vec![action(egui::accesskit::Action::Click, option_id)],
+                            vec![action(egui::accesskit::Action::Click, tab_id)],
                             egui::Modifiers::NONE,
                             size,
                         );
@@ -7989,44 +8221,42 @@ mod tests {
                     app.bottom_module, module,
                     "Method {method}, viewport {size:?}."
                 );
+                for (other, id, rect) in &tabs {
+                    assert_eq!(
+                        accessible_node(&output, other.tab_name()).0,
+                        *id,
+                        "Tabs keep their identity."
+                    );
+                    assert_eq!(
+                        effects_control_rect(&output, other.tab_name()),
+                        *rect,
+                        "Board navigation to {module:?} must not move the tabs at {size:?}."
+                    );
+                    assert_eq!(
+                        accessible_node(&output, other.tab_name()).1.toggled()
+                            == Some(egui::accesskit::Toggled::True),
+                        *other == module,
+                        "Only the shown board's tab is selected."
+                    );
+                }
+                let painted = output.shapes.iter().any(|shape| {
+                    matches!(&shape.shape, egui::Shape::Text(text)
+                        if text.galley.job.text == module.label()
+                            && !text.galley.elided
+                            && tab.contains_rect(
+                                text.galley.mesh_bounds.translate(text.pos.to_vec2())))
+                });
                 assert!(
-                    !egui::Popup::is_any_open(&ctx),
-                    "Module choice must close after method {method}, viewport {size:?}."
-                );
-                assert_eq!(accessible_node(&output, "Bottom module").0, selector_id);
-                assert_eq!(
-                    accessible_node(&output, "Bottom module").1.value(),
-                    Some(title_text(module.label()).as_str()),
-                    "The selected module's full name must remain accessible."
-                );
-                assert_eq!(
-                    effects_control_rect(&output, "Bottom module"),
-                    selector,
-                    "Module navigation must not move its selector at {size:?}."
-                );
-                let title = title_text(module.label());
-                let painted = output
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text) if text.galley.job.text == title => Some(text),
-                        _ => None,
-                    })
-                    .expect("The module selector must paint its selected name.");
-                assert!(painted.galley.job.sections.iter().all(|section| {
-                    section.format.font_id.family == theme::heading_family()
-                        && section.format.font_id.size == 16.0
-                }));
-                assert!(
-                    !painted.galley.elided,
-                    "The selector must show the whole name {title}."
+                    painted,
+                    "The {} tab must show its whole name.",
+                    module.label()
                 );
                 assert_eq!(
                     egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
                         .unwrap()
                         .rect,
                     panel,
-                    "Choosing a module must preserve the existing panel size."
+                    "Choosing a board must preserve the existing panel size."
                 );
                 assert_eq!(app.search, "grasp");
                 assert_eq!(app.group.as_deref(), Some("Loop"));
@@ -8043,41 +8273,17 @@ mod tests {
                     !nodes
                         .iter()
                         .any(|(_, node)| node.label() == Some("Show Mixer")
-                            || (node.label() == Some("Sounds")
-                                && node.role() == egui::accesskit::Role::Button
-                                // The status bar's Sounds panel switch toggles.
-                                && node.toggled().is_none())),
-                    "The shared selector replaces the former module swap buttons."
+                            || node.label() == Some("Bottom module")),
+                    "The tabs replace the former module selector and swap buttons."
                 );
-                if module == BottomModule::Sounds {
-                    for name in [
-                        "Find a sound",
-                        "Library filter",
-                        "Category filter",
-                        "Sort order",
-                    ] {
-                        accessible_node(&output, name);
-                    }
-                    assert!(
-                        !nodes
-                            .iter()
-                            .any(|(_, node)| node.label() == Some("Master gain"))
-                    );
-                } else {
-                    accessible_node(
-                        &output,
-                        if module == BottomModule::Mixer {
-                            "Master gain"
-                        } else {
-                            "Trim"
-                        },
-                    );
-                    assert!(
-                        !nodes
-                            .iter()
-                            .any(|(_, node)| node.label() == Some("Find a sound"))
-                    );
-                }
+                let shown = |name: &str| nodes.iter().any(|(_, node)| node.label() == Some(name));
+                let expected = match module {
+                    BottomModule::Mixer => "Master gain",
+                    BottomModule::Mastering => "Trim",
+                    BottomModule::FxReturns => "FX returns board",
+                    BottomModule::StepSynth => "Step synth BPM",
+                };
+                assert!(shown(expected), "{expected} must show with {module:?}.");
             }
             assert!(
                 !app.session.unsaved(),
@@ -8457,7 +8663,7 @@ mod tests {
     }
 
     #[test]
-    fn sound_library_divider_resizes_retains_height_and_preserves_arrangement() {
+    fn lower_panel_divider_resizes_retains_height_and_preserves_arrangement() {
         let (ctx, mut app) = fixture();
         for track in 2..TRACK_COUNT {
             app.session.place(1, track, 0).unwrap();
@@ -8476,21 +8682,7 @@ mod tests {
             app.session.project().clone(),
         )
         .unwrap();
-        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        let painted = |output: &egui::FullOutput| {
-            output
-                .shapes
-                .iter()
-                .filter(|shape| {
-                    matches!(
-                        &shape.shape,
-                        egui::Shape::Text(text)
-                            if text.galley.job.text.starts_with("Resizable sound")
-                    )
-                })
-                .count()
-        };
-        let before_count = painted(&output);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let panel = || {
             egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
                 .unwrap()
@@ -8510,13 +8702,12 @@ mod tests {
             );
         }
         pointer(&ctx, &mut app, target, false, egui::Modifiers::NONE);
-        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let expanded = panel();
         assert!(
             expanded.height() > before.height() + 100.0,
             "{before:?} -> {expanded:?}"
         );
-        assert!(painted(&output) > before_count);
         assert!(app.timeline_drop_rect.unwrap().height() < arrangement_before);
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(
@@ -9189,6 +9380,7 @@ mod tests {
         )
         .unwrap();
         app.palette_sort = PaletteSort::Name;
+        app.set_layout(|layout| layout.sounds = true);
         let project = app.session.project().clone();
         let unsaved = app.session.unsaved();
         ctx.enable_accesskit();
@@ -9226,19 +9418,6 @@ mod tests {
         ctx.fonts_mut(|fonts| {
             assert!(fonts.has_glyphs(&FontId::proportional(14.0), "\u{2191}\u{2193}"));
         });
-    }
-
-    #[test]
-    fn sound_tiles_span_their_bar_count_and_wrap_within_the_row() {
-        assert_eq!(tile_width(1, 800.0), TILE_BAR);
-        assert_eq!(tile_width(2, 800.0), 2.0 * TILE_BAR + TILE_GAP);
-        assert_eq!(tile_width(4, 800.0), 4.0 * TILE_BAR + 3.0 * TILE_GAP);
-        // A long take fills the row; a narrow panel still shows a whole one-bar tile.
-        assert_eq!(tile_width(32_766, 800.0), 800.0);
-        assert_eq!(tile_width(4, 40.0), TILE_BAR);
-        let widths = [1, 2, 4, 1, 8, 1].map(|bars| tile_width(bars, 420.0));
-        assert_eq!(tile_rows(widths, 420.0), [0, 2, 3, 4, 5]);
-        assert!(tile_rows([], 420.0).is_empty());
     }
 
     #[test]
@@ -10103,7 +10282,6 @@ mod tests {
         let project = app.session.project().clone();
         for (icon, window) in [
             (RailIcon::Effects, "Effect Studio"),
-            (RailIcon::StepSynth, "Step synth"),
             (RailIcon::Edit, "Sample editor"),
             (RailIcon::Stretch, "Time Stretcher"),
             (RailIcon::AlbumReview, "Album Review"),
@@ -10284,7 +10462,10 @@ mod tests {
             }],
             egui::Modifiers::NONE,
         );
-        assert_eq!(app.bottom_module, BottomModule::Mixer);
+        assert!(
+            app.mix_view,
+            "The rail's Mixer switches the score to the Mix view (R5)."
+        );
         assert!(
             clicked.platform_output.events.iter().any(|event| {
                 matches!(
@@ -10301,10 +10482,9 @@ mod tests {
             Some(egui::accesskit::Toggled::True)
         );
         click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
-        assert_eq!(
-            app.bottom_module,
-            BottomModule::Sounds,
-            "The Mixer rail shortcut must restore Sounds on a repeated click."
+        assert!(
+            !app.mix_view,
+            "A repeated click returns the score to the Arrange view (R5)."
         );
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(
@@ -10832,13 +11012,14 @@ mod tests {
     fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
         let (context, mut app, port) = agent_fixture();
         let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        send(&mut app, &["click", "target=Show the Sounds panel"]);
 
         let reply = send(&mut app, &["ui"]);
         let nodes = reply["nodes"].as_array().unwrap();
         for (label, role) in [
             ("Play / pause (Space)", "button"),
             ("Project BPM", "slider"),
-            ("Bottom module", "combo_box"),
+            ("Mixer tab", "button"),
             ("Zoom", "slider"),
             ("Find a sound", "text_input"),
             ("Library filter", "combo_box"),
@@ -10897,14 +11078,33 @@ mod tests {
         assert_eq!(reply["control"]["number"], 135.0, "{reply}");
         assert_eq!(app.session.project().bpm, 135.0);
 
-        // The module selector and the Sounds panel actions have distinct names.
+        // The tabs, the rail and the Sounds panel actions have distinct names.
         let reply = send(&mut app, &["click", "target=Step synth"]);
         assert_eq!(reply["ok"], true, "{reply}");
-        assert!(app.show_step_synth && app.group.is_none());
+        assert!(app.board_shown(BottomModule::StepSynth) && app.group.is_none());
+        // The board scopes its controls as the Step synth window did.
+        let reply = send(&mut app, &["ui", "window=Step synth"]);
+        assert!(
+            reply["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|node| node["label"] == "Step synth BPM"),
+            "{reply}"
+        );
+        let reply = send(&mut app, &["state"]);
+        assert!(
+            reply["windows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|window| window == "Step synth"),
+            "{reply}"
+        );
         send(&mut app, &["click", "target=Show Step synth sounds"]);
         assert_eq!(app.group.as_deref(), Some("Step synth"));
         send(&mut app, &["click", "target=Show All sounds"]);
-        let reply = send(&mut app, &["set", "target=Bottom module", "value=Mixer"]);
+        let reply = send(&mut app, &["click", "target=Mixer tab"]);
         assert_eq!(reply["ok"], true, "{reply}");
         assert_eq!(app.bottom_module, BottomModule::Mixer);
         // A name that several controls contain needs a selector.
@@ -10941,7 +11141,6 @@ mod tests {
             Project::default().tracks[0].gain
         );
 
-        send(&mut app, &["set", "target=Bottom module", "value=Sounds"]);
         let reply = send(&mut app, &["set", "target=Find a sound", "value=grasp"]);
         assert_eq!(reply["control"]["text"], "grasp", "{reply}");
         assert_eq!(app.search, "grasp");
@@ -12160,16 +12359,6 @@ mod tests {
                 "Listen before saving. Save sound adds a new WAV to Effect.",
             ),
             (
-                "step",
-                "STEP SYNTH",
-                "Click a note to set it. Click it again to clear it.",
-            ),
-            (
-                "step-effects",
-                "STEP SYNTH",
-                "Adjust sequence effects. Note grid returns to the notes.",
-            ),
-            (
                 "stretch",
                 "TIME STRETCHER",
                 "Same tempo. Duration is unchanged.",
@@ -12188,10 +12377,7 @@ mod tests {
                     app.effects.filter = Some(Default::default());
                 }
                 "stretch" => app.show_stretch = true,
-                _ => {
-                    app.show_step_synth = true;
-                    app.step_synth_effects_expanded = tool == "step-effects";
-                }
+                _ => unreachable!(),
             }
             for _ in 0..4 {
                 frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -12317,6 +12503,7 @@ mod tests {
     fn focused_controls_keep_command_shortcuts_and_only_typing_blocks_them() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
+        app.set_layout(|layout| layout.sounds = true);
         let before = app.session.project().bpm;
         let other = if before == 160.0 { 140.0 } else { 160.0 };
         app.session.edit(EditCommand::SetTempo(other)).unwrap();
@@ -12652,7 +12839,7 @@ mod tests {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         app.selected_sample = Some(1);
-        app.show_step_synth = true;
+        app.bottom_module = BottomModule::StepSynth;
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
@@ -12703,7 +12890,10 @@ mod tests {
             Some(1),
             "Arrow keys move the cell cursor and Enter sets its note."
         );
-        assert!(app.show_step_synth, "Arrow keys must stay inside the grid.");
+        assert!(
+            app.board_shown(BottomModule::StepSynth),
+            "Arrow keys must stay inside the grid."
+        );
     }
 
     #[test]
@@ -13505,7 +13695,7 @@ mod tests {
             vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
             egui::Modifiers::NONE,
         );
-        assert_eq!(app.bottom_module, BottomModule::Effects);
+        assert_eq!(app.bottom_module, BottomModule::FxReturns);
 
         let mut buses = app.session.project().fx;
         buses.buses[0].module = Module::EchoformDelay(Echoform::default());
@@ -14423,8 +14613,9 @@ mod tests {
     fn f_maximises_the_score_and_f_again_restores_the_rail_and_the_lower_panel() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
+        app.set_layout(|layout| layout.sounds = true);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+        assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
         let press = |app: &mut MixJamApp| {
             frame(
                 &ctx,
@@ -14452,10 +14643,7 @@ mod tests {
         let output = press(&mut app);
         assert!(app.session.layout().maximised);
         assert!(!has_control(&output, "New"), "The rail hides.");
-        assert!(
-            !has_control(&output, "Bottom module"),
-            "The lower panel hides."
-        );
+        assert!(!has_control(&output, "Mixer tab"), "The lower panel hides.");
         // The top bar, the score toolbar and the status bar stay.
         for name in ["Play / pause (Space)", "Help", "Follow", "Tools", "Boards"] {
             assert!(has_control(&output, name), "{name} stays.");
@@ -14468,7 +14656,7 @@ mod tests {
         assert!(app.session.layout().tool_names && app.session.layout().boards);
         let output = press(&mut app);
         assert!(!app.session.layout().maximised);
-        assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+        assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
 
         // Typing keeps the letter.
         focus_control(&ctx, &mut app, &output, "Find a sound");
@@ -14512,7 +14700,7 @@ mod tests {
                 layout, original,
                 "{switch} keeps the previous panel choices."
             );
-            assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+            assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
             click_named(&ctx, &mut app, "Maximise the score");
             click_named(&ctx, &mut app, "Maximise the score");
             assert!(!app.session.layout().maximised, "The button toggles.");
@@ -14522,14 +14710,7 @@ mod tests {
     #[test]
     fn the_sounds_switch_restores_a_maximised_layout_without_changing_its_panels() {
         for sounds in [false, true] {
-            for module in [
-                BottomModule::Sounds,
-                BottomModule::Mixer,
-                BottomModule::Mastering,
-            ] {
-                if sounds && module == BottomModule::Sounds {
-                    continue;
-                }
+            for module in [BottomModule::Mixer, BottomModule::Mastering] {
                 let (ctx, mut app) = fixture();
                 ctx.enable_accesskit();
                 app.bottom_module = module;
@@ -14558,10 +14739,9 @@ mod tests {
     }
 
     #[test]
-    fn the_sounds_panel_and_the_sounds_module_never_show_at_once() {
+    fn the_sounds_panel_opens_folds_and_hides_in_a_maximised_score() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        assert_eq!(app.bottom_module, BottomModule::Sounds);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(
             has_control(&output, "Show the Sounds panel"),
@@ -14571,11 +14751,9 @@ mod tests {
             accessible_node(&output, "Sounds").1.toggled(),
             Some(egui::accesskit::Toggled::False)
         );
-        // Opening the panel moves the lower panel to Mixer.
         click_named(&ctx, &mut app, "Sounds");
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(app.session.layout().sounds);
-        assert_eq!(app.bottom_module, BottomModule::Mixer);
         assert!(has_control(&output, "Fold the Sounds panel"));
         assert!(!has_control(&output, "Show the Sounds panel"));
         for name in [
@@ -14591,24 +14769,15 @@ mod tests {
         ] {
             assert_eq!(named_count(&output, name), 1, "{name} has one home.");
         }
-        // Choosing the Sounds module folds the panel to its strip.
-        app.bottom_module = BottomModule::Sounds;
-        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert!(!app.session.layout().sounds);
-        assert!(has_control(&output, "Show the Sounds panel"));
-        assert_eq!(named_count(&output, "Find a sound"), 1);
-        // The strip opens it again, and the fold button folds it.
-        click_named(&ctx, &mut app, "Show the Sounds panel");
-        assert!(app.session.layout().sounds);
-        assert_eq!(app.bottom_module, BottomModule::Mixer);
+        // The fold button folds it, and the strip opens it again.
         click_named(&ctx, &mut app, "Fold the Sounds panel");
         assert!(!app.session.layout().sounds);
-        assert_eq!(
-            app.bottom_module,
-            BottomModule::Mixer,
-            "Folding keeps Mixer."
-        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(has_control(&output, "Show the Sounds panel"));
+        assert!(!has_control(&output, "Find a sound"));
+        click_named(&ctx, &mut app, "Show the Sounds panel");
+        assert!(app.session.layout().sounds);
+        click_named(&ctx, &mut app, "Fold the Sounds panel");
         // A maximised score hides the panel and its strip; the switch restores them.
         click_named(&ctx, &mut app, "Sounds");
         click_named(&ctx, &mut app, "Maximise the score");
@@ -14634,17 +14803,30 @@ mod tests {
             "The Sounds switch restores the score."
         );
         assert!(has_control(&output, "Fold the Sounds panel"));
-        // A session that starts with the panel open starts the lower panel on Mixer.
-        let layout = app.session.layout();
-        let library = Arc::new(Library::fixture(app.session.library().samples.to_vec()));
-        let mut session = Session::headless(library, app.session.project().clone()).unwrap();
-        session.set_layout(layout).unwrap();
-        let app = MixJamApp::from_session(session, "UI fixture".into(), false);
-        assert_eq!(app.bottom_module, BottomModule::Mixer);
     }
 
     #[test]
-    fn a_sound_row_does_what_a_sound_tile_does() {
+    fn starting_with_sounds_opens_the_sounds_panel_and_folds_the_lower_panel() {
+        let (_, app) = fixture();
+        let library = Arc::new(Library::fixture(app.session.library().samples.to_vec()));
+        let session = Session::headless(library, app.session.project().clone()).unwrap();
+        assert_eq!(
+            session.options().starting_module,
+            mixjam_techno::application::options::StartingModule::Sounds
+        );
+        let app = MixJamApp::from_session(session, "UI fixture".into(), false);
+        let layout = app.session.layout();
+        assert!(layout.sounds && !layout.boards, "{layout:?}");
+        assert_eq!(
+            app.bottom_module,
+            BottomModule::Mixer,
+            "Mixer shows when it opens."
+        );
+        assert!(!app.mix_view);
+    }
+
+    #[test]
+    fn a_sound_row_selects_previews_places_and_drags() {
         #[derive(Debug, PartialEq)]
         struct Outcome {
             selected: Option<u32>,
@@ -14673,8 +14855,7 @@ mod tests {
             // An empty track, so a placed clip adds to the song.
             app.armed_track = 3;
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_eq!(named_count(&output, "good grasp 2"), 1);
-            assert_eq!(app.bottom_module == BottomModule::Sounds, !row);
+            assert_eq!(named_count(&output, "good grasp 2"), usize::from(row));
             let at = effects_control_rect(&output, "good grasp 2").center();
             let click = |app: &mut MixJamApp| {
                 pointer(&ctx, app, at, true, egui::Modifiers::NONE);
@@ -14712,13 +14893,10 @@ mod tests {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             outcome(&app)
         };
-        for action in ["click", "double-click", "enter", "drag"] {
-            let tile = act(false, action);
-            let row = act(true, action);
-            assert_eq!(row, tile, "A row and a tile agree on {action}.");
-        }
-        // The actions did act: a click selects, Enter places, a drag carries.
+        // A click selects, a double-click selects too, Enter places, and a
+        // drag carries.
         assert_eq!(act(true, "click").selected, Some(1));
+        assert_eq!(act(true, "double-click").selected, Some(1));
         assert_eq!(act(true, "enter").clips, 3);
         assert!(act(true, "drag").dragging);
     }
@@ -15492,5 +15670,621 @@ mod tests {
         );
         let tops: Vec<f32> = mesh.vertices.chunks(4).map(|quad| quad[0].pos.y).collect();
         assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "{tops:?}");
+    }
+
+    /// The fixture in the Mix view at `size`, with its layout settled.
+    fn mix_view_fixture(size: Vec2) -> (egui::Context, MixJamApp, egui::FullOutput) {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        ctx.style_mut(|style| style.animation_time = 0.0);
+        app.set_mix_view(true);
+        let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        (ctx, app, output)
+    }
+
+    /// The colour of `label` painted from inside `rows`.
+    fn text_color(output: &egui::FullOutput, label: &str, rows: Rect) -> egui::Color32 {
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text == label && rows.contains(text.pos) =>
+                {
+                    Some(text.galley.job.sections[0].format.color)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("Missing text: {label}"))
+    }
+
+    #[test]
+    fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
+        each_theme(|theme| {
+            let (_ctx, app, output) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+            assert!(app.mix_view);
+            assert_ne!(app.bottom_module, BottomModule::Mixer, "{theme:?}");
+            // M1: one row per used track, with its sounds.
+            for track in 1..=2 {
+                let name = format!("Track {track}");
+                for suffix in [
+                    "gain",
+                    "gain value",
+                    "pan",
+                    "mute",
+                    "solo",
+                    "left output",
+                    "right output",
+                    "polarity invert",
+                    "EQ",
+                    "send FX 1",
+                    "send FX 2",
+                    "send FX 3",
+                    "send FX 4",
+                ] {
+                    accessible_node(&output, &format!("{name} {suffix}"));
+                }
+                accessible_node(&output, &format!("Reset {name} gain to unity"));
+                accessible_node(&output, &format!("Center {name} pan"));
+                accessible_node(&output, &format!("Record on track {track}"));
+            }
+            assert!(
+                output
+                    .platform_output
+                    .accesskit_update
+                    .as_ref()
+                    .unwrap()
+                    .nodes
+                    .iter()
+                    .all(|(_, node)| node.label() != Some("Track 3 gain")),
+                "An empty lane has no mixer row."
+            );
+            accessible_label(&output, "good grasp 2");
+            // M2: the level's range is the strip's.
+            let (_, gain) = accessible_node(&output, "Track 1 gain");
+            assert_eq!(gain.role(), egui::accesskit::Role::Slider);
+            assert_eq!(gain.max_numeric_value(), Some(12.0));
+            assert!(gain.min_numeric_value().is_some_and(|db| db <= -60.0));
+            // M11 to M13: Master, the returns, and Export tracks.
+            for name in [
+                "Master gain",
+                "Master gain value",
+                "Master bypass",
+                "Export tracks",
+            ] {
+                accessible_node(&output, name);
+            }
+            text_rect(&output, "Stereo output");
+            for bus in 1..=4 {
+                for name in [
+                    format!("FX {bus} return level"),
+                    format!("FX {bus} power"),
+                    format!("FX {bus} limiter"),
+                    format!("Edit FX {bus}"),
+                ] {
+                    accessible_node(&output, &name);
+                }
+            }
+            text_rect(&output, "Return 100%");
+            for caption in ["OUTPUTS", "LEVEL", "SENDS"] {
+                text_rect(&output, caption);
+            }
+            // M15: the rows carry the strips' material and ink.
+            // The rows' left parts, so the clips' names are left out.
+            let left = |name: &str, up: f32| {
+                let control = effects_control_rect(&output, name);
+                Rect::from_min_max(
+                    Pos2::new(0.0, control.top() - up),
+                    Pos2::new(control.left(), control.bottom() + up),
+                )
+            };
+            let row = left("Track 1 gain", 10.0);
+            let master = left("Master gain", 16.0);
+            assert_eq!(
+                text_color(&output, "Stereo output", master),
+                roles().strip_text
+            );
+            assert_eq!(text_color(&output, "good grasp 2", row), roles().strip_text);
+        });
+    }
+
+    #[test]
+    fn mix_view_edits_levels_pan_outputs_and_polarity_with_one_undo_each() {
+        let (ctx, mut app, output) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+        let press = |ctx: &egui::Context, app: &mut MixJamApp, name: &str, key: egui::Key| {
+            let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+            focus_control(ctx, app, &output, name);
+            frame(
+                ctx,
+                app,
+                vec![key_event(key, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            frame(ctx, app, vec![], egui::Modifiers::NONE)
+        };
+        // M2: exact dB entry, one undo step.
+        focus_control(&ctx, &mut app, &output, "Track 1 gain value");
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                egui::Event::Text("-6.0".into()),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let half = 10.0_f32.powf(-6.0 / 20.0);
+        assert!((app.session.project().tracks[0].gain - half).abs() < 0.000_001);
+        app.history_step(false);
+        assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        app.history_step(true);
+        assert!((app.session.project().tracks[0].gain - half).abs() < 0.000_001);
+        // M3: Unity.
+        press(
+            &ctx,
+            &mut app,
+            "Reset Track 1 gain to unity",
+            egui::Key::Space,
+        );
+        assert_eq!(app.session.project().tracks[0].gain, 1.0);
+        // M4: arrows move the pan, and Center returns it.
+        press(&ctx, &mut app, "Track 1 pan", egui::Key::ArrowRight);
+        assert!(app.session.project().tracks[0].pan > 0.0);
+        press(&ctx, &mut app, "Center Track 1 pan", egui::Key::Space);
+        assert_eq!(app.session.project().tracks[0].pan, 0.0);
+        // M5: polarity, lit while inverted.
+        let output = press(&ctx, &mut app, "Track 1 polarity invert", egui::Key::Space);
+        assert!(app.session.project().tracks[0].polarity_inverted);
+        assert_eq!(
+            accessible_node(&output, "Track 1 polarity invert")
+                .1
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        // M6 and M7: the outputs and switches, and the state they leave.
+        press(&ctx, &mut app, "Track 2 solo", egui::Key::Space);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "Solo elsewhere");
+        press(&ctx, &mut app, "Track 1 left output", egui::Key::Space);
+        let output = press(&ctx, &mut app, "Track 1 right output", egui::Key::Space);
+        assert!(!app.session.project().tracks[0].left_enabled);
+        text_rect(&output, "No output");
+        let output = press(&ctx, &mut app, "Track 1 mute", egui::Key::Space);
+        assert!(app.session.project().tracks[0].muted);
+        text_rect(&output, "Muted");
+        app.history_step(false);
+        assert!(
+            !app.session.project().tracks[0].muted,
+            "Each edit is one step."
+        );
+        assert!(!app.session.project().tracks[0].right_enabled);
+        // M11: the Master level.
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Master gain");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        assert!(app.session.project().master_gain < 1.0);
+    }
+
+    #[test]
+    fn mix_view_marks_automation_and_opens_the_eq_and_the_returns() {
+        let (context, mut app, port) = agent_fixture();
+        context.enable_accesskit();
+        app.set_mix_view(true);
+        let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+        for words in [
+            &["automate", "track=1", "lane=pan", "points=[[1,-1],[2,1]]"][..],
+            &[
+                "automate",
+                "track=1",
+                "lane=send1",
+                "points=[[1,0],[2,0.5]]",
+            ],
+            &["automate", "bus=2", "lane=return", "points=[[1,0],[2,0.5]]"],
+        ] {
+            let reply = send(&mut app, words);
+            assert_eq!(reply["ok"], true, "{words:?}: {reply}");
+        }
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        // M4 and M12: the automation marks.
+        text_rect(&output, "Pan automated");
+        text_rect(&output, "Return automated");
+        // M9: an automated send is ringed.
+        let knob = effects_control_rect(&output, "Track 1 send FX 1");
+        let ringed = |rect: Rect| {
+            output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Circle(circle)
+                    if circle.center.distance(rect.center()) < 0.5
+                        && (circle.radius - (rect.width() / 2.0 + 2.0)).abs() < 0.5)
+            })
+        };
+        assert!(ringed(knob));
+        assert!(!ringed(effects_control_rect(&output, "Track 1 send FX 2")));
+        // M8: EQ is lit while the compressor is on, and opens the EQ window.
+        assert_eq!(
+            accessible_node(&output, "Track 1 EQ").1.toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        let mut tracks = app.session.project().tracks.clone();
+        tracks[0].compressor.on = true;
+        let master_gain = app.session.project().master_gain;
+        app.session
+            .edit(EditCommand::SetMixer {
+                tracks,
+                master_gain,
+            })
+            .unwrap();
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            accessible_node(&output, "Track 1 EQ").1.toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        send(&mut app, &["click", "target=Track 1 EQ"]);
+        assert_eq!(app.eq_track, Some(0));
+        app.eq_track = None;
+        // M12: the returns' switches and Edit.
+        let limiter = app.session.project().fx.buses[2].limiter;
+        send(&mut app, &["click", "target=FX 3 limiter"]);
+        assert_ne!(app.session.project().fx.buses[2].limiter, limiter);
+        send(&mut app, &["set", "target=FX 3 return level", "value=0.25"]);
+        assert!((app.session.project().fx.buses[2].return_level - 0.25).abs() < 0.0001);
+        send(&mut app, &["click", "target=Edit FX 3"]);
+        assert_eq!(app.bottom_module, BottomModule::FxReturns);
+        assert!(app.session.layout().boards);
+        assert!(app.mix_view, "Edit opens FX returns below the Mix view.");
+        // M11: Master bypass is Bypass all.
+        send(&mut app, &["click", "target=Master bypass"]);
+        assert!(app.session.project().master.bypass);
+        // M13: Export tracks asks for a folder.
+        let reply = send(&mut app, &["click", "target=Export tracks"]);
+        assert_eq!(reply["modal"], "Choose path", "{reply}");
+        let state = send(&mut app, &["state"]);
+        assert_eq!(state["path_prompt"]["title"], "Export tracks", "{state}");
+    }
+
+    #[test]
+    fn mix_view_wheel_moves_the_control_under_the_pointer_and_never_the_pan() {
+        let (ctx, mut app, output) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+        let wheel = |ctx: &egui::Context, app: &mut MixJamApp, at: Pos2, up: bool| {
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::PointerMoved(at)],
+                egui::Modifiers::NONE,
+            );
+            frame(
+                ctx,
+                app,
+                vec![egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: Vec2::new(0.0, if up { 1.0 } else { -1.0 }),
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                egui::Modifiers::NONE,
+            );
+            for _ in 0..10 {
+                frame(ctx, app, vec![], egui::Modifiers::NONE);
+            }
+        };
+        wheel(
+            &ctx,
+            &mut app,
+            effects_control_rect(&output, "Track 1 gain").center(),
+            true,
+        );
+        let db = amplitude_to_db(app.session.project().tracks[0].gain);
+        assert!((db - 0.5).abs() < 0.001, "One notch is 0.5 dB, once: {db}");
+        wheel(
+            &ctx,
+            &mut app,
+            effects_control_rect(&output, "Track 1 send FX 1").center(),
+            true,
+        );
+        assert!((app.session.project().tracks[0].sends[0] - 0.05).abs() < 0.0001);
+        wheel(
+            &ctx,
+            &mut app,
+            effects_control_rect(&output, "Track 1 pan").center(),
+            false,
+        );
+        assert_eq!(app.session.project().tracks[0].pan, 0.0);
+        wheel(
+            &ctx,
+            &mut app,
+            effects_control_rect(&output, "FX 1 return level").center(),
+            false,
+        );
+        assert!((app.session.project().fx.buses[0].return_level - 0.95).abs() < 0.0001);
+        let before = app.session.project().master_gain;
+        wheel(
+            &ctx,
+            &mut app,
+            effects_control_rect(&output, "Master gain").center(),
+            false,
+        );
+        assert!(app.session.project().master_gain < before);
+    }
+
+    #[test]
+    fn mix_view_keeps_master_and_returns_in_view_while_the_tracks_scroll() {
+        let size = Vec2::new(1024.0, 768.0);
+        let (ctx, mut app, _) = mix_view_fixture(size);
+        for track in 2..24 {
+            app.session.place(1, track, 0).unwrap();
+        }
+        for _ in 0..4 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        let master = effects_control_rect(&output, "Master gain");
+        let returns = effects_control_rect(&output, "FX 4 return level");
+        let window = Rect::from_min_size(Pos2::ZERO, size);
+        assert!(window.contains_rect(master) && window.contains_rect(returns));
+        let row = effects_control_rect(&output, "Track 1 gain");
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(Pos2::new(row.left() - 40.0, row.center().y)),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, -20_000.0),
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            egui::Modifiers::NONE,
+            size,
+        );
+        for _ in 0..60 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        assert_eq!(effects_control_rect(&output, "Master gain"), master);
+        assert_eq!(effects_control_rect(&output, "FX 4 return level"), returns);
+        let last = effects_control_rect(&output, "Track 24 gain");
+        assert!(last.bottom() <= master.top(), "{last:?} {master:?}");
+    }
+
+    #[test]
+    fn mix_view_columns_scroll_sideways_and_follow_keyboard_focus_in_a_narrow_window() {
+        let size = Vec2::new(960.0, 720.0);
+        let (ctx, mut app, output) = mix_view_fixture(size);
+        accessible_node(&output, "Mix view columns");
+        assert_eq!(app.mix_scroll, 0.0);
+        let settle = |ctx: &egui::Context, app: &mut MixJamApp| {
+            for _ in 0..20 {
+                frame_at_size(ctx, app, vec![], egui::Modifiers::NONE, size);
+            }
+            frame_at_size(ctx, app, vec![], egui::Modifiers::NONE, size)
+        };
+        // A control reached with the keyboard scrolls into view.
+        let (target, _) = accessible_node(&output, "Track 1 EQ");
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Focus,
+                    target,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+            size,
+        );
+        let output = settle(&ctx, &mut app);
+        assert!(app.mix_scroll > 0.0);
+        let eq = effects_control_rect(&output, "Track 1 EQ");
+        let (_, node) = accessible_node(&output, "Track 1 EQ");
+        let bounds = node.bounds().unwrap();
+        assert!(
+            (bounds.x1 as f32 - eq.right()).abs() < 0.5,
+            "The focused EQ is whole in view: {bounds:?} {eq:?}"
+        );
+        // Shift and the wheel over a row scroll the columns back.
+        let scrolled = app.mix_scroll;
+        let state = text_rect(&output, "Center");
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(state.center()),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, 400.0),
+                    modifiers: egui::Modifiers::SHIFT,
+                },
+            ],
+            egui::Modifiers::SHIFT,
+            size,
+        );
+        settle(&ctx, &mut app);
+        assert!(app.mix_scroll < scrolled, "{} {scrolled}", app.mix_scroll);
+    }
+
+    #[test]
+    fn mix_view_track_rows_take_horizontal_wheel_before_the_score() {
+        let size = Vec2::new(960.0, 720.0);
+        let (ctx, mut app, output) = mix_view_fixture(size);
+        let row = effects_control_rect(&output, "Track 1 gain");
+        let at = Pos2::new(app.timeline_rect.unwrap().left() - 400.0, row.center().y);
+        let before = app.score_view.unwrap().offset;
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, -400.0),
+                    modifiers: egui::Modifiers::SHIFT,
+                },
+            ],
+            egui::Modifiers::SHIFT,
+            size,
+        );
+        for _ in 0..30 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        assert!(
+            app.mix_scroll > 0.0,
+            "The track columns must take the wheel."
+        );
+        assert_eq!(app.score_view.unwrap().offset, before);
+        let scrolled = app.mix_scroll;
+        // The same header owns the opposite direction while the score is
+        // already scrolled and could otherwise consume that input.
+        app.overview_target = Some(32.0 * TICKS_PER_BAR as f32);
+        frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        let before = app.score_view.unwrap().offset;
+        assert!(before > 0.0);
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: Vec2::new(0.0, 400.0),
+                modifiers: egui::Modifiers::SHIFT,
+            }],
+            egui::Modifiers::SHIFT,
+            size,
+        );
+        for _ in 0..30 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        assert!(app.mix_scroll < scrolled);
+        assert_eq!(app.score_view.unwrap().offset, before);
+    }
+
+    #[test]
+    fn mix_view_gain_drafts_cannot_change_a_replacement_song() {
+        for name in ["Master gain value", "Track 1 gain value"] {
+            let (ctx, mut app, output) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+            focus_control(&ctx, &mut app, &output, name);
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    key_event(egui::Key::A, egui::Modifiers::COMMAND),
+                    egui::Event::Text("+6".into()),
+                ],
+                egui::Modifiers::COMMAND,
+            );
+            app.new_mix();
+            app.session.place(1, 0, 0).unwrap();
+            let replacement = app.session.project().clone();
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            assert!(app.session.project() == &replacement, "{name}");
+        }
+    }
+
+    #[test]
+    fn mix_view_held_controls_cannot_change_a_replacement_song() {
+        for name in ["Master gain", "Track 1 gain", "FX 1 return level"] {
+            let (ctx, mut app, output) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+            let start = effects_control_rect(&output, name).center();
+            pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(start + Vec2::new(-12.0, 12.0))],
+                egui::Modifiers::NONE,
+            );
+            app.new_mix();
+            app.session.place(1, 0, 0).unwrap();
+            let replacement = app.session.project().clone();
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(start + Vec2::new(-30.0, 30.0))],
+                egui::Modifiers::NONE,
+            );
+            assert!(app.session.project() == &replacement, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_empty_mix_view_says_no_tracks_and_keeps_master_and_returns() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let library = Arc::new(Library::fixture(app.session.library().samples.to_vec()));
+        app.session = Session::headless(library, Project::default()).unwrap();
+        app.set_mix_view(true);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        text_rect(&output, "NO TRACKS");
+        text_rect(&output, "Place a sound in the arrangement.");
+        assert!(!has_control(&output, "Track 1 gain"));
+        for name in ["Master gain", "FX 1 return level", "Export tracks"] {
+            assert!(has_control(&output, name), "{name} stays in an empty song.");
+        }
+    }
+
+    #[test]
+    fn mix_view_and_the_mixer_tab_never_show_at_once() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.bottom_module = BottomModule::Mixer;
+        click_named(&ctx, &mut app, "Mix view");
+        assert!(app.mix_view);
+        assert_eq!(app.bottom_module, BottomModule::Mastering);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            accessible_node(&output, "Mix view").1.toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        click_named(&ctx, &mut app, "Mixer tab");
+        assert!(!app.mix_view, "The Mixer tab returns the score to Arrange.");
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
+        // R5: the rail's Mixer toggles the Mix view.
+        click_named(&ctx, &mut app, "Mixer");
+        assert!(app.mix_view);
+        assert_ne!(app.bottom_module, BottomModule::Mixer);
+        click_named(&ctx, &mut app, "Mixer");
+        assert!(!app.mix_view);
+        click_named(&ctx, &mut app, "Mix view");
+        click_named(&ctx, &mut app, "Arrange view");
+        assert!(!app.mix_view);
+    }
+
+    #[test]
+    fn starting_with_the_mixer_opens_the_mix_view() {
+        let (_, app) = fixture();
+        let root = std::env::temp_dir().join(format!("mixjam-ui-start-mix-{}", std::process::id()));
+        let mut session = Session::headless(
+            Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+            app.session.project().clone(),
+        )
+        .unwrap()
+        .with_settings_root(root.join("settings"));
+        let mut options = session.options().clone();
+        options.starting_module = mixjam_techno::application::options::StartingModule::Mixer;
+        session
+            .apply_options(options, session.options_revision(), false)
+            .unwrap();
+        let app = MixJamApp::from_session(session, "UI fixture".into(), false);
+        assert!(app.mix_view);
+        assert_eq!(app.bottom_module, BottomModule::Mastering);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -8,7 +8,7 @@
 - [Arrange](#arrange)
 - [Mixer](#mixer)
 - [Mastering](#mastering)
-- [Effects](#effects)
+- [FX returns](#fx-returns)
 - [Sound tools and recording](#sound-tools-and-recording)
 - [Album Review](#album-review)
 - [Save and export](#save-and-export)
@@ -30,13 +30,13 @@ window also shows them beside it. The song name is marked with an asterisk when
 it has unsaved changes, and a short name shows the song's length in bars and
 minutes beneath it. The whole name always shows: a long name wraps onto two
 lines or uses smaller text, and in a narrow window the transport buttons get
-narrower to make room. Above the lanes, the score toolbar holds the Automation
-menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
+narrower to make room. Above the lanes, the score toolbar holds Arrange and
+Mix, the Automation menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
 rail, the Sounds panel, and the lower panel so the score fills the window;
-press **F** again, or use any status-bar switch, to restore them. Sounds, Mixer, Mastering, and Effects share the lower panel;
-use its left-side module selector to switch between them. Sample categories,
-search, and library filters stay together in Sounds; search and filters sit
-beside the selector. Sort sounds in library order, by name, length, BPM, or
+press **F** again, or use any status-bar switch, to restore them. Mixer,
+Mastering, FX returns, and Step synth share the lower panel; choose one with
+its tab on the left of the panel's top row. Sample categories, search, and
+library filters stay together in the Sounds panel. Sort sounds in library order, by name, length, BPM, or
 category. The arrow beside the sort list reverses the order: for example, longest
 or fastest first.
 The title branding, window, taskbar, and Windows executable use the tribal mask.
@@ -47,19 +47,17 @@ The tool rail at the left groups File, Clips, and Tools, with each tool's name
 under its icon. Hover a tool for its window and shortcut. The **Tools** switch
 at the right of the status bar, or the double chevron at the top of the rail,
 shrinks the rail to icons. The **Boards** switch folds the lower panel to its
-toolbar row; pick a module there, or select Mixer or Mastering in the rail, to
-open it again. In a short window, scroll the rail with the mouse wheel.
+toolbar row; pick a tab there, or select Mastering or Step synth in the
+rail, to open it again. In a short window, scroll the rail with the mouse wheel.
 
 The **Sounds** switch, or the strip named SOUNDS beside the rail, opens the
 Sounds panel: the library as a list, with each sound's name, category, length
-in bars, and waveform. Its search, filters, category chips, and sort are the
-same as in the lower panel's Sounds module, and so are its sounds: click one to
-place it with the next click on a lane, press Enter to place it at the playhead
-on the recording track, double-click to hear it, or drag it to a lane. The panel
-and the Sounds module never show together: opening the panel changes the lower
-panel from Sounds to Mixer, and choosing Sounds there folds the panel to its
-strip. The chevron at the panel's top folds it. These choices are kept for the
-next session.
+in bars, and waveform, above its search, filters, category chips, and sort.
+Click a sound to place it with the next click on a lane, press Enter to place
+it at the playhead on the recording track, double-click to hear it, or drag it
+to a lane. The chevron at the panel's top folds it. These choices are kept for
+the next session. When Starting module is Sounds, the app opens with the panel
+open and the lower panel folded.
 
 The song overview above the score shows the whole song: its sections (with
 Sections on), a thin line for each clip in its category color, the loop, the
@@ -331,11 +329,12 @@ double-click it for unity.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
 - Drag the divider above the lower panel to give it more or less room.
-- Select Sounds, Mixer, Mastering, or Effects from the fixed module menu at the
-  lower panel's left. The panel retains its resized height; opening Mixer,
-  Mastering, or Effects raises a shorter panel to fit its controls. The Mixer
-  and Mastering tool-rail shortcuts open their module and return to Sounds when
-  that module is already selected.
+- Choose Mixer, Mastering, FX returns, or Step synth with the tabs at
+  the lower panel's top left. The panel retains its resized height; opening a
+  board raises a shorter panel to fit its controls, and in a short window the
+  board scrolls. The Mixer tool-rail button switches the score between its
+  Arrange and Mix views. The Mastering and Step synth buttons open their tab,
+  and fold the lower panel when that board already shows.
 
 ## Mixer
 
@@ -346,6 +345,21 @@ fader or effect knob under the pointer (Shift for fine steps). Over a pan
 control, the wheel scrolls the view. Drag or use the arrow keys to change pan.
 Gain and pan change smoothly while the song plays, including when you undo or
 redo them.
+
+The mixer has two places. The Mixer tab in the lower panel shows a strip per
+track. Mix, in the score toolbar, or the Mixer button in the tool rail, turns
+each lane's header into a mixer row instead, while the clips stay beside it:
+the sound names, M, S, L, R, polarity, the fader with its exact dB value and
+Unity, pan with Center, the track's state, the four sends, and EQ. Below the
+lanes, the Master row (with Bypass and Export tracks…) and the four FX returns
+stay in view while the lanes scroll. The rows and the strips are the same
+controls with the same names, so everything below applies to both. The Mix
+view and the Mixer tab never show together: choosing Mix moves the lower panel
+to Mastering, and choosing the Mixer tab returns the score to Arrange. In a
+narrow window, drag the bar under the column captions, or use Shift and the
+wheel over the rows, to see the other columns; a control reached with Tab
+scrolls into view. When Starting module is Mixer, the score opens in the Mix
+view.
 
 - Gain runs from -inf dB (silence) to +12 dB; 0 dB is unity. Negative dB
   attenuates the signal. The rail gives more space to useful mixing levels.
@@ -402,7 +416,8 @@ redo them.
   outputs are on.
 - Bypass on the Master strip skips the master pedalboard, as Mastering's
   Bypass all does.
-- Export tracks… in the Mixer's toolbar asks for a folder and writes each
+- Export tracks… in the Mixer's toolbar or the Mix view's Master row asks
+  for a folder and writes each
   track that plays, and the return of each FX bus that it feeds, to its own
   WAV file, for mixing in another application. A track's file is the track
   alone after its EQ, drive, compressor, width, automation, fader, pan, outputs, and ducker,
@@ -416,7 +431,7 @@ redo them.
   0 to 100%, after its fader and pan. A ringed knob has an automation lane,
   which sets the send while the song plays. After the tracks, a return strip for
   each bus sets its return level and switches its input and limiter; Edit
-  opens the bus in the Effects module. A ringed return knob, marked Return
+  opens the bus on the FX returns board. A ringed return knob, marked Return
   automated, has an FX return lane, which sets the level while the song plays.
 
 ## Mastering
@@ -453,9 +468,9 @@ whole board, Trim included, for playback and export, so you can master the
 exported mix elsewhere. The pedals keep their settings, the board dims, and
 presets leave the switch alone.
 
-## Effects
+## FX returns
 
-Use Effects, the fourth module of the lower panel, for the four FX buses
+Use FX returns, a board of the lower panel, for the four FX buses
 that the Mixer's sends feed. Choose Echoform Delay or Aetherform Reverb for
 a bus, load a preset, and set its controls; the returns join the mix before
 the master pedalboard. Sync sets the delay in note lengths at the song's
@@ -473,7 +488,8 @@ follows that track instead, such as the kick. A preset keeps the Key.
   previews the draft; Save edited sound writes a new WAV in Wave.
 - Use the other sample tools to stretch tempo or apply effects, then save a new
   WAV sample.
-- Use Step synth to sequence one note per sixteenth step across up to four bars.
+- Use Step synth, a board of the lower panel, to sequence one note per
+  sixteenth step across up to four bars.
 - Select a recording track and press Record. Recording starts after an eight-beat
   count-in. Stop and save the take as a WAV file.
 

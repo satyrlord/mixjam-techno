@@ -122,7 +122,8 @@ fn role_name(role: accesskit::Role) -> &'static str {
         Role::Link => "link",
         Role::Label => "label",
         Role::Image => "image",
-        Role::Window => "window",
+        // A board and its named toolbar scope controls as a tool window did.
+        Role::Window | Role::TabPanel | Role::Toolbar => "window",
         Role::ProgressIndicator => "progress",
         _ => "other",
     }
@@ -138,7 +139,10 @@ pub(super) fn nodes(update: &accesskit::TreeUpdate) -> Vec<UiNode> {
         }
         if matches!(
             node.role(),
-            accesskit::Role::Window | accesskit::Role::Dialog
+            accesskit::Role::Window
+                | accesskit::Role::Dialog
+                | accesskit::Role::TabPanel
+                | accesskit::Role::Toolbar
         ) && Some(*id) != root
             && let Some(title) = node.label()
         {
@@ -1225,7 +1229,7 @@ impl MixJamApp {
             (self.options.is_some(), "Options"),
             (self.show_import_details, "Import details"),
             (self.show_effects, "Effect Studio"),
-            (self.show_step_synth, "Step synth"),
+            (self.board_shown(BottomModule::StepSynth), "Step synth"),
             (self.show_sample_edit, "Sample editor"),
             (self.show_stretch, "Time Stretcher"),
             (self.show_album_review, album_review::TITLE),

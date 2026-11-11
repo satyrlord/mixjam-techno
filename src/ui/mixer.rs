@@ -10,7 +10,7 @@ use mixjam_techno::application::{
 
 /// What the mixer changed: the tracks and master level, the FX buses, the
 /// master pedalboard's bypass, the bus whose return strip asked to open it
-/// in the Effects module, and the track whose EQ button was pressed.
+/// on the FX returns board, and the track whose EQ button was pressed.
 #[derive(Default)]
 pub(super) struct Changes {
     pub tracks: bool,
@@ -251,6 +251,7 @@ pub(super) fn show(
                                             let (summary, detail) =
                                                 mixer_sample_summary(project, library, index);
                                             let track = &mut tracks[index];
+                                            let eq_on = processing_on(track);
                                             let mut open_eq = false;
                                             changed |= strip(
                                                 ui,
@@ -277,11 +278,7 @@ pub(super) fn show(
                                                     pan_automated: !track.automation.pan.is_empty(),
                                                     sends: &mut track.sends,
                                                     any_solo,
-                                                    eq_on: track.eq.on
-                                                        || track.drive.on
-                                                        || track.compressor.on
-                                                        || track.width != TRACK_WIDTH.default
-                                                        || track.ducker.on,
+                                                    eq_on,
                                                     open_eq: &mut open_eq,
                                                 }),
                                             );
@@ -332,27 +329,7 @@ pub(super) fn show(
                 ui.min_rect().min + Vec2::new(14.0, height / scale - 56.0) * scale,
                 Vec2::new(80.0, 24.0) * scale,
             );
-            let response = button(ui, rect, "Bypass", "Master bypass", scale, *bypass);
-            response.widget_info(|| {
-                egui::WidgetInfo::selected(
-                    egui::WidgetType::Checkbox,
-                    response.enabled(),
-                    *bypass,
-                    "Master bypass",
-                )
-            });
-            if response
-                .hover_hint(format!(
-                    "Master bypass: {}. Bypass skips the master pedalboard, trim included, for \
-                     playback and export, so you can master the exported mix elsewhere. The \
-                     pedals keep their settings. Mastering's Bypass all is the same switch.",
-                    if *bypass { "on" } else { "off" }
-                ))
-                .clicked()
-            {
-                *bypass = !*bypass;
-                result.bypass = true;
-            }
+            result.bypass = bypass_button(ui, rect, scale, bypass);
         });
     });
     result.tracks = changed;
@@ -464,21 +441,15 @@ fn strip(
         FontId::proportional(10.0 * scale),
         roles().strip_text,
     );
-    let unity = button(
+    if unity_button(
         ui,
         Rect::from_center_size(
             Pos2::new(rect.left() + 79.0 * scale, zero_y),
             Vec2::new(44.0, 16.0) * scale,
         ),
-        "Unity",
-        &format!("Reset {name} gain to unity"),
         scale,
-        false,
-    );
-    if unity
-        .hover_hint("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
-        .clicked()
-    {
+        name,
+    ) {
         changed |= *gain != 1.0;
         *gain = 1.0;
     }
@@ -515,89 +486,43 @@ fn strip(
             at(8.0, height / scale - 116.0),
             Vec2::new(92.0, 16.0) * scale,
         );
-        ui.scope_builder(egui::UiBuilder::new().max_rect(pan_rect), |ui| {
-            ui.spacing_mut().slider_width = pan_rect.width();
-            ui.spacing_mut().interact_size.y = 16.0 * scale;
-            // The rail is a dark slot on every theme's strip, and the idle
-            // handle keeps a cap-colored edge on it.
-            let widgets = &mut ui.visuals_mut().widgets;
-            widgets.inactive.bg_fill = roles().strip_slot;
-            widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, roles().cap);
-            for state in [&mut widgets.hovered, &mut widgets.active] {
-                state.bg_fill = roles().cap;
-                state.fg_stroke = Stroke::new(1.5 * scale, roles().strip_slot);
-            }
-            let response = pan_control(ui, index, pan, pan_automated);
-            changed |= response.changed();
-            focus_ring(ui, &response, pan_rect, scale);
-        });
-        let center = button(
+        changed |= pan_slider(ui, pan_rect, scale, index, pan, pan_automated);
+        if center_button(
             ui,
             Rect::from_center_size(
                 at(54.0, height / scale - 90.0),
                 Vec2::new(40.0, 14.0) * scale,
             ),
-            "Center",
-            &format!("Center {name} pan"),
             scale,
-            false,
-        );
-        if center
-            .hover_hint("Reset pan to center. Output routing stays unchanged.")
-            .clicked()
-        {
+            name,
+        ) {
             changed |= *pan != 0.0;
             *pan = 0.0;
         }
-        // Name why the track is silent; causes on this track come first.
         text(
             ui,
             at(54.0, height / scale - 72.0),
-            &if *muted {
-                "Muted".into()
-            } else if !*left && !*right {
-                "No output".into()
-            } else if any_solo && !*solo {
-                "Solo elsewhere".into()
-            } else if pan_automated {
-                "Pan automated".into()
-            } else {
-                pan_description(*pan)
-            },
+            &track_state(
+                *muted,
+                *left || *right,
+                any_solo && !*solo,
+                pan_automated,
+                *pan,
+            ),
             11.0 * scale,
             roles().strip_text,
         );
         // The EQ button completes the row of Mute and Solo, above polarity.
-        let eq_name = format!("{name} EQ");
-        let response = button(
+        if eq_button(
             ui,
             Rect::from_min_size(
                 at(8.0, height / scale - 56.0),
                 Vec2::new(26.0, 24.0) * scale,
             ),
-            "EQ",
-            &eq_name,
             scale,
+            name,
             eq_on,
-        );
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::WidgetType::Button,
-                response.enabled(),
-                eq_on,
-                &eq_name,
-            )
-        });
-        if response
-            .hover_hint(format!(
-                "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
-                 shelves, and two peaks; the drive, which adds harmonics; the compressor and the \
-                 stereo width, before the track's automation and fader; and the ducker, which \
-                 lowers the track while another track sounds.",
-                if eq_on { "on" } else { "off" }
-            ))
-            .clicked()
-        {
+        ) {
             *open_eq = true;
         }
         for (switch, x, on) in [
@@ -613,52 +538,16 @@ fn strip(
                 on,
             );
         }
-        let invert_rect = Rect::from_min_size(
-            at(8.0, height / scale - 28.0),
-            Vec2::new(26.0, 24.0) * scale,
-        );
-        let response = button(
+        changed |= polarity_button(
             ui,
-            invert_rect,
-            "",
-            &format!("{name} polarity invert"),
+            Rect::from_min_size(
+                at(8.0, height / scale - 28.0),
+                Vec2::new(26.0, 24.0) * scale,
+            ),
             scale,
-            *inverted,
+            name,
+            inverted,
         );
-        let center = invert_rect.center();
-        let color = if *inverted {
-            roles().ink
-        } else {
-            roles().legend
-        };
-        ui.painter()
-            .circle_stroke(center, 6.0 * scale, Stroke::new(1.5 * scale, color));
-        ui.painter().line_segment(
-            [
-                center + Vec2::new(-5.0, 7.0) * scale,
-                center + Vec2::new(5.0, -7.0) * scale,
-            ],
-            Stroke::new(1.5 * scale, color),
-        );
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::WidgetType::Checkbox,
-                ui.is_enabled(),
-                *inverted,
-                format!("{name} polarity invert"),
-            )
-        });
-        if response
-            .hover_hint(format!(
-                "{name} polarity: {}. Invert the sign of both output channels without changing \
-                 gain or pan. Negative dB values only reduce level.",
-                if *inverted { "inverted" } else { "normal" }
-            ))
-            .clicked()
-        {
-            *inverted = !*inverted;
-            changed = true;
-        }
         for (switch, x, on) in [
             (TrackSwitch::Left, 40.0, left),
             (TrackSwitch::Right, 72.0, right),
@@ -694,7 +583,7 @@ fn strip(
 /// A small knob for a send amount from 0 to 1: drag, the wheel or arrow keys
 /// (Shift for fine steps), Home and End, or a double-click back to 0. An `automated`
 /// knob is ringed: an automation lane sets its amount while the song plays.
-fn send_knob(
+pub(super) fn send_knob(
     ui: &mut egui::Ui,
     rect: Rect,
     scale: f32,
@@ -826,7 +715,7 @@ fn send_knob(
 }
 
 /// The return of one FX bus: its effect, return level, input and limiter
-/// switches, and a button that opens it in the Effects module. An
+/// switches, and a button that opens it on the FX returns board. An
 /// `automated` return has a return lane, which sets the level while the
 /// song plays; its knob is ringed. Returns whether the bus changed and
 /// whether Edit was pressed.
@@ -880,38 +769,68 @@ fn return_strip(
     text(
         ui,
         at(54.0, 116.0),
-        &if automated {
-            "Return automated".to_string()
-        } else {
-            format!("Return {:.0}%", bus.return_level * 100.0)
-        },
+        &return_state(bus, automated),
         11.0 * scale,
         roles().legend,
     );
-    for (y, label, key, on, hint) in [
+    bus_switches(
+        ui,
+        [
+            Rect::from_min_size(at(14.0, 136.0), Vec2::new(80.0, 22.0) * scale),
+            Rect::from_min_size(at(14.0, 164.0), Vec2::new(80.0, 22.0) * scale),
+        ],
+        scale,
+        &name,
+        bus,
+    );
+    let edit = edit_button(
+        ui,
+        Rect::from_min_size(
+            at(14.0, height / scale - 40.0),
+            Vec2::new(80.0, 24.0) * scale,
+        ),
+        scale,
+        &name,
+    );
+    (*bus != before, edit)
+}
+
+/// A return's state: "Return automated" while its lane sets the level, else
+/// the level.
+pub(super) fn return_state(bus: &FxBus, automated: bool) -> String {
+    if automated {
+        "Return automated".to_string()
+    } else {
+        format!("Return {:.0}%", bus.return_level * 100.0)
+    }
+}
+
+/// A bus's Input and Limiter switches, named "{name} power" and
+/// "{name} limiter".
+pub(super) fn bus_switches(
+    ui: &mut egui::Ui,
+    rects: [Rect; 2],
+    scale: f32,
+    name: &str,
+    bus: &mut FxBus,
+) {
+    for (rect, label, key, on, hint) in [
         (
-            136.0,
+            rects[0],
             "Input",
             format!("{name} power"),
             &mut bus.powered,
             "Off stops new sound into the effect; its tail rings out.",
         ),
         (
-            164.0,
+            rects[1],
             "Limiter",
             format!("{name} limiter"),
             &mut bus.limiter,
             "Holds the return under -1 dBFS.",
         ),
     ] {
-        let response = button(
-            ui,
-            Rect::from_min_size(at(14.0, y), Vec2::new(80.0, 22.0) * scale),
-            label,
-            &key,
-            scale,
-            *on,
-        );
+        let response = button(ui, rect, label, &key, scale, *on);
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, &key)
         });
@@ -922,25 +841,237 @@ fn return_strip(
             *on = !*on;
         }
     }
-    let edit = button(
+}
+
+/// "Edit {name}": shows the bus on the FX returns board. Returns whether it
+/// was pressed.
+pub(super) fn edit_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str) -> bool {
+    button(ui, rect, "Edit", &format!("Edit {name}"), scale, false)
+        .hover_hint(format!(
+            "Show {name} on the FX returns board, with all its controls."
+        ))
+        .clicked()
+}
+
+/// Whether a track's channel EQ, drive, compressor, or ducker is on, or its
+/// width is not 100%: what lights its EQ button.
+pub(super) fn processing_on(track: &Track) -> bool {
+    track.eq.on
+        || track.drive.on
+        || track.compressor.on
+        || track.width != TRACK_WIDTH.default
+        || track.ducker.on
+}
+
+/// Why a track is silent, with causes on the track first, else its pan:
+/// Muted, No output, Solo elsewhere, Pan automated, or the pan position.
+pub(super) fn track_state(
+    muted: bool,
+    any_output: bool,
+    solo_elsewhere: bool,
+    pan_automated: bool,
+    pan: f32,
+) -> String {
+    if muted {
+        "Muted".into()
+    } else if !any_output {
+        "No output".into()
+    } else if solo_elsewhere {
+        "Solo elsewhere".into()
+    } else if pan_automated {
+        "Pan automated".into()
+    } else {
+        pan_description(pan)
+    }
+}
+
+/// "Master bypass": skips the master pedalboard. Returns whether it changed.
+pub(super) fn bypass_button(ui: &mut egui::Ui, rect: Rect, scale: f32, bypass: &mut bool) -> bool {
+    let response = button(ui, rect, "Bypass", "Master bypass", scale, *bypass);
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Checkbox,
+            response.enabled(),
+            *bypass,
+            "Master bypass",
+        )
+    });
+    let clicked = response
+        .hover_hint(format!(
+            "Master bypass: {}. Bypass skips the master pedalboard, trim included, for \
+             playback and export, so you can master the exported mix elsewhere. The \
+             pedals keep their settings. Mastering's Bypass all is the same switch.",
+            if *bypass { "on" } else { "off" }
+        ))
+        .clicked();
+    if clicked {
+        *bypass = !*bypass;
+    }
+    clicked
+}
+
+/// "Reset {name} gain to unity". Returns whether it was pressed.
+pub(super) fn unity_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str) -> bool {
+    button(
         ui,
-        Rect::from_min_size(
-            at(14.0, height / scale - 40.0),
-            Vec2::new(80.0, 24.0) * scale,
-        ),
-        "Edit",
-        &format!("Edit {name}"),
+        rect,
+        "Unity",
+        &format!("Reset {name} gain to unity"),
         scale,
         false,
     )
-    .hover_hint(format!(
-        "Show {name} in the Effects module, with all its controls."
-    ))
-    .clicked();
-    (*bus != before, edit)
+    .hover_hint("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
+    .clicked()
 }
 
-fn text(ui: &egui::Ui, pos: Pos2, value: &str, size: f32, color: Color32) {
+/// "Center {name} pan". Returns whether it was pressed.
+pub(super) fn center_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str) -> bool {
+    button(
+        ui,
+        rect,
+        "Center",
+        &format!("Center {name} pan"),
+        scale,
+        false,
+    )
+    .hover_hint("Reset pan to center. Output routing stays unchanged.")
+    .clicked()
+}
+
+/// A track's pan in `rect`, styled for the strips: "Track N pan". Returns
+/// whether it changed.
+pub(super) fn pan_slider(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    index: usize,
+    pan: &mut f32,
+    automated: bool,
+) -> bool {
+    let mut changed = false;
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        ui.spacing_mut().slider_width = rect.width();
+        ui.spacing_mut().interact_size.y = 16.0 * scale;
+        // The rail is a dark slot on every theme's strip, and the idle
+        // handle keeps a cap-colored edge on it.
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.bg_fill = roles().strip_slot;
+        widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, roles().cap);
+        for state in [&mut widgets.hovered, &mut widgets.active] {
+            state.bg_fill = roles().cap;
+            state.fg_stroke = Stroke::new(1.5 * scale, roles().strip_slot);
+        }
+        let response = pan_control(ui, index, pan, automated);
+        changed = response.changed();
+        focus_ring(ui, &response, rect, scale);
+    });
+    changed
+}
+
+/// "{name} EQ", lit while `on`: opens the channel EQ window. Returns whether
+/// it was pressed.
+pub(super) fn eq_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, on: bool) -> bool {
+    let eq_name = format!("{name} EQ");
+    let response = button(ui, rect, "EQ", &eq_name, scale, on);
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, response.enabled(), on, &eq_name)
+    });
+    response
+        .hover_hint(format!(
+            "{name} channel processing: {}. Open the channel EQ window: low and high cuts, \
+             shelves, and two peaks; the drive, which adds harmonics; the compressor and the \
+             stereo width, before the track's automation and fader; and the ducker, which \
+             lowers the track while another track sounds.",
+            if on { "on" } else { "off" }
+        ))
+        .clicked()
+}
+
+/// "{name} polarity invert": a slashed circle, amber while inverted. Returns
+/// whether it changed.
+pub(super) fn polarity_button(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    inverted: &mut bool,
+) -> bool {
+    let response = button(
+        ui,
+        rect,
+        "",
+        &format!("{name} polarity invert"),
+        scale,
+        *inverted,
+    );
+    let center = rect.center();
+    let color = if *inverted {
+        roles().ink
+    } else {
+        roles().legend
+    };
+    // The strip's 6-point circle, smaller in a short row.
+    let radius = (rect.height() / 2.0 - 2.0).min(6.0 * scale);
+    let unit = radius / 6.0;
+    ui.painter()
+        .circle_stroke(center, radius, Stroke::new(1.5 * scale, color));
+    ui.painter().line_segment(
+        [
+            center + Vec2::new(-5.0, 7.0) * unit,
+            center + Vec2::new(5.0, -7.0) * unit,
+        ],
+        Stroke::new(1.5 * scale, color),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Checkbox,
+            ui.is_enabled(),
+            *inverted,
+            format!("{name} polarity invert"),
+        )
+    });
+    let clicked = response
+        .hover_hint(format!(
+            "{name} polarity: {}. Invert the sign of both output channels without changing \
+             gain or pan. Negative dB values only reduce level.",
+            if *inverted { "inverted" } else { "normal" }
+        ))
+        .clicked();
+    if clicked {
+        *inverted = !*inverted;
+    }
+    clicked
+}
+
+/// Paints a Mix view row in the strips' material: the ivory, or for a return
+/// the graphite, tiles in Vintage, and the theme's strip colors elsewhere.
+pub(super) fn row_surface(ui: &egui::Ui, rect: Rect, is_return: bool) {
+    let art = (roles().material == theme::Material::Metal)
+        .then(|| Artwork::load(ui.ctx()).ok())
+        .flatten();
+    if let Some(art) = art {
+        art.tile(ui, usize::from(is_return), rect);
+    } else {
+        theme::surface(
+            ui.painter(),
+            rect,
+            roles().corner(3.0),
+            if is_return {
+                roles().return_strip
+            } else {
+                roles().strip
+            },
+        );
+    }
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        Stroke::new(1.0_f32, roles().strip_edge),
+        egui::StrokeKind::Inside,
+    );
+}
+
+pub(super) fn text(ui: &egui::Ui, pos: Pos2, value: &str, size: f32, color: Color32) {
     ui.painter().text(
         pos,
         Align2::CENTER_CENTER,
@@ -950,7 +1081,7 @@ fn text(ui: &egui::Ui, pos: Pos2, value: &str, size: f32, color: Color32) {
     );
 }
 
-fn button(
+pub(super) fn button(
     ui: &mut egui::Ui,
     rect: Rect,
     label: &str,
@@ -1011,7 +1142,7 @@ fn focus_ring(ui: &egui::Ui, response: &Response, rect: Rect, scale: f32) {
     }
 }
 
-fn switch_button(
+pub(super) fn switch_button(
     ui: &mut egui::Ui,
     rect: Rect,
     scale: f32,
@@ -1061,7 +1192,13 @@ fn switch_button(
     clicked
 }
 
-fn gain_value(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, gain: &mut f32) -> bool {
+pub(super) fn gain_value(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    gain: &mut f32,
+) -> bool {
     ui.painter().rect_filled(rect, 3.0, roles().strip_face);
     let before = *gain;
     let db = amplitude_to_db(before);

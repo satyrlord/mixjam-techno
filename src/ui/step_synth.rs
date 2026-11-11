@@ -21,29 +21,59 @@ pub(super) enum Action {
     SavePattern,
     LoadPattern,
     Details,
-    Help,
 }
 
+/// The gap between the board's painted edge and its content.
+const BOARD_INSET: f32 = 2.0;
+/// The drawn size of the board's controls, margins included. The status line
+/// sits in the tab row, so the board is no taller than the Mastering board.
+const BODY: Vec2 = Vec2::new(836.0, 512.0);
+/// The lower panel's height that shows the whole board: the board, and the
+/// panel's margins, tab row, and the spacing under it.
+pub(super) const MODULE_HEIGHT: f32 = BODY.y + 2.0 * BOARD_INSET + 64.0;
+
+/// Show the Step synth board in the space left in `ui`. The board is a tab
+/// panel named Step synth, so agents scope to it as they did to its window.
 pub(super) fn show(
-    ctx: &egui::Context,
-    open: &mut bool,
+    ui: &mut egui::Ui,
     source: Source<'_>,
-    feedback: Feedback<'_>,
     state: &mut StepSynthState,
     view_bar: &mut usize,
     show_effects: &mut bool,
 ) -> Action {
     let mut action = Action::None;
-    let response = dialog::tool(
-        ctx,
-        "Step synth",
-        open,
-        Vec2::new(820.0, 552.0),
-        controls::Palette::Olive,
-        true,
-        |ui| {
-            let (bounds, _) = ui.allocate_exact_size(Vec2::new(820.0, 552.0), Sense::hover());
-            let point = |x: f32, y: f32| bounds.min + Vec2::new(x, y - 48.0);
+    let ctx = ui.ctx().clone();
+    let area = ui.available_rect_before_wrap();
+    ui.advance_cursor_after_rect(area);
+    let mut board = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("step-synth-board")
+            .max_rect(area),
+    );
+    dialog::hardware_style(&mut board, controls::Palette::Olive);
+    board.set_clip_rect(area.intersect(ui.clip_rect()));
+    controls::panel(&board, area);
+    ctx.accesskit_node_builder(board.unique_id(), |node| {
+        node.set_role(egui::accesskit::Role::TabPanel);
+        node.set_label("Step synth");
+        node.set_bounds(egui::accesskit::Rect {
+            x0: area.left().into(),
+            y0: area.top().into(),
+            x1: area.right().into(),
+            y1: area.bottom().into(),
+        });
+    });
+    let mut content = board.new_child(
+        egui::UiBuilder::new()
+            .id_salt("step-synth-content")
+            .max_rect(area.shrink(BOARD_INSET)),
+    );
+    egui::ScrollArea::both()
+        .id_salt("step-synth-scroll")
+        .auto_shrink([false, false])
+        .show(&mut content, |ui| {
+            let (bounds, _) = ui.allocate_exact_size(BODY, Sense::hover());
+            let point = |x: f32, y: f32| bounds.min + Vec2::new(x + 8.0, y - 40.0);
             let rect = |x, y, w, h| Rect::from_min_size(point(x, y), Vec2::new(w, h));
             let mut panel = ui.new_child(egui::UiBuilder::new().max_rect(bounds));
             controls::inset(&panel, rect(12.0, 48.0, 796.0, 28.0));
@@ -272,42 +302,46 @@ pub(super) fn show(
             {
                 *show_effects = !*show_effects;
             }
-            let status = feedback.message.unwrap_or(if missing {
-                "Missing audio. Choose a source file or open Import details."
-            } else if !source.available {
-                "Choose a source file or select a sound in the palette."
-            } else if !active {
-                "Switch on at least one Active bar."
-            } else if *show_effects {
-                "Adjust sequence effects. Note grid returns to the notes."
-            } else {
-                "Click a note to set it. Click it again to clear it."
-            });
-            status_footer(
-                &mut panel,
-                rect(8.0, 564.0, 804.0, 30.0),
-                status,
-                feedback.error,
-                missing,
-            );
-            if missing
-                && button(
-                    &mut panel,
-                    rect(676.0, 566.0, 128.0, 26.0),
-                    "Import details",
-                    true,
-                    false,
-                )
-                .clicked()
-            {
-                action = Action::Details;
-            }
-        },
-    );
-    if response.help {
-        action = Action::Help;
-    }
+        });
     action
+}
+
+/// The board's status line and, for missing audio, Import details. They sit
+/// in the tab row, as the Mastering status does, `width` points wide.
+pub(super) fn toolbar(
+    ui: &mut egui::Ui,
+    width: f32,
+    source: Source<'_>,
+    feedback: Feedback<'_>,
+    state: &StepSynthState,
+    show_effects: bool,
+) -> Action {
+    let missing = source.missing && !source.explicit_file;
+    let active = state.active_bars.iter().any(|active| *active);
+    let status = feedback.message.unwrap_or(if missing {
+        "Missing audio. Choose a source file or open Import details."
+    } else if !source.available {
+        "Choose a source file or select a sound in the palette."
+    } else if !active {
+        "Switch on at least one Active bar."
+    } else if show_effects {
+        "Adjust sequence effects. Note grid returns to the notes."
+    } else {
+        "Click a note to set it. Click it again to clear it."
+    });
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width.max(0.0), 28.0), Sense::hover());
+    let mut strip = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    dialog::hardware_style(&mut strip, controls::Palette::Olive);
+    status_footer(&mut strip, rect, status, feedback.error, missing);
+    let details = Rect::from_min_size(
+        Pos2::new(rect.right() - 130.0, rect.top() + 1.0),
+        Vec2::new(128.0, 26.0),
+    );
+    if missing && button(&mut strip, details, "Import details", true, false).clicked() {
+        Action::Details
+    } else {
+        Action::None
+    }
 }
 fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usize) {
     let mut child = ui.new_child(
@@ -321,6 +355,7 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
     child.style_mut().spacing.scroll.bar_width = 6.0;
     child.style_mut().spacing.scroll.bar_inner_margin = 4.0;
     child.style_mut().spacing.scroll.bar_outer_margin = 0.0;
+    let mut revealed = None;
     egui::ScrollArea::vertical()
         .id_salt("step-synth-notes")
         .auto_shrink([false, false])
@@ -487,6 +522,7 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
                     );
                     if current && reveal {
                         ui.scroll_to_rect(cell, None);
+                        revealed = Some(cell);
                     }
                     if (response.hover_hint(label).clicked() || (current && toggle))
                         && let Some(value) = state.steps.get_mut(index)
@@ -498,6 +534,16 @@ fn note_grid(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState, bar: usi
             ui.ctx()
                 .data_mut(|data| data.insert_temp(cursor_id, cursor));
         });
+    // The grid scrolls the cell into its own view; a short lower panel then
+    // scrolls the board to where the cell lands.
+    if let Some(cell) = revealed {
+        let shift = if cell.bottom() > rect.bottom() {
+            rect.bottom() - cell.bottom()
+        } else {
+            (rect.top() - cell.top()).max(0.0)
+        };
+        ui.scroll_to_rect(cell.translate(Vec2::new(0.0, shift)), None);
+    }
 }
 fn form_style(ui: &mut egui::Ui) {
     let style = ui.style_mut();

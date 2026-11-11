@@ -24,6 +24,8 @@ mod lanes;
 mod libraries;
 #[path = "ui/master.rs"]
 mod master;
+#[path = "ui/mix_view.rs"]
+mod mix_view;
 #[path = "ui/mixer.rs"]
 mod mixer;
 #[path = "ui/options.rs"]
@@ -88,18 +90,24 @@ pub(crate) fn capture_zoom() -> f32 {
         .unwrap_or(1.0)
 }
 
-/// Available modules in the shared bottom section. The selector owns navigation.
+/// The boards of the lower panel, one tab each. The tab row owns navigation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum BottomModule {
     #[default]
-    Sounds,
     Mixer,
     Mastering,
-    Effects,
+    FxReturns,
+    StepSynth,
 }
 
 impl BottomModule {
-    const ALL: [Self; 4] = [Self::Sounds, Self::Mixer, Self::Mastering, Self::Effects];
+    /// Tab order.
+    const ALL: [Self; 4] = [
+        Self::Mixer,
+        Self::Mastering,
+        Self::FxReturns,
+        Self::StepSynth,
+    ];
     /// The score toolbar, its ruler, and a 150-point lane viewport.
     const ARRANGEMENT_RESERVE: f32 = 105.0 + 150.0;
     /// The panel minimum for a window whose content area is `available` points
@@ -109,30 +117,42 @@ impl BottomModule {
     /// Mixer's gain rail shortens and the boards scroll.
     fn minimum_height(self, available: f32) -> f32 {
         match self {
-            Self::Sounds => 180.0,
             Self::Mixer => (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
             Self::Mastering => {
                 (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
             }
-            Self::Effects => {
+            Self::FxReturns => {
                 (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, fx::MODULE_HEIGHT)
+            }
+            Self::StepSynth => {
+                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, step_synth::MODULE_HEIGHT)
             }
         }
     }
     fn label(self) -> &'static str {
         match self {
-            Self::Sounds => "Sounds",
             Self::Mixer => "Mixer",
             Self::Mastering => "Mastering",
-            Self::Effects => "Effects",
+            Self::FxReturns => "FX returns",
+            Self::StepSynth => "Step synth",
+        }
+    }
+    /// The tab's accessible name. The rail and the status bar already use
+    /// the bare labels.
+    fn tab_name(self) -> &'static str {
+        match self {
+            Self::Mixer => "Mixer tab",
+            Self::Mastering => "Mastering tab",
+            Self::FxReturns => "FX returns tab",
+            Self::StepSynth => "Step synth tab",
         }
     }
     fn key(self) -> &'static str {
         match self {
-            Self::Sounds => "sounds",
             Self::Mixer => "mixer",
             Self::Mastering => "mastering",
-            Self::Effects => "effects",
+            Self::FxReturns => "fx-returns",
+            Self::StepSynth => "step-synth",
         }
     }
 }
@@ -456,11 +476,17 @@ pub struct MixJamApp {
     master_reveal: Option<PedalKind>,
     /// Replacing the project invalidates the board's active widget gestures.
     master_view_generation: u64,
-    /// An FX bus that the Effects module brings into view on its next frame.
+    /// An FX bus that the FX returns board brings into view on its next frame.
     fx_reveal: Option<usize>,
     /// The track whose channel EQ window is open.
     eq_track: Option<usize>,
-    show_step_synth: bool,
+    /// The score shows the Mix view's mixer rows instead of the lane headers.
+    /// It never shows with the Mixer tab.
+    mix_view: bool,
+    /// How far the Mix view's columns are scrolled to the left.
+    mix_scroll: f32,
+    /// The Mix view control last scrolled into view for keyboard focus.
+    mix_revealed: Option<egui::Id>,
     show_sample_edit: bool,
     show_stretch: bool,
     show_album_review: bool,
@@ -564,7 +590,7 @@ impl MixJamApp {
             layout.tool_names = capture_view != "rail-icons";
             layout.boards = capture_view != "boards-folded";
             layout.maximised = capture_view == "maximised";
-            layout.sounds = capture_view == "sounds-panel";
+            layout.sounds = matches!(capture_view.as_str(), "sounds-panel" | "sample-details");
             layout.overview = capture_view != "overview-folded";
             if let Err(error) = session.set_layout(layout) {
                 eprintln!("{error}");
@@ -603,7 +629,7 @@ impl MixJamApp {
             }
             let _ = session.edit(EditCommand::SetMaster(chain));
         }
-        if capture_view == "mixer-eq" {
+        if matches!(capture_view.as_str(), "mixer-eq" | "mix-view-eq") {
             // Hi-hats tamed: a low cut, a dip at the harsh band, and less top.
             let mut tracks = session.project().tracks.clone();
             tracks[0].eq = mixjam_techno::application::eq::ChannelEq {
@@ -656,21 +682,29 @@ impl MixJamApp {
         };
         let section_bookmarks = session.section_bookmarks_setting();
         let follow_on_startup = session.options().follow_on_startup;
+        // Starting with Mixer opens the score's Mix view; the lower panel
+        // then shows Mastering, since the Mixer tab never shows with it.
+        // Starting with Sounds opens the Sounds panel and folds the lower
+        // panel, which keeps Mixer for when it opens.
+        use mixjam_techno::application::options::StartingModule;
+        let start_in_mix_view = session.options().starting_module == StartingModule::Mixer;
         let starting_module = match session.options().starting_module {
-            mixjam_techno::application::options::StartingModule::Sounds => BottomModule::Sounds,
-            mixjam_techno::application::options::StartingModule::Mixer => BottomModule::Mixer,
-            mixjam_techno::application::options::StartingModule::Mastering => {
-                BottomModule::Mastering
-            }
-            mixjam_techno::application::options::StartingModule::Effects => BottomModule::Effects,
+            StartingModule::Sounds => BottomModule::Mixer,
+            StartingModule::Mixer | StartingModule::Mastering => BottomModule::Mastering,
+            StartingModule::Effects => BottomModule::FxReturns,
         };
-        // The Sounds panel and the lower panel's Sounds module never show at
-        // once; an open panel starts the lower panel on Mixer instead.
-        let starting_module = if starting_module == BottomModule::Sounds && session.layout().sounds
+        let (status, status_error) = if capture_view.is_empty()
+            && session.options().starting_module == StartingModule::Sounds
         {
-            BottomModule::Mixer
+            let mut layout = session.layout();
+            layout.boards = false;
+            layout.sounds = true;
+            match session.set_layout(layout) {
+                Ok(()) => (status, status_error),
+                Err(error) => (error, true),
+            }
         } else {
-            starting_module
+            (status, status_error)
         };
         let options_draft =
             (capture_view.starts_with("options") || needs_sample_folder).then(|| {
@@ -703,16 +737,16 @@ impl MixJamApp {
             search: String::new(),
             bottom_module: if capture_view.starts_with("mixer") || capture_view == "sounds-panel" {
                 BottomModule::Mixer
-            } else if capture_view.starts_with("master") {
+            } else if capture_view.starts_with("master") || capture_view.starts_with("mix-view") {
                 BottomModule::Mastering
             } else if capture_view.starts_with("fx") {
-                BottomModule::Effects
+                BottomModule::FxReturns
+            } else if capture_view.contains("step-synth") {
+                BottomModule::StepSynth
+            } else if capture_view.is_empty() {
+                starting_module
             } else {
-                if capture_view.is_empty() {
-                    starting_module
-                } else {
-                    BottomModule::Sounds
-                }
+                BottomModule::Mixer
             },
             show_help: capture_view == "help",
             show_stretch_help: false,
@@ -785,11 +819,11 @@ impl MixJamApp {
             },
             master_view_generation: 0,
             fx_reveal: None,
-            eq_track: (capture_view == "mixer-eq").then_some(0),
-            show_step_synth: matches!(
-                capture_view.as_str(),
-                "step-synth" | "step-synth-effects" | "missing-step-synth"
-            ),
+            eq_track: matches!(capture_view.as_str(), "mixer-eq" | "mix-view-eq").then_some(0),
+            mix_view: capture_view.starts_with("mix-view")
+                || (capture_view.is_empty() && start_in_mix_view),
+            mix_scroll: 0.0,
+            mix_revealed: None,
             show_sample_edit: matches!(capture_view.as_str(), "edit" | "missing-edit"),
             show_stretch: matches!(capture_view.as_str(), "stretch" | "missing-stretch"),
             show_album_review: capture_view.starts_with("album-review"),
@@ -3158,85 +3192,6 @@ impl MixJamApp {
             }
             self.show_effects = open;
         }
-        if self.show_step_synth {
-            let mut open = true;
-            let explicit_file = self.step_synth_file.is_some();
-            let source_id = self.source_id();
-            let palette_source = source_id.filter(|_| !explicit_file);
-            if self.step_synth_feedback.source != palette_source {
-                self.step_synth_feedback = StepSynthFeedback {
-                    source: palette_source,
-                    ..Default::default()
-                };
-            }
-            let name = self.step_synth_file.as_ref().map_or_else(
-                || self.source_name(),
-                |path| {
-                    path.file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned()
-                },
-            );
-            let missing = !explicit_file
-                && source_id.is_some_and(|id| self.session.missing_sample(id).is_some());
-            let available = explicit_file
-                || source_id.is_some_and(|id| self.session.library().sample_by_id(id).is_some());
-            let action = step_synth::show(
-                ctx,
-                &mut open,
-                step_synth::Source {
-                    name: &name,
-                    available,
-                    missing,
-                    explicit_file,
-                },
-                step_synth::Feedback {
-                    message: self.step_synth_feedback.message.as_deref(),
-                    error: self.step_synth_feedback.error,
-                },
-                &mut self.step_synth,
-                &mut self.step_synth_bar,
-                &mut self.step_synth_effects_expanded,
-            );
-            match action {
-                step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
-                step_synth::Action::PaletteSource => {
-                    self.step_synth_file = None;
-                    self.step_synth_feedback = StepSynthFeedback::default();
-                }
-                step_synth::Action::Listen => {
-                    match self.step_synth_pcm() {
-                        Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
-                        Err(error) => self.error(error),
-                    }
-                    self.step_synth_notice();
-                }
-                step_synth::Action::SaveSequence => match self.step_synth_pcm() {
-                    Ok(pcm) => {
-                        self.step_synth_feedback.message =
-                            Some("Choose a WAV path to save the sequence.".into());
-                        self.step_synth_feedback.error = false;
-                        self.save_pcm(
-                            pcm,
-                            "Step synth sequence",
-                            "Step synth",
-                            self.step_synth.bpm,
-                        );
-                    }
-                    Err(error) => {
-                        self.error(error);
-                        self.step_synth_notice();
-                    }
-                },
-                step_synth::Action::SavePattern => self.ask_path(FileRequest::SavePattern),
-                step_synth::Action::LoadPattern => self.ask_path(FileRequest::LoadPattern),
-                step_synth::Action::Details => self.show_import_details = true,
-                step_synth::Action::Help => self.show_step_synth_help = true,
-                step_synth::Action::None => {}
-            }
-            self.show_step_synth = open;
-        }
         if self.show_sample_edit {
             let mut open = true;
             let source_id = self.source_id();
@@ -3566,7 +3521,7 @@ fn stretch_help(ui: &mut egui::Ui) {
 
 fn master_help(ui: &mut egui::Ui) {
     for text in [
-        "Mastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "Mastering processes the whole mix after the tracks are summed. Choose its tab in the lower panel, or its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
         "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
         "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
         "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
@@ -3602,7 +3557,7 @@ fn step_synth_help(ui: &mut egui::Ui) {
         "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
         "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
         "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
-        "The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
+        "The Step synth button in the tool rail folds the lower panel without changing the draft. Choose the Step synth tab to open it again. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the board.",
         "Resampling, source looping, and effects are the application's own algorithms.",
     ] {
         ui.add(egui::Label::new(text).wrap());

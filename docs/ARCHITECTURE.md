@@ -14,6 +14,7 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/controls.rs
              + src/ui/sample_editor.rs
              + src/ui/mixer.rs
+             + src/ui/mix_view.rs
              + src/ui/master.rs
              + src/ui/fx.rs
              + src/ui/agent.rs
@@ -83,8 +84,8 @@ lazily started worker thread, which reads it through `Library::read_pcm`, takes
 the newest request first, and drops requests from an older catalog. The tables
 stay until the catalog revision changes. `Session::poll` collects finished
 tables and keeps the view refreshing while any are pending.
-`src/ui/sounds.rs` draws the Sounds panel from those tables and shares the
-filters and sound actions with the lower panel's Sounds module.
+`src/ui/sounds.rs` draws the Sounds panel from those tables, with the
+library's search, filters, sort, and sound actions.
 `src/ui/waveform.rs` turns a ready table into one column pair per point for an
 arrangement clip, following the trim, Reverse, the fades, and where the sound
 ends, and paints the visible columns as one mesh. `src/ui/view.rs` keeps these
@@ -720,7 +721,28 @@ window: the frontend keeps which track it shows, and the window edits copies
 of that track's `ChannelEq`, `Drive`, `Compressor`, width, and `Ducker`, sent
 as `EditCommand::SetMixer`. It reuses the
 Mastering dials and paints its response curve. The Mixer's toolbar holds
-Export tracks, which asks for a folder through `ask_path`. Native controls
+Export tracks, which asks for a folder through `ask_path`.
+
+`src/ui/mix_view.rs` owns the score's Mix view. The frontend's `mix_view`
+flag turns each used lane's header into a row of fixed columns; the clips keep
+the rest of the lane. The row reuses `mixer.rs`'s control helpers
+(`switch_button`, `polarity_button`, `gain_value`, `unity_button`,
+`pan_slider`, `center_button`, `send_knob`, `eq_button`, `track_state`, and
+`row_surface`) and the lane fader, so the accessible names and operations are
+the strips'. Below the lanes, a pinned block holds the Master row (Bypass,
+level, Export tracks) and the returns row (`return_state`, `bus_switches`,
+`edit_button`). Every change returns to `apply_mixer_changes` in
+`src/ui/view.rs`, the path the Mixer board uses: one `EditCommand::SetMixer`,
+`SetEffects`, or `SetMaster` per frame. When the lanes' header column is
+narrower than the rows' 876 points, the columns past the track number and arm
+scroll sideways by `mix_scroll`, through the caption bar, Shift and the wheel,
+or a control that takes keyboard focus outside the visible part. Header rows
+take horizontal wheel input after their controls and before the score scrolls.
+Track rows and the pinned Master and returns block include the frontend
+generation in their control identities, so drafts and held controls cannot
+edit a replacement project. The Mix view
+and the Mixer tab never show together: `set_mix_view` moves the lower panel to
+Mastering, and selecting the Mixer tab turns the Mix view off. Native controls
 paint live labels, dB values,
 rail marks, pan, routing, polarity, focus, and hover. Gain uses a piecewise dB
 taper with 72% of travel between -24 and +12 dB; the bottom section maps linear
@@ -734,28 +756,30 @@ at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
 to one physical pixel, with no texture resizing. The empty bank gives one
 instruction and leaves Master available.
 
-`src/ui/fx.rs` owns the Effects board. It places the four buses in raised
+`src/ui/fx.rs` owns the FX returns board. It places the four buses in raised
 units on a Marine surface, with the effect and preset choices, dials, return
 level, switches, and Clear tail. `src/ui/view.rs` sends a changed bus set as
 an edit and sends Clear tail to the session. The Mixer's return-strip Edit
-button selects the module and brings that bus into view.
+button selects the FX returns tab and brings that bus into view.
 
-The frontend's `BottomModule` enum selects Sounds, Mixer, Mastering, or Effects. `src/ui/view.rs`
-owns their shared 28-point header and fixed left-side `Bottom module` combo.
-Its width, `BOTTOM_MODULE_WIDTH`, is 168 points, which shows every module name
-in full; the selected module uses the theme's 16-point heading face.
-The combo has bounded layout space and truncates long selected text; its
-accessible value and popup retain the full name.
-The combo keeps its control ID and horizontal anchor across module changes.
-Sounds filters render inline to its right. Each module renders only its body
-below that header. The Mixer and Mastering tool-rail shortcuts select their
-module, and select Sounds when that module is already selected. Selection and
-shared panel height are frontend session state. Switching preserves resized
-height; opening Mixer, Mastering, or Effects raises a shorter panel to its
-minimum: 400 points for Mixer, or the whole board for Mastering and Effects.
-Each yields down to 370 points in a window too short to keep a 150-point lane viewport. Sounds
-retains its 180-point minimum.
-Later modules can extend the enum and the same selector.
+The frontend's `BottomModule` enum selects the lower panel's board: Mixer,
+Mastering, FX returns, or Step synth. `src/ui/view.rs` owns the panel's
+28-point tab row: one tab per board in that order, each named after its board
+and "tab". The selected tab has a raised fill and an accent underline, and its
+accessible state is toggled. The shown board's own controls follow a separator:
+Mastering's preset, Bypass all, status, and help; Mixer's Export tracks…; and
+Step synth's status line, Import details, and help. The tabs keep their
+identity and position across boards. Each board renders only its body below
+the tab row. The tool rail's Mixer shortcut toggles the score's Mix view; Mastering
+and Step synth show their tab, and fold the lower panel when it already
+shows. Selection and shared panel height are frontend
+session state. Switching preserves resized height; opening a board raises a
+shorter panel to its minimum: 400 points for Mixer, or the whole board for
+Mastering, FX returns, and Step synth. Each yields down to 370 points in a
+window too short to keep a 150-point lane viewport, and the board then
+scrolls. A launch whose Starting module is Sounds opens the Sounds panel and
+folds the lower panel; `from_session` stores that layout, and the lower panel
+keeps Mixer for when it opens.
 
 `src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses
 shared rotaries, value entry, switches, action buttons, header, and status styling.
@@ -801,7 +825,11 @@ focusing a dial preserves saved values between steps. The OVER control exposes
 its latched state as text to assistive technology.
 
 `src/ui/step_synth.rs` owns Step synth's source, bar, grid, effects, and action
-content inside the shared shell. Text, grid cells, switches, and input stay live.
+content on an Olive board in the lower panel. The board is an accessible tab
+panel named Step synth, so agents scope to it as they did to its window. Its
+status line and Import details sit in a named Step synth toolbar in the tab
+row. The agent scopes this toolbar with the board. This keeps the board no
+taller than the Mastering board. Text, grid cells, switches, and input stay live.
 The pitch grid and replacement effects form have bounded scrolling; source,
 step labels, actions, and feedback remain reachable. The grid exposes sixteen
 steps and twenty-five pitch rows. The shared `effects_controls` form retains its
@@ -980,15 +1008,15 @@ chosen one, including the file extension that a save dialog adds.
 A control is usable by an agent, and by a screen reader, only when it has an
 accessible name. Give a new control visible label text, `widget_info`, or
 `name_control`. Keep each name unique among the controls that can be on screen
-together: the shared panel names its combo `Bottom module`, while the tool
-rail has a `Mixer` shortcut. Sound-library filters keep their own names.
+together: the lower panel names its tabs `Mixer tab`, `Mastering tab`, and so
+on, while the tool rail has a `Mixer` shortcut. Sound-library filters keep their own names.
 Add a control that is painted on a shared surface to the
 arrangement requests instead.
 
 ## Safe frontend iteration
 
-Change workspace layout in `src/ui/view.rs` and Mixer presentation in
-`src/ui/mixer.rs`. Change floating shell geometry and lifecycle in
+Change workspace layout in `src/ui/view.rs`, Mixer presentation in
+`src/ui/mixer.rs`, and the Mix view's rows in `src/ui/mix_view.rs`. Change floating shell geometry and lifecycle in
 `src/ui/dialog.rs`, and shared control rendering and interaction in
 `src/ui/controls.rs`. Tool bodies remain in `src/ui/stretch.rs`,
 `src/ui/effects.rs`, `src/ui/step_synth.rs`, and `src/ui/sample_editor.rs`.

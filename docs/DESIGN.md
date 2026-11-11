@@ -138,20 +138,19 @@ components:
     textColor: "{colors.muted}"
     typography: "{typography.button}"
     rounded: "{rounded.control}"
-    height: "26px"
+    height: "22px"
   category-selected:
     backgroundColor: "{colors.hover}"
     textColor: "{colors.text}"
     typography: "{typography.button}"
     rounded: "{rounded.control}"
-    height: "26px"
-  sample-tile:
+    height: "22px"
+  sample-row:
     backgroundColor: "{colors.raised}"
     textColor: "{colors.text}"
     typography: "{typography.clip}"
     rounded: "{rounded.control}"
-    width: "96px"
-    height: "46px"
+    height: "44px"
   transport-primary:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.canvas}"
@@ -326,7 +325,7 @@ ink edge. Clips are tight tabs.
 6% lighter at the top to 10% darker at the foot, a quiet white highlight (alpha
 10) across the upper 45%, and a restrained rim. These soften the owner's chosen
 gloss further, so that text on plastic keeps its contrast; they are not the
-superseded high-gloss study. Sound tiles use a darker cobalt than other raised
+superseded high-gloss study. Sound rows use a darker cobalt than other raised
 surfaces, because they carry small text under a category tint.
 `text_on_painted_surfaces_keeps_its_contrast` checks text against the lightest
 and darkest points that each material paints. Radii are 1.6 times the shared values, up to 14
@@ -401,16 +400,16 @@ Folded Metal palettes share dark inset bays and controls, cream lettering,
 polished silver knob caps, and pale metal primary buttons. Tool chassis colors
 remain distinct: Marine for Time Stretcher, Granite for Sample Editor, Red for
 Effect Studio, Olive for Step synth, Indigo for Mastering, and Marine for the
-Effects board. Utility is neutral and permits an orange-yellow accent. Use explicit names and states
+FX returns board. Utility is neutral and permits an orange-yellow accent. Use explicit names and states
 alongside color; Coral continues to identify errors and destructive actions.
 Palette changes must not change control geometry or behavior. Keep these
-colors local to floating windows and the Mastering and Effects boards; the arrangement,
+colors local to floating windows and the Mastering, FX returns, and Step synth boards; the arrangement,
 browser, and Mixer retain their palettes.
 
 | Palette | Window | Chassis | Active accent |
 | --- | --- | --- | --- |
 | Utility | Utility windows and dialogs | `#3c4140` | `#e79331` |
-| Marine | Time Stretcher and Effects board | `#20535b` | `#55aeb7` |
+| Marine | Time Stretcher and FX returns board | `#20535b` | `#55aeb7` |
 | Granite | Sample Editor | `#34393c` | `#adbabd` |
 | Red | Effect Studio | `#9a2d27` | `#eb7468` |
 | Olive | Step synth | `#3c4428` | `#9db25e` |
@@ -457,7 +456,7 @@ a pedal's lamp. Gain-reduction lamps on the Bus compressor and Limiter are
 Mastering Amber. These four tokens are local to the board. Each dynamics
 pedal ends its dials with Key, which reads Own or a track number; the Bus
 compressor's five dials take three columns, and the Limiter's three take two
-rows. The Effects board's duckers end with the same Key dial. The strip below
+rows. The FX returns board's duckers end with the same Key dial. The strip below
 the board, one 30-point row of chips in a dark well, repeats each pedal's
 enamel in signal order, with a cream outline around the pedals in view.
 Choosing a chip, or focusing any control above the strip, returns a scrolled
@@ -569,10 +568,9 @@ at the left, below the top bar: 84 points wide with tool names, 64 points with
 icons only. The Sounds panel follows the rail: 250 points open, or a 28-point
 strip that names it when folded (see Sounds panel). A 30-point status bar spans the
 full width at the bottom. The bottom panel
-(Sounds, Mixer, Mastering, or Effects) starts at 28% of the content height, clamped to 220-290 points. Drag its
+(Mixer, Mastering, FX returns, or Step synth) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
-its height for the current session, with a minimum of 180 points for Sounds and
-400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
+its height for the current session, with a minimum of 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
 In a short window Mixer yields down to 370 points so the lane viewport keeps
 150 points. A 400-point Mixer panel gives the physical gain rail 96 points.
 The short panel can reduce it to 68 points. The draggable area extends 16
@@ -584,36 +582,34 @@ occupies 30 points below it. Its application version, prefixed with `v`, stays a
 margin, with space reserved before status text is truncated. Use the 12-point text face
 and the theme's hyperlink color. Hover and keyboard focus show the link
 underline. The version opens the GitHub repository in the system browser.
-Sounds, Mixer, Mastering, and Effects share this panel size. Switching modules
-preserves the resized height; opening Mixer, Mastering, or Effects first raises
-a panel below its minimum. Mastering's minimum shows its whole 368-point board under
+The four boards share this panel size. Switching boards preserves the resized
+height; opening a board first raises a panel below its minimum. Mastering's minimum shows its whole 368-point board under
 the header row; a short window lowers it to 370 points, the same floor as
 Mixer, and the board then scrolls its chip strip below the pedals.
 
 The lower panel has 18-point side margins, 10 points above the header row, and 6
-below its content. Mixer, Mastering, and Effects boards start 8 points under the
-header row, so a board never touches the selector; the margins give up that
-space, so the boards keep their height. Sounds keeps its own category spacing
-and gains the 8 points the margins gave up.
+below its content. Mixer, Mastering, FX returns, and Step synth boards start 8
+points under the tab row, so a board never touches the tabs; the margins give up that
+space, so the boards keep their height.
 
-A single Bottom module selector occupies the fixed left slot in the lower
-panel's 28-point header row. Its width is 168 points, enough for the full name
-of every module, and its selected module uses the theme's 16-point heading face. The
-selector keeps the same horizontal anchor and control identity for Sounds,
-Mixer, Mastering, and Effects. A long selected name
-truncates within this width; the popup and accessible value retain its full name.
-Sound search and
-filters occupy the rest of this row when Sounds is selected. With Mastering,
+Tabs occupy the left of the lower panel's 28-point tab row, in the order
+Mixer, Mastering, FX returns, and Step synth. Each tab shows its whole
+board name in the 14-point body face; the selected tab has a raised fill, a
+2-point accent underline, and the text color, and the others are muted. The
+tabs keep their position and identity for every board. A separator follows,
+then the shown board's own controls. With Mastering,
 the row holds the 150-point preset selector, the 112-point Bypass all switch,
 the board's state in 12-point text that truncates, and the Mastering help
-button at the right margin. With Mixer, it holds the Export tracks… button. The
+button at the right margin. With Mixer, it holds the Export tracks… button.
+With Step synth, it holds the status line, Import details when the palette
+sound's audio is missing, and the Step synth help button. The
 preset list puts a rule after Subtle, Revive, and Loud, before the genres; the
 selector reads Choose a preset while every pedal is off at its defaults, and
 Custom when changed pedals match no preset. The trim, which belongs to the
-mix, affects neither. Module names appear
-in this selector; the module bodies start below it. The tool rail's Mixer and
-Mastering shortcuts open their module and return to Sounds when it is already
-selected.
+mix, affects neither. The board bodies start below the tab row. The tool
+rail's Mixer shortcut switches the score between its Arrange and Mix views.
+Its Mastering and Step synth buttons open their tab and fold the lower panel
+when that board already shows.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. A soloed track counts as occupied even without
@@ -643,12 +639,7 @@ stays where the user leaves it until the position or viewport geometry changes.
 Switch Follow off to keep horizontal scrolling under manual control during
 playback. The toggle is view state for the current session, not a project edit.
 
-Sound search and the product, category, and sort menus sit above a horizontally
-scrolling category row. Tiles wrap at the available width and scroll vertically.
-This keeps category access separate from palette height. A tile's width follows
-its bar count: 96 points per bar plus the 8-point gaps it spans, so a two-bar
-tile covers two one-bar tiles. A sound longer than a row fills the row. The sort
-menu orders the filtered sounds by library order, name, length, BPM, or
+The Sounds panel's sort menu orders the filtered sounds by library order, name, length, BPM, or
 category. The arrow beside it reverses the sort direction and exposes the
 current direction as an accessible value. Equal sort keys retain library order
 in either direction. Sort order and direction are view state for the current
@@ -716,7 +707,7 @@ communicate state. The application has no motion tokens.
 
 ## Shapes
 
-Clips use the smallest corner radius. Controls and sound tiles share the control
+Clips use the smallest corner radius. Controls and sound rows share the control
 radius; transport has a slightly larger radius. Floating windows use the window
 radius. Resting native widgets use one-point borders. Selected clips use a
 two-point text-colored border; active rail actions use a one-point accent outline.
@@ -790,9 +781,10 @@ focuses the existing window and retains its draft.
 
 The right end of the status bar holds a muted 12-point Panels label, four
 switches, and the version link. Tools shows or hides the rail's names. Boards
-folds the lower panel to its 28-point toolbar row, which keeps the module
-selector; choosing a module there, or the rail's Mixer or Mastering, opens the
-requested module again. Repeating its rail action while open returns to Sounds.
+folds the lower panel to its 28-point toolbar row, which keeps the board
+tabs; choosing a tab there, or the rail's Mastering or Step synth, opens
+the requested board again. Repeating that rail action while open folds the
+panel.
 Sounds opens or folds the Sounds panel. Overview opens or folds the song
 overview; it belongs to the score, so it keeps its state when the score is
 maximised. A switch that is on carries an accent underline. The choices are saved in `layout.json` beside `options.json` and do not touch the Options
@@ -810,25 +802,20 @@ with a Muted border when chosen. In a panel shorter than 440 points the chips
 share one row that scrolls sideways, so the list keeps its room; otherwise they
 wrap.
 
-Each sound is a 44-point row with a 4-point gap, tinted like a tile: the name
+Each sound is a 44-point row with a 4-point gap and a 20% category tint: the name
 on one line, the category and bar count below it at 90% Text (only the bar
 count when space is short), and an 84 by 30-point waveform at the right. The
 waveform shows the sound's lowest and highest sample per point in its category
 color, scaled to the sound's own peak, over a centre line at 45%. A sound whose
 waveform is still being read, or whose file cannot be read, shows the centre
-line only. Hover, selection, focus, the tooltip, and every action match a tile:
-a click selects for placement, Enter places on the recording track at the
+line only. A click selects for placement, Enter places on the recording track at the
 playhead, a double-click previews, and a drag carries the sound to a lane. The
 list draws only the rows on screen, and only those rows ask for waveforms.
 
-The panel and the lower panel's Sounds module never show at once, so each
-control keeps one name. They share the search, filters, sort, and selection.
-Choosing Sounds in the lower panel folds the panel to its strip; opening the
-panel, from its strip or the status bar's Sounds switch, changes a lower panel
-showing Sounds to Mixer. A session that starts with the panel open starts the
-lower panel on Mixer when Options would choose Sounds. The folded strip shows a
-chevron and SOUNDS read top to bottom; the whole strip opens the panel. A
-maximised score hides both.
+The panel is the library's only sound list. A launch whose Starting module is
+Sounds opens it and folds the lower panel. The folded strip shows a chevron and
+SOUNDS read top to bottom; the whole strip opens the panel. A maximised score
+hides both.
 
 ### Song overview
 
@@ -878,10 +865,13 @@ control stays on screen at the minimum window size. Help lives only here.
 ### Score toolbar and Maximise
 
 A toolbar row heads the arrangement: the Arrangement heading and its counts at
-the left, and at the right the Automation lane menu, Follow, Sections, the Zoom
-slider (the mouse wheel over it zooms), and the Maximise switch. When the score
-is narrower than 760 points, its smaller heading and counts share a two-line
-block, and the Automation menu omits its separate printed label. The menu keeps
+the left, and at the right the Arrange and Mix pair, the Automation lane menu,
+Follow, Sections, the Zoom slider (the mouse wheel over it zooms), and the
+Maximise switch. The pair is two selectable labels, 2 points apart, with the
+shown view selected. When the score is narrower than 840 points, its smaller
+heading and counts share a two-line block, and the Automation menu omits its
+separate printed label and narrows to 96 points. Below 700 points the row's
+spacing tightens to 4 points and its buttons' side padding to 6. The menu keeps
 its accessible name. All actions stay on one row beside the Sounds panel so
 the lane viewport keeps its height. Maximise, or
 F, hides the tool rail, the Sounds panel, and the lower panel so the score
@@ -919,13 +909,13 @@ from the canonical PNG for the shell icon.
 
 ### Sounds and clips
 
-Sound tiles show the name above the category label and bar count. A tile too
+Sound rows show the name above the category label and bar count. A row too
 narrow for both keeps the bar count. A 20% overlay
-of the category color tints the whole tile; there is no category dot.
+of the category color tints the whole row; there is no category dot.
 Hover or selection uses Hover; selection or keyboard focus adds a one-point
 category-colored border. The category and bar-count line uses Text at 80%.
-Unselected category buttons use Panel with Muted text; the selected one uses
-Hover, Text, and a one-point Muted border.
+Unselected category chips use Panel with Muted text and a one-point Hover
+border; the selected one uses Hover, Text, and a one-point Muted border.
 One tooltip groups the full name, product, category, code, sample IDs, source
 tempo, nominal bars, actual audio duration, frames, rate, channels, and WAV path
 when available. Nominal bars and audio duration remain separate facts.
@@ -953,7 +943,7 @@ with a status message. Off the lanes, a dragged sound shows a 150 by 30-point
 Drag Label with its name in Canvas text. A palette sound armed for click
 placement shows a tinted outline where it will land. Choosing a clip or pressing Esc
 ends click placement, so a click on an empty lane then only clears the
-selection. Enter on a focused sound tile places
+selection. Enter on a focused sound row places
 it on the recording track at the playhead. Lane M/S/L/R letters gain a short
 bar when their switch is on. The lanes are one Tab stop with an Accent outline:
 arrow keys choose a clip, Alt+arrows move the selection by a bar or a track,
@@ -979,6 +969,34 @@ frames, length, fades with their curves, and pitch in semitones and cents.
 The arrangement has no clip strip under the lanes. Clips with available audio
 show their name without a hover tooltip. Missing clips keep their metadata and
 resolution guidance in a tooltip.
+
+### Mix view
+
+The Mix view is the arrangement with each used lane's header widened into a
+mixer row; the clips keep the rest of the lane, and empty lanes keep their drop
+target. A row keeps the lane's height. From the left: the track number and
+record arm, the sound names (12 points, 11 in 20-point lanes, elided, with the
+full list in the hint), M, S, L, and R, polarity, the level fader with its dB
+value and Unity, pan with Center, the state text (Muted, No output, Solo
+elsewhere, Pan automated, or the pan position) in 11 points, the four send
+knobs, and EQ. The header column is the score's width less 160 points, from
+250 to 876 points; the rows' content is 876 points wide. The ruler strip's
+header part shows the column captions (Track, Outputs, Level, Pan, Sends, EQ)
+in 10-point uppercase Muted text. When the column is narrower than its rows,
+everything right of the 34-point number and arm scrolls sideways, and a
+3-point bar with a Muted thumb at the captions' foot shows and drags the
+offset.
+
+Under the lanes, a 70-point block stays in view while the lanes scroll: the
+Master row (Master over "Stereo output", Bypass, the level, and Export
+tracks…) and the returns row, with four 210-point groups of the bus name and
+its effect, the return state ("Return 88%" or "Return automated"), the return
+level knob, Input, Limiter, and Edit. The rows carry the Mixer's material:
+Vintage tiles the ivory strip artwork for the track and Master rows and the
+graphite return artwork for the returns row; Studio and Aero fill the strip
+and return-strip surfaces. Row text uses the strip ink, and each row has a
+1-point strip-edge outline. The track number keeps its arrangement position
+without its panel backing.
 
 ### Mixer and tool windows
 
@@ -1023,7 +1041,7 @@ while the EQ, drive, compressor, or ducker is on, or while the width is not 100%
 
 Four send knobs sit below each track's gain rail. After the tracks, four return
 strips hold the FX bus return levels, input switches, limiter switches, and
-Edit buttons. Edit opens the selected bus in the Effects module.
+Edit buttons. Edit opens the selected bus on the FX returns board.
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
 are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
@@ -1040,7 +1058,7 @@ both channels' polarity. Amber means inverted and its checked state is named.
 Polarity stays independent of gain and pan, even at silence; Unity leaves it
 unchanged. Pan retains a readable left/center/right value. Every control has
 a track-specific accessible name; Master has its own gain labels. The header
-uses the shared Bottom module selector. Control-specific tooltips and the Help
+is the lower panel's tab row. Control-specific tooltips and the Help
 window explain silence, unity, attenuation, and independent polarity.
 
 `src/ui/mixer.rs` paints prepared ivory and graphite tiles and a separate
@@ -1069,9 +1087,9 @@ All tool windows and utility dialogs use the same Folded Metal shell. The
 frontend submits edits to the application layer; visual changes preserve those
 commands.
 
-### Effects board
+### FX returns board
 
-The Effects module shows four bus units side by side on a Marine board. The
+The FX returns board shows four bus units side by side on a Marine board. The
 row scrolls in both directions when necessary. Each raised unit identifies its
 bus and effect, and provides the effect and preset selectors, settings, return
 level, input and limiter switches, and Clear tail. Empty units ask the user to
@@ -1175,8 +1193,12 @@ from this presentation change.
 
 ### Step synth
 
-`src/ui/step_synth.rs` supplies the note grid, source and bar controls, options,
-effects body, actions, and feedback inside the common shell. Source names truncate
+Step synth is an Olive board in the lower panel, chosen by its tab or its tool
+rail button; the rail button folds the lower panel when the board already
+shows. `src/ui/step_synth.rs` supplies the note grid, source and bar controls,
+options, effects body, and actions on the board, and the status line in the tab
+row. A short lower panel scrolls the board, and the focused grid cell scrolls
+both the grid and the board into view. Source names truncate
 with full tooltips and accessible values. Choose source file selects a WAV or PXD
 path; Use palette sound returns to the selected sound or clip. An explicit file
 takes precedence over missing palette audio and is read only when Listen sequence
@@ -1210,8 +1232,8 @@ source guidance, preview, file choice, cancellation, errors, and save confirmati
 Changing palette source resets feedback; an explicit file keeps its own feedback.
 Missing palette audio offers Import details. Full feedback remains in a tooltip
 and polite accessible live region; errors include an Error label. Help explains
-the source, grid, bars, tempo, effects, and file workflow. Collapse preserves the
-draft and source selection.
+the source, grid, bars, tempo, effects, and file workflow. Folding the lower
+panel or choosing another board preserves the draft and source selection.
 
 ### Sample Editor
 

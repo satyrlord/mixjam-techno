@@ -918,6 +918,7 @@ pub(super) fn status_text(
         .data_mut(|data| data.insert_temp(previous_id, text.to_owned()));
     let mut scroll = egui::ScrollArea::vertical()
         .id_salt(id_salt)
+        .min_scrolled_height(0.0)
         .max_height(rect.height())
         .auto_shrink([false, false]);
     if changed {

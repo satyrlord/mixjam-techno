@@ -901,7 +901,7 @@ fn workspace_options(ui: &mut egui::Ui, values: &mut AppOptions) {
             (StartingModule::Sounds, "Sounds"),
             (StartingModule::Mixer, "Mixer"),
             (StartingModule::Mastering, "Mastering"),
-            (StartingModule::Effects, "Effects"),
+            (StartingModule::Effects, "FX returns"),
         ],
     );
     help(ui, "At the next launch. Opening a song keeps the module.");
