@@ -42,6 +42,8 @@ mod ui_test_harness {
     include!("ui/tests.rs");
     #[path = "../ui/album_review_tests.rs"]
     mod album_review_tests;
+    #[path = "../ui/name_parity_tests.rs"]
+    mod name_parity_tests;
     #[path = "../ui/options_tests.rs"]
     mod options_tests;
     #[path = "../ui/window_lifecycle_tests.rs"]

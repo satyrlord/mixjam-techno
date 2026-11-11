@@ -535,6 +535,16 @@ impl MixJamApp {
         if capture_view == "follow" {
             session.seek(40 * TICKS_PER_BAR);
         }
+        if matches!(capture_view.as_str(), "rail-icons" | "boards-folded") {
+            // Captures run in their own data folder, so the saved layout
+            // stays there.
+            let mut layout = session.layout();
+            layout.tool_names = capture_view != "rail-icons";
+            layout.boards = capture_view != "boards-folded";
+            if let Err(error) = session.set_layout(layout) {
+                eprintln!("{error}");
+            }
+        }
         if matches!(
             capture_view.as_str(),
             "master-active"

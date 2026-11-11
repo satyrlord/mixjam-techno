@@ -69,6 +69,11 @@ file remains intact and receives no further writes. Invalid files load safe
 defaults with a visible error and need explicit Restore options defaults before
 replacement. A future schema remains intact and blocks preference writes.
 Library configuration and the last-used song folder retain their own storage.
+`WorkspaceLayout` in `src/options.rs` stores the Tools and Boards switches in
+`layout.json` beside `options.json`. `Session` adopts each layout change at once
+and saves it for the next launch. A failed write reports an error but keeps the
+current layout. Headless sessions do not save layouts. These switches do not
+change the Options revision, song data, or history.
 `src/ui/libraries.rs` renders library management as the Sample libraries page of
 Options. Folder scans and provider changes still use their existing Session
 operations and storage. A successful scan adopts its folder changes; fallback

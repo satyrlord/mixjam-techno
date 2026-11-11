@@ -25,7 +25,7 @@ pub mod eq {
 pub mod options {
     pub use crate::options::{
         AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget,
-        SampleQuality, SongFolderMode, StartingModule, Theme,
+        SampleQuality, SongFolderMode, StartingModule, Theme, WorkspaceLayout,
     };
 }
 /// The drive of each track and its controls.
@@ -379,6 +379,10 @@ pub struct Session {
     options_error: Option<String>,
     options_invalid: bool,
     options_future: bool,
+    /// Which workspace panels are open; saved in `layout.json` once the
+    /// settings folder is loaded, so headless sessions never write it.
+    layout: crate::options::WorkspaceLayout,
+    layout_saves: bool,
     editor: Editor,
     player: Option<Player>,
     /// The prepared mix of the current revision. With audio output, each
@@ -655,6 +659,8 @@ impl Session {
             options_error: None,
             options_invalid: false,
             options_future: false,
+            layout: crate::options::WorkspaceLayout::default(),
+            layout_saves: false,
             editor: Editor::new(project),
             player: None,
             render: None,
@@ -1065,7 +1071,24 @@ impl Session {
             .map(|_| ())
     }
 
+    pub fn layout(&self) -> crate::options::WorkspaceLayout {
+        self.layout
+    }
+    /// Adopt the layout at once; a failed write only loses it for later sessions.
+    pub fn set_layout(&mut self, layout: crate::options::WorkspaceLayout) -> Result<(), String> {
+        if layout == self.layout {
+            return Ok(());
+        }
+        self.layout = layout;
+        if self.layout_saves {
+            crate::options::save_layout(&self.settings_root, layout)?;
+        }
+        Ok(())
+    }
+
     fn load_options(&mut self) {
+        self.layout = crate::options::load_layout(&self.settings_root);
+        self.layout_saves = true;
         let loaded = crate::options::load(&self.settings_root);
         self.options = loaded.values;
         self.options_error = loaded.error;
@@ -3370,6 +3393,24 @@ mod tests {
             std::fs::remove_file(path).unwrap();
         }
         std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn layout_is_saved_beside_the_options_and_read_by_the_next_session() {
+        let root = manual_fixture_dir();
+        let mut session = fixture().with_settings_root(root.clone());
+        assert_eq!(session.layout(), crate::options::WorkspaceLayout::default());
+        let layout = crate::options::WorkspaceLayout {
+            tool_names: false,
+            boards: false,
+        };
+        session.set_layout(layout).unwrap();
+        assert_eq!(crate::options::load_layout(&root), layout);
+        // The Options window's revision and file are untouched.
+        assert_eq!(session.options_revision(), 0);
+        assert!(!root.join("options.json").exists());
+        assert_eq!(fixture().with_settings_root(root.clone()).layout(), layout);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

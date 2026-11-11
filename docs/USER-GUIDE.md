@@ -37,7 +37,13 @@ The title branding, window, taskbar, and Windows executable use the tribal mask.
 See [the icon assets](../assets/app/README.md) for source and regeneration details.
 [DESIGN.md](DESIGN.md) is the visual contract.
 
-Hover over the right-hand tool icons for action names.
+The tool rail at the left groups File, Clips, and Tools, with each tool's name
+under its icon. Hover a tool for its window and shortcut. The **Tools** switch
+at the right of the status bar, or the double chevron at the top of the rail,
+shrinks the rail to icons. The **Boards** switch folds the lower panel to its
+toolbar row; pick a module there, or select Mixer or Mastering in the rail, to
+open it again. Both choices are kept for the next session. In a short window,
+scroll the rail with the mouse wheel.
 
 ## Sample libraries
 
@@ -106,7 +112,7 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 
 ## Options
 
-Select the **Options** gear in the tool rail's utility group, or press **Ctrl+,**.
+Select the **Options** gear at the foot of the tool rail, or press **Ctrl+,**.
 The window has Audio, Workspace, Files, and Sample libraries pages. It fits the
 current page, up to the screen height; a longer page scrolls. **Apply** saves
 preference changes and keeps the window open. It is available only when

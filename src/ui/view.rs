@@ -65,6 +65,7 @@ impl HoverHints for Response {
         }
     }
 }
+use mixjam_techno::application::options::WorkspaceLayout;
 use mixjam_techno::application::{
     Fade, FadeCurve, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, Section, amplitude_to_db,
     db_to_amplitude,
@@ -156,6 +157,8 @@ const BOTTOM_PANEL_MARGIN: egui::Margin = egui::Margin {
     top: 10,
     bottom: 6,
 };
+/// The height of the lower panel's toolbar row.
+const TOOLBAR_HEIGHT: f32 = 28.0;
 /// The space between the module toolbar and a board (Mixer, Mastering, or
 /// Effects). The margins give it up, so a board keeps its height.
 const BOARD_GAP: f32 = 8.0;
@@ -309,187 +312,336 @@ impl MixJamApp {
         let Some(icons) = self.icons(ctx) else {
             return;
         };
-        egui::SidePanel::right("tools")
-            .exact_width(64.0)
+        let names = self.session.layout().tool_names;
+        egui::SidePanel::left("tools")
+            .exact_width(rail_width(names))
             .resizable(false)
             .frame(egui::Frame::new().fill(roles().canvas).inner_margin(6))
             .show(ctx, |ui| {
                 controls::apply_palette(ui, controls::Palette::Utility);
                 controls::rail_panel(ui, ui.max_rect().expand(4.0));
-                ui.spacing_mut().item_spacing.y = 3.0;
-                ui.add_space(4.0);
-                ui.vertical_centered(|ui| {
-                    if rail_button(ui, &icons, RailIcon::New, false).clicked() {
-                        self.request_action(PendingAction::New, ctx);
-                    }
-                    if rail_button(ui, &icons, RailIcon::Open, false).clicked() {
-                        self.request_action(PendingAction::Open, ctx);
-                    }
-                    if rail_button(ui, &icons, RailIcon::Save, false).clicked() {
-                        self.save(false);
-                    }
-                    if rail_button(ui, &icons, RailIcon::SaveAs, false).clicked() {
-                        self.save(true);
-                    }
-                    if rail_button(ui, &icons, RailIcon::Import, false).clicked() {
-                        self.import_wav();
-                    }
-                    if rail_button(ui, &icons, RailIcon::Export, false).clicked() {
-                        self.export();
-                    }
-                    controls::rail_separator(ui);
-                    if rail_button(ui, &icons, RailIcon::Options, self.options.is_some()).clicked()
-                    {
-                        self.open_options(ctx);
-                    }
-                    if rail_button(ui, &icons, RailIcon::Erase, self.erase).clicked() {
-                        self.erase = !self.erase;
-                    }
-                    if rail_button(ui, &icons, RailIcon::Delete, false).clicked() {
-                        self.delete_selection();
-                    }
-                    controls::rail_separator(ui);
-                    // Each module button shows its module, or Sounds again
-                    // when its module already shows.
-                    for (icon, module) in [
-                        (RailIcon::Mixer, BottomModule::Mixer),
-                        (RailIcon::Master, BottomModule::Mastering),
-                    ] {
-                        let shown = self.bottom_module == module;
-                        if rail_button(ui, &icons, icon, shown).clicked() {
-                            self.bottom_module = if shown { BottomModule::Sounds } else { module };
-                        }
-                    }
-                    if rail_button(ui, &icons, RailIcon::Effects, self.show_effects).clicked() {
-                        self.show_effects = !self.show_effects;
-                    }
-                    if rail_button(ui, &icons, RailIcon::StepSynth, self.show_step_synth).clicked()
-                    {
-                        self.show_step_synth = !self.show_step_synth;
-                    }
-                    if rail_button(ui, &icons, RailIcon::Edit, self.show_sample_edit).clicked() {
-                        self.show_sample_edit = !self.show_sample_edit;
-                        if self.show_sample_edit {
-                            self.edit_start = 0;
-                            self.edit_end = 0;
-                        }
-                    }
-                    if rail_button(ui, &icons, RailIcon::Stretch, self.show_stretch).clicked() {
-                        self.show_stretch = !self.show_stretch;
-                        if self.show_stretch {
-                            self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
-                        } else {
-                            self.close_stretch_request();
-                        }
-                    }
-                    if rail_button(ui, &icons, RailIcon::AlbumReview, self.show_album_review)
-                        .clicked()
-                    {
-                        self.show_album_review = !self.show_album_review;
-                    }
-                    controls::rail_separator(ui);
-                    rail_heading(ui, &icons, RailIcon::Record);
-                    let occupied = occupied_tracks(self.session.project());
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(48.0, 24.0),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            recording_destination(ui, &mut self.armed_track, &occupied);
-                        },
-                    );
+                ui.spacing_mut().item_spacing.y = 2.0;
+                // Options sits at the foot. Its place is kept first, but it is
+                // drawn last, so Tab still reaches the tools from the top.
+                let area = ui.available_rect_before_wrap();
+                let foot_height = RAIL_FOOT_GAP + rail_button_size(names).y;
+                let (body, foot) = area.split_top_bottom_at_y(area.bottom() - foot_height);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("tool-rail")
+                        .auto_shrink(false)
+                        .show(ui, |ui| {
+                            ui.vertical_centered(|ui| self.rail_tools(ui, ctx, &icons, names));
+                        });
                 });
-            });
-    }
-
-    pub(super) fn bottom(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status")
-            .exact_height(30.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(roles().canvas)
-                    .inner_margin(egui::Margin::symmetric(18, 3)),
-            )
-            .show(ctx, |ui| {
-                let notice = |ui: &mut egui::Ui, label: &str| {
-                    ui.add(
-                        egui::Button::new(egui::RichText::new(label).size(12.0))
-                            .min_size(Vec2::new(0.0, 24.0)),
-                    )
-                };
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add(
-                        egui::Hyperlink::from_label_and_url(
-                            egui::RichText::new(format!(
-                                "v{}",
-                                mixjam_techno::application::APP_VERSION
-                            ))
-                            .size(12.0)
-                            .color(roles().accent),
-                            "https://github.com/satyrlord/mixjam-techno",
-                        )
-                        .open_in_new_tab(true),
-                    )
-                    .hover_hint("Open MixJam Techno on GitHub");
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        if !self.session.sample_conflicts().is_empty()
-                            && notice(ui, "Sample conflicts").clicked()
+                ui.scope_builder(egui::UiBuilder::new().max_rect(foot), |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(RAIL_FOOT_GAP - 8.0);
+                        controls::rail_separator(ui);
+                        if rail_tool(ui, &icons, RailIcon::Options, self.options.is_some(), names)
+                            .clicked()
                         {
-                            self.show_sample_conflicts = true;
-                            self.sample_conflict_error = None;
-                        }
-                        if (!self.session.project().import_notices.is_empty()
-                            || !self.session.project().source_notices.is_empty()
-                            || !self.session.project().source_settings.is_empty()
-                            || !self.session.missing_samples().is_empty())
-                            && notice(ui, "Import details").clicked()
-                        {
-                            self.show_import_details = true;
-                        }
-                        if !self.session.missing_samples().is_empty() {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{} missing · silent",
-                                    self.session.missing_samples().len()
-                                ))
-                                .size(12.0)
-                                .color(roles().coral),
-                            )
-                            .hover_hint(
-                                "Missing samples play silence. Open Import details to see their \
-                                 saved references.",
-                            );
-                        }
-                        let color = if self.status_error {
-                            roles().coral
-                        } else {
-                            roles().muted
-                        };
-                        if self.session.options().quality_reduced() {
-                            ui.colored_label(
-                                roles().warning,
-                                "Playback quality reduced; exports use full quality",
-                            );
-                        }
-                        // The idle text would contradict a missing-sound notice.
-                        let status = if self.status == DEFAULT_STATUS
-                            && !self.session.missing_samples().is_empty()
-                        {
-                            String::new()
-                        } else {
-                            display_paths(&self.status)
-                        };
-                        if !status.is_empty() {
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&status).size(12.0).color(color),
-                                )
-                                .truncate(),
-                            )
-                            .hover_hint(&status);
+                            self.open_options(ctx);
                         }
                     });
                 });
             });
+    }
+
+    /// The rail's tools in their groups: File, Clips, Tools, and the
+    /// recording track. With names off, each group heading is a separator.
+    fn rail_tools(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        icons: &RailIcons,
+        names: bool,
+    ) {
+        let tool = |ui: &mut egui::Ui, icon: RailIcon, active: bool| {
+            rail_tool(ui, icons, icon, active, names)
+        };
+        if rail_names_switch(ui, names).clicked() {
+            self.set_layout(|layout| layout.tool_names = !layout.tool_names);
+        }
+        rail_group(ui, "File", names, true);
+        if tool(ui, RailIcon::New, false).clicked() {
+            self.request_action(PendingAction::New, ctx);
+        }
+        if tool(ui, RailIcon::Open, false).clicked() {
+            self.request_action(PendingAction::Open, ctx);
+        }
+        if tool(ui, RailIcon::Save, false).clicked() {
+            self.save(false);
+        }
+        if tool(ui, RailIcon::SaveAs, false).clicked() {
+            self.save(true);
+        }
+        if tool(ui, RailIcon::Import, false).clicked() {
+            self.import_wav();
+        }
+        if tool(ui, RailIcon::Export, false).clicked() {
+            self.export();
+        }
+        rail_group(ui, "Clips", names, false);
+        if tool(ui, RailIcon::Erase, self.erase).clicked() {
+            self.erase = !self.erase;
+        }
+        if tool(ui, RailIcon::Delete, false).clicked() {
+            self.delete_selection();
+        }
+        rail_group(ui, "Tools", names, false);
+        // Each module button shows its module, or Sounds again when its
+        // module already shows. A folded lower panel opens again.
+        for (icon, module) in [
+            (RailIcon::Mixer, BottomModule::Mixer),
+            (RailIcon::Master, BottomModule::Mastering),
+        ] {
+            let shown = self.bottom_module == module && self.session.layout().boards;
+            if tool(ui, icon, shown).clicked() {
+                self.bottom_module = if shown { BottomModule::Sounds } else { module };
+                self.set_layout(|layout| layout.boards = true);
+            }
+        }
+        if tool(ui, RailIcon::Effects, self.show_effects).clicked() {
+            self.show_effects = !self.show_effects;
+        }
+        if tool(ui, RailIcon::StepSynth, self.show_step_synth).clicked() {
+            self.show_step_synth = !self.show_step_synth;
+        }
+        if tool(ui, RailIcon::Edit, self.show_sample_edit).clicked() {
+            self.show_sample_edit = !self.show_sample_edit;
+            if self.show_sample_edit {
+                self.edit_start = 0;
+                self.edit_end = 0;
+            }
+        }
+        if tool(ui, RailIcon::Stretch, self.show_stretch).clicked() {
+            self.show_stretch = !self.show_stretch;
+            if self.show_stretch {
+                self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
+            } else {
+                self.close_stretch_request();
+            }
+        }
+        if tool(ui, RailIcon::AlbumReview, self.show_album_review).clicked() {
+            self.show_album_review = !self.show_album_review;
+        }
+        // Icons only, the microphone marks its own group; the slim rail
+        // needs the height at the 720-point minimum.
+        if names {
+            controls::rail_separator(ui);
+        } else {
+            ui.add_space(4.0);
+        }
+        rail_heading(ui, icons, RailIcon::Record);
+        let occupied = occupied_tracks(self.session.project());
+        ui.allocate_ui_with_layout(
+            Vec2::new(48.0, 24.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                recording_destination(ui, &mut self.armed_track, &occupied);
+            },
+        );
+    }
+
+    /// Change the workspace layout and keep it for later sessions.
+    pub(super) fn set_layout(&mut self, change: impl FnOnce(&mut WorkspaceLayout)) {
+        let mut layout = self.session.layout();
+        change(&mut layout);
+        if let Err(error) = self.session.set_layout(layout) {
+            self.error(error);
+        }
+    }
+
+    /// Keep the status bar's row across the whole window, under the rail.
+    /// Its controls are drawn by `status_bar` after the rest of the window,
+    /// so Tab reaches them last.
+    pub(super) fn status_bar_space(&self, ctx: &egui::Context) -> Rect {
+        egui::TopBottomPanel::bottom("status")
+            .exact_height(30.0)
+            .frame(egui::Frame::new().fill(roles().canvas))
+            .show(ctx, |_| {})
+            .response
+            .rect
+    }
+
+    pub(super) fn status_bar(&mut self, ctx: &egui::Context, rect: Rect) {
+        let inner = rect - egui::Margin::symmetric(18, 3);
+        let mut ui = egui::Ui::new(
+            ctx.clone(),
+            egui::Id::new("status-bar"),
+            egui::UiBuilder::new()
+                .layer_id(egui::LayerId::background())
+                .max_rect(inner),
+        );
+        ui.set_clip_rect(rect);
+        let ui = &mut ui;
+        let panels = egui::RichText::new("Panels")
+            .size(12.0)
+            .color(roles().muted);
+        let version = egui::RichText::new(format!("v{}", mixjam_techno::application::APP_VERSION))
+            .size(12.0)
+            .color(roles().accent);
+        // The right-hand group is drawn left to right, after the status, so
+        // Tab reads the bar in the order it is seen; its width is measured
+        // first to place it against the right edge.
+        let text_width = |ui: &egui::Ui, text: &egui::RichText| {
+            egui::WidgetText::from(text.clone())
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Extend),
+                    f32::INFINITY,
+                    egui::TextStyle::Body,
+                )
+                .size()
+                .x
+        };
+        let gap = ui.spacing().item_spacing.x;
+        let group = text_width(ui, &panels)
+            + gap
+            + panel_switch_width(ui, "Tools")
+            + gap
+            + panel_switch_width(ui, "Boards")
+            + gap
+            + STATUS_VERSION_GAP
+            + text_width(ui, &version);
+        let split = (inner.right() - group).max(inner.left());
+        let left = Rect::from_min_max(inner.min, Pos2::new(split - gap, inner.bottom()));
+        let right = Rect::from_min_max(Pos2::new(split, inner.top()), inner.max);
+        let notice = |ui: &mut egui::Ui, label: &str| {
+            ui.add(
+                egui::Button::new(egui::RichText::new(label).size(12.0))
+                    .min_size(Vec2::new(0.0, 24.0)),
+            )
+        };
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(left)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            |ui| {
+                if !self.session.sample_conflicts().is_empty()
+                    && notice(ui, "Sample conflicts").clicked()
+                {
+                    self.show_sample_conflicts = true;
+                    self.sample_conflict_error = None;
+                }
+                if (!self.session.project().import_notices.is_empty()
+                    || !self.session.project().source_notices.is_empty()
+                    || !self.session.project().source_settings.is_empty()
+                    || !self.session.missing_samples().is_empty())
+                    && notice(ui, "Import details").clicked()
+                {
+                    self.show_import_details = true;
+                }
+                if !self.session.missing_samples().is_empty() {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} missing · silent",
+                            self.session.missing_samples().len()
+                        ))
+                        .size(12.0)
+                        .color(roles().coral),
+                    )
+                    .hover_hint(
+                        "Missing samples play silence. Open Import details to see their \
+                             saved references.",
+                    );
+                }
+                let color = if self.status_error {
+                    roles().coral
+                } else {
+                    roles().muted
+                };
+                if self.session.options().quality_reduced() {
+                    ui.colored_label(
+                        roles().warning,
+                        "Playback quality reduced; exports use full quality",
+                    );
+                }
+                // The idle text would contradict a missing-sound notice.
+                let status = if self.status == DEFAULT_STATUS
+                    && !self.session.missing_samples().is_empty()
+                {
+                    String::new()
+                } else {
+                    display_paths(&self.status)
+                };
+                if !status.is_empty() {
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
+                            .truncate(),
+                    )
+                    .hover_hint(&status);
+                }
+            },
+        );
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(right)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            |ui| {
+                ui.label(panels);
+                let layout = self.session.layout();
+                if panel_switch(ui, "Tools", layout.tool_names)
+                    .hover_hint("Tool rail: names under the icons, or icons only")
+                    .clicked()
+                {
+                    self.set_layout(|layout| layout.tool_names = !layout.tool_names);
+                }
+                if panel_switch(ui, "Boards", layout.boards)
+                    .hover_hint("Lower panel: its board, or only its toolbar row")
+                    .clicked()
+                {
+                    self.set_layout(|layout| layout.boards = !layout.boards);
+                }
+                ui.add_space(STATUS_VERSION_GAP);
+                ui.add(
+                    egui::Hyperlink::from_label_and_url(
+                        version,
+                        "https://github.com/satyrlord/mixjam-techno",
+                    )
+                    .open_in_new_tab(true),
+                )
+                .hover_hint("Open MixJam Techno on GitHub");
+            },
+        );
+    }
+
+    pub(super) fn bottom(&mut self, ctx: &egui::Context) {
+        if self.session.layout().boards {
+            self.lower_panel(ctx);
+        } else {
+            // Folded: only the toolbar row, so the module choice and the
+            // filters stay in reach. Its own panel id keeps the open panel's
+            // height for when it opens again.
+            egui::TopBottomPanel::bottom("boards-folded")
+                .exact_height(
+                    TOOLBAR_HEIGHT
+                        + f32::from(BOTTOM_PANEL_MARGIN.top)
+                        + f32::from(BOTTOM_PANEL_MARGIN.bottom),
+                )
+                .resizable(false)
+                .frame(
+                    egui::Frame::new()
+                        .fill(roles().panel)
+                        .inner_margin(BOTTOM_PANEL_MARGIN),
+                )
+                .show(ctx, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    self.bottom_toolbar(ui);
+                });
+        }
+        egui::TopBottomPanel::top("transport")
+            .exact_height(68.0)
+            .frame(
+                egui::Frame::new()
+                    .fill(roles().panel)
+                    .inner_margin(egui::Margin::symmetric(18, 10)),
+            )
+            .show(ctx, |ui| self.transport(ui));
+    }
+
+    fn lower_panel(&mut self, ctx: &egui::Context) {
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
         // Reserve the transport and a usable arrangement.
         let available = ctx.available_rect().height();
@@ -534,14 +686,6 @@ impl MixJamApp {
         );
         ctx.layer_painter(egui::LayerId::background())
             .rect_filled(grip, 2.0, roles().muted);
-        egui::TopBottomPanel::top("transport")
-            .exact_height(68.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(roles().panel)
-                    .inner_margin(egui::Margin::symmetric(18, 10)),
-            )
-            .show(ctx, |ui| self.transport(ui));
     }
 
     pub(super) fn transport(&mut self, ui: &mut egui::Ui) {
@@ -741,9 +885,10 @@ impl MixJamApp {
     }
 
     fn bottom_toolbar(&mut self, ui: &mut egui::Ui) {
+        let mut picked = false;
         ui.push_id("bottom-module-toolbar", |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().interact_size.y = 28.0;
+                ui.spacing_mut().interact_size.y = TOOLBAR_HEIGHT;
                 let button_padding = ui.spacing().button_padding;
                 ui.spacing_mut().button_padding.y = 3.0;
                 // ComboBox width is a minimum. Bound its available space as
@@ -764,6 +909,7 @@ impl MixJamApp {
                                         )
                                         .clicked()
                                     {
+                                        picked = true;
                                         ui.close();
                                     }
                                 }
@@ -771,6 +917,10 @@ impl MixJamApp {
                             .response
                     })
                     .inner;
+                // Choosing a module opens a folded lower panel.
+                if picked {
+                    self.set_layout(|layout| layout.boards = true);
+                }
                 name_control(response, "Bottom module").hover_hint(
                     "Choose the module shown in this section. Sounds selects source audio; Mixer \
                      adjusts track levels, pan, EQ, sends, polarity and outputs; Mastering \
@@ -2379,6 +2529,7 @@ impl MixJamApp {
         }
         self.file_drop(ctx);
         self.header(ctx);
+        let status = self.status_bar_space(ctx);
         self.side_rail(ctx);
         self.bottom(ctx);
         egui::CentralPanel::default()
@@ -2388,6 +2539,7 @@ impl MixJamApp {
                     .inner_margin(egui::Margin::symmetric(18, 14)),
             )
             .show(ctx, |ui| self.timeline(ui));
+        self.status_bar(ctx, status);
         self.finish_drag(ctx);
         self.dialogs(ctx);
         self.tool_windows(ctx);
@@ -3097,6 +3249,9 @@ pub(super) fn recording_destination(
             }
         })
         .response;
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
     name_control(response, "Recording track")
         .hover_hint("Choose a track for recording. Unused tracks appear only when you add a sound.")
 }
@@ -3260,13 +3415,7 @@ pub(super) fn rail_button(
     let width = 48.0_f32.min(ui.available_width().max(1.0));
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::click());
     controls::icon_button_surface(ui, &response, active);
-    let color = if !ui.is_enabled() {
-        roles().muted.gamma_multiply(0.5)
-    } else if active {
-        roles().tools[0].1
-    } else {
-        roles().legend
-    };
+    let color = rail_icon_color(ui, active);
     ui.painter().image(
         icons.texture_id(icon),
         icons.icon_rect(ui.ctx(), rect.center()),
@@ -3300,6 +3449,217 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
         egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), icon.label())
     });
     response.hover_hint(icon.label());
+}
+
+/// The rail's width: icons with names, or icons only.
+pub(super) fn rail_width(names: bool) -> f32 {
+    if names { 84.0 } else { 64.0 }
+}
+
+/// One rail tool's target: an icon over its name, or the icon alone.
+pub(super) fn rail_button_size(names: bool) -> Vec2 {
+    if names {
+        Vec2::new(72.0, 42.0)
+    } else {
+        Vec2::new(48.0, 30.0)
+    }
+}
+
+/// The space above Options at the rail's foot, its separator included.
+const RAIL_FOOT_GAP: f32 = 12.0;
+
+fn rail_icon_color(ui: &egui::Ui, active: bool) -> Color32 {
+    if !ui.is_enabled() {
+        roles().muted.gamma_multiply(0.5)
+    } else if active {
+        roles().tools[0].1
+    } else {
+        roles().legend
+    }
+}
+
+/// A rail tool. With names on, the tool's accessible name is printed under
+/// its icon in the text face; the name, toggle state and hint stay the same
+/// in both states.
+pub(super) fn rail_tool(
+    ui: &mut egui::Ui,
+    icons: &RailIcons,
+    icon: RailIcon,
+    active: bool,
+    names: bool,
+) -> Response {
+    if !names {
+        return rail_button(ui, icons, icon, active);
+    }
+    let size = rail_button_size(true);
+    let width = size.x.min(ui.available_width().max(1.0));
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, size.y), Sense::click());
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
+    controls::icon_button_surface(ui, &response, active);
+    let color = rail_icon_color(ui, active);
+    ui.painter().image(
+        icons.texture_id(icon),
+        icons.icon_rect(ui.ctx(), Pos2::new(rect.center().x, rect.top() + 13.0)),
+        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+        color,
+    );
+    let text_color = if !ui.is_enabled() {
+        color
+    } else if active || response.hovered() {
+        roles().text
+    } else {
+        roles().legend
+    };
+    // A long name steps down half a point at a time rather than clipping.
+    let mut font = 11.0;
+    let galley = loop {
+        let galley = ui.painter().layout_no_wrap(
+            icon.label().to_owned(),
+            egui::FontId::proportional(font),
+            text_color,
+        );
+        if galley.size().x <= rect.width() - 4.0 || font <= 9.0 {
+            break galley;
+        }
+        font -= 0.5;
+    };
+    let origin = Pos2::new(
+        rect.center().x - galley.size().x / 2.0,
+        rect.bottom() - 4.0 - galley.size().y,
+    );
+    ui.painter().galley(origin, galley, text_color);
+    response.widget_info(|| {
+        if icon.is_toggle() {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::SelectableLabel,
+                ui.is_enabled(),
+                active,
+                icon.label(),
+            )
+        } else {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), icon.label())
+        }
+    });
+    response.hover_hint(icon.hint())
+}
+
+/// The button at the rail's top that shows or hides the tool names.
+pub(super) fn rail_names_switch(ui: &mut egui::Ui, names: bool) -> Response {
+    let label = if names {
+        "Shrink the tool rail to icons"
+    } else {
+        "Show the tool names"
+    };
+    let width = rail_button_size(names).x.min(ui.available_width().max(1.0));
+    let height = if names { 20.0 } else { 16.0 };
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
+    if response.hovered() || response.has_focus() {
+        ui.painter()
+            .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    focus_outline(ui, &response, roles().accent);
+    // A chevron that points where the rail goes: left to shrink, right to widen.
+    let direction = if names { -1.0 } else { 1.0 };
+    let color = if response.hovered() {
+        roles().text
+    } else {
+        roles().muted
+    };
+    let stroke = Stroke::new(1.5_f32, color);
+    for offset in [-3.0, 3.0] {
+        let tip = rect.center() + Vec2::new(offset + direction * 2.5, 0.0);
+        let back = tip - Vec2::new(direction * 4.0, 0.0);
+        ui.painter()
+            .line_segment([back + Vec2::new(0.0, -4.0), tip], stroke);
+        ui.painter()
+            .line_segment([back + Vec2::new(0.0, 4.0), tip], stroke);
+    }
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    response.hover_hint(label)
+}
+
+/// A status-bar switch that shows or folds a panel. On, its name is bright
+/// and underlined in the accent.
+/// Space between the panel switches and the version link.
+const STATUS_VERSION_GAP: f32 = 14.0;
+
+/// The width `panel_switch` takes for `label`.
+fn panel_switch_width(ui: &egui::Ui, label: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(
+            label.to_owned(),
+            egui::FontId::proportional(12.0),
+            roles().text,
+        )
+        .size()
+        .x
+        + 14.0
+}
+
+pub(super) fn panel_switch(ui: &mut egui::Ui, label: &str, on: bool) -> Response {
+    let color = if on { roles().text } else { roles().muted };
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.to_owned(), egui::FontId::proportional(12.0), color);
+    let size = Vec2::new(panel_switch_width(ui, label), 22.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    let text = Pos2::new(
+        rect.center().x - galley.size().x / 2.0,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(text, galley, color);
+    if on {
+        ui.painter().rect_filled(
+            Rect::from_min_max(
+                Pos2::new(rect.left() + 4.0, rect.bottom() - 2.0),
+                Pos2::new(rect.right() - 4.0, rect.bottom()),
+            ),
+            0.0,
+            roles().accent,
+        );
+    }
+    focus_outline(ui, &response, roles().accent);
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, label)
+    });
+    response
+}
+
+/// A group heading over the rail's tools: a short uppercase title with
+/// names on, a separator with icons only (none above the first group).
+pub(super) fn rail_group(ui: &mut egui::Ui, title: &str, names: bool, first: bool) {
+    if !names {
+        if !first {
+            controls::rail_separator(ui);
+        }
+        return;
+    }
+    let height = if first { 14.0 } else { 20.0 };
+    let width = rail_button_size(true).x.min(ui.available_width().max(1.0));
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    let galley = ui.painter().layout_no_wrap(
+        title.to_uppercase(),
+        egui::FontId::proportional(9.5),
+        roles().muted,
+    );
+    ui.painter().galley(
+        Pos2::new(
+            rect.center().x - galley.size().x / 2.0,
+            rect.bottom() - 1.0 - galley.size().y,
+        ),
+        galley,
+        roles().muted,
+    );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
 }
 
 pub(super) fn category_button(ui: &mut egui::Ui, label: &str, active: bool) -> Response {

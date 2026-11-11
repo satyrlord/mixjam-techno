@@ -7,7 +7,7 @@ The owner's implementation request accepted the recommended baseline in
 
 ## Delivered behavior
 
-Options opens from the gear in the utility rail or Ctrl+,. Audio, Workspace,
+Options opens from the gear at the foot of the tool rail or Ctrl+,. Audio, Workspace,
 Files, and Sample libraries share one window. Application preferences share
 one draft, Apply, Cancel, Restore options defaults, and stale-draft Reload.
 Session owns validation, persistence, active values, and audio changes.

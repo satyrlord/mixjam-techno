@@ -343,13 +343,16 @@ mod tests {
                 frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            // The rail is 64 points wide; the transport has an 18-point inner margin.
-            let content_right = size.x - 64.0 - 18.0;
+            // The rail with names is on the left; the transport has an
+            // 18-point inner margin.
+            let content_left = rail_width(true) + 18.0;
+            let content_right = size.x - 18.0;
             for name in ["Project BPM", "Zoom", "Follow", "Sections"] {
                 let rect = effects_control_rect(&output, name);
                 assert!(
-                    rect.left() >= 18.0 && rect.right() <= content_right,
-                    "{name} must fit before the rail at {size:?}: {rect:?}, right={content_right}"
+                    rect.left() >= content_left && rect.right() <= content_right,
+                    "{name} must fit beside the rail at {size:?}: {rect:?}, \
+                     {content_left}..{content_right}"
                 );
             }
         }
@@ -2052,6 +2055,223 @@ mod tests {
         );
     }
 
+    /// Click a control through accessibility, as the agent channel does.
+    fn click_named(ctx: &egui::Context, app: &mut MixJamApp, name: &str) -> egui::FullOutput {
+        let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+        let target = accessible_node(&output, name).0;
+        frame(
+            ctx,
+            app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Click,
+                    target,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+        frame(ctx, app, vec![], egui::Modifiers::NONE)
+    }
+
+    #[test]
+    fn panel_switches_show_names_fold_the_lower_panel_and_keep_every_tool() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let selected = |output: &egui::FullOutput, name: &str| {
+            accessible_node(output, name).1.toggled() == Some(egui::accesskit::Toggled::True)
+        };
+        assert!(selected(&output, "Tools"));
+        assert!(selected(&output, "Boards"));
+        assert_eq!(
+            effects_control_rect(&output, "New").size(),
+            rail_button_size(true)
+        );
+        // The status-bar switch and the rail's own switch both change the names.
+        output = click_named(&ctx, &mut app, "Tools");
+        assert!(!app.session.layout().tool_names);
+        assert!(!selected(&output, "Tools"));
+        assert_eq!(
+            effects_control_rect(&output, "New").size(),
+            rail_button_size(false)
+        );
+        output = click_named(&ctx, &mut app, "Show the tool names");
+        assert!(app.session.layout().tool_names);
+        accessible_node(&output, "Shrink the tool rail to icons");
+        // Folded, the lower panel keeps its toolbar row and the rail keeps
+        // every tool; Mixer opens it again.
+        let open_top = effects_control_rect(&output, "Bottom module").top();
+        output = click_named(&ctx, &mut app, "Boards");
+        assert!(!app.session.layout().boards);
+        assert!(!selected(&output, "Boards"));
+        let folded_top = effects_control_rect(&output, "Bottom module").top();
+        assert!(
+            folded_top > open_top + 150.0,
+            "Folded, only the toolbar row stays: {open_top} then {folded_top}."
+        );
+        for icon in RailIcon::ALL {
+            if !matches!(icon, RailIcon::Undo | RailIcon::Redo | RailIcon::Help) {
+                accessible_node(&output, icon.label());
+            }
+        }
+        click_named(&ctx, &mut app, "Mixer");
+        assert!(app.session.layout().boards);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
+    }
+
+    #[test]
+    fn folded_modules_reopen_from_their_rail_button_before_toggling_to_sounds() {
+        each_theme(|_| {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            for (name, module) in [
+                ("Mixer", BottomModule::Mixer),
+                ("Mastering", BottomModule::Mastering),
+            ] {
+                click_named(&ctx, &mut app, name);
+                assert_eq!(app.bottom_module, module);
+                click_named(&ctx, &mut app, "Boards");
+                assert!(!app.session.layout().boards);
+                click_named(&ctx, &mut app, name);
+                assert!(app.session.layout().boards);
+                assert_eq!(app.bottom_module, module, "Restore the folded {name}.");
+                click_named(&ctx, &mut app, name);
+                assert_eq!(app.bottom_module, BottomModule::Sounds);
+            }
+        });
+    }
+
+    /// The accessible name of the focused control, if any.
+    fn focused_label(output: &egui::FullOutput) -> Option<String> {
+        let update = output.platform_output.accesskit_update.as_ref()?;
+        update
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == update.focus)
+            .and_then(|(_, node)| node.label().map(str::to_owned))
+    }
+
+    #[test]
+    fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Help");
+        let mut order = vec!["Help".to_owned()];
+        for _ in 0..400 {
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            let Some(label) = focused_label(&output) else {
+                continue;
+            };
+            if label == "Help" {
+                break;
+            }
+            order.push(label);
+        }
+        assert_eq!(order.first().map(String::as_str), Some("Help"));
+        let rail = [
+            "Shrink the tool rail to icons",
+            "New",
+            "Open",
+            "Save",
+            "Save as",
+            "Import",
+            "Export",
+            "Erase",
+            "Delete",
+            "Mixer",
+            "Mastering",
+            "Effects",
+            "Step synth",
+            "Edit",
+            "Stretch",
+            "Album Review",
+            "Recording track",
+            "Options",
+        ];
+        assert_eq!(
+            &order[1..=rail.len()],
+            rail.as_slice(),
+            "The rail follows the header, top to bottom: {order:?}"
+        );
+        assert_eq!(
+            order.get(rail.len() + 1).map(String::as_str),
+            Some("Bottom module"),
+            "The lower panel follows the rail: {order:?}"
+        );
+        let tools = order.iter().position(|name| name == "Tools");
+        let boards = order.iter().position(|name| name == "Boards");
+        assert!(
+            tools.is_some() && boards == tools.map(|at| at + 1),
+            "The panel switches come together: {order:?}"
+        );
+        assert!(
+            boards.is_some_and(|at| at + 2 >= order.len()),
+            "Only the version link may follow the panel switches: {order:?}"
+        );
+    }
+
+    #[test]
+    fn tab_scrolls_rail_controls_into_view_in_short_windows() {
+        each_theme(|_| {
+            for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0)] {
+                let (ctx, mut app) = fixture();
+                ctx.enable_accesskit();
+                ctx.style_mut(|style| {
+                    style.scroll_animation = egui::style::ScrollAnimation::none();
+                });
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                let target = accessible_node(&output, "Shrink the tool rail to icons").0;
+                frame_at_size(
+                    &ctx,
+                    &mut app,
+                    vec![egui::Event::AccessKitActionRequest(
+                        egui::accesskit::ActionRequest {
+                            action: egui::accesskit::Action::Focus,
+                            target,
+                            data: None,
+                        },
+                    )],
+                    egui::Modifiers::NONE,
+                    size,
+                );
+                let mut reached_recording = false;
+                for _ in 0..18 {
+                    frame_at_size(
+                        &ctx,
+                        &mut app,
+                        vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+                        egui::Modifiers::NONE,
+                        size,
+                    );
+                    // Tab resolves focus after drawing. The next frame requests
+                    // scrolling, and the following frame paints that offset.
+                    frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                    let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                    let label = focused_label(&output).expect("A rail control must have focus.");
+                    let rect = effects_control_rect(&output, &label);
+                    let options = effects_control_rect(&output, "Options");
+                    assert!(
+                        rect.top() >= 66.0 && rect.bottom() < options.top(),
+                        "Focused {label} must be visible at {size:?}: {rect:?}."
+                    );
+                    if label == "Recording track" {
+                        reached_recording = true;
+                        break;
+                    }
+                }
+                assert!(reached_recording);
+            }
+        });
+    }
+
     #[test]
     fn mastering_over_latch_exposes_its_state_and_clears_by_keyboard() {
         let (ctx, _) = fixture();
@@ -2301,9 +2521,23 @@ mod tests {
         for name in ["Listen", "Save sound"] {
             assert!(accessible_node(&output, name).1.is_disabled());
         }
+        // The status bar has its own Import details; Effect Studio's sits in
+        // the window's status line.
+        let status = effects_control_rect(&output, "Effect Studio status");
         assert!(
-            effects_control_rect(&output, "Effect Studio status")
-                .contains_rect(effects_control_rect(&output, "Import details"))
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .filter(|(_, node)| node.label() == Some("Import details"))
+                .filter_map(|(_, node)| node.bounds())
+                .any(|bounds| status.contains_rect(Rect::from_min_max(
+                    Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                    Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+                )))
         );
         assert_full_recovery_caption(&output);
         text_rect(
@@ -3951,13 +4185,66 @@ mod tests {
                     .unwrap_or_else(|| panic!("Missing status label: {label}"))
             };
             let version = bounds(&format!("v{}", mixjam_techno::APP_VERSION));
-            // The bottom bar ends before the 64-point tool rail.
-            assert!((version.right() - (width - 64.0 - 18.0)).abs() <= 1.0);
+            // The status bar spans the window, under the rail.
+            assert!((version.right() - (width - 18.0)).abs() <= 1.0);
             assert!(version.top() >= height - 30.0);
             assert!(version.bottom() <= height);
             assert!(bounds(&app.status).right() < version.left());
             assert!(bounds("Import details").right() < version.left());
         }
+    }
+
+    #[test]
+    fn status_notices_stay_clear_of_panel_switches() {
+        each_theme(|theme| {
+            let (context, mut app, root) = sample_conflicts_fixture("status-panel-switches");
+            let (_, missing) = missing_fixture();
+            let mut project = app.session.project().clone();
+            project.missing_samples = missing.session.project().missing_samples.clone();
+            project
+                .clips
+                .push(missing.session.project().clips[0].clone());
+            project.clips.last_mut().unwrap().id = 99;
+            let mut library = Library::fixture(vec![]);
+            library.apply_imports(&project.imported_samples).unwrap();
+            app.session = Session::headless(Arc::new(library), project)
+                .unwrap()
+                .with_settings_root(root.join("settings"));
+            let mut options = app.session.options().clone();
+            options.theme = theme;
+            options.sample_playback_quality =
+                mixjam_techno::application::options::SampleQuality::Low;
+            app.session
+                .apply_options(options, app.session.options_revision(), false)
+                .unwrap();
+            app.show_sample_conflicts = false;
+            app.sample_conflicts_dismissed = true;
+            for size in [
+                Vec2::new(960.0, 720.0),
+                Vec2::new(1024.0, 768.0),
+                Vec2::new(1440.0, 1000.0),
+            ] {
+                frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+                let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+                let tools = effects_control_rect(&output, "Tools");
+                for shape in &output.shapes {
+                    if let egui::Shape::Text(text) = &shape.shape {
+                        let rect = text.galley.rect.translate(text.pos.to_vec2());
+                        if rect.top() >= size.y - 30.0
+                            && text.galley.job.text != "Panels"
+                            && rect.left() < tools.left()
+                        {
+                            assert!(
+                                rect.intersect(shape.clip_rect).right() < tools.left(),
+                                "Status text overlaps Tools at {size:?}: {:?} {rect:?}.",
+                                text.galley.job.text
+                            );
+                        }
+                    }
+                }
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        });
     }
 
     #[test]
@@ -7903,8 +8190,9 @@ mod tests {
         ];
         for size in [Vec2::new(960.0, 720.0), Vec2::new(1440.0, 1000.0)] {
             let narrowest = size.x == 960.0;
-            // The transport ends at the tool rail, inside its 18-point margins.
-            let right = size.x - 64.0 - 18.0;
+            // The transport starts after the tool rail, inside its 18-point margins.
+            let left = rail_width(true) + 18.0;
+            let right = size.x - 18.0;
             for title in titles {
                 retitle(&mut app, title);
                 let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
@@ -7913,7 +8201,7 @@ mod tests {
                 let context = format!("{size:?} {title}: {name:?} at {font} points");
                 assert!(!galley.elided, "{context}");
                 // The whole name stays in the 48-point row inside the transport.
-                assert!(name.left() >= 18.0 - 0.5, "{context}");
+                assert!(name.left() >= left - 0.5, "{context}");
                 assert!(
                     name.top() >= 76.0 - 0.5 && name.bottom() <= 124.0 + 0.5,
                     "{context}"
@@ -7929,7 +8217,7 @@ mod tests {
                 for button in buttons {
                     assert_eq!(button.size(), Vec2::splat(side), "{context}");
                     assert!(
-                        button.left() >= 18.0 && button.right() <= right,
+                        button.left() >= left && button.right() <= right,
                         "{context}"
                     );
                 }
@@ -9410,200 +9698,260 @@ mod tests {
     }
 
     #[test]
-    fn rail_groups_remain_ordered_separated_and_visible_at_supported_densities() {
+    fn rail_groups_remain_ordered_separated_and_reachable_in_both_states() {
         for density in themed_densities() {
-            let (ctx, mut app) = fixture();
-            ctx.set_pixels_per_point(density);
-            ctx.enable_accesskit();
-            let size = Vec2::new(960.0, 720.0);
-            let viewport = Rect::from_min_size(Pos2::ZERO, size);
-            let mut output = egui::FullOutput::default();
-            for _ in 0..3 {
-                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            }
-            let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap();
-            let actions = [
-                RailIcon::New,
-                RailIcon::Open,
-                RailIcon::Save,
-                RailIcon::SaveAs,
-                RailIcon::Import,
-                RailIcon::Export,
-                RailIcon::Options,
-                RailIcon::Erase,
-                RailIcon::Delete,
-                RailIcon::Mixer,
-                RailIcon::Effects,
-                RailIcon::StepSynth,
-                RailIcon::Edit,
-                RailIcon::Stretch,
-                RailIcon::AlbumReview,
-            ];
-            let bounds: Vec<_> = actions
-                .iter()
-                .map(|icon| {
-                    let rect = effects_control_rect(&output, icon.label());
-                    assert!(
-                        viewport.contains_rect(rect),
-                        "{} must fit the minimum viewport at {density}x.",
-                        icon.label()
-                    );
-                    assert!(
-                        (rect.width() - 48.0).abs() < 0.01 && (rect.height() - 30.0).abs() < 0.01,
-                        "{} must retain the common 48 by 30 action target.",
-                        icon.label()
-                    );
-                    assert!(
-                        (rect.center().x - (size.x - 32.0)).abs() < 0.6,
-                        "{} must be centered in the 64-point rail.",
-                        icon.label()
-                    );
-                    let (clip, image) = output
-                        .shapes
-                        .iter()
-                        .find_map(|shape| match &shape.shape {
-                            egui::Shape::Mesh(mesh)
-                                if mesh.texture_id == icons.texture_id(*icon) =>
-                            {
-                                Some((shape.clip_rect, mesh.calc_bounds()))
-                            }
-                            _ => None,
-                        })
-                        .unwrap_or_else(|| panic!("Missing rail artwork: {}", icon.label()));
-                    assert!(
-                        clip.contains_rect(image) && rect.contains_rect(image),
-                        "{} artwork must remain fully visible inside its action target.",
-                        icon.label()
-                    );
-                    assert!(
-                        (image.width() * density - 20.0 * density).abs() < 0.01
-                            && (image.height() * density - 20.0 * density).abs() < 0.01,
-                        "{} artwork must use the prepared density without stretching.",
-                        icon.label()
-                    );
-                    rect
-                })
-                .collect();
-            let options = effects_control_rect(&output, "Options");
-            assert!(
-                viewport.contains_rect(options),
-                "Options must fit at {density}x."
-            );
-            assert!(
-                (options.width() - 48.0).abs() < 0.01 && (options.height() - 30.0).abs() < 0.01
-            );
-            assert!((options.center().x - (size.x - 32.0)).abs() < 0.6);
-            assert!(
-                bounds[5].bottom() < options.top() && options.bottom() < bounds[7].top(),
-                "Options must stay between file actions and Erase."
-            );
-            for pair in bounds.windows(2) {
-                assert!(
-                    pair[0].bottom() < pair[1].top(),
-                    "File, utility, and musical actions must keep their category order without overlap at {density}x."
-                );
-            }
-            for (before, after) in [(5, 6), (8, 9)] {
-                let gap = Rect::from_min_max(
-                    Pos2::new(bounds[before].left(), bounds[before].bottom()),
-                    Pos2::new(bounds[after].right(), bounds[after].top()),
-                );
-                let has_separator = output.shapes.iter().any(|shape| match &shape.shape {
-                    egui::Shape::LineSegment { points, stroke } => {
-                        stroke.width > 0.0
-                            && (points[0].y - points[1].y).abs() < 0.01
-                            && (points[1].x - points[0].x).abs() >= 32.0
-                            && gap.contains(points[0])
-                            && gap.contains(points[1])
-                    }
-                    egui::Shape::Rect(rect) => {
-                        rect.rect.width() >= 32.0
-                            && rect.rect.height() <= 2.0
-                            && gap.contains_rect(rect.rect)
-                    }
-                    _ => false,
-                });
-                assert!(
-                    has_separator,
-                    "Category boundaries need a visible separator at {density}x."
-                );
-            }
-            let microphone = effects_control_rect(&output, RailIcon::Record.label());
-            let destination = effects_control_rect(&output, "Recording track");
-            assert!(
-                bounds.last().unwrap().bottom() < microphone.top()
-                    && microphone.bottom() <= destination.top(),
-                "The microphone and its track selector must follow every musical tool."
-            );
-            assert!(
-                viewport.contains_rect(microphone) && viewport.contains_rect(destination),
-                "The final recording selector must remain visible at {density}x."
-            );
-            assert!(
-                (destination.center().x - (size.x - 32.0)).abs() < 0.6,
-                "The recording selector must remain centered beneath the microphone at {density}x: {destination:?}."
-            );
-            let density_index = [1.0, 1.5, 2.0]
-                .iter()
-                .position(|value| *value == density)
-                .unwrap();
-            // Studio and Aero paint the rail in code; Vintage crops its artwork.
-            if roles().material == theme::Material::Metal {
-                for (part, expected) in [
-                    ("grain", [256, 256]),
-                    ("part-6", [12, 96]),
-                    ("part-7", [12, 96]),
+            for names in [true, false] {
+                for size in [
+                    Vec2::new(960.0, 720.0),
+                    Vec2::new(1024.0, 768.0),
+                    Vec2::new(1440.0, 1000.0),
                 ] {
-                    let name = format!("folded-metal-Utility-{part}-{density_index}");
-                    let (texture, pixels) = ctx
-                        .tex_manager()
-                        .read()
-                        .allocated()
-                        .find(|(_, meta)| meta.name == name)
-                        .map(|(id, meta)| (*id, meta.size))
-                        .expect("The rail must load its shared material finish.");
-                    assert_eq!(
-                        pixels,
-                        expected.map(|side| (side as f32 * density) as usize),
-                        "The rail must load the prepared material density."
-                    );
-                    let mut painted = false;
-                    for shape in &output.shapes {
-                        let egui::Shape::Mesh(mesh) = &shape.shape else {
-                            continue;
-                        };
-                        if mesh.texture_id != texture {
-                            continue;
+                    check_rail_state(density, names, size);
+                }
+            }
+        }
+    }
+
+    /// The rail's order, targets, artwork, groups and reach in one layout.
+    fn check_rail_state(density: f32, names: bool, size: Vec2) {
+        let actions = [
+            RailIcon::New,
+            RailIcon::Open,
+            RailIcon::Save,
+            RailIcon::SaveAs,
+            RailIcon::Import,
+            RailIcon::Export,
+            RailIcon::Erase,
+            RailIcon::Delete,
+            RailIcon::Mixer,
+            RailIcon::Master,
+            RailIcon::Effects,
+            RailIcon::StepSynth,
+            RailIcon::Edit,
+            RailIcon::Stretch,
+            RailIcon::AlbumReview,
+        ];
+        let (ctx, mut app) = fixture();
+        ctx.set_pixels_per_point(density);
+        ctx.enable_accesskit();
+        app.set_layout(|layout| layout.tool_names = names);
+        let viewport = Rect::from_min_size(Pos2::ZERO, size);
+        // The rail ends above the 30-point status bar.
+        let rail = Rect::from_min_max(
+            Pos2::new(0.0, 66.0),
+            Pos2::new(rail_width(names), size.y - 30.0),
+        );
+        let target = rail_button_size(names);
+        let state = format!("names {names}, {size:?}, {density}x");
+        let mut output = egui::FullOutput::default();
+        for _ in 0..3 {
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap().clone();
+        let bounds: Vec<_> = actions
+            .iter()
+            .map(|icon| {
+                let rect = effects_control_rect(&output, icon.label());
+                assert!(
+                    (rect.size() - target).abs().max_elem() < 0.01,
+                    "{} must keep the common {target:?} target ({state}).",
+                    icon.label()
+                );
+                assert!(
+                    (rect.center().x - rail_width(names) / 2.0).abs() < 0.6,
+                    "{} must be centered in the rail ({state}).",
+                    icon.label()
+                );
+                let (clip, image) = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Mesh(mesh) if mesh.texture_id == icons.texture_id(*icon) => {
+                            Some((shape.clip_rect, mesh.calc_bounds()))
                         }
-                        painted = true;
-                        for vertex in &mesh.vertices {
-                            for coordinate in [vertex.pos.x, vertex.pos.y] {
-                                assert!(
-                                    (coordinate * density - (coordinate * density).round()).abs()
-                                        < 0.001,
-                                    "Rail material must align to physical pixels."
-                                );
-                            }
-                        }
-                        for triangle in mesh.indices.as_chunks::<3>().0 {
-                            for edge in 0..3 {
-                                let a = mesh.vertices[triangle[edge] as usize];
-                                let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                                let destination = (b.pos - a.pos).abs() * density;
-                                let source = (b.uv - a.uv).abs()
-                                    * Vec2::new(pixels[0] as f32, pixels[1] as f32);
-                                assert!(
-                                    (destination - source).abs().max_elem() < 0.001,
-                                    "The narrow rail must crop its material without stretching texels."
-                                );
-                            }
-                        }
-                    }
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| panic!("Missing rail artwork: {}", icon.label()));
+                assert!(
+                    rect.contains_rect(image),
+                    "{} artwork must stay inside its target ({state}).",
+                    icon.label()
+                );
+                // In view: above the foot that holds Options.
+                if rail.contains_rect(rect) && rect.bottom() < rail.bottom() - target.y - 12.0 {
                     assert!(
-                        painted,
-                        "The rail must paint its {part} material at {density}x."
+                        clip.contains_rect(image),
+                        "{} artwork must be fully visible ({state}).",
+                        icon.label()
                     );
                 }
+                assert!(
+                    (image.width() * density - 20.0 * density).abs() < 0.01
+                        && (image.height() * density - 20.0 * density).abs() < 0.01,
+                    "{} artwork must use the prepared density without stretching.",
+                    icon.label()
+                );
+                rect
+            })
+            .collect();
+        for pair in bounds.windows(2) {
+            assert!(
+                pair[0].bottom() < pair[1].top(),
+                "File, clip and tool actions keep their order without overlap ({state})."
+            );
+        }
+        // Each group starts under a heading with names on, and
+        // under a separator with icons only.
+        for (before, after, heading) in [(5, 6, "Clips"), (7, 8, "Tools")] {
+            let gap = Rect::from_min_max(
+                Pos2::new(bounds[before].left(), bounds[before].bottom()),
+                Pos2::new(bounds[after].right(), bounds[after].top()),
+            );
+            if names {
+                let title = accessible_label(&output, heading);
+                assert!(
+                    gap.contains_rect(title),
+                    "The {heading} heading must sit between its groups ({state})."
+                );
+                continue;
+            }
+            let has_separator = output.shapes.iter().any(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points, stroke } => {
+                    stroke.width > 0.0
+                        && (points[0].y - points[1].y).abs() < 0.01
+                        && (points[1].x - points[0].x).abs() >= 32.0
+                        && gap.contains(points[0])
+                        && gap.contains(points[1])
+                }
+                _ => false,
+            });
+            assert!(
+                has_separator,
+                "Group boundaries need a visible separator ({state})."
+            );
+        }
+        let microphone = effects_control_rect(&output, RailIcon::Record.label());
+        let destination = effects_control_rect(&output, "Recording track");
+        assert!(
+            bounds.last().unwrap().bottom() < microphone.top()
+                && microphone.bottom() <= destination.top(),
+            "The microphone and its track selector must follow every tool ({state})."
+        );
+        assert!(
+            (destination.center().x - rail_width(names) / 2.0).abs() < 0.6,
+            "The recording selector must stay centered ({state}): {destination:?}."
+        );
+        // Options sits at the rail's foot and is always in view.
+        let options = effects_control_rect(&output, "Options");
+        assert!(
+            rail.contains_rect(options)
+                && (options.size() - target).abs().max_elem() < 0.01
+                && options.bottom() > rail.bottom() - 12.0,
+            "Options must sit at the foot of the rail ({state}): {options:?}."
+        );
+        let fits = |rect: Rect| rail.contains_rect(rect) && rect.bottom() < options.top();
+        if !names || size.y >= 1000.0 {
+            for rect in bounds.iter().chain([&microphone, &destination]) {
+                assert!(
+                    viewport.contains_rect(*rect) && fits(*rect),
+                    "Every tool must be in view without scrolling ({state}): {rect:?}."
+                );
+            }
+        } else {
+            // Too short for every name: the wheel brings the rest
+            // of the rail into view.
+            assert!(
+                !fits(destination),
+                "The named rail overflows here; check the scroll ({state})."
+            );
+            for _ in 0..3 {
+                frame_at_size(
+                    &ctx,
+                    &mut app,
+                    vec![
+                        egui::Event::PointerMoved(Pos2::new(
+                            rail_width(names) / 2.0,
+                            rail.center().y,
+                        )),
+                        egui::Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point,
+                            delta: Vec2::new(0.0, -400.0),
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    egui::Modifiers::NONE,
+                    size,
+                );
+            }
+            output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            for label in [RailIcon::AlbumReview.label(), "Recording track"] {
+                let rect = effects_control_rect(&output, label);
+                assert!(
+                    fits(rect),
+                    "{label} must scroll into view ({state}): {rect:?}."
+                );
+            }
+        }
+        let density_index = [1.0, 1.5, 2.0]
+            .iter()
+            .position(|value| *value == density)
+            .unwrap();
+        // Studio and Aero paint the rail in code; Vintage crops its artwork.
+        if roles().material == theme::Material::Metal {
+            for (part, expected) in [
+                ("grain", [256, 256]),
+                ("part-6", [12, 96]),
+                ("part-7", [12, 96]),
+            ] {
+                let name = format!("folded-metal-Utility-{part}-{density_index}");
+                let (texture, pixels) = ctx
+                    .tex_manager()
+                    .read()
+                    .allocated()
+                    .find(|(_, meta)| meta.name == name)
+                    .map(|(id, meta)| (*id, meta.size))
+                    .expect("The rail must load its shared material finish.");
+                assert_eq!(
+                    pixels,
+                    expected.map(|side| (side as f32 * density) as usize),
+                    "The rail must load the prepared material density."
+                );
+                let mut painted = false;
+                for shape in &output.shapes {
+                    let egui::Shape::Mesh(mesh) = &shape.shape else {
+                        continue;
+                    };
+                    if mesh.texture_id != texture {
+                        continue;
+                    }
+                    painted = true;
+                    for vertex in &mesh.vertices {
+                        for coordinate in [vertex.pos.x, vertex.pos.y] {
+                            assert!(
+                                (coordinate * density - (coordinate * density).round()).abs()
+                                    < 0.001,
+                                "Rail material must align to physical pixels."
+                            );
+                        }
+                    }
+                    for triangle in mesh.indices.as_chunks::<3>().0 {
+                        for edge in 0..3 {
+                            let a = mesh.vertices[triangle[edge] as usize];
+                            let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
+                            let destination = (b.pos - a.pos).abs() * density;
+                            let source =
+                                (b.uv - a.uv).abs() * Vec2::new(pixels[0] as f32, pixels[1] as f32);
+                            assert!(
+                                (destination - source).abs().max_elem() < 0.001,
+                                "The narrow rail must crop its material without stretching texels."
+                            );
+                        }
+                    }
+                }
+                assert!(
+                    painted,
+                    "The rail must paint its {part} material at {density}x."
+                );
             }
         }
     }
@@ -9701,6 +10049,8 @@ mod tests {
     #[test]
     fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         let (ctx, mut app) = fixture();
+        app.set_layout(|layout| layout.tool_names = false);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         let icons = app.rail_icons.as_ref().unwrap().as_ref().unwrap().clone();
         // The rail paints icons as textured meshes; header buttons paint
         // egui images as textured rectangles. Both carry the texture ID.
@@ -9729,8 +10079,8 @@ mod tests {
             !output.shapes.iter().any(|shape| {
                 if let egui::Shape::Text(text) = &shape.shape {
                     let label = text.galley.job.text.as_str();
-                    text.pos.x > 1364.0
-                        && text.pos.y > 50.0
+                    text.pos.x < rail_width(false)
+                        && text.pos.y > 66.0
                         && (RailIcon::ALL.iter().any(|icon| icon.label() == label)
                             || matches!(label, "MIX" | "Record"))
                 } else {
@@ -11895,11 +12245,14 @@ mod tests {
             })
             .rev()
             .find(|pos| {
-                !app.session
-                    .project()
-                    .clips
-                    .iter()
-                    .any(|clip| app.clip_rect(clip, canvas).contains(*pos))
+                // Inside the score, clear of its margin and scroll bar.
+                pos.x < 1440.0 - 40.0
+                    && !app
+                        .session
+                        .project()
+                        .clips
+                        .iter()
+                        .any(|clip| app.clip_rect(clip, canvas).contains(*pos))
             })
             .unwrap();
         click(&ctx, &mut app, empty, egui::Modifiers::NONE);

@@ -153,8 +153,8 @@ Keep the options preference draft intact while navigating to this page.
 
 ## Interaction and application rules
 
-1. Add a clearly named `Options` utility action and `Ctrl+,` shortcut. Reuse
-   the rail's utility group. Use the gear icon with the required PNG density
+1. Add a clearly named `Options` utility action and `Ctrl+,` shortcut. Place it
+   at the foot of the tool rail. Use the gear icon with the required PNG density
    variants; do not add SVG. A second activation focuses the existing window.
 2. Use one draft per open window, with Apply, Cancel, and Restore defaults.
    Apply validates and saves, updates active preferences, and keeps the window

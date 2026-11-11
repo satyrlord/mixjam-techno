@@ -1,0 +1,1122 @@
+button	+96 more
+button	Add library folder
+button	Add track 1
+button	Add track 5
+button	Album Review
+button	Apply
+button	Audio
+button	Back one bar
+button	Cancel
+button	Center Track 1 pan
+button	Center Track 2 pan
+button	Center Track 3 pan
+button	Center Track 4 pan
+button	Choose source file
+button	Clear OVER
+button	Clear bar
+button	Clear cover cache
+button	Clip fade in curve
+button	Clip fade out curve
+button	Close Album Review
+button	Close Choose path
+button	Close Effect Studio
+button	Close Effect Studio help
+button	Close Help
+button	Close Import sound
+button	Close Mastering help
+button	Close Options
+button	Close Sample editor
+button	Close Sample editor help
+button	Close Save your changes?
+button	Close Step synth
+button	Close Step synth help
+button	Close Time Stretcher
+button	Close Time Stretcher help
+button	Close Track 1 EQ
+button	Collapse Album Review
+button	Collapse Choose path
+button	Collapse Effect Studio
+button	Collapse Effect Studio help
+button	Collapse Help
+button	Collapse Import sound
+button	Collapse Mastering help
+button	Collapse Options
+button	Collapse Sample editor
+button	Collapse Sample editor help
+button	Collapse Save your changes?
+button	Collapse Step synth
+button	Collapse Step synth help
+button	Collapse Time Stretcher
+button	Collapse Time Stretcher help
+button	Collapse Track 1 EQ
+button	Confirm path
+button	Credits and rights
+button	Decrease End frame
+button	Decrease Pitch
+button	Decrease Start frame
+button	Delete
+button	Delete (Delete)
+button	Device details
+button	Discard changes
+button	Done
+button	Duplicate (Ctrl+D)
+button	Edit
+button	Edit FX 1
+button	Edit FX 2
+button	Edit FX 3
+button	Edit FX 4
+button	Effect Studio help
+button	Effects
+button	Erase
+button	Export
+button	Export tracks
+button	Files
+button	Follow
+button	Forward one bar
+button	Go to end
+button	Go to start
+button	Help
+button	Import
+button	Import into Wave
+button	Increase End frame
+button	Increase Pitch
+button	Increase Start frame
+button	Listen
+button	Listen edit
+button	Listen sequence
+button	Listen to stretched sound
+button	Load pattern
+button	Loop the section at the playhead. Drag the bar ruler to loop a range.
+button	Loop the whole song. Drag the bar ruler to loop a range.
+button	Mastering
+button	Mastering help
+button	Mixer
+button	Move Booster EQ left
+button	Move Booster EQ right
+button	Move Booster compressor left
+button	Move Booster compressor right
+button	Move Booster wide left
+button	Move Booster wide right
+button	Move Bus compressor left
+button	Move Bus compressor right
+button	Move Lift EQ left
+button	Move Lift EQ right
+button	Move Maximizer left
+button	Move Maximizer right
+button	Move Multiband left
+button	Move Multiband right
+button	Move Soft clip left
+button	Move Soft clip right
+button	Move Stereo imaging left
+button	Move Stereo imaging right
+button	Move Tape left
+button	Move Tape right
+button	Move Trim EQ left
+button	Move Trim EQ right
+button	Move Tube left
+button	Move Tube right
+button	New
+button	Open
+button	Optional product providers
+button	Options
+button	Play / pause (Space)
+button	Preview
+button	Record into the armed track
+button	Redo
+button	Reload reviews
+button	Reset
+button	Reset Master gain to unity
+button	Reset Track 1 EQ
+button	Reset Track 1 gain to unity
+button	Reset Track 2 gain to unity
+button	Reset Track 3 gain to unity
+button	Reset Track 4 gain to unity
+button	Restore options defaults
+button	Sample editor help
+button	Sample libraries
+button	Save
+button	Save as
+button	Save changes
+button	Save edited sound
+button	Save pattern
+button	Save sequence
+button	Save sound
+button	Save stretched sound
+button	Sections
+button	Show All sounds
+button	Show Bass sounds
+button	Show Booster EQ
+button	Show Booster compressor
+button	Show Booster wide
+button	Show Bus compressor
+button	Show Drum sounds
+button	Show Effect sounds
+button	Show Lift EQ
+button	Show Limiter
+button	Show Loop sounds
+button	Show Maximizer
+button	Show Multiband
+button	Show Sequence sounds
+button	Show Soft clip
+button	Show Sphere sounds
+button	Show Step synth sounds
+button	Show Stereo imaging
+button	Show Tape
+button	Show Trim EQ
+button	Show Tube
+button	Show Voice sounds
+button	Show Wave sounds
+button	Show Xtra sounds
+button	Sort direction
+button	Step synth
+button	Step synth help
+button	Stop
+button	Stretch
+button	Time Stretcher help
+button	Track 1 EQ
+button	Track 2 EQ
+button	Track 3 EQ
+button	Track 4 EQ
+button	Undo
+button	Use palette sound
+button	View bar 1
+button	View bar 2
+button	View bar 3
+button	View bar 4
+button	Workspace
+button	parity bass
+button	parity drum
+button	parity loop
+button	parity voice
+checkbox	1/16 cut
+checkbox	Active 1
+checkbox	Active 2
+checkbox	Active 3
+checkbox	Active 4
+checkbox	Arrangement track 1 left output
+checkbox	Arrangement track 1 mute
+checkbox	Arrangement track 1 right output
+checkbox	Arrangement track 1 solo
+checkbox	Arrangement track 2 left output
+checkbox	Arrangement track 2 mute
+checkbox	Arrangement track 2 right output
+checkbox	Arrangement track 2 solo
+checkbox	Arrangement track 3 left output
+checkbox	Arrangement track 3 mute
+checkbox	Arrangement track 3 right output
+checkbox	Arrangement track 3 solo
+checkbox	Arrangement track 4 left output
+checkbox	Arrangement track 4 mute
+checkbox	Arrangement track 4 right output
+checkbox	Arrangement track 4 solo
+checkbox	Booster EQ
+checkbox	Booster compressor
+checkbox	Booster wide
+checkbox	Bus compressor
+checkbox	Bypass all pedals
+checkbox	Clip reverse
+checkbox	Echo
+checkbox	FX 1 limiter
+checkbox	FX 1 power
+checkbox	FX 2 limiter
+checkbox	FX 2 power
+checkbox	FX 3 limiter
+checkbox	FX 3 power
+checkbox	FX 4 limiter
+checkbox	FX 4 power
+checkbox	Filter
+checkbox	Follow playhead on startup
+checkbox	Lift EQ
+checkbox	Limiter
+checkbox	Loop source
+checkbox	Master bypass
+checkbox	Maximizer
+checkbox	Multiband
+checkbox	Mute previews
+checkbox	Robotize
+checkbox	Show section bookmarks
+checkbox	Show tooltips
+checkbox	Soft clip
+checkbox	Step 1, +0 semitones
+checkbox	Step 1, +1 semitones
+checkbox	Step 1, +10 semitones
+checkbox	Step 1, +11 semitones
+checkbox	Step 1, +12 semitones
+checkbox	Step 1, +2 semitones
+checkbox	Step 1, +3 semitones
+checkbox	Step 1, +4 semitones
+checkbox	Step 1, +5 semitones
+checkbox	Step 1, +6 semitones
+checkbox	Step 1, +7 semitones
+checkbox	Step 1, +8 semitones
+checkbox	Step 1, +9 semitones
+checkbox	Step 1, -1 semitones
+checkbox	Step 1, -10 semitones
+checkbox	Step 1, -11 semitones
+checkbox	Step 1, -12 semitones
+checkbox	Step 1, -2 semitones
+checkbox	Step 1, -3 semitones
+checkbox	Step 1, -4 semitones
+checkbox	Step 1, -5 semitones
+checkbox	Step 1, -6 semitones
+checkbox	Step 1, -7 semitones
+checkbox	Step 1, -8 semitones
+checkbox	Step 1, -9 semitones
+checkbox	Step 10, +0 semitones
+checkbox	Step 10, +1 semitones
+checkbox	Step 10, +10 semitones
+checkbox	Step 10, +11 semitones
+checkbox	Step 10, +12 semitones
+checkbox	Step 10, +2 semitones
+checkbox	Step 10, +3 semitones
+checkbox	Step 10, +4 semitones
+checkbox	Step 10, +5 semitones
+checkbox	Step 10, +6 semitones
+checkbox	Step 10, +7 semitones
+checkbox	Step 10, +8 semitones
+checkbox	Step 10, +9 semitones
+checkbox	Step 10, -1 semitones
+checkbox	Step 10, -10 semitones
+checkbox	Step 10, -11 semitones
+checkbox	Step 10, -12 semitones
+checkbox	Step 10, -2 semitones
+checkbox	Step 10, -3 semitones
+checkbox	Step 10, -4 semitones
+checkbox	Step 10, -5 semitones
+checkbox	Step 10, -6 semitones
+checkbox	Step 10, -7 semitones
+checkbox	Step 10, -8 semitones
+checkbox	Step 10, -9 semitones
+checkbox	Step 11, +0 semitones
+checkbox	Step 11, +1 semitones
+checkbox	Step 11, +10 semitones
+checkbox	Step 11, +11 semitones
+checkbox	Step 11, +12 semitones
+checkbox	Step 11, +2 semitones
+checkbox	Step 11, +3 semitones
+checkbox	Step 11, +4 semitones
+checkbox	Step 11, +5 semitones
+checkbox	Step 11, +6 semitones
+checkbox	Step 11, +7 semitones
+checkbox	Step 11, +8 semitones
+checkbox	Step 11, +9 semitones
+checkbox	Step 11, -1 semitones
+checkbox	Step 11, -10 semitones
+checkbox	Step 11, -11 semitones
+checkbox	Step 11, -12 semitones
+checkbox	Step 11, -2 semitones
+checkbox	Step 11, -3 semitones
+checkbox	Step 11, -4 semitones
+checkbox	Step 11, -5 semitones
+checkbox	Step 11, -6 semitones
+checkbox	Step 11, -7 semitones
+checkbox	Step 11, -8 semitones
+checkbox	Step 11, -9 semitones
+checkbox	Step 12, +0 semitones
+checkbox	Step 12, +1 semitones
+checkbox	Step 12, +10 semitones
+checkbox	Step 12, +11 semitones
+checkbox	Step 12, +12 semitones
+checkbox	Step 12, +2 semitones
+checkbox	Step 12, +3 semitones
+checkbox	Step 12, +4 semitones
+checkbox	Step 12, +5 semitones
+checkbox	Step 12, +6 semitones
+checkbox	Step 12, +7 semitones
+checkbox	Step 12, +8 semitones
+checkbox	Step 12, +9 semitones
+checkbox	Step 12, -1 semitones
+checkbox	Step 12, -10 semitones
+checkbox	Step 12, -11 semitones
+checkbox	Step 12, -12 semitones
+checkbox	Step 12, -2 semitones
+checkbox	Step 12, -3 semitones
+checkbox	Step 12, -4 semitones
+checkbox	Step 12, -5 semitones
+checkbox	Step 12, -6 semitones
+checkbox	Step 12, -7 semitones
+checkbox	Step 12, -8 semitones
+checkbox	Step 12, -9 semitones
+checkbox	Step 13, +0 semitones
+checkbox	Step 13, +1 semitones
+checkbox	Step 13, +10 semitones
+checkbox	Step 13, +11 semitones
+checkbox	Step 13, +12 semitones
+checkbox	Step 13, +2 semitones
+checkbox	Step 13, +3 semitones
+checkbox	Step 13, +4 semitones
+checkbox	Step 13, +5 semitones
+checkbox	Step 13, +6 semitones
+checkbox	Step 13, +7 semitones
+checkbox	Step 13, +8 semitones
+checkbox	Step 13, +9 semitones
+checkbox	Step 13, -1 semitones
+checkbox	Step 13, -10 semitones
+checkbox	Step 13, -11 semitones
+checkbox	Step 13, -12 semitones
+checkbox	Step 13, -2 semitones
+checkbox	Step 13, -3 semitones
+checkbox	Step 13, -4 semitones
+checkbox	Step 13, -5 semitones
+checkbox	Step 13, -6 semitones
+checkbox	Step 13, -7 semitones
+checkbox	Step 13, -8 semitones
+checkbox	Step 13, -9 semitones
+checkbox	Step 14, +0 semitones
+checkbox	Step 14, +1 semitones
+checkbox	Step 14, +10 semitones
+checkbox	Step 14, +11 semitones
+checkbox	Step 14, +12 semitones
+checkbox	Step 14, +2 semitones
+checkbox	Step 14, +3 semitones
+checkbox	Step 14, +4 semitones
+checkbox	Step 14, +5 semitones
+checkbox	Step 14, +6 semitones
+checkbox	Step 14, +7 semitones
+checkbox	Step 14, +8 semitones
+checkbox	Step 14, +9 semitones
+checkbox	Step 14, -1 semitones
+checkbox	Step 14, -10 semitones
+checkbox	Step 14, -11 semitones
+checkbox	Step 14, -12 semitones
+checkbox	Step 14, -2 semitones
+checkbox	Step 14, -3 semitones
+checkbox	Step 14, -4 semitones
+checkbox	Step 14, -5 semitones
+checkbox	Step 14, -6 semitones
+checkbox	Step 14, -7 semitones
+checkbox	Step 14, -8 semitones
+checkbox	Step 14, -9 semitones
+checkbox	Step 15, +0 semitones
+checkbox	Step 15, +1 semitones
+checkbox	Step 15, +10 semitones
+checkbox	Step 15, +11 semitones
+checkbox	Step 15, +12 semitones
+checkbox	Step 15, +2 semitones
+checkbox	Step 15, +3 semitones
+checkbox	Step 15, +4 semitones
+checkbox	Step 15, +5 semitones
+checkbox	Step 15, +6 semitones
+checkbox	Step 15, +7 semitones
+checkbox	Step 15, +8 semitones
+checkbox	Step 15, +9 semitones
+checkbox	Step 15, -1 semitones
+checkbox	Step 15, -10 semitones
+checkbox	Step 15, -11 semitones
+checkbox	Step 15, -12 semitones
+checkbox	Step 15, -2 semitones
+checkbox	Step 15, -3 semitones
+checkbox	Step 15, -4 semitones
+checkbox	Step 15, -5 semitones
+checkbox	Step 15, -6 semitones
+checkbox	Step 15, -7 semitones
+checkbox	Step 15, -8 semitones
+checkbox	Step 15, -9 semitones
+checkbox	Step 16, +0 semitones
+checkbox	Step 16, +1 semitones
+checkbox	Step 16, +10 semitones
+checkbox	Step 16, +11 semitones
+checkbox	Step 16, +12 semitones
+checkbox	Step 16, +2 semitones
+checkbox	Step 16, +3 semitones
+checkbox	Step 16, +4 semitones
+checkbox	Step 16, +5 semitones
+checkbox	Step 16, +6 semitones
+checkbox	Step 16, +7 semitones
+checkbox	Step 16, +8 semitones
+checkbox	Step 16, +9 semitones
+checkbox	Step 16, -1 semitones
+checkbox	Step 16, -10 semitones
+checkbox	Step 16, -11 semitones
+checkbox	Step 16, -12 semitones
+checkbox	Step 16, -2 semitones
+checkbox	Step 16, -3 semitones
+checkbox	Step 16, -4 semitones
+checkbox	Step 16, -5 semitones
+checkbox	Step 16, -6 semitones
+checkbox	Step 16, -7 semitones
+checkbox	Step 16, -8 semitones
+checkbox	Step 16, -9 semitones
+checkbox	Step 2, +0 semitones
+checkbox	Step 2, +1 semitones
+checkbox	Step 2, +10 semitones
+checkbox	Step 2, +11 semitones
+checkbox	Step 2, +12 semitones
+checkbox	Step 2, +2 semitones
+checkbox	Step 2, +3 semitones
+checkbox	Step 2, +4 semitones
+checkbox	Step 2, +5 semitones
+checkbox	Step 2, +6 semitones
+checkbox	Step 2, +7 semitones
+checkbox	Step 2, +8 semitones
+checkbox	Step 2, +9 semitones
+checkbox	Step 2, -1 semitones
+checkbox	Step 2, -10 semitones
+checkbox	Step 2, -11 semitones
+checkbox	Step 2, -12 semitones
+checkbox	Step 2, -2 semitones
+checkbox	Step 2, -3 semitones
+checkbox	Step 2, -4 semitones
+checkbox	Step 2, -5 semitones
+checkbox	Step 2, -6 semitones
+checkbox	Step 2, -7 semitones
+checkbox	Step 2, -8 semitones
+checkbox	Step 2, -9 semitones
+checkbox	Step 3, +0 semitones
+checkbox	Step 3, +1 semitones
+checkbox	Step 3, +10 semitones
+checkbox	Step 3, +11 semitones
+checkbox	Step 3, +12 semitones
+checkbox	Step 3, +2 semitones
+checkbox	Step 3, +3 semitones
+checkbox	Step 3, +4 semitones
+checkbox	Step 3, +5 semitones
+checkbox	Step 3, +6 semitones
+checkbox	Step 3, +7 semitones
+checkbox	Step 3, +8 semitones
+checkbox	Step 3, +9 semitones
+checkbox	Step 3, -1 semitones
+checkbox	Step 3, -10 semitones
+checkbox	Step 3, -11 semitones
+checkbox	Step 3, -12 semitones
+checkbox	Step 3, -2 semitones
+checkbox	Step 3, -3 semitones
+checkbox	Step 3, -4 semitones
+checkbox	Step 3, -5 semitones
+checkbox	Step 3, -6 semitones
+checkbox	Step 3, -7 semitones
+checkbox	Step 3, -8 semitones
+checkbox	Step 3, -9 semitones
+checkbox	Step 4, +0 semitones
+checkbox	Step 4, +1 semitones
+checkbox	Step 4, +10 semitones
+checkbox	Step 4, +11 semitones
+checkbox	Step 4, +12 semitones
+checkbox	Step 4, +2 semitones
+checkbox	Step 4, +3 semitones
+checkbox	Step 4, +4 semitones
+checkbox	Step 4, +5 semitones
+checkbox	Step 4, +6 semitones
+checkbox	Step 4, +7 semitones
+checkbox	Step 4, +8 semitones
+checkbox	Step 4, +9 semitones
+checkbox	Step 4, -1 semitones
+checkbox	Step 4, -10 semitones
+checkbox	Step 4, -11 semitones
+checkbox	Step 4, -12 semitones
+checkbox	Step 4, -2 semitones
+checkbox	Step 4, -3 semitones
+checkbox	Step 4, -4 semitones
+checkbox	Step 4, -5 semitones
+checkbox	Step 4, -6 semitones
+checkbox	Step 4, -7 semitones
+checkbox	Step 4, -8 semitones
+checkbox	Step 4, -9 semitones
+checkbox	Step 5, +0 semitones
+checkbox	Step 5, +1 semitones
+checkbox	Step 5, +10 semitones
+checkbox	Step 5, +11 semitones
+checkbox	Step 5, +12 semitones
+checkbox	Step 5, +2 semitones
+checkbox	Step 5, +3 semitones
+checkbox	Step 5, +4 semitones
+checkbox	Step 5, +5 semitones
+checkbox	Step 5, +6 semitones
+checkbox	Step 5, +7 semitones
+checkbox	Step 5, +8 semitones
+checkbox	Step 5, +9 semitones
+checkbox	Step 5, -1 semitones
+checkbox	Step 5, -10 semitones
+checkbox	Step 5, -11 semitones
+checkbox	Step 5, -12 semitones
+checkbox	Step 5, -2 semitones
+checkbox	Step 5, -3 semitones
+checkbox	Step 5, -4 semitones
+checkbox	Step 5, -5 semitones
+checkbox	Step 5, -6 semitones
+checkbox	Step 5, -7 semitones
+checkbox	Step 5, -8 semitones
+checkbox	Step 5, -9 semitones
+checkbox	Step 6, +0 semitones
+checkbox	Step 6, +1 semitones
+checkbox	Step 6, +10 semitones
+checkbox	Step 6, +11 semitones
+checkbox	Step 6, +12 semitones
+checkbox	Step 6, +2 semitones
+checkbox	Step 6, +3 semitones
+checkbox	Step 6, +4 semitones
+checkbox	Step 6, +5 semitones
+checkbox	Step 6, +6 semitones
+checkbox	Step 6, +7 semitones
+checkbox	Step 6, +8 semitones
+checkbox	Step 6, +9 semitones
+checkbox	Step 6, -1 semitones
+checkbox	Step 6, -10 semitones
+checkbox	Step 6, -11 semitones
+checkbox	Step 6, -12 semitones
+checkbox	Step 6, -2 semitones
+checkbox	Step 6, -3 semitones
+checkbox	Step 6, -4 semitones
+checkbox	Step 6, -5 semitones
+checkbox	Step 6, -6 semitones
+checkbox	Step 6, -7 semitones
+checkbox	Step 6, -8 semitones
+checkbox	Step 6, -9 semitones
+checkbox	Step 7, +0 semitones
+checkbox	Step 7, +1 semitones
+checkbox	Step 7, +10 semitones
+checkbox	Step 7, +11 semitones
+checkbox	Step 7, +12 semitones
+checkbox	Step 7, +2 semitones
+checkbox	Step 7, +3 semitones
+checkbox	Step 7, +4 semitones
+checkbox	Step 7, +5 semitones
+checkbox	Step 7, +6 semitones
+checkbox	Step 7, +7 semitones
+checkbox	Step 7, +8 semitones
+checkbox	Step 7, +9 semitones
+checkbox	Step 7, -1 semitones
+checkbox	Step 7, -10 semitones
+checkbox	Step 7, -11 semitones
+checkbox	Step 7, -12 semitones
+checkbox	Step 7, -2 semitones
+checkbox	Step 7, -3 semitones
+checkbox	Step 7, -4 semitones
+checkbox	Step 7, -5 semitones
+checkbox	Step 7, -6 semitones
+checkbox	Step 7, -7 semitones
+checkbox	Step 7, -8 semitones
+checkbox	Step 7, -9 semitones
+checkbox	Step 8, +0 semitones
+checkbox	Step 8, +1 semitones
+checkbox	Step 8, +10 semitones
+checkbox	Step 8, +11 semitones
+checkbox	Step 8, +12 semitones
+checkbox	Step 8, +2 semitones
+checkbox	Step 8, +3 semitones
+checkbox	Step 8, +4 semitones
+checkbox	Step 8, +5 semitones
+checkbox	Step 8, +6 semitones
+checkbox	Step 8, +7 semitones
+checkbox	Step 8, +8 semitones
+checkbox	Step 8, +9 semitones
+checkbox	Step 8, -1 semitones
+checkbox	Step 8, -10 semitones
+checkbox	Step 8, -11 semitones
+checkbox	Step 8, -12 semitones
+checkbox	Step 8, -2 semitones
+checkbox	Step 8, -3 semitones
+checkbox	Step 8, -4 semitones
+checkbox	Step 8, -5 semitones
+checkbox	Step 8, -6 semitones
+checkbox	Step 8, -7 semitones
+checkbox	Step 8, -8 semitones
+checkbox	Step 8, -9 semitones
+checkbox	Step 9, +0 semitones
+checkbox	Step 9, +1 semitones
+checkbox	Step 9, +10 semitones
+checkbox	Step 9, +11 semitones
+checkbox	Step 9, +12 semitones
+checkbox	Step 9, +2 semitones
+checkbox	Step 9, +3 semitones
+checkbox	Step 9, +4 semitones
+checkbox	Step 9, +5 semitones
+checkbox	Step 9, +6 semitones
+checkbox	Step 9, +7 semitones
+checkbox	Step 9, +8 semitones
+checkbox	Step 9, +9 semitones
+checkbox	Step 9, -1 semitones
+checkbox	Step 9, -10 semitones
+checkbox	Step 9, -11 semitones
+checkbox	Step 9, -12 semitones
+checkbox	Step 9, -2 semitones
+checkbox	Step 9, -3 semitones
+checkbox	Step 9, -4 semitones
+checkbox	Step 9, -5 semitones
+checkbox	Step 9, -6 semitones
+checkbox	Step 9, -7 semitones
+checkbox	Step 9, -8 semitones
+checkbox	Step 9, -9 semitones
+checkbox	Stereo imaging
+checkbox	Tape
+checkbox	Track 1 EQ power
+checkbox	Track 1 compressor power
+checkbox	Track 1 drive power
+checkbox	Track 1 ducker power
+checkbox	Track 1 left output
+checkbox	Track 1 mute
+checkbox	Track 1 polarity invert
+checkbox	Track 1 right output
+checkbox	Track 1 solo
+checkbox	Track 2 left output
+checkbox	Track 2 mute
+checkbox	Track 2 polarity invert
+checkbox	Track 2 right output
+checkbox	Track 2 solo
+checkbox	Track 3 left output
+checkbox	Track 3 mute
+checkbox	Track 3 polarity invert
+checkbox	Track 3 right output
+checkbox	Track 3 solo
+checkbox	Track 4 left output
+checkbox	Track 4 mute
+checkbox	Track 4 polarity invert
+checkbox	Track 4 right output
+checkbox	Track 4 solo
+checkbox	Trim EQ
+checkbox	Tube
+combo_box	Automation lane
+combo_box	Bottom module
+combo_box	Category filter
+combo_box	Drive playback oversampling
+combo_box	FX 1 effect
+combo_box	FX 2 effect
+combo_box	FX 3 effect
+combo_box	FX 4 effect
+combo_box	Lane height
+combo_box	Library filter
+combo_box	Master playback oversampling
+combo_box	Mastering preset
+combo_box	Meter display rate
+combo_box	Playback buffer target
+combo_box	Recording track
+combo_box	Sample playback quality
+combo_box	Song dialog folder
+combo_box	Sort albums
+combo_box	Sort order
+combo_box	Source sound
+combo_box	Starting module
+combo_box	Theme
+image	MixJam Techno tribal mask
+image	Recording destination
+label	0 tracks  /  0 clips
+label	0.0 dB
+label	00 : 00
+label	1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.
+label	131 / 131 albums
+label	4 sounds
+label	4 tracks  /  8 clips
+label	4x keeps Soft clip, Tube, Maximizer, and Tape clean. Off can sound harsher.
+label	4x keeps track drive saturation clean. Off can sound harsher.
+label	75600 source frames selected · 1.714 s after pitch
+label	A larger buffer absorbs processing bursts but adds delay between a control and its sound.
+label	A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.
+label	ARRANGEMENT
+label	Add a folder of WAV files to fill the Sounds panel.
+label	An outline shows where a sound lands. Esc or a click on a clip ends click placement.
+label	Applies to the next Add library folder or Scan again.
+label	Artists
+label	At the next launch. Opening a song keeps the module.
+label	Audio capture
+label	Automation
+label	BPM
+label	Bus compressor gain reduction 0.0 dB
+label	Bypass all, beside Preset, skips the whole board, Trim included, for playback and export, so you can export the mix and master it elsewhere. The pedals keep their settings and switches, and the board dims. Switching it during playback crossfades over 30 ms. Presets leave it as it is. The Mixer's Master strip has the same switch.
+label	Bypass on the Master strip skips the master pedalboard for playback and export, as Mastering's Bypass all does.
+label	Cancel placing
+label	Changes here take effect right away.
+label	Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.
+label	Click Original BPM for exact entry. Drag the Original knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes. For Target BPM, click or drag to a notch, use the mouse wheel, or focus the slider and press an arrow key.
+label	Click a bar number to seek. Drag the ruler to loop.
+label	Click a gain value for exact dB entry, then Enter. Enter -inf for silence. Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. Master stays visible while tracks scroll.
+label	Click a note to set it. Click it again to clear it.
+label	Click a value for exact entry, then press Enter. The + and - buttons change one frame, or 100 with Shift.
+label	Clip menu
+label	Clips by key
+label	Cover cache: 2 covers, 0.4 MB of 256 MB.
+label	Ctrl+A
+label	Ctrl+D copies the selected clips to the bars that follow.
+label	Ctrl+N
+label	Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, MIXJAM, or JSON; save MIXJAM.
+label	Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y
+label	Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.
+label	Delete
+label	Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are the application's own algorithms.
+label	Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.
+label	Double-click a sound or clip.
+label	Drag a clip. Alt-drag copies.
+label	Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.
+label	Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.
+label	Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.
+label	Drag to a track, or select a sound and click a track. Up to 64 tracks.
+label	Drive playback oversampling
+label	Duplicate
+label	EQ opens a track's channel EQ: a low cut and a high cut at 12 dB per octave, a low shelf, two peaks with their Q, and a high shelf, drawn as a curve. It acts on the track's clips before its automation and fader. An EQ that is off keeps its settings and leaves the track as it was; Reset flattens every band. To tame harsh hi-hats, lower the high gain. The same window holds the track's compressor, stereo width, and ducker. The button lights when EQ, compression, or ducking is on, or width differs from 100%.
+label	Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.
+label	Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the board's state beside Preset shows the total, and exports remove it.
+label	Effect Studio
+label	Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.
+label	Enter the full path of the file to open.
+label	Every pedal is off and the trim is at 0 dB: the mix plays unprocessed.
+label	Export
+label	Export tracks… in the Mixer's toolbar writes each track that plays, and the return of each FX bus that it feeds, to its own WAV file in a folder. A track's file holds the track alone after its EQ, automation, fader, pan, and outputs, without its sends; the FX returns hold the sends. The master pedalboard is left out, every file is as long as the mix export, and the files sum to the mix with the board bypassed when that sum does not clip.
+label	F1
+label	F12 saves the last 30 seconds that playback sent to the audio device, with the song's state, to the diagnostics folder in the data folder. Press it while something sounds wrong.
+label	Fade in (beats)
+label	Fade out (beats)
+label	Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings. Turning it on restores that section's defaults.
+label	Fine snap
+label	From the next launch. The Follow button sets this session.
+label	Gain (dB)
+label	Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB reduces level; it does not invert polarity.
+label	Genres
+label	Help
+label	High reduces unwanted tones at changed tempo or rate. Low uses less CPU.
+label	Hold Ctrl for sixteenth-note positions.
+label	Hover hints only. Names, focus, and errors stay available.
+label	Input level: no mix playing
+label	Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.
+label	Lane height
+label	Length (bars)
+label	Limiter gain reduction 0.0 dB
+label	Listen before saving. Save sound adds a new WAV to Effect.
+label	Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.
+label	Lower settings use less CPU during playback. Exports always use full quality.
+label	M mutes a track. S solos it: while any track is soloed, only soloed tracks play, and a muted track stays silent. The strip says why a silent track is silent: Muted, No output, or Solo elsewhere.
+label	MIXJAM
+label	MONITORING
+label	Master playback oversampling
+label	Mastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.
+label	Meter display rate
+label	Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.
+label	Move / copy
+label	Name parity
+label	New song
+label	Open / save
+label	Original BPM describes the recording. Target BPM sets the result to 120, 125, 130, 135, 140, 160, or 180 BPM.
+label	Output loudness: momentary - LUFS, short-term - LUFS, integrated - LUFS, true peak - dBTP
+label	Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.
+label	PLAYBACK QUALITY
+label	Pitch
+label	Pitch runs from -24 to +24 semitones and changes speed and length together: +12 is an octave up and half as long, -12 an octave down and twice as long. Its buttons change 0.1 semitone, or one with Shift.
+label	Place by key
+label	Place sound
+label	Play / pause
+label	Playback buffer target
+label	Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.
+label	Preview
+label	Preview level
+label	Reduced draws meters at most 15 times a second. Measurement and peaks stay exact.
+label	Resampling, source looping, and effects are the application's own algorithms.
+label	Reverse
+label	Right-click a clip or press Shift+F10 for exact gain, trim, length, fades, pitch, Preview, Duplicate, Delete, and Resolve manually for a missing sound.
+label	SAMPLE LIBRARIES
+label	SONG FOLDERS
+label	Same tempo. Duration is unchanged.
+label	Sample Editor
+label	Sample playback quality
+label	Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.
+label	Seek / loop
+label	Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.
+label	Select a palette sound or a clip, then open Sample Editor. Listen edit previews the result. Save edited sound writes a new WAV, adds it to Wave, and leaves the source unchanged.
+label	Select all
+label	Select clips, then press Delete.
+label	Select group
+label	Shift-click clips or drag an empty area.
+label	Shortcuts with Ctrl work from any control except a value that is being typed. Space plays when no control has focus, or when a dial, a fader, or the lanes have it.
+label	Song dialog folder
+label	Songs open with every pedal off unless their file switched one on. Importing a legacy D3, D4, or T3 .mix song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.
+label	Source BPM
+label	Space
+label	Start frame is the first frame that is kept, counted from zero. End frame is the first frame that is left out; set it to the frame count to keep the last frame. A frame is one sample of audio.
+label	Starting module
+label	Step synth
+label	Stereo WAV of the mix. Export tracks… in the Mixer writes each track and FX return to its own WAV.
+label	Stereo output
+label	Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted metal. Layout and controls stay the same. Apply changes it at once, even while a song plays.
+label	Subfolders are included, up to 9 folders.
+label	TECHNO
+label	Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.
+label	Tab to a sound and press Enter. It lands on the recording track at the playhead.
+label	Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews.
+label	Tempo for files without one
+label	The Booster pedals reproduce the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. Each playback starts with settled compressor controls. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.
+label	The height of each arrangement row. Apply changes it at once, even while a song plays.
+label	The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband holds the peaks of the lows, mids, and highs apart and lifts the sound under them; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.
+label	The same setting as the Sections button.
+label	The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.
+label	The song has unsaved changes.
+label	The status line shows the selected frames and the length after pitch, or why editing is unavailable. A missing sound plays silence; resolve it in Import details.
+label	The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.
+label	The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.
+label	The upper-left triangle collapses the tool and keeps the edit. Esc closes the tool after a value being typed or a window above it has handled the key.
+label	The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.
+label	Theme
+label	Time Stretcher
+label	Trim start (frames)
+label	UNTITLED
+label	UNTITLED *
+label	Undo / redo
+label	View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.
+label	WAV audio: .wav
+label	WORKSPACE
+label	Where Open and Save as start. Existing songs stay in place.
+label	Zoom
+label	parity bass
+label	parity drum
+label	parity loop
+label	parity voice
+label	parity.wav
+number	Booster EQ 1100 Hz value
+number	Booster EQ 12000 Hz value
+number	Booster EQ 160 Hz value
+number	Booster EQ 2200 Hz value
+number	Booster EQ 320 Hz value
+number	Booster EQ 4500 Hz value
+number	Booster EQ 60 Hz value
+number	Booster EQ 640 Hz value
+number	Booster EQ 80 Hz value
+number	Booster EQ 9000 Hz value
+number	Booster compressor drive value
+number	Booster compressor gain value
+number	Booster compressor key value
+number	Booster compressor speed value
+number	Booster width value
+number	Bus compressor attack value
+number	Bus compressor key value
+number	Bus compressor ratio value
+number	Bus compressor release value
+number	Bus compressor threshold value
+number	Clip fade in (beats)
+number	Clip fade out (beats)
+number	Clip gain
+number	Clip length (bars)
+number	Clip pitch (cents)
+number	Clip pitch (semitones)
+number	Clip trim start (frames)
+number	Color value
+number	Cutoff value
+number	Delay (beats) value
+number	Dirty distortion value
+number	Echo volume value
+number	End frame
+number	Feedback value
+number	Filter volume value
+number	Lift EQ air value
+number	Lift EQ low value
+number	Limiter ceiling value
+number	Limiter gain value
+number	Limiter key value
+number	Master gain value
+number	Maximizer boost value
+number	Multiband high value
+number	Multiband key value
+number	Multiband low value
+number	Multiband mid value
+number	Noise distortion value
+number	Original BPM
+number	Output volume value
+number	Overdrive value
+number	Pitch value
+number	Resonance value
+number	Robotize volume value
+number	Soft clip amount value
+number	Soft clip ceiling value
+number	Source BPM
+number	Start frame
+number	Stereo imaging mono below value
+number	Stereo imaging width value
+number	Tape drive value
+number	Tape speed value
+number	Tempo for files without one
+number	Track 1 EQ high cut value
+number	Track 1 EQ high frequency value
+number	Track 1 EQ high gain value
+number	Track 1 EQ low cut value
+number	Track 1 EQ low frequency value
+number	Track 1 EQ low gain value
+number	Track 1 EQ mid Q value
+number	Track 1 EQ mid frequency value
+number	Track 1 EQ mid gain value
+number	Track 1 EQ peak 2 Q value
+number	Track 1 EQ peak 2 frequency value
+number	Track 1 EQ peak 2 gain value
+number	Track 1 compressor attack value
+number	Track 1 compressor makeup value
+number	Track 1 compressor ratio value
+number	Track 1 compressor release value
+number	Track 1 compressor threshold value
+number	Track 1 drive amount value
+number	Track 1 drive character value
+number	Track 1 drive focus value
+number	Track 1 drive mix value
+number	Track 1 drive output value
+number	Track 1 ducker attack value
+number	Track 1 ducker depth value
+number	Track 1 ducker key value
+number	Track 1 ducker release value
+number	Track 1 ducker threshold value
+number	Track 1 gain value
+number	Track 1 width value
+number	Track 2 gain value
+number	Track 3 gain value
+number	Track 4 gain value
+number	Trim EQ harsh value
+number	Trim EQ high-pass value
+number	Trim EQ mud value
+number	Trim value
+number	Tube drive value
+number	Tube mix value
+other	ALBUM REVIEW
+other	Arrangement lanes
+other	Bar ruler
+other	Choose path
+other	Drag Booster EQ
+other	Drag Booster compressor
+other	Drag Booster wide
+other	Drag Bus compressor
+other	Drag Lift EQ
+other	Drag Maximizer
+other	Drag Multiband
+other	Drag Soft clip
+other	Drag Stereo imaging
+other	Drag Tape
+other	Drag Trim EQ
+other	Drag Tube
+other	EFFECT STUDIO
+other	EFFECT STUDIO HELP
+other	Effect Studio status
+other	Effects board
+other	HELP
+other	Import sound
+other	Limiter always runs last
+other	MASTERING HELP
+other	Mastering board
+other	OPTIONS
+other	Pitch grid: step 1, +0 semitones
+other	SAMPLE EDITOR
+other	SAMPLE EDITOR HELP
+other	STEP SYNTH
+other	STEP SYNTH HELP
+other	Save your changes?
+other	Step synth status
+other	TIME STRETCHER
+other	TIME STRETCHER HELP
+other	TRACK 1 EQ
+other	Time Stretcher status
+other	Track 1 EQ response curve
+radio	Record on track 1
+radio	Record on track 2
+radio	Record on track 3
+radio	Record on track 4
+slider	Booster EQ 1100 Hz
+slider	Booster EQ 12000 Hz
+slider	Booster EQ 160 Hz
+slider	Booster EQ 2200 Hz
+slider	Booster EQ 320 Hz
+slider	Booster EQ 4500 Hz
+slider	Booster EQ 60 Hz
+slider	Booster EQ 640 Hz
+slider	Booster EQ 80 Hz
+slider	Booster EQ 9000 Hz
+slider	Booster compressor drive
+slider	Booster compressor gain
+slider	Booster compressor key
+slider	Booster compressor speed
+slider	Booster width
+slider	Bus compressor attack
+slider	Bus compressor key
+slider	Bus compressor ratio
+slider	Bus compressor release
+slider	Bus compressor threshold
+slider	Color
+slider	Cutoff
+slider	Delay (beats)
+slider	Dirty distortion
+slider	Echo volume
+slider	FX 1 return level
+slider	FX 2 return level
+slider	FX 3 return level
+slider	FX 4 return level
+slider	Feedback
+slider	Filter volume
+slider	Lift EQ air
+slider	Lift EQ low
+slider	Limiter ceiling
+slider	Limiter gain
+slider	Limiter key
+slider	Master gain
+slider	Maximizer boost
+slider	Multiband high
+slider	Multiband key
+slider	Multiband low
+slider	Multiband mid
+slider	Noise distortion
+slider	Original BPM knob
+slider	Output volume
+slider	Overdrive
+slider	Pitch (semitones)
+slider	Preview level
+slider	Project BPM
+slider	Resonance
+slider	Robotize volume
+slider	Soft clip amount
+slider	Soft clip ceiling
+slider	Step synth BPM
+slider	Stereo imaging mono below
+slider	Stereo imaging width
+slider	Tape drive
+slider	Tape speed
+slider	Target BPM
+slider	Track 1 EQ high cut
+slider	Track 1 EQ high frequency
+slider	Track 1 EQ high gain
+slider	Track 1 EQ low cut
+slider	Track 1 EQ low frequency
+slider	Track 1 EQ low gain
+slider	Track 1 EQ mid Q
+slider	Track 1 EQ mid frequency
+slider	Track 1 EQ mid gain
+slider	Track 1 EQ peak 2 Q
+slider	Track 1 EQ peak 2 frequency
+slider	Track 1 EQ peak 2 gain
+slider	Track 1 compressor attack
+slider	Track 1 compressor makeup
+slider	Track 1 compressor ratio
+slider	Track 1 compressor release
+slider	Track 1 compressor threshold
+slider	Track 1 drive amount
+slider	Track 1 drive character
+slider	Track 1 drive focus
+slider	Track 1 drive mix
+slider	Track 1 drive output
+slider	Track 1 ducker attack
+slider	Track 1 ducker depth
+slider	Track 1 ducker key
+slider	Track 1 ducker release
+slider	Track 1 ducker threshold
+slider	Track 1 gain
+slider	Track 1 pan
+slider	Track 1 send FX 1
+slider	Track 1 send FX 2
+slider	Track 1 send FX 3
+slider	Track 1 send FX 4
+slider	Track 1 width
+slider	Track 2 gain
+slider	Track 2 pan
+slider	Track 2 send FX 1
+slider	Track 2 send FX 2
+slider	Track 2 send FX 3
+slider	Track 2 send FX 4
+slider	Track 3 gain
+slider	Track 3 pan
+slider	Track 3 send FX 1
+slider	Track 3 send FX 2
+slider	Track 3 send FX 3
+slider	Track 3 send FX 4
+slider	Track 4 gain
+slider	Track 4 pan
+slider	Track 4 send FX 1
+slider	Track 4 send FX 2
+slider	Track 4 send FX 3
+slider	Track 4 send FX 4
+slider	Trim
+slider	Trim EQ harsh
+slider	Trim EQ high-pass
+slider	Trim EQ mud
+slider	Tube drive
+slider	Tube mix
+slider	Zoom
+text_input	Find a sound
+text_input	Path
+text_input	Search albums

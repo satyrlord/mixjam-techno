@@ -300,6 +300,49 @@ pub(crate) fn save(root: &Path, values: &AppOptions) -> Result<(), String> {
         .map_err(|e| format!("Cannot save options: {e}"))
 }
 
+/// Which workspace panels are open. The panel switches change it directly,
+/// without the Options window, so it lives in its own file beside
+/// `options.json` and never makes an Options draft stale.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorkspaceLayout {
+    /// The tool rail prints each tool's name under its icon; off, it shows icons only.
+    pub tool_names: bool,
+    /// The lower panel shows its board; off, only its toolbar row stays.
+    pub boards: bool,
+}
+
+impl Default for WorkspaceLayout {
+    fn default() -> Self {
+        Self {
+            tool_names: true,
+            boards: true,
+        }
+    }
+}
+
+const LAYOUT_FILE: &str = "layout.json";
+
+/// The saved layout. A missing or unreadable file gives the default layout;
+/// fields that a later version adds or drops are ignored.
+pub(crate) fn load_layout(root: &Path) -> WorkspaceLayout {
+    let Ok(file) = fs::File::open(root.join(LAYOUT_FILE)) else {
+        return WorkspaceLayout::default();
+    };
+    let mut bytes = Vec::new();
+    if file.take(64 * 1024).read_to_end(&mut bytes).is_err() {
+        return WorkspaceLayout::default();
+    }
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
+pub(crate) fn save_layout(root: &Path, layout: WorkspaceLayout) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(&layout).map_err(|e| e.to_string())?;
+    fs::create_dir_all(root).map_err(|e| format!("Cannot create the settings folder: {e}"))?;
+    crate::atomic_file::write(&root.join(LAYOUT_FILE), &bytes)
+        .map_err(|e| format!("Cannot save the panel layout: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,6 +521,32 @@ mod tests {
             ..AppOptions::default()
         };
         assert!(options.validate().is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn layout_round_trips_and_a_bad_file_gives_the_default_layout() {
+        let root = root();
+        assert_eq!(load_layout(&root), WorkspaceLayout::default());
+        let layout = WorkspaceLayout {
+            tool_names: false,
+            boards: false,
+        };
+        save_layout(&root, layout).unwrap();
+        assert_eq!(load_layout(&root), layout);
+        fs::write(
+            root.join(LAYOUT_FILE),
+            br#"{"toolNames":false,"inspector":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            load_layout(&root),
+            WorkspaceLayout {
+                tool_names: false,
+                boards: true,
+            }
+        );
+        fs::write(root.join(LAYOUT_FILE), b"not json").unwrap();
+        assert_eq!(load_layout(&root), WorkspaceLayout::default());
         fs::remove_dir_all(root).unwrap();
     }
 }

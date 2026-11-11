@@ -563,7 +563,9 @@ retain the full name in a tooltip.
 
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
 720. The header is 66 points high. Transport occupies 68 points above the
-arrangement. A fixed 64-point tool rail sits at the right. The bottom panel
+arrangement. The tool rail sits at the left, below the header: 84 points wide
+with tool names, 64 points with icons only. A 30-point status bar spans the
+full width at the bottom. The bottom panel
 (Sounds, Mixer, Mastering, or Effects) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
@@ -734,7 +736,7 @@ cache, with action names in tooltips and accessibility labels.
 Help uses its own ringed question-mark PNG with Help as its accessibility
 label. Tooltips name each action with its window or shortcut; accessible names
 stay short.
-Export WAV is available through the Export icon in the right-hand tool rail.
+Export WAV is available through the Export icon in the left-hand tool rail.
 Play/Pause stays prominent in the transport; other transport controls
 use raised surfaces and hover fills. Record uses a coral circle with a white ring
 during capture. Symbols are painted native geometry with tooltips and accessible
@@ -749,22 +751,42 @@ available window width. Text never overlaps the changing fill.
 
 ### Tool rail
 
-The fixed 64-point rail uses the utility Folded Metal finish: dark neutral
+The rail at the left uses the utility Folded Metal finish: dark neutral
 paint, subtle monochromatic grain, smooth folded edges, and shared dark button
-faces. Orange marks active controls and focus. Icons stay centered in 48 by
-30-point targets. Recessed horizontal separators divide file commands (New,
-Open, Save, Save as, Import, Export), utilities (Options, Erase, Delete),
-and musical tools (Mixer, Mastering, Effect Studio, Step synth, Sample editor,
-Time Stretcher, Album Review). The microphone icon and visible recording-track selector come last,
-after a final separator. Material and icons retain their prepared physical
+faces. Orange marks active controls and focus. It has two widths. With names
+(the default) it is 84 points wide; each tool is a 72 by 42-point target with
+its 20-point icon above an 11-point name, shrunk in half-point steps to 9 points
+when a long name needs it. Icons only, it is 64 points wide with 48 by 30-point
+targets. A double-chevron switch at the top changes the width; the Tools switch
+in the status bar does the same.
+
+Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
+Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, Effect Studio,
+Step synth, Sample editor, Time Stretcher, Album Review). With names, each group
+has an uppercase 9.5-point muted heading; icons only, recessed separators divide
+them. The microphone icon and visible recording-track selector follow the tools.
+Options sits alone at the foot of the rail, below a separator. When the window
+is too short for every name, the rail scrolls under the mouse wheel or to keep
+the keyboard-focused tool visible. Options stays fixed at the foot. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 
 Musical tools toggle their open state. Erase toggles its editing
 mode. Active toggles use a subtle accent outline and icon tint and expose their
 selected state to accessibility. A collapsed window stays active until closed.
 File commands and Delete remain one-shot actions.
-Options uses a gear PNG icon in the utility group. Its second activation
+Options uses a gear PNG icon at the foot of the rail. Its second activation
 focuses the existing window and retains its draft.
+
+### Status bar panel switches
+
+The right end of the status bar holds a muted 12-point Panels label, two
+switches, and the version link. Tools shows or hides the rail's names. Boards
+folds the lower panel to its 28-point toolbar row, which keeps the module
+selector; choosing a module there, or the rail's Mixer or Mastering, opens the
+requested module again. Repeating its rail action while open returns to Sounds.
+A switch that is on carries an accent underline. Both choices are
+saved in `layout.json` beside `options.json` and do not touch the Options
+window or its revision.
 
 The header places a 40-point tribal mask before the MixJam Techno title.
 The artwork retains its original colors and transparent background. The native
@@ -1250,8 +1272,9 @@ defects.
   compact strip is intended.
 - Step synth note cells stay 14 points high so that 19 of 25 pitch rows show at
   once. Arrow keys reach every cell.
-- The tool rail stays icon-only. Tooltips name each action, its window, and its
-  shortcut.
+- The tool rail shows each tool's name by default, and the Tools switch in the
+  status bar shrinks it to icons. Tooltips name each action, its window, and its
+  shortcut. (Changed by the 2026 UI concept migration.)
 - The Sounds panel keeps both the category menu and the category row. The menu
   lists the library's own categories, including Uncategorized.
 - The product notes leave Platform unclassified. No value of the design skill

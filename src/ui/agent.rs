@@ -128,7 +128,7 @@ fn role_name(role: accesskit::Role) -> &'static str {
     }
 }
 
-fn nodes(update: &accesskit::TreeUpdate) -> Vec<UiNode> {
+pub(super) fn nodes(update: &accesskit::TreeUpdate) -> Vec<UiNode> {
     let root = update.tree.as_ref().map(|tree| tree.root);
     let mut parents = HashMap::new();
     let mut windows = HashMap::new();

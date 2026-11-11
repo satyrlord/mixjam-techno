@@ -117,7 +117,8 @@ supported window sizes with isolated synthetic fixtures and settings.
 The sections case includes named bookmarks and a long section name.
 Options capture views are `options-audio`, `options-workspace`, and `options-files`;
 `options-unapplied` adds unapplied edits on two pages, and `options-discard`
-shows its Discard changes? prompt. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+shows its Discard changes? prompt. `rail-icons` shows the tool rail without
+names, and `boards-folded` folds the lower panel to its toolbar row. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.
