@@ -61,6 +61,17 @@ panel from Sounds to Mixer, and choosing Sounds there folds the panel to its
 strip. The chevron at the panel's top folds it. These choices are kept for the
 next session.
 
+The song overview above the score shows the whole song: its sections (with
+Sections on), a thin line for each clip in its category color, the loop, the
+playhead, and a frame around the part the score shows. Click or drag in it to
+move the score there; with it focused, Left and Right move by a screen, and Home
+and End go to the start and the end. It never changes the song. The button at
+its lower right, or the **Overview** switch in the status bar, folds it to a
+bar named SONG OVERVIEW; click the bar to open it again. When the window is too
+short for it and the lanes, the bar shows instead until there is room. If the
+bar also cannot fit, the overview hides until space returns. Its saved choice
+stays; fold the lower board or maximise the score to make more room.
+
 ## Sample libraries
 
 On first launch, Options opens its **Sample libraries** page. Select
@@ -314,7 +325,7 @@ double-click it for unity.
   Double-click the bar ruler to add a section at that bar; type its name and
   press Enter, or Escape to keep the old one. Double-click a name to rename it,
   and right-click a name to rename or delete it. Turn Sections beside Follow
-  off to hide the bookmarks. The application keeps that choice. Sections are
+  off to hide the bookmarks, here and in the song overview. The application keeps that choice. Sections are
   saved with the song; agents set them with `set_sections`.
 - Drag Zoom, or turn the mouse wheel over it, to zoom the timeline in or out.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse

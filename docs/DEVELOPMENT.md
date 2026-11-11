@@ -120,8 +120,8 @@ Options capture views are `options-audio`, `options-workspace`, and `options-fil
 shows its Discard changes? prompt. `rail-icons` shows the tool rail without
 names, `boards-folded` folds the lower panel to its toolbar row, and
 `maximised` hides the tool rail, the Sounds panel and the lower panel so the
-score fills the window, and `sounds-panel` opens the Sounds panel with the lower
-panel on Mixer. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+score fills the window, `sounds-panel` opens the Sounds panel with the lower
+panel on Mixer, and `overview-folded` folds the song overview to its bar. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.

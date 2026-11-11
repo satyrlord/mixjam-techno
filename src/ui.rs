@@ -28,6 +28,8 @@ mod master;
 mod mixer;
 #[path = "ui/options.rs"]
 mod options;
+#[path = "ui/overview.rs"]
+mod overview;
 #[path = "ui/sample_editor.rs"]
 mod sample_editor;
 #[path = "ui/sounds.rs"]
@@ -98,20 +100,23 @@ enum BottomModule {
 
 impl BottomModule {
     const ALL: [Self; 4] = [Self::Sounds, Self::Mixer, Self::Mastering, Self::Effects];
+    /// The score toolbar, its ruler, and a 150-point lane viewport.
+    const ARRANGEMENT_RESERVE: f32 = 105.0 + 150.0;
     /// The panel minimum for a window whose content area is `available` points
     /// high. Mixer prefers 400 points, and Mastering and Effects the height of
     /// their whole boards. A short window reduces each, down to 370, so the
     /// arrangement keeps its toolbar and ruler and a 150-point lane viewport;
     /// Mixer's gain rail shortens and the boards scroll.
     fn minimum_height(self, available: f32) -> f32 {
-        const ARRANGEMENT_RESERVE: f32 = 105.0 + 150.0;
         match self {
             Self::Sounds => 180.0,
-            Self::Mixer => (available - ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
+            Self::Mixer => (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
             Self::Mastering => {
-                (available - ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
+                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
             }
-            Self::Effects => (available - ARRANGEMENT_RESERVE).clamp(370.0, fx::MODULE_HEIGHT),
+            Self::Effects => {
+                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, fx::MODULE_HEIGHT)
+            }
         }
     }
     fn label(self) -> &'static str {
@@ -415,6 +420,14 @@ pub struct MixJamApp {
     timeline_bar_width: f32,
     /// Each clip's waveform at the zoom it was last drawn at.
     clip_waves: std::collections::HashMap<u64, waveform::ClipWave>,
+    /// The score's horizontal view as last laid out, for the song overview.
+    score_view: Option<overview::ScoreView>,
+    /// A tick the song overview asked the score to centre on.
+    overview_target: Option<f32>,
+    /// The song overview's rect, open or folded, as last laid out.
+    overview_rect: Option<Rect>,
+    /// The song overview's clip lines and what they were built from.
+    overview_lines: Option<(overview::ClipLinesKey, Arc<egui::Mesh>)>,
     loop_start: Option<u32>,
     /// Whether the arrangement shows the song's section bookmarks.
     section_bookmarks: bool,
@@ -552,6 +565,7 @@ impl MixJamApp {
             layout.boards = capture_view != "boards-folded";
             layout.maximised = capture_view == "maximised";
             layout.sounds = capture_view == "sounds-panel";
+            layout.overview = capture_view != "overview-folded";
             if let Err(error) = session.set_layout(layout) {
                 eprintln!("{error}");
             }
@@ -738,6 +752,10 @@ impl MixJamApp {
             timeline_row_height: 30.0,
             timeline_bar_width: 62.0,
             clip_waves: Default::default(),
+            score_view: None,
+            overview_target: None,
+            overview_rect: None,
+            overview_lines: None,
             loop_start: None,
             section_bookmarks,
             section_rename: None,

@@ -69,7 +69,7 @@ file remains intact and receives no further writes. Invalid files load safe
 defaults with a visible error and need explicit Restore options defaults before
 replacement. A future schema remains intact and blocks preference writes.
 Library configuration and the last-used song folder retain their own storage.
-`WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, and Sounds
+`WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, Sounds, and Overview
 switches and the Maximise state in `layout.json` beside `options.json`. `Session` adopts each
 layout change at once and saves it for the next launch. A failed write reports
 an error but keeps the current layout. Headless sessions do not save layouts.
@@ -94,6 +94,13 @@ catalog revision, or peak table. The catalog revision prevents a replacement
 sound from reusing a stale waveform when its peak table reuses an address.
 `src/ui/lanes.rs` owns the Arrange lane header's layout constants, the lane
 name derived from the first clip's sound family, and the lane fader.
+`src/ui/overview.rs` draws the song overview above the score. It is laid out
+before the score toolbar, so a click moves this frame's scroll offset, and
+painted after the lanes from the offset they just used. Its clip lines are one
+mesh, kept until the project change token, catalog revision, theme, strip, or
+span changes. It reads the song and never edits it. When neither the strip nor
+its folded bar fits beside the required score area, it hides until space
+returns and keeps the saved visibility choice.
 `src/ui/libraries.rs` renders library management as the Sample libraries page of
 Options. Folder scans and provider changes still use their existing Session
 operations and storage. A successful scan adopts its folder changes; fallback

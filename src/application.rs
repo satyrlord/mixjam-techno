@@ -3432,6 +3432,7 @@ mod tests {
             boards: false,
             maximised: true,
             sounds: true,
+            overview: false,
         };
         session.set_layout(layout).unwrap();
         assert_eq!(crate::options::load_layout(&root), layout);

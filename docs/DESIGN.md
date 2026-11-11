@@ -788,13 +788,14 @@ focuses the existing window and retains its draft.
 
 ### Status bar panel switches
 
-The right end of the status bar holds a muted 12-point Panels label, three
+The right end of the status bar holds a muted 12-point Panels label, four
 switches, and the version link. Tools shows or hides the rail's names. Boards
 folds the lower panel to its 28-point toolbar row, which keeps the module
 selector; choosing a module there, or the rail's Mixer or Mastering, opens the
 requested module again. Repeating its rail action while open returns to Sounds.
-Sounds opens or folds the Sounds panel. A switch that is on carries an accent
-underline. The choices are saved in `layout.json` beside `options.json` and do not touch the Options
+Sounds opens or folds the Sounds panel. Overview opens or folds the song
+overview; it belongs to the score, so it keeps its state when the score is
+maximised. A switch that is on carries an accent underline. The choices are saved in `layout.json` beside `options.json` and do not touch the Options
 window or its revision.
 
 ### Sounds panel
@@ -829,6 +830,39 @@ lower panel on Mixer when Options would choose Sounds. The folded strip shows a
 chevron and SOUNDS read top to bottom; the whole strip opens the panel. A
 maximised score hides both.
 
+### Song overview
+
+A 60-point strip above the score toolbar shows the whole song at a glance, on
+Panel fill with a 4-point radius. It spans the song's end, its last section,
+and the playhead, and at least the score's visible width, so a short or empty
+song keeps its true size. Inside a 12-point inset, left to right:
+
+- With Sections on, each section gets a 2-point line in its section color along
+  the top and its name in uppercase 10-point text, the current section in Text
+  and the others Muted; every second section is shaded with Canvas at 55%.
+- One thin line per clip in its category color, a row per shown track, from
+  the same ticks as the score's clip rectangles. A missing sound draws Raised;
+  a muted or solo-silenced track mixes 30% of its color into Canvas. The lines
+  are one mesh, rebuilt only when the song, catalog, theme, strip, or span
+  changes.
+- The loop as a 2-point accent line along the bottom.
+- The score's visible window as a frame: Text at 8% fill and an 85% 1-point
+  stroke, kept inside the strip.
+- The playhead as a 1.5-point accent line.
+
+A click or drag centres the score's view on that point; with the strip focused,
+Left and Right move it by one screen and Home and End go to the start and the
+end. It never edits the song or moves the playhead. A 22-point hide button with
+an up chevron sits over the lower right corner. Folded, a 20-point bar with a
+down chevron and SONG OVERVIEW opens it again from anywhere on it. An 8-point
+gap separates either from the toolbar. Where the score has no room for the open
+strip as well as the toolbar, the ruler, and a 150-point lane viewport, the bar shows instead,
+reading "Needs a taller score" and doing nothing on a click, and the saved
+choice stays. If even the bar cannot fit with that score area, the overview
+hides until space returns. The Overview status switch stays available. This
+preserves the 150-point lane viewport and the full Mastering board from
+1024x768. The choice is saved in `layout.json`.
+
 ### Top bar
 
 One 64-point top bar spans the window, with 18-point side margins and 8 above
@@ -851,7 +885,8 @@ block, and the Automation menu omits its separate printed label. The menu keeps
 its accessible name. All actions stay on one row beside the Sounds panel so
 the lane viewport keeps its height. Maximise, or
 F, hides the tool rail, the Sounds panel, and the lower panel so the score
-fills the window; the top bar, the score toolbar, and the status bar stay. F
+fills the window; the top bar, the song overview, the score toolbar, and the
+status bar stay. F
 again, the switch, or any status-bar switch restores them, and each panel's own
 choices come back unchanged. While the score is maximised, Tools, Boards, and
 Sounds read off. The state is saved in `layout.json`. A text field that has focus

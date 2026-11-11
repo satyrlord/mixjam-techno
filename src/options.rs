@@ -317,6 +317,8 @@ pub struct WorkspaceLayout {
     /// a named strip. It never shows while the lower panel shows its own
     /// Sounds module.
     pub sounds: bool,
+    /// The song overview shows above the score; off, it folds to a named bar.
+    pub overview: bool,
 }
 
 impl Default for WorkspaceLayout {
@@ -326,6 +328,7 @@ impl Default for WorkspaceLayout {
             boards: true,
             maximised: false,
             sounds: false,
+            overview: true,
         }
     }
 }
@@ -541,6 +544,7 @@ mod tests {
             boards: false,
             maximised: true,
             sounds: true,
+            overview: false,
         };
         save_layout(&root, layout).unwrap();
         assert_eq!(load_layout(&root), layout);

@@ -467,6 +467,8 @@ impl MixJamApp {
             + gap
             + panel_switch_width(ui, "Sounds")
             + gap
+            + panel_switch_width(ui, "Overview")
+            + gap
             + STATUS_VERSION_GAP
             + text_width(ui, &version);
         let split = (inner.right() - group).max(inner.left());
@@ -517,10 +519,13 @@ impl MixJamApp {
                     roles().muted
                 };
                 if self.session.options().quality_reduced() {
-                    ui.colored_label(
-                        roles().warning,
-                        "Playback quality reduced; exports use full quality",
-                    );
+                    // It shortens before it would run under the panel switches.
+                    let reduced = "Playback quality reduced; exports use full quality";
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(reduced).color(roles().warning))
+                            .truncate(),
+                    )
+                    .hover_hint(reduced);
                 }
                 // The idle text would contradict a missing-sound notice.
                 let status = if self.status == DEFAULT_STATUS
@@ -585,6 +590,14 @@ impl MixJamApp {
                     } else {
                         self.open_sounds_panel();
                     }
+                }
+                // The overview belongs to the score, so it keeps its place
+                // when the score is maximised.
+                if panel_switch(ui, "Overview", layout.overview)
+                    .hover_hint("Song overview above the score, or its named bar")
+                    .clicked()
+                {
+                    self.set_layout(|layout| layout.overview = !layout.overview);
                 }
                 ui.add_space(STATUS_VERSION_GAP);
                 ui.add(
@@ -938,10 +951,10 @@ impl MixJamApp {
             if ui
                 .toggle_value(&mut self.section_bookmarks, "Sections")
                 .hover_hint(
-                    "Show the song's section bookmarks on the bar ruler and the lanes. With \
-                     sections shown, double-click the bar ruler to add a section, double-click \
-                     a name to rename it, right-click a name to delete it, and Loop loops the \
-                     section at the playhead.",
+                    "Show the song's section bookmarks on the bar ruler, the lanes and the song \
+                     overview. With sections shown, double-click the bar ruler to add a section, \
+                     double-click a name to rename it, right-click a name to delete it, and Loop \
+                     loops the section at the playhead.",
                 )
                 .changed()
                 && let Err(error) = self
@@ -1634,6 +1647,7 @@ impl MixJamApp {
         if !self.section_bookmarks {
             self.cancel_section_edit();
         }
+        let overview = self.song_overview(ui);
         self.score_toolbar(ui);
         ui.add_space(12.0);
         self.timeline_rect = None;
@@ -1706,6 +1720,12 @@ impl MixJamApp {
             }
         }
         self.last_follow_position = Some(follow_position);
+        // The song overview centres the view on the tick it was clicked at.
+        if let Some(tick) = self.overview_target.take() {
+            let offset = tick / TICKS_PER_BAR as f32 * bar_width - visible_width / 2.0;
+            scroll_area = scroll_area
+                .horizontal_scroll_offset(offset.clamp(0.0, (width - visible_width).max(0.0)));
+        }
         if self.capture_last_track {
             scroll_area = scroll_area.vertical_scroll_offset(track_height);
             self.capture_last_track = false;
@@ -2388,6 +2408,14 @@ impl MixJamApp {
                 },
             );
         });
+        self.score_view = Some(overview::ScoreView {
+            offset: scroll.state.offset.x,
+            visible: visible_width,
+            bar_width,
+        });
+        if let Some(slot) = &overview {
+            self.paint_overview(ui, slot);
+        }
         let ruler_clip = Rect::from_min_max(
             ruler_strip.min + Vec2::new(lane_inset, 0.0),
             Pos2::new(scroll.inner_rect.right(), ruler_strip.bottom()),
