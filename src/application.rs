@@ -14,6 +14,7 @@ pub use crate::{
         EQ_BAND_MAX, EQ_FREQUENCIES, KNOB_MAX, Knob, KnobRange, MasterChain, MeterReading,
         OVER_DBTP, PedalKind, presets,
     },
+    peaks::{PeakState, Peaks},
     products::Product,
     synth::StepSynthState,
 };
@@ -390,6 +391,8 @@ pub struct Session {
     render: Option<Arc<audio::Mix>>,
     render_dirty: bool,
     render_worker: RenderWorker,
+    /// Waveform peaks of library sounds, filled by their own worker thread.
+    peaks: std::cell::RefCell<crate::peaks::PeakStore>,
     revision: u64,
     requested_revision: Option<u64>,
     /// Whether each revision is prepared before Play asks for it.
@@ -666,6 +669,7 @@ impl Session {
             render: None,
             render_dirty: true,
             render_worker: RenderWorker::new(),
+            peaks: Default::default(),
             revision: 0,
             requested_revision: None,
             prepares_ahead: false,
@@ -997,6 +1001,20 @@ impl Session {
     /// can keep work derived from `library()` until it changes.
     pub fn catalog_revision(&self) -> u64 {
         self.catalog_revision
+    }
+    /// The waveform peaks of a library sound. The first request queues the
+    /// sound for a worker thread and reads as pending; `poll` collects the
+    /// result. The tables last until the catalog changes.
+    pub fn sample_peaks(&self, id: u32) -> PeakState {
+        self.peaks
+            .borrow_mut()
+            .get(self.catalog_revision, id, &self.library)
+    }
+
+    /// How many sounds' peaks views have asked for in this catalog.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn requested_peaks(&self) -> usize {
+        self.peaks.borrow().len()
     }
     pub fn library(&self) -> LibraryView<'_> {
         LibraryView {
@@ -2674,6 +2692,7 @@ impl Session {
             (a, b) => a.or(b),
         };
         self.poll_render();
+        let peaks_pending = self.peaks.get_mut().poll();
         self.prepare_ahead();
         if self.wants_playback
             && !self.render_dirty
@@ -2697,7 +2716,7 @@ impl Session {
             self.priority_reported = true;
             self.error(failure);
         }
-        let delay = if self.render_worker.in_flight || self.is_stretching() {
+        let delay = if self.render_worker.in_flight || self.is_stretching() || peaks_pending {
             Some(20)
         } else if self.playing_mix() || self.is_previewing() {
             Some(30)
@@ -3404,6 +3423,7 @@ mod tests {
             tool_names: false,
             boards: false,
             maximised: true,
+            sounds: true,
         };
         session.set_layout(layout).unwrap();
         assert_eq!(crate::options::load_layout(&root), layout);

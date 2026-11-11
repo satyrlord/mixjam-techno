@@ -32,8 +32,8 @@ minutes beneath it. The whole name always shows: a long name wraps onto two
 lines or uses smaller text, and in a narrow window the transport buttons get
 narrower to make room. Above the lanes, the score toolbar holds the Automation
 menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
-rail and the lower panel so the score fills the window; press **F** again, or
-use either status-bar switch, to restore them. Sounds, Mixer, Mastering, and Effects share the lower panel;
+rail, the Sounds panel, and the lower panel so the score fills the window;
+press **F** again, or use any status-bar switch, to restore them. Sounds, Mixer, Mastering, and Effects share the lower panel;
 use its left-side module selector to switch between them. Sample categories,
 search, and library filters stay together in Sounds; search and filters sit
 beside the selector. Sort sounds in library order, by name, length, BPM, or
@@ -48,8 +48,18 @@ under its icon. Hover a tool for its window and shortcut. The **Tools** switch
 at the right of the status bar, or the double chevron at the top of the rail,
 shrinks the rail to icons. The **Boards** switch folds the lower panel to its
 toolbar row; pick a module there, or select Mixer or Mastering in the rail, to
-open it again. Both choices are kept for the next session. In a short window,
-scroll the rail with the mouse wheel.
+open it again. In a short window, scroll the rail with the mouse wheel.
+
+The **Sounds** switch, or the strip named SOUNDS beside the rail, opens the
+Sounds panel: the library as a list, with each sound's name, category, length
+in bars, and waveform. Its search, filters, category chips, and sort are the
+same as in the lower panel's Sounds module, and so are its sounds: click one to
+place it with the next click on a lane, press Enter to place it at the playhead
+on the recording track, double-click to hear it, or drag it to a lane. The panel
+and the Sounds module never show together: opening the panel changes the lower
+panel from Sounds to Mixer, and choosing Sounds there folds the panel to its
+strip. The chevron at the panel's top folds it. These choices are kept for the
+next session.
 
 ## Sample libraries
 

@@ -2246,12 +2246,13 @@ mod tests {
         );
         let tools = order.iter().position(|name| name == "Tools");
         let boards = order.iter().position(|name| name == "Boards");
+        let sounds = order.iter().position(|name| name == "Sounds");
         assert!(
-            tools.is_some() && boards == tools.map(|at| at + 1),
+            tools.is_some() && boards == tools.map(|at| at + 1) && sounds == tools.map(|at| at + 2),
             "The panel switches come together: {order:?}"
         );
         assert!(
-            boards.is_some_and(|at| at + 2 >= order.len()),
+            sounds.is_some_and(|at| at + 2 >= order.len()),
             "Only the version link may follow the panel switches: {order:?}"
         );
     }
@@ -6955,10 +6956,13 @@ mod tests {
         each_theme(|theme| {
             for (size, minimum) in [
                 (Vec2::new(1440.0, 1000.0), 400.0),
-                (Vec2::new(960.0, 720.0), 372.0),
+                (Vec2::new(960.0, 720.0), 370.0),
             ] {
                 let (ctx, mut app) = fixture();
                 app.bottom_module = BottomModule::Mixer;
+                for track in 2..5 {
+                    app.session.place(1, track, 0).unwrap();
+                }
                 for _ in 0..3 {
                     frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
                 }
@@ -6971,7 +6975,7 @@ mod tests {
                     "{theme:?} {size:?}: {panel:?}"
                 );
                 let lanes = app.timeline_drop_rect.unwrap().height();
-                assert!(lanes >= 80.0, "{theme:?} {size:?}: {lanes}");
+                assert!(lanes >= 150.0, "{theme:?} {size:?}: {lanes}");
             }
         });
     }
@@ -8026,7 +8030,9 @@ mod tests {
                         .iter()
                         .any(|(_, node)| node.label() == Some("Show Mixer")
                             || (node.label() == Some("Sounds")
-                                && node.role() == egui::accesskit::Role::Button)),
+                                && node.role() == egui::accesskit::Role::Button
+                                // The status bar's Sounds panel switch toggles.
+                                && node.toggled().is_none())),
                     "The shared selector replaces the former module swap buttons."
                 );
                 if module == BottomModule::Sounds {
@@ -8119,6 +8125,52 @@ mod tests {
                 "{label}: {time:?}"
             );
         }
+    }
+
+    #[test]
+    fn score_toolbar_controls_fit_with_the_sounds_panel_open() {
+        each_theme(|theme| {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            for track in 2..5 {
+                app.session.place(1, track, 0).unwrap();
+            }
+            app.open_sounds_panel();
+            for size in [
+                Vec2::new(960.0, 720.0),
+                Vec2::new(1024.0, 768.0),
+                Vec2::new(1440.0, 1000.0),
+            ] {
+                for _ in 0..3 {
+                    frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                }
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                let heading = text_rect(&output, "ARRANGEMENT");
+                let controls = [
+                    "Automation lane",
+                    "Follow",
+                    "Sections",
+                    "Zoom",
+                    "Maximise the score",
+                ]
+                .map(|name| effects_control_rect(&output, name));
+                for rect in controls {
+                    assert!(
+                        rect.left() >= heading.left() && rect.right() <= size.x - 18.0 + 0.5,
+                        "{theme:?}, {size:?}: {rect:?} must fit beside the Sounds panel."
+                    );
+                    assert!(
+                        rect.bottom() <= app.timeline_rect.unwrap().top(),
+                        "The toolbar must stay above the lanes."
+                    );
+                }
+                for pair in controls.windows(2) {
+                    assert!(pair[0].right() <= pair[1].left(), "{pair:?}");
+                }
+                let lanes = app.timeline_drop_rect.unwrap();
+                assert!(lanes.height() >= 150.0, "{theme:?}, {size:?}: {lanes:?}");
+            }
+        });
     }
 
     /// Replace the fixture's song with one of the given name.
@@ -14407,6 +14459,7 @@ mod tests {
                 tool_names,
                 boards,
                 maximised: false,
+                sounds: false,
             };
             app.session.set_layout(original).unwrap();
             let output = click_named(&ctx, &mut app, "Maximise the score");
@@ -14430,6 +14483,250 @@ mod tests {
             click_named(&ctx, &mut app, "Maximise the score");
             assert!(!app.session.layout().maximised, "The button toggles.");
         }
+    }
+
+    #[test]
+    fn the_sounds_switch_restores_a_maximised_layout_without_changing_its_panels() {
+        for sounds in [false, true] {
+            for module in [
+                BottomModule::Sounds,
+                BottomModule::Mixer,
+                BottomModule::Mastering,
+            ] {
+                if sounds && module == BottomModule::Sounds {
+                    continue;
+                }
+                let (ctx, mut app) = fixture();
+                ctx.enable_accesskit();
+                app.bottom_module = module;
+                app.set_layout(|layout| layout.sounds = sounds);
+                let original = app.session.layout();
+                click_named(&ctx, &mut app, "Maximise the score");
+                assert!(app.session.layout().maximised);
+                click_named(&ctx, &mut app, "Sounds");
+                assert_eq!(app.session.layout(), original);
+                assert_eq!(app.bottom_module, module);
+            }
+        }
+    }
+
+    /// How many accessible nodes carry this name.
+    fn named_count(output: &egui::FullOutput, name: &str) -> usize {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("Accessibility must be enabled for this test.")
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.label() == Some(name))
+            .count()
+    }
+
+    #[test]
+    fn the_sounds_panel_and_the_sounds_module_never_show_at_once() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        assert_eq!(app.bottom_module, BottomModule::Sounds);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            has_control(&output, "Show the Sounds panel"),
+            "Folded by default."
+        );
+        assert_eq!(
+            accessible_node(&output, "Sounds").1.toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        // Opening the panel moves the lower panel to Mixer.
+        click_named(&ctx, &mut app, "Sounds");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(app.session.layout().sounds);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
+        assert!(has_control(&output, "Fold the Sounds panel"));
+        assert!(!has_control(&output, "Show the Sounds panel"));
+        for name in [
+            "Find a sound",
+            "Library filter",
+            "Category filter",
+            "Sort order",
+            "Sort direction",
+            "Show All sounds",
+            "Show Loop sounds",
+            "good grasp 2",
+            "Sounds",
+        ] {
+            assert_eq!(named_count(&output, name), 1, "{name} has one home.");
+        }
+        // Choosing the Sounds module folds the panel to its strip.
+        app.bottom_module = BottomModule::Sounds;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(!app.session.layout().sounds);
+        assert!(has_control(&output, "Show the Sounds panel"));
+        assert_eq!(named_count(&output, "Find a sound"), 1);
+        // The strip opens it again, and the fold button folds it.
+        click_named(&ctx, &mut app, "Show the Sounds panel");
+        assert!(app.session.layout().sounds);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
+        click_named(&ctx, &mut app, "Fold the Sounds panel");
+        assert!(!app.session.layout().sounds);
+        assert_eq!(
+            app.bottom_module,
+            BottomModule::Mixer,
+            "Folding keeps Mixer."
+        );
+        // A maximised score hides the panel and its strip; the switch restores them.
+        click_named(&ctx, &mut app, "Sounds");
+        click_named(&ctx, &mut app, "Maximise the score");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        for name in [
+            "Fold the Sounds panel",
+            "Show the Sounds panel",
+            "Find a sound",
+        ] {
+            assert!(
+                !has_control(&output, name),
+                "{name} hides in a maximised score."
+            );
+        }
+        assert_eq!(
+            accessible_node(&output, "Sounds").1.toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        click_named(&ctx, &mut app, "Sounds");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            !app.session.layout().maximised,
+            "The Sounds switch restores the score."
+        );
+        assert!(has_control(&output, "Fold the Sounds panel"));
+        // A session that starts with the panel open starts the lower panel on Mixer.
+        let layout = app.session.layout();
+        let library = Arc::new(Library::fixture(app.session.library().samples.to_vec()));
+        let mut session = Session::headless(library, app.session.project().clone()).unwrap();
+        session.set_layout(layout).unwrap();
+        let app = MixJamApp::from_session(session, "UI fixture".into(), false);
+        assert_eq!(app.bottom_module, BottomModule::Mixer);
+    }
+
+    #[test]
+    fn a_sound_row_does_what_a_sound_tile_does() {
+        #[derive(Debug, PartialEq)]
+        struct Outcome {
+            selected: Option<u32>,
+            place_on_click: bool,
+            clips: usize,
+            dragging: bool,
+            previewing: bool,
+            status: String,
+        }
+        let outcome = |app: &MixJamApp| Outcome {
+            selected: app.selected_sample,
+            place_on_click: app.place_on_click,
+            clips: app.session.project().clips.len(),
+            dragging: matches!(app.drag, Some(DragItem::Sample(1))),
+            previewing: app.session.is_previewing(),
+            status: app.status.clone(),
+        };
+        let act = |row: bool, action: &str| {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            if row {
+                click_named(&ctx, &mut app, "Sounds");
+            }
+            app.selected_sample = None;
+            app.place_on_click = false;
+            // An empty track, so a placed clip adds to the song.
+            app.armed_track = 3;
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(named_count(&output, "good grasp 2"), 1);
+            assert_eq!(app.bottom_module == BottomModule::Sounds, !row);
+            let at = effects_control_rect(&output, "good grasp 2").center();
+            let click = |app: &mut MixJamApp| {
+                pointer(&ctx, app, at, true, egui::Modifiers::NONE);
+                pointer(&ctx, app, at, false, egui::Modifiers::NONE);
+            };
+            match action {
+                "click" => click(&mut app),
+                "double-click" => {
+                    click(&mut app);
+                    click(&mut app);
+                }
+                "enter" => {
+                    focus_control(&ctx, &mut app, &output, "good grasp 2");
+                    frame(
+                        &ctx,
+                        &mut app,
+                        vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                        egui::Modifiers::NONE,
+                    );
+                }
+                _ => {
+                    pointer(&ctx, &mut app, at, true, egui::Modifiers::NONE);
+                    for step in 1..=4 {
+                        frame(
+                            &ctx,
+                            &mut app,
+                            vec![egui::Event::PointerMoved(
+                                at + Vec2::new(8.0 * step as f32, 0.0),
+                            )],
+                            egui::Modifiers::NONE,
+                        );
+                    }
+                }
+            }
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            outcome(&app)
+        };
+        for action in ["click", "double-click", "enter", "drag"] {
+            let tile = act(false, action);
+            let row = act(true, action);
+            assert_eq!(row, tile, "A row and a tile agree on {action}.");
+        }
+        // The actions did act: a click selects, Enter places, a drag carries.
+        assert_eq!(act(true, "click").selected, Some(1));
+        assert_eq!(act(true, "enter").clips, 3);
+        assert!(act(true, "drag").dragging);
+    }
+
+    #[test]
+    fn the_sounds_panel_asks_peaks_only_for_the_rows_it_shows() {
+        let context = egui::Context::default();
+        configure_style(&context);
+        let samples = (1..=600)
+            .map(|id| Sample {
+                id,
+                code: format!("S{id}"),
+                name: format!("sound {id:03}"),
+                bars: 1 + id % 4,
+                group_name: "Loop".into(),
+                offset: 0,
+                length: 0,
+                frame_count: 75600,
+                sample_rate: 44100,
+                channels: 1,
+                source_bpm: 140.0,
+                wav_path: None,
+                digest: None,
+            })
+            .collect();
+        let library = Arc::new(Library::fixture(samples));
+        let mut app = MixJamApp::from_session(
+            Session::headless(library, Project::default()).unwrap(),
+            "UI fixture".into(),
+            false,
+        );
+        app.capture_path = None;
+        app.session.set_theme_fixture(theme::current());
+        app.open_sounds_panel();
+        for _ in 0..3 {
+            frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let asked = app.session.requested_peaks();
+        assert!(
+            (5..40).contains(&asked),
+            "Only the rows on screen ask for peaks, not all 600: {asked}"
+        );
     }
 
     #[test]

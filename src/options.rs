@@ -310,9 +310,13 @@ pub struct WorkspaceLayout {
     pub tool_names: bool,
     /// The lower panel shows its board; off, only its toolbar row stays.
     pub boards: bool,
-    /// The score fills the window: the tool rail and the lower panel hide,
+    /// The score fills the window: the tool rail, the Sounds panel and the lower panel hide,
     /// and their own settings above are kept for when it is restored.
     pub maximised: bool,
+    /// The Sounds panel at the left of the score is open; off, it folds to
+    /// a named strip. It never shows while the lower panel shows its own
+    /// Sounds module.
+    pub sounds: bool,
 }
 
 impl Default for WorkspaceLayout {
@@ -321,6 +325,7 @@ impl Default for WorkspaceLayout {
             tool_names: true,
             boards: true,
             maximised: false,
+            sounds: false,
         }
     }
 }
@@ -535,6 +540,7 @@ mod tests {
             tool_names: false,
             boards: false,
             maximised: true,
+            sounds: true,
         };
         save_layout(&root, layout).unwrap();
         assert_eq!(load_layout(&root), layout);

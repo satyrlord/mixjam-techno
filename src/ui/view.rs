@@ -169,7 +169,7 @@ const TOOLBAR_HEIGHT: f32 = 28.0;
 /// The space between the module toolbar and a board (Mixer, Mastering, or
 /// Effects). The margins give it up, so a board keeps its height.
 const BOARD_GAP: f32 = 8.0;
-const GROUPS: [&str; 10] = [
+pub(super) const GROUPS: [&str; 10] = [
     "Loop",
     "Drum",
     "Bass",
@@ -465,6 +465,8 @@ impl MixJamApp {
             + gap
             + panel_switch_width(ui, "Boards")
             + gap
+            + panel_switch_width(ui, "Sounds")
+            + gap
             + STATUS_VERSION_GAP
             + text_width(ui, &version);
         let split = (inner.right() - group).max(inner.left());
@@ -543,7 +545,7 @@ impl MixJamApp {
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
             |ui| {
                 ui.label(panels);
-                // In a maximised score both read off; either one restores the
+                // In a maximised score all read off; each switch restores the
                 // score with the previous panel choices.
                 let layout = self.session.layout();
                 let shown = !layout.maximised;
@@ -568,6 +570,21 @@ impl MixJamApp {
                         }
                         layout.maximised = false;
                     });
+                }
+                if panel_switch(ui, "Sounds", self.sounds_panel_open())
+                    .hover_hint(
+                        "Sounds panel beside the score, or its folded strip. Opening it \
+                         changes the lower panel's Sounds module to Mixer.",
+                    )
+                    .clicked()
+                {
+                    if !shown {
+                        self.set_layout(|layout| layout.maximised = false);
+                    } else if self.sounds_panel_open() {
+                        self.set_layout(|layout| layout.sounds = false);
+                    } else {
+                        self.open_sounds_panel();
+                    }
                 }
                 ui.add_space(STATUS_VERSION_GAP);
                 ui.add(
@@ -880,18 +897,26 @@ impl MixJamApp {
     /// The score's toolbar: its heading and counts, then the automation lane,
     /// Follow, Sections, Zoom and Maximise against the right edge.
     fn score_toolbar(&mut self, ui: &mut egui::Ui) {
+        // Keep the toolbar in one row beside the Sounds panel, so its
+        // controls do not take height from the lane viewport.
+        let narrow = ui.available_width() < 760.0;
+        let counts = format!(
+            "{} tracks  /  {} clips",
+            occupied_tracks(self.session.project()).len(),
+            self.session.project().clips.len()
+        );
         ui.horizontal(|ui| {
-            ui.label(heading("Arrangement", 18.0));
-            ui.add_space(10.0);
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} tracks  /  {} clips",
-                    occupied_tracks(self.session.project()).len(),
-                    self.session.project().clips.len()
-                ))
-                .size(12.0)
-                .color(roles().muted),
-            );
+            if narrow {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label(heading("Arrangement", 12.0));
+                    ui.label(egui::RichText::new(&counts).size(10.0).color(roles().muted));
+                });
+            } else {
+                ui.label(heading("Arrangement", 18.0));
+                ui.add_space(10.0);
+                ui.label(egui::RichText::new(&counts).size(12.0).color(roles().muted));
+            }
             let compact = ui.available_width() < 700.0;
             // The controls' width is measured in the previous pass; a change
             // redoes this pass before it is shown.
@@ -899,7 +924,7 @@ impl MixJamApp {
             let width = ui.ctx().data(|data| data.get_temp::<f32>(width_id));
             ui.add_space((ui.available_width() - width.unwrap_or_default()).max(16.0));
             let start = ui.cursor().left();
-            self.automation_selector(ui);
+            self.automation_selector(ui, !narrow);
             ui.add_space(if compact { 4.0 } else { 10.0 });
             if ui
                 .toggle_value(&mut self.follow_playhead, "Follow")
@@ -1033,79 +1058,11 @@ impl MixJamApp {
 
     fn palette_filters(&mut self, ui: &mut egui::Ui) {
         let (samples, groups) = self.palette_view();
-        name_control(
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search)
-                    // The workspace overrides text color; a hint needs its own.
-                    .hint_text(egui::RichText::new("Find a sound").color(roles().muted))
-                    .desired_width(170.0),
-            ),
-            "Find a sound",
-        );
-        let libraries = egui::ComboBox::from_id_salt("palette_product")
-            .selected_text(self.palette_product.map_or("All libraries", Product::label))
-            .width(145.0)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.palette_product, None, "All libraries");
-                for product in Product::ALL {
-                    ui.selectable_value(&mut self.palette_product, Some(product), product.label());
-                }
-            })
-            .response;
-        name_control(libraries, "Library filter");
-        let group_label = self.group.as_deref().map_or("All sounds", |g| {
-            if g.is_empty() { "Uncategorized" } else { g }
-        });
-        let categories = egui::ComboBox::from_id_salt("palette_category")
-            .selected_text(group_label)
-            .width(105.0)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.group, None, "All sounds");
-                for name in groups.iter() {
-                    ui.selectable_value(
-                        &mut self.group,
-                        Some((*name).to_owned()),
-                        if name.is_empty() {
-                            "Uncategorized"
-                        } else {
-                            name
-                        },
-                    );
-                }
-            })
-            .response;
-        name_control(categories, "Category filter");
-        let sorting = egui::ComboBox::from_id_salt("palette_sort")
-            .selected_text(self.palette_sort.label())
-            .width(105.0)
-            .show_ui(ui, |ui| {
-                for sort in PaletteSort::ALL {
-                    ui.selectable_value(&mut self.palette_sort, sort, sort.label());
-                }
-            })
-            .response;
-        name_control(sorting, "Sort order");
-        let [forward, reversed] = self.palette_sort.directions();
-        let (now, next) = if self.palette_descending {
-            (reversed, forward)
-        } else {
-            (forward, reversed)
-        };
-        let direction = ui
-            .add(
-                egui::Button::new(if self.palette_descending {
-                    "\u{2193}"
-                } else {
-                    "\u{2191}"
-                })
-                .min_size(Vec2::new(24.0, 0.0)),
-            )
-            .hover_hint(format!("{now}. Click for {}.", next.to_lowercase()));
-        ui.ctx()
-            .accesskit_node_builder(direction.id, |node| node.set_value(now));
-        if name_control(direction, "Sort direction").clicked() {
-            self.palette_descending = !self.palette_descending;
-        }
+        self.sound_search(ui, 170.0);
+        self.library_filter(ui, 145.0, false);
+        self.category_filter(ui, 105.0, &groups, false);
+        self.sort_order(ui, 105.0);
+        self.sort_direction(ui);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.label(
                 egui::RichText::new(format!("{} sounds", samples.len()))
@@ -1136,23 +1093,7 @@ impl MixJamApp {
         ui.add_space(10.0);
         if samples.is_empty() {
             ui.add_space(12.0);
-            ui.label(heading(
-                if self.session.library().samples.is_empty() {
-                    "No sounds"
-                } else {
-                    "No matching sounds"
-                },
-                17.0,
-            ));
-            if self.session.library().samples.is_empty() {
-                if action_button(ui, "Open sample libraries", true).clicked() {
-                    self.open_sample_libraries(ui.ctx());
-                }
-            } else if action_button(ui, "Clear filters", false).clicked() {
-                self.search.clear();
-                self.group = None;
-                self.palette_product = None;
-            }
+            self.no_sounds(ui, 17.0);
         }
         // Tile width follows the bar count, so rows hold a varying number of tiles.
         let row_width = ui.available_width();
@@ -1196,24 +1137,7 @@ impl MixJamApp {
                                 }
                                 (sample.id, response)
                             };
-                            // Enter on a focused tile places it without a pointer.
-                            let place = response.has_focus()
-                                && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                            if response.clicked() {
-                                self.selected_sample = Some(id);
-                                self.place_on_click = true;
-                            }
-                            if place {
-                                self.place(id, self.armed_track, self.session.cursor_tick());
-                            }
-                            if response.double_clicked() {
-                                self.preview(id);
-                            }
-                            if response.drag_started() {
-                                self.selected_sample = Some(id);
-                                self.place_on_click = true;
-                                self.drag = Some(DragItem::Sample(id));
-                            }
+                            self.sound_actions(ui, id, &response);
                         }
                     });
                 }
@@ -2588,7 +2512,13 @@ impl MixJamApp {
         self.header(ctx);
         let status = self.status_bar_space(ctx);
         self.side_rail(ctx);
+        // The lower panel's Sounds module folds the Sounds panel, whichever
+        // way it was chosen, so the two never show at once.
+        if self.bottom_module == BottomModule::Sounds && self.session.layout().sounds {
+            self.set_layout(|layout| layout.sounds = false);
+        }
         self.bottom(ctx);
+        self.sounds_side(ctx);
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
@@ -3410,7 +3340,7 @@ pub(super) fn outline(painter: &egui::Painter, rect: Rect, color: Color32, width
 }
 
 /// These buttons override egui's fill and stroke, so focus needs its own mark.
-fn focus_outline(ui: &egui::Ui, response: &Response, color: Color32) {
+pub(super) fn focus_outline(ui: &egui::Ui, response: &Response, color: Color32) {
     if response.has_focus() {
         ui.painter().rect_stroke(
             response.rect.shrink(1.0),
@@ -3611,9 +3541,9 @@ fn maximise_button(ui: &mut egui::Ui, on: bool) -> Response {
         )
     });
     response.hover_hint(if on {
-        "Restore the tool rail and the lower panel (F)"
+        "Restore the tool rail, the Sounds panel and the lower panel (F)"
     } else {
-        "Maximise the score: hide the tool rail and the lower panel (F)"
+        "Maximise the score: hide the tool rail, the Sounds panel and the lower panel (F)"
     })
 }
 
@@ -4005,12 +3935,14 @@ pub(super) fn sample_details(sample: &Sample, product: Option<Product>) -> Strin
 impl MixJamApp {
     /// The arrangement's automation lane: Off, or the lane that the track
     /// rows show and edit.
-    fn automation_selector(&mut self, ui: &mut egui::Ui) {
-        ui.label(
-            egui::RichText::new("Automation")
-                .size(12.0)
-                .color(roles().muted),
-        );
+    fn automation_selector(&mut self, ui: &mut egui::Ui, show_label: bool) {
+        if show_label {
+            ui.label(
+                egui::RichText::new("Automation")
+                    .size(12.0)
+                    .color(roles().muted),
+            );
+        }
         let current = match (self.automation_lane, self.return_lane) {
             (_, Some(bus)) => return_lane_label(bus),
             (Some(lane), None) => lane.label(),

@@ -28,6 +28,8 @@ mod mixer;
 mod options;
 #[path = "ui/sample_editor.rs"]
 mod sample_editor;
+#[path = "ui/sounds.rs"]
+mod sounds;
 #[path = "ui/step_synth.rs"]
 mod step_synth;
 #[path = "ui/stretch.rs"]
@@ -98,7 +100,7 @@ impl BottomModule {
     /// arrangement keeps its toolbar and ruler and a 150-point lane viewport;
     /// Mixer's gain rail shortens and the boards scroll.
     fn minimum_height(self, available: f32) -> f32 {
-        const ARRANGEMENT_RESERVE: f32 = 103.0 + 150.0;
+        const ARRANGEMENT_RESERVE: f32 = 105.0 + 150.0;
         match self {
             Self::Sounds => 180.0,
             Self::Mixer => (available - ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
@@ -535,16 +537,15 @@ impl MixJamApp {
         if capture_view == "follow" {
             session.seek(40 * TICKS_PER_BAR);
         }
-        if matches!(
-            capture_view.as_str(),
-            "rail-icons" | "boards-folded" | "maximised"
-        ) {
+        if !capture_view.is_empty() {
             // Captures run in their own data folder, so the saved layout
-            // stays there.
+            // stays there. Every capture sets the whole layout, so one view
+            // never inherits another's panels.
             let mut layout = session.layout();
             layout.tool_names = capture_view != "rail-icons";
             layout.boards = capture_view != "boards-folded";
             layout.maximised = capture_view == "maximised";
+            layout.sounds = capture_view == "sounds-panel";
             if let Err(error) = session.set_layout(layout) {
                 eprintln!("{error}");
             }
@@ -643,6 +644,14 @@ impl MixJamApp {
             }
             mixjam_techno::application::options::StartingModule::Effects => BottomModule::Effects,
         };
+        // The Sounds panel and the lower panel's Sounds module never show at
+        // once; an open panel starts the lower panel on Mixer instead.
+        let starting_module = if starting_module == BottomModule::Sounds && session.layout().sounds
+        {
+            BottomModule::Mixer
+        } else {
+            starting_module
+        };
         let options_draft =
             (capture_view.starts_with("options") || needs_sample_folder).then(|| {
                 let page = if needs_sample_folder && !capture_view.starts_with("options") {
@@ -672,7 +681,7 @@ impl MixJamApp {
             palette_sort: PaletteSort::default(),
             palette_descending: false,
             search: String::new(),
-            bottom_module: if capture_view.starts_with("mixer") {
+            bottom_module: if capture_view.starts_with("mixer") || capture_view == "sounds-panel" {
                 BottomModule::Mixer
             } else if capture_view.starts_with("master") {
                 BottomModule::Mastering
@@ -2092,7 +2101,8 @@ impl MixJamApp {
                             ),
                             (
                                 "Maximise",
-                                "F hides the tool rail and the lower panel; F again restores them.",
+                                "F hides the tool rail, the Sounds panel and the lower panel; F \
+                                 again restores them.",
                             ),
                             ("Help", "F1"),
                         ] {

@@ -566,7 +566,8 @@ retain the full name in a tooltip.
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
 720. One 64-point top bar spans the window (see Top bar). The tool rail sits
 at the left, below the top bar: 84 points wide with tool names, 64 points with
-icons only. A 30-point status bar spans the
+icons only. The Sounds panel follows the rail: 250 points open, or a 28-point
+strip that names it when folded (see Sounds panel). A 30-point status bar spans the
 full width at the bottom. The bottom panel
 (Sounds, Mixer, Mastering, or Effects) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
@@ -780,14 +781,46 @@ focuses the existing window and retains its draft.
 
 ### Status bar panel switches
 
-The right end of the status bar holds a muted 12-point Panels label, two
+The right end of the status bar holds a muted 12-point Panels label, three
 switches, and the version link. Tools shows or hides the rail's names. Boards
 folds the lower panel to its 28-point toolbar row, which keeps the module
 selector; choosing a module there, or the rail's Mixer or Mastering, opens the
 requested module again. Repeating its rail action while open returns to Sounds.
-A switch that is on carries an accent underline. Both choices are
-saved in `layout.json` beside `options.json` and do not touch the Options
+Sounds opens or folds the Sounds panel. A switch that is on carries an accent
+underline. The choices are saved in `layout.json` beside `options.json` and do not touch the Options
 window or its revision.
+
+### Sounds panel
+
+The Sounds panel lists the library beside the score. Its 250-point column holds,
+top to bottom: the painted Sounds title with a muted "shown of total" count and
+the fold chevron, the search field across the full width, the library and
+category menus side by side, the category chips, and the sort menu with its
+direction arrow. Chips are 22 points high: a 6-point square in the category's
+color before a 12-point name, Panel fill with a Hover border, and Hover fill
+with a Muted border when chosen. In a panel shorter than 440 points the chips
+share one row that scrolls sideways, so the list keeps its room; otherwise they
+wrap.
+
+Each sound is a 44-point row with a 4-point gap, tinted like a tile: the name
+on one line, the category and bar count below it at 90% Text (only the bar
+count when space is short), and an 84 by 30-point waveform at the right. The
+waveform shows the sound's lowest and highest sample per point in its category
+color, scaled to the sound's own peak, over a centre line at 45%. A sound whose
+waveform is still being read, or whose file cannot be read, shows the centre
+line only. Hover, selection, focus, the tooltip, and every action match a tile:
+a click selects for placement, Enter places on the recording track at the
+playhead, a double-click previews, and a drag carries the sound to a lane. The
+list draws only the rows on screen, and only those rows ask for waveforms.
+
+The panel and the lower panel's Sounds module never show at once, so each
+control keeps one name. They share the search, filters, sort, and selection.
+Choosing Sounds in the lower panel folds the panel to its strip; opening the
+panel, from its strip or the status bar's Sounds switch, changes a lower panel
+showing Sounds to Mixer. A session that starts with the panel open starts the
+lower panel on Mixer when Options would choose Sounds. The folded strip shows a
+chevron and SOUNDS read top to bottom; the whole strip opens the panel. A
+maximised score hides both.
 
 ### Top bar
 
@@ -805,12 +838,16 @@ control stays on screen at the minimum window size. Help lives only here.
 
 A toolbar row heads the arrangement: the Arrangement heading and its counts at
 the left, and at the right the Automation lane menu, Follow, Sections, the Zoom
-slider (the mouse wheel over it zooms), and the Maximise switch. Maximise, or
-F, hides the tool rail and the lower panel so the score fills the window; the
-top bar, the score toolbar, and the status bar stay. F again, the switch, or
-either status-bar switch restores them, and the rail's and the lower panel's
-own choices come back unchanged. While the score is maximised, Tools and Boards
-read off. The state is saved in `layout.json`. A text field that has focus
+slider (the mouse wheel over it zooms), and the Maximise switch. When the score
+is narrower than 760 points, its smaller heading and counts share a two-line
+block, and the Automation menu omits its separate printed label. The menu keeps
+its accessible name. All actions stay on one row beside the Sounds panel so
+the lane viewport keeps its height. Maximise, or
+F, hides the tool rail, the Sounds panel, and the lower panel so the score
+fills the window; the top bar, the score toolbar, and the status bar stay. F
+again, the switch, or any status-bar switch restores them, and each panel's own
+choices come back unchanged. While the score is maximised, Tools, Boards, and
+Sounds read off. The state is saved in `layout.json`. A text field that has focus
 keeps F for typing.
 
 The top bar places a 40-point tribal mask before the MixJam Techno brand:

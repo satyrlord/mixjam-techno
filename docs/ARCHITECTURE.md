@@ -69,11 +69,22 @@ file remains intact and receives no further writes. Invalid files load safe
 defaults with a visible error and need explicit Restore options defaults before
 replacement. A future schema remains intact and blocks preference writes.
 Library configuration and the last-used song folder retain their own storage.
-`WorkspaceLayout` in `src/options.rs` stores the Tools and Boards switches and
-the Maximise state in `layout.json` beside `options.json`. `Session` adopts each
+`WorkspaceLayout` in `src/options.rs` stores the Tools, Boards, and Sounds
+switches and the Maximise state in `layout.json` beside `options.json`. `Session` adopts each
 layout change at once and saves it for the next launch. A failed write reports
 an error but keeps the current layout. Headless sessions do not save layouts.
 Layout changes do not change the Options revision, song data, or history.
+`src/peaks.rs` holds read-only waveform peaks for library sounds: the lowest and
+highest sample of every 64 frames, all channels together, and coarser tables
+of four times as many frames each until a few buckets remain. Views ask
+`Session::sample_peaks(id)`, which answers `Pending`, `Ready`, or `Unavailable`
+and never decodes on the UI thread. The first request queues the sound for one
+lazily started worker thread, which reads it through `Library::read_pcm`, takes
+the newest request first, and drops requests from an older catalog. The tables
+stay until the catalog revision changes. `Session::poll` collects finished
+tables and keeps the view refreshing while any are pending.
+`src/ui/sounds.rs` draws the Sounds panel from those tables and shares the
+filters and sound actions with the lower panel's Sounds module.
 `src/ui/libraries.rs` renders library management as the Sample libraries page of
 Options. Folder scans and provider changes still use their existing Session
 operations and storage. A successful scan adopts its folder changes; fallback
