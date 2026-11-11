@@ -18,6 +18,8 @@ mod effects;
 mod eq;
 #[path = "ui/fx.rs"]
 mod fx;
+#[path = "ui/lanes.rs"]
+mod lanes;
 #[path = "ui/libraries.rs"]
 mod libraries;
 #[path = "ui/master.rs"]
@@ -36,6 +38,8 @@ mod step_synth;
 mod stretch;
 #[path = "ui/theme.rs"]
 mod theme;
+#[path = "ui/waveform.rs"]
+mod waveform;
 use theme::roles;
 
 use std::{
@@ -409,6 +413,8 @@ pub struct MixJamApp {
     timeline_add_track: Option<usize>,
     timeline_row_height: f32,
     timeline_bar_width: f32,
+    /// Each clip's waveform at the zoom it was last drawn at.
+    clip_waves: std::collections::HashMap<u64, waveform::ClipWave>,
     loop_start: Option<u32>,
     /// Whether the arrangement shows the song's section bookmarks.
     section_bookmarks: bool,
@@ -731,6 +737,7 @@ impl MixJamApp {
             timeline_add_track: None,
             timeline_row_height: 30.0,
             timeline_bar_width: 62.0,
+            clip_waves: Default::default(),
             loop_start: None,
             section_bookmarks,
             section_rename: None,
@@ -1875,7 +1882,7 @@ impl MixJamApp {
                 painter.set_opacity(0.6);
                 for (ghost, sample_id) in ghosts {
                     let sample = self.session.library().sample_by_id(sample_id);
-                    draw_clip(&painter, ghost, sample, None, true, false);
+                    draw_clip(&painter, ghost, sample, None, true, false, None);
                 }
             } else if let DragItem::Sample(id) = drag {
                 let name = self

@@ -213,6 +213,13 @@ by this build.
 
 ## Arrange
 
+Each lane's header shows, from the left, the track number (click it to record
+on that track), the lane's name, Mute, Solo, the left and right outputs, and a
+short level fader. The name is the sound family of the lane's first clip, such
+as "deep chord" for "deep chord 3". The fader sets the same track gain as the
+Mixer: drag it (Shift for fine steps), use the wheel or the arrow keys, and
+double-click it for unity.
+
 - Filter sounds by library, category, or name. Double-click a sound to preview it.
 - Drag a sound onto a track. Hold Ctrl for sixteenth-note positions. The
   arrangement and mixer omit unused tracks.
@@ -236,7 +243,8 @@ by this build.
   stay where they are, so the fade in still opens the clip and the fade out
   still closes it. A reversed clip whose sound is shorter than the clip
   starts with silence and ends with the clip. The clip reads "rev" in its
-  corner. The trim and length still describe the forward stretch: dragging
+  corner. Each clip draws the waveform of the part of its sound it plays,
+  reversed and faded as you hear it. The trim and length still describe the forward stretch: dragging
   the left edge trims what is heard at the clip's end.
 - Choose a lane in Automation above the arrangement to draw it on every track:
   Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces

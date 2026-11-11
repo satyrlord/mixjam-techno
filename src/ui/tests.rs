@@ -5706,6 +5706,13 @@ mod tests {
         accessible_node(&output, "Import details");
     }
 
+    /// The screen x of a point `x` from the lane header's left edge, given
+    /// the visible lanes.
+    fn header_x(context: &egui::Context, visible: Rect, x: f32) -> f32 {
+        let spacing = context.style().spacing.item_spacing.x;
+        visible.left() - lanes::LANE_HEADER_WIDTH - spacing + x
+    }
+
     fn frame(
         context: &egui::Context,
         app: &mut MixJamApp,
@@ -8216,6 +8223,25 @@ mod tests {
     ];
 
     #[test]
+    fn the_song_name_stays_clear_of_the_transport_at_every_width() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        for title in ["All 64 tracks", "Night Shift", "Fades and automation"] {
+            for width in (960..=1440).step_by(16) {
+                let size = Vec2::new(width as f32, 768.0);
+                retitle(&mut app, title);
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                let (name, _) = song_name_text(&output, title);
+                let first = effects_control_rect(&output, TRANSPORT_BUTTONS[0]);
+                assert!(
+                    name.right() <= first.left() - 4.0,
+                    "{title} at {width}: {name:?} runs into {first:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn song_name_and_position_readout_share_the_top_bar() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
@@ -8971,7 +8997,7 @@ mod tests {
         click(
             &ctx,
             &mut app,
-            Pos2::new(visible.left() - 44.0, row_y),
+            Pos2::new(header_x(&ctx, visible, lanes::NUMBER_X), row_y),
             egui::Modifiers::NONE,
         );
         assert_eq!(
@@ -8981,7 +9007,7 @@ mod tests {
         click(
             &ctx,
             &mut app,
-            Pos2::new(visible.left() - 70.0, row_y),
+            Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[2]), row_y),
             egui::Modifiers::NONE,
         );
         assert!(
@@ -9518,7 +9544,7 @@ mod tests {
         click(
             &ctx,
             &mut app,
-            Pos2::new(visible.left() - 70.0, second_y),
+            Pos2::new(header_x(&ctx, visible, lanes::SWITCH_X[2]), second_y),
             egui::Modifiers::NONE,
         );
         assert!(!app.session.project().tracks[63].left_enabled);
@@ -14727,6 +14753,308 @@ mod tests {
             (5..40).contains(&asked),
             "Only the rows on screen ask for peaks, not all 600: {asked}"
         );
+    }
+
+    /// A 64-track song of 256 bars whose eight sounds all have peaks.
+    fn long_song_fixture(
+        lane_height: mixjam_techno::application::options::LaneHeight,
+        root: &Path,
+    ) -> MixJamApp {
+        use mixjam_techno::application::Peaks;
+        let samples: Vec<Sample> = (1..=8)
+            .map(|id| Sample {
+                id,
+                code: format!("S{id}"),
+                name: format!("long song sound {id}"),
+                bars: 1 << (id % 3),
+                group_name: ["Loop", "Drum", "Bass", "Sequence"][id as usize % 4].into(),
+                offset: 0,
+                length: 0,
+                frame_count: 75600 << (id % 3),
+                sample_rate: 44100,
+                channels: 1,
+                source_bpm: 140.0,
+                wav_path: None,
+                digest: None,
+            })
+            .collect();
+        let mut editor = Editor::new(Project::default());
+        for track in 0..TRACK_COUNT {
+            let mut bar = 0;
+            while bar < 256 {
+                let id = (track as u32 + bar) % 8 + 1;
+                let bars = 1 << (id % 3);
+                editor
+                    .place(id, track, bar * TICKS_PER_BAR, bars * TICKS_PER_BAR)
+                    .unwrap();
+                bar += bars;
+            }
+        }
+        let mut project = editor.into_project();
+        for (index, clip) in project.clips.iter_mut().enumerate() {
+            clip.reverse = index % 5 == 0;
+            if index % 3 == 0 {
+                clip.fades.fade_in.ticks = TICKS_PER_BAR / 4;
+                clip.fades.fade_out.ticks = TICKS_PER_BAR / 2;
+            }
+        }
+        let library = Arc::new(Library::fixture(samples.clone()));
+        let mut app = MixJamApp::from_session(
+            Session::headless(library, project)
+                .unwrap()
+                .with_settings_root(root.to_path_buf()),
+            "UI fixture".into(),
+            false,
+        );
+        app.capture_path = None;
+        app.session.set_theme_fixture(theme::current());
+        let mut options = app.session.options().clone();
+        options.lane_height = lane_height;
+        app.session
+            .apply_options(options, app.session.options_revision(), false)
+            .unwrap();
+        for sample in &samples {
+            // A decaying sine, so every column has a different height.
+            let frames = sample.frame_count as usize;
+            let pcm = Pcm {
+                sample_rate: 44100,
+                channels: 1,
+                samples: (0..frames)
+                    .map(|frame| {
+                        let t = frame as f32 / 44100.0;
+                        (t * 220.0 * std::f32::consts::TAU).sin() * (-(t % 0.43) * 6.0).exp()
+                    })
+                    .collect(),
+            };
+            app.session
+                .set_sample_peaks(sample.id, Arc::new(Peaks::from_pcm(&pcm)));
+        }
+        app
+    }
+
+    /// The frame time of the 64-track view of a long song: building the frame
+    /// and tessellating it, as the window does. Run it in release:
+    /// `cargo test --release --locked arrangement_frame_time -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "a timing measurement, not a check"]
+    fn arrangement_frame_time() {
+        use mixjam_techno::application::options::LaneHeight;
+        for (lane_height, maximised, zoom) in [
+            (LaneHeight::Px30, false, 1.0),
+            (LaneHeight::Px20, true, 1.0),
+            (LaneHeight::Px20, true, 0.55),
+            (LaneHeight::Px40, true, 2.0),
+        ] {
+            let context = egui::Context::default();
+            configure_style(&context);
+            let root =
+                std::env::temp_dir().join(format!("mixjam-long-song-{}", std::process::id()));
+            let mut app = long_song_fixture(lane_height, &root);
+            app.zoom = zoom;
+            if maximised {
+                app.set_layout(|layout| layout.maximised = true);
+            }
+            let mut times = Vec::new();
+            for index in 0..80 {
+                let started = std::time::Instant::now();
+                // A pointer that moves over the lanes, as while editing.
+                let pos = Pos2::new(600.0 + (index % 40) as f32 * 7.0, 400.0);
+                let output = frame(
+                    &context,
+                    &mut app,
+                    vec![egui::Event::PointerMoved(pos)],
+                    egui::Modifiers::NONE,
+                );
+                let primitives = context.tessellate(output.shapes, output.pixels_per_point);
+                std::hint::black_box(primitives);
+                if index >= 20 {
+                    times.push(started.elapsed().as_secs_f64() * 1000.0);
+                }
+            }
+            times.sort_by(f64::total_cmp);
+            eprintln!(
+                "{lane_height:?} maximised={maximised} zoom={zoom}: median {:.2} ms, \
+                 p95 {:.2} ms, max {:.2} ms",
+                times[times.len() / 2],
+                times[times.len() * 95 / 100],
+                times[times.len() - 1]
+            );
+            // The default lane height saves nothing, so the folder may not exist.
+            let _ = std::fs::remove_dir_all(root);
+        }
+    }
+
+    /// Give the fixture's sound peaks: a 220 Hz tone that decays each beat.
+    fn give_fixture_peaks(app: &MixJamApp) {
+        use mixjam_techno::application::Peaks;
+        let pcm = Pcm {
+            sample_rate: 44100,
+            channels: 1,
+            samples: (0..75600)
+                .map(|frame| {
+                    let t = frame as f32 / 44100.0;
+                    (t * 220.0 * std::f32::consts::TAU).sin() * (-(t % 0.43) * 6.0).exp()
+                })
+                .collect(),
+        };
+        app.session
+            .set_sample_peaks(1, Arc::new(Peaks::from_pcm(&pcm)));
+    }
+
+    /// The waveform meshes painted inside `clip`: many vertices of one color,
+    /// unlike a clip's fill, its gloss, or its marks.
+    fn wave_meshes(output: &egui::FullOutput, clip: Rect) -> Vec<Rect> {
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Mesh(mesh)
+                    if mesh.vertices.len() >= 40
+                        && mesh
+                            .vertices
+                            .iter()
+                            .all(|vertex| vertex.color == mesh.vertices[0].color) =>
+                {
+                    let bounds = mesh.calc_bounds();
+                    clip.expand(0.5).contains_rect(bounds).then_some(bounds)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
+        use mixjam_techno::application::options::LaneHeight;
+        each_theme(|theme| {
+            let (ctx, mut app) = fixture();
+            let root = std::env::temp_dir().join(format!(
+                "mixjam-clip-wave-ui-{}-{}",
+                std::process::id(),
+                theme.label()
+            ));
+            let project = app.session.project().clone();
+            app.session = Session::headless(
+                Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+                project,
+            )
+            .unwrap()
+            .with_settings_root(root.clone());
+            give_fixture_peaks(&app);
+            for lane_height in LaneHeight::ALL {
+                let mut options = app.session.options().clone();
+                options.theme = theme;
+                options.lane_height = lane_height;
+                app.session
+                    .apply_options(options, app.session.options_revision(), false)
+                    .unwrap();
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+                let clip =
+                    app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+                let waves = wave_meshes(&output, clip);
+                assert_eq!(waves.len(), 1, "{theme:?} {lane_height:?}");
+                let wave = waves[0];
+                // One bar of sound fills the one-bar clip.
+                assert!(wave.width() > clip.width() - 6.0, "{wave:?} in {clip:?}");
+                let name = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text)
+                            if text.galley.job.text == "good grasp 2"
+                                && clip.contains(text.pos) =>
+                        {
+                            Some(text.galley.rect.translate(text.pos.to_vec2()))
+                        }
+                        _ => None,
+                    })
+                    .unwrap();
+                if lane_height != LaneHeight::Px20 {
+                    assert!(
+                        wave.top() >= name.bottom() - 0.5,
+                        "{theme:?} {lane_height:?}: waveform {wave:?} under name {name:?}"
+                    );
+                }
+            }
+            std::fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn clip_waveforms_are_cached_per_clip_and_zoom() {
+        let (ctx, mut app) = fixture();
+        give_fixture_peaks(&app);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.clip_waves.len(), 2);
+        let first = app.session.project().clips[0].id;
+        let key = app.clip_waves[&first].key;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            app.clip_waves[&first].key == key,
+            "A still frame reuses the waveform."
+        );
+        app.zoom = 1.5;
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(
+            app.clip_waves[&first].key != key,
+            "A new zoom reads it again."
+        );
+        let second = app.session.project().clips[1].id;
+        app.session.delete(second).unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            app.clip_waves.len(),
+            1,
+            "A deleted clip's waveform is dropped."
+        );
+    }
+
+    #[test]
+    fn the_lane_header_names_each_lane_and_its_fader_sets_the_track_gain() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        // The lane is named after its first clip's sound family.
+        let name = text_rect(&output, "good grasp");
+        let visible = app.timeline_drop_rect.unwrap();
+        assert!(
+            name.right() <= visible.left(),
+            "The name sits in the lane header."
+        );
+        for label in [
+            "Record on track 1",
+            "Arrangement track 1 mute",
+            "Arrangement track 1 solo",
+            "Arrangement track 1 left output",
+            "Arrangement track 1 right output",
+            "Arrangement track 1 gain",
+        ] {
+            accessible_node(&output, label);
+        }
+        focus_control(&ctx, &mut app, &output, "Arrangement track 1 gain");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let gain = app.session.project().tracks[0].gain;
+        assert!(
+            (amplitude_to_db(gain) + 0.5).abs() < 0.01,
+            "One key step is 0.5 dB: {gain}"
+        );
+        assert_eq!(app.session.project().tracks[1].gain, 1.0);
+        // A click at the fader's left end silences the track.
+        let canvas = app.timeline_rect.unwrap();
+        let row_y = canvas.top() + 0.5 * app.timeline_row_height;
+        click(
+            &ctx,
+            &mut app,
+            Pos2::new(header_x(&ctx, visible, lanes::FADER_SPAN.0 + 2.0), row_y),
+            egui::Modifiers::NONE,
+        );
+        assert_eq!(app.session.project().tracks[0].gain, 0.0);
     }
 
     #[test]

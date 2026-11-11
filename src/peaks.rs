@@ -111,6 +111,18 @@ impl Peaks {
         (f32::from(low) / 127.0, f32::from(high) / 127.0)
     }
 
+    /// The sound's highest absolute sample, from 0 to 1.
+    pub fn loudest(&self) -> f32 {
+        self.levels.last().map_or(0.0, |level| {
+            level
+                .buckets
+                .iter()
+                .map(|[low, high]| low.unsigned_abs().max(high.unsigned_abs()))
+                .max()
+                .map_or(0.0, |peak| f32::from(peak) / 127.0)
+        })
+    }
+
     /// The whole sound in `count` columns of equal length, as a thumbnail.
     pub fn columns(&self, count: usize) -> Vec<(f32, f32)> {
         let step = self.frames as f64 / count.max(1) as f64;
@@ -242,12 +254,25 @@ impl PeakStore {
         self.entries.len()
     }
 
+    /// Give `sample` finished tables without the worker, for view tests.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn insert(&mut self, revision: u64, sample: u32, peaks: Arc<Peaks>) {
+        if revision != self.revision {
+            self.revision = revision;
+            self.entries.clear();
+        }
+        self.entries.insert(sample, PeakState::Ready(peaks));
+    }
+
     /// Take the worker's finished tables. Returns whether any sound is still
     /// pending, so the view keeps refreshing until all have arrived.
     pub(crate) fn poll(&mut self) -> bool {
         if let Some(worker) = &self.worker {
             for reply in worker.receiver.try_iter() {
-                if reply.revision == self.revision {
+                // A finished table stays; only a pending sound takes a reply.
+                if reply.revision == self.revision
+                    && matches!(self.entries.get(&reply.sample), Some(PeakState::Pending))
+                {
                     self.entries.insert(
                         reply.sample,
                         reply.peaks.map_or(PeakState::Unavailable, PeakState::Ready),

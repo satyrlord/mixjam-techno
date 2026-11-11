@@ -157,6 +157,12 @@ Collapse keeps a window in place and preserves its expanded size and edits.
 Collapsing a blocking dialog releases the workspace and pauses its pending action.
 Native operating-system file pickers retain their system presentation.
 
+The ignored `arrangement_frame_time` test times the Arrange view on a song of
+64 tracks by 256 bars with waveforms at each lane height and at the zoom limits.
+Run it optimized with `cargo.ps1 -CargoArguments @('test','--release','--locked',
+'--lib','arrangement_frame_time','--','--ignored','--nocapture')`. Each case's
+p95 frame time must stay under 16.7 ms.
+
 A body that overflows its window shows a scroll bar, and short blocking dialogs
 follow the height of their content. Scaled captures verify high-DPI painting,
 not Windows display-scale changes. The captures do not verify screen readers or

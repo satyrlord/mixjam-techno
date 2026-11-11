@@ -85,6 +85,15 @@ stay until the catalog revision changes. `Session::poll` collects finished
 tables and keeps the view refreshing while any are pending.
 `src/ui/sounds.rs` draws the Sounds panel from those tables and shares the
 filters and sound actions with the lower panel's Sounds module.
+`src/ui/waveform.rs` turns a ready table into one column pair per point for an
+arrangement clip, following the trim, Reverse, the fades, and where the sound
+ends, and paints the visible columns as one mesh. `src/ui/view.rs` keeps these
+shapes per clip and rebuilds one only when its key changes: the sound, trim,
+length, Reverse, fades, points per tick (zoom), frames per tick (tempo),
+catalog revision, or peak table. The catalog revision prevents a replacement
+sound from reusing a stale waveform when its peak table reuses an address.
+`src/ui/lanes.rs` owns the Arrange lane header's layout constants, the lane
+name derived from the first clip's sound family, and the lane fader.
 `src/ui/libraries.rs` renders library management as the Sample libraries page of
 Options. Folder scans and provider changes still use their existing Session
 operations and storage. A successful scan adopts its folder changes; fallback
@@ -692,6 +701,8 @@ Save completion updates the local feedback and the selected output's source
 tempo; cancelling a file choice does not report success.
 
 `src/ui/mixer.rs` owns Mixer's compact strip presentation in the current theme.
+Its `gain_keys` and `gain_semantics` give the Mixer's gain rail and the lane
+fader the same wheel, key, accessibility, and double-click behaviour.
 Vintage tiles the graphite and ivory artwork; Studio and Aero paint the strips
 and fader caps in code at the same density scale.
 Each strip is 108 logical points wide. Master remains outside the horizontally

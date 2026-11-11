@@ -67,8 +67,8 @@ impl HoverHints for Response {
 }
 use mixjam_techno::application::options::WorkspaceLayout;
 use mixjam_techno::application::{
-    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, Section, amplitude_to_db,
-    db_to_amplitude,
+    Fade, FadeCurve, MAX_PITCH_CENTS, MAX_SECTION_NAME, MAX_TICKS, PeakState, Section,
+    amplitude_to_db, db_to_amplitude,
 };
 
 /// Format Windows filesystem paths for labels only. Stored paths and messages
@@ -706,7 +706,9 @@ impl MixJamApp {
         } else {
             title.clone()
         };
-        let galley = transport_title_galley(ui, &shown, fit, width);
+        // The saved name lays out in the slot sized for the marked one: alone
+        // it could fit one row wider than the slot.
+        let galley = transport_title_galley(ui, &shown, fit, (slot.x + 0.5).min(width));
         // Under a name on one line at full size, the song's length, where it
         // fits the name's room.
         let meta = (fit.size >= TRANSPORT_TITLE_SIZE && galley.rows.len() == 1)
@@ -1670,13 +1672,14 @@ impl MixJamApp {
         let bars =
             (project.end_tick().max(cursor_tick).max(last_section) / TICKS_PER_BAR + 16).max(64);
         let width = bars as f32 * bar_width;
-        let label_width = 122.0;
+        let label_width = lanes::LANE_HEADER_WIDTH;
         let lane_inset = label_width + ui.spacing().item_spacing.x;
         let viewport_height = (ui.available_height() - 26.0 - 8.0).max(80.0);
         let (ruler_strip, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
         let body_left = ruler_strip.left();
         let mut route_change = None;
+        let mut gain_change = None;
         let mut painted_offset_x = 0.0;
         let mut scroll_area = egui::ScrollArea::both()
             .id_salt("arrangement_scroll")
@@ -1853,24 +1856,53 @@ impl MixJamApp {
                                     .map(|clip| clip.id)
                             })
                     });
+                    let tick_width = bar_width / TICKS_PER_BAR as f32;
                     for clip in &self.session.project().clips {
                         let clip = preview.filter(|p| p.id == clip.id).unwrap_or(clip);
                         let clip_rect = self.clip_rect(clip, rect);
                         if visible.intersects(clip_rect) {
                             let sample = self.session.library().sample_by_id(clip.sample_id);
-                            draw_clip(
-                                &painter,
-                                clip_rect,
-                                sample,
-                                self.session.missing_sample(clip.sample_id),
-                                self.selected_clips.contains(&clip.id),
-                                clip.reverse,
-                            );
+                            let missing = self.session.missing_sample(clip.sample_id);
                             let bpm = sample.map_or(self.session.project().bpm, |sample| {
                                 self.session
                                     .project()
                                     .sample_playback_bpm(sample.id, sample.source_bpm)
                             });
+                            // Only clips on screen ask for their sound's peaks.
+                            let wave = match (sample, missing) {
+                                (Some(sample), None) => {
+                                    match self.session.sample_peaks(sample.id) {
+                                        PeakState::Ready(peaks) => {
+                                            let key = waveform::ClipWaveKey::new(
+                                                clip,
+                                                &peaks,
+                                                self.session.catalog_revision(),
+                                                tick_width,
+                                                frames_per_tick(sample, bpm),
+                                            );
+                                            let wave =
+                                                self.clip_waves.entry(clip.id).or_insert_with(
+                                                    || waveform::ClipWave::new(key, &peaks),
+                                                );
+                                            if wave.key != key {
+                                                *wave = waveform::ClipWave::new(key, &peaks);
+                                            }
+                                            Some(&*wave)
+                                        }
+                                        PeakState::Pending | PeakState::Unavailable => None,
+                                    }
+                                }
+                                _ => None,
+                            };
+                            draw_clip(
+                                &painter,
+                                clip_rect,
+                                sample,
+                                missing,
+                                self.selected_clips.contains(&clip.id),
+                                clip.reverse,
+                                wave,
+                            );
                             draw_fades(&painter, clip_rect, clip, sample, bar_width, bpm);
                             let handles = shows_handles == Some(clip.id);
                             if handles || self.selected_clips.contains(&clip.id) {
@@ -1883,6 +1915,17 @@ impl MixJamApp {
                                 draw_gain_handle(&painter, clip_rect, visible, clip.gain);
                             }
                         }
+                    }
+                    // Forget the waveforms of deleted clips.
+                    if self.clip_waves.len() > self.session.project().clips.len() {
+                        let ids: BTreeSet<u64> = self
+                            .session
+                            .project()
+                            .clips
+                            .iter()
+                            .map(|clip| clip.id)
+                            .collect();
+                        self.clip_waves.retain(|id, _| ids.contains(id));
                     }
                     // Dim the lanes that Mute or another track's solo silences.
                     let project = self.session.project();
@@ -2168,6 +2211,7 @@ impl MixJamApp {
                 |ui| {
                     ui.set_clip_rect(labels.intersect(ui.clip_rect()));
                     ui.spacing_mut().item_spacing.y = 0.0;
+                    let first_sounds = lanes::first_sounds(self.session.project());
                     for &index in &visible_tracks {
                         let (rect, _) = ui.allocate_exact_size(
                             Vec2::new(label_width, row_height),
@@ -2206,8 +2250,9 @@ impl MixJamApp {
                             .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
                         let project = self.session.project();
                         let silenced = !project.tracks[index].audible(project.any_solo());
-                        // From the left: M, S, L, the track number, and R.
-                        let number = Pos2::new(rect.left() + 85.0, rect.center().y);
+                        // From the left: the track number, the lane's name,
+                        // M, S, L, R, and the level fader.
+                        let number = Pos2::new(rect.left() + lanes::NUMBER_X, rect.center().y);
                         ui.painter().rect_filled(
                             Rect::from_center_size(number, Vec2::new(25.0, row_height - 3.0)),
                             0.0,
@@ -2257,10 +2302,39 @@ impl MixJamApp {
                             self.message(format!("Track {} is ready for recording.", index + 1));
                         }
                         arm.hover_hint("Select this track for recording");
+                        let name = lanes::lane_name(
+                            first_sounds[index],
+                            self.session.library(),
+                            |id| {
+                                self.session
+                                    .missing_sample(id)
+                                    .map(|missing| missing.name.clone())
+                            },
+                            index,
+                        );
+                        let (name_left, name_right) = lanes::NAME_SPAN;
+                        let name_size = if row_height < 30.0 { 11.0 } else { 12.0 };
+                        let name_text = ui.painter().layout_job(elided(
+                            &name,
+                            name_size,
+                            if silenced {
+                                roles().muted
+                            } else {
+                                roles().text
+                            },
+                            name_right - name_left,
+                            1,
+                        ));
+                        ui.painter().galley(
+                            Pos2::new(
+                                rect.left() + name_left,
+                                rect.center().y - name_text.size().y / 2.0,
+                            ),
+                            name_text,
+                            roles().text,
+                        );
                         let track = &self.session.project().tracks[index];
-                        for (switch, x) in
-                            TrackSwitch::ALL.into_iter().zip([12.0, 36.0, 60.0, 110.0])
-                        {
+                        for (switch, x) in TrackSwitch::ALL.into_iter().zip(lanes::SWITCH_X) {
                             let button = Rect::from_center_size(
                                 Pos2::new(rect.left() + x, rect.center().y),
                                 Vec2::new(24.0, row_height - 3.0),
@@ -2296,6 +2370,19 @@ impl MixJamApp {
                                 );
                             }
                             response.hover_hint(switch_hint(&label, switch, on));
+                        }
+                        let (fader_left, fader_right) = lanes::FADER_SPAN;
+                        let mut gain = track.gain;
+                        if lanes::lane_fader(
+                            ui,
+                            Rect::from_x_y_ranges(
+                                rect.left() + fader_left..=rect.left() + fader_right,
+                                rect.y_range().shrink(1.0),
+                            ),
+                            &format!("Arrangement track {}", index + 1),
+                            &mut gain,
+                        ) {
+                            gain_change = Some((index, gain));
                         }
                     }
                 },
@@ -2404,6 +2491,16 @@ impl MixJamApp {
             self.apply(result);
             // The mixer is laid out before the arrangement. Redraw it with the
             // new switch state even when the pointer stops after this click.
+            ui.ctx().request_repaint();
+        }
+        if let Some((index, gain)) = gain_change {
+            let mut tracks = self.session.project().tracks.clone();
+            tracks[index].gain = gain;
+            let result = self.session.edit(EditCommand::SetMixer {
+                tracks,
+                master_gain: self.session.project().master_gain,
+            });
+            self.apply(result);
             ui.ctx().request_repaint();
         }
     }
@@ -4524,23 +4621,22 @@ fn return_value(y: f32, row: Rect) -> f32 {
     value.clamp(0.0, automation::RETURN_CEILING)
 }
 
-/// Mark a clip that plays backwards: "rev" in its bottom right corner.
-fn draw_reverse_mark(painter: &egui::Painter, rect: Rect) -> Option<Rect> {
+/// Mark a clip that plays backwards: "rev" in its bottom right corner. Over
+/// a waveform, a `plate` of the clip's fill keeps it readable.
+fn draw_reverse_mark(painter: &egui::Painter, rect: Rect, plate: Option<Color32>) -> Option<Rect> {
     // The shortest lane height still shows it.
     if rect.width() < 36.0 || rect.height() < 16.0 {
         return None;
     }
-    Some(
-        painter
-            .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
-            .text(
-                rect.right_bottom() + Vec2::new(-6.0, -3.0),
-                Align2::RIGHT_BOTTOM,
-                "rev",
-                FontId::proportional(10.0),
-                roles().on_light,
-            ),
-    )
+    let painter = painter.with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)));
+    let galley = painter.layout_no_wrap("rev".into(), FontId::proportional(10.0), roles().on_light);
+    let mark = Align2::RIGHT_BOTTOM
+        .anchor_size(rect.right_bottom() + Vec2::new(-6.0, -3.0), galley.size());
+    if let Some(fill) = plate {
+        painter.rect_filled(mark.expand2(Vec2::new(2.0, 0.0)), 2.0, fill);
+    }
+    painter.galley(mark.min, galley, roles().on_light);
+    Some(mark)
 }
 
 /// Shade a clip's fades above their curves. The fade out ends where the
@@ -4868,6 +4964,8 @@ fn pitch_controls(ui: &mut egui::Ui, cents: &mut i32) -> bool {
     change
 }
 
+/// A clip: its category fill, waveform, name, and marks. A missing sound
+/// has no waveform.
 pub(super) fn draw_clip(
     painter: &egui::Painter,
     rect: Rect,
@@ -4875,6 +4973,7 @@ pub(super) fn draw_clip(
     missing: Option<&MissingSample>,
     selected: bool,
     reverse: bool,
+    wave: Option<&waveform::ClipWave>,
 ) {
     let color = if missing.is_some() {
         roles().raised
@@ -4896,6 +4995,34 @@ pub(super) fn draw_clip(
         );
     }
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)));
+    let label = missing
+        .map(|missing| format!("Missing: {}", missing.name))
+        .or_else(|| sample.map(|sample| sample.name.clone()));
+    let text_color = if missing.is_some() {
+        roles().text
+    } else {
+        roles().on_light
+    };
+    let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
+    // The 20-point lane leaves no room below the name at the usual inset.
+    let top = if rect.height() < 20.0 { 2.0 } else { 4.0 };
+    let at = rect.left_top() + Vec2::new(6.0, top);
+    let text = label.as_ref().map(|label| {
+        clipped.layout_job(elided(
+            label,
+            size,
+            text_color,
+            rect.width() - 12.0,
+            clip_label_rows(rect.height()),
+        ))
+    });
+    let wave = wave.filter(|_| missing.is_none());
+    if let Some(wave) = wave {
+        let name_bottom = text
+            .as_ref()
+            .map_or(rect.top(), |text| at.y + text.size().y);
+        waveform::paint_clip_wave(painter, rect, name_bottom, wave, color);
+    }
     if selected {
         painter.rect_stroke(
             rect.shrink(0.5),
@@ -4911,27 +5038,10 @@ pub(super) fn draw_clip(
             egui::StrokeKind::Inside,
         );
     }
-    let reverse_mark = reverse.then(|| draw_reverse_mark(painter, rect)).flatten();
-    let label = missing
-        .map(|missing| format!("Missing: {}", missing.name))
-        .or_else(|| sample.map(|sample| sample.name.clone()));
-    if let Some(label) = label {
-        let text_color = if missing.is_some() {
-            roles().text
-        } else {
-            roles().on_light
-        };
-        let size = if rect.height() < 28.0 { 10.0 } else { 12.0 };
-        let mut text = clipped.layout_job(elided(
-            &label,
-            size,
-            text_color,
-            rect.width() - 12.0,
-            clip_label_rows(rect.height()),
-        ));
-        // The 20-point lane leaves no room below the name at the usual inset.
-        let top = if rect.height() < 20.0 { 2.0 } else { 4.0 };
-        let at = rect.left_top() + Vec2::new(6.0, top);
+    let reverse_mark = reverse
+        .then(|| draw_reverse_mark(painter, rect, wave.map(|_| color)))
+        .flatten();
+    if let (Some(label), Some(mut text)) = (label, text) {
         let mut label_painter = clipped;
         if let Some(mark) = reverse_mark
             && text.mesh_bounds.translate(at.to_vec2()).intersects(mark)

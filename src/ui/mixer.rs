@@ -1200,7 +1200,7 @@ fn gain_rail(
     gain: &mut f32,
 ) -> bool {
     let before = *gain;
-    let mut response = ui.interact(
+    let response = ui.interact(
         // The whole cap stays draggable at either end. Position mapping
         // below still uses the physical rail and clamps beyond its ends.
         rect.expand2(Vec2::new(0.0, 16.0 * scale)),
@@ -1231,7 +1231,32 @@ fn gain_rail(
         };
         *gain = fraction_gain(fraction);
     }
-    let mut step = controls::wheel(ui, &response);
+    gain_keys(ui, &response, gain);
+    let cap = Pos2::new(
+        rect.center().x,
+        egui::lerp(rect.bottom()..=rect.top(), gain_fraction(*gain)),
+    );
+    if let Some(art) = art {
+        art.fader(ui, cap);
+    } else {
+        // A flat software cap on Studio, a molded one on Aero; both stay
+        // inside the bitmap cap's 24 by 32 points.
+        let size = if roles().material == theme::Material::Flat {
+            Vec2::new(24.0, 16.0)
+        } else {
+            Vec2::new(24.0, 24.0)
+        };
+        theme::fader_cap(ui.painter(), cap, size * scale);
+    }
+    focus_ring(ui, &response, rect, scale);
+    gain_semantics(ui, response, name, before, *gain);
+    before != *gain
+}
+
+/// The edits every gain fader takes besides the pointer: the wheel, the
+/// arrow keys, Home and End, the accessibility actions, and a double-click.
+pub(super) fn gain_keys(ui: &egui::Ui, response: &Response, gain: &mut f32) {
+    let mut step = controls::wheel(ui, response);
     if response.has_focus() {
         controls::keep_transport_key(ui.ctx(), response.id);
         ui.memory_mut(|memory| {
@@ -1305,24 +1330,17 @@ fn gain_rail(
     if response.double_clicked() {
         *gain = 1.0;
     }
-    let cap = Pos2::new(
-        rect.center().x,
-        egui::lerp(rect.bottom()..=rect.top(), gain_fraction(*gain)),
-    );
-    if let Some(art) = art {
-        art.fader(ui, cap);
-    } else {
-        // A flat software cap on Studio, a molded one on Aero; both stay
-        // inside the bitmap cap's 24 by 32 points.
-        let size = if roles().material == theme::Material::Flat {
-            Vec2::new(24.0, 16.0)
-        } else {
-            Vec2::new(24.0, 24.0)
-        };
-        theme::fader_cap(ui.painter(), cap, size * scale);
-    }
-    focus_ring(ui, &response, rect, scale);
-    let db = amplitude_to_db(*gain);
+}
+
+/// A gain fader's accessible name, value, range, and hint: "{name} gain".
+pub(super) fn gain_semantics(
+    ui: &egui::Ui,
+    mut response: Response,
+    name: &str,
+    before: f32,
+    gain: f32,
+) -> Response {
+    let db = amplitude_to_db(gain);
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(
             response.enabled(),
@@ -1341,7 +1359,7 @@ fn gain_rail(
         node.add_action(Action::Increment);
         node.add_action(Action::Decrement);
     });
-    if before != *gain {
+    if before != gain {
         response.mark_changed();
     }
     response.hover_hint(format!(
@@ -1350,6 +1368,5 @@ fn gain_rail(
          (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB \
          only reduces level.",
         db_text(db)
-    ));
-    before != *gain
+    ))
 }

@@ -622,9 +622,16 @@ Original track numbers remain stable. Rows are
 20, 30, or 40 points high, as the Lane height option sets, at every window and
 panel size, so more room shows more rows, and they scroll vertically. The new
 track's drop hint stays visible at each height. Compact reversed clips leave
-space between their name and the `rev` mark. The label column is 122 points wide
-and holds, from left, M, S, L, the track number, and R. A lane that Mute or
-another track's Solo silences is dimmed, and its track number uses Muted. The
+space between their name and the `rev` mark. The lane header is 250 points wide
+and holds, from left, the track number, the lane's name, M, S, L, R, and a
+short horizontal level fader. The song stores no lane names: a lane is named
+after the sound family of its first clip (the sound's name without its trailing
+number), or "Track N" while it has no clips. The name is elided to its span and
+uses 11-point text in 20-point lanes, 12-point otherwise. The fader edits the
+same track gain as the Mixer, with the same taper, keys, and double-click to
+unity; a Canvas slot, a fill to the cap, a unity tick, and a Cap-colored cap.
+A lane that Mute or another track's Solo silences is dimmed, and its track
+number and name use Muted. The
 fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
 timeline scrolls horizontally without moving track labels.
 
@@ -887,8 +894,20 @@ Hover, Text, and a one-point Muted border.
 One tooltip groups the full name, product, category, code, sample IDs, source
 tempo, nominal bars, actual audio duration, frames, rate, channels, and WAV path
 when available. Nominal bars and audio duration remain separate facts.
-Arrangement clips use flat category fills and names. They do not display a
-waveform. A selected clip can show a gain line; it is a control indicator.
+Arrangement clips use flat category fills and names, with the clip's waveform
+under the name. The waveform uses the category color darkened to 55% and fills
+the band between the name and the clip's bottom edge. In a 20-point lane that
+band is too short, so the waveform fills the clip in a lighter tone (82%) and
+the name stays readable over it. The waveform shows the part of the sound the
+clip plays: it starts at the trim and ends where the sound ends, which can be
+before the clip's end. A reversed clip mirrors it, so any silence comes first.
+Fades shape it to silence at their ends. Clips never repeat their sound, so the
+waveform does not repeat; Pitch-lane varispeed is not drawn. A reversed clip's
+`rev` mark sits on a small plate of the clip's fill. A clip whose sound is
+missing has no waveform. Only clips on screen paint a waveform, and each clip
+keeps its shape until its sound, trim, length, fades, Reverse, tempo, or zoom
+changes.
+A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
 a Text-colored name that begins with Missing. While a sound or clip is dragged
 over the lanes, clip ghosts at 60% opacity show the destination bar and track.

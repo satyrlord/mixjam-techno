@@ -1016,6 +1016,14 @@ impl Session {
     pub(crate) fn requested_peaks(&self) -> usize {
         self.peaks.borrow().len()
     }
+
+    /// Give a sound finished peaks, as if the worker had read its file.
+    #[cfg(all(test, feature = "gui"))]
+    pub(crate) fn set_sample_peaks(&self, id: u32, peaks: Arc<Peaks>) {
+        self.peaks
+            .borrow_mut()
+            .insert(self.catalog_revision, id, peaks);
+    }
     pub fn library(&self) -> LibraryView<'_> {
         LibraryView {
             samples: &self.library.samples,
