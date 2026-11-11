@@ -634,8 +634,17 @@ mod tests {
                 "Output volume",
             ] {
                 let slot = effects_control_rect(&output, &format!("{name} value"));
-                let number = output
+                // Only the window's own text, painted from its title on: the
+                // arrangement's track numbers can lie beneath the slot.
+                let first = output
                     .shapes
+                    .iter()
+                    .position(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => text.galley.job.text == "EFFECT STUDIO",
+                        _ => false,
+                    })
+                    .expect("The window paints its title.");
+                let number = output.shapes[first..]
                     .iter()
                     .filter_map(|shape| match &shape.shape {
                         egui::Shape::Text(text) if text.galley.job.text.parse::<f64>().is_ok() => {
@@ -2157,8 +2166,9 @@ mod tests {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        focus_control(&ctx, &mut app, &output, "Help");
-        let mut order = vec!["Help".to_owned()];
+        let first = TRANSPORT_BUTTONS[0];
+        focus_control(&ctx, &mut app, &output, first);
+        let mut order = vec![first.to_owned()];
         for _ in 0..400 {
             frame(
                 &ctx,
@@ -2170,12 +2180,22 @@ mod tests {
             let Some(label) = focused_label(&output) else {
                 continue;
             };
-            if label == "Help" {
+            if label == first {
                 break;
             }
             order.push(label);
         }
-        assert_eq!(order.first().map(String::as_str), Some("Help"));
+        // The top bar, left to right: the transport, the recording track, the
+        // tempo, then Help (Undo and Redo are disabled in the fixture).
+        let top_bar: Vec<&str> = TRANSPORT_BUTTONS
+            .into_iter()
+            .chain(["Recording track", "Project BPM", "Help"])
+            .collect();
+        assert_eq!(
+            &order[..top_bar.len()],
+            top_bar.as_slice(),
+            "The top bar comes first: {order:?}"
+        );
         let rail = [
             "Shrink the tool rail to icons",
             "New",
@@ -2193,18 +2213,36 @@ mod tests {
             "Edit",
             "Stretch",
             "Album Review",
-            "Recording track",
             "Options",
         ];
+        let after = top_bar.len();
         assert_eq!(
-            &order[1..=rail.len()],
+            &order[after..after + rail.len()],
             rail.as_slice(),
-            "The rail follows the header, top to bottom: {order:?}"
+            "The rail follows the top bar, top to bottom: {order:?}"
         );
         assert_eq!(
-            order.get(rail.len() + 1).map(String::as_str),
+            order.get(after + rail.len()).map(String::as_str),
             Some("Bottom module"),
             "The lower panel follows the rail: {order:?}"
+        );
+        // The score toolbar leads the arrangement, left to right.
+        let toolbar = [
+            "Automation lane",
+            "Follow",
+            "Sections",
+            "Zoom",
+            "Maximise the score",
+            "Arrangement lanes",
+        ];
+        let at = order
+            .iter()
+            .position(|name| name == toolbar[0])
+            .unwrap_or_else(|| panic!("The score toolbar is reachable: {order:?}"));
+        assert_eq!(
+            &order[at..at + toolbar.len()],
+            toolbar.as_slice(),
+            "{order:?}"
         );
         let tools = order.iter().position(|name| name == "Tools");
         let boards = order.iter().position(|name| name == "Boards");
@@ -2242,7 +2280,7 @@ mod tests {
                     egui::Modifiers::NONE,
                     size,
                 );
-                let mut reached_recording = false;
+                let mut reached_last = false;
                 for _ in 0..18 {
                     frame_at_size(
                         &ctx,
@@ -2259,15 +2297,15 @@ mod tests {
                     let rect = effects_control_rect(&output, &label);
                     let options = effects_control_rect(&output, "Options");
                     assert!(
-                        rect.top() >= 66.0 && rect.bottom() < options.top(),
+                        rect.top() >= 64.0 && rect.bottom() < options.top(),
                         "Focused {label} must be visible at {size:?}: {rect:?}."
                     );
-                    if label == "Recording track" {
-                        reached_recording = true;
+                    if label == "Album Review" {
+                        reached_last = true;
                         break;
                     }
                 }
-                assert!(reached_recording);
+                assert!(reached_last);
             }
         });
     }
@@ -8066,18 +8104,18 @@ mod tests {
             }
             positions = Some(current);
             assert!(
-                current[2].right() < size.x - 64.0,
-                "Follow must fit beside the rail."
+                current[2].right() <= size.x - 18.0,
+                "Follow must fit in the score toolbar."
             );
             let tick = (bar - 1) * TICKS_PER_BAR + 3 * TICKS_PER_BAR / 4;
             let seconds =
                 (tick as f64 * 240.0 / app.session.project().bpm / TICKS_PER_BAR as f64) as u32;
             let label = format!("{:02} : {:02}", seconds / 60, seconds % 60);
-            // The position readout sits in the 66-point header, in the song
-            // name's former place, clear of the header actions.
+            // The position readout sits in the 64-point top bar, before the
+            // tempo.
             let time = text_rect(&output, &label);
             assert!(
-                time.bottom() <= 66.0 && time.right() < size.x - 190.0,
+                time.bottom() <= 64.0 && time.right() < current[0].left(),
                 "{label}: {time:?}"
             );
         }
@@ -8126,51 +8164,71 @@ mod tests {
     ];
 
     #[test]
-    fn song_name_and_position_readout_trade_places() {
+    fn song_name_and_position_readout_share_the_top_bar() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        let size = Vec2::new(960.0, 720.0);
         let long = "Long song name ".repeat(6);
-        for title in ["Song", long.trim_end()] {
-            retitle(&mut app, title);
-            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            let (name, _) = song_name_text(&output, title);
-            let time = text_rect(&output, "00 : 00");
-            // The header is 66 points high and the transport follows it.
-            assert!(time.bottom() <= 66.0, "The readout is in the header.");
-            assert!(name.top() >= 66.0, "The name is in the transport.");
-            let bpm = effects_control_rect(&output, "Project BPM");
-            assert!(
-                name.left() >= 18.0 && name.left() < bpm.left(),
-                "The song name leads the transport: {name:?}"
-            );
-            // The readout sits between the brand and the header actions.
-            assert!(time.left() > text_rect(&output, "TECHNO").right());
-            assert!(time.right() < effects_control_rect(&output, "Undo").left());
+        for size in [Vec2::new(960.0, 720.0), Vec2::new(1440.0, 1000.0)] {
+            for title in ["Song", long.trim_end()] {
+                retitle(&mut app, title);
+                let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                let context = format!("{size:?} {title}");
+                let (name, _) = song_name_text(&output, title);
+                let time = accessible_label(&output, "00 : 00");
+                // One 64-point bar holds the brand, the name and the transport.
+                assert!(name.bottom() <= 64.0 && time.bottom() <= 64.0, "{context}");
+                let buttons = TRANSPORT_BUTTONS.map(|button| effects_control_rect(&output, button));
+                assert!(
+                    name.left() > text_rect(&output, "TECHNO").right()
+                        && name.right() <= buttons[0].left() - 4.0,
+                    "The song name follows the brand and leads the transport: {context}"
+                );
+                // Record, its track, the readout, the tempo, then the actions.
+                let track = effects_control_rect(&output, "Recording track");
+                let bpm = effects_control_rect(&output, "Project BPM");
+                let undo = effects_control_rect(&output, "Undo");
+                assert!(
+                    buttons[7].right() <= track.left()
+                        && track.right() <= time.left()
+                        && time.right() <= bpm.left()
+                        && bpm.right() <= undo.left(),
+                    "{context}: {track:?} {time:?} {bpm:?} {undo:?}"
+                );
+                let help = effects_control_rect(&output, "Help");
+                assert!(help.right() <= size.x - 18.0 + 0.5, "{context}: {help:?}");
+            }
         }
     }
 
     #[test]
-    fn position_readout_is_centered_in_the_header() {
+    fn position_readout_keeps_its_place_in_the_top_bar_and_shows_bar_and_beat_when_wide() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
         for width in [960.0, 1024.0, 1280.0, 1440.0, 1920.0] {
             let size = Vec2::new(width, 900.0);
+            // The top bar narrows its controls below 1240 points of content.
+            let compact = width - 36.0 < 1240.0;
             for title in ["Song", "Reality (Vocal Guide, Proposals)"] {
                 retitle(&mut app, title);
                 let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-                // The header spans the window, so its center is the window's.
                 let readout = accessible_label(&output, "00 : 00");
-                assert_eq!(readout.size(), Vec2::new(112.0, 42.0));
-                assert!(
-                    (readout.center().x - width / 2.0).abs() <= 0.5,
-                    "{width}: {readout:?}"
-                );
-                assert!((readout.center().y - 33.0).abs() <= 0.5, "{readout:?}");
+                let expected = if compact {
+                    Vec2::new(76.0, 40.0)
+                } else {
+                    Vec2::new(112.0, 42.0)
+                };
+                assert_eq!(readout.size(), expected, "{width}");
+                assert!((readout.center().y - 32.0).abs() <= 0.5, "{readout:?}");
                 let digits = text_rect(&output, "00 : 00");
-                assert!((digits.center().x - width / 2.0).abs() <= 0.5, "{digits:?}");
-                assert!(readout.left() > text_rect(&output, "TECHNO").right());
-                assert!(readout.right() < effects_control_rect(&output, "Undo").left());
+                assert!(
+                    (digits.center().x - readout.center().x).abs() <= 0.5,
+                    "{digits:?}"
+                );
+                let beside = output.shapes.iter().any(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => text.galley.job.text == "1 . 1",
+                    _ => false,
+                });
+                assert_eq!(beside, !compact, "{width}: bar and beat beside the time");
             }
         }
     }
@@ -8190,20 +8248,21 @@ mod tests {
         ];
         for size in [Vec2::new(960.0, 720.0), Vec2::new(1440.0, 1000.0)] {
             let narrowest = size.x == 960.0;
-            // The transport starts after the tool rail, inside its 18-point margins.
-            let left = rail_width(true) + 18.0;
             let right = size.x - 18.0;
             for title in titles {
                 retitle(&mut app, title);
                 let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                // The name and the transport follow the brand, inside the top
+                // bar's 18-point margins.
+                let left = text_rect(&output, "TECHNO").right();
                 let (name, galley) = song_name_text(&output, title);
                 let font = galley.job.sections[0].format.font_id.size;
                 let context = format!("{size:?} {title}: {name:?} at {font} points");
                 assert!(!galley.elided, "{context}");
-                // The whole name stays in the 48-point row inside the transport.
+                // The whole name stays in the 48-point row inside the top bar.
                 assert!(name.left() >= left - 0.5, "{context}");
                 assert!(
-                    name.top() >= 76.0 - 0.5 && name.bottom() <= 124.0 + 0.5,
+                    name.top() >= 8.0 - 0.5 && name.bottom() <= 56.0 + 0.5,
                     "{context}"
                 );
                 let buttons = TRANSPORT_BUTTONS.map(|button| effects_control_rect(&output, button));
@@ -8221,16 +8280,18 @@ mod tests {
                         "{context}"
                     );
                 }
-                if !narrowest || title == "Song" {
+                // One top bar holds the brand and the transport, so the
+                // narrowest window narrows the buttons for any name.
+                if !narrowest {
                     assert_eq!(side, 42.0, "{context}");
                 } else {
                     assert!(side >= 34.0, "{context}");
                 }
                 let bpm = effects_control_rect(&output, "Project BPM");
                 assert!(buttons[7].right() <= bpm.left(), "{context}");
-                for toggle in ["Follow", "Sections"] {
-                    let toggle = effects_control_rect(&output, toggle);
-                    assert!(toggle.right() <= right + 0.5, "{context}: {toggle:?}");
+                for control in ["Follow", "Sections", "Maximise the score", "Help"] {
+                    let control = effects_control_rect(&output, control);
+                    assert!(control.right() <= right + 0.5, "{context}: {control:?}");
                 }
                 // Real names keep at least the 9-point floor; a short name and
                 // the owner's song keep the full 15-point size where they fit.
@@ -9736,9 +9797,9 @@ mod tests {
         ctx.enable_accesskit();
         app.set_layout(|layout| layout.tool_names = names);
         let viewport = Rect::from_min_size(Pos2::ZERO, size);
-        // The rail ends above the 30-point status bar.
+        // The rail runs from the 64-point top bar to the 30-point status bar.
         let rail = Rect::from_min_max(
-            Pos2::new(0.0, 66.0),
+            Pos2::new(0.0, 64.0),
             Pos2::new(rail_width(names), size.y - 30.0),
         );
         let target = rail_button_size(names);
@@ -9830,17 +9891,14 @@ mod tests {
                 "Group boundaries need a visible separator ({state})."
             );
         }
-        let microphone = effects_control_rect(&output, RailIcon::Record.label());
-        let destination = effects_control_rect(&output, "Recording track");
-        assert!(
-            bounds.last().unwrap().bottom() < microphone.top()
-                && microphone.bottom() <= destination.top(),
-            "The microphone and its track selector must follow every tool ({state})."
-        );
-        assert!(
-            (destination.center().x - rail_width(names) / 2.0).abs() < 0.6,
-            "The recording selector must stay centered ({state}): {destination:?}."
-        );
+        // The microphone and its track selector moved to the top bar.
+        for label in [RailIcon::Record.label(), "Recording track"] {
+            let rect = effects_control_rect(&output, label);
+            assert!(
+                rect.bottom() <= 64.0 && !rail.intersects(rect),
+                "{label} sits in the top bar, not the rail ({state}): {rect:?}."
+            );
+        }
         // Options sits at the rail's foot and is always in view.
         let options = effects_control_rect(&output, "Options");
         assert!(
@@ -9850,8 +9908,9 @@ mod tests {
             "Options must sit at the foot of the rail ({state}): {options:?}."
         );
         let fits = |rect: Rect| rail.contains_rect(rect) && rect.bottom() < options.top();
-        if !names || size.y >= 1000.0 {
-            for rect in bounds.iter().chain([&microphone, &destination]) {
+        let last = *bounds.last().unwrap();
+        if !names || size.y >= 1000.0 || fits(last) {
+            for rect in &bounds {
                 assert!(
                     viewport.contains_rect(*rect) && fits(*rect),
                     "Every tool must be in view without scrolling ({state}): {rect:?}."
@@ -9860,10 +9919,6 @@ mod tests {
         } else {
             // Too short for every name: the wheel brings the rest
             // of the rail into view.
-            assert!(
-                !fits(destination),
-                "The named rail overflows here; check the scroll ({state})."
-            );
             for _ in 0..3 {
                 frame_at_size(
                     &ctx,
@@ -9884,13 +9939,12 @@ mod tests {
                 );
             }
             output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-            for label in [RailIcon::AlbumReview.label(), "Recording track"] {
-                let rect = effects_control_rect(&output, label);
-                assert!(
-                    fits(rect),
-                    "{label} must scroll into view ({state}): {rect:?}."
-                );
-            }
+            let label = RailIcon::AlbumReview.label();
+            let rect = effects_control_rect(&output, label);
+            assert!(
+                fits(rect),
+                "{label} must scroll into view ({state}): {rect:?}."
+            );
         }
         let density_index = [1.0, 1.5, 2.0]
             .iter()
@@ -14266,5 +14320,220 @@ mod tests {
         );
         assert_eq!(reply["ok"], true, "{reply}");
         assert!(!app.session.project().clips[0].reverse);
+    }
+
+    /// Whether any accessible node carries this name.
+    fn has_control(output: &egui::FullOutput, name: &str) -> bool {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("Accessibility must be enabled for this test.")
+            .nodes
+            .iter()
+            .any(|(_, node)| node.label() == Some(name))
+    }
+
+    #[test]
+    fn f_maximises_the_score_and_f_again_restores_the_rail_and_the_lower_panel() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+        let press = |app: &mut MixJamApp| {
+            frame(
+                &ctx,
+                app,
+                vec![
+                    key_event(egui::Key::F, egui::Modifiers::NONE),
+                    egui::Event::Text("f".into()),
+                ],
+                egui::Modifiers::NONE,
+            );
+            // Release it, or the next press reads as a held key's repeat.
+            frame(
+                &ctx,
+                app,
+                vec![egui::Event::Key {
+                    key: egui::Key::F,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                egui::Modifiers::NONE,
+            )
+        };
+        let output = press(&mut app);
+        assert!(app.session.layout().maximised);
+        assert!(!has_control(&output, "New"), "The rail hides.");
+        assert!(
+            !has_control(&output, "Bottom module"),
+            "The lower panel hides."
+        );
+        // The top bar, the score toolbar and the status bar stay.
+        for name in ["Play / pause (Space)", "Help", "Follow", "Tools", "Boards"] {
+            assert!(has_control(&output, name), "{name} stays.");
+        }
+        assert_eq!(
+            accessible_node(&output, "Maximise the score").1.toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        // The panels' own settings are kept for the restore.
+        assert!(app.session.layout().tool_names && app.session.layout().boards);
+        let output = press(&mut app);
+        assert!(!app.session.layout().maximised);
+        assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+
+        // Typing keeps the letter.
+        focus_control(&ctx, &mut app, &output, "Find a sound");
+        press(&mut app);
+        assert!(
+            !app.session.layout().maximised,
+            "F in a text field is typing."
+        );
+    }
+
+    #[test]
+    fn maximise_button_and_either_panel_switch_restore_the_layout() {
+        for (switch, tool_names, boards) in ["Tools", "Boards"].into_iter().flat_map(|switch| {
+            [false, true].into_iter().flat_map(move |tool_names| {
+                [false, true].map(move |boards| (switch, tool_names, boards))
+            })
+        }) {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            let original = mixjam_techno::application::options::WorkspaceLayout {
+                tool_names,
+                boards,
+                maximised: false,
+            };
+            app.session.set_layout(original).unwrap();
+            let output = click_named(&ctx, &mut app, "Maximise the score");
+            assert!(app.session.layout().maximised);
+            for name in ["Tools", "Boards"] {
+                assert_eq!(
+                    accessible_node(&output, name).1.toggled(),
+                    Some(egui::accesskit::Toggled::False),
+                    "{name} reads off while the score fills the window."
+                );
+            }
+            let output = click_named(&ctx, &mut app, switch);
+            let layout = app.session.layout();
+            assert!(!layout.maximised, "{switch} restores the layout.");
+            assert_eq!(
+                layout, original,
+                "{switch} keeps the previous panel choices."
+            );
+            assert!(has_control(&output, "New") && has_control(&output, "Bottom module"));
+            click_named(&ctx, &mut app, "Maximise the score");
+            click_named(&ctx, &mut app, "Maximise the score");
+            assert!(!app.session.layout().maximised, "The button toggles.");
+        }
+    }
+
+    #[test]
+    fn song_length_metadata_does_not_move_the_transport_controls() {
+        each_theme(|theme| {
+            for width in [960.0, 1440.0] {
+                for title in ["A", "Song"] {
+                    let (ctx, mut app) = fixture();
+                    ctx.enable_accesskit();
+                    let mut project = app.session.project().clone();
+                    project.title = title.into();
+                    project.clips.clear();
+                    app.session = Session::headless(
+                        Arc::new(Library::fixture(app.session.library().samples.to_vec())),
+                        project,
+                    )
+                    .unwrap();
+                    app.session.set_theme_fixture(theme);
+                    let size = Vec2::new(width, 1000.0);
+                    let controls = |output: &egui::FullOutput| {
+                        TRANSPORT_BUTTONS
+                            .map(|button| effects_control_rect(output, button))
+                            .into_iter()
+                            .chain(
+                                ["Recording track", "Project BPM", "Help"]
+                                    .map(|name| effects_control_rect(output, name)),
+                            )
+                            .collect::<Vec<_>>()
+                    };
+                    for _ in 0..3 {
+                        frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                    }
+                    let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                    let before = controls(&output);
+                    for bar in [0, 9, 99, 999] {
+                        app.session.place(1, 0, bar * TICKS_PER_BAR).unwrap();
+                        let output =
+                            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                        assert_eq!(
+                            controls(&output),
+                            before,
+                            "Song length must not move transport controls: {title}, {width}, {bar}."
+                        );
+                    }
+                    app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
+                    let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+                    assert_eq!(
+                        controls(&output),
+                        before,
+                        "Tempo changes only the metadata."
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn top_bar_names_every_control_inside_the_bar_at_every_supported_size() {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let controls: Vec<&str> = TRANSPORT_BUTTONS
+            .into_iter()
+            .chain([
+                "MixJam Techno tribal mask",
+                RailIcon::Record.label(),
+                "Recording track",
+                "Project BPM",
+                "Undo",
+                "Redo",
+                "Help",
+            ])
+            .collect();
+        for size in [
+            Vec2::new(960.0, 720.0),
+            Vec2::new(1024.0, 768.0),
+            Vec2::new(1440.0, 1000.0),
+            Vec2::new(1920.0, 1080.0),
+        ] {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            let bar = Rect::from_min_max(Pos2::ZERO, Pos2::new(size.x, 64.0)).expand(0.5);
+            let mut rects: Vec<(&str, Rect)> = controls
+                .iter()
+                .map(|name| (*name, effects_control_rect(&output, name)))
+                .collect();
+            for text in ["MIXJAM", "TECHNO", "00 : 00"] {
+                rects.push((text, accessible_label(&output, text)));
+            }
+            for (name, rect) in &rects {
+                assert!(bar.contains_rect(*rect), "{size:?} {name}: {rect:?}");
+            }
+            // Left to right, without overlap, below the brand.
+            rects.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+            for pair in rects.windows(2) {
+                if pair[0].0 == "MIXJAM" || pair[1].0 == "TECHNO" {
+                    continue;
+                }
+                assert!(
+                    pair[0].1.right() <= pair[1].1.left() + 0.5,
+                    "{size:?}: {} overlaps {}",
+                    pair[0].0,
+                    pair[1].0
+                );
+            }
+        }
     }
 }

@@ -310,6 +310,9 @@ pub struct WorkspaceLayout {
     pub tool_names: bool,
     /// The lower panel shows its board; off, only its toolbar row stays.
     pub boards: bool,
+    /// The score fills the window: the tool rail and the lower panel hide,
+    /// and their own settings above are kept for when it is restored.
+    pub maximised: bool,
 }
 
 impl Default for WorkspaceLayout {
@@ -317,6 +320,7 @@ impl Default for WorkspaceLayout {
         Self {
             tool_names: true,
             boards: true,
+            maximised: false,
         }
     }
 }
@@ -530,6 +534,7 @@ mod tests {
         let layout = WorkspaceLayout {
             tool_names: false,
             boards: false,
+            maximised: true,
         };
         save_layout(&root, layout).unwrap();
         assert_eq!(load_layout(&root), layout);
@@ -542,7 +547,7 @@ mod tests {
             load_layout(&root),
             WorkspaceLayout {
                 tool_names: false,
-                boards: true,
+                ..WorkspaceLayout::default()
             }
         );
         fs::write(root.join(LAYOUT_FILE), b"not json").unwrap();

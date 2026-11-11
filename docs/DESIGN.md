@@ -516,24 +516,26 @@ the clip size, reduced to metadata size when their rectangle is below 28 points
 high. Small and Metadata support compact controls and sample details.
 
 The position readout shows elapsed minutes and seconds (`MM : SS`) in the text
-face at 23 points in a fixed 112 by 42-point container centered on the
-header's width, whatever the widths of the title before it and the actions
-after it; its tooltip adds the bar and beat. Changes to digit widths or song
-length must not move the adjacent controls.
+face at 23 points in a fixed 112 by 42-point container, or at 19 points in 76
+by 40 points in a compact top bar. It follows Record and the recording track
+and comes before the tempo. In a wide top bar the bar and beat follow it in the
+12-point muted text face; its tooltip always adds them. Changes to digit widths
+or song length must not move the adjacent controls.
 
-The song name leads the transport at the Headline size (15 points), followed by
-a mark when the song has unsaved changes. The name is never clipped, so it has
+The song name follows the brand in the top bar and leads the transport at the
+Headline size (15 points), followed by a mark when the song has unsaved changes.
+Under a name that fits one line at that size, an 11-point muted line gives the
+song's length in bars and minutes, where it fits the name's room. The name is never clipped, so it has
 no tooltip. Its slot is sized to the name and always keeps room for the mark,
 so the first edit does not move the transport controls; a longer name pushes
 the controls to the right. The controls after the name keep their widths, and
 the name takes the rest of the row. When it does not fit, it wraps between words
 onto two lines, then shrinks in 1-point steps to a 9-point floor. At the floor,
 a very long name takes as many lines as the 48-point row holds. Only an
-absurdly long name, beyond about 110 characters at the minimum window or 300
-at the starting size, goes below
-the floor, breaking words if it must. In a compact window (a transport narrower
-than 1000 points) the eight transport buttons narrow from 42 to 34 points when
-the name would otherwise lose its full size. No transport control is dropped
+absurdly long name, far longer than a real title, goes below the floor,
+breaking words if it must. In a compact top bar (less than 1240 points of
+content) the eight transport buttons narrow from 42 to 34 points when the name
+would otherwise lose its full size. No transport control is dropped
 or hidden, and all of them stay on screen at the minimum window size. Status text
 uses the text face at 12 points. These are local sizes within the same text family.
 
@@ -562,20 +564,20 @@ retain the full name in a tooltip.
 ## Layout
 
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
-720. The header is 66 points high. Transport occupies 68 points above the
-arrangement. The tool rail sits at the left, below the header: 84 points wide
-with tool names, 64 points with icons only. A 30-point status bar spans the
+720. One 64-point top bar spans the window (see Top bar). The tool rail sits
+at the left, below the top bar: 84 points wide with tool names, 64 points with
+icons only. A 30-point status bar spans the
 full width at the bottom. The bottom panel
 (Sounds, Mixer, Mastering, or Effects) starts at 28% of the content height, clamped to 220-290 points. Drag its
 top divider to resize it. A centered grip marks the divider. The panel retains
 its height for the current session, with a minimum of 180 points for Sounds and
 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
 In a short window Mixer yields down to 370 points so the lane viewport keeps
-80 points. A 400-point Mixer panel gives the physical gain rail 96 points.
+150 points. A 400-point Mixer panel gives the physical gain rail 96 points.
 The short panel can reduce it to 68 points. The draggable area extends 16
 points past each end of the rail to include the fader cap.
-When space permits, the maximum panel height leaves 220 points for the
-arrangement plus 68 points for transport. At the minimum client height,
+When space permits, the maximum panel height leaves 290 points for the
+score toolbar, the ruler, and the lanes. At the minimum client height,
 Mixer's minimum can reduce that arrangement reserve. Status
 occupies 30 points below it. Its application version, prefixed with `v`, stays at the right inner
 margin, with space reserved before status text is truncated. Use the 12-point text face
@@ -625,7 +627,7 @@ another track's Solo silences is dimmed, and its track number uses Muted. The
 fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
 timeline scrolls horizontally without moving track labels.
 
-Follow is enabled by default in the transport. Options can change its startup
+Follow is enabled by default in the score toolbar. Options can change its startup
 default without changing the current session's toggle. It moves the horizontal viewport
 when the playhead approaches an edge, including seeks and backward loop jumps.
 It leaves vertical scrolling unchanged. While paused, manual horizontal scroll
@@ -764,8 +766,7 @@ Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
 Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, Effect Studio,
 Step synth, Sample editor, Time Stretcher, Album Review). With names, each group
 has an uppercase 9.5-point muted heading; icons only, recessed separators divide
-them. The microphone icon and visible recording-track selector follow the tools.
-Options sits alone at the foot of the rail, below a separator. When the window
+them. Options sits alone at the foot of the rail, below a separator. When the window
 is too short for every name, the rail scrolls under the mouse wheel or to keep
 the keyboard-focused tool visible. Options stays fixed at the foot. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
@@ -788,7 +789,32 @@ A switch that is on carries an accent underline. Both choices are
 saved in `layout.json` beside `options.json` and do not touch the Options
 window or its revision.
 
-The header places a 40-point tribal mask before the MixJam Techno title.
+### Top bar
+
+One 64-point top bar spans the window, with 18-point side margins and 8 above
+and below its 48-point row. From the left: the tribal mask, the brand, the song
+name, the eight transport buttons (Loop, Go to start, Back one bar, Stop,
+Play / pause, Forward one bar, Go to end, Record), the microphone and the
+recording-track selector, the position readout, the BPM label and tempo slider,
+and, at the right end, Undo, Redo, and Help. Tab follows the same order. Below
+1240 points of content the bar is compact: tighter spacing, a smaller brand, no
+separator after it, and narrower readout, tempo, and action buttons, so every
+control stays on screen at the minimum window size. Help lives only here.
+
+### Score toolbar and Maximise
+
+A toolbar row heads the arrangement: the Arrangement heading and its counts at
+the left, and at the right the Automation lane menu, Follow, Sections, the Zoom
+slider (the mouse wheel over it zooms), and the Maximise switch. Maximise, or
+F, hides the tool rail and the lower panel so the score fills the window; the
+top bar, the score toolbar, and the status bar stay. F again, the switch, or
+either status-bar switch restores them, and the rail's and the lower panel's
+own choices come back unchanged. While the score is maximised, Tools and Boards
+read off. The state is saved in `layout.json`. A text field that has focus
+keeps F for typing.
+
+The top bar places a 40-point tribal mask before the MixJam Techno brand:
+MixJam over a muted Techno, at 20 and 11 points, or 14 and 9 in a compact bar.
 The artwork retains its original colors and transparent background. The native
 window, taskbar, and Windows executable use the same preserved mask.
 `assets/app/` contains its PNG and multiple-size ICO. The viewport embeds

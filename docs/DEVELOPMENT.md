@@ -118,7 +118,9 @@ The sections case includes named bookmarks and a long section name.
 Options capture views are `options-audio`, `options-workspace`, and `options-files`;
 `options-unapplied` adds unapplied edits on two pages, and `options-discard`
 shows its Discard changes? prompt. `rail-icons` shows the tool rail without
-names, and `boards-folded` folds the lower panel to its toolbar row. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+names, `boards-folded` folds the lower panel to its toolbar row, and
+`maximised` hides the tool rail and the lower panel so the score fills the
+window. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.

@@ -95,10 +95,10 @@ impl BottomModule {
     /// The panel minimum for a window whose content area is `available` points
     /// high. Mixer prefers 400 points, and Mastering and Effects the height of
     /// their whole boards. A short window reduces each, down to 370, so the
-    /// arrangement keeps the transport, its heading and ruler, and an 80-point
-    /// lane viewport; Mixer's gain rail shortens and the boards scroll.
+    /// arrangement keeps its toolbar and ruler and a 150-point lane viewport;
+    /// Mixer's gain rail shortens and the boards scroll.
     fn minimum_height(self, available: f32) -> f32 {
-        const ARRANGEMENT_RESERVE: f32 = 68.0 + 103.0 + 80.0;
+        const ARRANGEMENT_RESERVE: f32 = 103.0 + 150.0;
         match self {
             Self::Sounds => 180.0,
             Self::Mixer => (available - ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
@@ -535,12 +535,16 @@ impl MixJamApp {
         if capture_view == "follow" {
             session.seek(40 * TICKS_PER_BAR);
         }
-        if matches!(capture_view.as_str(), "rail-icons" | "boards-folded") {
+        if matches!(
+            capture_view.as_str(),
+            "rail-icons" | "boards-folded" | "maximised"
+        ) {
             // Captures run in their own data folder, so the saved layout
             // stays there.
             let mut layout = session.layout();
             layout.tool_names = capture_view != "rail-icons";
             layout.boards = capture_view != "boards-folded";
+            layout.maximised = capture_view == "maximised";
             if let Err(error) = session.set_layout(layout) {
                 eprintln!("{error}");
             }
@@ -1550,6 +1554,13 @@ impl MixJamApp {
         if pressed_once(egui::Key::F1) {
             self.show_help = true;
         }
+        // F maximises the score or restores it; typing already returned.
+        if ctx.input(|i| i.modifiers.is_none())
+            && !egui::Popup::is_any_open(ctx)
+            && pressed_once(egui::Key::F)
+        {
+            self.set_layout(|layout| layout.maximised = !layout.maximised);
+        }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::O) {
             self.request_action(PendingAction::Open, ctx);
         }
@@ -2078,6 +2089,10 @@ impl MixJamApp {
                                 "F12 saves the last 30 seconds that playback sent to the audio \
                                  device, with the song's state, to the diagnostics folder in the \
                                  data folder. Press it while something sounds wrong.",
+                            ),
+                            (
+                                "Maximise",
+                                "F hides the tool rail and the lower panel; F again restores them.",
                             ),
                             ("Help", "F1"),
                         ] {

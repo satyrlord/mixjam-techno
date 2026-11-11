@@ -23,11 +23,17 @@ dark; **Aero** is colorful cobalt and aqua plastic; **Vintage** is worn painted
 metal with ivory mixer strips. Choose one on the Options **Workspace** page. Every
 theme has the same layout, controls, and keyboard order; only colors,
 materials, control shapes, and typefaces change. Titles are uppercase in every
-theme. The header shows the position readout (minutes and seconds) in its center; hover it for
-the bar and beat. Transport sits above the arrangement and starts with the song name,
-marked with an asterisk when it has unsaved changes. The whole name always shows: a
-long name wraps onto two lines or uses smaller text, and in a narrow window the
-transport buttons get narrower to make room. Sounds, Mixer, Mastering, and Effects share the lower panel;
+theme. One top bar holds the brand, the song name, the transport, the
+recording track beside Record, the position readout (minutes and seconds), the
+tempo, and Undo, Redo, and Help. Hover the readout for the bar and beat; a wide
+window also shows them beside it. The song name is marked with an asterisk when
+it has unsaved changes, and a short name shows the song's length in bars and
+minutes beneath it. The whole name always shows: a long name wraps onto two
+lines or uses smaller text, and in a narrow window the transport buttons get
+narrower to make room. Above the lanes, the score toolbar holds the Automation
+menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
+rail and the lower panel so the score fills the window; press **F** again, or
+use either status-bar switch, to restore them. Sounds, Mixer, Mastering, and Effects share the lower panel;
 use its left-side module selector to switch between them. Sample categories,
 search, and library filters stay together in Sounds; search and filters sit
 beside the selector. Sort sounds in library order, by name, length, BPM, or

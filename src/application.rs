@@ -3403,6 +3403,7 @@ mod tests {
         let layout = crate::options::WorkspaceLayout {
             tool_names: false,
             boards: false,
+            maximised: true,
         };
         session.set_layout(layout).unwrap();
         assert_eq!(crate::options::load_layout(&root), layout);

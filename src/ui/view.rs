@@ -112,8 +112,15 @@ const TRANSPORT_ROW_HEIGHT: f32 = 48.0;
 const TRANSPORT_BUTTON: f32 = 42.0;
 const TRANSPORT_BUTTON_NARROW: f32 = 34.0;
 const TRANSPORT_BUTTON_COUNT: f32 = 8.0;
-/// The position readout's container, centered in the header.
+/// The position readout's container in the top bar, and in a narrow window.
 const POSITION_SIZE: Vec2 = Vec2::new(112.0, 42.0);
+const POSITION_SIZE_COMPACT: Vec2 = Vec2::new(76.0, 40.0);
+/// The top bar: the transport row inside its vertical margins.
+const TOP_BAR_MARGIN: i8 = 8;
+const TOP_BAR_HEIGHT: f32 = TRANSPORT_ROW_HEIGHT + 2.0 * TOP_BAR_MARGIN as f32;
+/// Below this width the top bar packs tighter: a stacked brand, narrower
+/// buttons, and no bar and beat beside the position.
+const TOP_BAR_COMPACT_WIDTH: f32 = 1240.0;
 
 /// Section bookmark colors, in section order; a song with more sections
 /// repeats them.
@@ -242,68 +249,35 @@ impl MixJamApp {
         self.rail_icons.as_ref()?.as_ref().ok().cloned()
     }
 
+    /// The top bar across the window: the brand, the song name, the
+    /// transport, the recording track, the position, the tempo, and Undo,
+    /// Redo and Help at the right end.
     pub(super) fn header(&mut self, ctx: &egui::Context) {
         let icons = self.icons(ctx);
-        let (can_undo, can_redo) = (
-            self.session.has_history_step(false),
-            self.session.has_history_step(true),
-        );
-        let action = |ui: &mut egui::Ui, icon: RailIcon, label: &str| match &icons {
-            Some(icons) => action_icon_button(
-                ui,
-                icons,
-                icon,
-                label,
-                match icon {
-                    RailIcon::Undo => can_undo,
-                    RailIcon::Redo => can_redo,
-                    _ => true,
-                },
-                icon.hint(),
-            ),
-            None => action_button(ui, label, false).hover_hint(label),
-        };
         egui::TopBottomPanel::top("header")
-            .exact_height(66.0)
+            .exact_height(TOP_BAR_HEIGHT)
             .frame(
                 egui::Frame::new()
                     .fill(roles().canvas)
-                    .inner_margin(egui::Margin::symmetric(22, 10)),
+                    .inner_margin(egui::Margin::symmetric(18, TOP_BAR_MARGIN)),
             )
             .show(ctx, |ui| {
-                // The header spans the window and its margins are symmetric,
-                // so its center is the window's center.
-                let center = ui.max_rect().center().x;
                 ui.horizontal_centered(|ui| {
+                    let compact = ui.available_width() < TOP_BAR_COMPACT_WIDTH;
+                    ui.spacing_mut().item_spacing.x = if compact { 4.0 } else { 6.0 };
                     if let Some(icons) = &icons {
                         icons.brand_image(ui);
                     }
-                    ui.label(brand("MixJam", 27.0));
-                    ui.label(brand("Techno", 14.0).color(roles().muted));
-                    ui.add_space(24.0);
-                    ui.separator();
-                    let position = Rect::from_center_size(
-                        Pos2::new(center, ui.max_rect().center().y),
-                        POSITION_SIZE,
-                    );
-                    transport_position(
-                        ui,
-                        position,
-                        self.session.cursor_tick(),
-                        self.session.project().bpm,
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if action(ui, RailIcon::Help, "Help").clicked() {
-                            self.show_help = !self.show_help;
-                        }
-                        ui.add_space(8.0);
-                        if action(ui, RailIcon::Redo, "Redo").clicked() {
-                            self.history_step(true);
-                        }
-                        if action(ui, RailIcon::Undo, "Undo").clicked() {
-                            self.history_step(false);
-                        }
-                    });
+                    stacked_brand(ui, compact);
+                    // A narrow bar gives the separator's room to the name.
+                    if compact {
+                        ui.add_space(6.0);
+                    } else {
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(2.0);
+                    }
+                    self.transport(ui, icons.as_deref(), compact);
                 });
             });
     }
@@ -312,7 +286,11 @@ impl MixJamApp {
         let Some(icons) = self.icons(ctx) else {
             return;
         };
-        let names = self.session.layout().tool_names;
+        let layout = self.session.layout();
+        if layout.maximised {
+            return;
+        }
+        let names = layout.tool_names;
         egui::SidePanel::left("tools")
             .exact_width(rail_width(names))
             .resizable(false)
@@ -348,8 +326,8 @@ impl MixJamApp {
             });
     }
 
-    /// The rail's tools in their groups: File, Clips, Tools, and the
-    /// recording track. With names off, each group heading is a separator.
+    /// The rail's tools in their groups: File, Clips and Tools. With names
+    /// off, each group heading is a separator.
     fn rail_tools(
         &mut self,
         ui: &mut egui::Ui,
@@ -426,22 +404,6 @@ impl MixJamApp {
         if tool(ui, RailIcon::AlbumReview, self.show_album_review).clicked() {
             self.show_album_review = !self.show_album_review;
         }
-        // Icons only, the microphone marks its own group; the slim rail
-        // needs the height at the 720-point minimum.
-        if names {
-            controls::rail_separator(ui);
-        } else {
-            ui.add_space(4.0);
-        }
-        rail_heading(ui, icons, RailIcon::Record);
-        let occupied = occupied_tracks(self.session.project());
-        ui.allocate_ui_with_layout(
-            Vec2::new(48.0, 24.0),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                recording_destination(ui, &mut self.armed_track, &occupied);
-            },
-        );
     }
 
     /// Change the workspace layout and keep it for later sessions.
@@ -581,18 +543,31 @@ impl MixJamApp {
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
             |ui| {
                 ui.label(panels);
+                // In a maximised score both read off; either one restores the
+                // score with the previous panel choices.
                 let layout = self.session.layout();
-                if panel_switch(ui, "Tools", layout.tool_names)
+                let shown = !layout.maximised;
+                if panel_switch(ui, "Tools", shown && layout.tool_names)
                     .hover_hint("Tool rail: names under the icons, or icons only")
                     .clicked()
                 {
-                    self.set_layout(|layout| layout.tool_names = !layout.tool_names);
+                    self.set_layout(|layout| {
+                        if shown {
+                            layout.tool_names = !layout.tool_names;
+                        }
+                        layout.maximised = false;
+                    });
                 }
-                if panel_switch(ui, "Boards", layout.boards)
+                if panel_switch(ui, "Boards", shown && layout.boards)
                     .hover_hint("Lower panel: its board, or only its toolbar row")
                     .clicked()
                 {
-                    self.set_layout(|layout| layout.boards = !layout.boards);
+                    self.set_layout(|layout| {
+                        if shown {
+                            layout.boards = !layout.boards;
+                        }
+                        layout.maximised = false;
+                    });
                 }
                 ui.add_space(STATUS_VERSION_GAP);
                 ui.add(
@@ -608,7 +583,11 @@ impl MixJamApp {
     }
 
     pub(super) fn bottom(&mut self, ctx: &egui::Context) {
-        if self.session.layout().boards {
+        let layout = self.session.layout();
+        if layout.maximised {
+            return;
+        }
+        if layout.boards {
             self.lower_panel(ctx);
         } else {
             // Folded: only the toolbar row, so the module choice and the
@@ -631,19 +610,11 @@ impl MixJamApp {
                     self.bottom_toolbar(ui);
                 });
         }
-        egui::TopBottomPanel::top("transport")
-            .exact_height(68.0)
-            .frame(
-                egui::Frame::new()
-                    .fill(roles().panel)
-                    .inner_margin(egui::Margin::symmetric(18, 10)),
-            )
-            .show(ctx, |ui| self.transport(ui));
     }
 
     fn lower_panel(&mut self, ctx: &egui::Context) {
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
-        // Reserve the transport and a usable arrangement.
+        // Reserve the score toolbar, its ruler and a usable lane viewport.
         let available = ctx.available_rect().height();
         let min_height = self.bottom_module.minimum_height(available);
         // Keep the resized section stable when switching to a shorter module.
@@ -651,7 +622,7 @@ impl MixJamApp {
             .into_iter()
             .map(|module| module.minimum_height(available))
             .fold(0.0_f32, f32::max);
-        let max_height = (available - 68.0 - 220.0).max(shared_minimum);
+        let max_height = (available - 290.0).max(shared_minimum);
         let sounds = egui::TopBottomPanel::bottom("sounds")
             .default_height(height)
             .height_range(min_height..=max_height)
@@ -688,168 +659,248 @@ impl MixJamApp {
             .rect_filled(grip, 2.0, roles().muted);
     }
 
-    pub(super) fn transport(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_centered(|ui| {
-            // Keep both view toggles clear of the tool rail in compact windows.
-            let compact = ui.available_width() < 1000.0;
-            if compact {
-                ui.spacing_mut().item_spacing.x = 4.0;
-            }
-            // The controls after the name keep their own widths: the name gets
-            // the rest of the row, measured in the previous pass, and is never
-            // clipped. Its slot keeps room for the unsaved mark, so the first
-            // edit does not move the controls.
-            let rest_id = egui::Id::new(("transport-rest-width", compact));
-            let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_id));
-            let available = ui.available_width();
-            let room = |button: f32| {
-                available - rest.unwrap_or_default() - TRANSPORT_BUTTON_COUNT * button
-            };
-            let title = &self.session.project().title;
-            let sizing = format!("{title} *");
-            let mut button = TRANSPORT_BUTTON;
-            let mut fit = transport_title_fit(ui, &sizing, room(button));
-            if compact && fit.size < TRANSPORT_TITLE_SIZE {
-                button = TRANSPORT_BUTTON_NARROW;
-                fit = transport_title_fit(ui, &sizing, room(button));
-            }
-            let width = room(button);
-            let slot = transport_title_galley(ui, &sizing, fit, width).size();
-            let shown = if self.session.unsaved() {
-                sizing.clone()
-            } else {
-                title.clone()
-            };
-            let galley = transport_title_galley(ui, &shown, fit, width);
-            let (name, response) =
-                ui.allocate_exact_size(Vec2::new(slot.x, slot.y.max(30.0)), Sense::hover());
+    pub(super) fn transport(
+        &mut self,
+        ui: &mut egui::Ui,
+        icons: Option<&RailIcons>,
+        compact: bool,
+    ) {
+        // The controls after the name keep their own widths: the name gets
+        // the rest of the row, measured in the previous pass, and is never
+        // clipped. Its slot keeps room for the unsaved mark, so the first
+        // edit does not move the controls.
+        let rest_id = egui::Id::new(("transport-rest-width", compact));
+        let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_id));
+        let available = ui.available_width();
+        let room =
+            |button: f32| available - rest.unwrap_or_default() - TRANSPORT_BUTTON_COUNT * button;
+        let title = &self.session.project().title;
+        let sizing = format!("{title} *");
+        let mut button = TRANSPORT_BUTTON;
+        let mut fit = transport_title_fit(ui, &sizing, room(button));
+        if compact && fit.size < TRANSPORT_TITLE_SIZE {
+            button = TRANSPORT_BUTTON_NARROW;
+            fit = transport_title_fit(ui, &sizing, room(button));
+        }
+        let width = room(button);
+        let slot = transport_title_galley(ui, &sizing, fit, width).size();
+        let shown = if self.session.unsaved() {
+            sizing.clone()
+        } else {
+            title.clone()
+        };
+        let galley = transport_title_galley(ui, &shown, fit, width);
+        // Under a name on one line at full size, the song's length, where it
+        // fits the name's room.
+        let meta = (fit.size >= TRANSPORT_TITLE_SIZE && galley.rows.len() == 1)
+            .then(|| song_meta(self.session.project()))
+            .flatten()
+            .map(|text| {
+                ui.painter()
+                    .layout_no_wrap(text, FontId::proportional(11.0), roles().muted)
+            })
+            .filter(|meta| meta.size().x <= slot.x);
+        let block = galley.size().y + meta.as_ref().map_or(0.0, |meta| meta.size().y + 1.0);
+        let (name, response) =
+            ui.allocate_exact_size(Vec2::new(slot.x, slot.y.max(30.0)), Sense::hover());
+        let top = name.center().y - block / 2.0;
+        let title_height = galley.size().y;
+        ui.painter()
+            .galley(Pos2::new(name.left(), top), galley, roles().text);
+        if let Some(meta) = meta {
             ui.painter().galley(
-                Pos2::new(name.left(), name.center().y - galley.size().y / 2.0),
-                galley,
-                roles().text,
+                Pos2::new(name.left(), top + title_height + 1.0),
+                meta,
+                roles().muted,
             );
-            response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title_text(&shown))
-            });
-            ui.add_space(if compact { 4.0 } else { 12.0 });
-            let sections = self.section_bookmarks && !self.session.project().sections.is_empty();
-            if transport_button(
-                ui,
-                button,
-                TransportIcon::Loop,
-                self.session.project().loop_region.is_some(),
-                if sections {
-                    "Loop the section at the playhead. Drag the bar ruler to loop a range."
-                } else {
-                    "Loop the whole song. Drag the bar ruler to loop a range."
-                },
-            )
-            .clicked()
-            {
-                let project = self.session.project();
-                let region = if project.loop_region.is_some() {
-                    None
-                } else if sections {
-                    project.section_span(self.session.cursor_tick())
-                } else {
-                    Some([0, project.end_tick().max(TICKS_PER_BAR)])
-                };
-                let result = self.session.edit(EditCommand::SetLoop(region));
-                self.apply(result);
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title_text(&shown))
+        });
+        ui.add_space(if compact { 4.0 } else { 12.0 });
+        let sections = self.section_bookmarks && !self.session.project().sections.is_empty();
+        if transport_button(
+            ui,
+            button,
+            TransportIcon::Loop,
+            self.session.project().loop_region.is_some(),
+            if sections {
+                "Loop the section at the playhead. Drag the bar ruler to loop a range."
+            } else {
+                "Loop the whole song. Drag the bar ruler to loop a range."
+            },
+        )
+        .clicked()
+        {
+            let project = self.session.project();
+            let region = if project.loop_region.is_some() {
+                None
+            } else if sections {
+                project.section_span(self.session.cursor_tick())
+            } else {
+                Some([0, project.end_tick().max(TICKS_PER_BAR)])
+            };
+            let result = self.session.edit(EditCommand::SetLoop(region));
+            self.apply(result);
+        }
+        if transport_button(ui, button, TransportIcon::Start, false, "Go to start").clicked() {
+            self.seek(0);
+        }
+        if transport_button(ui, button, TransportIcon::Back, false, "Back one bar").clicked() {
+            self.seek(self.session.cursor_tick().saturating_sub(TICKS_PER_BAR));
+        }
+        if transport_button(ui, button, TransportIcon::Stop, false, "Stop").clicked() {
+            self.stop();
+        }
+        let play = transport_button(
+            ui,
+            button,
+            if self.session.wants_playback() {
+                TransportIcon::Pause
+            } else {
+                TransportIcon::Play
+            },
+            self.session.wants_playback(),
+            "Play / pause (Space)",
+        );
+        if self.capture_transport_focus {
+            play.request_focus();
+            self.capture_focus_ready = play.has_focus();
+            if !self.capture_focus_ready {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
             }
-            if transport_button(ui, button, TransportIcon::Start, false, "Go to start").clicked() {
-                self.seek(0);
+        }
+        if play.clicked() {
+            if self.session.wants_playback() {
+                self.pause();
+            } else {
+                self.start_playback();
             }
-            if transport_button(ui, button, TransportIcon::Back, false, "Back one bar").clicked() {
-                self.seek(self.session.cursor_tick().saturating_sub(TICKS_PER_BAR));
-            }
-            if transport_button(ui, button, TransportIcon::Stop, false, "Stop").clicked() {
+        }
+        if transport_button(ui, button, TransportIcon::Forward, false, "Forward one bar").clicked()
+        {
+            self.seek(self.session.cursor_tick().saturating_add(TICKS_PER_BAR));
+        }
+        if transport_button(ui, button, TransportIcon::End, false, "Go to end").clicked() {
+            self.seek(self.session.project().end_tick());
+        }
+        if transport_button(
+            ui,
+            button,
+            TransportIcon::Record,
+            self.session.is_recording(),
+            "Record into the armed track",
+        )
+        .clicked()
+        {
+            if self.session.is_recording() {
                 self.stop();
+            } else {
+                self.start_recording();
             }
-            let play = transport_button(
+        }
+        // The recording track sits beside Record.
+        if let Some(icons) = icons {
+            icon_heading(
                 ui,
-                button,
-                if self.session.wants_playback() {
-                    TransportIcon::Pause
-                } else {
-                    TransportIcon::Play
-                },
-                self.session.wants_playback(),
-                "Play / pause (Space)",
+                icons,
+                RailIcon::Record,
+                if compact { 18.0 } else { 24.0 },
             );
-            if self.capture_transport_focus {
-                play.request_focus();
-                self.capture_focus_ready = play.has_focus();
-                if !self.capture_focus_ready {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
-                }
-            }
-            if play.clicked() {
-                if self.session.wants_playback() {
-                    self.pause();
-                } else {
-                    self.start_playback();
-                }
-            }
-            if transport_button(ui, button, TransportIcon::Forward, false, "Forward one bar")
-                .clicked()
-            {
-                self.seek(self.session.cursor_tick().saturating_add(TICKS_PER_BAR));
-            }
-            if transport_button(ui, button, TransportIcon::End, false, "Go to end").clicked() {
-                self.seek(self.session.project().end_tick());
-            }
-            if transport_button(
+        }
+        let occupied = occupied_tracks(self.session.project());
+        recording_destination(ui, &mut self.armed_track, &occupied);
+        ui.add_space(if compact { 2.0 } else { 10.0 });
+        transport_position(
+            ui,
+            if compact {
+                POSITION_SIZE_COMPACT
+            } else {
+                POSITION_SIZE
+            },
+            self.session.cursor_tick(),
+            self.session.project().bpm,
+            !compact,
+        );
+        ui.add_space(if compact { 2.0 } else { 10.0 });
+        ui.label(egui::RichText::new("BPM").color(roles().muted));
+        let mut bpm = self.session.project().bpm;
+        if name_control(
+            bpm_picker(
                 ui,
-                button,
-                TransportIcon::Record,
-                self.session.is_recording(),
-                "Record into the armed track",
-            )
-            .clicked()
-            {
-                if self.session.is_recording() {
-                    self.stop();
-                } else {
-                    self.start_recording();
-                }
-            }
-            ui.add_space(if compact { 4.0 } else { 12.0 });
-            ui.label(egui::RichText::new("BPM").color(roles().muted));
-            let mut bpm = self.session.project().bpm;
-            if name_control(
-                bpm_picker(
-                    ui,
-                    "Project BPM",
-                    &mut bpm,
-                    if compact { 88.0 } else { 104.0 },
-                ),
                 "Project BPM",
-            )
-            .changed()
-            {
-                let result = self.session.edit(EditCommand::SetTempo(bpm));
-                self.apply(result);
+                &mut bpm,
+                if compact { 64.0 } else { 88.0 },
+            ),
+            "Project BPM",
+        )
+        .changed()
+        {
+            let result = self.session.edit(EditCommand::SetTempo(bpm));
+            self.apply(result);
+        }
+        // Undo, Redo and Help against the right edge.
+        let action_width = if compact { 32.0 } else { 40.0 };
+        let help_gap = if compact { 4.0 } else { 8.0 };
+        let spacing = ui.spacing().item_spacing.x;
+        let actions = 3.0 * action_width + 2.0 * spacing + help_gap;
+        // Remember what follows the name, less the transport buttons. A
+        // changed width redoes this pass before it is shown.
+        let measured = ui.min_rect().right() - name.right() - TRANSPORT_BUTTON_COUNT * button
+            + spacing
+            + actions;
+        ui.add_space((ui.available_width() - actions).max(0.0));
+        let (can_undo, can_redo) = (
+            self.session.has_history_step(false),
+            self.session.has_history_step(true),
+        );
+        let action = |ui: &mut egui::Ui, icon: RailIcon, label: &str, enabled: bool| match icons {
+            Some(icons) => {
+                action_icon_button(ui, icons, icon, label, enabled, icon.hint(), action_width)
             }
-            ui.add_space(if compact { 4.0 } else { 10.0 });
-            ui.label(egui::RichText::new("Zoom").color(roles().muted));
-            // A shorter zoom rail leaves room for the stepped tempo slider.
-            ui.spacing_mut().slider_width = if compact { 48.0 } else { 64.0 };
-            let zoom = name_control(
-                ui.add(
-                    egui::Slider::new(&mut self.zoom, ZOOM_RANGE)
-                        .show_value(false)
-                        .clamping(egui::SliderClamping::Always),
-                ),
-                "Zoom",
+            None => action_button(ui, label, false).hover_hint(label),
+        };
+        if action(ui, RailIcon::Undo, "Undo", can_undo).clicked() {
+            self.history_step(false);
+        }
+        if action(ui, RailIcon::Redo, "Redo", can_redo).clicked() {
+            self.history_step(true);
+        }
+        ui.add_space(help_gap);
+        if action(ui, RailIcon::Help, "Help", true).clicked() {
+            self.show_help = !self.show_help;
+        }
+        if rest.is_none_or(|rest| (rest - measured).abs() > 0.5) {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(rest_id, measured));
+            ui.ctx().request_discard("The transport layout changed.");
+        }
+    }
+
+    /// The score's toolbar: its heading and counts, then the automation lane,
+    /// Follow, Sections, Zoom and Maximise against the right edge.
+    fn score_toolbar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(heading("Arrangement", 18.0));
+            ui.add_space(10.0);
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} tracks  /  {} clips",
+                    occupied_tracks(self.session.project()).len(),
+                    self.session.project().clips.len()
+                ))
+                .size(12.0)
+                .color(roles().muted),
             );
-            // An egui slider ignores the wheel; each notch scales the zoom by
-            // a tenth, as the other wheel-driven controls take one step.
-            let turn = controls::wheel(ui, &zoom);
-            if turn != 0.0 {
-                self.zoom = (self.zoom * ZOOM_WHEEL_STEP.powf(turn))
-                    .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
-            }
+            let compact = ui.available_width() < 700.0;
+            // The controls' width is measured in the previous pass; a change
+            // redoes this pass before it is shown.
+            let width_id = ui.id().with(("score-toolbar-width", compact));
+            let width = ui.ctx().data(|data| data.get_temp::<f32>(width_id));
+            ui.add_space((ui.available_width() - width.unwrap_or_default()).max(16.0));
+            let start = ui.cursor().left();
+            self.automation_selector(ui);
+            ui.add_space(if compact { 4.0 } else { 10.0 });
             if ui
                 .toggle_value(&mut self.follow_playhead, "Follow")
                 .hover_hint("Keep the playhead in view during playback and seeking.")
@@ -873,13 +924,33 @@ impl MixJamApp {
                 self.section_bookmarks = self.session.options().show_section_bookmarks;
                 self.error(error);
             }
-            // Remember what follows the name, less the transport buttons. A
-            // changed width redoes this pass before it is shown.
-            let measured = ui.min_rect().right() - name.right() - TRANSPORT_BUTTON_COUNT * button;
-            if rest.is_none_or(|rest| (rest - measured).abs() > 0.5) {
+            ui.add_space(if compact { 4.0 } else { 10.0 });
+            ui.label(egui::RichText::new("Zoom").size(12.0).color(roles().muted));
+            ui.spacing_mut().slider_width = if compact { 48.0 } else { 72.0 };
+            let zoom = name_control(
+                ui.add(
+                    egui::Slider::new(&mut self.zoom, ZOOM_RANGE)
+                        .show_value(false)
+                        .clamping(egui::SliderClamping::Always),
+                ),
+                "Zoom",
+            );
+            // An egui slider ignores the wheel; each notch scales the zoom by
+            // a tenth, as the other wheel-driven controls take one step.
+            let turn = controls::wheel(ui, &zoom);
+            if turn != 0.0 {
+                self.zoom = (self.zoom * ZOOM_WHEEL_STEP.powf(turn))
+                    .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
+            }
+            let maximised = self.session.layout().maximised;
+            if maximise_button(ui, maximised).clicked() {
+                self.set_layout(|layout| layout.maximised = !layout.maximised);
+            }
+            let measured = ui.min_rect().right() - start;
+            if width.is_none_or(|width| (width - measured).abs() > 0.5) {
                 ui.ctx()
-                    .data_mut(|data| data.insert_temp(rest_id, measured));
-                ui.ctx().request_discard("The transport layout changed.");
+                    .data_mut(|data| data.insert_temp(width_id, measured));
+                ui.ctx().request_discard("The score toolbar changed.");
             }
         });
     }
@@ -1637,21 +1708,7 @@ impl MixJamApp {
         if !self.section_bookmarks {
             self.cancel_section_edit();
         }
-        ui.horizontal(|ui| {
-            ui.label(heading("Arrangement", 18.0));
-            ui.add_space(10.0);
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} tracks  /  {} clips",
-                    occupied_tracks(self.session.project()).len(),
-                    self.session.project().clips.len()
-                ))
-                .size(12.0)
-                .color(roles().muted),
-            );
-            ui.add_space(16.0);
-            self.automation_selector(ui);
-        });
+        self.score_toolbar(ui);
         ui.add_space(12.0);
         self.timeline_rect = None;
         self.timeline_drop_rect = None;
@@ -2787,12 +2844,18 @@ fn follow_offset(
     ((next - offset).abs() > 0.5).then_some(next)
 }
 
-fn transport_position(ui: &mut egui::Ui, rect: Rect, tick: u32, bpm: f64) -> Response {
+fn transport_position(
+    ui: &mut egui::Ui,
+    size: Vec2,
+    tick: u32,
+    bpm: f64,
+    bar_and_beat: bool,
+) -> Response {
     let bars = tick / TICKS_PER_BAR + 1;
     let beat = (tick % TICKS_PER_BAR) / (TICKS_PER_BAR / 4) + 1;
     let seconds = (tick as f64 * 240.0 / bpm / TICKS_PER_BAR as f64) as u64;
     let text = format!("{:02} : {:02}", seconds / 60, seconds % 60);
-    let response = ui.allocate_rect(rect, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
     // Vintage reads time from an amber display window; the other themes from
     // the header itself.
     let display = roles().material == theme::Material::Metal;
@@ -2814,13 +2877,24 @@ fn transport_position(ui: &mut egui::Ui, rect: Rect, tick: u32, bpm: f64) -> Res
             rect.center(),
             Align2::CENTER_CENTER,
             &text,
-            FontId::proportional(23.0),
+            FontId::proportional(if size.x < POSITION_SIZE.x { 19.0 } else { 23.0 }),
             if display {
                 roles().accent
             } else {
                 roles().text
             },
         );
+    // Bar and beat beside the time, where the top bar has room.
+    if bar_and_beat {
+        let (beside, _) = ui.allocate_exact_size(Vec2::new(44.0, size.y), Sense::hover());
+        ui.painter().text(
+            beside.left_center(),
+            Align2::LEFT_CENTER,
+            format!("{bars} . {beat}"),
+            FontId::proportional(12.0),
+            roles().muted,
+        );
+    }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &text));
     response.hover_hint(format!(
         "{text} (minutes : seconds). Bar {bars}, beat {beat}"
@@ -3381,13 +3455,14 @@ fn action_icon_button(
     label: &str,
     enabled: bool,
     hint: &str,
+    width: f32,
 ) -> Response {
     let response = ui.add_enabled(
         enabled,
         egui::Button::new("")
             .fill(roles().raised)
             .stroke(Stroke::NONE)
-            .min_size(Vec2::new(48.0, 30.0)),
+            .min_size(Vec2::new(width, 30.0)),
     );
     ui.painter().image(
         icons.texture_id(icon),
@@ -3437,8 +3512,10 @@ pub(super) fn rail_button(
     response.hover_hint(icon.hint())
 }
 
-pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon) {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(48.0, 20.0), Sense::hover());
+/// A muted icon that names the control beside it, as the microphone does
+/// for the recording track.
+pub(super) fn icon_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon, width: f32) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 20.0), Sense::hover());
     ui.painter().image(
         icons.texture_id(icon),
         icons.icon_rect(ui.ctx(), rect.center()),
@@ -3449,6 +3526,95 @@ pub(super) fn rail_heading(ui: &mut egui::Ui, icons: &RailIcons, icon: RailIcon)
         egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), icon.label())
     });
     response.hover_hint(icon.label());
+}
+
+/// The brand: MixJam over Techno, smaller in a narrow top bar.
+fn stacked_brand(ui: &mut egui::Ui, compact: bool) {
+    let galley = |text: egui::RichText| {
+        egui::WidgetText::from(text).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Body,
+        )
+    };
+    let (large, small) = if compact { (14.0, 9.0) } else { (20.0, 11.0) };
+    let top = galley(brand("MixJam", large));
+    let bottom = galley(brand("Techno", small).color(roles().muted));
+    let size = Vec2::new(
+        top.size().x.max(bottom.size().x),
+        top.size().y + bottom.size().y,
+    );
+    let (_, rect) = ui.allocate_space(size);
+    // Two labels, so each word keeps its own accessible name.
+    let mut stack = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    stack.spacing_mut().item_spacing.y = 0.0;
+    stack.label(top);
+    stack.label(bottom);
+}
+
+/// The song's length under its name: bars and minutes. None for an empty
+/// song.
+fn song_meta(project: &Project) -> Option<String> {
+    let end = project.end_tick();
+    if end == 0 {
+        return None;
+    }
+    let bars = end.div_ceil(TICKS_PER_BAR);
+    let seconds = (f64::from(end) * 240.0 / project.bpm / f64::from(TICKS_PER_BAR)).round() as u64;
+    Some(format!(
+        "{bars} {}  ·  {}:{:02}",
+        if bars == 1 { "bar" } else { "bars" },
+        seconds / 60,
+        seconds % 60
+    ))
+}
+
+/// The score toolbar's Maximise switch: corners pointing out, or in while
+/// the score fills the window.
+fn maximise_button(ui: &mut egui::Ui, on: bool) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(30.0, 26.0), Sense::click());
+    controls::icon_button_surface(ui, &response, on);
+    let color = rail_icon_color(ui, on);
+    let stroke = Stroke::new(1.5_f32, color);
+    let mark = Rect::from_center_size(rect.center(), Vec2::splat(12.0));
+    let arm = 4.0;
+    for (corner, x, y) in [
+        (mark.left_top(), 1.0, 1.0),
+        (mark.right_top(), -1.0, 1.0),
+        (mark.left_bottom(), 1.0, -1.0),
+        (mark.right_bottom(), -1.0, -1.0),
+    ] {
+        // Restored, each corner is an outward bracket; maximised, the
+        // brackets turn inward.
+        let (tip, dx, dy) = if on {
+            (corner + Vec2::new(x * arm, y * arm), -x, -y)
+        } else {
+            (corner, x, y)
+        };
+        ui.painter()
+            .line_segment([tip, tip + Vec2::new(dx * arm, 0.0)], stroke);
+        ui.painter()
+            .line_segment([tip, tip + Vec2::new(0.0, dy * arm)], stroke);
+    }
+    focus_outline(ui, &response, roles().accent);
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            true,
+            on,
+            "Maximise the score",
+        )
+    });
+    response.hover_hint(if on {
+        "Restore the tool rail and the lower panel (F)"
+    } else {
+        "Maximise the score: hide the tool rail and the lower panel (F)"
+    })
 }
 
 /// The rail's width: icons with names, or icons only.
