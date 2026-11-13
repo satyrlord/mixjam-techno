@@ -765,9 +765,11 @@ Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
 Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, Effect Studio,
 Step synth, Sample editor, Time Stretcher, Album Review). With names, each group
 has an uppercase 9.5-point muted heading; icons only, recessed separators divide
-them. Options sits alone at the foot of the rail, below a separator. When the window
-is too short for every name, the rail scrolls under the mouse wheel or to keep
-the keyboard-focused tool visible. Options stays fixed at the foot. Material and icons retain their prepared physical
+them. Options and All commands sit at the foot of the rail, below a separator.
+When the window is too short for every name, the rail scrolls under the mouse
+wheel or to keep the keyboard-focused tool visible. The foot stays fixed.
+All commands draws a magnifier with the painter (no icon asset) in the rail
+icon's colors and target sizes. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 
 Musical tools toggle their open state. Erase toggles its editing
@@ -776,6 +778,30 @@ selected state to accessibility. A collapsed window stays active until closed.
 File commands and Delete remain one-shot actions.
 Options uses a gear PNG icon at the foot of the rail. Its second activation
 focuses the existing window and retains its draft.
+
+### Command list
+
+One registry (`src/ui/commands.rs`) names every command, its group, its
+shortcut and its action; the rail, the status bar's panel switches, the
+keyboard and the command list read it. All commands or Ctrl+K opens the list
+as a modal over a dimmed window, up to 580 points wide and centered. A Raised
+field at the top holds the text cursor and the muted hint "Everything is listed
+below. Type to narrow it." Below it, every command shows in its group before
+anything is typed: File, Clips, Tools, Application, Transport, Edit, Panels,
+Automation, each under the Automation menu's muted uppercase heading. A row is
+30 points tall: a 6-point Accent dot when the tool, panel or lane is on, the
+name in 13-point Text, and the shortcut in 11-point muted monospace at the
+right. The current row has the Hover fill and a 3-point Accent bar; Up and Down
+move it and scroll it into view. Typed words narrow the list to commands whose
+name or group holds every word. A changed search returns to the top of the list.
+Enter uses the current search, including text received in the same frame.
+Enter or a click runs the command and closes
+the list; Esc or a click outside closes it. When nothing matches, the list says
+"Nothing matches. Clear the field to see the whole list again." Concept
+entries for themes, sections, tracks and sounds stay out (decision M).
+The search has the accessible name "Find a command". The modal blocks workspace
+controls, arrangement requests, and song drops. A file or confirmation modal
+dismisses the command list before it can consume more input.
 
 ### Status bar panel switches
 

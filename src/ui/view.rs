@@ -301,7 +301,7 @@ impl MixJamApp {
                 // Options sits at the foot. Its place is kept first, but it is
                 // drawn last, so Tab still reaches the tools from the top.
                 let area = ui.available_rect_before_wrap();
-                let foot_height = RAIL_FOOT_GAP + rail_button_size(names).y;
+                let foot_height = RAIL_FOOT_GAP + 2.0 * rail_button_size(names).y + 2.0;
                 let (body, foot) = area.split_top_bottom_at_y(area.bottom() - foot_height);
                 ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
                     egui::ScrollArea::vertical()
@@ -318,7 +318,12 @@ impl MixJamApp {
                         if rail_tool(ui, &icons, RailIcon::Options, self.options.is_some(), names)
                             .clicked()
                         {
-                            self.open_options(ctx);
+                            self.run_command(commands::Command::Options, ctx);
+                        }
+                        if commands::rail_commands_button(ui, names, self.commands.is_some())
+                            .clicked()
+                        {
+                            self.commands = Some(commands::CommandList::new());
                         }
                     });
                 });
@@ -340,77 +345,17 @@ impl MixJamApp {
         if rail_names_switch(ui, names).clicked() {
             self.set_layout(|layout| layout.tool_names = !layout.tool_names);
         }
-        rail_group(ui, "File", names, true);
-        if tool(ui, RailIcon::New, false).clicked() {
-            self.request_action(PendingAction::New, ctx);
-        }
-        if tool(ui, RailIcon::Open, false).clicked() {
-            self.request_action(PendingAction::Open, ctx);
-        }
-        if tool(ui, RailIcon::Save, false).clicked() {
-            self.save(false);
-        }
-        if tool(ui, RailIcon::SaveAs, false).clicked() {
-            self.save(true);
-        }
-        if tool(ui, RailIcon::Import, false).clicked() {
-            self.import_wav();
-        }
-        if tool(ui, RailIcon::Export, false).clicked() {
-            self.export();
-        }
-        rail_group(ui, "Clips", names, false);
-        if tool(ui, RailIcon::Erase, self.erase).clicked() {
-            self.erase = !self.erase;
-        }
-        if tool(ui, RailIcon::Delete, false).clicked() {
-            self.delete_selection();
-        }
-        rail_group(ui, "Tools", names, false);
-        // Mixer switches the score between its Arrange and Mix views.
-        if tool(ui, RailIcon::Mixer, self.mix_view).clicked() {
-            self.set_mix_view(!self.mix_view);
-        }
-        // Mastering and Step synth open their tab, and fold the lower panel
-        // when their tab already shows.
-        if tool(
-            ui,
-            RailIcon::Master,
-            self.board_shown(BottomModule::Mastering),
-        )
-        .clicked()
-        {
-            self.toggle_board(BottomModule::Mastering);
-        }
-        if tool(ui, RailIcon::Effects, self.show_effects).clicked() {
-            self.show_effects = !self.show_effects;
-        }
-        if tool(
-            ui,
-            RailIcon::StepSynth,
-            self.board_shown(BottomModule::StepSynth),
-        )
-        .clicked()
-        {
-            self.toggle_board(BottomModule::StepSynth);
-        }
-        if tool(ui, RailIcon::Edit, self.show_sample_edit).clicked() {
-            self.show_sample_edit = !self.show_sample_edit;
-            if self.show_sample_edit {
-                self.edit_start = 0;
-                self.edit_end = 0;
+        // The rail draws its groups and tools from the command registry.
+        for (index, (group, tools)) in commands::RAIL.iter().enumerate() {
+            rail_group(ui, group, names, index == 0);
+            for command in tools.iter().copied() {
+                let Some(icon) = command.icon() else {
+                    continue;
+                };
+                if tool(ui, icon, self.command_active(command)).clicked() {
+                    self.run_command(command, ctx);
+                }
             }
-        }
-        if tool(ui, RailIcon::Stretch, self.show_stretch).clicked() {
-            self.show_stretch = !self.show_stretch;
-            if self.show_stretch {
-                self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
-            } else {
-                self.close_stretch_request();
-            }
-        }
-        if tool(ui, RailIcon::AlbumReview, self.show_album_review).clicked() {
-            self.show_album_review = !self.show_album_review;
         }
     }
 
@@ -430,7 +375,7 @@ impl MixJamApp {
     }
 
     /// Show `module`'s board, or fold the lower panel when it already shows.
-    fn toggle_board(&mut self, module: BottomModule) {
+    pub(super) fn toggle_board(&mut self, module: BottomModule) {
         if self.board_shown(module) {
             self.set_layout(|layout| layout.boards = false);
         } else {
@@ -606,62 +551,40 @@ impl MixJamApp {
                 ui.label(panels);
                 // In a maximised score all read off; each switch restores the
                 // score with the previous panel choices.
-                let layout = self.session.layout();
-                let shown = !layout.maximised;
-                if panel_switch(ui, "Tools", shown && layout.tool_names)
-                    .hover_hint("Tool rail: names under the icons, or icons only")
-                    .clicked()
-                {
-                    self.set_layout(|layout| {
-                        if shown {
-                            layout.tool_names = !layout.tool_names;
-                        }
-                        layout.maximised = false;
-                    });
-                }
-                if panel_switch(ui, "Boards", self.room.boards)
-                    .hover_hint("Lower panel: its board, or only its toolbar row")
-                    .clicked()
-                {
-                    if !shown {
-                        self.set_layout(|layout| layout.maximised = false);
-                    } else if self.room.boards {
-                        self.set_layout(|layout| layout.boards = false);
-                    } else {
-                        self.set_layout(|layout| layout.boards = true);
-                        self.claim(room::Panel::Boards);
-                    }
-                }
-                if panel_switch(ui, "Sounds", self.sounds_panel_open())
-                    .hover_hint("Sounds panel beside the score, or its folded strip")
-                    .clicked()
-                {
-                    if !shown {
-                        self.set_layout(|layout| layout.maximised = false);
-                    } else if self.sounds_panel_open() {
-                        self.set_layout(|layout| layout.sounds = false);
-                    } else {
-                        self.open_sounds_panel();
-                    }
-                }
-                // The overview belongs to the score, so it keeps its place
-                // when the score is maximised.
-                if panel_switch(ui, "Overview", layout.overview)
-                    .hover_hint("Song overview above the score, or its named bar")
-                    .clicked()
-                {
-                    self.set_layout(|layout| layout.overview = !layout.overview);
-                }
-                if panel_switch(ui, "Inspector", self.room.inspector)
-                    .hover_hint("Inspector beside the score, or its folded strip")
-                    .clicked()
-                {
-                    if !shown {
-                        self.set_layout(|layout| layout.maximised = false);
-                    } else if self.room.inspector {
-                        self.set_layout(|layout| layout.inspector = false);
-                    } else {
-                        self.open_inspector();
+                // In a maximised score all read off but Overview; each switch
+                // restores the score with the previous panel choices.
+                for (command, label, hint) in [
+                    (
+                        commands::Command::ToolNames,
+                        "Tools",
+                        "Tool rail: names under the icons, or icons only",
+                    ),
+                    (
+                        commands::Command::Boards,
+                        "Boards",
+                        "Lower panel: its board, or only its toolbar row",
+                    ),
+                    (
+                        commands::Command::Sounds,
+                        "Sounds",
+                        "Sounds panel beside the score, or its folded strip",
+                    ),
+                    (
+                        commands::Command::Overview,
+                        "Overview",
+                        "Song overview above the score, or its named bar",
+                    ),
+                    (
+                        commands::Command::Inspector,
+                        "Inspector",
+                        "Inspector beside the score, or its folded strip",
+                    ),
+                ] {
+                    if panel_switch(ui, label, self.command_active(command))
+                        .hover_hint(hint)
+                        .clicked()
+                    {
+                        self.run_command(command, ctx);
                     }
                 }
                 ui.add_space(STATUS_VERSION_GAP);
@@ -3070,6 +2993,7 @@ impl MixJamApp {
         self.finish_drag(ctx);
         self.dialogs(ctx);
         self.tool_windows(ctx);
+        self.command_list(ctx);
         self.sample_conflicts_dialog(ctx);
         self.path_prompt_dialog(ctx);
         self.capture(ctx);
@@ -4494,7 +4418,15 @@ impl MixJamApp {
              hold Ctrl for single ticks. Off edits clips again.",
         );
         if choice != shown {
-            (self.automation_lane, self.return_lane) = choice;
+            self.choose_lane(choice);
+        }
+    }
+
+    /// Draw `lane` on the score, or a bus's return lane, or edit clips when
+    /// both are `None`.
+    pub(super) fn choose_lane(&mut self, lane: (Option<automation::Lane>, Option<usize>)) {
+        if lane != (self.automation_lane, self.return_lane) {
+            (self.automation_lane, self.return_lane) = lane;
             self.automation_drag = None;
             self.session.end_automation_gesture();
         }
@@ -5034,13 +4966,13 @@ fn automation_value(lane: automation::Lane, y: f32, row: Rect) -> f32 {
 }
 
 /// The name of FX bus `bus`'s return lane in the lane menu: "FX 1 return".
-fn return_lane_label(bus: usize) -> String {
+pub(super) fn return_lane_label(bus: usize) -> String {
     format!("FX {} return", bus + 1)
 }
 
 /// The Automation menu's first group: the lanes on every track other than
 /// the sends, which have their own group.
-const TRACK_LANES: [automation::Lane; 6] = [
+pub(super) const TRACK_LANES: [automation::Lane; 6] = [
     automation::Lane::Volume,
     automation::Lane::Pan,
     automation::Lane::Filter,
@@ -5064,7 +4996,7 @@ fn bus_module_name(module: &mixjam_techno::application::fx::Module) -> &'static 
 }
 
 /// A group heading inside the Automation menu.
-fn lane_menu_heading(ui: &mut egui::Ui, text: &str) {
+pub(super) fn lane_menu_heading(ui: &mut egui::Ui, text: &str) {
     ui.add_space(6.0);
     ui.add(
         egui::Label::new(

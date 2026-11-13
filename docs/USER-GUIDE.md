@@ -50,6 +50,14 @@ shrinks the rail to icons. The **Boards** switch folds the lower panel to its
 toolbar row; pick a tab there, or select Mastering or Step synth in the
 rail, to open it again. In a short window, scroll the rail with the mouse wheel.
 
+**All commands**, at the foot of the rail under Options, or **Ctrl+K**, opens a
+list of everything the app can do: the rail's tools, Options and Help,
+playback, Undo, Redo and the other edits, Maximise, the status bar's panel
+switches, and every automation lane. The whole list shows in its groups before
+you type; type words to narrow it. Up and Down move through it, Enter or a click
+runs the command, and Esc closes the list. Shortcuts show at the right of
+their commands, and a dot marks a tool, panel or lane that is on.
+
 The **Sounds** switch, or the strip named SOUNDS beside the rail, opens the
 Sounds panel: the library as a list, with each sound's name, category, length
 in bars, and waveform, above its search, filters, category chips, and sort.

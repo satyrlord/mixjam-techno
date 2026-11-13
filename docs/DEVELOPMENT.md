@@ -125,7 +125,8 @@ panel on Mixer, and `overview-folded` folds the song overview to its bar.
 `inspector-song`, `inspector-track`, `inspector-clip`, and `inspector-clips`
 open the Inspector on each of its pages. `automation-menu` opens the Automation
 lane menu over the fades-and-automation song, whose track 9 plays a Step synth
-sequence saved with its pattern, drawn as notes. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+sequence saved with its pattern, drawn as notes. `command-list` opens the
+command list over the default song. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.

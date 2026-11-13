@@ -8,6 +8,8 @@ use view::*;
 mod agent;
 #[path = "ui/album_review.rs"]
 mod album_review;
+#[path = "ui/commands.rs"]
+mod commands;
 #[path = "ui/controls.rs"]
 mod controls;
 #[path = "ui/dialog.rs"]
@@ -457,6 +459,8 @@ pub struct MixJamApp {
     /// when it has none, read once per catalog revision.
     step_patterns: std::collections::HashMap<u32, Option<Arc<StepSynthState>>>,
     step_patterns_revision: u64,
+    /// The command list (Ctrl+K) while it is open.
+    commands: Option<commands::CommandList>,
     /// The score's horizontal view as last laid out, for the song overview.
     score_view: Option<overview::ScoreView>,
     /// A tick the song overview asked the score to centre on.
@@ -846,6 +850,7 @@ impl MixJamApp {
             clip_waves: Default::default(),
             step_patterns: Default::default(),
             step_patterns_revision: 0,
+            commands: (capture_view == "command-list").then(commands::CommandList::new),
             score_view: None,
             overview_target: None,
             overview_rect: None,
@@ -1609,8 +1614,16 @@ impl MixJamApp {
     }
 
     fn keyboard(&mut self, ctx: &egui::Context) {
+        // The command list owns the keys while it is open.
+        if self.commands.is_some() {
+            return;
+        }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma)) {
-            self.open_options(ctx);
+            self.run_command(commands::Command::Options, ctx);
+            return;
+        }
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
+            self.commands = Some(commands::CommandList::new());
             return;
         }
         if let Some(options) = &self.options
@@ -1657,14 +1670,10 @@ impl MixJamApp {
             })
         };
         if transport && pressed_once(egui::Key::Space) {
-            if self.session.wants_playback() {
-                self.pause();
-            } else {
-                self.start_playback();
-            }
+            self.run_command(commands::Command::PlayPause, ctx);
         }
         if free && ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
-            self.delete_selection();
+            self.run_command(commands::Command::Delete, ctx);
         }
         if free && ctx.input(|i| i.modifiers.shift) && pressed_once(egui::Key::F10) {
             self.clip_menu_key = true;
@@ -1674,32 +1683,39 @@ impl MixJamApp {
             self.history_step(redo);
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Y)) {
-            self.history_step(true);
+            self.run_command(commands::Command::Redo, ctx);
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::S) {
-            self.save(ctx.input(|i| i.modifiers.shift));
+            self.run_command(
+                if ctx.input(|i| i.modifiers.shift) {
+                    commands::Command::SaveAs
+                } else {
+                    commands::Command::Save
+                },
+                ctx,
+            );
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::N) {
-            self.request_action(PendingAction::New, ctx);
+            self.run_command(commands::Command::New, ctx);
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::A) {
-            self.select_all_clips();
+            self.run_command(commands::Command::SelectAll, ctx);
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::D) {
-            self.duplicate_selection();
+            self.run_command(commands::Command::Duplicate, ctx);
         }
         if pressed_once(egui::Key::F1) {
-            self.show_help = true;
+            self.run_command(commands::Command::Help, ctx);
         }
         // F maximises the score or restores it; typing already returned.
         if ctx.input(|i| i.modifiers.is_none())
             && !egui::Popup::is_any_open(ctx)
             && pressed_once(egui::Key::F)
         {
-            self.set_layout(|layout| layout.maximised = !layout.maximised);
+            self.run_command(commands::Command::Maximise, ctx);
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::O) {
-            self.request_action(PendingAction::Open, ctx);
+            self.run_command(commands::Command::Open, ctx);
         }
         if transport && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.drag = None;
@@ -2096,7 +2112,11 @@ impl MixJamApp {
     /// Pending file choices suspend their parent confirmation, even while collapsed.
     fn blocking_modal(&self, ctx: &egui::Context) -> Option<&'static str> {
         if self.path_prompt.is_some() {
-            return (!dialog::is_collapsed(ctx, "Choose path")).then_some("Choose path");
+            return if dialog::is_collapsed(ctx, "Choose path") {
+                self.commands.as_ref().map(|_| "All commands")
+            } else {
+                Some("Choose path")
+            };
         }
         if self.pending_action.is_some() && !dialog::is_collapsed(ctx, "Save your changes?") {
             return Some("Save your changes?");
@@ -2115,7 +2135,7 @@ impl MixJamApp {
         {
             return Some(options::DISCARD);
         }
-        None
+        self.commands.as_ref().map(|_| "All commands")
     }
 
     fn dialogs(&mut self, ctx: &egui::Context) {

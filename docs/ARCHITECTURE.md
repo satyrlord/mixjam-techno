@@ -98,6 +98,11 @@ A clip of a Step synth sound with a pattern beside its WAV draws notes instead:
 `waveform::ClipNotes` places the active bars' notes on the clip's ticks. Note
 positions use the pattern's render tempo for source frames and the catalog's
 effective playback tempo for song ticks.
+`src/ui/commands.rs` holds the command registry: each command's name, group,
+shortcut, rail icon and action. The rail draws its groups from `RAIL`, the
+status bar's switches and the keyboard run their commands through
+`run_command`, and the command list shows `Command::all()`. A test fails when a
+rail icon has no registered command.
 `src/ui/lanes.rs` owns the Arrange lane header's layout constants, the lane
 name derived from the first clip's sound family, and the lane fader.
 `src/ui/room.rs` decides each frame which of the Sounds panel, the Inspector,
