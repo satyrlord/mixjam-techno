@@ -16,7 +16,7 @@ pub use crate::{
     },
     peaks::{PeakState, Peaks},
     products::Product,
-    synth::StepSynthState,
+    synth::{StepSynthState, pattern_beside},
 };
 /// The channel EQ of each track and its controls.
 pub mod eq {
@@ -2228,6 +2228,35 @@ impl Session {
         group: &str,
         source_bpm: f64,
     ) -> Result<u32, String> {
+        Self::validate_pcm_save(pcm, path, group, source_bpm)?;
+        pcm.write_wav(path)?;
+        self.register_file(path, group, source_bpm)
+    }
+    /// Save the sequence and its note pattern in one publication batch.
+    pub fn save_sequence(
+        &mut self,
+        pcm: &Pcm,
+        path: &Path,
+        state: &StepSynthState,
+    ) -> Result<u32, String> {
+        use std::io::Write;
+        state.validate()?;
+        Self::validate_pcm_save(pcm, path, "Step synth", state.bpm)?;
+        let pattern = serde_json::to_vec_pretty(state).map_err(|error| error.to_string())?;
+        crate::atomic_file::write_many(&[path.to_path_buf(), pattern_beside(path)], |files| {
+            pcm.write_wav_to(&mut files[0])?;
+            files[1]
+                .write_all(&pattern)
+                .map_err(|error| error.to_string())
+        })?;
+        self.register_file(path, "Step synth", state.bpm)
+    }
+    fn validate_pcm_save(
+        pcm: &Pcm,
+        path: &Path,
+        group: &str,
+        source_bpm: f64,
+    ) -> Result<(), String> {
         pcm.validate()?;
         crate::engine::validate_import_metadata(&crate::engine::ImportedSample {
             id: crate::products::IMPORTED_ID_START,
@@ -2246,8 +2275,7 @@ impl Session {
         if pcm.frames() == 0 {
             return Err("The audio source is empty.".into());
         }
-        pcm.write_wav(path)?;
-        self.register_file(path, group, source_bpm)
+        Ok(())
     }
     pub fn source_pcm(&self, id: Option<u32>) -> Result<Pcm, String> {
         if id.is_some_and(|id| self.missing_sample(id).is_some()) {
@@ -6022,6 +6050,104 @@ mod boundary_tests {
             !library.contains("pub mod ui;"),
             "The production library must remain headless."
         );
+    }
+
+    #[test]
+    fn saving_a_sequence_publishes_its_wav_and_pattern_before_registration() {
+        let dir = fixture_dir();
+        let path = dir.join("sequence.wav");
+        let pcm = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        };
+        let state = StepSynthState {
+            bpm: 160.0,
+            ..StepSynthState::default()
+        };
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let id = session.save_sequence(&pcm, &path, &state).unwrap();
+        assert_eq!(audio::read_wav(&path).unwrap().samples, pcm.samples);
+        assert_eq!(session.load_pattern(&pattern_beside(&path)).unwrap(), state);
+        let sample = session.library().sample_by_id(id).unwrap();
+        assert_eq!(sample.group_name, "Step synth");
+        assert_eq!(sample.source_bpm, 160.0);
+        assert!(
+            session
+                .project()
+                .imported_samples
+                .iter()
+                .any(|s| s.id == id)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_blocked_sequence_pattern_preserves_the_wav_and_session() {
+        let dir = fixture_dir();
+        let path = dir.join("sequence.wav");
+        std::fs::write(&path, b"existing WAV").unwrap();
+        std::fs::create_dir(pattern_beside(&path)).unwrap();
+        let pcm = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        };
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let before = session.project().clone();
+        let revision = session.catalog_revision();
+        assert!(
+            session
+                .save_sequence(&pcm, &path, &StepSynthState::default())
+                .is_err()
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"existing WAV");
+        assert_eq!(session.project(), &before);
+        assert_eq!(session.catalog_revision(), revision);
+        assert!(!session.has_history_step(false));
+        assert!(!session.unsaved());
+        assert!(session.library().samples.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_locked_sequence_pattern_rolls_back_the_existing_pair_without_session_changes() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = fixture_dir();
+        let path = dir.join("sequence.wav");
+        let pattern = pattern_beside(&path);
+        let mut pcm = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.5; 1000],
+        };
+        let mut state = StepSynthState::default();
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        session.save_sequence(&pcm, &path, &state).unwrap();
+        let wav_before = std::fs::read(&path).unwrap();
+        let pattern_before = std::fs::read(&pattern).unwrap();
+        let project_before = session.project().clone();
+        let token = session.project_change_token();
+        let revision = session.catalog_revision();
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&pattern)
+            .unwrap();
+        pcm.samples.fill(-0.5);
+        state.steps[4] = Some(7);
+        assert!(session.save_sequence(&pcm, &path, &state).is_err());
+        drop(lock);
+        assert_eq!(std::fs::read(&path).unwrap(), wav_before);
+        assert_eq!(std::fs::read(&pattern).unwrap(), pattern_before);
+        assert_eq!(session.project(), &project_before);
+        assert_eq!(session.project_change_token(), token);
+        assert_eq!(session.catalog_revision(), revision);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

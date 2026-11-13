@@ -187,6 +187,136 @@ impl ClipWave {
     }
 }
 
+/// What a clip draws below its name: its waveform, or a Step synth clip's
+/// notes at `f32` points per tick.
+#[derive(Clone, Copy)]
+pub(super) enum ClipBody<'a> {
+    Wave(&'a ClipWave),
+    Notes(&'a ClipNotes, f32),
+}
+
+/// A Step synth clip's notes, which it draws instead of a waveform. Save
+/// sequence keeps the pattern beside the WAV, so the notes are known: each
+/// note is held to the next one, or for one sixteenth with the 1/16 cut.
+pub(super) struct ClipNotes {
+    /// Each note's start and end in ticks from the clip's left edge, and its
+    /// pitch in semitones.
+    notes: Vec<(f64, f64, i8)>,
+    /// The lowest and highest pitch drawn, at least an octave apart.
+    low: f32,
+    high: f32,
+}
+
+impl ClipNotes {
+    /// The notes `clip` plays of a sound rendered from `pattern` with
+    /// `frames_per_step` source frames per sixteenth and `sound_frames`
+    /// frames in all, at `frames_per_tick` source frames per song tick.
+    pub(super) fn new(
+        clip: &Clip,
+        pattern: &StepSynthState,
+        frames_per_step: f64,
+        frames_per_tick: f64,
+        sound_frames: f64,
+    ) -> Self {
+        let steps: Vec<Option<i8>> = pattern
+            .active_bars
+            .iter()
+            .enumerate()
+            .filter(|(_, active)| **active)
+            .flat_map(|(bar, _)| {
+                pattern
+                    .steps
+                    .get(bar * 16..bar * 16 + 16)
+                    .unwrap_or_default()
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        let mut notes = Vec::new();
+        if frames_per_step > 0.0 && frames_per_tick > 0.0 {
+            let length = f64::from(clip.length_ticks);
+            let offset = f64::from(clip.offset_frames);
+            let sound = ((sound_frames - offset).max(0.0) / frames_per_tick).min(length);
+            for (step, note) in steps.iter().enumerate() {
+                let Some(note) = *note else { continue };
+                let next = if pattern.cut_sixteenth {
+                    step + 1
+                } else {
+                    steps
+                        .iter()
+                        .enumerate()
+                        .skip(step + 1)
+                        .find(|(_, note)| note.is_some())
+                        .map_or(steps.len(), |(index, _)| index)
+                };
+                let tick = |step: usize| (step as f64 * frames_per_step - offset) / frames_per_tick;
+                let (start, end) = (tick(step).max(0.0), tick(next).min(sound));
+                if start >= end {
+                    continue;
+                }
+                // Reversed, the clip ends with the sound.
+                notes.push(if clip.reverse {
+                    (length - end, length - start, note)
+                } else {
+                    (start, end, note)
+                });
+            }
+        }
+        let (low, high) = notes.iter().fold((i8::MAX, i8::MIN), |(low, high), note| {
+            (low.min(note.2), high.max(note.2))
+        });
+        let (low, high) = if notes.is_empty() {
+            (0.0, 0.0)
+        } else {
+            (f32::from(low), f32::from(high))
+        };
+        let middle = (low + high) / 2.0;
+        let half = ((high - low) / 2.0).max(6.0);
+        Self {
+            notes,
+            low: middle - half,
+            high: middle + half,
+        }
+    }
+
+    /// Paint the notes below the clip's name, `tick_width` points per tick
+    /// from the clip's left edge: higher notes higher up.
+    pub(super) fn paint(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        name_bottom: f32,
+        tick_width: f32,
+        category: Color32,
+    ) {
+        let inner = rect.shrink2(Vec2::new(2.0, 2.0));
+        let band = Rect::from_min_max(Pos2::new(inner.left(), name_bottom), inner.max);
+        let (area, color) = if band.height() >= WAVE_BAND {
+            (band.shrink2(Vec2::new(0.0, 1.0)), tone(category, 0.55))
+        } else {
+            (inner.shrink2(Vec2::new(0.0, 1.0)), tone(category, 0.82))
+        };
+        let clipped = painter.with_clip_rect(painter.clip_rect().intersect(inner));
+        let thick = (area.height() / 6.0).clamp(2.0, 4.0);
+        for &(start, end, note) in &self.notes {
+            let left = rect.left() + start as f32 * tick_width;
+            let right = rect.left() + end as f32 * tick_width;
+            if right < clipped.clip_rect().left() || left > clipped.clip_rect().right() {
+                continue;
+            }
+            let share = (f32::from(note) - self.low) / (self.high - self.low);
+            let y = area.bottom() - thick - share * (area.height() - thick);
+            // A gap between notes that follow each other.
+            let right = (right - 1.0).max(left + 1.5);
+            clipped.rect_filled(
+                Rect::from_min_max(Pos2::new(left, y), Pos2::new(right, y + thick)),
+                1.0,
+                color,
+            );
+        }
+    }
+}
+
 /// A darker tone of a category color, for a waveform over its fill.
 fn tone(color: Color32, keep: f32) -> Color32 {
     let scale = |channel: u8| (f32::from(channel) * keep).round() as u8;
@@ -332,5 +462,45 @@ mod tests {
         assert!((heights[100] - 0.5).abs() < 0.01, "{}", heights[100]);
         assert!((heights[400] - 1.0).abs() < 0.01);
         assert!(heights[heights.len() - 1] < 0.01);
+    }
+
+    /// A one-bar pattern: the source pitch on the first step and a fifth up
+    /// on the fifth, read at 100 source frames per step and 10 per tick, so
+    /// each step is 10 ticks.
+    fn notes(clip: &Clip, cut_sixteenth: bool) -> Vec<(f64, f64, i8)> {
+        let mut steps = vec![None; 64];
+        steps[0] = Some(0);
+        steps[4] = Some(7);
+        let pattern = StepSynthState {
+            steps,
+            cut_sixteenth,
+            ..StepSynthState::default()
+        };
+        ClipNotes::new(clip, &pattern, 100.0, 10.0, 1600.0).notes
+    }
+
+    #[test]
+    fn a_step_synth_clip_holds_each_note_to_the_next_and_mirrors_when_reversed() {
+        assert_eq!(
+            notes(&clip(160, 0, false), false),
+            vec![(0.0, 40.0, 0), (40.0, 160.0, 7)]
+        );
+        assert_eq!(
+            notes(&clip(160, 0, false), true),
+            vec![(0.0, 10.0, 0), (40.0, 50.0, 7)],
+            "The 1/16 cut ends each note after one step."
+        );
+        assert_eq!(
+            notes(&clip(160, 0, true), false),
+            vec![(120.0, 160.0, 0), (0.0, 120.0, 7)]
+        );
+        // A trimmed start moves the notes left; the sound ends before a
+        // longer clip does.
+        assert_eq!(
+            notes(&clip(400, 200, false), false),
+            vec![(0.0, 20.0, 0), (20.0, 140.0, 7)]
+        );
+        // A clip shorter than the pattern shows only what it plays.
+        assert_eq!(notes(&clip(30, 0, false), false), vec![(0.0, 30.0, 0)]);
     }
 }

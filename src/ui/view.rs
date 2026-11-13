@@ -2079,6 +2079,8 @@ impl MixJamApp {
                             })
                     });
                     let tick_width = bar_width / TICKS_PER_BAR as f32;
+                    self.load_step_patterns();
+                    let preview = self.handle_drag.as_ref().map(|drag| &drag.preview);
                     for clip in &self.session.project().clips {
                         let clip = preview.filter(|p| p.id == clip.id).unwrap_or(clip);
                         let clip_rect = self.clip_rect(clip, rect);
@@ -2090,8 +2092,23 @@ impl MixJamApp {
                                     .project()
                                     .sample_playback_bpm(sample.id, sample.source_bpm)
                             });
+                            // A Step synth sound saved with its pattern draws notes.
+                            let notes = sample.filter(|_| missing.is_none()).and_then(|sample| {
+                                let pattern =
+                                    self.step_patterns.get(&sample.id).cloned().flatten()?;
+                                let frames_per_step =
+                                    f64::from(sample.sample_rate) * 60.0 / pattern.bpm / 4.0;
+                                Some(waveform::ClipNotes::new(
+                                    clip,
+                                    &pattern,
+                                    frames_per_step,
+                                    frames_per_tick(sample, bpm),
+                                    f64::from(sample.frame_count),
+                                ))
+                            });
                             // Only clips on screen ask for their sound's peaks.
                             let wave = match (sample, missing) {
+                                _ if notes.is_some() => None,
                                 (Some(sample), None) => {
                                     match self.session.sample_peaks(sample.id) {
                                         PeakState::Ready(peaks) => {
@@ -2123,7 +2140,12 @@ impl MixJamApp {
                                 missing,
                                 self.selected_clips.contains(&clip.id),
                                 clip.reverse,
-                                wave,
+                                match &notes {
+                                    Some(notes) => {
+                                        Some(waveform::ClipBody::Notes(notes, tick_width))
+                                    }
+                                    None => wave.map(waveform::ClipBody::Wave),
+                                },
                             );
                             draw_fades(&painter, clip_rect, clip, sample, bar_width, bpm);
                             let handles = shows_handles == Some(clip.id);
@@ -4404,33 +4426,64 @@ impl MixJamApp {
         };
         let shown = (self.automation_lane, self.return_lane);
         let mut choice = shown;
+        if self.capture_view_is("automation-menu") {
+            // egui keeps a combo box's popup state under its id with "popup",
+            // and makes that id from the salt's `Id`.
+            let button = ui.make_persistent_id(egui::Id::new("automation_lane"));
+            egui::Popup::open_id(ui.ctx(), button.with("popup"));
+        }
+        let project = self.session.project();
         let response = egui::ComboBox::from_id_salt("automation_lane")
             .selected_text(current)
             // "Repeat gate" and "FX 1 return" still fit the narrow width.
             .width(if show_label { 112.0 } else { 96.0 })
+            // The whole grouped list shows without a scroll bar.
+            .height(f32::INFINITY)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(choice == (None, None), "Off").clicked() {
-                    choice = (None, None);
-                    ui.close();
-                }
-                for lane in automation::Lane::ALL {
-                    if ui
-                        .selectable_label(choice == (Some(lane), None), lane.label())
-                        .clicked()
-                    {
-                        choice = (Some(lane), None);
+                ui.spacing_mut().item_spacing.y = 0.0;
+                let mut row = |ui: &mut egui::Ui, lane, name: &str, detail, count| {
+                    if lane_menu_row(ui, choice == lane, name, detail, count).clicked() {
+                        choice = lane;
                         ui.close();
                     }
+                };
+                row(ui, (None, None), "Off", Some("edit clips"), None);
+                let tracks = |lane: automation::Lane| {
+                    let count = project
+                        .tracks
+                        .iter()
+                        .filter(|track| !track.automation.lane(lane).is_empty())
+                        .count();
+                    (count > 0).then(|| plural(count, "track"))
+                };
+                lane_menu_heading(ui, "On every track");
+                for lane in TRACK_LANES {
+                    row(ui, (Some(lane), None), &lane.label(), None, tracks(lane));
                 }
-                ui.separator();
+                lane_menu_heading(ui, "Send amount, on every track");
                 for bus in 0..mixjam_techno::application::fx::BUSES {
-                    if ui
-                        .selectable_label(choice == (None, Some(bus)), return_lane_label(bus))
-                        .clicked()
-                    {
-                        choice = (None, Some(bus));
-                        ui.close();
-                    }
+                    let lane = automation::Lane::Send(bus);
+                    let module = bus_module_name(&project.fx.buses[bus].module);
+                    row(
+                        ui,
+                        (Some(lane), None),
+                        &lane.label(),
+                        Some(module),
+                        tracks(lane),
+                    );
+                }
+                lane_menu_heading(ui, "Return level, one line across the song");
+                for bus in 0..mixjam_techno::application::fx::BUSES {
+                    let module = bus_module_name(&project.fx.buses[bus].module);
+                    let points = project.return_automation[bus].len();
+                    let count = (points > 0).then(|| plural(points, "point"));
+                    row(
+                        ui,
+                        (None, Some(bus)),
+                        &return_lane_label(bus),
+                        Some(module),
+                        count,
+                    );
                 }
             })
             .response;
@@ -4444,6 +4497,37 @@ impl MixJamApp {
             (self.automation_lane, self.return_lane) = choice;
             self.automation_drag = None;
             self.session.end_automation_gesture();
+        }
+    }
+
+    /// Read the pattern beside each Step synth sound the song's clips use, once
+    /// per sound and catalog revision. A sound without one keeps its waveform.
+    pub(super) fn load_step_patterns(&mut self) {
+        let revision = self.session.catalog_revision();
+        if revision != self.step_patterns_revision {
+            self.step_patterns.clear();
+            self.step_patterns_revision = revision;
+        }
+        let wanted: BTreeSet<u32> = self
+            .session
+            .project()
+            .clips
+            .iter()
+            .map(|clip| clip.sample_id)
+            .filter(|id| !self.step_patterns.contains_key(id))
+            .collect();
+        for id in wanted {
+            let pattern = self
+                .session
+                .library()
+                .sample_by_id(id)
+                .filter(|sample| sample.group_name == "Step synth")
+                .and_then(|sample| sample.wav_path.as_deref())
+                .map(mixjam_techno::application::pattern_beside)
+                .filter(|path| path.is_file())
+                .and_then(|path| self.session.load_pattern(&path).ok())
+                .map(Arc::new);
+            self.step_patterns.insert(id, pattern);
         }
     }
 
@@ -4954,6 +5038,117 @@ fn return_lane_label(bus: usize) -> String {
     format!("FX {} return", bus + 1)
 }
 
+/// The Automation menu's first group: the lanes on every track other than
+/// the sends, which have their own group.
+const TRACK_LANES: [automation::Lane; 6] = [
+    automation::Lane::Volume,
+    automation::Lane::Pan,
+    automation::Lane::Filter,
+    automation::Lane::Pitch,
+    automation::Lane::Repeat,
+    automation::Lane::RepeatGate,
+];
+
+/// "1 track", "2 tracks".
+fn plural(count: usize, noun: &str) -> String {
+    format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+}
+
+/// What an FX bus holds, as the Automation menu names it beside its lanes.
+fn bus_module_name(module: &mixjam_techno::application::fx::Module) -> &'static str {
+    if module.is_empty() {
+        "empty"
+    } else {
+        module.label()
+    }
+}
+
+/// A group heading inside the Automation menu.
+fn lane_menu_heading(ui: &mut egui::Ui, text: &str) {
+    ui.add_space(6.0);
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(title_text(text))
+                .size(10.0)
+                .color(roles().muted),
+        )
+        .selectable(false),
+    );
+    ui.add_space(2.0);
+}
+
+/// One lane in the Automation menu: its name, what its bus holds, and how
+/// much it holds, as "2 tracks" or "4 points". The current lane is filled
+/// and marked at its left edge. Its accessible name is the lane's name alone.
+fn lane_menu_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    name: &str,
+    detail: Option<&str>,
+    count: Option<String>,
+) -> egui::Response {
+    let width = ui.available_width().max(300.0);
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 22.0), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, name)
+    });
+    if !ui.is_rect_visible(rect) {
+        return response;
+    }
+    let painter = ui.painter();
+    if selected {
+        painter.rect_filled(rect, 2.0, roles().selection);
+        painter.rect_filled(
+            Rect::from_min_size(rect.min, Vec2::new(3.0, rect.height())),
+            0.0,
+            roles().accent,
+        );
+    } else if response.hovered() || response.has_focus() {
+        painter.rect_filled(rect, 2.0, roles().hover);
+    }
+    if response.has_focus() {
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            2.0,
+            Stroke::new(1.0_f32, roles().accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let mut right = rect.right() - 8.0;
+    if let Some(count) = count {
+        let counted = painter.text(
+            Pos2::new(right, rect.center().y),
+            Align2::RIGHT_CENTER,
+            count,
+            FontId::proportional(11.0),
+            roles().muted,
+        );
+        right = counted.left() - 10.0;
+    }
+    let left = rect.left() + 10.0;
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        name,
+        0.0,
+        egui::TextFormat::simple(FontId::proportional(13.0), roles().text),
+    );
+    if let Some(detail) = detail {
+        job.append(
+            &format!(" · {detail}"),
+            0.0,
+            egui::TextFormat::simple(FontId::proportional(12.0), roles().muted),
+        );
+    }
+    job.wrap = egui::text::TextWrapping::truncate_at_width((right - left).max(1.0));
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    ui.painter().galley(
+        Pos2::new(left, rect.center().y - galley.size().y / 2.0),
+        galley,
+        roles().text,
+    );
+    response
+}
+
 /// The return lane's row: the visible rows of the arrangement, below its
 /// name and 4 points above the bottom.
 pub(super) fn return_row(rect: Rect, visible: Rect) -> Rect {
@@ -5331,7 +5526,7 @@ pub(super) fn draw_clip(
     missing: Option<&MissingSample>,
     selected: bool,
     reverse: bool,
-    wave: Option<&waveform::ClipWave>,
+    body: Option<waveform::ClipBody<'_>>,
 ) {
     let color = if missing.is_some() {
         roles().raised
@@ -5374,12 +5569,19 @@ pub(super) fn draw_clip(
             clip_label_rows(rect.height()),
         ))
     });
-    let wave = wave.filter(|_| missing.is_none());
-    if let Some(wave) = wave {
-        let name_bottom = text
-            .as_ref()
-            .map_or(rect.top(), |text| at.y + text.size().y);
-        waveform::paint_clip_wave(painter, rect, name_bottom, wave, color);
+    let name_bottom = text
+        .as_ref()
+        .map_or(rect.top(), |text| at.y + text.size().y);
+    // A Step synth clip with a known pattern shows notes, any other its waveform.
+    let body = body.filter(|_| missing.is_none());
+    match body {
+        Some(waveform::ClipBody::Notes(notes, tick_width)) => {
+            notes.paint(painter, rect, name_bottom, tick_width, color);
+        }
+        Some(waveform::ClipBody::Wave(wave)) => {
+            waveform::paint_clip_wave(painter, rect, name_bottom, wave, color);
+        }
+        None => {}
     }
     if selected {
         painter.rect_stroke(
@@ -5397,7 +5599,7 @@ pub(super) fn draw_clip(
         );
     }
     let reverse_mark = reverse
-        .then(|| draw_reverse_mark(painter, rect, wave.map(|_| color)))
+        .then(|| draw_reverse_mark(painter, rect, body.map(|_| color)))
         .flatten();
     if let (Some(label), Some(mut text)) = (label, text) {
         let mut label_painter = clipped;

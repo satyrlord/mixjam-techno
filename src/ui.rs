@@ -453,6 +453,10 @@ pub struct MixJamApp {
     timeline_bar_width: f32,
     /// Each clip's waveform at the zoom it was last drawn at.
     clip_waves: std::collections::HashMap<u64, waveform::ClipWave>,
+    /// The pattern saved beside each Step synth sound the song uses, or None
+    /// when it has none, read once per catalog revision.
+    step_patterns: std::collections::HashMap<u32, Option<Arc<StepSynthState>>>,
+    step_patterns_revision: u64,
     /// The score's horizontal view as last laid out, for the song overview.
     score_view: Option<overview::ScoreView>,
     /// A tick the song overview asked the score to centre on.
@@ -822,7 +826,8 @@ impl MixJamApp {
             library_product: Product::T1,
             rail_icons: None,
             erase: false,
-            automation_lane: (capture_view == "automation").then_some(automation::Lane::Volume),
+            automation_lane: matches!(capture_view.as_str(), "automation" | "automation-menu")
+                .then_some(automation::Lane::Volume),
             return_lane: None,
             automation_drag: None,
             zoom: 1.0,
@@ -839,6 +844,8 @@ impl MixJamApp {
             timeline_row_height: 30.0,
             timeline_bar_width: 62.0,
             clip_waves: Default::default(),
+            step_patterns: Default::default(),
+            step_patterns_revision: 0,
             score_view: None,
             overview_target: None,
             overview_rect: None,
@@ -2852,7 +2859,11 @@ impl MixJamApp {
                 source_bpm,
                 stretch,
                 ..
-            } => match self.session.save_pcm(&pcm, &path, group, source_bpm) {
+            } => match if group == "Step synth" && stretch.is_none() {
+                self.session.save_sequence(&pcm, &path, &self.step_synth)
+            } else {
+                self.session.save_pcm(&pcm, &path, group, source_bpm)
+            } {
                 Ok(id) => {
                     self.group = Some(group.into());
                     self.palette_product = None;
@@ -2885,6 +2896,7 @@ impl MixJamApp {
                                 path.file_name().unwrap_or_default().to_string_lossy()
                             ));
                             self.step_synth_feedback.error = false;
+                            self.step_patterns.clear();
                         }
                     }
                 }

@@ -48,23 +48,25 @@ impl Pcm {
     }
     pub fn write_wav(&self, path: &Path) -> Result<(), String> {
         self.validate()?;
+        // A failed export must not truncate a WAV that it would replace.
+        crate::atomic_file::write_with(path, |file| self.write_wav_to(file))
+    }
+    /// Encode validated PCM into a staged file owned by the caller's batch.
+    pub(crate) fn write_wav_to(&self, file: &mut std::fs::File) -> Result<(), String> {
         let spec = hound::WavSpec {
             channels: self.channels,
             sample_rate: self.sample_rate,
             bits_per_sample: 16,
             sample_format: hound::SampleFormat::Int,
         };
-        // A failed export must not truncate a WAV that it would replace.
-        crate::atomic_file::write_with(path, |file| {
-            let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)
+        let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)
+            .map_err(|e| e.to_string())?;
+        for &s in &self.samples {
+            writer
+                .write_sample(float_to_i16(s))
                 .map_err(|e| e.to_string())?;
-            for &s in &self.samples {
-                writer
-                    .write_sample(float_to_i16(s))
-                    .map_err(|e| e.to_string())?;
-            }
-            writer.finalize().map_err(|e| e.to_string())
-        })
+        }
+        writer.finalize().map_err(|e| e.to_string())
     }
 }
 pub(crate) fn float_to_i16(x: f32) -> i16 {

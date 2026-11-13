@@ -93,6 +93,11 @@ shapes per clip and rebuilds one only when its key changes: the sound, trim,
 length, Reverse, fades, points per tick (zoom), frames per tick (tempo),
 catalog revision, or peak table. The catalog revision prevents a replacement
 sound from reusing a stale waveform when its peak table reuses an address.
+A clip of a Step synth sound with a pattern beside its WAV draws notes instead:
+`view.rs` loads each such pattern once per catalog revision, and
+`waveform::ClipNotes` places the active bars' notes on the clip's ticks. Note
+positions use the pattern's render tempo for source frames and the catalog's
+effective playback tempo for song ticks.
 `src/ui/lanes.rs` owns the Arrange lane header's layout constants, the lane
 name derived from the first clip's sound family, and the lane fader.
 `src/ui/room.rs` decides each frame which of the Sounds panel, the Inspector,
@@ -594,8 +599,8 @@ recorded take, project, and settings.
 
 `src/atomic_file.rs` owns file replacement. Projects, settings, the scan cache,
 synth patterns, and WAV exports are staged beside the destination and renamed
-over it. A failed single-file write leaves the existing file intact. A stem
-batch rejects duplicate or non-file destinations, stages all files, and keeps
+over it. A failed single-file write leaves the existing file intact. Stem and
+sequence batches reject duplicate or non-file destinations, stage all files, and keep
 the originals as sibling backups until every replacement succeeds. A commit
 failure restores the originals; if restoration fails, the error names the
 retained backups for recovery. A process interruption can leave a partial batch
@@ -852,8 +857,10 @@ including missing palette audio. Selecting it does not read audio.
 `Session::step_synth_pcm` reads the source and renders synchronously when Listen
 sequence or Save sequence is requested. The frontend then requests PCM preview
 or the existing WAV save workflow. Save registers the result in Step synth at
-the draft BPM and selects it. Save choice, cancellation, failure, and success
-update local feedback. Missing palette audio offers Import details.
+the draft BPM and selects it. `Session::save_sequence` stages the WAV and draft
+at `synth::pattern_beside` as one batch, with rollback if replacement fails;
+registration follows successful publication. Save choice, cancellation, failure,
+and success update local feedback. Missing palette audio offers Import details.
 Pattern save/load uses `Session::save_pattern` and `Session::load_pattern`.
 It replaces only the four-bar draft; the source path and viewed bar remain.
 Clear bar clears only the viewed sixteen steps. The visible +12 through -12

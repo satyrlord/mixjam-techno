@@ -56,6 +56,13 @@ impl StepSynthState {
     }
 }
 
+/// Where Save sequence keeps a sequence's pattern: beside its WAV, as
+/// `Name.pattern.json` for `Name.wav`, in the format Load pattern reads. The
+/// arrangement draws a clip of that sound as notes.
+pub fn pattern_beside(wav: &std::path::Path) -> std::path::PathBuf {
+    wav.with_extension("pattern.json")
+}
+
 pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
     source.validate()?;
     state.validate()?;

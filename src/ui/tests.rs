@@ -6885,6 +6885,48 @@ mod tests {
             Some("Saved sequence.wav to Step synth."),
             "Selecting the saved sound must keep the save confirmation."
         );
+        assert_eq!(
+            app.session
+                .load_pattern(&dir.join("sequence.pattern.json"))
+                .unwrap()
+                .steps,
+            app.step_synth.steps,
+            "Save sequence keeps the pattern beside the WAV."
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
+        let (ctx, mut app) = fixture();
+        let dir =
+            std::env::temp_dir().join(format!("mixjam-step-pattern-error-{}", std::process::id()));
+        let wav = dir.join("sequence.wav");
+        let pattern = mixjam_techno::application::pattern_beside(&wav);
+        std::fs::create_dir_all(&pattern).unwrap();
+        app.bottom_module = BottomModule::StepSynth;
+        app.finish_path(
+            FileRequest::SaveSound {
+                pcm: Pcm {
+                    sample_rate: 1000,
+                    channels: 1,
+                    samples: vec![0.25; 1000],
+                },
+                name: "sequence".into(),
+                group: "Step synth",
+                source_bpm: 140.0,
+                stretch: None,
+            },
+            Some(wav.clone()),
+        );
+        assert!(!wav.exists(), "A pattern failure must not publish the WAV.");
+        assert!(app.selected_sample.is_none());
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert!(app.status_error && app.step_synth_feedback.error);
+        assert_eq!(
+            app.step_synth_feedback.message,
+            Some(format!("Cannot save the sequence: {}", app.status))
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -14175,6 +14217,291 @@ mod tests {
         text_rect(&output, "FX 3 return (100% dashed)");
         choose_automation_lane(&ctx, &mut app, "Off");
         assert_eq!((app.automation_lane, app.return_lane), (None, None));
+    }
+
+    #[test]
+    fn the_lane_menu_groups_all_fourteen_lanes_and_shows_what_each_holds() {
+        use mixjam_techno::application::automation::{Lane, Point};
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let point = |tick| Point { tick, value: 0.5 };
+        for track in [0, 1] {
+            app.session
+                .edit(EditCommand::SetAutomation {
+                    track,
+                    lane: Lane::Filter,
+                    points: vec![point(0)],
+                })
+                .unwrap();
+        }
+        app.session
+            .edit(EditCommand::SetAutomation {
+                track: 0,
+                lane: Lane::Send(0),
+                points: vec![point(0)],
+            })
+            .unwrap();
+        app.session
+            .edit(EditCommand::SetReturnAutomation {
+                bus: 1,
+                points: (0..4).map(|bar| point(bar * TICKS_PER_BAR)).collect(),
+            })
+            .unwrap();
+        app.automation_lane = Some(Lane::Filter);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let (selector, _) = accessible_node(&output, "Automation lane");
+        frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Click,
+                    target: selector,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        // Three headed groups, in the order of the concept.
+        let headings = [
+            "ON EVERY TRACK",
+            "SEND AMOUNT, ON EVERY TRACK",
+            "RETURN LEVEL, ONE LINE ACROSS THE SONG",
+        ]
+        .map(|heading| text_rect(&output, heading).top());
+        assert!(headings.is_sorted(), "{headings:?}");
+        assert!(text_rect(&output, "Pan").top() < headings[1]);
+        assert!(text_rect(&output, "FX 1 send · empty").top() > headings[1]);
+        assert!(text_rect(&output, "FX 1 return · empty").top() > headings[2]);
+        // Each lane says how much it holds.
+        text_rect(&output, "2 tracks");
+        text_rect(&output, "1 track");
+        text_rect(&output, "4 points");
+        // The current lane is marked for assistive technology too.
+        let toggled = |label| accessible_node(&output, label).1.toggled();
+        assert_eq!(toggled("Filter"), Some(egui::accesskit::Toggled::True));
+        assert_eq!(toggled("Volume"), Some(egui::accesskit::Toggled::False));
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+
+        // Every lane is one click away.
+        type Choice = (Option<Lane>, Option<usize>);
+        let mut lanes: Vec<(String, Choice)> = Lane::ALL
+            .iter()
+            .map(|lane| (lane.label(), (Some(*lane), None)))
+            .collect();
+        lanes.extend(
+            (0..mixjam_techno::application::fx::BUSES)
+                .map(|bus| (format!("FX {} return", bus + 1), (None, Some(bus)))),
+        );
+        assert_eq!(lanes.len(), 14);
+        for (label, lane) in lanes {
+            choose_automation_lane(&ctx, &mut app, &label);
+            assert_eq!((app.automation_lane, app.return_lane), lane, "{label}");
+        }
+        choose_automation_lane(&ctx, &mut app, "Off");
+        assert_eq!((app.automation_lane, app.return_lane), (None, None));
+    }
+
+    #[test]
+    fn the_agent_automate_request_reaches_all_fourteen_lanes() {
+        use mixjam_techno::application::automation::Lane;
+        let (context, mut app, port) = agent_fixture();
+        for lane in Lane::ALL {
+            let value = match lane {
+                Lane::Repeat => "8",
+                Lane::RepeatGate => "50",
+                Lane::Send(_) => "0.5",
+                _ => "0",
+            };
+            let key = lane.key();
+            let reply = agent(
+                &context,
+                &mut app,
+                &port,
+                &[
+                    "automate",
+                    "track=1",
+                    &format!("lane={key}"),
+                    &format!("points=[[2,{value}]]"),
+                ],
+            );
+            assert_eq!(reply["ok"], true, "{key}: {reply}");
+            assert_eq!(
+                app.session.project().tracks[0].automation.lane(lane).len(),
+                1,
+                "{key}"
+            );
+        }
+        for bus in 1..=mixjam_techno::application::fx::BUSES {
+            let reply = agent(
+                &context,
+                &mut app,
+                &port,
+                &[
+                    "automate",
+                    &format!("bus={bus}"),
+                    "lane=return",
+                    "points=[[2,1]]",
+                ],
+            );
+            assert_eq!(reply["ok"], true, "bus {bus}: {reply}");
+            assert_eq!(app.session.project().return_automation[bus - 1].len(), 1);
+        }
+    }
+
+    #[test]
+    fn the_keyboard_opens_the_lane_menu_and_chooses_a_lane() {
+        use mixjam_techno::application::automation::Lane;
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        focus_control(&ctx, &mut app, &output, "Automation lane");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        // Tab walks into the menu, past Off, to Volume; Enter chooses it.
+        let focused = |output: &egui::FullOutput| {
+            let update = output.platform_output.accesskit_update.as_ref().unwrap();
+            update
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == update.focus)
+                .and_then(|(_, node)| node.label().map(str::to_owned))
+        };
+        let mut walked = Vec::new();
+        for _ in 0..6 {
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            walked.extend(focused(&output));
+            if walked.last().map(String::as_str) == Some("Volume") {
+                break;
+            }
+        }
+        assert_eq!(walked, ["Off", "Volume"], "{walked:?}");
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert_eq!(
+            (app.automation_lane, app.return_lane),
+            (Some(Lane::Volume), None)
+        );
+    }
+
+    #[test]
+    fn a_step_synth_sound_saved_with_its_pattern_draws_notes_instead_of_a_waveform() {
+        let dir = std::env::temp_dir().join(format!(
+            "mixjam-step-notes-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("Lead.wav");
+        let sample = |id, wav_path| Sample {
+            id,
+            code: String::new(),
+            name: "Lead".into(),
+            bars: 1,
+            group_name: "Step synth".into(),
+            offset: 0,
+            length: 0,
+            frame_count: 75_600,
+            sample_rate: 44_100,
+            channels: 1,
+            source_bpm: 140.0,
+            wav_path,
+            digest: None,
+        };
+        let library = Arc::new(Library::fixture(vec![
+            sample(1, Some(wav.clone())),
+            sample(2, None),
+        ]));
+        let mut editor = Editor::new(Project::default());
+        editor.place(1, 0, 0, TICKS_PER_BAR).unwrap();
+        editor.place(2, 1, 0, TICKS_PER_BAR).unwrap();
+        let mut app = MixJamApp::from_session(
+            Session::headless(library, editor.into_project()).unwrap(),
+            "UI fixture".into(),
+            false,
+        );
+        app.capture_path = None;
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        let pattern = mixjam_techno::application::pattern_beside(&wav);
+        assert_eq!(pattern, dir.join("Lead.pattern.json"));
+        let mut state = StepSynthState {
+            bpm: 120.0,
+            ..StepSynthState::default()
+        };
+        state.steps.fill(None);
+        state.steps[4] = Some(7);
+        app.session.save_pattern(&pattern, &state).unwrap();
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        assert!(
+            app.step_patterns.get(&1).is_some_and(Option::is_some),
+            "The sound with a pattern beside it draws notes."
+        );
+        assert_eq!(
+            app.step_patterns.get(&2).map(Option::is_some),
+            Some(false),
+            "A sound without one keeps its waveform."
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let clip = app.clip_rect(&app.session.project().clips[0], app.timeline_rect.unwrap());
+        let category = group_color("Step synth");
+        let tones = [0.55, 0.82].map(|keep| {
+            Color32::from_rgb(
+                (f32::from(category.r()) * keep).round() as u8,
+                (f32::from(category.g()) * keep).round() as u8,
+                (f32::from(category.b()) * keep).round() as u8,
+            )
+        });
+        let note = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect)
+                    if tones.contains(&rect.fill) && clip.contains(rect.rect.center()) =>
+                {
+                    Some(rect.rect)
+                }
+                _ => None,
+            })
+            .expect("The note must be painted inside the clip.");
+        // The WAV was rendered at 120 BPM, even if its catalog tempo is 140.
+        let expected_tick = (44_100.0 * 60.0 / 120.0) / (44_100.0 * 240.0 / 140.0 / 256.0);
+        let expected_left = clip.left() + expected_tick * app.timeline_bar_width / 256.0;
+        assert!(
+            (note.left() - expected_left).abs() < 0.01,
+            "{note:?} vs {expected_left}"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

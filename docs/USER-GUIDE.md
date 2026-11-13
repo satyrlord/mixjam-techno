@@ -265,17 +265,26 @@ double-click it for unity.
   starts with silence and ends with the clip. The clip reads "rev" in its
   corner. Each clip draws the waveform of the part of its sound it plays,
   reversed and faded as you hear it. The trim and length still describe the forward stretch: dragging
-  the left edge trims what is heard at the clip's end.
-- Choose a lane in Automation above the arrangement to draw it on every track:
-  Volume (dB over the fader), FX 1 to FX 4 send (the amount, which replaces
-  the send knob while the lane has points), Filter (low-pass below the
-  middle, high-pass above it, open in the middle; it crosses between the two
-  without a click), Pan, Repeat, Repeat gate, or Pitch. Click a lane to add a
+  the left edge trims what is heard at the clip's end. A clip of a Step
+  synth sequence draws its notes instead: each note is a short bar, higher
+  notes higher up, held to the next note (or for one sixteenth with the 1/16
+  cut). Save sequence keeps the pattern beside the WAV for this; a Step synth
+  sound without one shows its waveform.
+- Choose a lane in Automation above the arrangement to draw it on every track.
+  The menu lists all 14 lanes in three groups. On every track: Volume (dB
+  over the fader), Pan, Filter (low-pass below the middle, high-pass above
+  it, open in the middle; it crosses between the two without a click),
+  Pitch, Repeat, and Repeat gate. Send amount, on every track: FX 1 to FX 4
+  send (the amount, which replaces the send knob while the lane has points),
+  each named with the effect its bus holds. Return level, one line across
+  the song: FX 1 to FX 4 return. The current lane is marked, and each lane
+  says how much it holds: how many tracks have points on it ("2 tracks"),
+  or how many points a return lane has ("4 points"). Click a lane to add a
   point, drag a point to move it, and double-click or right-click a point to
   delete it. Points snap to 1/16 bar; hold Ctrl for single ticks. Between
   points the value moves in a straight line, except on the Repeat and Repeat
-  gate lanes, which step. The same menu holds FX 1 to FX 4 return, one lane
-  for a bus's return across the arrangement. Choose Off to edit clips again.
+  gate lanes, which step. A return lane is one lane for a bus's return
+  across the arrangement. Choose Off to edit clips again.
 - The Pan lane moves a track across the stereo field: the top of the row is
   hard right, the bottom hard left, and the middle the center. A point reads
   as L 40, C, or R 100. While the lane has points it replaces the track's pan
@@ -500,7 +509,10 @@ follows that track instead, such as the kick. A preset keeps the Key.
 - Use the other sample tools to stretch tempo or apply effects, then save a new
   WAV sample.
 - Use Step synth, a board of the lower panel, to sequence one note per
-  sixteenth step across up to four bars.
+  sixteenth step across up to four bars. Save sequence writes the WAV and,
+  beside it, its pattern as `Name.pattern.json`, which Load pattern also
+  opens; the arrangement draws the sound's clips as notes from it. If the
+  pattern cannot be saved, the tool reports the error and preserves existing files.
 - Select a recording track and press Record. Recording starts after an eight-beat
   count-in. Stop and save the take as a WAV file.
 

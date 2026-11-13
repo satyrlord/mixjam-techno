@@ -921,7 +921,18 @@ separate printed label and narrows to 96 points. Below 600 points, the heading
 and counts hide so every action stays within the score. Below 700 points the row's
 spacing tightens to 4 points and its buttons' side padding to 6. The menu keeps
 its accessible name. All actions stay on one row beside the Sounds panel so
-the lane viewport keeps its height. Maximise, or
+the lane viewport keeps its height.
+
+The Automation menu lists Off and all 14 lanes in three groups under small
+muted uppercase headings: On every track (Volume, Pan, Filter, Pitch, Repeat,
+Repeat gate), Send amount, on every track (FX 1 to FX 4 send), and Return
+level, one line across the song (FX 1 to FX 4 return). Each row is 22 points
+tall and at least 300 points wide: the lane name in Text, then a muted detail
+(Off says edit clips; a send or return names its bus's effect, or empty), and
+at the right a muted count of what the lane holds, in tracks for a track lane
+and in points for a return lane. The current lane uses the Selection fill and
+a 3-point Accent bar at its left edge. Each row's accessible name is the lane
+name alone, with its selected state. The menu does not scroll. Maximise, or
 F, hides the tool rail, the Sounds panel, the Inspector, and the lower panel so the score
 fills the window; the top bar, the song overview, the score toolbar, and the
 status bar stay. F
@@ -979,7 +990,11 @@ waveform does not repeat; Pitch-lane varispeed is not drawn. A reversed clip's
 `rev` mark sits on a small plate of the clip's fill. A clip whose sound is
 missing has no waveform. Only clips on screen paint a waveform, and each clip
 keeps its shape until its sound, trim, length, fades, Reverse, tempo, or zoom
-changes.
+changes. A clip of a Step synth sound saved with its pattern draws notes in
+place of the waveform, in the same band and tones: one bar per note, 2 to 4
+points thick by the lane's height, its pitch mapped over at least an octave,
+held to the next note or for one sixteenth with the 1/16 cut, and mirrored by
+Reverse. WAV clips never draw notes.
 A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
 a Text-colored name that begins with Missing. While a sound or clip is dragged
@@ -1274,7 +1289,8 @@ focus when its label changes.
 
 Listen and Save sequence need a source and active bar. Disabled actions explain
 why. Pattern saving retains validation, including one active bar. Processing is
-synchronous. Save sequence writes a WAV in Step synth at draft BPM and selects it.
+synchronous. Save sequence writes a WAV in Step synth at draft BPM and selects it,
+and keeps its pattern beside it as `Name.pattern.json`.
 Pattern JSON does not replace the source file or viewed bar. Local feedback covers
 source guidance, preview, file choice, cancellation, errors, and save confirmation.
 Changing palette source resets feedback; an explicit file keeps its own feedback.

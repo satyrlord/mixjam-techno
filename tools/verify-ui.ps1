@@ -8,8 +8,8 @@ param(
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
     [ValidateSet('1', '1.5', '1.75', '2')]
     [string[]]$Scales = @('1'),
-    [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips')]
-    [string[]]$Views = @('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips')
+    [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips')]
+    [string[]]$Views = @('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -91,6 +91,35 @@ for index, (group, name, frequency, bars) in enumerate(definitions):
         output.writeframes(audio)
     samples.append(dict(id=1000000 + index, name=name, group_name=group,
                         path=str(path), source_bpm=140, origin=None))
+
+# A Step synth sequence saved with its pattern beside it, as Save sequence
+# keeps it; the score draws its clips as notes.
+step_notes = {0: 0, 3: 3, 6: 7, 8: 12, 10: 10, 12: 7, 14: 5}
+step_folder = sounds / 'Step synth'
+step_folder.mkdir(parents=True, exist_ok=True)
+step_path = step_folder / 'Lead sequence.wav'
+frame_count = round(sample_rate * 240 / 140)
+step_frames = frame_count / 16
+audio = bytearray(frame_count * 2)
+for frame in range(frame_count):
+    step = int(frame // step_frames)
+    held = max(s for s in step_notes if s <= step)
+    phase = (frame - held * step_frames) / sample_rate
+    frequency = 220 * 2 ** (step_notes[held] / 12)
+    value = int(5000 * math.exp(-6 * phase) * math.sin(2 * math.pi * frequency * phase))
+    struct.pack_into('<h', audio, frame * 2, value)
+with wave.open(str(step_path), 'wb') as output:
+    output.setnchannels(1)
+    output.setsampwidth(2)
+    output.setframerate(sample_rate)
+    output.writeframes(audio)
+(step_folder / 'Lead sequence.pattern.json').write_text(json.dumps(dict(
+    bpm=140.0, active_bars=[True, False, False, False],
+    steps=[step_notes.get(step) for step in range(64)], cut_sixteenth=False, loop_source=False,
+    effects=dict(filter=None, echo=None, robotize=None, dirty=0.0, noise=0.0, volume=1.0)),
+    indent=2), encoding='utf-8')
+step_sample = dict(id=1000000 + len(definitions), name='Lead sequence', group_name='Step synth',
+                   path=str(step_path), source_bpm=140, origin=None)
 
 project = dict(schema_version=2, title='Night Shift', author='UI verification',
                bpm=140, master_gain=0.75, pitch_ratio=1,
@@ -216,6 +245,11 @@ shaped_project['tracks'][1]['automation'] = {'volume': [
     'filter': [{'tick': 0, 'value': -0.8}, {'tick': 8 * 256, 'value': 0.0}]}
 shaped_project['tracks'][2]['sends'] = [0.3, 0.0, 0.0, 0.0]
 shaped_project['tracks'][2]['automation'] = {'sends': [[], [{'tick': 0, 'value': 0.0}, {'tick': 8 * 256, 'value': 1.0}], [], []]}
+shaped_project['imported_samples'].append(step_sample)
+for start in range(4, 12):
+    shaped_project['clips'].append(dict(id=len(shaped_project['clips']) + 1,
+        sample_id=step_sample['id'], track=8, start_tick=start * 256, length_ticks=256,
+        offset_frames=0, gain=1))
 shaped = write_project('shaped', shaped_project)
 follow_project = deepcopy(project)
 follow_project['title'] = 'Follow the playhead'
@@ -240,7 +274,7 @@ if 'options-library-expanded' in views:
 
 report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).hexdigest(),
               captured_utc=datetime.now(timezone.utc).isoformat(), platform=platform.platform(),
-              fixture='12 synthetic WAVs at 22050 Hz, schema-2 native projects, 8/2/64 used tracks; schema-3 missing sources and sample conflict choices; import notices; expanded library adds 128 named copies; options-library-tempos uses an empty project and 60 folders with 3 WAVs each',
+              fixture='12 base synthetic WAVs plus a Step synth WAV and pattern at 22050 Hz, schema-2 native projects, 8/2/9/64 used tracks; schema-3 missing sources and sample conflict choices; import notices; expanded library adds 128 named copies; options-library-tempos uses an empty project and 60 folders with 3 WAVs each',
               output_directory=str(root), captures=[],
               checks=['Native process exits successfully', 'BMP exists and dimensions match',
                       'Dedicated per-case user data directory'],
@@ -285,6 +319,7 @@ for theme, scale, size, view in ((t, z, s, v) for t in themes for z in scales fo
                 'inspector-clip': shaped, 'inspector-clips': shaped,
                 'follow': follow,
                 'fx-board': mixer_states, 'clip-fades': shaped, 'automation': shaped,
+                'automation-menu': shaped,
                 'missing': missing, 'missing-details': missing,
                 'missing-effects': missing, 'missing-edit': missing,
                 'missing-stretch': missing, 'missing-step-synth': missing,
