@@ -33,7 +33,7 @@ shrinks the rail to icons. The **Boards** switch folds the lower panel to its
 toolbar row; pick a tab there, or select Mastering, FX returns, or Step synth
 in the rail, to open it again. In a short window, scroll the rail with the mouse wheel.
 
-**All commands**, at the foot of the rail under Options, or **Ctrl+K**, opens a
+**Commands**, at the foot of the rail under Options, or **Ctrl+K**, opens a
 list of everything the app can do: the rail's tools, Options and Help,
 playback, Undo, Redo and the other edits, Maximise, the status bar's panel
 switches, and every automation lane. The whole list shows in its groups before

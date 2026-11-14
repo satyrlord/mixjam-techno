@@ -117,6 +117,16 @@ impl RailIcon {
         }
     }
 
+    /// The name printed under the icon in the tool rail. Every name fits the
+    /// rail at one size; a long one is shortened here, never shrunk. The
+    /// accessible name and the tooltip keep the full `label`.
+    pub(crate) fn rail_name(self) -> &'static str {
+        match self {
+            Self::AlbumReview => "Review",
+            other => other.label(),
+        }
+    }
+
     /// The tooltip: what the action does, with its window name or shortcut.
     /// `label` stays the short accessible name.
     pub(crate) fn hint(self) -> &'static str {

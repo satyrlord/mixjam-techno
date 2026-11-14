@@ -19,7 +19,8 @@ mod sliders;
 #[path = "controls/surfaces.rs"]
 mod surfaces;
 pub(super) use buttons::{
-    button, button_at, focus_color, header_button, icon_button_surface, print_color, toggle_at,
+    button, button_at, focus_color, header_button, icon_button_surface, print_color, rail_surface,
+    toggle_at,
 };
 pub(super) use knobs::{RotarySpec, rotary, wheel};
 pub(super) use readouts::{disclosure, number, progress, radio, status_text, value_style};

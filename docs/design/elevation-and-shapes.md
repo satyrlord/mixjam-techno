@@ -22,7 +22,8 @@ communicate state. The application has no motion tokens.
 Clips use the smallest corner radius. Controls and sound rows share the control
 radius; transport has a slightly larger radius. Floating windows use the window
 radius. Resting native widgets use one-point borders. Selected clips use a
-two-point text-colored border; active rail actions use a one-point accent outline.
+two-point text-colored border; active rail tools use a one-point accent outline
+on Vintage's key faces and a two-point accent bar at the left edge on Studio and Aero.
 Transport keyboard focus uses a two-point inset outline: Canvas on the bright
 Play/Pause button and Accent on secondary controls. Header actions, category
 buttons, and empty-state actions use the same outline. Undo and Redo dim and
@@ -36,5 +37,5 @@ language (`Roles::corner`).
 Paint the perimeter and bevel as continuous antialiased native geometry. Fade
 raster material before the outer outline and at strip ends so joints stay smooth.
 Prepare knob edges at 8x resolution, then reduce once with premultiplied-alpha
-Lanczos filtering for each 100%, 150%, and 200% variant.
+Lanczos filtering for each prepared size.
 Live text and header symbols stay independent of the material artwork.

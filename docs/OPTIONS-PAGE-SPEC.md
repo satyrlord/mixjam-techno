@@ -124,8 +124,8 @@ with the owner before making release-readiness claims about hardware capacity.
 
 Listen for the Off-mode tradeoff on bass, bright tones, drums, and dense mixes.
 Check clicks, delay alignment, seeks, loop boundaries, and physical playback
-at 44.1 and 48 kHz. Record microphone, native-picker, screen-reader, high-DPI,
-and clean-machine checks separately as passed, failed, or unavailable.
+at 44.1 and 48 kHz. Record microphone, native-picker, screen-reader, and
+clean-machine checks separately as passed, failed, or unavailable.
 
 ## Decisions for the owner or assigned agent
 

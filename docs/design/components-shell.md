@@ -24,29 +24,43 @@ available window width. Text never overlaps the changing fill.
 ## Tool rail
 
 The rail at the left uses the utility Folded Metal finish: dark neutral
-paint, subtle monochromatic grain, smooth folded edges, and shared dark button
-faces. Orange marks active controls and focus. It has two widths. With names
-(the default) it is 84 points wide; each tool is a 72 by 42-point target with
-its 20-point icon above an 11-point name, shrunk in half-point steps to 9 points
-when a long name needs it. Icons only, it is 64 points wide with 48 by 30-point
-targets. A double-chevron switch at the top changes the width; the Tools switch
-in the status bar does the same.
+paint, subtle monochromatic grain and smooth folded edges. The theme's
+workspace accent (lime in Studio and Aero, orange in Vintage) marks active
+tools and focus. It has two widths. With names (the default) it is 84 points
+wide; each tool is a 68 by 40-point target with its 20-point icon above a
+10.5-point name. Every name prints at that one size; a name too long for it
+is shortened on the rail only (Album Review shows "Review", All commands
+"Commands"), while the tooltip, accessible name and window title keep the
+full name. Icons only, it is 64 points wide with 48 by 30-point targets.
+Tools stack with no gap between them. A double-chevron switch at the right of
+the first heading changes the width (icons only, it has its own row at the
+top); the Tools switch in the status bar does the same.
+
+Tool faces follow the theme's `rail_keys` role. On Vintage every tool rests on
+a dark key face. On Studio and Aero a tool is bare until hover or press shows
+its face. An active tool keeps its face and adds the accent: on keys, a
+1-point accent outline; bare, a 2-point accent bar at the left edge. The icon
+of an active tool takes the accent too, and its name brightens to the text
+color, as it does under the pointer.
 
 Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
 Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, FX returns,
 Effects, Step synth, Edit, Stretch, Album Review); Effects opens Effect Studio, Edit
 the Sample Editor, and Stretch the Time Stretcher. With names, each group
-has an uppercase 9.5-point muted heading; icons only, recessed separators divide
-them. Options and All commands sit at the foot of the rail, below a separator.
+has an uppercase 10-point muted heading with 0.6-point letter spacing, 8
+points of space above it and 4 below; icons only, recessed separators divide
+them. Options and Commands sit at the foot of the rail, 12 points below the
+tools; icons only, a separator divides that space.
 When the window is too short for every name, the rail scrolls under the mouse
-wheel or to keep the keyboard-focused tool visible. The foot stays fixed.
-All commands draws a magnifier with the painter (no icon asset) in the rail
+wheel or to keep the keyboard-focused tool visible. An engraved line marks
+each edge past which more tools lie. The foot stays fixed.
+Commands draws a magnifier with the painter (no icon asset) in the rail
 icon's colors and target sizes. Material and icons retain their prepared physical
 pixel density; the narrow chassis omits the windows' wide corner patches.
 
 Musical tools toggle their open state. Erase toggles its editing
-mode. Active toggles use a subtle accent outline and icon tint and expose their
-selected state to accessibility. A collapsed window stays active until closed.
+mode. Active toggles expose their selected state to accessibility. A
+collapsed window stays active until closed.
 File commands and Delete remain one-shot actions.
 Options uses a gear PNG icon at the foot of the rail. Its second activation
 focuses the existing window and retains its draft.

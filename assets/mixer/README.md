@@ -48,5 +48,5 @@ those masters can use the prepared assets but cannot run reproduction.
 
 Run `python tools/assets/check-raster-assets.py` after asset or source changes.
 These checks establish reproduction and provenance. They do not establish
-owner visual acceptance, physical high-DPI behavior, screen-reader support,
+owner visual acceptance, screen-reader support,
 listening quality, or original-product mixer parity.

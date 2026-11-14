@@ -23,7 +23,7 @@ Album Review is a library of deep-listening analyses of albums: for each
 album the metadata, an overview, and for each track its energy, tags, part in
 the album, and a timeline of timestamped events. Reviews of your own albums
 and songs use the same form, so you can compare your work with the reference
-albums. Select the record icon in the tool rail to open it.
+albums. Select **Review**, the vinyl record in the tool rail, to open it.
 
 - The grid shows one card for each album. Search finds titles, artists, and
   genre tags and ignores accents: "oxygene" finds "Oxygène". Artist filters

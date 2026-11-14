@@ -98,7 +98,7 @@ Run the callback benchmark in `src/audio/realtime_bench.rs` in an optimized
 build for CPU claims; record workload, rate, cadence, mean, p99, maximum, and
 missed deadlines. An accepted larger buffer request does not establish a
 longer processing deadline. Physical listening, microphone operation, native
-pickers, screen readers, high DPI, and minimum-machine capacity need separate
+pickers, screen readers, and minimum-machine capacity need separate
 results. Automated tests and screenshots do not establish those results.
 
 The ignored `realtime_options_bench` test covers sparse, dense Drive,
@@ -142,7 +142,8 @@ Each Aero and Vintage case starts from an options file with that theme; Studio
 cases start without one, which checks the fresh-start default. Captures are
 named `theme-view-size`. Cases run in parallel, each in its own process with
 its own data folder; `-Jobs N` sets how many run at once (half the processors,
-at most 8, by default). Captures run at a display scale of 100% only.
+at most 8, by default). Captures run at a display scale of 100% only; 150%
+and 200% display scaling are out of scope.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.
 The capture set also covers Help, Sample libraries, Import sound, Import details,
@@ -170,14 +171,14 @@ Run it optimized with `cargo.ps1 -CargoArguments @('test','--release','--locked'
 p95 frame time must stay under 16.7 ms.
 
 A body that overflows its window shows a scroll bar, and short blocking dialogs
-follow the height of their content. The captures do not verify high DPI,
-screen readers, or
-other accessibility, physical audio, or native file pickers.
+follow the height of their content. The captures do not verify screen readers
+or other accessibility, physical audio, or native file pickers.
 
 ## Visual assets
 
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
-Prepared density variants support Windows scaling. SVG files and embedded SVG
+Each asset has three prepared PNG sizes (100, 150, and 200); only 100% display
+scaling is in scope. SVG files and embedded SVG
 artwork are prohibited in tracked and non-ignored project files. Run
 `python tools/assets/check-raster-assets.py` as part of the quality gate. Original
 legacy archives and required dependency caches stay in ignored `local-data/`;

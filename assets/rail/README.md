@@ -1,6 +1,6 @@
 # Native UI icons
 
-The native right-hand rail and the header Undo, Redo, and Help actions use the PNG
+The native left-hand tool rail and the header Undo, Redo, and Help actions use the PNG
 files in this directory. Each PNG is 96 by 96 pixels with a transparent
 background, antialiased edges, and navy (`#05092a`) artwork. These PNGs are the
 canonical source assets. Edit them directly with raster tools. The UI supplies each action's
@@ -9,7 +9,8 @@ Help has its own question-mark artwork. Options uses a gear. Sample library
 management is part of Options; its former books icon is retired.
 
 The numbered subfolders contain prepared display PNGs at 20, 30, and 40 pixels.
-These cover 100%, 150%, and 200% display density for a nominal 20-point control.
+The 20-pixel set serves a nominal 20-point control at 100% display scaling,
+the only scale in scope.
 The UI chooses the closest prepared size and draws it at exactly one image pixel
 per display pixel.
 Unusual display scales can vary the logical icon size slightly. The UI does not
@@ -32,7 +33,7 @@ license status. This adaptation does not assign a new license to donor work.
 | `mixer` | Exact donor `mixer` path |
 | `erase` | Exact donor `erase` path |
 | `delete` | Exact donor `trash` path |
-| `effects` | Exact donor `inspector` waveform path |
+| `effects` | New "fx" lettering in the donor family |
 | `undo` | Exact donor `undo` path |
 | `redo` | Exact donor `redo` path |
 | `save-as` | Donor `save` outline, opened at lower right for a new pencil |
@@ -40,14 +41,14 @@ license status. This adaptation does not assign a new license to donor work.
 | `open` | New open-folder path in the donor family |
 | `options` | New eight-tooth gear in the donor family, drawn with Pillow at eight times the size and reduced once |
 | `new` | New document and plus path in the donor family |
-| `step-synth` | New lightning path in the donor family |
-| `edit` | New pencil path in the donor family |
+| `step-synth` | New framed pattern of three stepped notes in the donor family |
+| `edit` | New waveform between two brackets, the sample's edges, in the donor family |
 | `stretch` | New outward arrows and sample boundaries in the donor family |
 | `record` | New microphone path in the donor family |
 | `help` | New ringed question mark in the donor family, drawn with Pillow at eight times the size and reduced once |
 | `master` | New level gauge for Mastering in the donor family, drawn with Pillow at eight times the size and reduced once |
-| `album-review` | New record half out of its sleeve for Album Review, drawn with Pillow at eight times the size and reduced once |
-| `fx-returns` | New group of four send knobs, one per FX bus, drawn with Pillow at eight times the size and reduced once |
+| `album-review` | New vinyl record with two groove arcs for Album Review, in the donor family |
+| `fx-returns` | New arrow that turns back down to a baseline, the return to the mix, in the donor family |
 
 ## Update and check
 

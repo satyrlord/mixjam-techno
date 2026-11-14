@@ -289,13 +289,25 @@ fn every_command_row_says_what_it_does_after_its_name() {
     let name = painted("New").expect("New is painted");
     let description = painted("Start an empty song").expect("its description is painted");
     assert!(description > name, "The description follows the name");
-    let update = output.platform_output.accesskit_update.as_ref().unwrap();
-    let row = update
-        .nodes
-        .iter()
-        .find(|(_, node)| node.label() == Some("New") && node.description().is_some())
-        .expect("The New row carries its description");
-    assert_eq!(row.1.description(), Some("Start an empty song"));
+    // The rail's New tool shares the name and describes itself with its
+    // hint, so the row is the one in the command list's window.
+    let nodes = agent::nodes(output.platform_output.accesskit_update.as_ref().unwrap());
+    let described = |window: Option<&str>| {
+        nodes
+            .iter()
+            .find(|node| node.label == "New" && node.window.as_deref() == window)
+            .and_then(|node| node.description.as_deref())
+    };
+    assert_eq!(
+        described(Some("All commands")),
+        Some("Start an empty song"),
+        "The New row carries its description"
+    );
+    assert_eq!(
+        described(None),
+        Some(RailIcon::New.hint()),
+        "The rail's New tool keeps its own hint"
+    );
 }
 
 #[test]

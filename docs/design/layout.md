@@ -134,8 +134,9 @@ replace a paused request when another file action is requested.
 
 Fixed raster detail fades from opaque texture to transparency over the matching
 solid chassis color. Resizing grows the solid regions instead of stretching bitmap
-edges or repeating a visible texture seam. Prepare only 100%, 150%, and 200% PNG variants;
-select the nearest and paint one texel per physical screen pixel. Keep labels,
+edges or repeating a visible texture seam. Prepare no PNG sizes beyond the
+existing 100, 150, and 200 sets; select the nearest and paint one texel per
+physical screen pixel. Keep labels,
 control values, indicators, and interaction states live.
 
 Painted backgrounds use restrained, static monochromatic Gaussian grain. Its
@@ -144,6 +145,8 @@ offset to all channels to retain each module's color. Align the prepared grain
 to physical pixels and fade it before the perimeter. Do not animate the noise or
 add grain over labels and control values.
 
-This is a resizable Windows desktop surface. No browser, mobile, touch, or
-high-DPI acceptance is implied by these logical dimensions. Native capture cases
+This is a resizable Windows desktop surface at 100% display scaling. Display
+scaling of 150% and 200% is out of scope, and the larger PNG sets make no
+claim for it. No browser, mobile, or touch acceptance is implied by these
+logical dimensions. Native capture cases
 are defined by `tools/verify-ui.ps1`; execution results belong in evidence reports.

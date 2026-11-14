@@ -606,50 +606,16 @@ fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bo
 /// The rail's All commands button: a magnifier drawn over its name, or the
 /// magnifier alone when the rail shows icons only.
 pub(super) fn rail_commands_button(ui: &mut egui::Ui, names: bool, open: bool) -> Response {
-    let size = view::rail_button_size(names);
-    let width = size.x.min(ui.available_width().max(1.0));
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, size.y), Sense::click());
-    controls::icon_button_surface(ui, &response, open);
-    let color = if open {
-        roles().tools[0].1
-    } else {
-        roles().legend
-    };
-    let centre = if names {
-        Pos2::new(rect.center().x - 1.0, rect.top() + 12.0)
-    } else {
-        rect.center() - Vec2::splat(1.0)
-    };
-    let stroke = Stroke::new(1.6_f32, color);
-    ui.painter().circle_stroke(centre, 5.0, stroke);
-    ui.painter().line_segment(
-        [centre + Vec2::splat(3.6), centre + Vec2::splat(7.5)],
-        Stroke::new(2.0_f32, color),
-    );
-    if names {
-        let text_color = if open || response.hovered() {
-            roles().text
-        } else {
-            roles().legend
-        };
-        let mut font = 11.0;
-        let galley = loop {
-            let galley = ui.painter().layout_no_wrap(
-                "All commands".to_owned(),
-                egui::FontId::proportional(font),
-                text_color,
-            );
-            if galley.size().x <= rect.width() - 4.0 || font <= 9.0 {
-                break galley;
-            }
-            font -= 0.5;
-        };
-        let origin = Pos2::new(
-            rect.center().x - galley.size().x / 2.0,
-            rect.bottom() - 4.0 - galley.size().y,
+    // The rail prints the short "Commands"; the accessible name stays full.
+    let response = view::rail_item(ui, names, open, "Commands", |ui, centre, color| {
+        let centre = centre - Vec2::splat(1.0);
+        ui.painter()
+            .circle_stroke(centre, 5.0, Stroke::new(1.6_f32, color));
+        ui.painter().line_segment(
+            [centre + Vec2::splat(3.6), centre + Vec2::splat(7.5)],
+            Stroke::new(2.0_f32, color),
         );
-        ui.painter().galley(origin, galley, Color32::PLACEHOLDER);
-    }
+    });
     response
         .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "All commands"));
     response.hover_hint("All commands: everything the app can do, in one list (Ctrl+K)")

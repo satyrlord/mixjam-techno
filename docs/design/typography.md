@@ -57,7 +57,7 @@ text roles where needed, without inventing per-tool typography. Keep labels sepa
 from controls and check rendered glyph bounds. Resizing never scales text.
 Center value text and button captions inside their own visible faces. Native
 widget minimums must fit the readout rectangle; they must not shift text below
-the well. Check the visible glyph center at all three prepared display densities.
+the well. Check the visible glyph center at 100% display scaling.
 
 Mixer uses the shared text-face sizes without a local title. Track names use Body,
 gain values use Clip, sound summaries and pan or Muted text use Small, and

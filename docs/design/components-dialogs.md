@@ -93,7 +93,7 @@ and all button states at supported sizes. Native captures from
 `tools/verify-ui.ps1` on 2026-10-27 show open windows with long content and
 disabled actions: an overflowing body shows its scroll bar, and short blocking
 dialogs follow the height of their content. They do not cover collapsed windows, resizing,
-keyboard focus, hover or pressed states, high DPI, accessibility, physical audio,
+keyboard focus, hover or pressed states, accessibility, physical audio,
 or native file pickers.
 
 ## Empty states and feedback

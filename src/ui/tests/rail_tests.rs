@@ -438,9 +438,10 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             rect
         })
         .collect();
+    // Tools may touch: their faces, not gaps, separate them.
     for pair in bounds.windows(2) {
         assert!(
-            pair[0].bottom() < pair[1].top(),
+            pair[0].bottom() <= pair[1].top() + 0.01,
             "File, clip and tool actions keep their order without overlap ({state})."
         );
     }
@@ -490,7 +491,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             && (options.size() - target).abs().max_elem() < 0.01
             && (commands.size() - target).abs().max_elem() < 0.01
             && rail.contains_rect(commands)
-            && options.bottom() < commands.top()
+            && options.bottom() <= commands.top() + 0.01
             && commands.bottom() > rail.bottom() - 12.0,
         "Options and All commands must sit at the foot of the rail ({state}):              {options:?} {commands:?}."
     );
@@ -591,6 +592,270 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
 }
 
 #[test]
+fn rail_names_share_one_size_and_fit_their_targets() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.set_layout(|layout| layout.tool_names = true);
+    let size = Vec2::new(1440.0, 1000.0);
+    let mut output = egui::FullOutput::default();
+    for _ in 0..3 {
+        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let mut tools: Vec<(&str, &str)> = commands::RAIL
+        .iter()
+        .flat_map(|(_, tools)| tools.iter().filter_map(|command| command.icon()))
+        .chain([RailIcon::Options])
+        .map(|icon| (icon.label(), icon.rail_name()))
+        .collect();
+    tools.push(("All commands", "Commands"));
+    for (label, name) in tools {
+        let target = effects_control_rect(&output, label);
+        let text = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text == name && target.contains(text.pos) =>
+                {
+                    Some(text)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{label} must print its rail name {name:?}."));
+        for section in &text.galley.job.sections {
+            assert_eq!(
+                section.format.font_id.size, 10.5,
+                "{label}: every rail name uses one size."
+            );
+        }
+        let bounds = text.visual_bounding_rect();
+        assert!(
+            bounds.left() >= target.left() + 4.0 && bounds.right() <= target.right() - 4.0,
+            "{label}: the name {name:?} must clear its target's edges: {bounds:?} in {target:?}."
+        );
+    }
+}
+
+#[test]
+fn the_names_switch_stays_in_the_rail_clear_of_the_first_title_and_tool() {
+    each_theme(|_| {
+        for names in [true, false] {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.set_layout(|layout| layout.tool_names = names);
+            let size = Vec2::new(1440.0, 1000.0);
+            let mut output = egui::FullOutput::default();
+            for _ in 0..3 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            let rail = Rect::from_min_max(
+                Pos2::new(0.0, 64.0),
+                Pos2::new(rail_width(names), size.y - 30.0),
+            );
+            let switch = effects_control_rect(
+                &output,
+                if names {
+                    "Shrink the tool rail to icons"
+                } else {
+                    "Show the tool names"
+                },
+            );
+            let new = effects_control_rect(&output, "New");
+            assert!(
+                rail.contains_rect(switch) && switch.bottom() <= new.top() + 0.01,
+                "The switch sits in the rail, above the first tool (names {names}): \
+                 {switch:?} over {new:?}."
+            );
+            if !names {
+                continue;
+            }
+            // With names, it shares the first heading's row, at the right.
+            let title = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text == "FILE" && rail.contains(text.pos) =>
+                    {
+                        Some(text.visual_bounding_rect())
+                    }
+                    _ => None,
+                })
+                .expect("The first heading must be painted.");
+            assert!(
+                (switch.right() - new.right()).abs() < 0.01
+                    && switch.left() > title.right()
+                    && switch.y_range().contains(title.center().y),
+                "The switch ends the File heading's row, clear of its title: \
+                 {switch:?} beside {title:?}."
+            );
+        }
+    });
+}
+
+#[test]
+fn rail_tool_faces_and_active_marks_follow_the_themes_rail_keys_role() {
+    each_theme(|_| {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        click_named(&ctx, &mut app, "Erase");
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(
+            accessible_node(&output, "Erase").1.toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        // The rectangles painted inside one tool's target.
+        let painted = |target: Rect| -> Vec<&egui::epaint::RectShape> {
+            output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect) if target.expand(0.01).contains_rect(rect.rect) => {
+                        Some(rect)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let keys = roles().rail_keys;
+        let idle = effects_control_rect(&output, "New");
+        assert_eq!(
+            !painted(idle).is_empty(),
+            keys,
+            "An idle tool rests on a face only where the theme gives the rail keys."
+        );
+        let active = effects_control_rect(&output, "Erase");
+        let marks = painted(active);
+        let outline = marks.iter().any(|mark| {
+            mark.fill == Color32::TRANSPARENT
+                && mark.stroke.color == roles().accent
+                && mark.stroke.width == 1.0
+                && (mark.rect.size() - active.shrink(0.5).size())
+                    .abs()
+                    .max_elem()
+                    < 0.01
+        });
+        let bar = marks.iter().any(|mark| {
+            mark.fill == roles().accent
+                && (mark.rect.width() - 2.0).abs() < 0.01
+                && (mark.rect.left() - active.left()).abs() < 0.01
+        });
+        assert_eq!(
+            (outline, bar),
+            (keys, !keys),
+            "The active tool is outlined on keys and carries the accent bar when bare."
+        );
+        assert!(
+            marks.len() > 1,
+            "The active tool keeps its face under the mark."
+        );
+    });
+}
+
+#[test]
+fn a_short_rail_marks_each_edge_that_hides_tools() {
+    each_theme(|_| {
+        // The engraved edge: a dark line across the scrolling view, 6 points
+        // in from each side. With names on, the rail has no other such line.
+        let width = rail_width(true);
+        let edges = |output: &egui::FullOutput| -> Vec<f32> {
+            output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::LineSegment { points, stroke }
+                        if stroke.color == roles().ink
+                            && (points[0].y - points[1].y).abs() < 0.01
+                            && (points[0].x - 12.0).abs() < 0.01
+                            && (points[1].x - (width - 12.0)).abs() < 0.01 =>
+                    {
+                        Some(points[0].y)
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        // Where the scrolling view stops drawing its tools: the widest reach
+        // of the clip rectangles that end above the rail's foot.
+        let drawn = |output: &egui::FullOutput, foot: f32| -> (f32, f32) {
+            output
+                .shapes
+                .iter()
+                .map(|shape| shape.clip_rect)
+                .filter(|clip| clip.right() <= width + 0.01 && clip.bottom() < foot)
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(top, bottom), clip| {
+                    (top.min(clip.top()), bottom.max(clip.bottom()))
+                })
+        };
+        let draw = |size: Vec2| {
+            let (ctx, mut app) = fixture();
+            ctx.enable_accesskit();
+            app.set_layout(|layout| layout.tool_names = true);
+            let mut output = egui::FullOutput::default();
+            for _ in 0..3 {
+                output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+            }
+            (ctx, app, output)
+        };
+        let (_, _, output) = draw(Vec2::new(1440.0, 1000.0));
+        assert_eq!(
+            edges(&output),
+            Vec::<f32>::new(),
+            "A rail that shows every tool marks no edge."
+        );
+
+        let size = Vec2::new(960.0, 720.0);
+        let (ctx, mut app, output) = draw(size);
+        let options = effects_control_rect(&output, "Options");
+        let hidden = effects_control_rect(&output, RailIcon::AlbumReview.label());
+        let marks = edges(&output);
+        assert!(
+            marks.len() == 1
+                && marks[0] < options.top()
+                && marks[0] > options.top() - 16.0
+                && hidden.bottom() > marks[0],
+            "Tools below the view need the lower edge only: {marks:?} above {options:?}."
+        );
+        let (_, bottom) = drawn(&output, options.top());
+        assert!(
+            (0.0..=2.0).contains(&(bottom - marks[0])),
+            "The lower edge ends the tools, not crosses them: {} against {bottom}.",
+            marks[0]
+        );
+        for _ in 0..3 {
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![
+                    egui::Event::PointerMoved(Pos2::new(width / 2.0, size.y / 2.0)),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: Vec2::new(0.0, -400.0),
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                egui::Modifiers::NONE,
+                size,
+            );
+        }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        let first = effects_control_rect(&output, "New");
+        let marks = edges(&output);
+        assert!(
+            marks.len() == 1 && marks[0] < 64.0 + 8.0 && first.top() < marks[0],
+            "Scrolled to the end, tools above the view need the upper edge only: {marks:?}."
+        );
+        let options = effects_control_rect(&output, "Options");
+        let (top, _) = drawn(&output, options.top());
+        assert!(
+            (0.0..=2.0).contains(&(marks[0] - top)),
+            "The upper edge ends the tools, not crosses them: {} against {top}.",
+            marks[0]
+        );
+    });
+}
+
+#[test]
 fn rail_toggles_close_windows_and_keep_highlights_in_sync() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -633,10 +898,11 @@ fn rail_toggles_close_windows_and_keep_highlights_in_sync() {
                     _ => None,
                 })
                 .expect("The rail icon must be painted.");
+            // The rail marks its active tool in the workspace accent.
             assert_eq!(
                 tint,
                 if active {
-                    roles().tools[0].1
+                    roles().accent
                 } else {
                     roles().legend
                 }

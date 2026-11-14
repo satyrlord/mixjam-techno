@@ -64,7 +64,7 @@ is the lower panel's tab row. Control-specific tooltips and the Help
 window explain silence, unity, attenuation, and independent polarity.
 
 `src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a separate
-24 by 32-point fader cap. Nine PNGs cover 100%, 150%, and 200% density. The tiny
+24 by 32-point fader cap. Nine PNGs hold three prepared sizes of each. The tiny
 cap is first reduced to a 48 by 64-pixel canonical grid before preparing the
 lower densities, preserving broad ridges and its ivory indicator stripe. All
 text, values, rails, ticks, reset buttons, polarity, routing, focus, and hover

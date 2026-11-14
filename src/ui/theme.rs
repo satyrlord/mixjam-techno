@@ -22,6 +22,9 @@ pub(super) enum Material {
 /// theme; they ask for a role and, where shape differs, for the material.
 pub(super) struct Roles {
     pub material: Material,
+    /// Rail tools rest on key faces. Otherwise they sit bare on the chassis
+    /// and gain a face on hover, on press, and while active.
+    pub rail_keys: bool,
     // The workspace: top bar, score, side panels, lower panel, and menus.
     pub canvas: Color32,
     pub panel: Color32,
@@ -109,6 +112,7 @@ const SECTIONS: [Color32; 6] = [
 
 static STUDIO: Roles = Roles {
     material: Material::Flat,
+    rail_keys: false,
     canvas: rgb(21, 23, 26),
     panel: rgb(28, 31, 35),
     raised: rgb(40, 44, 49),
@@ -172,6 +176,7 @@ static STUDIO: Roles = Roles {
 
 static AERO: Roles = Roles {
     material: Material::Plastic,
+    rail_keys: false,
     canvas: rgb(20, 64, 132),
     panel: rgb(11, 36, 80),
     raised: rgb(30, 82, 156),
@@ -235,6 +240,7 @@ static AERO: Roles = Roles {
 
 static VINTAGE: Roles = Roles {
     material: Material::Metal,
+    rail_keys: true,
     canvas: rgb(24, 23, 21),
     panel: rgb(31, 30, 27),
     raised: rgb(45, 43, 39),
@@ -876,6 +882,9 @@ mod tests {
                 ("muted on panel", r.muted, r.panel, 4.5),
                 ("muted on canvas", r.muted, r.canvas, 4.5),
                 ("accent on panel", r.accent, r.panel, 3.0),
+                // The rail marks its active tool and focus in the accent.
+                ("accent on rail", r.accent, r.tools[0].0, 3.0),
+                ("accent on rail face", r.accent, r.face, 3.0),
                 ("ink on accent", r.on_light, r.accent, 4.5),
                 ("coral on panel", r.coral, r.panel, 4.5),
                 ("legend on face", r.legend, r.face, 4.5),

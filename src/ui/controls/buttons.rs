@@ -34,7 +34,78 @@ pub(crate) fn focus_color(ui: &egui::Ui) -> Color32 {
     Palette::of(ui).focus()
 }
 
+/// A rail tool's surface. Where the theme gives the rail keys, every tool is
+/// a secondary key and the active one is outlined in the accent. Elsewhere a
+/// tool sits bare on the chassis and gains the key face on hover or press; the
+/// active tool keeps the face and a short accent bar at its leading edge. Rail
+/// tools touch, so the focus ring stays inside the target.
+pub(crate) fn rail_surface(ui: &egui::Ui, response: &Response, active: bool) {
+    let keys = roles().rail_keys;
+    let touched = response.hovered() || response.is_pointer_button_down_on();
+    let raised = keys || active || (response.enabled() && touched);
+    key_face(ui, response, ButtonRole::Secondary, raised);
+    let rect = response.rect;
+    let painter = ui.painter();
+    if active && keys {
+        painter.rect_stroke(
+            rect.shrink(0.5),
+            5.0,
+            Stroke::new(1.0_f32, roles().accent),
+            egui::StrokeKind::Inside,
+        );
+    } else if active {
+        let bar = Rect::from_center_size(
+            Pos2::new(rect.left() + 1.0, rect.center().y),
+            Vec2::new(2.0, (rect.height() * 0.45).round()),
+        );
+        painter.rect_filled(bar, 1.0, roles().accent);
+    }
+    if response.has_focus() {
+        painter.rect_stroke(
+            rect,
+            5.0,
+            Stroke::new(2.0_f32, roles().accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
 fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRole) {
+    let quiet = matches!(role, ButtonRole::Tertiary);
+    let down = response.is_pointer_button_down_on();
+    let raised = !quiet || (response.enabled() && (response.hovered() || down));
+    let face = key_face(ui, response, role, raised);
+    let painter = ui.painter();
+    let color = match role {
+        ButtonRole::Primary => roles().ink,
+        _ => roles().legend,
+    };
+    let color = if response.enabled() {
+        color
+    } else {
+        roles().disabled_text
+    };
+    let mut text = egui::RichText::new(label)
+        .font(FontId::proportional(13.0))
+        .color(color);
+    if quiet && !raised {
+        text = text.underline();
+    }
+    let galley = egui::WidgetText::from(text).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Truncate),
+        (face.width() - 12.0).max(0.0),
+        egui::TextStyle::Button,
+    );
+    painter
+        .with_clip_rect(face.intersect(ui.clip_rect()))
+        .galley(face.center() - galley.size() / 2.0, galley, color);
+    focus(ui, response);
+}
+
+/// Paint the key face for `role` in the theme's material when `raised`, and
+/// return the face rectangle, where a label sits.
+fn key_face(ui: &egui::Ui, response: &Response, role: ButtonRole, raised: bool) -> Rect {
     let rect = response.rect;
     let down = response.is_pointer_button_down_on();
     let base = match role {
@@ -52,8 +123,6 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
         base
     };
     let painter = ui.painter();
-    let quiet = matches!(role, ButtonRole::Tertiary);
-    let raised = !quiet || (response.enabled() && (response.hovered() || down));
     let material = roles().material;
     // Every theme's key face, and so its label, sits in the same place.
     let face = rect
@@ -116,31 +185,7 @@ fn paint_button(ui: &egui::Ui, response: &Response, label: &str, role: ButtonRol
             Stroke::new(1.0_f32, Color32::from_white_alpha(55)),
         );
     }
-    let color = match role {
-        ButtonRole::Primary => roles().ink,
-        _ => roles().legend,
-    };
-    let color = if response.enabled() {
-        color
-    } else {
-        roles().disabled_text
-    };
-    let mut text = egui::RichText::new(label)
-        .font(FontId::proportional(13.0))
-        .color(color);
-    if quiet && !raised {
-        text = text.underline();
-    }
-    let galley = egui::WidgetText::from(text).into_galley(
-        ui,
-        Some(egui::TextWrapMode::Truncate),
-        (face.width() - 12.0).max(0.0),
-        egui::TextStyle::Button,
-    );
-    painter
-        .with_clip_rect(face.intersect(ui.clip_rect()))
-        .galley(face.center() - galley.size() / 2.0, galley, color);
-    focus(ui, response);
+    face
 }
 
 pub(crate) fn button(ui: &mut egui::Ui, label: &str, role: ButtonRole) -> Response {

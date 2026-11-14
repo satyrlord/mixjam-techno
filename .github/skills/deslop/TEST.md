@@ -93,4 +93,4 @@ If context proves one of these values, keep the test:
 
 For native UI checks, build the release executable and use the configured
 `tools/verify-ui.ps1` capture procedure. Inspect the images. It does not
-verify physical audio, file pickers, high DPI, or screen readers.
+verify physical audio, file pickers, or screen readers.

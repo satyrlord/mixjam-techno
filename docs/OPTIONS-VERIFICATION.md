@@ -25,7 +25,7 @@ The owner's follow-up folded the complete Sample Libraries feature into the
 fourth page. Folder and provider actions use their existing operations;
 Apply and Cancel affect the options draft only. The standalone window, its
 rail action, and the books PNGs are retired. The gear uses the existing
-canonical-raster and 100%, 150%, and 200% prepared-density pipeline.
+canonical-raster pipeline and its three prepared PNG sizes.
 
 Audio changes require stopped playback, previews, and recording. Buffer Apply
 prepares a silent stream on the same device and format, writes settings, then
@@ -96,7 +96,7 @@ The physical output buffering, Drive tradeoff, and playback performance measurem
 | Microphone and recorded-input operation | Not available; recording guards use fixtures |
 | Native Windows file pickers | Not available; the agent path chooser is tested |
 | Screen reader | Not available; the accessibility tree is tested |
-| Physical high-DPI displays | Not available; geometry tests cover 100%, 150%, and 200% |
+| Display scaling of 150% and 200% | Out of scope by the owner's decision |
 | Clean minimum-spec machine | Not available; the owner has not selected one |
 
 The largest remaining blind spot is audible heavy-song playback on the owner's
@@ -135,8 +135,7 @@ its migration default are now included in the specification's stored fields.
 Native checks used isolated settings on Windows 11 Pro build 26300. They
 covered draft isolation, Apply, saved values, unchanged song content, Cancel
 with discarded edits, Restore defaults, and persistence after restart.
-Native interaction did not start playback or recording. Physical high-DPI
-displays and screen readers remain unverified. Check compact labels and track
-controls on those displays and with a screen reader before claiming those
-forms of accessibility. These checks do not establish minimum-machine support
+Native interaction did not start playback or recording. Screen readers remain
+unverified. Check compact labels and track controls with a screen reader
+before claiming that form of accessibility. These checks do not establish minimum-machine support
 or audio parity.

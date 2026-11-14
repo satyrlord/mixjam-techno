@@ -45,7 +45,7 @@ Run `python tools/assets/check-raster-assets.py` after asset or source changes.
 `tools/verify-ui.ps1` checks the built native executable at 1440 by 1000,
 1024 by 768, and 960 by 720. It creates synthetic WAV/project fixtures and uses
 isolated settings. These captures need visual inspection. They do not test
-physical audio, native file-picker interaction, high DPI, or screen readers.
+physical audio, native file-picker interaction, or screen readers.
 Mixer capture cases include a full 64-track bank, an empty arrangement, and
 attenuation/silence/unity gain, independent polarity, pan, and output-routing
 states. Native egui tests check

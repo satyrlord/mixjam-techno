@@ -460,100 +460,100 @@
     },
     {
       "name": "effects",
-      "png_sha256": "24d26d8974bb0e41b18ff86dd15bd9007c89d7fa3d061cfee4c8fc3fcf0f3996",
+      "png_sha256": "cf1a8faf0e5efdd49985492651e1983b10b8e4fb39289b1750000af1430cbca7",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 1290,
-      "opaque_pixels": 971,
-      "transparent_pixels": 7926,
-      "antialiased_pixels": 319,
+      "visible_pixels": 1737,
+      "opaque_pixels": 1342,
+      "transparent_pixels": 7479,
+      "antialiased_pixels": 395,
       "alpha_bounds": [
-        8,
-        20,
-        88,
-        76
+        18,
+        12,
+        83,
+        83
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "ad3c429113bf5e140115567cc6af8a97557df8d868441978d7788af4a3223cab"
+          "png_sha256": "98557e2bfb269e90729e60590fe45f8e2b24365547ef42c48bfd66a57f4c61b9"
         },
         {
           "size": 30,
-          "png_sha256": "c18af2cdfe63c73bf68e87088dfe6f78cccf26d6a5b0c6c7778c1d206419d86c"
+          "png_sha256": "fa9be8cd4d4ec07a94349a821e4abe6109a7ba6dcd17a198c74f8a87a2a55744"
         },
         {
           "size": 40,
-          "png_sha256": "fe1fb7d5f0fa3bd3906a3fa5d82458bc4357be1212a96dcd94e71baabc7785a0"
+          "png_sha256": "8b5e4f978c325b70f8571cb5a7e07c929f53d9ea16283893dfc669a705a2619f"
         }
       ]
     },
     {
       "name": "step-synth",
-      "png_sha256": "36668749cc784920ef3cc3416cdc6f27ab56fe8e89cfbe0829b8c816d8d7aa40",
+      "png_sha256": "fc252fa5052d1abcf91f4f109fc8a609a87bbe0b5b2a7db09132be09724f222d",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 1630,
-      "opaque_pixels": 1227,
-      "transparent_pixels": 7586,
-      "antialiased_pixels": 403,
+      "visible_pixels": 2864,
+      "opaque_pixels": 2384,
+      "transparent_pixels": 6352,
+      "antialiased_pixels": 480,
       "alpha_bounds": [
-        16,
         8,
-        80,
-        88
+        12,
+        89,
+        85
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "899b9fb49c14060ffcdc32f431c189e84e3f9fe5c7bb65578528577a4fb1b015"
+          "png_sha256": "e1821669e80177a0f53d911b2009f9389fd53b473f5f2413c7c95d3e1012a29e"
         },
         {
           "size": 30,
-          "png_sha256": "67abc6d62563a3ab905a667d454eee5d67c1bd46d59c1336d2150b7745c657de"
+          "png_sha256": "e1bd7688d0deac7e4b2d89a0f0b12b44973971972c0a91396f295df43a3d20b0"
         },
         {
           "size": 40,
-          "png_sha256": "822cccf15e8c9f528a88b3835692829c318760cf9f9d90e60247949a7ac1385d"
+          "png_sha256": "18acb1ed074da1d26362d69fd00d439f90a19426ccc14f0314e168eebcf21a6e"
         }
       ]
     },
     {
       "name": "edit",
-      "png_sha256": "b855f910b68619fce902ba0a0f3d1952bdb2f7bbe418a2c420af2a821b060263",
+      "png_sha256": "2a9cd172994d6bb604d46702276b62499328fb4fb815ebcbcd143cfdd4365424",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 2156,
-      "opaque_pixels": 1748,
-      "transparent_pixels": 7060,
-      "antialiased_pixels": 408,
+      "visible_pixels": 2319,
+      "opaque_pixels": 1920,
+      "transparent_pixels": 6897,
+      "antialiased_pixels": 399,
       "alpha_bounds": [
-        12,
-        8,
-        88,
-        84
+        10,
+        16,
+        87,
+        81
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "32f0f69ccfeab90e5cbf0085538288283e2811f49184fc9102981bf76a501fa5"
+          "png_sha256": "7190ec80d8114846e707bc8fee294551740a832b2347652ffc2db866984d19f9"
         },
         {
           "size": 30,
-          "png_sha256": "096a6527d5b12d7cc4b6cbf709fffdd3cc3e94298a2eb02449b160f6205d9234"
+          "png_sha256": "3014d3dc0e1e140fd90be89f217287fa18efe1bee4da3870705d1f5241ecd11a"
         },
         {
           "size": 40,
-          "png_sha256": "e006cc67f10611e645a63dd4e8c098876c38f0e8d7cff14ddd92a4a9e0eb1c4a"
+          "png_sha256": "127965d271d4b5a642b9391f4681cd697053b37fb3b33f81688a2c5588d81768"
         }
       ]
     },
@@ -724,67 +724,67 @@
     },
     {
       "name": "album-review",
-      "png_sha256": "e57a6e5d0abe42b3959f39efaf22dc2b5706ee435e0a439d635207d397908dc8",
+      "png_sha256": "b69b4d60a83dfbda5eb0770255b475a50a6017fa78682ff6459880cc63fca4eb",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 3154,
-      "opaque_pixels": 1020,
-      "transparent_pixels": 6062,
-      "antialiased_pixels": 2134,
+      "visible_pixels": 2764,
+      "opaque_pixels": 2010,
+      "transparent_pixels": 6452,
+      "antialiased_pixels": 754,
       "alpha_bounds": [
-        5,
-        17,
-        92,
-        79
+        8,
+        8,
+        89,
+        89
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "d3946b894b8f8a7bffe1038003052174524a1e9bb187991a765175437c78b74f"
+          "png_sha256": "ccb83e0a39550868f101c6c1266212a049a7111d85f1cd2b283f9e1c3ca554d9"
         },
         {
           "size": 30,
-          "png_sha256": "f01d101a68c63bd29bb56e34dbeb59c38a89fe4e213229991d34782d658e2bc1"
+          "png_sha256": "3b05a5ad77d34d95df8ac722fd69a17c6bb01e1edaf691d41f577805c2d23b00"
         },
         {
           "size": 40,
-          "png_sha256": "9f7c1165e41dffc302ddf18580f3f9601accd924912173eeff95fe5e89eeac28"
+          "png_sha256": "c6b3c006569396cbe23a2ca6a388e72c5422d5df007757b4f8039a902b0b730b"
         }
       ]
     },
     {
       "name": "fx-returns",
-      "png_sha256": "c1947a600de051a204e4738066b4733665bdbb1520f132ebc56ef2d997819780",
+      "png_sha256": "e718a1dbea227f9a81870272eddf7e06b641451769ac21829d3e22e439a6bcb5",
       "size": [
         96,
         96
       ],
       "mode": "RGBA",
-      "visible_pixels": 3788,
-      "opaque_pixels": 1478,
-      "transparent_pixels": 5428,
-      "antialiased_pixels": 2310,
+      "visible_pixels": 2107,
+      "opaque_pixels": 1672,
+      "transparent_pixels": 7109,
+      "antialiased_pixels": 435,
       "alpha_bounds": [
-        8,
-        8,
-        88,
-        88
+        10,
+        12,
+        89,
+        83
       ],
       "variants": [
         {
           "size": 20,
-          "png_sha256": "6d57dc3bc035c087fc3b6d19cc7e0cbe945fdd67cdc21a1158be6628b8167385"
+          "png_sha256": "46181f7ec094e06493c48909021d669838c09c4ffc143b48104c024ad8216226"
         },
         {
           "size": 30,
-          "png_sha256": "87d9361b59f93dda53f39ae8d011588b6ad4cc53b536ec4788b96918dbf2aa8f"
+          "png_sha256": "25c4f4515f178fdf48a67f06727973bc1b2b64c40328e6c43b79358aa0f67e84"
         },
         {
           "size": 40,
-          "png_sha256": "7b356abb43891be1d1f5487556afe958d5540ec07754836cbf492c00921aae23"
+          "png_sha256": "2fa1c790d4584218aac20eff41d56e8acfff91a53c8040ea49f420713a4c1a03"
         }
       ]
     }

@@ -8,8 +8,9 @@ This covers the window, taskbar, and Windows file icons.
 
 Run `python tools/assets/render-app-icon.py` to regenerate the ICO from the PNG.
 The helper also prepares header PNGs offline with LANCZOS resampling at 40, 60,
-and 80 pixels, in matching numbered subfolders. These cover 100%, 150%, and 200%
-display density for the nominal 40-point header. The UI chooses the closest prepared size and draws it
+and 80 pixels, in matching numbered subfolders. The 40-pixel set serves the
+nominal 40-point header at 100% display scaling, the only scale in scope.
+The UI chooses the closest prepared size and draws it
 at exactly one image pixel per display pixel; unusual display scales can vary
 its logical size slightly. The header performs no runtime image resizing.
 The helper does not change the canonical PNG. Run it with `--check` to verify

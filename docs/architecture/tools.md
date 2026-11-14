@@ -48,8 +48,8 @@ tempo; cancelling a file choice does not report success.
 
 `src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses
 shared rotaries, value entry, switches, action buttons, header, and status styling.
-Keep labels, values, and dial marks separate. Verify rendered bounds at all three
-prepared densities; source coordinates alone do not establish visual acceptance.
+Keep labels, values, and dial marks separate. Verify rendered bounds at 100%
+display scaling; source coordinates alone do not establish visual acceptance.
 
 `src/ui/tools.rs` adapts Listen, Save sound, Reset, Help, and Import details. Listen
 and Save sound call `Session::processed_pcm` synchronously; Listen then uses the
