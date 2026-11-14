@@ -7,7 +7,7 @@ presentation in the current theme. Its `gain_keys` and `gain_semantics`
 (`mixer/gain.rs`) give the Mixer's gain rail and the lane fader the same wheel,
 key, accessibility, and double-click behaviour. Vintage tiles the graphite and
 ivory artwork (`mixer/artwork.rs`); Studio and Aero paint the strips and fader
-caps in code at the same density scale.
+caps in code at the same physical-pixel scale.
 Each strip is 108 logical points wide. Master remains outside the horizontally
 scrolling occupied-track bank. Each track strip's EQ button starts the row of
 Mute and Solo, above polarity, and the Master strip's Bypass sits under its
@@ -52,9 +52,9 @@ amplitude to exact silence. Unity sits at 0 dB on the gain rail. Center aligns
 with the pan midpoint just below its rail. Polarity has a separate
 slashed-circle button. Control-specific tooltips and the Help window carry
 detailed guidance.
-Prepared material tiles and fader caps live in `assets/mixer/{100,150,200}/`.
+Prepared material tiles and the fader cap live in `assets/mixer/100/`.
 The fader is first reduced to a 48 by 64-pixel canonical grid, then prepared
-at 24 by 32, 36 by 48, and 48 by 64 pixels. Runtime painting aligns one texel
+at 24 by 32 pixels. Runtime painting aligns one texel
 to one physical pixel, with no texture resizing. The empty bank gives one
 instruction and leaves Master available.
 

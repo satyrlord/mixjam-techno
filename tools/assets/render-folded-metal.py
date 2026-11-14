@@ -110,81 +110,81 @@ def render(check: bool) -> None:
     chassis = original.crop(CHASSIS_BOX)
     patch = chassis.crop((500, 160, 700, 300))
     baseline = statistics.median(.2126*r + .7152*g + .0722*b for r, g, b, _ in patch.get_flattened_data())
-    grain_stats = {}
-    for density in (100, 150, 200):
-        scale = density / 200
-        material = chassis.convert("RGBa").resize(
-            (round(chassis.width*scale), round(chassis.height*scale)),
-            Image.Resampling.LANCZOS).convert("RGBA")
-        unit = density / 100
-        cw, ch = round(112*unit), round(64*unit)
-        width, height = material.size
-        specs = {
-            "corner-tl": ((0, 0, cw, ch), True, True, False, False),
-            "corner-tr": ((width-cw, 0, width, ch), True, True, True, False),
-            "corner-bl": ((0, height-ch, cw, height), True, True, False, True),
-            "corner-br": ((width-cw, height-ch, width, height), True, True, True, True),
-            "edge-top": ((cw, 0, cw+round(192*unit), round(12*unit)), False, True, False, False),
-            "edge-bottom": ((cw, height-round(12*unit), cw+round(192*unit), height), False, True, False, True),
-            "edge-left": ((0, ch, round(12*unit), ch+round(96*unit)), True, False, False, False),
-            "edge-right": ((width-round(12*unit), ch, width, ch+round(96*unit)), True, False, True, False),
-        }
-        grain_size = round(256*unit)
-        rng = random.Random(41723 + density)
-        # Quantized symmetric Gaussian pairs give an exactly zero-mean field.
-        # Shuffle removes pairing patterns; the saved PNG is static at runtime.
-        noise = []
-        for _ in range(grain_size*grain_size//2):
-            value = round(rng.gauss(0.0, 1.5))
-            noise.extend((value, -value))
-        rng.shuffle(noise)
-        deviation = statistics.pstdev(noise)
-        if statistics.mean(noise) != 0 or not 1.2 <= deviation <= 1.8:
-            raise ValueError("Paint grain must be zero-mean with restrained finite variance.")
-        grain_stats[str(density)] = {"width": grain_size, "height": grain_size,
-            "mean": statistics.mean(noise), "standard_deviation": deviation,
-            "minimum": min(noise), "maximum": max(noise)}
-        for name, color in PALETTES.items():
-            for part, (box, horizontal, vertical, rx, ry) in specs.items():
-                prepared = prepare(material.crop(box), color, baseline, horizontal, vertical, unit, rx, ry)
-                validate_material(prepared, unit, horizontal, vertical, rx, ry)
-                save(prepared, OUTPUT / name / str(density) / f"{part}.png", check)
-            grain = Image.new("RGBA", (grain_size, grain_size))
-            grain.putdata([(*(channel+delta for channel in color), 255) for delta in noise])
-            save(grain, OUTPUT / name / str(density) / "paint-grain.png", check)
-        # Prepare each physical-size cap from an 8x supersampled original.
-        # The one-time premultiplied-alpha reduction smooths silhouettes, ribs,
-        # and metal grain without introducing runtime texture scaling.
-        size = round(36*unit)
-        supersample = 8
-        render_size = size * supersample
-        render_unit = unit * supersample
-        knob = Image.new("RGBA", (render_size, render_size))
-        center = (render_size-1)/2
-        for y in range(render_size):
-            for x in range(render_size):
-                dx, dy = (x-center)/render_unit, (y-center)/render_unit
-                radius = math.hypot(dx,dy)
-                if radius > 17.8: continue
-                light = (-dx-dy)/36
-                if radius > 16: level = 24+light*22
-                elif radius > 11.8: level = 44+light*30+math.cos(math.atan2(dy,dx)*36)*6
-                else: level = 184+light*55+math.sin(y/render_unit*4)*3
-                level = max(0,min(255,round(level)))
-                knob.putpixel((x,y),(level,level,max(0,level-3),255))
-        knob = knob.convert("RGBa").resize((size, size), Image.Resampling.LANCZOS).convert("RGBA")
-        save(knob, OUTPUT / "controls" / str(density) / "knob.png", check)
-        # Fixed grain tile for the light primary face; native geometry owns edges.
-        brushed = Image.new("RGBA", (round(48*unit), round(24*unit)))
-        for y in range(brushed.height):
-            for x in range(brushed.width):
-                grain = round(4*math.sin(y*2.4/unit) + 2*math.sin((x+y)*.37/unit))
-                brushed.putpixel((x,y), (max(0,212+grain), max(0,205+grain), max(0,182+grain), 255))
-        save(brushed, OUTPUT / "controls" / str(density) / "primary.png", check)
+    # The one prepared size: one texel per screen pixel at 100% display scaling.
+    density = 100
+    scale = density / 200
+    material = chassis.convert("RGBa").resize(
+        (round(chassis.width*scale), round(chassis.height*scale)),
+        Image.Resampling.LANCZOS).convert("RGBA")
+    unit = density / 100
+    cw, ch = round(112*unit), round(64*unit)
+    width, height = material.size
+    specs = {
+        "corner-tl": ((0, 0, cw, ch), True, True, False, False),
+        "corner-tr": ((width-cw, 0, width, ch), True, True, True, False),
+        "corner-bl": ((0, height-ch, cw, height), True, True, False, True),
+        "corner-br": ((width-cw, height-ch, width, height), True, True, True, True),
+        "edge-top": ((cw, 0, cw+round(192*unit), round(12*unit)), False, True, False, False),
+        "edge-bottom": ((cw, height-round(12*unit), cw+round(192*unit), height), False, True, False, True),
+        "edge-left": ((0, ch, round(12*unit), ch+round(96*unit)), True, False, False, False),
+        "edge-right": ((width-round(12*unit), ch, width, ch+round(96*unit)), True, False, True, False),
+    }
+    grain_size = round(256*unit)
+    rng = random.Random(41723 + density)
+    # Quantized symmetric Gaussian pairs give an exactly zero-mean field.
+    # Shuffle removes pairing patterns; the saved PNG is static at runtime.
+    noise = []
+    for _ in range(grain_size*grain_size//2):
+        value = round(rng.gauss(0.0, 1.5))
+        noise.extend((value, -value))
+    rng.shuffle(noise)
+    deviation = statistics.pstdev(noise)
+    if statistics.mean(noise) != 0 or not 1.2 <= deviation <= 1.8:
+        raise ValueError("Paint grain must be zero-mean with restrained finite variance.")
+    grain_stats = {"width": grain_size, "height": grain_size,
+        "mean": statistics.mean(noise), "standard_deviation": deviation,
+        "minimum": min(noise), "maximum": max(noise)}
+    for name, color in PALETTES.items():
+        for part, (box, horizontal, vertical, rx, ry) in specs.items():
+            prepared = prepare(material.crop(box), color, baseline, horizontal, vertical, unit, rx, ry)
+            validate_material(prepared, unit, horizontal, vertical, rx, ry)
+            save(prepared, OUTPUT / name / str(density) / f"{part}.png", check)
+        grain = Image.new("RGBA", (grain_size, grain_size))
+        grain.putdata([(*(channel+delta for channel in color), 255) for delta in noise])
+        save(grain, OUTPUT / name / str(density) / "paint-grain.png", check)
+    # Prepare the cap from an 8x supersampled original.
+    # The one-time premultiplied-alpha reduction smooths silhouettes, ribs,
+    # and metal grain without introducing runtime texture scaling.
+    size = round(36*unit)
+    supersample = 8
+    render_size = size * supersample
+    render_unit = unit * supersample
+    knob = Image.new("RGBA", (render_size, render_size))
+    center = (render_size-1)/2
+    for y in range(render_size):
+        for x in range(render_size):
+            dx, dy = (x-center)/render_unit, (y-center)/render_unit
+            radius = math.hypot(dx,dy)
+            if radius > 17.8: continue
+            light = (-dx-dy)/36
+            if radius > 16: level = 24+light*22
+            elif radius > 11.8: level = 44+light*30+math.cos(math.atan2(dy,dx)*36)*6
+            else: level = 184+light*55+math.sin(y/render_unit*4)*3
+            level = max(0,min(255,round(level)))
+            knob.putpixel((x,y),(level,level,max(0,level-3),255))
+    knob = knob.convert("RGBa").resize((size, size), Image.Resampling.LANCZOS).convert("RGBA")
+    save(knob, OUTPUT / "controls" / str(density) / "knob.png", check)
+    # Fixed grain tile for the light primary face; native geometry owns edges.
+    brushed = Image.new("RGBA", (round(48*unit), round(24*unit)))
+    for y in range(brushed.height):
+        for x in range(brushed.width):
+            grain = round(4*math.sin(y*2.4/unit) + 2*math.sin((x+y)*.37/unit))
+            brushed.putpixel((x,y), (max(0,212+grain), max(0,205+grain), max(0,182+grain), 255))
+    save(brushed, OUTPUT / "controls" / str(density) / "primary.png", check)
     manifest = {"source": "local-data/artwork/folded-metal/chassis-screwless.png", "sha256": hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
-                "crop": CHASSIS_BOX, "palettes": PALETTES, "variants": [100,150,200], "source_material": "generated screw-free Folded Metal chassis",
+                "crop": CHASSIS_BOX, "palettes": PALETTES, "source_material": "generated screw-free Folded Metal chassis",
                 "perimeter": "continuous native antialiased bevel; source material fades at all boundaries",
-                "paint_grain": {"distribution": "quantized Gaussian, symmetric shuffled pairs", "seed": "41723 + density",
+                "paint_grain": {"distribution": "quantized Gaussian, symmetric shuffled pairs", "seed": 41723 + density,
                     "requested_standard_deviation": 1.5, "channel_policy": "identical additive RGB delta", "measured": grain_stats}}
     text = json.dumps(manifest, indent=2) + "\n"
     path = OUTPUT / "provenance.json"

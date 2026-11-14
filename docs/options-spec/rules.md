@@ -3,8 +3,8 @@
 ## Interaction and application rules
 
 1. Add a clearly named `Options` utility action and `Ctrl+,` shortcut. Place it
-   at the foot of the tool rail. Use the gear icon with the required PNG density
-   variants; do not add SVG. A second activation focuses the existing window.
+   at the foot of the tool rail. Use the gear icon as a prepared PNG; do not
+   add SVG. A second activation focuses the existing window.
 2. Use one draft per open window, with Apply, Cancel, and Restore defaults.
    Apply validates and saves, updates active preferences, and keeps the window
    open. Disable Apply when the draft has no pending changes. Cancel, Escape,

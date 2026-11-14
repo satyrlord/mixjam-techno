@@ -1,4 +1,4 @@
-"""Prepare compact mixer materials and a small fader at supported densities."""
+"""Prepare compact mixer materials and a small fader."""
 from io import BytesIO
 from pathlib import Path
 import argparse
@@ -15,7 +15,7 @@ SOURCES = {
 }
 
 
-def render(name, density):
+def render(name):
     source_name = 'fader' if name == 'fader' else 'materials'
     path = ROOT / 'local-data/artwork/mixer' / f'{source_name}.png'
     if hashlib.sha256(path.read_bytes()).hexdigest() != SOURCES[source_name]:
@@ -26,7 +26,7 @@ def render(name, density):
             bounds = image.getchannel('A').point(lambda value: 255 if value > 32 else 0).getbbox()
             image = image.crop(bounds)
             image.putalpha(image.getchannel('A').point(lambda value: 255 if value >= 128 else 0))
-            # Resolve the tiny control on its 200% grid before preparing lower densities.
+            # Resolve the tiny control on a doubled grid before the final reduction.
             image = image.resize((48, 64), Image.Resampling.LANCZOS)
             size = (24, 32)
         else:
@@ -44,7 +44,7 @@ def render(name, density):
                 for pixel, shade in zip(image.get_flattened_data(), lighting.get_flattened_data())
             ])
             size = (108, 64)
-        image = image.resize(tuple(axis * density // 100 for axis in size), Image.Resampling.LANCZOS)
+        image = image.resize(size, Image.Resampling.LANCZOS)
     prompt = json.loads((OUTPUT / 'prompts.json').read_text(encoding='utf-8'))[source_name]
     metadata = PngImagePlugin.PngInfo()
     metadata.add_text('Description', f'Built-in OpenAI ImageGen compact mixer {name}. Labels and rail marks are native.')
@@ -61,16 +61,15 @@ def main():
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     for name in ('ivory', 'graphite', 'fader'):
-        for density in (100, 150, 200):
-            path = OUTPUT / str(density) / f'{name}.png'
-            data = render(name, density)
-            if args.check:
-                if path.read_bytes() != data:
-                    raise ValueError(f'{path} differs from its prepared artwork.')
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(data)
-    print('PASS: nine prepared mixer PNGs match.' if args.check else 'Prepared nine mixer PNGs.')
+        path = OUTPUT / '100' / f'{name}.png'
+        data = render(name)
+        if args.check:
+            if path.read_bytes() != data:
+                raise ValueError(f'{path} differs from its prepared artwork.')
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+    print('PASS: three prepared mixer PNGs match.' if args.check else 'Prepared three mixer PNGs.')
 
 
 if __name__ == '__main__':

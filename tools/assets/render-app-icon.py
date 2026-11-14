@@ -1,4 +1,4 @@
-"""Prepare header PNGs and the Windows ICO from the canonical tribal mask PNG."""
+"""Prepare the header PNG and the Windows ICO from the canonical tribal mask PNG."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,7 @@ from PIL import Image
 
 
 SIZES = (16, 24, 32, 48, 64, 128, 256)
-DISPLAY_SIZES = (40, 60, 80)
+DISPLAY_SIZE = 40
 DESTINATION = ROOT / "assets/app"
 SOURCE = DESTINATION / "mixjam-techno.png"
 
@@ -31,10 +31,9 @@ def main() -> None:
         output = BytesIO()
         image.save(output, format="ICO", sizes=[(size, size) for size in SIZES])
         assets = {DESTINATION / "mixjam-techno.ico": output.getvalue()}
-        for size in DISPLAY_SIZES:
-            output = BytesIO()
-            image.resize((size, size), Image.Resampling.LANCZOS).save(output, format="PNG")
-            assets[DESTINATION / str(size) / "mixjam-techno.png"] = output.getvalue()
+        output = BytesIO()
+        image.resize((DISPLAY_SIZE, DISPLAY_SIZE), Image.Resampling.LANCZOS).save(output, format="PNG")
+        assets[DESTINATION / str(DISPLAY_SIZE) / "mixjam-techno.png"] = output.getvalue()
     for path, data in assets.items():
         if args.check:
             if path.read_bytes() != data:
@@ -45,7 +44,7 @@ def main() -> None:
     with Image.open(DESTINATION / "mixjam-techno.ico") as icon:
         if icon.ico.sizes() != {(size, size) for size in SIZES}:
             raise ValueError("The Windows ICO does not contain every required size")
-    print(f"Tribal mask PNG and ICO verified; ICO sizes: {SIZES}; display sizes: {DISPLAY_SIZES}")
+    print(f"Tribal mask PNG and ICO verified; ICO sizes: {SIZES}; display size: {DISPLAY_SIZE}")
 
 
 if __name__ == "__main__":

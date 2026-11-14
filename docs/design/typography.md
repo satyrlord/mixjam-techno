@@ -61,8 +61,8 @@ the well. Check the visible glyph center at 100% display scaling.
 
 Mixer uses the shared text-face sizes without a local title. Track names use Body,
 gain values use Clip, sound summaries and pan or Muted text use Small, and
-rail marks and button lettering use Metadata. These sizes follow the selected
-artwork density with the strip.
+rail marks and button lettering use Metadata. These sizes follow the strip,
+which is measured in physical pixels.
 
 Numeric formatting is presentation only. Rounded display values must not change
 stored drafts. Keep live content selectable where supported and independent of the

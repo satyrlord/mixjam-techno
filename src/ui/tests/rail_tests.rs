@@ -432,7 +432,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             assert!(
                 (image.width() * density - 20.0 * density).abs() < 0.01
                     && (image.height() * density - 20.0 * density).abs() < 0.01,
-                "{} artwork must use the prepared density without stretching.",
+                "{} artwork must use the prepared size without stretching.",
                 icon.label()
             );
             rect
@@ -531,10 +531,6 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             "{label} must scroll into view ({state}): {rect:?}."
         );
     }
-    let density_index = [1.0, 1.5, 2.0]
-        .iter()
-        .position(|value| *value == density)
-        .unwrap();
     // Studio and Aero paint the rail in code; Vintage crops its artwork.
     if roles().material == theme::Material::Metal {
         for (part, expected) in [
@@ -542,7 +538,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             ("part-6", [12, 96]),
             ("part-7", [12, 96]),
         ] {
-            let name = format!("folded-metal-Utility-{part}-{density_index}");
+            let name = format!("folded-metal-Utility-{part}");
             let (texture, pixels) = ctx
                 .tex_manager()
                 .read()
@@ -551,9 +547,8 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                 .map(|(id, meta)| (*id, meta.size))
                 .expect("The rail must load its shared material finish.");
             assert_eq!(
-                pixels,
-                expected.map(|side| (side as f32 * density) as usize),
-                "The rail must load the prepared material density."
+                pixels, expected,
+                "The rail must load the prepared material."
             );
             let mut painted = false;
             for shape in &output.shapes {

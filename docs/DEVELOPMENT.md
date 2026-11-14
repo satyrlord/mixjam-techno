@@ -177,8 +177,8 @@ or other accessibility, physical audio, or native file pickers.
 ## Visual assets
 
 Visual assets are transparent PNGs painted at one image pixel per screen pixel.
-Each asset has three prepared PNG sizes (100, 150, and 200); only 100% display
-scaling is in scope. SVG files and embedded SVG
+Each asset has one prepared PNG size, for 100% display scaling, the only scale
+in scope. SVG files and embedded SVG
 artwork are prohibited in tracked and non-ignored project files. Run
 `python tools/assets/check-raster-assets.py` as part of the quality gate. Original
 legacy archives and required dependency caches stay in ignored `local-data/`;

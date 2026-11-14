@@ -55,8 +55,8 @@ When the window is too short for every name, the rail scrolls under the mouse
 wheel or to keep the keyboard-focused tool visible. An engraved line marks
 each edge past which more tools lie. The foot stays fixed.
 Commands draws a magnifier with the painter (no icon asset) in the rail
-icon's colors and target sizes. Material and icons retain their prepared physical
-pixel density; the narrow chassis omits the windows' wide corner patches.
+icon's colors and target sizes. Material and icons paint one texel per physical
+pixel; the narrow chassis omits the windows' wide corner patches.
 
 Musical tools toggle their open state. Erase toggles its editing
 mode. Active toggles expose their selected state to accessibility. A

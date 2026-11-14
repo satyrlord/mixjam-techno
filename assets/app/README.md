@@ -7,14 +7,12 @@ raster tools. The PNG is embedded in the native viewport. The ICO contains 16, 2
 This covers the window, taskbar, and Windows file icons.
 
 Run `python tools/assets/render-app-icon.py` to regenerate the ICO from the PNG.
-The helper also prepares header PNGs offline with LANCZOS resampling at 40, 60,
-and 80 pixels, in matching numbered subfolders. The 40-pixel set serves the
-nominal 40-point header at 100% display scaling, the only scale in scope.
-The UI chooses the closest prepared size and draws it
-at exactly one image pixel per display pixel; unusual display scales can vary
-its logical size slightly. The header performs no runtime image resizing.
+The helper also prepares the 40-pixel header PNG offline with LANCZOS
+resampling, in the `40` subfolder. It serves the nominal 40-point header at
+100% display scaling, the only scale in scope. The UI draws it at exactly one
+image pixel per display pixel; the header performs no runtime image resizing.
 The helper does not change the canonical PNG. Run it with `--check` to verify
-the PNG format, transparency, antialiased edges, every display PNG, and every ICO size against a
+the PNG format, transparency, antialiased edges, the header PNG, and every ICO size against a
 fresh derivation. The tool uses only Pillow 12.3.0 from
 `local-data/icon-renderer`. Neither Python nor Pillow is needed to build or run
 the app.

@@ -35,12 +35,12 @@ bays, cream lettering, polished silver knobs, and pale metal primary buttons.
 `controls::Palette` supplies Utility, Marine, Granite, Red, Olive, and Indigo variants.
 Time Stretcher uses Marine; Sample Editor uses Granite; Effect Studio uses Red;
 Step synth uses Olive; Mastering uses Indigo. Utilities use neutral metal with orange-yellow accents.
-Prepared material and control PNGs live in `assets/folded-metal/<palette>/{100,150,200}/` and the shared
-`assets/folded-metal/controls/{100,150,200}/`.
+Prepared material and control PNGs live in `assets/folded-metal/<palette>/100/` and the shared
+`assets/folded-metal/controls/100/`.
 The chassis contains no decorative screws or fasteners. Its continuous
 antialiased perimeter and bevel are native geometry. Raster material fades before
 the outer outline and at strip ends to avoid visible joints. Knob edges use 8x
-supersampling and one premultiplied-alpha Lanczos reduction per density.
+supersampling and one premultiplied-alpha Lanczos reduction.
 Fixed details fade to transparent over a matching solid chassis color. Resizing
 extends the solid regions; painting aligns one texel to one physical pixel. Text
 and input remain live, and content reflows or scrolls instead of scaling artwork
@@ -70,7 +70,7 @@ are prohibited in tracked and non-ignored project files.
 `tools/assets/check-raster-assets.py` uses Git's file inventory and respects
 ignore rules. Original archives and the Rust dependency
 cache reside in `local-data/`; temporary files reside in `tmp/`. Runtime PNG textures
-use prepared density variants with one texel per physical screen pixel; views
+have one prepared size, painted with one texel per physical screen pixel; views
 snap their bounds to the pixel grid and do not resize them.
 
 ## Waveform peaks and the Sounds panel

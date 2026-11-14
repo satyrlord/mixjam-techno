@@ -3,15 +3,10 @@
 use super::*;
 
 impl MixJamApp {
-    /// Load the bundled artwork, again when the display density changes. A
-    /// failure is reported once; the header then falls back to text actions
-    /// and the tool rail stays hidden.
+    /// Load the bundled artwork once. A failure is reported once; the header
+    /// then falls back to text actions and the tool rail stays hidden.
     pub(super) fn icons(&mut self, ctx: &egui::Context) -> Option<Arc<RailIcons>> {
-        if self.rail_icons.as_ref().is_none_or(|loaded| {
-            loaded
-                .as_ref()
-                .is_ok_and(|icons| !icons.matches_density(ctx))
-        }) {
+        if self.rail_icons.is_none() {
             let loaded = RailIcons::load(ctx).map(Arc::new);
             if let Err(error) = &loaded {
                 self.error(error.clone());

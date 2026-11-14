@@ -1,60 +1,28 @@
-//! The bundled Folded Metal artwork: its decoded textures per palette and
-//! screen density, and the helpers that paint a texture or its grain.
+//! The bundled Folded Metal artwork: its decoded textures per palette, and
+//! the helpers that paint a texture or its grain.
 use super::*;
 
-macro_rules! variants {
+macro_rules! control {
     ($name:literal) => {
-        [
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/controls/100/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/controls/150/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/controls/200/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-        ]
+        include_bytes!(concat!(
+            "../../../assets/folded-metal/controls/100/",
+            $name,
+            ".png"
+        ))
+        .as_slice()
     };
 }
 
 macro_rules! material {
     ($palette:literal, $name:literal) => {
-        [
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/",
-                $palette,
-                "/100/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/",
-                $palette,
-                "/150/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-            include_bytes!(concat!(
-                "../../../assets/folded-metal/",
-                $palette,
-                "/200/",
-                $name,
-                ".png"
-            ))
-            .as_slice(),
-        ]
+        include_bytes!(concat!(
+            "../../../assets/folded-metal/",
+            $palette,
+            "/100/",
+            $name,
+            ".png"
+        ))
+        .as_slice()
     };
 }
 
@@ -81,16 +49,7 @@ pub(super) struct Artwork {
 }
 
 pub(super) fn artwork(ctx: &egui::Context, palette: Palette) -> Arc<Artwork> {
-    let density = [1.0_f32, 1.5, 2.0]
-        .into_iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            (a - ctx.pixels_per_point())
-                .abs()
-                .total_cmp(&(b - ctx.pixels_per_point()).abs())
-        })
-        .map_or(0, |(index, _)| index);
-    let id = egui::Id::new(("folded-metal-artwork", palette, density));
+    let id = egui::Id::new(("folded-metal-artwork", palette));
     if let Some(art) = ctx.data(|data| data.get_temp::<Arc<Artwork>>(id)) {
         return art;
     }
@@ -99,7 +58,7 @@ pub(super) fn artwork(ctx: &egui::Context, palette: Palette) -> Arc<Artwork> {
             .expect("Bundled Folded Metal PNG must decode")
             .into_rgba8();
         ctx.load_texture(
-            format!("folded-metal-{palette:?}-{name}-{density}"),
+            format!("folded-metal-{palette:?}-{name}"),
             egui::ColorImage::from_rgba_unmultiplied(
                 [image.width() as usize, image.height() as usize],
                 image.as_raw(),
@@ -127,11 +86,11 @@ pub(super) fn artwork(ctx: &egui::Context, palette: Palette) -> Arc<Artwork> {
         material: parts
             .iter()
             .enumerate()
-            .map(|(part, variants)| load(&format!("part-{part}"), variants[density]))
+            .map(|(part, bytes)| load(&format!("part-{part}"), bytes))
             .collect(),
-        grain: load("grain", grain[density]),
-        knob: load("knob", variants!("knob")[density]),
-        primary: load("primary", variants!("primary")[density]),
+        grain: load("grain", grain),
+        knob: load("knob", control!("knob")),
+        primary: load("primary", control!("primary")),
     });
     ctx.data_mut(|data| data.insert_temp(id, art.clone()));
     art

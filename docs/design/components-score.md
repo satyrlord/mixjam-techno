@@ -141,10 +141,7 @@ project files. Ignored `local-data/` and `tmp/` files are outside this check.
 Original preservation material stays in `local-data/` under the owner's layout.
 
 Control icons use prepared 20-pixel PNGs and the title mask uses a 40-pixel PNG
-at 100% Windows scaling, the only scale in scope. Three prepared sizes exist:
-20/30/40-pixel controls and 40/60/80-pixel title artwork.
-Each image texel maps to exactly one physical screen pixel, with
-pixel-aligned bounds and no runtime resizing. At other scale factors, select
-the nearest prepared size; its logical size can differ slightly. Reload cached
-textures when the required density changes. Windows ICO packaging is generated
+at 100% Windows scaling, the only scale in scope. These are the only prepared
+sizes. Each image texel maps to exactly one physical screen pixel, with
+pixel-aligned bounds and no runtime resizing. Windows ICO packaging is generated
 from the canonical PNG for the shell icon.

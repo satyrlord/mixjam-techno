@@ -21,16 +21,9 @@ pub(crate) fn show(
         }
         None => None,
     };
-    // Strips are measured in whole physical pixels at each supported density,
+    // Strips are measured in whole physical pixels, as their artwork is,
     // so every theme keeps the same layout.
-    let ppp = ui.ctx().pixels_per_point();
-    let density = [1.0_f32, 1.5, 2.0]
-        .into_iter()
-        .min_by(|a, b| (a - ppp).abs().total_cmp(&(b - ppp).abs()))
-        .unwrap_or(1.0);
-    let scale = art.map_or(density / ppp, |art| {
-        [1.0, 1.5, 2.0][art.density] / ui.ctx().pixels_per_point()
-    });
+    let scale = 1.0 / ui.ctx().pixels_per_point();
     let width = 108.0 * scale;
     let whole = ui.available_rect_before_wrap();
     if let Some(art) = art {

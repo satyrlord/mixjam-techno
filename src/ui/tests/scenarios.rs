@@ -52,18 +52,11 @@ pub(super) fn assert_folded_assets(
             return;
         }
     }
-    let density_index = [1.0_f32, 1.5, 2.0]
-        .iter()
-        .position(|prepared| *prepared == density)
-        .expect("Unsupported display density");
     let textures: Vec<_> = ctx
         .tex_manager()
         .read()
         .allocated()
-        .filter(|(_, meta)| {
-            meta.name.starts_with(&format!("folded-metal-{palette}-"))
-                && meta.name.ends_with(&format!("-{density_index}"))
-        })
+        .filter(|(_, meta)| meta.name.starts_with(&format!("folded-metal-{palette}-")))
         .map(|(id, meta)| (*id, meta.size, meta.name.clone()))
         .collect();
     let dimensions = [
@@ -89,21 +82,18 @@ pub(super) fn assert_folded_assets(
         } else {
             "grain".into()
         };
-        let name = format!("folded-metal-{palette}-{part}-{density_index}");
-        let expected = [
-            (width as f32 * density) as usize,
-            (height as f32 * density) as usize,
-        ];
+        let name = format!("folded-metal-{palette}-{part}");
+        let expected = [width, height];
         assert!(
             textures
                 .iter()
                 .any(|(_, size, key)| *key == name && *size == expected),
-            "{name} must load its prepared density dimensions {expected:?}."
+            "{name} must load its prepared dimensions {expected:?}."
         );
     }
     let grain = textures
         .iter()
-        .find(|(_, _, name)| name == &format!("folded-metal-{palette}-grain-{density_index}"))
+        .find(|(_, _, name)| name == &format!("folded-metal-{palette}-grain"))
         .unwrap()
         .0;
     assert!(

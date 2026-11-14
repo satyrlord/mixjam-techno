@@ -62,7 +62,7 @@ Use the current commands in `docs/DEVELOPMENT.md` and
    private masters are in `local-data/artwork/`, also run
    `python tools/assets/render-folded-metal.py --check` and
    `python tools/assets/render-mixer.py --check`.
-   Completion criterion: Tracked/non-ignored files contain no SVG assets and PNG variants match.
+   Completion criterion: Tracked/non-ignored files contain no SVG assets and prepared PNGs match.
 9. For UI changes, run `tools/verify-ui.ps1` against the release build.
    Completion criterion: The native capture procedure has a current result.
 10. For UI changes, inspect the captures at the documented sizes.

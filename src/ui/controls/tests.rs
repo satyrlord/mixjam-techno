@@ -287,35 +287,27 @@ fn rotary_steps_boundaries_fine_and_discrete() {
 
 #[test]
 fn supported_materials_decode_and_fade_to_solid_chassis() {
-    for (index, density) in [1.0_f32, 1.5, 2.0].into_iter().enumerate() {
-        let corner = image::load_from_memory(material!("utility", "corner-tl")[index])
-            .unwrap()
-            .into_rgba8();
-        assert_eq!(
-            corner.dimensions(),
-            ((112.0 * density) as u32, (64.0 * density) as u32)
-        );
-        assert!(corner.pixels().any(|pixel| pixel[3] > 0));
-        for x in 0..corner.width() {
-            assert_eq!(corner.get_pixel(x, corner.height() - 1)[3], 0);
-        }
-        for y in 0..corner.height() {
-            assert_eq!(corner.get_pixel(corner.width() - 1, y)[3], 0);
-        }
-        let knob = image::load_from_memory(variants!("knob")[index]).unwrap();
-        assert_eq!(
-            (knob.width(), knob.height()),
-            ((36.0 * density) as u32, (36.0 * density) as u32)
-        );
-        let rgba = knob.to_rgba8();
-        assert!(
-            rgba.pixels()
-                .filter(|pixel| pixel[3] > 0 && pixel[3] < 255)
-                .count()
-                > knob.width() as usize,
-            "The native-size dial silhouette must retain antialiased edge coverage at {density}x."
-        );
+    let corner = image::load_from_memory(material!("utility", "corner-tl"))
+        .unwrap()
+        .into_rgba8();
+    assert_eq!(corner.dimensions(), (112, 64));
+    assert!(corner.pixels().any(|pixel| pixel[3] > 0));
+    for x in 0..corner.width() {
+        assert_eq!(corner.get_pixel(x, corner.height() - 1)[3], 0);
     }
+    for y in 0..corner.height() {
+        assert_eq!(corner.get_pixel(corner.width() - 1, y)[3], 0);
+    }
+    let knob = image::load_from_memory(control!("knob")).unwrap();
+    assert_eq!((knob.width(), knob.height()), (36, 36));
+    let rgba = knob.to_rgba8();
+    assert!(
+        rgba.pixels()
+            .filter(|pixel| pixel[3] > 0 && pixel[3] < 255)
+            .count()
+            > knob.width() as usize,
+        "The native-size dial silhouette must retain antialiased edge coverage."
+    );
 }
 
 #[test]
@@ -328,35 +320,33 @@ fn material_slices_have_no_outer_fringe_or_strip_endpoint_seams() {
         parts!("olive"),
         parts!("indigo"),
     ] {
-        for (part, variants) in palette.into_iter().enumerate() {
-            for (density, bytes) in variants.into_iter().enumerate() {
-                let image = image::load_from_memory(bytes).unwrap().into_rgba8();
-                let (width, height) = image.dimensions();
-                assert!(image.pixels().any(|pixel| pixel[3] > 0));
+        for (part, bytes) in palette.into_iter().enumerate() {
+            let image = image::load_from_memory(bytes).unwrap().into_rgba8();
+            let (width, height) = image.dimensions();
+            assert!(image.pixels().any(|pixel| pixel[3] > 0));
+            for x in 0..width {
+                assert_eq!(image.get_pixel(x, 0)[3], 0);
+                assert_eq!(image.get_pixel(x, height - 1)[3], 0);
+            }
+            for y in 0..height {
+                assert_eq!(image.get_pixel(0, y)[3], 0);
+                assert_eq!(image.get_pixel(width - 1, y)[3], 0);
+            }
+            let margin = 4;
+            for y in 0..height {
                 for x in 0..width {
-                    assert_eq!(image.get_pixel(x, 0)[3], 0);
-                    assert_eq!(image.get_pixel(x, height - 1)[3], 0);
-                }
-                for y in 0..height {
-                    assert_eq!(image.get_pixel(0, y)[3], 0);
-                    assert_eq!(image.get_pixel(width - 1, y)[3], 0);
-                }
-                let margin = [4, 6, 8][density];
-                for y in 0..height {
-                    for x in 0..width {
-                        let side = match part {
-                            0 | 2 | 6 => x < margin,
-                            1 | 3 | 7 => x >= width - margin,
-                            _ => false,
-                        };
-                        let top_bottom = match part {
-                            0 | 1 | 4 => y < margin,
-                            2 | 3 | 5 => y >= height - margin,
-                            _ => false,
-                        };
-                        if side || top_bottom {
-                            assert_eq!(image.get_pixel(x, y)[3], 0);
-                        }
+                    let side = match part {
+                        0 | 2 | 6 => x < margin,
+                        1 | 3 | 7 => x >= width - margin,
+                        _ => false,
+                    };
+                    let top_bottom = match part {
+                        0 | 1 | 4 => y < margin,
+                        2 | 3 | 5 => y >= height - margin,
+                        _ => false,
+                    };
+                    if side || top_bottom {
+                        assert_eq!(image.get_pixel(x, y)[3], 0);
                     }
                 }
             }
@@ -368,7 +358,7 @@ fn material_slices_have_no_outer_fringe_or_strip_endpoint_seams() {
 fn paint_grain_preserves_palette_mean_and_monochrome_gaussian_statistics() {
     // The grain artwork belongs to Vintage's painted metal.
     theme::paint_as(theme::Theme::Vintage);
-    for (palette, variants) in [
+    for (palette, bytes) in [
         (Palette::Utility, material!("utility", "paint-grain")),
         (Palette::Marine, material!("marine", "paint-grain")),
         (Palette::Granite, material!("granite", "paint-grain")),
@@ -377,34 +367,32 @@ fn paint_grain_preserves_palette_mean_and_monochrome_gaussian_statistics() {
         (Palette::Indigo, material!("indigo", "paint-grain")),
     ] {
         let base = palette.body();
-        for (index, bytes) in variants.into_iter().enumerate() {
-            let image = image::load_from_memory(bytes).unwrap().into_rgba8();
-            let size = [256, 384, 512][index];
-            assert_eq!(image.dimensions(), (size, size));
-            let mut sum = 0.0_f64;
-            let mut squares = 0.0_f64;
-            let mut fourth = 0.0_f64;
-            for pixel in image.pixels() {
-                let delta = i16::from(pixel[0]) - i16::from(base.r());
-                assert_eq!(delta, i16::from(pixel[1]) - i16::from(base.g()));
-                assert_eq!(delta, i16::from(pixel[2]) - i16::from(base.b()));
-                assert_eq!(pixel[3], 255);
-                assert!(delta.abs() <= 8, "Rare grain tails must remain subtle.");
-                let delta = f64::from(delta);
-                sum += delta;
-                squares += delta * delta;
-                fourth += delta.powi(4);
-            }
-            let count = f64::from(size * size);
-            assert_eq!(sum, 0.0, "Grain must not shift a palette's mean color.");
-            let variance = squares / count;
-            assert!(variance.is_finite() && (1.2..=1.8).contains(&variance.sqrt()));
-            let kurtosis = (fourth / count) / (variance * variance);
-            assert!(
-                (2.7..=3.3).contains(&kurtosis),
-                "Grain must retain a Gaussian distribution, rather than two-level dithering."
-            );
+        let image = image::load_from_memory(bytes).unwrap().into_rgba8();
+        let size = 256;
+        assert_eq!(image.dimensions(), (size, size));
+        let mut sum = 0.0_f64;
+        let mut squares = 0.0_f64;
+        let mut fourth = 0.0_f64;
+        for pixel in image.pixels() {
+            let delta = i16::from(pixel[0]) - i16::from(base.r());
+            assert_eq!(delta, i16::from(pixel[1]) - i16::from(base.g()));
+            assert_eq!(delta, i16::from(pixel[2]) - i16::from(base.b()));
+            assert_eq!(pixel[3], 255);
+            assert!(delta.abs() <= 8, "Rare grain tails must remain subtle.");
+            let delta = f64::from(delta);
+            sum += delta;
+            squares += delta * delta;
+            fourth += delta.powi(4);
         }
+        let count = f64::from(size * size);
+        assert_eq!(sum, 0.0, "Grain must not shift a palette's mean color.");
+        let variance = squares / count;
+        assert!(variance.is_finite() && (1.2..=1.8).contains(&variance.sqrt()));
+        let kurtosis = (fourth / count) / (variance * variance);
+        assert!(
+            (2.7..=3.3).contains(&kurtosis),
+            "Grain must retain a Gaussian distribution, rather than two-level dithering."
+        );
     }
 }
 

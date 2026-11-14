@@ -25,7 +25,7 @@ The owner's follow-up folded the complete Sample Libraries feature into the
 fourth page. Folder and provider actions use their existing operations;
 Apply and Cancel affect the options draft only. The standalone window, its
 rail action, and the books PNGs are retired. The gear uses the existing
-canonical-raster pipeline and its three prepared PNG sizes.
+canonical-raster pipeline and its prepared 20-pixel PNG.
 
 Audio changes require stopped playback, previews, and recording. Buffer Apply
 prepares a silent stream on the same device and format, writes settings, then

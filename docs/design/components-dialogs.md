@@ -82,9 +82,9 @@ Blocking dialogs and Recorded take follow the height of their content until the
 user resizes them.
 Sample conflicts confirms only through Keep choices; dismissal does not confirm.
 
-Prepared material lives in `assets/folded-metal/<palette>/{100,150,200}/`;
-shared controls live in `assets/folded-metal/controls/{100,150,200}/`.
-`tools/assets/render-folded-metal.py` prepares the shared density variants. The
+Prepared material lives in `assets/folded-metal/<palette>/100/`;
+shared controls live in `assets/folded-metal/controls/100/`.
+`tools/assets/render-folded-metal.py` prepares both. The
 shared material geometry supports Utility, Marine, Granite, Red, Olive, and
 Indigo palettes. Fixed raster details
 fade to a matching solid base; no window depends on a complete fixed-size skin.

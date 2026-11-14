@@ -8,12 +8,9 @@ name as a tooltip and accessible name.
 Help has its own question-mark artwork. Options uses a gear. Sample library
 management is part of Options; its former books icon is retired.
 
-The numbered subfolders contain prepared display PNGs at 20, 30, and 40 pixels.
-The 20-pixel set serves a nominal 20-point control at 100% display scaling,
-the only scale in scope.
-The UI chooses the closest prepared size and draws it at exactly one image pixel
-per display pixel.
-Unusual display scales can vary the logical icon size slightly. The UI does not
+The `20` subfolder contains the prepared 20-pixel display PNGs. They serve a
+nominal 20-point control at 100% display scaling, the only scale in scope.
+The UI draws each at exactly one image pixel per display pixel and does not
 resize these images at runtime. The 96-pixel canonical PNGs are authoring inputs.
 
 ## Origin
@@ -61,13 +58,13 @@ python tools/assets/render-rail-icons.py
 ```
 
 The helper reads the canonical PNGs without changing their pixels or bytes.
-It prepares every display variant offline with LANCZOS resampling of the alpha
+It prepares each display PNG offline with LANCZOS resampling of the alpha
 channel and retains the exact artwork color.
 It checks PNG dimensions, transparency, antialiased edges, artwork color, and
 distinct hashes. It writes the display PNGs and updates `manifest.json` and
 `contact-sheet.png`. The native UI embeds the individual PNG files. Use the
 contact sheet and manifest for review.
 Use `python tools/assets/render-rail-icons.py --check` to check existing
-assets, every prepared display size, and their manifest hashes without writing files.
+assets, every prepared display PNG, and their manifest hashes without writing files.
 Run `python tools/assets/check-raster-assets.py` to check the repository's
 raster-only asset policy.

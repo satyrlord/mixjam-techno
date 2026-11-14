@@ -1,4 +1,4 @@
-"""Prepare rail display PNGs and check their sources, manifest, and variants."""
+"""Prepare rail display PNGs and check their sources and manifest."""
 from __future__ import annotations
 
 import argparse
@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 SIZE = (96, 96)
-DISPLAY_SIZES = (20, 30, 40)
+DISPLAY_SIZE = 20
 INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "options", "new", "mixer", "master",
@@ -82,26 +82,24 @@ def contact_sheet() -> None:
     sheet.save(ASSETS / "contact-sheet.png")
 
 
-def variants(name: str, check: bool) -> list[dict]:
-    result = []
+def display(name: str, check: bool) -> dict:
+    size = DISPLAY_SIZE
     with Image.open(ASSETS / f"{name}.png") as source:
-        for size in DISPLAY_SIZES:
-            # Resize offline. Keep coverage and the exact tintable artwork color.
-            alpha = source.getchannel("A").resize((size, size), Image.Resampling.LANCZOS)
-            resized = Image.new("RGBA", (size, size), (*INK, 0))
-            resized.putalpha(alpha)
-            output = BytesIO()
-            resized.save(output, format="PNG")
-            data = output.getvalue()
-            path = ASSETS / str(size) / f"{name}.png"
-            if check:
-                if path.read_bytes() != data:
-                    raise ValueError(f"{name}: {size}-pixel variant differs from its canonical PNG")
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(data)
-            result.append({"size": size, "png_sha256": hashlib.sha256(data).hexdigest()})
-    return result
+        # Resize offline. Keep coverage and the exact tintable artwork color.
+        alpha = source.getchannel("A").resize((size, size), Image.Resampling.LANCZOS)
+    resized = Image.new("RGBA", (size, size), (*INK, 0))
+    resized.putalpha(alpha)
+    output = BytesIO()
+    resized.save(output, format="PNG")
+    data = output.getvalue()
+    path = ASSETS / str(size) / f"{name}.png"
+    if check:
+        if path.read_bytes() != data:
+            raise ValueError(f"{name}: the {size}-pixel PNG differs from its canonical PNG")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    return {"size": size, "png_sha256": hashlib.sha256(data).hexdigest()}
 
 
 def main() -> None:
@@ -113,7 +111,7 @@ def main() -> None:
     if len({result["png_sha256"] for result in results}) != len(NAMES):
         raise ValueError("Two UI icons have identical PNG bytes")
     for result in results:
-        result["variants"] = variants(result["name"], args.check)
+        result["display"] = display(result["name"], args.check)
     manifest = json.loads((ASSETS / "manifest.json").read_text(encoding="utf-8"))
     if args.check:
         if manifest.get("icons") != results:
@@ -127,7 +125,7 @@ def main() -> None:
         contact_sheet()
     print(json.dumps({"checked_icons": len(results), "size": list(SIZE),
                       "transparent": True, "antialiased": True, "distinct": True,
-                      "display_sizes": DISPLAY_SIZES, "variants": len(results) * len(DISPLAY_SIZES)}))
+                      "display_size": DISPLAY_SIZE}))
 
 
 if __name__ == "__main__":

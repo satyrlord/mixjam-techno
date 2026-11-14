@@ -64,12 +64,12 @@ is the lower panel's tab row. Control-specific tooltips and the Help
 window explain silence, unity, attenuation, and independent polarity.
 
 `src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a separate
-24 by 32-point fader cap. Nine PNGs hold three prepared sizes of each. The tiny
-cap is first reduced to a 48 by 64-pixel canonical grid before preparing the
-lower densities, preserving broad ridges and its ivory indicator stripe. All
+24 by 32-point fader cap. Three PNGs hold the one prepared size of each. The
+tiny cap is first reduced to a 48 by 64-pixel canonical grid before preparing
+its final size, preserving broad ridges and its ivory indicator stripe. All
 text, values, rails, ticks, reset buttons, polarity, routing, focus, and hover
-remain native. Select the nearest density and paint one texel per physical
-pixel with aligned bounds; tile materials without runtime texture resizing.
+remain native. Paint one texel per physical pixel with aligned bounds; tile
+materials without runtime texture resizing.
 See `assets/mixer/README.md` for exact prompts, source hashes, and reproduction.
 Native mixer buttons use Mixer Face at rest and shared Raised on hover;
 keyboard focus changes their one-point border to Mixer Amber and adds a

@@ -20,7 +20,7 @@ to take a color from.
 The current generated chassis is retained at
 `local-data/artwork/folded-metal/chassis-screwless.png`. The earlier original
 remains preserved as `chassis.png`. `provenance.json` records the active source's
-SHA-256, crop, palette values, and prepared display variants. It came from the
+SHA-256, crop, palette values, and prepared dimensions. It came from the
 built-in image-generation tool. The material slices preserve its actual grain,
 scratches and highlights. Recoloring changes the painted material while
 retaining neutral exposed metal details. No full-window bitmap is
@@ -33,11 +33,11 @@ at the outer edges remain fully transparent. Continuous antialiased native
 rounded paths own the outline and folded bevel, so source silhouettes and tile
 joins cannot produce a broken window edge. Corner patches blend through alpha
 overlap when collapsed; they are not cut at the window midpoint.
-The 150% and 200% variants have proportional pixel dimensions. Every image
-pixel paints one physical screen pixel; clipping supports smaller windows.
+This is the one prepared size; 100% is the only display scale in scope. Every
+image pixel paints one physical screen pixel; clipping supports smaller windows.
 
-Each palette also has a static monochromatic Gaussian paint-grain tile:
-256 by 256 pixels at 100%, 384 by 384 at 150%, and 512 by 512 at 200%.
+Each palette also has a static monochromatic Gaussian paint-grain tile of
+256 by 256 pixels.
 The deterministic quantized distribution has an exact zero mean and a measured
 standard deviation of approximately 1.526 RGB levels. Every pixel receives the
 same offset in all three color channels, so the approved paint hue and mean

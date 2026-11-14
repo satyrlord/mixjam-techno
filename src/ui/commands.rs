@@ -608,13 +608,15 @@ fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bo
 pub(super) fn rail_commands_button(ui: &mut egui::Ui, names: bool, open: bool) -> Response {
     // The rail prints the short "Commands"; the accessible name stays full.
     let response = view::rail_item(ui, names, open, "Commands", |ui, centre, color| {
-        let centre = centre - Vec2::splat(1.0);
+        // The rail icons' 1.6-point stroke throughout, with a round-capped
+        // handle, balanced in the 20-point icon square.
+        let stroke = Stroke::new(1.6_f32, color);
+        let lens = centre - Vec2::splat(1.5);
+        let tip = centre + Vec2::splat(7.5);
+        ui.painter().circle_stroke(lens, 6.0, stroke);
         ui.painter()
-            .circle_stroke(centre, 5.0, Stroke::new(1.6_f32, color));
-        ui.painter().line_segment(
-            [centre + Vec2::splat(3.6), centre + Vec2::splat(7.5)],
-            Stroke::new(2.0_f32, color),
-        );
+            .line_segment([lens + Vec2::splat(6.0 / std::f32::consts::SQRT_2), tip], stroke);
+        ui.painter().circle_filled(tip, 0.8, color);
     });
     response
         .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "All commands"));

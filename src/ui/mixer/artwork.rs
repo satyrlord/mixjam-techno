@@ -1,48 +1,33 @@
-//! The mixer's bitmap artwork, loaded per screen density, and the row surface
-//! painted with it.
+//! The mixer's bitmap artwork and the row surface painted with it.
 use super::*;
 
 const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
 
-macro_rules! pngs {
+macro_rules! png {
     ($name:literal) => {
-        [
-            include_bytes!(concat!("../../../assets/mixer/100/", $name, ".png")).as_slice(),
-            include_bytes!(concat!("../../../assets/mixer/150/", $name, ".png")).as_slice(),
-            include_bytes!(concat!("../../../assets/mixer/200/", $name, ".png")).as_slice(),
-        ]
+        include_bytes!(concat!("../../../assets/mixer/100/", $name, ".png")).as_slice()
     };
 }
 
 pub(super) struct Artwork {
-    pub(super) density: usize,
     textures: Vec<egui::TextureHandle>,
 }
 
 impl Artwork {
     pub(super) fn load(ctx: &egui::Context) -> Result<Arc<Self>, String> {
-        let density = [1.0_f32, 1.5, 2.0]
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                (**a - ctx.pixels_per_point())
-                    .abs()
-                    .total_cmp(&(**b - ctx.pixels_per_point()).abs())
-            })
-            .map_or(0, |(index, _)| index);
-        let id = egui::Id::new(("mixer-artwork", density));
+        let id = egui::Id::new("mixer-artwork");
         if let Some(art) = ctx.data(|data| data.get_temp::<Arc<Self>>(id)) {
             return Ok(art);
         }
-        let textures = [pngs!("ivory"), pngs!("graphite"), pngs!("fader")]
-            .iter()
+        let textures = [png!("ivory"), png!("graphite"), png!("fader")]
+            .into_iter()
             .enumerate()
-            .map(|(index, variants)| {
-                let image = image::load_from_memory(variants[density])
+            .map(|(index, bytes)| {
+                let image = image::load_from_memory(bytes)
                     .map_err(|error| format!("Cannot load mixer artwork: {error}"))?
                     .into_rgba8();
                 Ok(ctx.load_texture(
-                    format!("mixer-{density}-{index}"),
+                    format!("mixer-{index}"),
                     egui::ColorImage::from_rgba_unmultiplied(
                         [image.width() as usize, image.height() as usize],
                         image.as_raw(),
@@ -51,7 +36,7 @@ impl Artwork {
                 ))
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let art = Arc::new(Self { density, textures });
+        let art = Arc::new(Self { textures });
         ctx.data_mut(|data| data.insert_temp(id, art.clone()));
         Ok(art)
     }

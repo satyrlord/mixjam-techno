@@ -1,35 +1,16 @@
 //! Transparent PNG artwork. Texture handles live for one native egui context.
 use eframe::egui::{self, TextureHandle, TextureId};
 
-// Pick a prepared density variant and paint one texel per physical pixel.
-const ICON_PIXELS: [usize; 3] = [20, 30, 40];
+// The artwork has one prepared size. Paint one texel per physical pixel.
+const ICON_PIXELS: usize = 20;
 
-macro_rules! rail_pngs {
+macro_rules! rail_png {
     ($name:literal) => {
-        [
-            include_bytes!(concat!("../assets/rail/20/", $name, ".png")).as_slice(),
-            include_bytes!(concat!("../assets/rail/30/", $name, ".png")).as_slice(),
-            include_bytes!(concat!("../assets/rail/40/", $name, ".png")).as_slice(),
-        ]
+        include_bytes!(concat!("../assets/rail/20/", $name, ".png")).as_slice()
     };
 }
 
-const BRAND_PNGS: [&[u8]; 3] = [
-    include_bytes!("../assets/app/40/mixjam-techno.png"),
-    include_bytes!("../assets/app/60/mixjam-techno.png"),
-    include_bytes!("../assets/app/80/mixjam-techno.png"),
-];
-
-fn density_index(pixels_per_point: f32) -> usize {
-    let desired = 20.0 * pixels_per_point;
-    ICON_PIXELS
-        .iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            ((**a as f32 - desired).abs()).total_cmp(&(**b as f32 - desired).abs())
-        })
-        .map_or(0, |(index, _)| index)
-}
+const BRAND_PNG: &[u8] = include_bytes!("../assets/app/40/mixjam-techno.png");
 
 fn pixel_rect(center: egui::Pos2, pixels: usize, pixels_per_point: f32) -> egui::Rect {
     let left = ((center.x * pixels_per_point - pixels as f32 / 2.0).round()) / pixels_per_point;
@@ -171,29 +152,29 @@ impl RailIcon {
         )
     }
 
-    fn bytes(self, density: usize) -> &'static [u8] {
+    fn bytes(self) -> &'static [u8] {
         match self {
-            Self::Open => rail_pngs!("open")[density],
-            Self::Save => rail_pngs!("save")[density],
-            Self::SaveAs => rail_pngs!("save-as")[density],
-            Self::Export => rail_pngs!("export")[density],
-            Self::Import => rail_pngs!("import")[density],
-            Self::Options => rail_pngs!("options")[density],
-            Self::New => rail_pngs!("new")[density],
-            Self::Mixer => rail_pngs!("mixer")[density],
-            Self::Master => rail_pngs!("master")[density],
-            Self::Erase => rail_pngs!("erase")[density],
-            Self::Delete => rail_pngs!("delete")[density],
-            Self::Effects => rail_pngs!("effects")[density],
-            Self::StepSynth => rail_pngs!("step-synth")[density],
-            Self::Edit => rail_pngs!("edit")[density],
-            Self::Stretch => rail_pngs!("stretch")[density],
-            Self::Record => rail_pngs!("record")[density],
-            Self::Undo => rail_pngs!("undo")[density],
-            Self::Redo => rail_pngs!("redo")[density],
-            Self::Help => rail_pngs!("help")[density],
-            Self::AlbumReview => rail_pngs!("album-review")[density],
-            Self::FxReturns => rail_pngs!("fx-returns")[density],
+            Self::Open => rail_png!("open"),
+            Self::Save => rail_png!("save"),
+            Self::SaveAs => rail_png!("save-as"),
+            Self::Export => rail_png!("export"),
+            Self::Import => rail_png!("import"),
+            Self::Options => rail_png!("options"),
+            Self::New => rail_png!("new"),
+            Self::Mixer => rail_png!("mixer"),
+            Self::Master => rail_png!("master"),
+            Self::Erase => rail_png!("erase"),
+            Self::Delete => rail_png!("delete"),
+            Self::Effects => rail_png!("effects"),
+            Self::StepSynth => rail_png!("step-synth"),
+            Self::Edit => rail_png!("edit"),
+            Self::Stretch => rail_png!("stretch"),
+            Self::Record => rail_png!("record"),
+            Self::Undo => rail_png!("undo"),
+            Self::Redo => rail_png!("redo"),
+            Self::Help => rail_png!("help"),
+            Self::AlbumReview => rail_png!("album-review"),
+            Self::FxReturns => rail_png!("fx-returns"),
         }
     }
 }
@@ -201,21 +182,19 @@ impl RailIcon {
 pub(crate) struct RailIcons {
     textures: Vec<TextureHandle>,
     brand: TextureHandle,
-    density: usize,
 }
 
 impl RailIcons {
     pub(crate) fn load(ctx: &egui::Context) -> Result<Self, String> {
-        let density = density_index(ctx.pixels_per_point());
         let textures = RailIcon::ALL
             .into_iter()
             .map(|icon| {
-                let mut image = image::load_from_memory_with_format(
-                    icon.bytes(density),
-                    image::ImageFormat::Png,
-                )
-                .map_err(|error| format!("Cannot load the bundled {} icon: {error}", icon.label()))?
-                .into_rgba8();
+                let mut image =
+                    image::load_from_memory_with_format(icon.bytes(), image::ImageFormat::Png)
+                        .map_err(|error| {
+                            format!("Cannot load the bundled {} icon: {error}", icon.label())
+                        })?
+                        .into_rgba8();
                 // Use the preserved artwork as an alpha mask. The view owns its color.
                 for pixel in image.pixels_mut() {
                     pixel.0[..3].fill(255);
@@ -228,10 +207,9 @@ impl RailIcons {
                 ))
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let brand =
-            image::load_from_memory_with_format(BRAND_PNGS[density], image::ImageFormat::Png)
-                .map_err(|error| format!("Cannot load the bundled tribal mask: {error}"))?
-                .into_rgba8();
+        let brand = image::load_from_memory_with_format(BRAND_PNG, image::ImageFormat::Png)
+            .map_err(|error| format!("Cannot load the bundled tribal mask: {error}"))?
+            .into_rgba8();
         let brand = ctx.load_texture(
             "tribal-mask",
             egui::ColorImage::from_rgba_unmultiplied(
@@ -240,27 +218,19 @@ impl RailIcons {
             ),
             egui::TextureOptions::NEAREST,
         );
-        Ok(Self {
-            textures,
-            brand,
-            density,
-        })
+        Ok(Self { textures, brand })
     }
 
     pub(crate) fn texture_id(&self, icon: RailIcon) -> TextureId {
         self.textures[icon as usize].id()
     }
 
-    pub(crate) fn matches_density(&self, ctx: &egui::Context) -> bool {
-        self.density == density_index(ctx.pixels_per_point())
-    }
-
     pub(crate) fn icon_rect(&self, ctx: &egui::Context, center: egui::Pos2) -> egui::Rect {
-        pixel_rect(center, ICON_PIXELS[self.density], ctx.pixels_per_point())
+        pixel_rect(center, ICON_PIXELS, ctx.pixels_per_point())
     }
 
     pub(crate) fn brand_image(&self, ui: &mut egui::Ui) -> egui::Response {
-        let pixels = ICON_PIXELS[self.density] * 2;
+        let pixels = ICON_PIXELS * 2;
         let (rect, response) = ui.allocate_exact_size(
             egui::Vec2::splat(pixels as f32 / ui.ctx().pixels_per_point()),
             egui::Sense::hover(),
@@ -288,57 +258,47 @@ mod tests {
 
     #[test]
     fn every_bundled_rail_icon_has_visible_artwork_and_a_transparent_background() {
-        for (density, pixels) in ICON_PIXELS.into_iter().enumerate() {
-            for icon in RailIcon::ALL {
-                assert_eq!(
-                    image::guess_format(icon.bytes(density)).unwrap(),
-                    image::ImageFormat::Png
-                );
-                let image = image::load_from_memory_with_format(
-                    icon.bytes(density),
-                    image::ImageFormat::Png,
-                )
+        let pixels = ICON_PIXELS as u32;
+        for icon in RailIcon::ALL {
+            assert_eq!(
+                image::guess_format(icon.bytes()).unwrap(),
+                image::ImageFormat::Png
+            );
+            let image = image::load_from_memory_with_format(icon.bytes(), image::ImageFormat::Png)
                 .unwrap()
                 .into_rgba8();
-                assert_eq!(image.dimensions(), (pixels as u32, pixels as u32));
-                assert!(
-                    image.pixels().any(|pixel| pixel[3] == 0),
-                    "{} needs transparency",
-                    icon.label()
-                );
-                assert!(
-                    image.pixels().any(|pixel| pixel[3] > 0),
-                    "{} has no artwork",
-                    icon.label()
-                );
-                assert!(
-                    image.pixels().any(|pixel| (1..255).contains(&pixel[3])),
-                    "{} needs antialiased alpha edges",
-                    icon.label()
-                );
-            }
-            let brand =
-                image::load_from_memory_with_format(BRAND_PNGS[density], image::ImageFormat::Png)
-                    .unwrap()
-                    .into_rgba8();
-            assert_eq!(brand.dimensions(), (pixels as u32 * 2, pixels as u32 * 2));
-            assert!(brand.pixels().any(|pixel| pixel[3] == 0));
+            assert_eq!(image.dimensions(), (pixels, pixels));
+            assert!(
+                image.pixels().any(|pixel| pixel[3] == 0),
+                "{} needs transparency",
+                icon.label()
+            );
+            assert!(
+                image.pixels().any(|pixel| pixel[3] > 0),
+                "{} has no artwork",
+                icon.label()
+            );
+            assert!(
+                image.pixels().any(|pixel| (1..255).contains(&pixel[3])),
+                "{} needs antialiased alpha edges",
+                icon.label()
+            );
         }
+        let brand = image::load_from_memory_with_format(BRAND_PNG, image::ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(brand.dimensions(), (pixels * 2, pixels * 2));
+        assert!(brand.pixels().any(|pixel| pixel[3] == 0));
     }
 
     #[test]
-    fn raster_rects_match_texels_and_snap_to_physical_pixels_at_each_density() {
-        for scale in [
-            0.75, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0, 4.0, 4.5,
-        ] {
-            let density = density_index(scale);
-            for pixels in [ICON_PIXELS[density], ICON_PIXELS[density] * 2] {
-                let rect = pixel_rect(egui::pos2(18.3, 45.7), pixels, scale);
-                assert!((rect.width() * scale - pixels as f32).abs() < 0.001);
-                assert!((rect.height() * scale - pixels as f32).abs() < 0.001);
-                for edge in [rect.left(), rect.top(), rect.right(), rect.bottom()] {
-                    assert!((edge * scale - (edge * scale).round()).abs() < 0.001);
-                }
+    fn raster_rects_match_texels_and_snap_to_physical_pixels() {
+        for pixels in [ICON_PIXELS, ICON_PIXELS * 2] {
+            let rect = pixel_rect(egui::pos2(18.3, 45.7), pixels, 1.0);
+            assert!((rect.width() - pixels as f32).abs() < 0.001);
+            assert!((rect.height() - pixels as f32).abs() < 0.001);
+            for edge in [rect.left(), rect.top(), rect.right(), rect.bottom()] {
+                assert!((edge - edge.round()).abs() < 0.001);
             }
         }
     }

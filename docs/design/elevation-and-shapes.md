@@ -37,5 +37,5 @@ language (`Roles::corner`).
 Paint the perimeter and bevel as continuous antialiased native geometry. Fade
 raster material before the outer outline and at strip ends so joints stay smooth.
 Prepare knob edges at 8x resolution, then reduce once with premultiplied-alpha
-Lanczos filtering for each prepared size.
+Lanczos filtering to the prepared size.
 Live text and header symbols stay independent of the material artwork.
