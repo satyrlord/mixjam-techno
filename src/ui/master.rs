@@ -1,4 +1,4 @@
-//! Mastering module of the bottom section: the master pedalboard, laid out
+//! Mastering board of the lower panel: the master pedalboard, laid out
 //! as the signal flows. The mixer's output enters the input unit at the left, with its
 //! trim and VU meter. It passes each pedal in order along a row that
 //! scrolls, and reaches the output unit at the right, with the loudness

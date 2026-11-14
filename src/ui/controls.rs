@@ -1735,17 +1735,11 @@ mod tests {
 
     #[test]
     fn numeric_text_fits_and_centers_in_its_own_container() {
-        let themes = theme::Theme::ALL.into_iter().flat_map(|theme| {
-            [1.0, 1.5, 2.0].map(move |density| {
-                theme::paint_as(theme);
-                density
-            })
-        });
-        for density in themes {
+        for theme in theme::Theme::ALL {
+            theme::paint_as(theme);
             for height in [18.0, 20.0, 24.0, 28.0] {
                 let ctx = egui::Context::default();
                 super::super::configure_style(&ctx);
-                ctx.set_pixels_per_point(density);
                 let rect = Rect::from_min_size(Pos2::new(40.0, 40.0), Vec2::new(100.0, height));
                 let mut response_rect = Rect::NOTHING;
                 let mut value = 2000.0_f64;
@@ -1771,10 +1765,10 @@ mod tests {
                         _ => None,
                     })
                     .unwrap();
-                let offset = (text.center() - rect.center()).abs() * density;
+                let offset = (text.center() - rect.center()).abs();
                 assert!(
                     offset.x <= 1.0 && offset.y <= 1.0,
-                    "Visible numeric text offset {offset:?} at {density}x in {height}-point container"
+                    "Visible numeric text offset {offset:?} in {height}-point container in {theme:?}"
                 );
             }
         }

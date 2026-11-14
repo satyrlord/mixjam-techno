@@ -19,6 +19,7 @@ pub(super) enum Command {
     Delete,
     Mixer,
     Mastering,
+    FxReturns,
     Effects,
     StepSynth,
     Edit,
@@ -61,6 +62,7 @@ pub(super) const RAIL: [(&str, &[Command]); 3] = [
         &[
             Command::Mixer,
             Command::Mastering,
+            Command::FxReturns,
             Command::Effects,
             Command::StepSynth,
             Command::Edit,
@@ -118,6 +120,7 @@ impl Command {
             Self::Delete => RailIcon::Delete,
             Self::Mixer => RailIcon::Mixer,
             Self::Mastering => RailIcon::Master,
+            Self::FxReturns => RailIcon::FxReturns,
             Self::Effects => RailIcon::Effects,
             Self::StepSynth => RailIcon::StepSynth,
             Self::Edit => RailIcon::Edit,
@@ -231,9 +234,10 @@ impl MixJamApp {
             Command::Delete => self.delete_selection(),
             // Mixer switches the score between its Arrange and Mix views.
             Command::Mixer => self.set_mix_view(!self.mix_view),
-            // Mastering and Step synth open their tab, and fold the lower
-            // panel when their tab already shows.
+            // Mastering, FX returns and Step synth open their tab, and fold
+            // the lower panel when their tab already shows.
             Command::Mastering => self.toggle_board(BottomModule::Mastering),
+            Command::FxReturns => self.toggle_board(BottomModule::FxReturns),
             Command::StepSynth => self.toggle_board(BottomModule::StepSynth),
             Command::Effects => self.show_effects = !self.show_effects,
             Command::Edit => {
@@ -318,6 +322,7 @@ impl MixJamApp {
             Command::Erase => self.erase,
             Command::Mixer => self.mix_view,
             Command::Mastering => self.board_shown(BottomModule::Mastering),
+            Command::FxReturns => self.board_shown(BottomModule::FxReturns),
             Command::StepSynth => self.board_shown(BottomModule::StepSynth),
             Command::Effects => self.show_effects,
             Command::Edit => self.show_sample_edit,
@@ -470,7 +475,9 @@ impl MixJamApp {
 /// shortcut at the right.
 fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bool) -> Response {
     let width = ui.available_width();
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::click());
+    // The arrows choose the row, so Tab never lands on one: a focused row
+    // that Enter ignores would run a different command.
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 30.0), Sense::CLICK);
     let rect = rect.shrink2(Vec2::new(6.0, 0.0));
     let active = app.command_active(command);
     let name = command.name();

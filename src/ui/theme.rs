@@ -22,7 +22,7 @@ pub(super) enum Material {
 /// theme; they ask for a role and, where shape differs, for the material.
 pub(super) struct Roles {
     pub material: Material,
-    // The workspace: header, transport, arrangement, browser, and menus.
+    // The workspace: top bar, score, side panels, lower panel, and menus.
     pub canvas: Color32,
     pub panel: Color32,
     pub raised: Color32,

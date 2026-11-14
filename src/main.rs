@@ -370,9 +370,6 @@ fn run() -> Result<(), String> {
                         }
                     })
                     .unwrap_or([1440.0, 1000.0]);
-                // A zoomed capture keeps its layout size in points.
-                let zoom = ui::capture_zoom();
-                let size = [size[0] * zoom, size[1] * zoom];
                 // Claim the port before the window opens, so that a port in
                 // use is a startup error.
                 let agent_server = agent_port

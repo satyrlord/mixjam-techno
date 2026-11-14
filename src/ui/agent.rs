@@ -1313,7 +1313,6 @@ impl MixJamApp {
                 clips: self.selected_clips.iter().copied().collect(),
             },
             tools: Tools {
-                panel: self.bottom_module.key(),
                 erase: self.erase,
                 follow: self.follow_playhead,
                 zoom: self.zoom,

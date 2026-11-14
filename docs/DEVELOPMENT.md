@@ -96,8 +96,7 @@ build for CPU claims; record workload, rate, cadence, mean, p99, maximum, and
 missed deadlines. An accepted larger buffer request does not establish a
 longer processing deadline. Physical listening, microphone operation, native
 pickers, screen readers, high DPI, and minimum-machine capacity need separate
-results. Automated tests and screenshots do not establish those results;
-scaled captures cover high-DPI painting only.
+results. Automated tests and screenshots do not establish those results.
 
 The ignored `realtime_options_bench` test covers sparse, dense Drive,
 master-heavy, and 64-track synthetic arrangements, with all four quality
@@ -119,14 +118,18 @@ Options capture views are `options-audio`, `options-workspace`, and `options-fil
 `options-unapplied` adds unapplied edits on two pages, and `options-discard`
 shows its Discard changes? prompt. `rail-icons` shows the tool rail without
 names, `boards-folded` folds the lower panel to its toolbar row, and
-`maximised` hides the tool rail, the Sounds panel and the lower panel so the
-score fills the window, `sounds-panel` opens the Sounds panel with the lower
+`maximised` hides the tool rail, the Sounds panel, the Inspector, and the
+lower panel so the score fills the window, `sounds-panel` opens the Sounds panel with the lower
 panel on Mixer, and `overview-folded` folds the song overview to its bar.
 `inspector-song`, `inspector-track`, `inspector-clip`, and `inspector-clips`
 open the Inspector on each of its pages. `automation-menu` opens the Automation
 lane menu over the fades-and-automation song, whose track 9 plays a Step synth
 sequence saved with its pattern, drawn as notes. `command-list` opens the
-command list over the default song. Inspect each at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
+command list over the default song. `mix-view` shows the score's Mix view with
+the lower panel on Mastering; `mix-view-dense` fills it with the full song,
+`mix-view-empty` shows it with no tracks, `mix-view-states` with the mixer
+states song, and `mix-view-eq` adds the first track's EQ window. Inspect each
+at 960x720, 1024x768, and 1440x1000. Verify keyboard page selection,
 draft editing, Apply, Cancel, Restore options defaults, and focus restoration
 through the built app's agent channel. Inspect its accessibility tree separately
 from capture appearance.
@@ -134,14 +137,9 @@ from capture appearance.
 `-Themes` a subset of `studio`, `aero`, and `vintage` (all three by default).
 Each Aero and Vintage case starts from an options file with that theme; Studio
 cases start without one, which checks the fresh-start default. Captures are
-named `theme-view-size`. `-Scales` adds display scales (`1.5`, `1.75`, `2`):
-each scaled case sets `MIXJAM_TECHNO_CAPTURE_ZOOM`, which the application reads
-only during a capture. It multiplies egui's pixels per point and the window
-size, so the capture keeps the case's size in points, paints with the matching
-artwork density, and is named `theme-view-size@scalex`. On a 3440x1440 display
-at 100%, 1024x768 fits at 1.75 and 960x720 at 2. A scaled capture does not
-change the Windows display scale, so it does not test the operating system's
-DPI messages or a monitor change.
+named `theme-view-size`. Cases run in parallel, each in its own process with
+its own data folder; `-Jobs N` sets how many run at once (half the processors,
+at most 8, by default). Captures run at a display scale of 100% only.
 Mixer cases cover ordinary, 64-track, empty, and gain/polarity/routing states,
 and a track's EQ window; Mastering cases include a bypassed board.
 The capture set also covers Help, Sample libraries, Import sound, Import details,
@@ -169,8 +167,8 @@ Run it optimized with `cargo.ps1 -CargoArguments @('test','--release','--locked'
 p95 frame time must stay under 16.7 ms.
 
 A body that overflows its window shows a scroll bar, and short blocking dialogs
-follow the height of their content. Scaled captures verify high-DPI painting,
-not Windows display-scale changes. The captures do not verify screen readers or
+follow the height of their content. The captures do not verify high DPI,
+screen readers, or
 other accessibility, physical audio, or native file pickers.
 
 ## Visual assets

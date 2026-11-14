@@ -23,7 +23,7 @@ INK = (5, 9, 42)
 NAMES = (
     "open", "save", "save-as", "export", "import", "options", "new", "mixer", "master",
     "erase", "delete", "effects", "step-synth", "edit", "stretch", "record",
-    "undo", "redo", "help", "album-review",
+    "undo", "redo", "help", "album-review", "fx-returns",
 )
 
 

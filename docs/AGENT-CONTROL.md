@@ -59,8 +59,18 @@ port.
   `clip` sets gain, trim, length, fades, pitch, and `reverse=true|false` for
   one clip; `state` gives each clip's `reverse`.
   These edits use the same history as edits made by hand.
+- `ui` lists only the controls on screen, and a folded panel lists none. Click
+  the status bar's `Sounds`, `Inspector`, `Boards`, `Overview`, or `Tools`
+  switch to open a panel, or `Maximise the score` to restore a maximised score.
+  The layout is kept in `layout.json` in the data folder. The score's
+  `Arrange view` and `Mix view` labels switch between the lanes and the Mix
+  view, whose track rows use the Mixer's names (`Track N mute`, `Track N EQ`);
+  the Mixer tab and the Mix view never show at once. Inspector controls start with `Inspector track`
+  or `Inspector clip`. `key key=K modifiers=["ctrl"]` opens the All commands
+  list; its search field is `Find a command`.
 - A track's channel EQ, drive, compressor, width, and ducker are controls in
-  its EQ window. Click `Track N EQ` in the Mixer to open it, then `set` the
+  its EQ window. Click `Track N EQ` in the Mixer or the Mix view, or
+  `Inspector track EQ` for the selected track, to open it, then `set` the
   control by name: `set target="Track 1 drive power" value=true`, then
   `set target="Track 1 drive amount" value=18`, and likewise `drive
   character`, `drive mix`, `drive focus` (Hz), and `drive output` (dB). `state`

@@ -33,6 +33,10 @@ Do not start a session on the owner's settings unless the owner requests it.
    Completion criterion: You know which modal, if any, takes the input.
 2. Send `ui` for the controls that you can operate now. Add `window=TITLE` to
    list one window or modal. Add `all=true` to read text and disabled controls.
+   A folded panel lists none of its controls. Click the status bar's `Sounds`,
+   `Inspector`, `Boards`, `Overview`, or `Tools` switch to open it, or
+   `Maximise the score` to restore a maximised score. Click `Mix view` for the
+   Mix view's track rows.
    Completion criterion: You have the exact name of each control that you will use.
 3. Send `samples search=TEXT` to find a sound and its id.
    Completion criterion: Each sound that you will place has one id.

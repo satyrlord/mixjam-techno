@@ -102,7 +102,7 @@ pub(crate) fn retain_manual_wave(path: &Path, root: &Path) -> Result<PathBuf, St
     result
 }
 
-/// The library folders that the sound browser merges, in order, and the
+/// The library folders that the Sounds panel merges, in order, and the
 /// fallback tempo of their scans. Stored in `sample-folder.json`.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct WaveFolderConfig {

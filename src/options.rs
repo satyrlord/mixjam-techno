@@ -310,8 +310,9 @@ pub struct WorkspaceLayout {
     pub tool_names: bool,
     /// The lower panel shows its board; off, only its toolbar row stays.
     pub boards: bool,
-    /// The score fills the window: the tool rail, the Sounds panel and the lower panel hide,
-    /// and their own settings above are kept for when it is restored.
+    /// The score fills the window: the tool rail, the Sounds panel, the
+    /// Inspector, and the lower panel hide, and their own settings above are
+    /// kept for when it is restored.
     pub maximised: bool,
     /// The Sounds panel at the left of the score is open; off, it folds to
     /// a named strip.

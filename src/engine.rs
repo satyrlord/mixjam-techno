@@ -964,7 +964,7 @@ impl Project {
         }
         let mut ids = HashSet::new();
         let mut imported_ids = HashSet::new();
-        // The open project holds the whole sound browser as imports, so its
+        // The open project holds the whole Sounds panel as imports, so its
         // count follows the library. The song and project readers' byte
         // limits bound what a file can declare.
         for sample in &self.imported_samples {

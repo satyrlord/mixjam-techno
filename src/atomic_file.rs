@@ -4,7 +4,8 @@
 //! over the destination; new files publish it only if the path is free.
 //! A single-file publication is atomic. A batch keeps backups
 //! until every replacement succeeds and attempts rollback on an error. A
-//! process interruption can leave batch backups for manual recovery.
+//! process interruption, or a backup that cannot be removed after a
+//! successful batch, can leave batch backups for manual recovery.
 use std::{
     fs,
     io::Write,
@@ -184,13 +185,10 @@ fn commit_staged(paths: &[PathBuf], staged: &[PathBuf]) -> Result<(), String> {
             format!("{error} {}", recovery.join(" "))
         });
     }
+    // Every file is in place, so the write succeeded. A backup that cannot
+    // be removed stays as a hidden sibling file.
     for backup in backups.into_iter().flatten() {
-        if let Err(error) = fs::remove_file(&backup) {
-            return Err(format!(
-                "All files were written, but the backup {} could not be removed: {error}",
-                backup.display()
-            ));
-        }
+        let _ = fs::remove_file(&backup);
     }
     Ok(())
 }

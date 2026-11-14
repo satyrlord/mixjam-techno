@@ -38,6 +38,11 @@ const RENAMED: &[(&str, &str)] = &[
     ),
     // Phase 6c: the Sounds panel's count replaces the Sounds module's.
     ("label\t4 sounds", "label\t4 of 4"),
+    // Phase 10: the Step synth pane switch no longer shares the rail's name.
+    (
+        "label\tEffects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+        "label\tSequence effects replaces the note grid with the effects form. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+    ),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {

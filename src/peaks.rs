@@ -1,11 +1,14 @@
 //! Waveform peaks of library sounds: the lowest and highest sample of each
 //! bucket of frames, at several resolutions. Views draw waveforms from these
-//! tables and never decode audio. A worker thread decodes each sound once,
-//! when a view first asks for it; the tables are kept until the catalog
-//! changes.
-use crate::{audio::Pcm, library::Library};
+//! tables and never decode audio. A worker thread decodes the sounds a view
+//! shows as pending, in the order the view asked for them. A new catalog
+//! keeps each table whose sound reads the same audio from an unchanged file.
+use crate::{
+    audio::Pcm,
+    library::{AudioKey, Library},
+};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, mpsc},
 };
 
@@ -145,54 +148,71 @@ pub enum PeakState {
     Unavailable,
 }
 
-struct Request {
+/// The sounds a view showed as pending in its last frame, in the order it
+/// asked for them. Each list replaces the worker's queue.
+struct Wanted {
     revision: u64,
-    sample: u32,
+    samples: Vec<u32>,
     library: Arc<Library>,
 }
 
 struct Reply {
     revision: u64,
     sample: u32,
+    /// The audio the table was read from, taken before the read.
+    key: Option<AudioKey>,
     peaks: Option<Arc<Peaks>>,
 }
 
 struct Worker {
-    sender: mpsc::Sender<Request>,
+    sender: mpsc::Sender<Wanted>,
     receiver: mpsc::Receiver<Reply>,
 }
 
 impl Worker {
     fn spawn() -> Option<Self> {
-        let (sender, requests) = mpsc::channel::<Request>();
+        let (sender, requests) = mpsc::channel::<Wanted>();
         let (replies, receiver) = mpsc::channel();
         std::thread::Builder::new()
             .name("mixjam-techno-peaks".into())
             .spawn(move || {
-                let mut queue: Vec<Request> = Vec::new();
+                let mut queue: VecDeque<u32> = VecDeque::new();
+                let mut current: Option<(u64, Arc<Library>)> = None;
                 loop {
+                    let mut next = None;
                     if queue.is_empty() {
                         match requests.recv() {
-                            Ok(request) => queue.push(request),
+                            Ok(wanted) => next = Some(wanted),
                             Err(_) => return,
                         }
                     }
-                    queue.extend(requests.try_iter());
-                    // The newest catalog only, and the newest request first:
-                    // the rows on screen now come before the rows scrolled past.
-                    let newest = queue.iter().map(|request| request.revision).max();
-                    queue.retain(|request| Some(request.revision) == newest);
-                    let Some(request) = queue.pop() else {
+                    // Only the newest list counts: the rows on screen now,
+                    // never the rows scrolled past.
+                    if let Some(wanted) = requests.try_iter().last() {
+                        next = Some(wanted);
+                    }
+                    if let Some(wanted) = next {
+                        queue = wanted.samples.into();
+                        current = Some((wanted.revision, wanted.library));
+                    }
+                    let (Some(sample), Some((revision, library))) = (queue.pop_front(), &current)
+                    else {
                         continue;
                     };
-                    let peaks = request
-                        .library
-                        .read_pcm(request.sample)
-                        .ok()
-                        .map(|pcm| Arc::new(Peaks::from_pcm(&pcm)));
+                    let key = library.audio_key(sample);
+                    // A decoder that panics marks one sound unreadable and
+                    // keeps the worker for the others.
+                    let peaks = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        library
+                            .read_pcm(sample)
+                            .ok()
+                            .map(|pcm| Arc::new(Peaks::from_pcm(&pcm)))
+                    }))
+                    .unwrap_or(None);
                     let reply = Reply {
-                        revision: request.revision,
-                        sample: request.sample,
+                        revision: *revision,
+                        sample,
+                        key,
                         peaks,
                     };
                     if replies.send(reply).is_err() {
@@ -210,42 +230,52 @@ impl Worker {
 pub(crate) struct PeakStore {
     revision: u64,
     entries: HashMap<u32, PeakState>,
+    /// The audio each finished table of this catalog was read from.
+    keys: HashMap<u32, AudioKey>,
+    /// Finished tables of earlier catalogs by their audio, until a sound
+    /// of this catalog with the same audio takes them back.
+    earlier: HashMap<AudioKey, PeakState>,
     worker: Option<Worker>,
+    /// The pending sounds asked for since the last `poll`, in order.
+    asked: Vec<u32>,
+    asked_set: HashSet<u32>,
+    /// The list the worker holds now.
+    sent: Vec<u32>,
+    library: Option<Arc<Library>>,
 }
 
 impl PeakStore {
-    /// The peaks of `sample` in the catalog of `revision`. The first request
-    /// queues the sound for the worker and reads as pending.
+    /// The peaks of `sample` in the catalog of `revision`. A sound that is
+    /// not ready reads as pending; the next `poll` queues it for the worker
+    /// ahead of the sounds asked for after it. In a new catalog, a sound
+    /// whose audio and file match a finished table takes it at once.
     pub(crate) fn get(&mut self, revision: u64, sample: u32, library: &Arc<Library>) -> PeakState {
         if revision != self.revision {
-            self.revision = revision;
-            self.entries.clear();
+            self.new_catalog(revision);
         }
-        if let Some(state) = self.entries.get(&sample) {
-            return state.clone();
+        if !self
+            .library
+            .as_ref()
+            .is_some_and(|known| Arc::ptr_eq(known, library))
+        {
+            self.library = Some(Arc::clone(library));
         }
-        if self.worker.is_none() {
-            self.worker = Worker::spawn();
+        if !self.entries.contains_key(&sample)
+            && !self.earlier.is_empty()
+            && let Some(key) = library.audio_key(sample)
+            && let Some(state) = self.earlier.remove(&key)
+        {
+            self.keys.insert(sample, key);
+            self.entries.insert(sample, state);
         }
-        let sent = self.worker.as_ref().is_some_and(|worker| {
-            worker
-                .sender
-                .send(Request {
-                    revision,
-                    sample,
-                    library: Arc::clone(library),
-                })
-                .is_ok()
-        });
-        let state = if sent {
-            PeakState::Pending
-        } else {
-            // A worker that cannot start or has stopped is replaced on the
-            // next request; meanwhile the sound has no waveform.
-            self.worker = None;
-            PeakState::Unavailable
-        };
-        self.entries.insert(sample, state.clone());
+        let state = self
+            .entries
+            .entry(sample)
+            .or_insert(PeakState::Pending)
+            .clone();
+        if matches!(state, PeakState::Pending) && self.asked_set.insert(sample) {
+            self.asked.push(sample);
+        }
         state
     }
 
@@ -258,31 +288,121 @@ impl PeakStore {
     #[cfg(all(test, feature = "gui"))]
     pub(crate) fn insert(&mut self, revision: u64, sample: u32, peaks: Arc<Peaks>) {
         if revision != self.revision {
-            self.revision = revision;
-            self.entries.clear();
+            self.new_catalog(revision);
         }
         self.entries.insert(sample, PeakState::Ready(peaks));
     }
 
-    /// Take the worker's finished tables. Returns whether any sound is still
-    /// pending, so the view keeps refreshing until all have arrived.
+    /// Move to the catalog of `revision`. Finished tables wait by their audio
+    /// for the sounds of the new catalog; pending sounds are asked for again.
+    fn new_catalog(&mut self, revision: u64) {
+        self.revision = revision;
+        for (sample, state) in self.entries.drain() {
+            if let Some(key) = self.keys.remove(&sample)
+                && !matches!(state, PeakState::Pending)
+            {
+                self.earlier.insert(key, state);
+            }
+        }
+        self.keys.clear();
+        self.asked.clear();
+        self.asked_set.clear();
+        if !self.sent.is_empty() {
+            // Forget the worker's old queue too, even when every visible
+            // sound in the new catalog takes back a finished table.
+            self.send(Vec::new());
+        }
+        self.sent.clear();
+    }
+
+    /// Take the worker's finished tables and hand it the sounds still
+    /// pending on screen. Returns whether any sound is still pending, so the
+    /// view keeps refreshing until all have arrived.
     pub(crate) fn poll(&mut self) -> bool {
+        let mut stopped = false;
         if let Some(worker) = &self.worker {
-            for reply in worker.receiver.try_iter() {
-                // A finished table stays; only a pending sound takes a reply.
-                if reply.revision == self.revision
-                    && matches!(self.entries.get(&reply.sample), Some(PeakState::Pending))
-                {
-                    self.entries.insert(
-                        reply.sample,
-                        reply.peaks.map_or(PeakState::Unavailable, PeakState::Ready),
-                    );
+            loop {
+                match worker.receiver.try_recv() {
+                    Ok(reply) => {
+                        // A finished table stays; only a pending sound takes a reply.
+                        if reply.revision == self.revision
+                            && matches!(self.entries.get(&reply.sample), Some(PeakState::Pending))
+                        {
+                            self.entries.insert(
+                                reply.sample,
+                                reply.peaks.map_or(PeakState::Unavailable, PeakState::Ready),
+                            );
+                            if let Some(key) = reply.key {
+                                self.keys.insert(reply.sample, key);
+                            }
+                        }
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        stopped = true;
+                        break;
+                    }
                 }
             }
+        }
+        if stopped {
+            // A worker that stopped is replaced, and its list goes to the
+            // next one.
+            self.worker = None;
+            let lost = std::mem::take(&mut self.sent);
+            for sample in lost {
+                if matches!(self.entries.get(&sample), Some(PeakState::Pending))
+                    && self.asked_set.insert(sample)
+                {
+                    self.asked.push(sample);
+                }
+            }
+        }
+        let asked: Vec<u32> = std::mem::take(&mut self.asked)
+            .into_iter()
+            .filter(|sample| matches!(self.entries.get(sample), Some(PeakState::Pending)))
+            .collect();
+        self.asked_set.clear();
+        if asked != self.sent {
+            // Sounds that left the screen before the worker reached them are
+            // forgotten, so they are asked for again when they return.
+            let keep: HashSet<u32> = asked.iter().copied().collect();
+            self.entries.retain(|sample, state| {
+                !matches!(state, PeakState::Pending) || keep.contains(sample)
+            });
+            self.send(asked);
         }
         self.entries
             .values()
             .any(|state| matches!(state, PeakState::Pending))
+    }
+
+    fn send(&mut self, samples: Vec<u32>) {
+        let Some(library) = self.library.clone() else {
+            return;
+        };
+        if self.worker.is_none() {
+            self.worker = Worker::spawn();
+        }
+        let wanted = Wanted {
+            revision: self.revision,
+            samples: samples.clone(),
+            library,
+        };
+        if self
+            .worker
+            .as_ref()
+            .is_some_and(|worker| worker.sender.send(wanted).is_ok())
+        {
+            self.sent = samples;
+        } else {
+            // No worker can start: these sounds have no waveform.
+            self.worker = None;
+            self.sent.clear();
+            for sample in samples {
+                self.entries.insert(sample, PeakState::Unavailable);
+            }
+        }
     }
 }
 
@@ -409,16 +529,232 @@ mod tests {
         let mut store = PeakStore::default();
         assert!(matches!(store.get(1, 7, &library), PeakState::Pending));
         // The fixture has no audio for sound 7, so the worker reports it unavailable.
+        settle(&mut store);
+        assert!(matches!(store.get(1, 7, &library), PeakState::Unavailable));
+        // A new catalog asks again.
+        assert!(matches!(store.get(2, 7, &library), PeakState::Pending));
+    }
+
+    #[test]
+    fn closing_all_peak_views_cancels_the_worker_queue() {
+        let library = Arc::new(Library::fixture(Vec::new()));
+        let mut store = PeakStore::default();
+        let (sender, requests) = mpsc::channel();
+        let (_replies, receiver) = mpsc::channel();
+        store.worker = Some(Worker { sender, receiver });
+        store.get(1, 7, &library);
+        store.get(1, 8, &library);
+        assert!(store.poll());
+        assert_eq!(requests.try_recv().unwrap().samples, vec![7, 8]);
+
+        // No view asks for peaks after both sounds leave the screen. Cancel
+        // the worker's remaining queue and stop refreshing for those sounds.
+        assert!(!store.poll());
+        assert!(requests.try_recv().unwrap().samples.is_empty());
+        assert!(!store.entries.contains_key(&7));
+        assert!(!store.entries.contains_key(&8));
+        assert!(matches!(store.get(1, 7, &library), PeakState::Pending));
+    }
+
+    #[test]
+    fn a_new_catalog_with_only_cached_peaks_cancels_the_old_worker_queue() {
+        let folder =
+            std::env::temp_dir().join(format!("peaks-catalog-cancellation-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("loop.wav");
+        let audio = pcm(1, vec![0.5; FINEST_BUCKET as usize]);
+        audio.write_wav(&path).unwrap();
+        let library = Arc::new(Library::fixture(vec![crate::library::Sample {
+            id: 1,
+            code: "cached".into(),
+            name: "Cached sound".into(),
+            bars: 1,
+            group_name: "Loop".into(),
+            offset: 0,
+            length: 0,
+            frame_count: FINEST_BUCKET,
+            sample_rate: 44_100,
+            source_bpm: 140.0,
+            channels: 1,
+            wav_path: Some(path),
+            digest: None,
+        }]));
+        let mut store = PeakStore::default();
+        let (sender, requests) = mpsc::channel();
+        let (_replies, receiver) = mpsc::channel();
+        store.worker = Some(Worker { sender, receiver });
+        store.get(1, 1, &library);
+        store
+            .entries
+            .insert(1, PeakState::Ready(Arc::new(Peaks::from_pcm(&audio))));
+        store.keys.insert(1, library.audio_key(1).unwrap());
+        store.get(1, 7, &library);
+        store.get(1, 8, &library);
+        assert!(store.poll());
+        assert_eq!(requests.try_recv().unwrap().samples, vec![7, 8]);
+
+        // The new catalog's only visible sound recovers its cached table.
+        // The old pending sounds still need an empty replacement queue.
+        let next = Arc::new((*library).clone());
+        assert!(matches!(store.get(2, 1, &next), PeakState::Ready(_)));
+        assert!(!store.poll());
+        let cancelled = requests.try_recv().unwrap();
+        assert_eq!(cancelled.revision, 2);
+        assert!(cancelled.samples.is_empty());
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_new_catalog_replaces_a_worker_queue_with_the_same_sample_ids() {
+        let library = Arc::new(Library::fixture(Vec::new()));
+        let mut store = PeakStore::default();
+        let (sender, requests) = mpsc::channel();
+        let (_replies, receiver) = mpsc::channel();
+        store.worker = Some(Worker { sender, receiver });
+        for revision in [1, 2] {
+            store.get(revision, 7, &library);
+            store.get(revision, 8, &library);
+            assert!(store.poll());
+            let wanted = requests.try_iter().last().unwrap();
+            assert_eq!(wanted.revision, revision);
+            assert_eq!(wanted.samples, vec![7, 8]);
+        }
+    }
+
+    #[test]
+    fn sounds_that_leave_the_screen_never_keep_the_store_pending() {
+        let library = Arc::new(Library::fixture(Vec::new()));
+        let mut store = PeakStore::default();
+        // A long list scrolls past: each frame asks for other sounds.
+        for frame in 0..20u32 {
+            for sample in frame * 10..frame * 10 + 10 {
+                store.get(1, sample, &library);
+            }
+            store.poll();
+        }
+        // Only the last screen stays asked for; it must finish, and nothing
+        // scrolled past may stay pending.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while store.poll() {
+        loop {
+            for sample in 190..200 {
+                store.get(1, sample, &library);
+            }
+            if !store.poll() {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "The sounds on screen must finish."
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        for sample in 190..200 {
+            assert!(matches!(
+                store.get(1, sample, &library),
+                PeakState::Unavailable
+            ));
+        }
+        assert!(
+            !store
+                .entries
+                .values()
+                .any(|state| matches!(state, PeakState::Pending))
+        );
+    }
+
+    #[test]
+    fn a_stopped_worker_is_replaced_with_its_list() {
+        let library = Arc::new(Library::fixture(Vec::new()));
+        let mut store = PeakStore::default();
+        store.get(1, 3, &library);
+        // A worker whose thread has ended: its reply channel is closed.
+        let (sender, _requests) = mpsc::channel();
+        let (_, receiver) = mpsc::channel();
+        store.worker = Some(Worker { sender, receiver });
+        store.sent = vec![3];
+        store.asked.clear();
+        store.asked_set.clear();
+        // Recovery sends the lost list even before the view asks again.
+        assert!(store.poll());
+        settle(&mut store);
+        assert!(matches!(store.get(1, 3, &library), PeakState::Unavailable));
+    }
+
+    /// Keep the pending sounds visible until the worker has answered them.
+    fn settle(store: &mut PeakStore) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let library = store.library.clone().unwrap();
+            let pending: Vec<u32> = store
+                .entries
+                .iter()
+                .filter_map(|(&sample, state)| {
+                    matches!(state, PeakState::Pending).then_some(sample)
+                })
+                .collect();
+            for sample in pending {
+                store.get(store.revision, sample, &library);
+            }
+            if !store.poll() {
+                break;
+            }
             assert!(
                 std::time::Instant::now() < deadline,
                 "The worker must answer."
             );
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
-        assert!(matches!(store.get(1, 7, &library), PeakState::Unavailable));
-        // A new catalog asks again.
-        assert!(matches!(store.get(2, 7, &library), PeakState::Pending));
+    }
+
+    #[test]
+    fn a_new_catalog_keeps_the_tables_of_unchanged_files_and_rereads_changed_ones() {
+        let folder = std::env::temp_dir().join(format!("peaks-catalog-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("loop.wav");
+        pcm(1, vec![0.5; 4 * FINEST_BUCKET as usize])
+            .write_wav(&path)
+            .unwrap();
+        let sound = |id: u32| crate::library::Sample {
+            id,
+            code: format!("sound {id}"),
+            name: format!("Sound {id}"),
+            bars: 1,
+            group_name: "Loop".into(),
+            offset: 0,
+            length: 0,
+            frame_count: 4 * FINEST_BUCKET,
+            sample_rate: 44_100,
+            source_bpm: 140.0,
+            channels: 1,
+            wav_path: Some(path.clone()),
+            digest: None,
+        };
+        let mut store = PeakStore::default();
+        let first = Arc::new(Library::fixture(vec![sound(1)]));
+        store.get(1, 1, &first);
+        settle(&mut store);
+        let PeakState::Ready(read) = store.get(1, 1, &first) else {
+            panic!("The sound must have peaks.");
+        };
+        // A folder joins the catalog: the same audio, now under another id,
+        // keeps its table without a read.
+        let second = Arc::new(Library::fixture(vec![sound(2), sound(5)]));
+        let PeakState::Ready(kept) = store.get(2, 5, &second) else {
+            panic!("An unchanged file keeps its table.");
+        };
+        assert!(Arc::ptr_eq(&read, &kept));
+        // The file changes: the next catalog reads it again.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        pcm(1, vec![-0.25; 8 * FINEST_BUCKET as usize])
+            .write_wav(&path)
+            .unwrap();
+        let third = Arc::new(Library::fixture(vec![sound(5)]));
+        assert!(matches!(store.get(3, 5, &third), PeakState::Pending));
+        settle(&mut store);
+        let PeakState::Ready(reread) = store.get(3, 5, &third) else {
+            panic!("The changed file must be read again.");
+        };
+        assert_eq!(reread.frames, 8 * u64::from(FINEST_BUCKET));
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }

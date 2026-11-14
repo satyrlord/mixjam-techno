@@ -348,7 +348,12 @@ impl MixJamApp {
         ui.painter().text(
             Pos2::new(rect.left() + 190.0, rect.top() + 47.0),
             Align2::LEFT_CENTER,
-            view::pan_description(track.pan),
+            // While its lane drives the pan, the stored value is not what plays.
+            if track.automation.pan.is_empty() {
+                view::pan_description(track.pan)
+            } else {
+                "Automated".into()
+            },
             FontId::proportional(11.0),
             roles().strip_text,
         );

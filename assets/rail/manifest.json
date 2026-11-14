@@ -754,6 +754,39 @@
           "png_sha256": "9f7c1165e41dffc302ddf18580f3f9601accd924912173eeff95fe5e89eeac28"
         }
       ]
+    },
+    {
+      "name": "fx-returns",
+      "png_sha256": "c1947a600de051a204e4738066b4733665bdbb1520f132ebc56ef2d997819780",
+      "size": [
+        96,
+        96
+      ],
+      "mode": "RGBA",
+      "visible_pixels": 3788,
+      "opaque_pixels": 1478,
+      "transparent_pixels": 5428,
+      "antialiased_pixels": 2310,
+      "alpha_bounds": [
+        8,
+        8,
+        88,
+        88
+      ],
+      "variants": [
+        {
+          "size": 20,
+          "png_sha256": "6d57dc3bc035c087fc3b6d19cc7e0cbe945fdd67cdc21a1158be6628b8167385"
+        },
+        {
+          "size": 30,
+          "png_sha256": "87d9361b59f93dda53f39ae8d011588b6ad4cc53b536ec4788b96918dbf2aa8f"
+        },
+        {
+          "size": 40,
+          "png_sha256": "7b356abb43891be1d1f5487556afe958d5540ec07754836cbf492c00921aae23"
+        }
+      ]
     }
   ]
 }

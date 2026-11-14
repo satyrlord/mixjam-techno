@@ -1002,9 +1002,10 @@ impl Session {
     pub fn catalog_revision(&self) -> u64 {
         self.catalog_revision
     }
-    /// The waveform peaks of a library sound. The first request queues the
-    /// sound for a worker thread and reads as pending; `poll` collects the
-    /// result. The tables last until the catalog changes.
+    /// The waveform peaks of a library sound. A sound that is not ready reads
+    /// as pending; `poll` queues the sounds asked for since the last poll for
+    /// a worker thread and collects the results. A new catalog keeps the
+    /// tables of sounds whose audio file is unchanged.
     pub fn sample_peaks(&self, id: u32) -> PeakState {
         self.peaks
             .borrow_mut()
@@ -1284,6 +1285,17 @@ impl Session {
     /// setting and is not an undo step.
     pub fn clear_fx_tail(&self, bus: usize) {
         self.master.clear_tail(bus);
+    }
+    /// Follow the pointer for control gestures. A press starts a new undo
+    /// step, so a button such as Unity never joins the drag before it. While
+    /// a button is held, the gesture continues through any pause, so a drag
+    /// held still stays one step. Call it once per frame, before the controls.
+    pub fn pointer_gesture(&mut self, pressed: bool, held: bool) {
+        if pressed {
+            self.gesture = None;
+        } else if held && let Some((_, at)) = &mut self.gesture {
+            *at = std::time::Instant::now();
+        }
     }
     /// Begin one undo step for a point drag, including a point added by the drag.
     pub fn begin_automation_gesture(
@@ -5120,6 +5132,41 @@ mod boundary_tests {
         assert!(!session.history_step(false).unwrap());
     }
     #[test]
+    fn a_held_pointer_keeps_one_step_and_a_new_press_starts_another() {
+        let mut session =
+            Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+        let gain = |session: &mut Session, gain: f32| {
+            let mut tracks = session.project().tracks.clone();
+            tracks[1].gain = gain;
+            session
+                .edit(EditCommand::SetMixer {
+                    tracks,
+                    master_gain: session.project().master_gain,
+                })
+                .unwrap();
+        };
+        let pause = |session: &mut Session| {
+            session.gesture = session
+                .gesture
+                .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
+        };
+        // A drag held still past the pause is still one step.
+        session.pointer_gesture(true, true);
+        gain(&mut session, 0.8);
+        pause(&mut session);
+        session.pointer_gesture(false, true);
+        gain(&mut session, 0.6);
+        // Unity pressed at once after it is a step of its own.
+        session.pointer_gesture(false, false);
+        session.pointer_gesture(true, true);
+        gain(&mut session, 1.0);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project().tracks[1].gain, 0.6);
+        assert!(session.history_step(false).unwrap());
+        assert_eq!(session.project(), &Project::default());
+        assert!(!session.history_step(false).unwrap());
+    }
+    #[test]
     fn an_eq_dial_drag_is_one_undo_step_and_its_switch_another() {
         let mut session =
             Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
@@ -6005,6 +6052,14 @@ mod boundary_tests {
             ("ui/libraries.rs", include_str!("ui/libraries.rs")),
             ("ui/theme.rs", include_str!("ui/theme.rs")),
             ("ui/capture.rs", include_str!("ui/capture.rs")),
+            ("ui/commands.rs", include_str!("ui/commands.rs")),
+            ("ui/inspector.rs", include_str!("ui/inspector.rs")),
+            ("ui/lanes.rs", include_str!("ui/lanes.rs")),
+            ("ui/mix_view.rs", include_str!("ui/mix_view.rs")),
+            ("ui/overview.rs", include_str!("ui/overview.rs")),
+            ("ui/room.rs", include_str!("ui/room.rs")),
+            ("ui/sounds.rs", include_str!("ui/sounds.rs")),
+            ("ui/waveform.rs", include_str!("ui/waveform.rs")),
             ("ui_icons.rs", include_str!("ui_icons.rs")),
         ];
         // Screen capture writes its image file itself, so it is exempt from

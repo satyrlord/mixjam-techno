@@ -278,14 +278,16 @@ pub(super) fn master_row(
 }
 
 /// The returns row: per FX bus its name and effect, return level, state,
-/// Input, Limiter, and Edit. Returns whether a bus changed and which bus's
-/// Edit was pressed.
+/// Input, Limiter, and Edit. While the FX returns board shows (`on_board`),
+/// the row keeps only the names, states, and Edit, so no control is named
+/// twice. Returns whether a bus changed and which bus's Edit was pressed.
 pub(super) fn returns_row(
     ui: &mut egui::Ui,
     rect: Rect,
     offset: f32,
     buses: &mut FxBuses,
     automated: [bool; BUSES],
+    on_board: bool,
 ) -> (bool, Option<usize>) {
     row_surface(ui, rect, true);
     let mut ui = row_ui(ui, rect, "mix_returns");
@@ -315,15 +317,27 @@ pub(super) fn returns_row(
             10.0,
             roles().legend,
         );
-        send_knob(
-            ui,
-            centred(rect, offset, left + 92.0, Vec2::splat(20.0)),
-            1.0,
-            &format!("{name} return level"),
-            &mut bus.return_level,
-            automated[index],
-        );
-        bus_switches(ui, [at(106.0, 142.0), at(146.0, 184.0)], 1.0, &name, bus);
+        if on_board {
+            let note = at(84.0, 184.0);
+            clipped_text(
+                ui,
+                note,
+                Pos2::new(note.left(), rect.center().y),
+                "On the board below",
+                10.0,
+                roles().muted,
+            );
+        } else {
+            send_knob(
+                ui,
+                centred(rect, offset, left + 92.0, Vec2::splat(20.0)),
+                1.0,
+                &format!("{name} return level"),
+                &mut bus.return_level,
+                automated[index],
+            );
+            bus_switches(ui, [at(106.0, 142.0), at(146.0, 184.0)], 1.0, &name, bus);
+        }
         if edit_button(ui, at(188.0, 208.0), 1.0, &name) {
             open = Some(index);
         }

@@ -639,7 +639,12 @@ impl MixJamApp {
             .into_iter()
             .map(|module| module.minimum_height(available))
             .fold(0.0_f32, f32::max);
-        let max_height = (available - 290.0).max(shared_minimum);
+        let mut max_height = (available - 290.0).max(shared_minimum);
+        if self.room.sounds {
+            // An open Sounds panel keeps its least height above the board, so
+            // a drag never folds one of them.
+            max_height = max_height.min((available - room::SOUNDS_MIN_HEIGHT).max(min_height));
+        }
         let sounds = egui::TopBottomPanel::bottom("sounds")
             .default_height(height)
             .height_range(min_height..=max_height)
@@ -2820,7 +2825,9 @@ impl MixJamApp {
         );
         export.spacing_mut().interact_size.y = row.export.height();
         self.export_tracks_button(&mut export, 12.0);
-        let (fx, open) = mix_view::returns_row(ui, returns_rect, offset, &mut buses, automated);
+        let on_board = self.board_shown(BottomModule::FxReturns);
+        let (fx, open) =
+            mix_view::returns_row(ui, returns_rect, offset, &mut buses, automated, on_board);
         changes.fx = fx;
         changes.open = open;
         if empty {
@@ -2951,6 +2958,8 @@ impl MixJamApp {
 
     pub(super) fn draw(&mut self, ctx: &egui::Context) {
         self.poll_application(ctx);
+        let (pressed, held) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_down()));
+        self.session.pointer_gesture(pressed, held);
         // An applied theme repaints the next frame; songs, history, and audio
         // are untouched.
         theme::adopt(ctx, self.session.options().theme);
@@ -4433,7 +4442,8 @@ impl MixJamApp {
     }
 
     /// Read the pattern beside each Step synth sound the song's clips use, once
-    /// per sound and catalog revision. A sound without one keeps its waveform.
+    /// per sound and catalog revision. A sound without one keeps its waveform;
+    /// a pattern that cannot be read says so once in the status line.
     pub(super) fn load_step_patterns(&mut self) {
         let revision = self.session.catalog_revision();
         if revision != self.step_patterns_revision {
@@ -4448,18 +4458,28 @@ impl MixJamApp {
             .map(|clip| clip.sample_id)
             .filter(|id| !self.step_patterns.contains_key(id))
             .collect();
+        let mut failed = None;
         for id in wanted {
-            let pattern = self
-                .session
-                .library()
-                .sample_by_id(id)
+            let sample = self.session.library().sample_by_id(id);
+            let pattern = sample
                 .filter(|sample| sample.group_name == "Step synth")
                 .and_then(|sample| sample.wav_path.as_deref())
                 .map(mixjam_techno::application::pattern_beside)
                 .filter(|path| path.is_file())
-                .and_then(|path| self.session.load_pattern(&path).ok())
-                .map(Arc::new);
+                .and_then(|path| match self.session.load_pattern(&path) {
+                    Ok(pattern) => Some(Arc::new(pattern)),
+                    Err(error) => {
+                        let name = sample.map_or("A Step synth sound", |sample| &sample.name);
+                        failed.get_or_insert(format!(
+                            "{name} draws its waveform: its pattern cannot be read ({error})."
+                        ));
+                        None
+                    }
+                });
             self.step_patterns.insert(id, pattern);
+        }
+        if let Some(text) = failed {
+            self.error(text);
         }
     }
 

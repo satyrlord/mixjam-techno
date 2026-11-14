@@ -97,10 +97,9 @@ typography:
     fontSize: "10px"
     fontWeight: 500
   bottom-module:
-    fontFamily: "IBM Plex Sans"
-    textTransform: "uppercase"
-    fontSize: "16px"
-    fontWeight: 600
+    fontFamily: "Inter"
+    fontSize: "14px"
+    fontWeight: 500
   folded-title:
     fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
@@ -165,7 +164,6 @@ components:
     height: "30px"
   bottom-module:
     typography: "{typography.bottom-module}"
-    width: "168px"
     height: "28px"
   mixer-strip:
     backgroundColor: "{colors.mixer-metal}"
@@ -232,11 +230,11 @@ components:
 
 The arrangement is the main work area. Graphite surfaces separate clip names,
 track numbers, and playback controls. Lime marks primary actions. Category
-colors identify the same sounds in the browser and arrangement.
+colors identify the same sounds in the Sounds panel and the arrangement.
 
 The application has three complete themes that the owner selected: Studio,
 the default; Aero / Y2K; and Vintage. Each theme covers every surface, from
-the arrangement, browser, and Mixer to the boards, tools, menus, tooltips,
+the arrangement, Sounds panel, and Mixer to the boards, tools, menus, tooltips,
 confirmations, and feedback. See [Themes](#themes). The rest of this document
 describes the shared layout and behavior, which no theme changes. Where it
 names Folded Metal, ivory strips, or enamel finishes, it describes Vintage,
@@ -273,11 +271,15 @@ behavior; if `local-data/research/PRODUCT.md` and
   material.
 - Syncopate for the product name; uppercase titles in the theme's heading
   face; the theme's text face for all other text.
-- A wide arrangement with transport above and sound discovery below.
+- A wide arrangement with the transport above, the tool rail and Sounds
+  panel at the left, the Inspector at the right, and the boards below.
 - Lime primary actions, category-colored clips, and coral recording signals.
 
 The implementation is native Windows Rust with eframe/egui. Workspace tokens and
-painting live in `src/ui/view.rs`; Mixer stays in `src/ui/mixer.rs`.
+painting live in `src/ui/view.rs`; Mixer stays in `src/ui/mixer.rs`. The side
+panels, overview, Mix view, and command list have their own modules
+(`sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view.rs`, `commands.rs`),
+and `room.rs` decides which panels fit.
 `src/ui/dialog.rs` owns every floating shell and its lifecycle.
 `src/ui/controls.rs` owns reusable control rendering and interaction. Tool bodies
 remain in `src/ui/stretch.rs`, `src/ui/effects.rs`, `src/ui/step_synth.rs`, and
@@ -337,7 +339,7 @@ Unlit plastic stays 12% lighter than unlit enamel so ink keeps 5:1 at the foot.
 **Vintage.** The original Folded Metal chassis, knob, and primary-button
 artwork, the ivory and graphite Mixer artwork, and the enamel pedals with
 brushed grain, sheen, and seeded scratches. Wear stays on chassis folds and
-pedal faces; dense working areas (arrangement, browser, value wells) carry no
+pedal faces; dense working areas (arrangement, Sounds panel, value wells) carry no
 added wear. The position readout is an amber display window. Indicators are
 warm amber.
 
@@ -380,16 +382,16 @@ Coral identifies recording, errors, missing sources, and selected synth notes.
 ### Secondary
 
 Loop, Drum, Bass, Sequence, Sphere/Wave, Effect, Voice, and Other Sample colors
-identify sounds. Tiles use a 20% category-color overlay; arrangement clips use the
+identify sounds. Sound rows use a 20% category-color overlay; arrangement clips use the
 full category fill with canvas-colored text. Selection adds a text-colored clip border.
 
 **The Shared Category Rule.** Use the same category color for a sound in the
-browser and arrangement. Pair color with its name or category label.
+Sounds panel and the arrangement. Pair color with its name or category label.
 
 ### Neutral
 
-Canvas is the deepest structural surface. Panel supports transport, browser,
-and mixer. Floating tools use their Folded Metal palette. Raised and Hover
+Canvas is the deepest structural surface. Panel supports the top bar, the side
+panels, the lower panel, and the overview. Floating tools use their Folded Metal palette. Raised and Hover
 distinguish controls and interaction
 states. Text carries primary labels; Muted carries counts, metadata, and status.
 Line separates surfaces. Selection and Warning retain their native widget roles.
@@ -404,7 +406,7 @@ FX returns board. Utility is neutral and permits an orange-yellow accent. Use ex
 alongside color; Coral continues to identify errors and destructive actions.
 Palette changes must not change control geometry or behavior. Keep these
 colors local to floating windows and the Mastering, FX returns, and Step synth boards; the arrangement,
-browser, and Mixer retain their palettes.
+Sounds panel, and Mixer retain their palettes.
 
 | Palette | Window | Chassis | Active accent |
 | --- | --- | --- | --- |
@@ -507,8 +509,8 @@ Keep every font's license and provenance with the application; see
 
 Display is the MixJam name; Techno follows it in 14-point Syncopate and Muted.
 Headline is the standard native heading. Section
-labels identify Arrangement. Bottom Module supplies the lower panel's module
-selector its 16-point heading-face text. Title names the project. Body
+labels identify Arrangement. Bottom Module supplies the lower panel's board
+tabs their 14-point text-face names. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
 use the text face. Track labels and numeric controls also use it. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points
@@ -563,29 +565,45 @@ retain the full name in a tooltip.
 ## Layout
 
 The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
-720. One 64-point top bar spans the window (see Top bar). The tool rail sits
-at the left, below the top bar: 84 points wide with tool names, 64 points with
-icons only. The Sounds panel follows the rail: 250 points open, or a 28-point
-strip that names it when folded (see Sounds panel). A 30-point status bar spans the
-full width at the bottom. The bottom panel
-(Mixer, Mastering, FX returns, or Step synth) starts at 28% of the content height, clamped to 220-290 points. Drag its
-top divider to resize it. A centered grip marks the divider. The panel retains
-its height for the current session, with a minimum of 400 points for Mixer. Opening Mixer raises a shorter panel to that minimum.
-In a short window Mixer yields down to 370 points so the lane viewport keeps
-150 points. A 400-point Mixer panel gives the physical gain rail 96 points.
-The short panel can reduce it to 68 points. The draggable area extends 16
-points past each end of the rail to include the fader cap.
-When space permits, the maximum panel height leaves 290 points for the
-score toolbar, the ruler, and the lanes. At the minimum client height,
-Mixer's minimum can reduce that arrangement reserve. Status
-occupies 30 points below it. Its application version, prefixed with `v`, stays at the right inner
-margin, with space reserved before status text is truncated. Use the 12-point text face
-and the theme's hyperlink color. Hover and keyboard focus show the link
-underline. The version opens the GitHub repository in the system browser.
-The four boards share this panel size. Switching boards preserves the resized
-height; opening a board first raises a panel below its minimum. Mastering's minimum shows its whole 368-point board under
-the header row; a short window lowers it to 370 points, the same floor as
-Mixer, and the board then scrolls its chip strip below the pedals.
+720. Panels are placed in this order, so each earlier one spans the space the
+later ones share:
+
+1. The 64-point top bar across the window (see Top bar).
+2. The 30-point status bar across the bottom.
+3. The tool rail at the left, below the top bar: 84 points wide with tool
+   names, 64 points with icons only (see Tool rail).
+4. The lower panel, from the rail's edge to the window's right edge, or its
+   folded toolbar row.
+5. The Sounds panel after the rail, above the lower panel: 250 points open, or
+   a 28-point strip that names it when folded (see Sounds panel).
+6. The Inspector at the right, above the lower panel: 280 points open, or a
+   28-point strip (see Inspector).
+7. The score in the rest, inside 18-point side and 14-point top and bottom margins: the
+   60-point song overview or its 20-point bar, the score toolbar, a 12-point
+   gap, the 26-point ruler, and the lanes; the Mix view adds its 70-point
+   Master and returns block under the lanes after an 8-point gap.
+
+The lower panel (Mixer, Mastering, FX returns, or Step synth) starts at 28% of
+the content height, clamped to 220-290 points. Drag its top divider to resize
+it. A centered grip marks the divider. The panel keeps its height for the
+current session. Each board has a minimum panel height: Mixer 400 points,
+Mastering 432, FX returns 462, and Step synth 580, so each shows its whole
+board under the tab row. Opening a board raises a shorter panel to its minimum;
+switching boards otherwise keeps the resized height. In a short window a board
+yields down to 370 points so the lane viewport keeps 150 points, and the board
+then scrolls (Mastering scrolls its chip strip below the pedals). When space
+permits, the maximum panel height leaves 290 points for the score toolbar, the
+ruler, and the lanes; the largest board minimum wins over that reserve at the
+minimum client height. While the Sounds panel shows, the divider stops where
+the Sounds panel keeps its 330 points, unless the board's minimum is larger. A 400-point Mixer panel gives the physical gain rail 96
+points; the short panel can reduce it to 68 points. The draggable area extends
+16 points past each end of the rail to include the fader cap.
+
+The status bar's application version, prefixed with `v`, stays at the right
+inner margin, with space reserved before status text is truncated. It uses the
+12-point text face and the theme's hyperlink color. Hover and keyboard focus
+show the link underline. The version opens the GitHub repository in the system
+browser.
 
 The lower panel has 18-point side margins, 10 points above the header row, and 6
 below its content. Mixer, Mastering, FX returns, and Step synth boards start 8
@@ -595,7 +613,8 @@ space, so the boards keep their height.
 Tabs occupy the left of the lower panel's 28-point tab row, in the order
 Mixer, Mastering, FX returns, and Step synth. Each tab shows its whole
 board name in the 14-point body face; the selected tab has a raised fill, a
-2-point accent underline, and the text color, and the others are muted. The
+2-point accent underline, and the text color, and the others are muted. While
+the panel is folded, the chosen tab keeps only its text color. The
 tabs keep their position and identity for every board. A separator follows,
 then the shown board's own controls. With Mastering,
 the row holds the 150-point preset selector, the 112-point Bypass all switch,
@@ -608,8 +627,13 @@ selector reads Choose a preset while every pedal is off at its defaults, and
 Custom when changed pedals match no preset. The trim, which belongs to the
 mix, affects neither. The board bodies start below the tab row. The tool
 rail's Mixer shortcut switches the score between its Arrange and Mix views.
-Its Mastering and Step synth buttons open their tab and fold the lower panel
-when that board already shows.
+The Mix view and the Mixer tab never show together: the Mix view moves a lower
+panel on Mixer to Mastering, and the Mixer tab returns the score to Arrange.
+A launch whose Starting module is Mixer opens the Mix view over Mastering; one
+whose Starting module is Mastering or FX returns opens the lower panel on that
+tab. The Mix view is session state, not part of `layout.json`. Its Mastering
+and Step synth buttons open their tab and fold the lower panel when that board
+already shows.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. A soloed track counts as occupied even without
@@ -762,8 +786,9 @@ targets. A double-chevron switch at the top changes the width; the Tools switch
 in the status bar does the same.
 
 Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
-Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, Effect Studio,
-Step synth, Sample editor, Time Stretcher, Album Review). With names, each group
+Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, FX returns,
+Effects, Step synth, Edit, Stretch, Album Review); Effects opens Effect Studio, Edit
+the Sample Editor, and Stretch the Time Stretcher. With names, each group
 has an uppercase 9.5-point muted heading; icons only, recessed separators divide
 them. Options and All commands sit at the foot of the rail, below a separator.
 When the window is too short for every name, the rail scrolls under the mouse
@@ -807,7 +832,8 @@ dismisses the command list before it can consume more input.
 
 The right end of the status bar holds a muted 12-point Panels label, five
 switches, and the version link. Tools shows or hides the rail's names. Boards
-folds the lower panel to its 28-point toolbar row, which keeps the board
+folds the lower panel to its 28-point toolbar row (44 points with its
+margins), which keeps the board
 tabs; choosing a tab there, or the rail's Mastering or Step synth, opens
 the requested board again. Repeating that rail action while open folds the
 panel.
@@ -817,7 +843,9 @@ maximised. Inspector opens or folds the Inspector. Boards, Sounds, and
 Inspector show what is on screen, so a panel folded for room reads off and
 opening it takes the room back. A switch that is on carries an accent
 underline. The choices are saved in `layout.json` beside `options.json` and do not touch the Options
-window or its revision.
+window or its revision. Without a saved layout, Tools, Boards, Overview, and
+Inspector start on, and Sounds and Maximise off; a Starting module of Sounds
+then opens the Sounds panel and folds the lower panel at each launch.
 
 ### Sounds panel
 
@@ -858,8 +886,8 @@ scrolls:
   Sounds panel's order (missing sounds last), and SECTIONS with a 3-point bar
   in each section's color, its name, and its bars. A section row scrolls the
   score to that section; it never moves the playhead.
-- A track, chosen by a click on its name in the Arrange lane header (the name
-  then carries Raised fill and a 2-point accent edge): LEVEL with the fader,
+- A track, chosen by a click on its name in the Arrange lane header, which
+  also opens a folded Inspector (the name then carries Raised fill and a 2-point accent edge): LEVEL with the fader,
   dB field, Unity, the pan slider, Center, and the pan; OUTPUTS with Mute,
   Solo, Left, Right, polarity, and why the track is silent; SENDS with the
   four send knobs; CHANNEL PROCESSING with the EQ response curve, the EQ,
@@ -881,7 +909,8 @@ hides both.
 
 The Sounds panel and the Inspector share the score's width; the Sounds panel
 and the lower panel's board share its height. Both side panels open together
-when the score keeps 520 points between them, from about 1134 points of window.
+when 520 points stay between them, from 1134 points of window (1114 with the
+icon rail).
 The Sounds panel stays open above a board when it keeps 330 points: its search,
 filters, chips, sort, and three rows. Where a pair does not fit, the panel
 opened most recently shows and the other folds to its strip or the board's
@@ -944,7 +973,8 @@ Maximise switch. The pair is two selectable labels, 2 points apart, with the
 shown view selected. When the score is narrower than 840 points, its smaller
 heading and counts share a two-line block, and the Automation menu omits its
 separate printed label and narrows to 96 points. Below 600 points, the heading
-and counts hide so every action stays within the score. Below 700 points the row's
+and counts hide so every action stays within the score. When less than 700 points remain after
+the heading and counts, the row's
 spacing tightens to 4 points and its buttons' side padding to 6. The menu keeps
 its accessible name. All actions stay on one row beside the Sounds panel so
 the lane viewport keeps its height.
@@ -962,7 +992,8 @@ name alone, with its selected state. The menu does not scroll. Maximise, or
 F, hides the tool rail, the Sounds panel, the Inspector, and the lower panel so the score
 fills the window; the top bar, the song overview, the score toolbar, and the
 status bar stay. F
-again, the switch, or any status-bar switch restores them, and each panel's own
+again, the switch, or the Tools, Boards, Sounds, or Inspector switch restores
+them (Overview only folds or opens the overview), and each panel's own
 choices come back unchanged. While the score is maximised, Tools, Boards,
 Sounds, and Inspector read off. The state is saved in `layout.json`. A text field that has focus
 keeps F for typing.
@@ -998,7 +1029,7 @@ Sound rows show the name above the category label and bar count. A row too
 narrow for both keeps the bar count. A 20% overlay
 of the category color tints the whole row; there is no category dot.
 Hover or selection uses Hover; selection or keyboard focus adds a one-point
-category-colored border. The category and bar-count line uses Text at 80%.
+category-colored border. The category and bar-count line uses Text at 90%.
 Unselected category chips use Panel with Muted text and a one-point Hover
 border; the selected one uses Hover, Text, and a one-point Muted border.
 One tooltip groups the full name, product, category, code, sample IDs, source
@@ -1080,7 +1111,9 @@ Under the lanes, a 70-point block stays in view while the lanes scroll: the
 Master row (Master over "Stereo output", Bypass, the level, and Export
 tracks…) and the returns row, with four 210-point groups of the bus name and
 its effect, the return state ("Return 88%" or "Return automated"), the return
-level knob, Input, Limiter, and Edit. The rows carry the Mixer's material:
+level knob, Input, Limiter, and Edit. While the FX returns board shows, each
+group keeps its name, state, and Edit and reads "On the board below" in place of
+the knob and switches, so no control has two names on screen. The rows carry the Mixer's material:
 Vintage tiles the ivory strip artwork for the track and Master rows and the
 graphite return artwork for the returns row; Studio and Aero fill the strip
 and return-strip surfaces. Row text uses the strip ink, and each row has a
@@ -1309,7 +1342,8 @@ cut ends a trigger after one sixteenth;
 otherwise it continues until the next trigger or sequence end. Loop source repeats
 audio within that interval. Keep tooltips that explain retriggering, duration,
 combined behavior, whole-file repetition, and effects after source gating.
-Effects replaces the grid with the common effects form; Note grid restores it.
+Sequence effects replaces the grid with the common effects form; Note grid
+restores it.
 Keep actions reachable while the body scrolls. The pane switch retains keyboard
 focus when its label changes.
 
@@ -1466,7 +1500,7 @@ or native file pickers.
 
 ### Empty states and feedback
 
-The empty sound browser offers Open sample libraries. Filtered empty
+The empty Sounds panel offers Open sample libraries. Filtered empty
 results offer Clear filters. The status strip truncates long messages and gives
 the full text on hover. Import details remain available when a project carries
 compatibility notices.

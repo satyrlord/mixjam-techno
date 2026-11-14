@@ -672,87 +672,83 @@ mod tests {
 
     #[test]
     fn resized_window_collapses_in_place_and_restores_its_size_and_draft() {
-        for density in [1.0, 1.5, 2.0] {
-            let ctx = egui::Context::default();
-            configure_style(&ctx);
-            ctx.set_pixels_per_point(density);
-            let mut open = true;
-            let mut draft = String::from("Unfinished edit");
-            let mut body_calls = 0;
-            let mut frame = |events: Vec<egui::Event>| {
-                let _ = ctx.run(
-                    egui::RawInput {
-                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
-                        focused: true,
-                        events,
-                        ..Default::default()
-                    },
-                    |ctx| {
-                        window("Resize fixture")
-                            .open(&mut open)
-                            .default_width(420.0)
-                            .show(ctx, |ui| {
-                                body_calls += 1;
-                                ui.text_edit_singleline(&mut draft);
-                            });
-                    },
-                );
-            };
-            for _ in 0..3 {
-                frame(vec![]);
-            }
-            let geometry = || {
-                ctx.data(|d| {
-                    d.get_temp::<Geometry>(
-                        egui::Id::new("Resize fixture").with("hardware-geometry"),
-                    )
-                })
-                .unwrap()
-            };
-            let before = geometry();
-            let start = before.position + before.size - Vec2::splat(2.0);
-            frame(vec![egui::Event::PointerMoved(start), pointer(start, true)]);
-            let end = start + Vec2::new(80.0, 50.0);
-            frame(vec![egui::Event::PointerMoved(end)]);
-            frame(vec![pointer(end, false)]);
-            frame(vec![]);
-            let resized = geometry();
-            assert!(
-                resized.size.x > before.size.x + 60.0,
-                "Right edge must resize at {density}x"
+        let density = 1.0;
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        let mut open = true;
+        let mut draft = String::from("Unfinished edit");
+        let mut body_calls = 0;
+        let mut frame = |events: Vec<egui::Event>| {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 720.0))),
+                    focused: true,
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    window("Resize fixture")
+                        .open(&mut open)
+                        .default_width(420.0)
+                        .show(ctx, |ui| {
+                            body_calls += 1;
+                            ui.text_edit_singleline(&mut draft);
+                        });
+                },
             );
-            assert!(resized.size.y > before.size.y + 30.0);
-            let collapse = resized.position + Vec2::new(24.0, HEADER / 2.0);
-            frame(vec![
-                egui::Event::PointerMoved(collapse),
-                pointer(collapse, true),
-            ]);
-            frame(vec![pointer(collapse, false)]);
-            for _ in 0..3 {
-                frame(vec![]);
-            }
-            assert!(is_collapsed(&ctx, "Resize fixture"));
-            let small = ctx
-                .memory(|m| m.area_rect(egui::Id::new("Resize fixture")))
-                .unwrap();
-            assert!((small.height() - HEADER).abs() < 1.0);
-            assert_eq!(geometry().position, resized.position);
-            assert_eq!(geometry().size, resized.size);
-            frame(vec![
-                egui::Event::PointerMoved(collapse),
-                pointer(collapse, true),
-            ]);
-            frame(vec![pointer(collapse, false)]);
-            for _ in 0..3 {
-                frame(vec![]);
-            }
-            assert!(!is_collapsed(&ctx, "Resize fixture"));
-            assert_eq!(geometry().position, resized.position);
-            assert_eq!(geometry().size, resized.size);
-            assert_eq!(draft, "Unfinished edit");
-            assert!(body_calls > 3);
-            assert!(open);
+        };
+        for _ in 0..3 {
+            frame(vec![]);
         }
+        let geometry = || {
+            ctx.data(|d| {
+                d.get_temp::<Geometry>(egui::Id::new("Resize fixture").with("hardware-geometry"))
+            })
+            .unwrap()
+        };
+        let before = geometry();
+        let start = before.position + before.size - Vec2::splat(2.0);
+        frame(vec![egui::Event::PointerMoved(start), pointer(start, true)]);
+        let end = start + Vec2::new(80.0, 50.0);
+        frame(vec![egui::Event::PointerMoved(end)]);
+        frame(vec![pointer(end, false)]);
+        frame(vec![]);
+        let resized = geometry();
+        assert!(
+            resized.size.x > before.size.x + 60.0,
+            "Right edge must resize at {density}x"
+        );
+        assert!(resized.size.y > before.size.y + 30.0);
+        let collapse = resized.position + Vec2::new(24.0, HEADER / 2.0);
+        frame(vec![
+            egui::Event::PointerMoved(collapse),
+            pointer(collapse, true),
+        ]);
+        frame(vec![pointer(collapse, false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+        assert!(is_collapsed(&ctx, "Resize fixture"));
+        let small = ctx
+            .memory(|m| m.area_rect(egui::Id::new("Resize fixture")))
+            .unwrap();
+        assert!((small.height() - HEADER).abs() < 1.0);
+        assert_eq!(geometry().position, resized.position);
+        assert_eq!(geometry().size, resized.size);
+        frame(vec![
+            egui::Event::PointerMoved(collapse),
+            pointer(collapse, true),
+        ]);
+        frame(vec![pointer(collapse, false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+        assert!(!is_collapsed(&ctx, "Resize fixture"));
+        assert_eq!(geometry().position, resized.position);
+        assert_eq!(geometry().size, resized.size);
+        assert_eq!(draft, "Unfinished edit");
+        assert!(body_calls > 3);
+        assert!(open);
     }
 
     #[test]

@@ -19,7 +19,7 @@ pub mod master;
 pub mod mixjam;
 pub mod options;
 pub mod packed;
-pub mod peaks;
+mod peaks;
 pub mod playback_quality;
 pub mod products;
 pub mod project_io;

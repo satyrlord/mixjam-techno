@@ -227,23 +227,23 @@ pub(super) fn show(
             for (x, width, text, next, enabled, ivory) in [
                 (
                     16.0,
-                    156.0,
+                    148.0,
                     "Listen sequence",
                     Action::Listen,
                     available && active,
                     false,
                 ),
                 (
-                    182.0,
-                    156.0,
+                    174.0,
+                    148.0,
                     "Save sequence",
                     Action::SaveSequence,
                     available && active,
                     true,
                 ),
                 (
-                    470.0,
-                    160.0,
+                    478.0,
+                    152.0,
                     "Save pattern",
                     Action::SavePattern,
                     true,
@@ -288,12 +288,12 @@ pub(super) fn show(
             }
             if keyed_button(
                 &mut panel,
-                rect(348.0, 516.0, 112.0, 28.0),
+                rect(332.0, 516.0, 136.0, 28.0),
                 "pane",
                 if *show_effects {
                     "Note grid"
                 } else {
-                    "Effects"
+                    "Sequence effects"
                 },
                 true,
                 false,

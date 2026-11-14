@@ -606,7 +606,6 @@ pub struct Selection {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Tools {
-    pub panel: &'static str,
     pub erase: bool,
     pub follow: bool,
     pub zoom: f32,

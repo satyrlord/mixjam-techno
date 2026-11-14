@@ -1,5 +1,5 @@
 //! Resolve preserved MixJam Sample Folder-relative paths after folder moves.
-//! Every library folder of the sound browser is searched.
+//! Every library folder of the Sounds panel is searched.
 use crate::library::Library;
 use std::{
     collections::{HashMap, HashSet},

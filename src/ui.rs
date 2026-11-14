@@ -84,18 +84,6 @@ struct PaletteKey {
     descending: bool,
 }
 
-/// An interface capture's extra display scale, from 1 to 2: the value of
-/// `MIXJAM_TECHNO_CAPTURE_ZOOM`, read only when `MIXJAM_TECHNO_CAPTURE_TO` is
-/// set. It multiplies the operating system's scale, so a capture on a 100%
-/// display paints the 150% and 200% layouts and artwork. Otherwise it is 1.
-pub(crate) fn capture_zoom() -> f32 {
-    std::env::var_os("MIXJAM_TECHNO_CAPTURE_TO")
-        .and_then(|_| std::env::var("MIXJAM_TECHNO_CAPTURE_ZOOM").ok())
-        .and_then(|value| value.parse::<f32>().ok())
-        .filter(|zoom| (1.0..=2.0).contains(zoom))
-        .unwrap_or(1.0)
-}
-
 /// The boards of the lower panel, one tab each. The tab row owns navigation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum BottomModule {
@@ -151,14 +139,6 @@ impl BottomModule {
             Self::Mastering => "Mastering tab",
             Self::FxReturns => "FX returns tab",
             Self::StepSynth => "Step synth tab",
-        }
-    }
-    fn key(self) -> &'static str {
-        match self {
-            Self::Mixer => "mixer",
-            Self::Mastering => "mastering",
-            Self::FxReturns => "fx-returns",
-            Self::StepSynth => "step-synth",
         }
     }
 }
@@ -409,7 +389,7 @@ pub struct MixJamApp {
     group: Option<String>,
     palette_product: Option<Product>,
     palette_sort: PaletteSort,
-    /// The sound browser's sort runs from its last item to its first.
+    /// The Sounds panel's sort runs from its last item to its first.
     palette_descending: bool,
     search: String,
     bottom_module: BottomModule,
@@ -551,21 +531,10 @@ fn startup_status(session: &mut Session) -> (String, bool) {
 impl MixJamApp {
     #[cfg_attr(test, allow(dead_code))]
     pub fn new(cc: &eframe::CreationContext<'_>, mut session: Session) -> Self {
-        cc.egui_ctx.set_zoom_factor(capture_zoom());
         theme::adopt(&cc.egui_ctx, session.options().theme);
         let (status, status_error) = startup_status(&mut session);
         let app = Self::from_session(session, status, status_error);
         if app.capture_path.is_some() {
-            if app.capture_view_is("options-library-expanded") {
-                cc.egui_ctx.data_mut(|data| {
-                    data.insert_persisted(
-                        egui::Id::new("sounds"),
-                        egui::containers::panel::PanelState {
-                            rect: Rect::from_min_size(Pos2::ZERO, Vec2::new(1.0, 480.0)),
-                        },
-                    )
-                });
-            }
             cc.egui_ctx.style_mut(|style| {
                 style.animation_time = 0.0;
                 style.scroll_animation = egui::style::ScrollAnimation::none();
@@ -707,7 +676,8 @@ impl MixJamApp {
         // Starting with Mixer opens the score's Mix view; the lower panel
         // then shows Mastering, since the Mixer tab never shows with it.
         // Starting with Sounds opens the Sounds panel and folds the lower
-        // panel, which keeps Mixer for when it opens.
+        // panel, which keeps Mixer for when it opens. Starting with Mastering
+        // or Effects opens the lower panel on that tab.
         use mixjam_techno::application::options::StartingModule;
         let start_in_mix_view = session.options().starting_module == StartingModule::Mixer;
         let starting_module = match session.options().starting_module {
@@ -715,12 +685,16 @@ impl MixJamApp {
             StartingModule::Mixer | StartingModule::Mastering => BottomModule::Mastering,
             StartingModule::Effects => BottomModule::FxReturns,
         };
-        let (status, status_error) = if capture_view.is_empty()
-            && session.options().starting_module == StartingModule::Sounds
-        {
+        let (status, status_error) = if capture_view.is_empty() {
             let mut layout = session.layout();
-            layout.boards = false;
-            layout.sounds = true;
+            match session.options().starting_module {
+                StartingModule::Sounds => {
+                    layout.boards = false;
+                    layout.sounds = true;
+                }
+                StartingModule::Mastering | StartingModule::Effects => layout.boards = true,
+                StartingModule::Mixer => {}
+            }
             match session.set_layout(layout) {
                 Ok(()) => (status, status_error),
                 Err(error) => (error, true),
@@ -1358,7 +1332,7 @@ impl MixJamApp {
         }
     }
 
-    /// Scan these library folders. The sound browser changes when the scan ends.
+    /// Scan these library folders. The Sounds panel changes when the scan ends.
     fn scan_library_folders(&mut self, roots: Vec<PathBuf>) {
         if let Err(error) = self.try_scan_library_folders(roots, self.fallback_bpm) {
             self.error(error);
@@ -1459,7 +1433,10 @@ impl MixJamApp {
         }
     }
 
+    /// Select clip `id`, or add it to the selection. A chosen track clears,
+    /// so the Inspector never falls back to it once the clips are gone.
     fn select_clip(&mut self, id: u64, additive: bool) {
+        self.selected_track = None;
         if let Some(clip) = self.session.project().clips.iter().find(|c| c.id == id) {
             self.selected_sample = Some(clip.sample_id);
         }
@@ -2249,8 +2226,8 @@ impl MixJamApp {
                             ),
                             (
                                 "Maximise",
-                                "F hides the tool rail, the Sounds panel and the lower panel; F \
-                                 again restores them.",
+                                "F hides the tool rail, the Sounds panel, the Inspector and \
+                                 the lower panel; F again restores them.",
                             ),
                             ("Help", "F1"),
                         ] {
@@ -3650,7 +3627,7 @@ fn step_synth_help(ui: &mut egui::Ui) {
         "Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
         "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
         "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
-        "Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+        "Sequence effects replaces the note grid with the effects form. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
         "The Step synth button in the tool rail folds the lower panel without changing the draft. Choose the Step synth tab to open it again. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the board.",
         "Resampling, source looping, and effects are the application's own algorithms.",
     ] {

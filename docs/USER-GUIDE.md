@@ -33,7 +33,8 @@ lines or uses smaller text, and in a narrow window the transport buttons get
 narrower to make room. Above the lanes, the score toolbar holds Arrange and
 Mix, the Automation menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
 rail, the Sounds panel, the Inspector, and the lower panel so the score fills the window;
-press **F** again, or use any status-bar switch, to restore them. Mixer,
+press **F** again, or use the Tools, Boards, Sounds, or Inspector switch, to
+restore them. Mixer,
 Mastering, FX returns, and Step synth share the lower panel; choose one with
 its tab on the left of the panel's top row. Sample categories, search, and
 library filters stay together in the Sounds panel. Sort sounds in library order, by name, length, BPM, or
@@ -47,8 +48,8 @@ The tool rail at the left groups File, Clips, and Tools, with each tool's name
 under its icon. Hover a tool for its window and shortcut. The **Tools** switch
 at the right of the status bar, or the double chevron at the top of the rail,
 shrinks the rail to icons. The **Boards** switch folds the lower panel to its
-toolbar row; pick a tab there, or select Mastering or Step synth in the
-rail, to open it again. In a short window, scroll the rail with the mouse wheel.
+toolbar row; pick a tab there, or select Mastering, FX returns, or Step synth
+in the rail, to open it again. In a short window, scroll the rail with the mouse wheel.
 
 **All commands**, at the foot of the rail under Options, or **Ctrl+K**, opens a
 list of everything the app can do: the rail's tools, Options and Help,
@@ -361,8 +362,8 @@ double-click it for unity.
   the lower panel's top left. The panel retains its resized height; opening a
   board raises a shorter panel to fit its controls, and in a short window the
   board scrolls. The Mixer tool-rail button switches the score between its
-  Arrange and Mix views. The Mastering and Step synth buttons open their tab,
-  and fold the lower panel when that board already shows.
+  Arrange and Mix views. The Mastering, FX returns, and Step synth buttons open
+  their tab, and fold the lower panel when that board already shows.
 
 ## Mixer
 

@@ -9,7 +9,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-/// The most library folders that one scan merges into the sound browser.
+/// The most library folders that one scan merges into the Sounds panel.
 pub const MAX_LIBRARY_FOLDERS: usize = 9;
 
 /// Check a list of library folders: 1 to [`MAX_LIBRARY_FOLDERS`] folders,
@@ -21,7 +21,7 @@ pub fn check_library_folders(roots: &[PathBuf]) -> Result<(), String> {
     }
     if roots.len() > MAX_LIBRARY_FOLDERS {
         return Err(format!(
-            "The sound browser holds up to {MAX_LIBRARY_FOLDERS} library folders."
+            "The Sounds panel holds up to {MAX_LIBRARY_FOLDERS} library folders."
         ));
     }
     let resolved: Vec<PathBuf> = roots
@@ -286,7 +286,7 @@ pub struct Library {
     reserved_import_id: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum AudioSource {
     Archive {
         path: PathBuf,
@@ -300,7 +300,40 @@ enum AudioSource {
     },
 }
 
+/// Where a sound's audio is read from, with its file's size and last change
+/// when the key was taken. Two sounds with equal keys read the same audio, in
+/// any catalog.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct AudioKey {
+    source: AudioSource,
+    offset: u64,
+    length: u64,
+    frame_count: u32,
+    file_len: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
 impl Library {
+    /// The key of sound `id`'s audio as its file is now. Reads the file's
+    /// metadata, never its audio. `None` when the sound has no source or its
+    /// file cannot be read.
+    pub(crate) fn audio_key(&self, id: u32) -> Option<AudioKey> {
+        let sample = self.sample_by_id(id)?;
+        let source = self.sources.get(&id)?;
+        let (AudioSource::Archive { path }
+        | AudioSource::T1Packed { path }
+        | AudioSource::Wave { path, .. }) = source;
+        let metadata = fs::metadata(path).ok()?;
+        Some(AudioKey {
+            source: source.clone(),
+            offset: sample.offset,
+            length: sample.length,
+            frame_count: sample.frame_count,
+            file_len: metadata.len(),
+            modified: metadata.modified().ok(),
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn fixture(samples: Vec<Sample>) -> Self {
         let sources = samples_sources(&samples);

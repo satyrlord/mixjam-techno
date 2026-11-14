@@ -19,6 +19,13 @@ src/ui/view.rs + src/ui/stretch.rs       src/application.rs
              + src/ui/fx.rs
              + src/ui/agent.rs
              + src/ui/album_review.rs
+             + src/ui/sounds.rs
+             + src/ui/waveform.rs
+             + src/ui/inspector.rs
+             + src/ui/overview.rs
+             + src/ui/lanes.rs
+             + src/ui/room.rs
+             + src/ui/commands.rs
              + src/ui.rs
         |                                       |
         | immutable project/catalog views       | Editor and history
@@ -37,7 +44,9 @@ routing, sections, and mixer settings. Separate operations place and move clips.
 Successful edits update history and, when needed, mark the render for update. An accepted command that
 changes nothing is not an edit: it leaves history, the saved state, and the render
 unchanged. Changes to tempo or one gain, pan, send, channel EQ dial, FX knob, or clip control that arrive within 400 ms
-of each other form one history entry, so a slider drag is one undo step. Saving
+of each other form one history entry, so a slider drag is one undo step. A
+pointer press starts a new entry, so a reset such as Unity or Center is a step of
+its own; while a pointer button is held, a pause does not end the entry. Saving
 ends that group, so undo can return to the saved state after the next edit. A clip
 cannot be lengthened over the next clip on its track. Automation point drags
 use explicit start and end boundaries, so a pause within a drag does not split
@@ -79,11 +88,17 @@ Layout changes do not change the Options revision, song data, or history.
 highest sample of every 64 frames, all channels together, and coarser tables
 of four times as many frames each until a few buckets remain. Views ask
 `Session::sample_peaks(id)`, which answers `Pending`, `Ready`, or `Unavailable`
-and never decodes on the UI thread. The first request queues the sound for one
-lazily started worker thread, which reads it through `Library::read_pcm`, takes
-the newest request first, and drops requests from an older catalog. The tables
-stay until the catalog revision changes. `Session::poll` collects finished
-tables and keeps the view refreshing while any are pending.
+and never decodes on the UI thread. At each `Session::poll`, the pending
+sounds that views asked for since the last poll, in the order asked, replace the
+queue of one lazily started worker thread, which reads them through
+`Library::read_pcm`. A pending sound that left the screen before the worker
+reached it is forgotten and asked for again when it returns. A decoder panic
+marks that sound unavailable; a worker that stops is replaced with its list.
+When the catalog changes, as when a library folder is added or removed, a
+sound keeps its table while its source, its place in the file, and the file's
+size and modified time are the same; only that metadata is read on the UI
+thread. Any other sound is read again. `Session::poll` collects
+finished tables and keeps the view refreshing while any are pending.
 `src/ui/sounds.rs` draws the Sounds panel from those tables, with the
 library's search, filters, sort, and sound actions.
 `src/ui/waveform.rs` turns a ready table into one column pair per point for an
