@@ -9,7 +9,7 @@ fn fixture() -> (egui::Context, MixJamApp) {
         "Printed panel lifecycle".into(),
         false,
     );
-    app.capture_path = None;
+    app.capture.path = None;
     // This fixture tests workspace input, not the empty-library startup page.
     app.options = None;
     (ctx, app)
@@ -46,9 +46,9 @@ fn collapsed_dialogs_release_workspace_keyboard_without_cancelling_tasks() {
     for identity in ["Save your changes?", "Import sound", "Choose path"] {
         let (ctx, mut app) = fixture();
         match identity {
-            "Save your changes?" => app.pending_action = Some(PendingAction::New),
-            "Import sound" => app.import_path = Some(PathBuf::from("unread.wav")),
-            _ => app.path_prompt = Some(prompt()),
+            "Save your changes?" => app.files.pending_action = Some(PendingAction::New),
+            "Import sound" => app.sample_import.path = Some(PathBuf::from("unread.wav")),
+            _ => app.files.path_prompt = Some(prompt()),
         }
         assert_eq!(app.blocking_modal(&ctx), Some(identity));
         collapsed(&ctx, identity, true);
@@ -57,7 +57,7 @@ fn collapsed_dialogs_release_workspace_keyboard_without_cancelling_tasks() {
         }
         assert_eq!(app.blocking_modal(&ctx), None);
         assert!(ctx.memory(|memory| memory.top_modal_layer().is_none()));
-        app.erase = true;
+        app.score_tools.erase = true;
         frame(
             &ctx,
             &mut app,
@@ -70,7 +70,7 @@ fn collapsed_dialogs_release_workspace_keyboard_without_cancelling_tasks() {
             }],
         );
         assert!(
-            !app.erase,
+            !app.score_tools.erase,
             "Workspace Escape must work while {identity} is collapsed."
         );
         collapsed(&ctx, identity, false);
@@ -85,8 +85,8 @@ fn collapsed_dialogs_release_workspace_keyboard_without_cancelling_tasks() {
 #[test]
 fn collapsed_nested_path_suspends_parent_confirmation_and_preserves_path_draft() {
     let (ctx, mut app) = fixture();
-    app.pending_action = Some(PendingAction::New);
-    app.path_prompt = Some(prompt());
+    app.files.pending_action = Some(PendingAction::New);
+    app.files.path_prompt = Some(prompt());
     collapsed(&ctx, "Choose path", true);
     for _ in 0..3 {
         frame(&ctx, &mut app, vec![]);
@@ -96,17 +96,17 @@ fn collapsed_nested_path_suspends_parent_confirmation_and_preserves_path_draft()
         ctx.memory(|memory| memory.top_modal_layer().is_none()),
         "The parent must not retain a hidden modal blocker."
     );
-    assert!(matches!(app.pending_action, Some(PendingAction::New)));
+    assert!(matches!(app.files.pending_action, Some(PendingAction::New)));
     assert_eq!(
-        app.path_prompt.as_ref().unwrap().text,
+        app.files.path_prompt.as_ref().unwrap().text,
         "C:\\Draft\\song.mixjam"
     );
     assert_eq!(
-        app.path_prompt.as_ref().unwrap().error.as_deref(),
+        app.files.path_prompt.as_ref().unwrap().error.as_deref(),
         Some("Keep this draft error.")
     );
     assert!(
-        !app.path_prompt.as_ref().unwrap().focused,
+        !app.files.path_prompt.as_ref().unwrap().focused,
         "Collapsed contents must not take text focus."
     );
 }
@@ -114,18 +114,21 @@ fn collapsed_nested_path_suspends_parent_confirmation_and_preserves_path_draft()
 #[test]
 fn resumed_save_waits_for_expansion_before_running_pending_action() {
     let (ctx, mut app) = fixture();
-    app.pending_action = Some(PendingAction::Close);
-    app.resume_save_changes = true;
+    app.files.pending_action = Some(PendingAction::Close);
+    app.files.resume_save_changes = true;
     collapsed(&ctx, "Save your changes?", true);
     frame(&ctx, &mut app, vec![]);
-    assert!(!app.allow_close);
-    assert!(app.resume_save_changes);
-    assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+    assert!(!app.files.allow_close);
+    assert!(app.files.resume_save_changes);
+    assert!(matches!(
+        app.files.pending_action,
+        Some(PendingAction::Close)
+    ));
     collapsed(&ctx, "Save your changes?", false);
     frame(&ctx, &mut app, vec![]);
-    assert!(app.allow_close);
-    assert!(!app.resume_save_changes);
-    assert!(app.pending_action.is_none());
+    assert!(app.files.allow_close);
+    assert!(!app.files.resume_save_changes);
+    assert!(app.files.pending_action.is_none());
 }
 
 #[test]
@@ -141,7 +144,10 @@ fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed()
         app.session.save(&folder.join("song.mixjam")).unwrap();
         app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
         app.request_action(PendingAction::Close, &ctx);
-        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        assert!(matches!(
+            app.files.pending_action,
+            Some(PendingAction::Close)
+        ));
         collapsed(&ctx, "Save your changes?", true);
         assert_eq!(app.blocking_modal(&ctx), None);
         app.session.start_recording_fixture();
@@ -152,16 +158,22 @@ fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed()
             app.run_action(PendingAction::Close, &ctx);
         }
         assert!(
-            !app.allow_close,
+            !app.files.allow_close,
             "A deferred close must keep the recording alive."
         );
         assert!(app.session.is_recording());
-        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        assert!(matches!(
+            app.files.pending_action,
+            Some(PendingAction::Close)
+        ));
         assert!(app.status_error);
         assert!(app.status.contains("Stop recording"));
         app.session.stop();
         assert!(app.session.has_recorded_take());
-        assert!(matches!(app.pending_action, Some(PendingAction::Close)));
+        assert!(matches!(
+            app.files.pending_action,
+            Some(PendingAction::Close)
+        ));
         std::fs::remove_dir_all(folder).unwrap();
     }
 }
@@ -169,26 +181,26 @@ fn deferred_close_preserves_recording_started_while_confirmation_was_collapsed()
 #[test]
 fn workspace_file_requests_cannot_replace_paused_tasks() {
     let (ctx, mut app) = fixture();
-    app.pending_action = Some(PendingAction::New);
+    app.files.pending_action = Some(PendingAction::New);
     collapsed(&ctx, "Save your changes?", true);
     app.request_action(PendingAction::Close, &ctx);
-    assert!(matches!(app.pending_action, Some(PendingAction::New)));
+    assert!(matches!(app.files.pending_action, Some(PendingAction::New)));
     assert!(!dialog::is_collapsed(&ctx, "Save your changes?"));
-    assert!(!app.allow_close);
+    assert!(!app.files.allow_close);
 
-    app.pending_action = None;
-    app.path_prompt = Some(prompt());
+    app.files.pending_action = None;
+    app.files.path_prompt = Some(prompt());
     collapsed(&ctx, "Choose path", true);
     app.request_action(PendingAction::New, &ctx);
-    assert!(app.pending_action.is_none());
+    assert!(app.files.pending_action.is_none());
     assert!(!dialog::is_collapsed(&ctx, "Choose path"));
 
-    app.path_prompt = None;
-    app.import_path = Some(PathBuf::from("first.wav"));
-    app.import_bpm = 127.0;
+    app.files.path_prompt = None;
+    app.sample_import.path = Some(PathBuf::from("first.wav"));
+    app.sample_import.bpm = 127.0;
     app.finish_path(FileRequest::ImportSound, Some(PathBuf::from("second.wav")));
-    assert_eq!(app.import_path, Some(PathBuf::from("first.wav")));
-    assert_eq!(app.import_bpm, 127.0);
+    assert_eq!(app.sample_import.path, Some(PathBuf::from("first.wav")));
+    assert_eq!(app.sample_import.bpm, 127.0);
 }
 
 /// A frame in which `paths` are dropped on the window.
@@ -223,7 +235,7 @@ fn dropped_song_opens_and_asks_before_replacing_unsaved_work() {
         "Printed panel lifecycle".into(),
         false,
     );
-    app.capture_path = None;
+    app.capture.path = None;
     app.options = None;
     let song = folder.join("Dropped.MIXJAM");
     app.session.edit(EditCommand::SetTempo(135.0)).unwrap();
@@ -243,10 +255,12 @@ fn dropped_song_opens_and_asks_before_replacing_unsaved_work() {
     // Unsaved work asks first; Discard changes then opens the dropped song.
     app.session.edit(EditCommand::SetTempo(160.0)).unwrap();
     drop_frame(&ctx, &mut app, std::slice::from_ref(&song));
-    assert!(matches!(app.pending_action, Some(PendingAction::OpenPath(ref path)) if *path == song));
+    assert!(
+        matches!(app.files.pending_action, Some(PendingAction::OpenPath(ref path)) if *path == song)
+    );
     assert_eq!(app.session.project().bpm, 160.0);
-    app.run_action(app.pending_action.clone().unwrap(), &ctx);
-    assert!(app.pending_action.is_none());
+    app.run_action(app.files.pending_action.clone().unwrap(), &ctx);
+    assert!(app.files.pending_action.is_none());
     assert_eq!(app.session.project().bpm, 135.0);
     assert!(!app.session.unsaved());
     std::fs::remove_dir_all(folder).unwrap();

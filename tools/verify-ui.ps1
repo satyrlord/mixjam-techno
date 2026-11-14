@@ -350,19 +350,24 @@ def run_case(theme, size, view):
             expected = [int(side) for side in size.split('x')]
             assert entry['dimensions'] == expected, 'Capture dimensions differ'
             entry['passed'] = True
-        except (AssertionError, subprocess.TimeoutExpired) as error:
+        except (AssertionError, subprocess.TimeoutExpired, OSError, struct.error) as error:
             entry.update(passed=False, error=str(error))
         entry['seconds'] = round(time.monotonic() - started, 3)
         return entry
 
 cases = [(t, s, v) for t in themes for s in sizes for v in views]
 with ThreadPoolExecutor(max_workers=jobs) as pool:
-    for future in as_completed([pool.submit(run_case, *case) for case in cases]):
-        entry = future.result()
-        report['captures'].append(entry)
-        report['captures'].sort(key=lambda capture: capture['name'])
-        (root / 'captures.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-        print(f"{'PASS' if entry['passed'] else 'FAIL'} {entry['name']}: {entry['seconds']} s", flush=True)
+    try:
+        for future in as_completed([pool.submit(run_case, *case) for case in cases]):
+            entry = future.result()
+            report['captures'].append(entry)
+            report['captures'].sort(key=lambda capture: capture['name'])
+            (root / 'captures.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+            print(f"{'PASS' if entry['passed'] else 'FAIL'} {entry['name']}: {entry['seconds']} s", flush=True)
+    except BaseException:
+        # Do not open the windows of the queued captures after an unexpected error.
+        pool.shutdown(cancel_futures=True)
+        raise
 
 report['passed'] = all(capture['passed'] for capture in report['captures'])
 (root / 'captures.json').write_text(json.dumps(report, indent=2), encoding='utf-8')

@@ -7,7 +7,7 @@ pub fn count_in(bpm: f64) -> Result<Pcm, String> {
     if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
         return Err("Effective tempo must be from 7.5 to 1200 BPM.".into());
     }
-    let sample_rate = 44_100;
+    let sample_rate = crate::audio::Mix::SAMPLE_RATE;
     let beat_frames = sample_rate as f64 * 60.0 / bpm;
     let mut samples = vec![0.0; (beat_frames * 8.0).round() as usize];
     for beat in 0..8 {
@@ -30,14 +30,86 @@ pub fn count_in(bpm: f64) -> Result<Pcm, String> {
     })
 }
 
+/// The mono samples of a take, in chunks. A take has no duration limit, and
+/// a chunk is never copied as the take grows, so the input callback only ever
+/// pushes into reserved room or reserves one more chunk.
+#[derive(Default)]
+struct Take {
+    chunks: Vec<Vec<f32>>,
+    len: usize,
+}
+impl Take {
+    /// Samples per chunk: 16 MiB, about 95 seconds at 44.1 kHz.
+    const CHUNK: usize = 1 << 22;
+
+    #[cfg(test)]
+    fn new(samples: &[f32]) -> Self {
+        let mut take = Self::default();
+        samples.iter().for_each(|&sample| take.push(sample));
+        take
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    fn push(&mut self, sample: f32) {
+        if self
+            .chunks
+            .last()
+            .is_none_or(|chunk| chunk.len() == Self::CHUNK)
+        {
+            self.chunks.push(Vec::with_capacity(Self::CHUNK));
+        }
+        if let Some(chunk) = self.chunks.last_mut() {
+            chunk.push(sample);
+            self.len += 1;
+        }
+    }
+
+    #[cfg(test)]
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// The take as one buffer. Each chunk is freed once it is copied, so the
+    /// copy needs room for the take and one chunk more.
+    fn into_samples(self) -> Result<Vec<f32>, String> {
+        let mut samples = Vec::new();
+        samples
+            .try_reserve_exact(self.len)
+            .map_err(|_| "There is not enough memory to keep the recording.".to_string())?;
+        for chunk in self.chunks {
+            samples.extend_from_slice(&chunk);
+        }
+        Ok(samples)
+    }
+}
+
 struct Buffer {
     channels: usize,
     skip: u64,
+    /// The most samples that a take holds: what a WAV file can hold, which
+    /// is more than 13 hours at 44.1 kHz.
     limit: usize,
-    samples: Vec<f32>,
+    samples: Take,
     error: Option<String>,
 }
 impl Buffer {
+    fn new(channels: usize, skip: u64) -> Self {
+        Self {
+            channels,
+            skip,
+            limit: crate::audio::MAX_WAV_SAMPLES,
+            samples: Take::default(),
+            error: None,
+        }
+    }
+
     /// Mix interleaved input frames to mono. A trailing partial frame is dropped.
     fn push(&mut self, mut data: impl ExactSizeIterator<Item = f32>) {
         for _ in 0..data.len() / self.channels {
@@ -58,11 +130,6 @@ impl Buffer {
         }
     }
 }
-/// A take ends after ten minutes, or sooner at the WAV limit: the take is mono
-/// and is saved as a WAV that the library reads again.
-fn take_limit(sample_rate: u32) -> usize {
-    (sample_rate as usize * 600).min(crate::audio::MAX_WAV_SAMPLES)
-}
 pub struct RecordingStatus {
     pub count_in_frames_remaining: u64,
     pub captured_frames: u64,
@@ -81,11 +148,8 @@ impl Recorder {
         Self {
             stream: None,
             buffer: Arc::new(Mutex::new(Buffer {
-                channels: 1,
-                skip: 0,
-                limit: 44_100,
-                samples: vec![0.25, -0.25],
-                error: None,
+                samples: Take::new(&[0.25, -0.25]),
+                ..Buffer::new(1, 0)
             })),
             sample_rate: 44_100,
         }
@@ -111,16 +175,10 @@ impl Recorder {
             return Err("The audio input settings are not supported.".into());
         }
         let sample_rate = config.sample_rate.0;
-        let limit = take_limit(sample_rate);
-        let buffer = Arc::new(Mutex::new(Buffer {
-            channels: config.channels as usize,
-            skip: (sample_rate as f64 * 480.0 / bpm).round() as u64,
-            limit,
-            // Reserve one tenth of the take limit, so that a short take does not
-            // reallocate inside the input callback.
-            samples: Vec::with_capacity(limit / 10),
-            error: None,
-        }));
+        let buffer = Arc::new(Mutex::new(Buffer::new(
+            config.channels as usize,
+            (sample_rate as f64 * 480.0 / bpm).round() as u64,
+        )));
         let capture = buffer.clone();
         let errors = buffer.clone();
         let on_error = move |error: cpal::StreamError| {
@@ -205,7 +263,7 @@ impl Recorder {
         Ok(Pcm {
             sample_rate: self.sample_rate,
             channels: 1,
-            samples: std::mem::take(&mut b.samples),
+            samples: std::mem::take(&mut b.samples).into_samples()?,
         })
     }
 }
@@ -215,22 +273,40 @@ mod tests {
     #[test]
     fn count_in_discards_exact_frames_and_capture_is_bounded() {
         let mut b = Buffer {
-            channels: 2,
-            skip: 2,
             limit: 2,
-            samples: Vec::new(),
-            error: None,
+            ..Buffer::new(2, 2)
         };
         b.push([1.0, 1.0, 0.5, 0.5, 0.2, 0.6, 0.0, 0.2, 1.0, 1.0].into_iter());
         assert_eq!(b.skip, 0);
-        assert_eq!(b.samples, vec![0.4, 0.1]);
+        assert_eq!(b.samples.into_samples().unwrap(), vec![0.4, 0.1]);
     }
     #[test]
-    fn a_take_never_exceeds_ten_minutes_or_the_wav_limit() {
-        assert_eq!(take_limit(44_100), 26_460_000);
-        assert_eq!(take_limit(96_000), 57_600_000);
-        assert_eq!(take_limit(192_000), 64_000_000);
-        assert_eq!(take_limit(384_000), 64_000_000);
+    fn a_take_has_no_duration_limit_before_the_wav_limit() {
+        // The WAV limit is the only one: more than 13 hours at 44.1 kHz.
+        assert!(Buffer::new(1, 0).limit / 44_100 / 3600 >= 13);
+        assert_eq!(Buffer::new(1, 0).limit, crate::audio::MAX_WAV_SAMPLES);
+    }
+    #[test]
+    fn a_take_keeps_its_order_across_chunks() {
+        let count = Take::CHUNK * 2 + 3;
+        let mut b = Buffer::new(1, 0);
+        b.push((0..count).map(|index| (index % 1000) as f32 / 1000.0));
+        assert_eq!(b.samples.len(), count);
+        assert_eq!(b.samples.chunks.len(), 3);
+        assert!(
+            b.samples
+                .chunks
+                .iter()
+                .all(|chunk| chunk.capacity() == Take::CHUNK)
+        );
+        let samples = b.samples.into_samples().unwrap();
+        assert_eq!(samples.len(), count);
+        assert!(
+            samples
+                .iter()
+                .enumerate()
+                .all(|(index, sample)| *sample == (index % 1000) as f32 / 1000.0)
+        );
     }
     #[test]
     fn a_failed_input_keeps_the_audio_captured_before_the_failure() {

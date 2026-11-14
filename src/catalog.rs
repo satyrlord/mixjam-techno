@@ -403,6 +403,11 @@ struct IndexRecord {
     group: u32,
 }
 
+/// The most sample records that one product index may list. Every installed
+/// index lists far fewer; the bound stops a file that is not an index, or a
+/// damaged one, from becoming a list of any size.
+const MAX_INDEX_RECORDS: usize = 100_000;
+
 fn index_records(text: &str) -> Result<Vec<IndexRecord>, String> {
     let lines: Vec<_> = text.lines().collect();
     let start = lines
@@ -411,7 +416,7 @@ fn index_records(text: &str) -> Result<Vec<IndexRecord>, String> {
         .ok_or("The sample index has no SAMPLES section.")?
         + 1;
     let rows = &lines[start..];
-    if rows.is_empty() || !rows.len().is_multiple_of(12) || rows.len() / 12 > 100_000 {
+    if rows.is_empty() || !rows.len().is_multiple_of(12) || rows.len() / 12 > MAX_INDEX_RECORDS {
         return Err("The sample index has an incomplete or excessive record list.".into());
     }
     rows.as_chunks::<12>()
@@ -469,7 +474,10 @@ fn load_index(
                 record.id
             ));
         }
-        if record.id == 0 || record.length < 12 || record.length > 64 * 1024 * 1024 {
+        if record.id == 0
+            || record.length < 12
+            || record.length > legacy_format::packed::MAX_PACKED_BYTES
+        {
             return Err(format!(
                 "Native sample {} has an invalid ID or length.",
                 record.id
@@ -483,16 +491,18 @@ fn load_index(
             .filter(|end| *end <= archive_size)
             .ok_or_else(|| format!("Native sample {} exceeds its archive.", record.id))?;
         let header = packed_header(&path, record.offset, record.length)?;
-        let fields = header.metadata_fields();
-        let group_name = if fields.len() >= 5 && !fields[4].is_empty() {
-            fields[4].to_owned()
-        } else {
-            format!("Group {}", record.group)
+        let group_name = match header.metadata_fields().into_iter().nth(4) {
+            Some(name) if !name.is_empty() => name,
+            _ => format!("Group {}", record.group),
         };
         // One shipped D2 record (7051) has zero bars/group in its index.
         // Use measured audio length for its display length, without changing ID.
         let bars = if record.bars == 0 {
-            ((header.decoded_samples as f64 * bpm / 44_100.0 / 240.0).ceil() as u32).max(1)
+            ((header.decoded_samples as f64 * bpm
+                / f64::from(legacy_format::NATIVE_SAMPLE_RATE)
+                / 240.0)
+                .ceil() as u32)
+                .max(1)
         } else {
             record.bars
         };
@@ -555,7 +565,7 @@ fn packed_header(
         fs::File::open(path).map_err(|e| format!("Cannot open {}: {e}", path.display()))?;
     file.seek(SeekFrom::Start(offset))
         .map_err(|e| e.to_string())?;
-    let mut prefix = vec![0; length.min(512) as usize];
+    let mut prefix = vec![0; length.min(legacy_format::packed::MAX_HEADER_BYTES as u64) as usize];
     file.read_exact(&mut prefix).map_err(|e| e.to_string())?;
     let header = legacy_format::packed::parse_header(&prefix).map_err(|e| {
         format!(
@@ -569,9 +579,14 @@ fn packed_header(
     Ok(header)
 }
 
+/// The largest sample index or catalog text file that is read, in bytes.
+/// Installed ones are far smaller; the bound stops a file that is not a
+/// catalog from being read whole.
+const MAX_CATALOG_TEXT_BYTES: u64 = 32 * 1024 * 1024;
+
 fn read_text(path: &Path) -> Result<String, String> {
     let length = fs::metadata(path).map_err(|e| e.to_string())?.len();
-    if length > 32 * 1024 * 1024 {
+    if length > MAX_CATALOG_TEXT_BYTES {
         return Err("The sample catalog exceeds its size limit.".into());
     }
     fs::read(path)

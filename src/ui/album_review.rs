@@ -41,6 +41,46 @@ pub(super) struct AlbumReviewState {
     reveal_track: Option<u32>,
     /// A cover cache other than the data folder's, for tests.
     cache_override: Option<CoverCache>,
+    grid: GridCache,
+}
+
+/// The grid's derived lists. Filtering folds every title, artist, and tag,
+/// and each genre chip asks whether it still finds an album, so they are
+/// computed again only when the reviews, the filter, or the sort change.
+#[derive(Default)]
+struct GridCache {
+    revision: Option<u64>,
+    artists: Vec<String>,
+    genres: Vec<(String, usize)>,
+    filtered: Option<(Filter, Sort)>,
+    visible: Vec<usize>,
+    /// For each of `genres`: whether adding it to the filter leaves a match.
+    has_results: Vec<bool>,
+}
+
+impl GridCache {
+    fn update(&mut self, revision: u64, reviews: &[Review], filter: &Filter, sort: Sort) {
+        if self.revision != Some(revision) {
+            self.revision = Some(revision);
+            self.artists = collection::artists(reviews);
+            self.genres = collection::genre_counts(reviews);
+            self.filtered = None;
+        }
+        if self
+            .filtered
+            .as_ref()
+            .is_some_and(|(cached, cached_sort)| cached == filter && *cached_sort == sort)
+        {
+            return;
+        }
+        self.visible = collection::visible(reviews, filter, sort);
+        self.has_results = self
+            .genres
+            .iter()
+            .map(|(genre, _)| filter.genre_has_results(reviews, genre))
+            .collect();
+        self.filtered = Some((filter.clone(), sort));
+    }
 }
 
 impl AlbumReviewState {
@@ -52,6 +92,8 @@ impl AlbumReviewState {
     /// Show the reviews of another folder, or of none.
     pub(super) fn use_folder(&mut self, folder: Option<PathBuf>, cache: CoverCache) {
         self.shelf = Some(Shelf::open(folder));
+        // A new shelf counts its revisions from the start again.
+        self.grid = GridCache::default();
         self.cache_override = Some(cache);
         self.covers = None;
         self.textures.clear();
@@ -194,6 +236,7 @@ fn grid(ui: &mut egui::Ui, state: &mut AlbumReviewState) {
             shelf.reload();
         }
         let count = shelf.reviews().len();
+        state.grid = GridCache::default();
         state.cache_message = Some(format!(
             "Read {count} review{} again.",
             if count == 1 { "" } else { "s" }
@@ -222,7 +265,10 @@ fn grid_body(ui: &mut egui::Ui, state: &mut AlbumReviewState, shelf: &Shelf) {
         footer(ui, state);
         return;
     }
-    let visible = collection::visible(reviews, &state.filter, state.sort);
+    state
+        .grid
+        .update(shelf.revision(), reviews, &state.filter, state.sort);
+    let visible = state.grid.visible.clone();
     ui.horizontal(|ui| {
         let search = ui.add(
             egui::TextEdit::singleline(&mut state.filter.search)
@@ -243,7 +289,7 @@ fn grid_body(ui: &mut egui::Ui, state: &mut AlbumReviewState, shelf: &Shelf) {
         let count = ui.label(collection::count_label(visible.len(), reviews.len()));
         name_control(count, "Album count");
     });
-    filter_rows(ui, state, reviews, !visible.is_empty());
+    filter_rows(ui, state, reviews, shelf.revision(), !visible.is_empty());
     if visible.is_empty() {
         ui.add_space(8.0);
         ui.label("No results for the current search and filters.");
@@ -295,23 +341,33 @@ fn chip(ui: &mut egui::Ui, label: &str, active: bool, name: &str) -> Response {
 
 /// The artist and genre rows, and the chips of the active filters. Without
 /// results, the empty state carries the one Clear filters button.
-fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Review], results: bool) {
+fn filter_rows(
+    ui: &mut egui::Ui,
+    state: &mut AlbumReviewState,
+    reviews: &[Review],
+    revision: u64,
+    results: bool,
+) {
     ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new("Artists")
                 .color(roles().legend)
                 .strong(),
         );
-        for artist in collection::artists(reviews) {
-            let active = state.filter.artists.contains(&artist);
-            if chip(ui, &artist, active, &format!("Artist filter: {artist}")).clicked()
-                && !state.filter.artists.remove(&artist)
+        for artist in &state.grid.artists {
+            let active = state.filter.artists.contains(artist);
+            if chip(ui, artist, active, &format!("Artist filter: {artist}")).clicked()
+                && !state.filter.artists.remove(artist)
             {
-                state.filter.artists.insert(artist);
+                state.filter.artists.insert(artist.clone());
             }
         }
     });
-    let genres = collection::genre_counts(reviews);
+    // An artist chosen above changes which genres still find an album.
+    state
+        .grid
+        .update(revision, reviews, &state.filter, state.sort);
+    let genres = &state.grid.genres;
     let hidden = genres.len().saturating_sub(TOP_GENRES);
     ui.horizontal_wrapped(|ui| {
         ui.label(egui::RichText::new("Genres").color(roles().legend).strong());
@@ -320,7 +376,7 @@ fn filter_rows(ui: &mut egui::Ui, state: &mut AlbumReviewState, reviews: &[Revie
             if !state.genres_expanded && index >= TOP_GENRES && !active {
                 continue;
             }
-            let usable = active || state.filter.genre_has_results(reviews, genre);
+            let usable = active || state.grid.has_results[index];
             let label = format!("{genre} ({count})");
             // A disabled chip draws in its own scope, which does not wrap by
             // itself; start a new row when it would not fit.

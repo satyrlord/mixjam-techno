@@ -1,9 +1,6 @@
 //! File-backed sample admission: compressed sources and canonical PCM WAV.
 
-use crate::{
-    packed::{self, HeaderKind},
-    source::SampleSource,
-};
+use crate::packed::{self, DecodeOptions, HeaderKind};
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -22,6 +19,16 @@ impl From<packed::PackedError> for PlaybackError {
         Self(e.to_string())
     }
 }
+
+/// The original loader holds a file's byte length in a signed 32-bit value, so
+/// a WAV or packed file past 2 GiB is not a native sample. A file below this
+/// bound is read whole and its audio is converted in memory; the work is
+/// bounded by the file's own size.
+pub const NATIVE_FILE_BYTES: u64 = i32::MAX as u64;
+
+/// How many samples a stream may leave out at its end for the original file
+/// loader to still accept it. The audio of a short stream is not padded.
+const LOADER_TAIL_SLACK: usize = 4;
 
 /// Original AWaveDauer registration result for admitted canonical PCM WAV.
 /// Files shorter than the original 270-byte probe return zero. This value is
@@ -61,15 +68,15 @@ pub fn wave_duration_bytes(bytes: &[u8]) -> Result<i32, PlaybackError> {
     Ok(length)
 }
 
-/// Canonical PCM WAV within the playback bound, at an original rate.
+/// Canonical PCM WAV within the native byte range, at an original rate.
 fn admit_wave(bytes: &[u8]) -> Result<crate::wav::PcmWave, PlaybackError> {
-    if bytes.len() > 128 * 1024 * 1024 {
+    if bytes.len() as u64 > NATIVE_FILE_BYTES {
         return Err(PlaybackError(
-            "WAV source exceeds the 128 MiB playback bound".into(),
+            "WAV file exceeds the native signed byte range".into(),
         ));
     }
     let wave = crate::wav::PcmWave::parse(bytes).map_err(|e| PlaybackError(e.to_string()))?;
-    if !matches!(wave.sample_rate, 11025 | 22050 | 44100) {
+    if !matches!(wave.sample_rate, 11025 | 22050 | crate::NATIVE_SAMPLE_RATE) {
         return Err(PlaybackError(
             "WAV playback supports 11025, 22050, or 44100 Hz".into(),
         ));
@@ -116,13 +123,24 @@ impl FileSample {
             ));
         }
         admit_path(&path)?;
-        if bytes.len() > i32::MAX as usize {
+        if bytes.len() as u64 > NATIVE_FILE_BYTES {
             return Err(PlaybackError(
                 "Sample file exceeds the native signed byte range".into(),
             ));
         }
-        let source = SampleSource::from_packed(bytes)?.with_file_loader_initial_sample();
-        Ok(Self { pcm: source.pcm })
+        // The loader reads the declared count of samples. It accepts a stream
+        // that ends a few samples early and keeps what the stream holds.
+        let decoded = packed::decode(bytes, DecodeOptions::FILE)?;
+        let missing = header.decoded_samples.saturating_sub(decoded.produced);
+        if missing > LOADER_TAIL_SLACK {
+            return Err(packed::PackedError::IncompleteAudio {
+                missing_samples: missing,
+            }
+            .into());
+        }
+        Ok(Self {
+            pcm: decoded.samples,
+        })
     }
     /// Original canonical PCM WAV path: first source lane, half gain, and
     /// nearest sample hold at the admitted 11.025/22.05/44.1 kHz rates.
@@ -153,14 +171,11 @@ impl FileSample {
                 "Native WAV length leaves an incomplete source frame".into(),
             ));
         }
-        let repeat = (44100 / wave.sample_rate) as usize;
+        let repeat = (crate::NATIVE_SAMPLE_RATE / wave.sample_rate) as usize;
         let count = input.len() / align;
         let total = count
             .checked_mul(repeat)
-            .filter(|&n| n <= packed::MAX_DECODED_SAMPLES)
-            .ok_or_else(|| {
-                PlaybackError("Converted WAV exceeds the playback frame bound".into())
-            })?;
+            .ok_or_else(|| PlaybackError("The converted WAV has too many frames.".into()))?;
         if total == 0 {
             return Err(PlaybackError(
                 "WAV source has no native playable frames".into(),
@@ -212,5 +227,67 @@ mod tests {
         pcm[4..8].copy_from_slice(&length.to_le_bytes());
         assert!(crate::wav::PcmWave::parse(&pcm).is_ok());
         assert!(FileSample::from_wave("metadata.wav".into(), &pcm).is_err());
+    }
+
+    fn packed(count: u32, stream: &[u8]) -> Vec<u8> {
+        let mut bytes = b"t\x50xD\0T".to_vec();
+        bytes.extend(count.to_le_bytes());
+        bytes.extend(37u16.to_le_bytes());
+        bytes.extend(stream);
+        bytes
+    }
+
+    #[test]
+    fn a_packed_file_starts_at_the_header_word_and_keeps_the_whole_last_run() {
+        let stream = [0xf8, 1, 0x81, 0x82, 0x80, 0x7f, 0x83, 1];
+        let sample = FileSample::from_bytes("a.pxd".into(), &packed(8, &stream)).unwrap();
+        assert_eq!(
+            sample.samples(),
+            [74, 76, 80, 80, 78, 84, 86, 90, 90, 88, 94]
+        );
+    }
+
+    #[test]
+    fn a_packed_file_may_end_four_samples_early_but_not_five() {
+        // One literal makes one sample. A count of five leaves four missing.
+        let sample = FileSample::from_bytes("a.pxd".into(), &packed(5, &[255, 129])).unwrap();
+        assert_eq!(sample.samples(), [74, 76]);
+        assert!(matches!(
+            FileSample::from_bytes("a.pxd".into(), &packed(6, &[255, 129])),
+            Err(PlaybackError(text)) if text == "Incomplete packed audio: 5 samples missing"
+        ));
+        // A huge count over a tiny stream fails without a large allocation.
+        assert!(FileSample::from_bytes(
+            "a.pxd".into(),
+            &packed(packed::MAX_DECODED_SAMPLES as u32, &[255, 129])
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn a_packed_file_rejects_malformed_opcodes_and_audio_only_headers() {
+        for stream in [&[0xf9u8][..], &[0xff], &[1], &[0xf5, 0, 1, 2]] {
+            assert!(FileSample::from_bytes("a.pxd".into(), &packed(2, stream)).is_err());
+        }
+        let metadata = packed(2, &[255, 129, 255, 128]);
+        assert!(FileSample::from_bytes("a.pxd".into(), &metadata[5..]).is_err());
+    }
+
+    #[test]
+    fn a_wav_past_128_mib_is_a_native_sample() {
+        let data_bytes = 129 * 1024 * 1024u32;
+        let mut wav = crate::wav::PcmWave {
+            sample_rate: 44100,
+            channels: 1,
+            samples: Vec::new(),
+        }
+        .encode()
+        .unwrap();
+        wav[4..8].copy_from_slice(&(data_bytes + 36).to_le_bytes());
+        wav[40..44].copy_from_slice(&data_bytes.to_le_bytes());
+        wav.resize(44 + data_bytes as usize, 0);
+        let sample = FileSample::from_wave("long.wav".into(), &wav).unwrap();
+        assert_eq!(sample.samples().len(), data_bytes as usize / 2);
+        assert!(wave_duration_bytes(&wav).unwrap() > 0);
     }
 }

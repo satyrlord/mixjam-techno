@@ -11,6 +11,18 @@ use super::*;
 use mixjam_techno::application::Track;
 use mixjam_techno::application::fx::{BUSES, FxBuses};
 
+/// The Mix view: whether the score shows it, and its column scroll.
+#[derive(Default)]
+pub(super) struct MixViewState {
+    /// The score shows the Mix view's mixer rows instead of the lane headers.
+    /// It never shows with the Mixer tab.
+    pub(super) shown: bool,
+    /// How far the Mix view's columns are scrolled to the left.
+    pub(super) scroll: f32,
+    /// The Mix view control last scrolled into view for keyboard focus.
+    pub(super) revealed: Option<egui::Id>,
+}
+
 /// The width of a row's columns; a narrower header column scrolls them.
 pub(super) const CONTENT_WIDTH: f32 = 876.0;
 /// The track number stays in place while the other columns scroll.

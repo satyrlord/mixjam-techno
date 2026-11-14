@@ -18,7 +18,6 @@ pub mod library;
 pub mod master;
 pub mod mixjam;
 pub mod options;
-pub mod packed;
 mod peaks;
 pub mod playback_quality;
 pub mod products;
@@ -40,13 +39,14 @@ mod ui_icons;
 #[cfg(all(test, feature = "gui"))]
 mod ui_test_harness {
     include!("ui.rs");
-    include!("ui/tests.rs");
     #[path = "../ui/album_review_tests.rs"]
     mod album_review_tests;
     #[path = "../ui/name_parity_tests.rs"]
     mod name_parity_tests;
-    #[path = "../ui/options_tests.rs"]
+    #[path = "../ui/options_tests/mod.rs"]
     mod options_tests;
+    #[path = "../ui/tests/mod.rs"]
+    mod tests;
     #[path = "../ui/window_lifecycle_tests.rs"]
     mod window_lifecycle_tests;
 }

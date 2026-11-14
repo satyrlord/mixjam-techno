@@ -21,11 +21,12 @@ user asks for it. MusicBrainz allows one request a second, so `release` and `tra
 requests. The tool sends a descriptive user agent to both services.
 """
 import argparse
+import http.client
 import json
 import sys
 import time
 import unicodedata
-import urllib.error
+import uuid
 import urllib.parse
 import urllib.request
 
@@ -35,6 +36,8 @@ WIKI_API = "https://en.wikipedia.org/w/api.php"
 WIKI_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 TIMEOUT = 20
 _last_musicbrainz = 0.0
+# A reset connection or a truncated body is not a URLError; OSError covers both URLError and timeouts.
+NETWORK_ERRORS = (OSError, http.client.HTTPException, ValueError)
 
 
 def get_json(url):
@@ -94,7 +97,8 @@ def releases(artist, title, year):
 
 
 def tracks(mbid):
-    data = musicbrainz(f"release/{mbid}", inc="recordings")
+    # A release id is a UUID; anything else must not reach the URL path.
+    data = musicbrainz(f"release/{uuid.UUID(mbid)}", inc="recordings")
     listed = []
     total = 0
     for medium in data.get("media", []):
@@ -145,7 +149,7 @@ def wiki_search(query):
     )
     try:
         data = get_json(f"{WIKI_API}?{params}")
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except NETWORK_ERRORS:
         return []
     return [result["title"] for result in data.get("query", {}).get("search", [])]
 
@@ -153,7 +157,7 @@ def wiki_search(query):
 def wiki_summary(page):
     try:
         return get_json(WIKI_SUMMARY + urllib.parse.quote(page.replace(" ", "_"), safe=""))
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except NETWORK_ERRORS:
         return None
 
 
@@ -243,7 +247,7 @@ def main(argv):
             result = tracks(arguments.mbid)
         else:
             result = cover(arguments.artist, arguments.title, arguments.page)
-    except (urllib.error.URLError, TimeoutError, ValueError) as error:
+    except NETWORK_ERRORS as error:
         print(f"Cannot look up the metadata: {error}", file=sys.stderr)
         return 1
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2)

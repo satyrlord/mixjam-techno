@@ -15,6 +15,7 @@ Lane names come from the song's `.meta.json`. Without it, each used track is
 its own lane. render.py writes the same table as audible.txt from its lane
 renders. Run this tool alone only for a song that render.py did not render.
 """
+import argparse
 import json
 import os
 import sys
@@ -150,12 +151,13 @@ def audibility(document, groups, rate, mix, part_of, jobs=None):
 
 
 def main():
-    args = sys.argv[1:]
-    if len(args) < 2 or args[0].startswith('-'):
-        raise SystemExit(__doc__)
-    song_path, out = Path(args[0]), Path(args[1])
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('song', type=Path)
+    parser.add_argument('out', type=Path)
+    parser.add_argument('--jobs', type=int, metavar='N')
+    arguments = parser.parse_args()
+    song_path, out, jobs = arguments.song, arguments.out, arguments.jobs
     out.mkdir(parents=True, exist_ok=True)
-    jobs = int(args[args.index('--jobs') + 1]) if '--jobs' in args else None
     document = json.loads(song_path.read_text(encoding='utf-8'))
     groups = render.lane_groups(document, render.read_meta(song_path))
     lanes = render.render_lanes(document, groups, out, jobs)

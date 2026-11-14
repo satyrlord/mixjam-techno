@@ -13,6 +13,7 @@
 //! The same key tracks feed the master pedals' and the FX buses' keys
 //! (`Keys`): a dynamics pedal or an FX ducker whose key names a track
 //! listens to that track instead of its own input.
+use crate::master::dsp::flush32;
 use crate::master::{KnobRange, range, ratio_range};
 use serde::{Deserialize, Serialize};
 
@@ -170,7 +171,7 @@ impl Run {
     /// larger channel's magnitude). The state carries from frame to frame.
     #[inline]
     pub(crate) fn gain(&self, key: f32, state: &mut State) -> f32 {
-        state.peak = key.max(state.peak * self.fall);
+        state.peak = flush32(key.max(state.peak * self.fall));
         let level = 20.0 * state.peak.max(1e-9).log10();
         let target = (level - self.threshold_db).clamp(0.0, self.depth_db);
         let speed = if target > state.reduction {

@@ -109,7 +109,9 @@ impl CoverCache {
             let _ = fs::remove_file(self.folder.join(format!("{id}.{}", other.extension())));
         }
         touch(&path);
-        self.evict(&path)?;
+        // Trimming is best effort: a cover that another program holds open stays
+        // until a later store, and the cover just written is still usable.
+        self.evict(&path);
         Ok(path)
     }
 
@@ -142,21 +144,19 @@ impl CoverCache {
     }
 
     /// Remove the least recently viewed covers until the cache fits its limit.
-    /// The cover at `keep` stays.
-    fn evict(&self, keep: &Path) -> Result<(), String> {
+    /// The cover at `keep` stays, and so does any cover that cannot be removed:
+    /// the loop goes on with the next-oldest one.
+    fn evict(&self, keep: &Path) {
         let entries = self.entries();
         let mut total: u64 = entries.iter().map(|entry| entry.1).sum();
         for (path, size, _) in entries {
             if total <= self.limit {
                 break;
             }
-            if path != keep {
-                fs::remove_file(&path)
-                    .map_err(|error| format!("Cannot trim the cover cache: {error}"))?;
+            if path != keep && fs::remove_file(&path).is_ok() {
                 total -= size;
             }
         }
-        Ok(())
     }
 
     /// The number of cached covers and their total size in bytes.

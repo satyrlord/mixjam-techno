@@ -9,15 +9,16 @@ use std::sync::Arc;
 
 /// The safety limiters' lookahead: 5 ms. Every return is this much late,
 /// and the effects shorten their own delays by as much.
-pub(crate) const LOOKAHEAD: usize = 220;
+pub(crate) const LOOKAHEAD: usize = RATE / 200;
 /// The longest tail that playback and export let ring after the song: one
 /// minute. A delay with feedback above 100% never dies away by itself.
-pub(crate) const TAIL_LIMIT: u64 = 60 * 44_100;
+pub(crate) const TAIL_LIMIT: u64 = 60 * RATE as u64;
 /// A cut (Clear Tail or a change of effect) fades the return out over 12 ms.
-const CUT: usize = 529;
+const CUT: usize = RATE * 12 / 1000;
 /// A bus sleeps after two seconds without input or internal activity.
 /// Delay buses also wait long enough for any pending repeat to arrive.
-const SLEEP_AFTER: usize = 2 * 44_100;
+const SLEEP_AFTER: usize = 2 * RATE;
+const RATE: usize = crate::audio::Mix::SAMPLE_RATE as usize;
 const SILENCE: f64 = 1e-6;
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -1,10 +1,28 @@
 //! Packed container and dictionary expansion recovered from the installed corpus.
 //!
 //! The original DLL table and decoder were called by an isolated x86 oracle.
-//! `original_pcm` matches that decoder with an empty destination mix buffer.
+//! `decode` is the one decoder. Archive records and stand-alone files differ
+//! in two documented ways, which `DecodeOptions` names: where the predictor
+//! starts, and what happens when the stream ends before the header's count.
+//! Both modes validate every opcode they read.
 
 use std::fmt;
 
+/// The largest packed sample, as an archive record or a stand-alone file, in
+/// bytes. Every installed sample is far smaller. The bound stops a damaged
+/// catalog or file from making a reader load a huge file.
+pub const MAX_PACKED_BYTES: u64 = 64 * 1024 * 1024;
+
+/// The longest header that a packed sample can have: the signature, a length
+/// byte, up to 255 bytes of metadata, and the seven-byte audio header. A reader
+/// that needs only the header can read this many bytes of a record.
+pub const MAX_HEADER_BYTES: usize = 5 + 255 + 7;
+
+/// The largest sample count that a packed header may declare: about 25 minutes
+/// of 44.1 kHz audio. The header field holds up to four billion, and every
+/// installed sample is far shorter. The bound stops a damaged header from
+/// asking for a silent tail of many gigabytes. Decoding allocates only the
+/// audio that the stream produces, and the declared tail when it is padded.
 pub const MAX_DECODED_SAMPLES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,8 +34,8 @@ pub enum HeaderKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackedHeader {
     pub kind: HeaderKind,
-    /// Latin-1 mapping preserves each metadata byte as the same Unicode value.
-    pub metadata_text: String,
+    /// The metadata bytes, without the zero bytes that end them.
+    pub metadata: Vec<u8>,
     pub decoded_samples: usize,
     /// Raw initial value; the original loader doubles it with 16-bit wrapping.
     pub unknown_field: u16,
@@ -25,27 +43,21 @@ pub struct PackedHeader {
 }
 
 impl PackedHeader {
-    pub fn metadata_fields(&self) -> Vec<&str> {
-        self.metadata_text.lines().map(str::trim).collect()
+    /// The metadata as text. The Latin-1 mapping keeps each byte as the same
+    /// Unicode value.
+    pub fn metadata_text(&self) -> String {
+        self.metadata.iter().map(|&b| char::from(b)).collect()
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExpandedCodes {
-    pub codes: Vec<u8>,
-    pub consumed_bytes: usize,
-    pub padded_samples: usize,
-    pub clipped_samples: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedPacked {
-    pub header: PackedHeader,
-    pub codes: Vec<u8>,
-    pub consumed_bytes: usize,
-    pub trailing_bytes: usize,
-    pub padded_samples: usize,
-    pub clipped_samples: usize,
+    pub fn metadata_fields(&self) -> Vec<String> {
+        self.metadata_text()
+            .lines()
+            .map(|line| line.trim().to_owned())
+            .collect()
+    }
+    /// The predictor value that the original file loader starts from.
+    fn header_word(&self) -> i16 {
+        (self.unknown_field as i16).wrapping_mul(2)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +65,6 @@ pub enum PackedError {
     InvalidHeader,
     MissingAudioMarker,
     AllocationLimit { requested: usize },
-    ImpossibleExpansion { requested: usize, compressed: usize },
     TruncatedOpcode { offset: usize },
     ReservedOpcode { offset: usize, opcode: u8 },
     InvalidDictionaryKey { offset: usize, key: u8 },
@@ -69,14 +80,6 @@ impl fmt::Display for PackedError {
             Self::AllocationLimit { requested } => write!(
                 f,
                 "Packed sample count exceeds allocation limit: {requested}"
-            ),
-            Self::ImpossibleExpansion {
-                requested,
-                compressed,
-            } => write!(
-                f,
-                "Packed sample count {requested} exceeds expansion bound for {compressed} \
-                 compressed bytes"
             ),
             Self::TruncatedOpcode { offset } => {
                 write!(f, "Incomplete packed opcode at byte {offset}")
@@ -129,11 +132,66 @@ pub fn parse_header(data: &[u8]) -> Result<PackedHeader, PackedError> {
     }
     Ok(PackedHeader {
         kind,
-        metadata_text: metadata.iter().map(|&b| char::from(b)).collect(),
+        metadata: metadata.to_vec(),
         decoded_samples,
         unknown_field: u16::from_le_bytes(audio_header[5..7].try_into().unwrap()),
         audio_offset: marker + 7,
     })
+}
+
+/// Where the predictor starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartState {
+    /// An archive record starts at zero. The channel state of the original
+    /// decoder supplies the start, and the header word is unused.
+    Zero,
+    /// The original file loader starts from the doubled header word. A header
+    /// with metadata also hands the loader's pending initial sample out as
+    /// the first sample, so the audio is one sample longer than the stream.
+    /// An audio-only header has no such sample.
+    HeaderWord,
+}
+
+/// What happens when the stream ends or passes the header's sample count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tail {
+    /// The audio is exactly the header's count. The last run is cut at the
+    /// count, and a stream that ends early is padded with silence (zero
+    /// samples, not a held level).
+    PadSilence,
+    /// The audio ends at the last complete opcode. The last run stays whole,
+    /// even past the header's count, and nothing is invented for a stream
+    /// that ends early.
+    PhysicalEnd,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeOptions {
+    pub start: StartState,
+    pub tail: Tail,
+}
+
+impl DecodeOptions {
+    /// An archive record: zero start, padded to the header's count.
+    pub const ARCHIVE: Self = Self {
+        start: StartState::Zero,
+        tail: Tail::PadSilence,
+    };
+    /// A stand-alone file: header-word start, ends at the last opcode.
+    pub const FILE: Self = Self {
+        start: StartState::HeaderWord,
+        tail: Tail::PhysicalEnd,
+    };
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decoded {
+    pub header: PackedHeader,
+    /// 16-bit mono audio at the container's own rate.
+    pub samples: Vec<i16>,
+    /// How many samples the stream itself produced. The loader's initial
+    /// sample and the silence pad are not counted.
+    pub produced: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -142,25 +200,22 @@ struct Snippet {
     len: usize,
 }
 
-/// Expand codes, allowing a diagnosed tail pad of at most four neutral codes.
-/// The expansion is bounded before allocating. Malformed opcodes are errors.
-pub fn expand(compressed: &[u8], decoded_samples: usize) -> Result<ExpandedCodes, PackedError> {
-    if decoded_samples > MAX_DECODED_SAMPLES {
-        return Err(PackedError::AllocationLimit {
-            requested: decoded_samples,
-        });
-    }
-    if decoded_samples > compressed.len().saturating_mul(5).saturating_add(4) {
-        return Err(PackedError::ImpossibleExpansion {
-            requested: decoded_samples,
-            compressed: compressed.len(),
-        });
-    }
+/// Walk the opcodes of `compressed` until `nominal` samples exist or the input
+/// ends, and hand each run of delta codes to `sink`. Every opcode that is read
+/// is validated: a reserved opcode, a dictionary key outside `1..=0xf3`, an
+/// undefined key and a truncated opcode are all errors. Slot 0 always holds
+/// five unchanged codes. The result is the pair of bytes consumed and samples
+/// produced.
+fn walk(
+    compressed: &[u8],
+    nominal: usize,
+    tail: Tail,
+    mut sink: impl FnMut(&[u8]),
+) -> Result<(usize, usize), PackedError> {
     let mut dictionary = [Snippet::default(); 256];
-    let mut codes = Vec::with_capacity(decoded_samples);
     let mut pos = 0;
-    let mut clipped_samples = 0;
-    while pos < compressed.len() && codes.len() < decoded_samples {
+    let mut produced = 0;
+    while pos < compressed.len() && produced < nominal {
         let start = pos;
         let opcode = compressed[pos];
         pos += 1;
@@ -201,47 +256,59 @@ pub fn expand(compressed: &[u8], decoded_samples: usize) -> Result<ExpandedCodes
                 return Err(PackedError::ReservedOpcode {
                     offset: start,
                     opcode,
-                })
+                });
             }
             key => {
                 let entry = dictionary[key as usize];
-                if entry.len > 0 {
-                    entry
-                } else {
+                if entry.len == 0 {
                     return Err(PackedError::UndefinedDictionaryKey { offset: start, key });
                 }
+                entry
             }
         };
-        let count = snippet.len.min(decoded_samples - codes.len());
-        codes.extend_from_slice(&snippet.bytes[..count]);
-        clipped_samples += snippet.len - count;
+        let count = match tail {
+            Tail::PadSilence => snippet.len.min(nominal - produced),
+            Tail::PhysicalEnd => snippet.len,
+        };
+        sink(&snippet.bytes[..count]);
+        produced += count;
     }
-    let padded_samples = decoded_samples - codes.len();
-    if padded_samples > 4 {
-        return Err(PackedError::IncompleteAudio {
-            missing_samples: padded_samples,
-        });
-    }
-    codes.resize(decoded_samples, 0x80);
-    Ok(ExpandedCodes {
-        codes,
-        consumed_bytes: pos,
-        padded_samples,
-        clipped_samples,
-    })
+    Ok((pos, produced))
 }
 
-pub fn decode_file(data: &[u8]) -> Result<DecodedPacked, PackedError> {
+/// Decode one packed archive record or stand-alone file to 16-bit mono audio.
+///
+/// The decoder reserves room only for what the input bytes can produce: no
+/// opcode yields more than five samples. A declared count that the stream
+/// never reaches costs memory only under `Tail::PadSilence`, which pads to it.
+pub fn decode(data: &[u8], options: DecodeOptions) -> Result<Decoded, PackedError> {
     let header = parse_header(data)?;
     let compressed = &data[header.audio_offset..];
-    let expanded = expand(compressed, header.decoded_samples)?;
-    Ok(DecodedPacked {
+    let nominal = header.decoded_samples;
+    let initial = match options.start {
+        StartState::Zero => 0,
+        StartState::HeaderWord => header.header_word(),
+    };
+    let lead = options.start == StartState::HeaderWord && header.kind == HeaderKind::Metadata;
+    let reachable = compressed.len().saturating_mul(5).saturating_add(4);
+    let mut samples = Vec::with_capacity(usize::from(lead) + nominal.min(reachable));
+    if lead {
+        samples.push(initial);
+    }
+    let mut predictor = initial;
+    let (_, produced) = walk(compressed, nominal, options.tail, |codes| {
+        for &code in codes {
+            predictor = predictor.wrapping_add(ORIGINAL_DPCM_STEPS[usize::from(code)]);
+            samples.push(predictor);
+        }
+    })?;
+    if options.tail == Tail::PadSilence {
+        samples.resize(usize::from(lead) + nominal, 0);
+    }
+    Ok(Decoded {
         header,
-        codes: expanded.codes,
-        consumed_bytes: expanded.consumed_bytes,
-        trailing_bytes: compressed.len() - expanded.consumed_bytes,
-        padded_samples: expanded.padded_samples,
-        clipped_samples: expanded.clipped_samples,
+        samples,
+        produced,
     })
 }
 
@@ -266,30 +333,33 @@ pub const ORIGINAL_DPCM_STEPS: [i16; 256] = [
     19082, 19778, 20494, 21232, 21992, 22776, 23582, 24412, 25266,
 ];
 
-/// Recover the original mono channel contribution into an empty mix buffer.
-/// The original accumulator wraps at 16 bits. An unwritten short tail stays
-/// zero in the destination, rather than repeating the final accumulator.
-pub fn original_pcm(decoded: &DecodedPacked) -> Vec<i16> {
-    let mut accumulator = (decoded.header.unknown_field as i16).wrapping_mul(2);
-    let written_samples = decoded.codes.len().saturating_sub(decoded.padded_samples);
-    decoded
-        .codes
-        .iter()
-        .enumerate()
-        .map(|(index, &code)| {
-            if index < written_samples {
-                accumulator = accumulator.wrapping_add(ORIGINAL_DPCM_STEPS[code as usize]);
-                accumulator
-            } else {
-                0
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A record with empty metadata: the signature, length 0, the audio
+    /// marker, the declared count and the header word, then the stream.
+    fn record(frames: u32, header_word: i16, stream: &[u8]) -> Vec<u8> {
+        let mut bytes = b"t\x50xD\0T".to_vec();
+        bytes.extend(frames.to_le_bytes());
+        bytes.extend(header_word.to_le_bytes());
+        bytes.extend(stream);
+        bytes
+    }
+    fn archive(frames: u32, header_word: i16, stream: &[u8]) -> Result<Vec<i16>, PackedError> {
+        decode(&record(frames, header_word, stream), DecodeOptions::ARCHIVE)
+            .map(|decoded| decoded.samples)
+    }
+    fn file(frames: u32, header_word: i16, stream: &[u8]) -> Result<Vec<i16>, PackedError> {
+        decode(&record(frames, header_word, stream), DecodeOptions::FILE)
+            .map(|decoded| decoded.samples)
+    }
+    /// The delta codes that a stream expands to.
+    fn codes(stream: &[u8], nominal: usize, tail: Tail) -> Result<Vec<u8>, PackedError> {
+        let mut out = Vec::new();
+        walk(stream, nominal, tail, |run| out.extend_from_slice(run))?;
+        Ok(out)
+    }
 
     #[test]
     fn parses_latin1_metadata_and_audio_only_header() {
@@ -297,7 +367,8 @@ mod tests {
             b't', b'P', b'x', b'D', 4, 0xe9, 13, 10, 0, b'T', 3, 0, 0, 0, 0xfe, 0xff, 0x80,
         ];
         let header = parse_header(&bytes).unwrap();
-        assert_eq!(header.metadata_text, "é\r\n");
+        assert_eq!(header.metadata_text(), "é\r\n");
+        assert_eq!(header.metadata, [0xe9, 13, 10]);
         assert_eq!(header.unknown_field, 65534);
         assert_eq!(header.audio_offset, 16);
         assert_eq!(
@@ -319,6 +390,16 @@ mod tests {
             parse_header(&[84, 255, 255, 255, 255, 0, 0]),
             Err(PackedError::AllocationLimit { .. })
         ));
+        // The bound is the count that a header may declare, not a byte total.
+        let at_bound = record(MAX_DECODED_SAMPLES as u32, 0, &[]);
+        assert!(parse_header(&at_bound).is_ok());
+        let past_bound = record(MAX_DECODED_SAMPLES as u32 + 1, 0, &[]);
+        for options in [DecodeOptions::ARCHIVE, DecodeOptions::FILE] {
+            assert!(matches!(
+                decode(&past_bound, options),
+                Err(PackedError::AllocationLimit { .. })
+            ));
+        }
     }
 
     #[test]
@@ -350,62 +431,148 @@ mod tests {
             0xf5, 0x10, 0x81, 0x7f, 0x10, 0xf4, 0x10, 0x82, 0x10, 0xff, 0x10,
         ];
         assert_eq!(
-            expand(&input, 7).unwrap().codes,
+            codes(&input, 7, Tail::PadSilence).unwrap(),
             [0x81, 0x7f, 0x81, 0x7f, 0x82, 0x82, 0x10]
         );
     }
 
     #[test]
-    fn every_dictionary_length_and_tail_diagnostic() {
+    fn every_dictionary_length_and_both_tails() {
         for len in 1..=5 {
             let mut input = vec![0xf3 + len as u8, 42];
             input.extend(1..=len as u8);
             input.push(42);
             let mut expected: Vec<u8> = (1..=len as u8).collect();
             expected.extend(1..=len as u8);
-            assert_eq!(expand(&input, len * 2).unwrap().codes, expected);
+            assert_eq!(codes(&input, len * 2, Tail::PadSilence).unwrap(), expected);
+            assert_eq!(codes(&input, len * 2, Tail::PhysicalEnd).unwrap(), expected);
         }
-        let padded = expand(&[0xff, 0x81], 4).unwrap();
-        assert_eq!(padded.codes, [0x81, 0x80, 0x80, 0x80]);
-        assert_eq!(padded.padded_samples, 3);
-        let clipped = expand(&[0], 3).unwrap();
-        assert_eq!(clipped.codes, [0x80; 3]);
-        assert_eq!(clipped.clipped_samples, 2);
+        // Slot 0 is five unchanged codes. The last run is cut at the count
+        // under PadSilence and stays whole under PhysicalEnd.
+        assert_eq!(codes(&[0], 3, Tail::PadSilence).unwrap(), [0x80; 3]);
+        assert_eq!(codes(&[0], 3, Tail::PhysicalEnd).unwrap(), [0x80; 5]);
+        // A stream that ends early produces only what it holds.
+        assert_eq!(codes(&[0xff, 0x81], 4, Tail::PadSilence).unwrap(), [0x81]);
+        assert_eq!(codes(&[0xff, 0x81], 4, Tail::PhysicalEnd).unwrap(), [0x81]);
     }
 
     #[test]
-    fn malformed_streams_are_errors() {
+    fn archive_output_starts_at_zero_and_pads_silence() {
+        // One literal, one defined pair, its reuse, and a literal.
+        assert_eq!(
+            archive(6, 0, &[0xff, 90, 0xf5, 1, 204, 52, 1, 0xff, 128]).unwrap(),
+            [-430, 2882, -430, 2882, -430, -430]
+        );
+        // The header word does not move the start of an archive record.
+        assert_eq!(archive(5, 123, &[0]).unwrap(), [0; 5]);
+        assert_eq!(archive(1, 0, &[]).unwrap(), [0]);
+        assert_eq!(archive(2, 37, &[0xff, 129]).unwrap(), [2, 0]);
+        // The pad is zero samples, not the last level held.
+        assert_eq!(archive(4, 0, &[0xff, 255]).unwrap(), [25266, 0, 0, 0]);
+        // The last run is cut at the count.
+        let stream = [0xf8, 1, 0x81, 0x82, 0x80, 0x7f, 0x83, 1];
+        assert_eq!(
+            archive(8, 0, &stream).unwrap(),
+            [2, 6, 6, 4, 10, 12, 16, 16]
+        );
+        let decoded = decode(&record(8, 0, &stream), DecodeOptions::ARCHIVE).unwrap();
+        assert_eq!(decoded.produced, 8);
+        let short = decode(&record(4, 0, &[0xff, 255]), DecodeOptions::ARCHIVE).unwrap();
+        assert_eq!(short.produced, 1);
+        assert_eq!(short.samples.len(), 4);
+    }
+
+    #[test]
+    fn predictor_wraps_without_saturation() {
+        assert_eq!(
+            archive(2, 0, &[0xff, 255, 0xff, 255]).unwrap(),
+            [25266, -15004]
+        );
+        assert_eq!(
+            file(1, i16::MAX, &[0xff, 255]).unwrap(),
+            [-2, 25264],
+            "the doubled header word wraps too"
+        );
+    }
+
+    #[test]
+    fn file_output_starts_at_the_header_word_and_ends_at_the_last_opcode() {
+        // The header word 37 doubles to 74 and leads the audio.
+        assert_eq!(file(4, 37, &[255, 129]).unwrap(), [74, 76]);
+        // The last run stays whole, past the count of 8.
+        let stream = [0xf8, 1, 0x81, 0x82, 0x80, 0x7f, 0x83, 1];
+        assert_eq!(
+            file(8, 37, &stream).unwrap(),
+            [74, 76, 80, 80, 78, 84, 86, 90, 90, 88, 94]
+        );
+        let decoded = decode(&record(8, 37, &stream), DecodeOptions::FILE).unwrap();
+        assert_eq!(decoded.produced, 10);
+        // The same bytes decode differently as an archive record.
+        assert_ne!(
+            archive(4, 37, &[255, 129]).unwrap(),
+            file(4, 37, &[255, 129]).unwrap()
+        );
+        // A declared count that the stream never reaches allocates nothing.
+        let huge = record(MAX_DECODED_SAMPLES as u32, 37, &[255, 129]);
+        let decoded = decode(&huge, DecodeOptions::FILE).unwrap();
+        assert_eq!(decoded.samples, [74, 76]);
+        assert!(decoded.samples.capacity() < 64);
+    }
+
+    #[test]
+    fn an_audio_only_header_has_no_loader_sample() {
+        let with_metadata = record(2, 37, &[255, 129, 255, 128]);
+        let audio_only = &with_metadata[5..];
+        let decoded = decode(audio_only, DecodeOptions::FILE).unwrap();
+        assert_eq!(decoded.header.kind, HeaderKind::AudioOnly);
+        assert_eq!(decoded.samples, [76, 76]);
+        assert_eq!(
+            decode(&with_metadata, DecodeOptions::FILE).unwrap().samples,
+            [74, 76, 76]
+        );
+    }
+
+    #[test]
+    fn malformed_streams_are_errors_in_both_modes() {
+        let bad: [(&[u8], u32); 10] = [
+            (&[0xff], 1),
+            (&[0xf8, 1, 2], 5),
+            (&[0xf4, 0, 1], 1),
+            (&[0xf4, 0xf4, 1], 1),
+            (&[0xf5, 0, 1, 2], 2),
+            (&[0xf9], 1),
+            (&[0xfa, 1, 2, 3, 4, 5, 6], 1),
+            (&[0xfe], 1),
+            (&[1], 1),
+            (&[0xff, 129, 0xff], 100),
+        ];
+        for (stream, frames) in bad {
+            assert!(archive(frames, 0, stream).is_err(), "archive {stream:?}");
+            assert!(file(frames, 0, stream).is_err(), "file {stream:?}");
+        }
         assert!(matches!(
-            expand(&[0xff], 1),
+            archive(1, 0, &[0xf9]),
+            Err(PackedError::ReservedOpcode { opcode: 0xf9, .. })
+        ));
+        assert!(matches!(
+            archive(1, 0, &[0xfa]),
+            Err(PackedError::ReservedOpcode { opcode: 0xfa, .. })
+        ));
+        assert!(matches!(
+            archive(2, 0, &[0xf5, 0, 1, 2]),
+            Err(PackedError::InvalidDictionaryKey { key: 0, .. })
+        ));
+        assert!(matches!(
+            archive(1, 0, &[1]),
+            Err(PackedError::UndefinedDictionaryKey { key: 1, .. })
+        ));
+        assert!(matches!(
+            archive(1, 0, &[0xff]),
             Err(PackedError::TruncatedOpcode { .. })
         ));
-        assert!(matches!(
-            expand(&[0xf8, 1, 2], 5),
-            Err(PackedError::TruncatedOpcode { .. })
-        ));
-        assert!(matches!(
-            expand(&[0xf4, 0, 1], 1),
-            Err(PackedError::InvalidDictionaryKey { .. })
-        ));
-        assert!(matches!(
-            expand(&[0xf9], 1),
-            Err(PackedError::ReservedOpcode { .. })
-        ));
-        assert!(matches!(
-            expand(&[1], 1),
-            Err(PackedError::UndefinedDictionaryKey { .. })
-        ));
-        assert!(matches!(
-            expand(&[0xff, 1], 6),
-            Err(PackedError::IncompleteAudio { .. })
-        ));
-        assert!(matches!(
-            expand(&[], 5),
-            Err(PackedError::ImpossibleExpansion { .. })
-        ));
-        assert!(matches!(
-            expand(&[], MAX_DECODED_SAMPLES + 1),
-            Err(PackedError::AllocationLimit { .. })
-        ));
+        // A malformed opcode after the count is never read.
+        assert!(archive(1, 0, &[0xff, 128, 0xf9]).is_ok());
+        assert!(decode(&[], DecodeOptions::ARCHIVE).is_err());
+        assert!(decode(b"t\x50xD", DecodeOptions::FILE).is_err());
     }
 }

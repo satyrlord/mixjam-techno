@@ -250,7 +250,7 @@ impl MixJamApp {
             ducker: settings.ducker,
         };
         // A replaced project starts new dial gestures.
-        let generation = self.master_view_generation;
+        let generation = self.boards.master_view_generation;
         let mut open = true;
         let mut action = Action::None;
         // The shell's margins and bay take 36 by 12 points of the size.
@@ -276,15 +276,15 @@ impl MixJamApp {
             Action::Turn(channel) => (channel, false),
             Action::Switch(channel) => (channel, true),
         };
-        let mut tracks = self.session.project().tracks.clone();
-        tracks[track].eq = changed.eq;
-        tracks[track].drive = changed.drive;
-        tracks[track].compressor = changed.compressor;
-        tracks[track].width = changed.width;
-        tracks[track].ducker = changed.ducker;
-        let command = EditCommand::SetMixer {
-            tracks,
-            master_gain: self.session.project().master_gain,
+        let mut edited = self.session.project().tracks[track].clone();
+        edited.eq = changed.eq;
+        edited.drive = changed.drive;
+        edited.compressor = changed.compressor;
+        edited.width = changed.width;
+        edited.ducker = changed.ducker;
+        let command = EditCommand::SetTrack {
+            index: track,
+            track: Box::new(edited),
         };
         let result = if discrete {
             self.session.edit_discrete(command)

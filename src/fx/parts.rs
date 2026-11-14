@@ -1,6 +1,6 @@
 //! Parts that the delay and the reverb share. Delay lines live on the heap
 //! and are sized when an effect is built, so processing never allocates.
-use crate::master::dsp::{RATE, db_to_gain, flush, gain_to_db, pole};
+use crate::master::dsp::{MovingMin, RATE, db_to_gain, flush, gain_to_db, pole};
 use std::f64::consts::{PI, TAU};
 
 /// A delay line of one channel, read at fractional positions with cubic
@@ -255,41 +255,9 @@ impl Glide {
     }
 }
 
-/// The smallest of the last `span` values pushed: a queue of the values
-/// that can still become the smallest.
-struct MovingMin {
-    values: Box<[f64]>,
-    times: Box<[u32]>,
-    head: usize,
-    len: usize,
-    now: u32,
-}
-impl MovingMin {
-    fn new(span: usize) -> Self {
-        Self {
-            values: vec![0.0; span].into_boxed_slice(),
-            times: vec![0; span].into_boxed_slice(),
-            head: 0,
-            len: 0,
-            now: 0,
-        }
-    }
-    fn push(&mut self, value: f64) -> f64 {
-        let n = self.values.len();
-        if self.len > 0 && self.now.wrapping_sub(self.times[self.head]) as usize >= n {
-            self.head = (self.head + 1) % n;
-            self.len -= 1;
-        }
-        while self.len > 0 && self.values[(self.head + self.len - 1) % n] >= value {
-            self.len -= 1;
-        }
-        let at = (self.head + self.len) % n;
-        (self.values[at], self.times[at]) = (value, self.now);
-        self.len += 1;
-        self.now = self.now.wrapping_add(1);
-        self.values[self.head]
-    }
-}
+/// The frames whose gain needs the safety limiter compares: its lookahead
+/// and the frame now arriving.
+const NEEDS: usize = super::LOOKAHEAD + 1;
 
 /// A return's safety limiter: stereo-linked, -1 dBFS ceiling, `LOOKAHEAD`
 /// frames of lookahead, and a 100 ms release. It always delays the return
@@ -297,7 +265,7 @@ impl MovingMin {
 /// effects shorten their own delays by as much.
 pub(super) struct SafetyLimiter {
     delays: [Line; 2],
-    needs: MovingMin,
+    needs: MovingMin<NEEDS>,
     held: f64,
     ramp: Box<[f64]>,
     ramp_at: usize,
@@ -311,7 +279,7 @@ impl SafetyLimiter {
         let lookahead = super::LOOKAHEAD;
         Self {
             delays: [Line::new(lookahead), Line::new(lookahead)],
-            needs: MovingMin::new(lookahead + 1),
+            needs: MovingMin::EMPTY,
             held: 1.0,
             ramp: vec![1.0; lookahead].into_boxed_slice(),
             ramp_at: 0,
@@ -321,9 +289,7 @@ impl SafetyLimiter {
     }
     pub(super) fn clear(&mut self) {
         self.delays.iter_mut().for_each(Line::clear);
-        self.needs.head = 0;
-        self.needs.len = 0;
-        self.needs.now = 0;
+        self.needs = MovingMin::EMPTY;
         self.held = 1.0;
         self.ramp.fill(1.0);
         self.ramp_at = 0;
@@ -345,7 +311,7 @@ impl SafetyLimiter {
         } else {
             1.0
         };
-        let lowest = self.needs.push(need);
+        let lowest = self.needs.push(need, NEEDS);
         self.held = if lowest < self.held {
             lowest
         } else {
@@ -396,9 +362,12 @@ mod tests {
 
     #[test]
     fn moving_min_keeps_the_oldest_live_value_when_full() {
-        let mut minimum = MovingMin::new(4);
+        let mut minimum = MovingMin::<4>::EMPTY;
         for index in 0usize..20 {
-            assert_eq!(minimum.push(index as f64), index.saturating_sub(3) as f64);
+            assert_eq!(
+                minimum.push(index as f64, 4),
+                index.saturating_sub(3) as f64
+            );
         }
     }
 

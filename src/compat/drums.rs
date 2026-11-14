@@ -438,6 +438,12 @@ pub(super) fn prepare_kit<'a>(
     Ok(PreparedKit { pads, volume })
 }
 
+/// The longest bar that a drum pattern renders, in frames at 44.1 kHz: about
+/// 12 minutes, which is a tempo of a third of a beat per minute. No song has
+/// a tempo that slow; a file that asks for it is damaged, and the bound stops
+/// it from asking for a render of any size.
+const MAX_BAR_FRAMES: f64 = 32_000_000.0;
+
 pub(super) fn render(prepared: &PreparedKit, pattern: &Pattern, bpm: f64) -> Result<Pcm, String> {
     if !bpm.is_finite() || bpm <= 0.0 {
         return Err("The native drum tempo must be finite and positive.".into());
@@ -445,9 +451,9 @@ pub(super) fn render(prepared: &PreparedKit, pattern: &Pattern, bpm: f64) -> Res
     if !matches!(prepared.pads.len(), 10 | 16) || prepared.pads.len() != pattern.masks.len() {
         return Err("The native drum kit and pattern pad counts differ.".into());
     }
-    let rate = 44100;
+    let rate = legacy_format::NATIVE_SAMPLE_RATE;
     let exact_bar_frames = f64::from(rate) * 240.0 / bpm;
-    if !(1.0..=32_000_000.0).contains(&exact_bar_frames) {
+    if !(1.0..=MAX_BAR_FRAMES).contains(&exact_bar_frames) {
         return Err("The native drum pattern duration is not supported.".into());
     }
     let frames = exact_bar_frames.round() as usize;

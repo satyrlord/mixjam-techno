@@ -1860,7 +1860,7 @@ dependencies = [
 
 [[package]]
 name = "mixjam-techno"
-version = "1.97.0"
+version = "1.98.0"
 dependencies = [
  "cpal",
  "deunicode",
@@ -1870,7 +1870,6 @@ dependencies = [
  "image",
  "legacy-format",
  "rfd",
- "rodio",
  "serde",
  "serde_json",
  "sha2",
@@ -2657,15 +2656,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rodio"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ceb6607dd738c99bc8cb28eff249b7cd5c8ec88b9db96c0608c1480d140fb1"
-dependencies = [
- "cpal",
 ]
 
 [[package]]

@@ -1,6 +1,10 @@
 //! Shared file-size policy for original MIX songs, including embedded audio.
 use std::{fs::File, io::Read, path::Path};
 
+/// The largest `.mix` file that the importer reads, in bytes. It is a stated
+/// limit of the importer, not of the original products: their songs are a few
+/// megabytes, even with embedded audio. The file is read whole, and the bound
+/// stops a file that is not a song, or a damaged one, from filling memory.
 pub(crate) const MIX_BYTE_LIMIT: usize = 500_000_000;
 const SIZE_ERROR: &str = "The MIX file exceeds the 500 MB limit (500,000,000 bytes).";
 

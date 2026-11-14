@@ -16,7 +16,8 @@ pub fn trim(input: &Pcm, start_frame: u64, end_frame: u64) -> Result<Pcm, String
     })
 }
 
-/// An edited sound is saved as a WAV and read again, so it has the WAV limit.
+/// An edited sound is saved as a WAV, so it can be as long as a WAV file can
+/// hold and no longer. This is the format's limit, not a choice.
 fn fits_a_wav(frames: usize, channels: usize) -> bool {
     frames
         .checked_mul(channels)
@@ -343,11 +344,15 @@ fn overlap_add(
 mod tests {
     use super::*;
     #[test]
-    fn an_edited_sound_can_be_as_large_as_an_importable_wav() {
-        assert!(fits_a_wav(64_000_000, 1));
-        assert!(!fits_a_wav(64_000_001, 1));
-        assert!(fits_a_wav(32_000_000, 2));
-        assert!(!fits_a_wav(32_000_001, 2));
+    fn an_edited_sound_can_be_as_long_as_a_wav_file_holds() {
+        let most = crate::audio::MAX_WAV_SAMPLES;
+        assert!(fits_a_wav(most, 1));
+        assert!(!fits_a_wav(most + 1, 1));
+        assert!(fits_a_wav(most / 2, 2));
+        assert!(!fits_a_wav(most / 2 + 1, 2));
+        // Past the fixed limits that earlier versions had.
+        assert!(fits_a_wav(64_000_001, 1));
+        assert!(fits_a_wav(32_000_001, 2));
         assert!(!fits_a_wav(usize::MAX, 2));
     }
     fn sine(frames: usize) -> Pcm {

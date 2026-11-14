@@ -23,11 +23,23 @@ const WRAPPED_CHIPS_HEIGHT: f32 = 440.0;
 /// stay small rather than show their noise floor.
 const THUMBNAIL_FLOOR: f32 = 0.05;
 
+/// The Sounds panel's search, filters, and sort, and the list they made.
+#[derive(Default)]
+pub(super) struct SoundsPanel {
+    pub(super) group: Option<String>,
+    pub(super) product: Option<Product>,
+    pub(super) sort: PaletteSort,
+    /// The Sounds panel's sort runs from its last item to its first.
+    pub(super) descending: bool,
+    pub(super) search: String,
+    pub(super) cache: Option<PaletteCache>,
+}
+
 impl MixJamApp {
     /// Whether the open Sounds panel shows: chosen, not maximised, and given
     /// the room it needs.
     pub(super) fn sounds_panel_open(&self) -> bool {
-        self.room.sounds
+        self.panels.room.sounds
     }
 
     /// Open the Sounds panel. In a small window the Inspector or the lower
@@ -114,17 +126,17 @@ impl MixJamApp {
         });
         let chips = |app: &mut Self, ui: &mut egui::Ui| {
             let mut chosen = None;
-            if category_chip(ui, "All", None, app.group.is_none()).clicked() {
+            if category_chip(ui, "All", None, app.sounds.group.is_none()).clicked() {
                 chosen = Some(None);
             }
             for name in GROUPS {
-                let active = app.group.as_deref() == Some(name);
+                let active = app.sounds.group.as_deref() == Some(name);
                 if category_chip(ui, name, Some(group_color(name)), active).clicked() {
                     chosen = Some(Some(name.to_owned()));
                 }
             }
             if let Some(group) = chosen {
-                app.group = group;
+                app.sounds.group = group;
             }
         };
         ui.scope(|ui| {
@@ -166,13 +178,13 @@ impl MixJamApp {
                                     sample,
                                     product,
                                     &peaks,
-                                    self.selected_sample == Some(sample.id),
+                                    self.selection.sample == Some(sample.id),
                                     row_width,
                                 )
                             })
                             .inner;
                         if self.capture_view_is("sample-details")
-                            && self.selected_sample == Some(sample.id)
+                            && self.selection.sample == Some(sample.id)
                         {
                             response.show_tooltip_text(sample_details(sample, product));
                         }
@@ -189,19 +201,19 @@ impl MixJamApp {
     pub(super) fn sound_actions(&mut self, ui: &egui::Ui, id: u32, response: &Response) {
         let place = response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if response.clicked() {
-            self.selected_sample = Some(id);
-            self.place_on_click = true;
+            self.selection.sample = Some(id);
+            self.selection.place_on_click = true;
         }
         if place {
-            self.place(id, self.armed_track, self.session.cursor_tick());
+            self.place(id, self.recording.track, self.session.cursor_tick());
         }
         if response.double_clicked() {
             self.preview(id);
         }
         if response.drag_started() {
-            self.selected_sample = Some(id);
-            self.place_on_click = true;
-            self.drag = Some(DragItem::Sample(id));
+            self.selection.sample = Some(id);
+            self.selection.place_on_click = true;
+            self.gestures.drag = Some(DragItem::Sample(id));
         }
     }
 
@@ -221,16 +233,16 @@ impl MixJamApp {
                 self.open_sample_libraries(ui.ctx());
             }
         } else if action_button(ui, "Clear filters", false).clicked() {
-            self.search.clear();
-            self.group = None;
-            self.palette_product = None;
+            self.sounds.search.clear();
+            self.sounds.group = None;
+            self.sounds.product = None;
         }
     }
 
     pub(super) fn sound_search(&mut self, ui: &mut egui::Ui, width: f32) {
         name_control(
             ui.add(
-                egui::TextEdit::singleline(&mut self.search)
+                egui::TextEdit::singleline(&mut self.sounds.search)
                     // The workspace overrides text color; a hint needs its own.
                     .hint_text(egui::RichText::new("Find a sound").color(roles().muted))
                     .desired_width(width),
@@ -243,16 +255,16 @@ impl MixJamApp {
     /// lower panel's toolbar lets it widen the box as before.
     pub(super) fn library_filter(&mut self, ui: &mut egui::Ui, width: f32, truncate: bool) {
         let mut libraries = egui::ComboBox::from_id_salt("palette_product")
-            .selected_text(self.palette_product.map_or("All libraries", Product::label))
+            .selected_text(self.sounds.product.map_or("All libraries", Product::label))
             .width(width);
         if truncate {
             libraries = libraries.truncate();
         }
         let libraries = libraries
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.palette_product, None, "All libraries");
+                ui.selectable_value(&mut self.sounds.product, None, "All libraries");
                 for product in Product::ALL {
-                    ui.selectable_value(&mut self.palette_product, Some(product), product.label());
+                    ui.selectable_value(&mut self.sounds.product, Some(product), product.label());
                 }
             })
             .response;
@@ -266,7 +278,7 @@ impl MixJamApp {
         groups: &[String],
         truncate: bool,
     ) {
-        let group_label = self.group.as_deref().map_or("All sounds", |g| {
+        let group_label = self.sounds.group.as_deref().map_or("All sounds", |g| {
             if g.is_empty() { "Uncategorized" } else { g }
         });
         let mut categories = egui::ComboBox::from_id_salt("palette_category")
@@ -277,10 +289,10 @@ impl MixJamApp {
         }
         let categories = categories
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.group, None, "All sounds");
+                ui.selectable_value(&mut self.sounds.group, None, "All sounds");
                 for name in groups {
                     ui.selectable_value(
-                        &mut self.group,
+                        &mut self.sounds.group,
                         Some(name.clone()),
                         if name.is_empty() {
                             "Uncategorized"
@@ -296,11 +308,11 @@ impl MixJamApp {
 
     pub(super) fn sort_order(&mut self, ui: &mut egui::Ui, width: f32) {
         let sorting = egui::ComboBox::from_id_salt("palette_sort")
-            .selected_text(self.palette_sort.label())
+            .selected_text(self.sounds.sort.label())
             .width(width)
             .show_ui(ui, |ui| {
                 for sort in PaletteSort::ALL {
-                    ui.selectable_value(&mut self.palette_sort, sort, sort.label());
+                    ui.selectable_value(&mut self.sounds.sort, sort, sort.label());
                 }
             })
             .response;
@@ -308,15 +320,15 @@ impl MixJamApp {
     }
 
     pub(super) fn sort_direction(&mut self, ui: &mut egui::Ui) {
-        let [forward, reversed] = self.palette_sort.directions();
-        let (now, next) = if self.palette_descending {
+        let [forward, reversed] = self.sounds.sort.directions();
+        let (now, next) = if self.sounds.descending {
             (reversed, forward)
         } else {
             (forward, reversed)
         };
         let direction = ui
             .add(
-                egui::Button::new(if self.palette_descending {
+                egui::Button::new(if self.sounds.descending {
                     "\u{2193}"
                 } else {
                     "\u{2191}"
@@ -327,7 +339,7 @@ impl MixJamApp {
         ui.ctx()
             .accesskit_node_builder(direction.id, |node| node.set_value(now));
         if name_control(direction, "Sort direction").clicked() {
-            self.palette_descending = !self.palette_descending;
+            self.sounds.descending = !self.sounds.descending;
         }
     }
 }

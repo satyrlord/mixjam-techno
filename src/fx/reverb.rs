@@ -99,7 +99,7 @@ fn prime_frames(seconds: f64) -> usize {
 }
 
 /// A set of early reflection taps for both sides: delays in frames and gains.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq)]
 struct Taps {
     delays: [[usize; 14]; 2],
     gains: [[f64; 14]; 2],
@@ -187,6 +187,24 @@ struct Retime {
     previous: f64,
 }
 
+/// The read position of one modulated delay head.
+#[inline]
+fn modulated_length(length: f64, depth: f64, phase: f64, vintage: f64, wander: f64) -> f64 {
+    // A shorter head must be safe before the shared depth finishes gliding.
+    // Each head keeps its own bound so the outgoing head remains continuous.
+    let depth = depth.min(0.45 * length);
+    let wobble = vintage * 0.5 * depth * wander;
+    length + (depth * phase + wobble)
+}
+
+/// The delay positions that a set of settings asks for.
+#[derive(Clone, Copy, PartialEq)]
+struct Positions {
+    lines: [f64; LINES],
+    pre: f64,
+    taps: Taps,
+}
+
 pub(super) struct Core {
     activity: f64,
     pre: [Line; 2],
@@ -208,6 +226,9 @@ pub(super) struct Core {
     inner: [AllPass; LINES],
     /// Frames left of the crossfade after a retime.
     fade: usize,
+    /// Positions that arrived during a crossfade. They start their own
+    /// crossfade when it ends, so the output never jumps from a half blend.
+    queued: Option<Positions>,
     lfo: Lfo,
     wander: Lfo,
     shifters: [Shifter; 2],
@@ -219,6 +240,8 @@ pub(super) struct Core {
     shimmer_level: Glide,
     ducker: Ducker,
     mod_rate: f64,
+    /// The requested swing, before the active delay lengths bound it.
+    requested_depth: f64,
     depth: Glide,
     diffusion: Glide,
     density: Glide,
@@ -269,6 +292,7 @@ impl Core {
             damped: [0.0; LINES],
             inner: INNER_MS.map(|ms| AllPass::new(ms / 1000.0)),
             fade: 0,
+            queued: None,
             lfo: Lfo::default(),
             wander: Lfo::default(),
             shifters: [Shifter::new(), Shifter::new()],
@@ -279,6 +303,7 @@ impl Core {
             shimmer_level: Glide::new(0.0, 0.04),
             ducker: Ducker::new(),
             mod_rate: 0.0,
+            requested_depth: 0.0,
             depth: smooth(0.0),
             diffusion: smooth(0.0),
             density: smooth(0.0),
@@ -300,17 +325,16 @@ impl Core {
         let size = f64::from(s.size_percent);
         let decay = f64::from(s.decay_seconds);
         let factor = size_factor(size);
-        let mut retimed = false;
         let mut total = 0.0;
         let mut circulations = [0.0; LINES];
-        for (i, ms) in base_lengths(s.space_model).into_iter().enumerate() {
-            let seconds = (ms * factor).max(5.0) / 1000.0;
+        let mut lines = [0.0; LINES];
+        let bases = base_lengths(s.space_model);
+        for (i, ms) in bases.into_iter().enumerate() {
+            // The 5 ms floor scales with each line, so that small sizes keep
+            // distinct lengths instead of sharing one comb.
+            let seconds = (ms * factor).max(5.0 * ms / bases[0]) / 1000.0;
             let frames = prime_frames(seconds) as f64;
-            if frames != self.lengths[i].length {
-                self.lengths[i].previous = self.lengths[i].length;
-                self.lengths[i].length = frames;
-                retimed = true;
-            }
+            lines[i] = frames;
             // A circulation also passes the line's inner all-pass.
             let circulation = frames / RATE + INNER_MS[i] / 1000.0;
             circulations[i] = circulation;
@@ -322,20 +346,13 @@ impl Core {
         self.late_norm
             .set(1.6 * (1.0 - total / LINES as f64).sqrt());
         let pre = (f64::from(s.pre_delay_ms) / 1000.0 * RATE - compensation).max(2.0);
-        if pre != self.pre_time.length {
-            self.pre_time.previous = self.pre_time.length;
-            self.pre_time.length = pre;
-            retimed = true;
-        }
         let density = f64::from(s.density_percent) / 100.0;
         let taps = Taps::new(s.space_model, size, density);
-        if taps.delays != self.taps.delays || taps.count != self.taps.count {
-            self.previous_taps = self.taps;
-            retimed = true;
-        }
-        self.taps = taps;
-        if retimed {
-            self.fade = FADE;
+        if self.fade > 0 {
+            let target = Positions { lines, pre, taps };
+            self.queued = (target != self.positions()).then_some(target);
+        } else {
+            self.retime(Positions { lines, pre, taps });
         }
         let (low_cut, high_cut) = (f64::from(s.low_cut_hz), f64::from(s.high_cut_hz));
         self.high_cut = high_cut;
@@ -358,7 +375,8 @@ impl Core {
         self.bloomy.set(f64::from(u8::from(bloom)));
         self.mod_rate = f64::from(s.mod_rate_hz) * if bloom { 0.6 } else { 1.0 };
         let depth = (f64::from(s.mod_depth_percent) / 100.0).powi(2) * 0.004 * RATE;
-        self.depth.set(depth * if bloom { 1.5 } else { 1.0 });
+        self.requested_depth = depth * if bloom { 1.5 } else { 1.0 };
+        self.update_depth();
         self.diffusion
             .set(0.3 + 0.45 * f64::from(s.diffusion_percent) / 100.0);
         self.density.set(0.1 + 0.5 * density);
@@ -390,9 +408,58 @@ impl Core {
             .iter_mut()
             .for_each(|shifter| shifter.tune(ratio, high_cut));
     }
+    /// The positions the delays move to.
+    fn positions(&self) -> Positions {
+        Positions {
+            lines: self.lengths.map(|length| length.length),
+            pre: self.pre_time.length,
+            taps: self.taps,
+        }
+    }
+    /// Bound the swing to the positions that still play, and prepare for a
+    /// queued shorter delay. An old position stops bounding it after its fade.
+    fn update_depth(&mut self) {
+        let mut shortest = self
+            .lengths
+            .iter()
+            .map(|length| length.length)
+            .fold(f64::INFINITY, f64::min);
+        if self.fade > 0 {
+            for length in &self.lengths {
+                shortest = shortest.min(length.previous);
+            }
+        }
+        if let Some(queued) = self.queued {
+            for length in queued.lines {
+                shortest = shortest.min(length);
+            }
+        }
+        self.depth.set(self.requested_depth.min(0.45 * shortest));
+    }
+    /// Move the delays to `target`, with a crossfade when a delay changes.
+    fn retime(&mut self, target: Positions) {
+        if target == self.positions() {
+            return;
+        }
+        // Every read head participates in the fade, including those whose
+        // target did not move. Snapshot the whole current geometry together.
+        for (length, frames) in self.lengths.iter_mut().zip(target.lines) {
+            length.previous = length.length;
+            length.length = frames;
+        }
+        self.pre_time.previous = self.pre_time.length;
+        self.pre_time.length = target.pre;
+        self.previous_taps = self.taps;
+        self.taps = target.taps;
+        self.fade = FADE;
+    }
     /// Move every setting straight to its target, with no crossfade.
     pub(super) fn settle(&mut self) {
+        if let Some(target) = self.queued.take() {
+            self.retime(target);
+        }
         self.fade = 0;
+        self.update_depth();
         self.ratio = self.target_ratio;
         self.shimmer_level.set(self.shimmer_send);
         for glide in [
@@ -518,15 +585,27 @@ impl Core {
         // The network.
         let depth = self.depth.next();
         let vintage = self.vintage.next();
-        let wobble = vintage * 0.5 * depth * self.wander.value(0.0);
+        let wander = self.wander.value(0.0);
         let density = self.density.next();
         let mut taps = [0.0; LINES];
         for (i, tap) in taps.iter_mut().enumerate() {
-            let offset = depth * self.lfo.value(i as f64 / LINES as f64) + wobble;
+            let phase = self.lfo.value(i as f64 / LINES as f64);
             let length = self.lengths[i];
-            let now = self.lines[i].read(length.length + offset);
+            let now = self.lines[i].read(modulated_length(
+                length.length,
+                depth,
+                phase,
+                vintage,
+                wander,
+            ));
             let mut x = if fading {
-                let before = self.lines[i].read(length.previous + offset);
+                let before = self.lines[i].read(modulated_length(
+                    length.previous,
+                    depth,
+                    phase,
+                    vintage,
+                    wander,
+                ));
                 before + (now - before) * weight
             } else {
                 now
@@ -580,6 +659,12 @@ impl Core {
         }
         if fading {
             self.fade -= 1;
+            if self.fade == 0 {
+                if let Some(target) = self.queued.take() {
+                    self.retime(target);
+                }
+                self.update_depth();
+            }
         }
         let (early_gain, late_gain) = (self.early_gain.next(), self.late_gain.next());
         let (l, r) = widen(
@@ -593,354 +678,4 @@ impl Core {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn neutral() -> Aetherform {
-        Aetherform {
-            character: ReverbCharacter::Natural,
-            pre_delay_ms: 0.0,
-            mod_depth_percent: 0.0,
-            duck_amount_percent: 0.0,
-            output_db: 0.0,
-            low_cut_hz: 20.0,
-            high_cut_hz: 20_000.0,
-            ..Aetherform::default()
-        }
-    }
-
-    fn reverb(settings: &Aetherform) -> Core {
-        let mut core = Core::new();
-        core.set(settings, 0.0);
-        core.settle();
-        core
-    }
-
-    /// Energy in 50 ms windows after an impulse, in dB.
-    fn decay_curve(core: &mut Core, seconds: f64) -> Vec<f64> {
-        let window = 2205;
-        let frames = (seconds * RATE) as usize;
-        let mut curve = Vec::new();
-        let mut sum = 0.0;
-        for i in 0..frames {
-            let x = if i == 0 { 1.0 } else { 0.0 };
-            let (l, r) = core.process(x, x);
-            assert!(l.is_finite() && r.is_finite());
-            sum += l * l + r * r;
-            if (i + 1) % window == 0 {
-                curve.push(10.0 * (sum + 1e-30).log10());
-                sum = 0.0;
-            }
-        }
-        curve
-    }
-
-    /// The time to fall 60 dB, from the slope between -5 and -25 dB below
-    /// the curve's peak.
-    fn rt60(curve: &[f64]) -> f64 {
-        let peak = curve.iter().cloned().fold(f64::MIN, f64::max);
-        let at = |drop: f64| curve.iter().rposition(|v| *v >= peak - drop).unwrap() as f64;
-        let (a, b) = (at(5.0), at(25.0));
-        (b - a) * 0.05 * 60.0 / 20.0
-    }
-
-    #[test]
-    fn the_tail_falls_60_db_in_the_decay_time() {
-        for (model, decay) in [
-            (SpaceModel::Room, 0.8),
-            (SpaceModel::Chamber, 2.8),
-            (SpaceModel::Hall, 6.0),
-            (SpaceModel::Plate, 1.9),
-        ] {
-            let settings = Aetherform {
-                space_model: model,
-                decay_seconds: decay,
-                late_balance_percent: 100.0,
-                ..neutral()
-            };
-            let mut core = reverb(&settings);
-            let decay = f64::from(decay);
-            let measured = rt60(&decay_curve(&mut core, decay * 1.6 + 0.5));
-            assert!(
-                (measured / decay - 1.0).abs() < 0.25,
-                "{model:?}: {measured:.2} s for {decay} s"
-            );
-        }
-    }
-
-    /// Energy in 50 ms windows during and after a 2 s sine of `hz`, in dB.
-    fn burst_curve(core: &mut Core, hz: f64, seconds: f64) -> Vec<f64> {
-        let window = 2205;
-        let burst = (2.0 * RATE) as usize;
-        let mut curve = Vec::new();
-        let mut sum = 0.0;
-        for i in 0..(seconds * RATE) as usize {
-            let x = if i < burst {
-                0.1 * (2.0 * PI * hz * i as f64 / RATE).sin()
-            } else {
-                0.0
-            };
-            let (l, r) = core.process(x, x);
-            sum += l * l + r * r;
-            if (i + 1) % window == 0 {
-                curve.push(10.0 * (sum + 1e-30).log10());
-                sum = 0.0;
-            }
-        }
-        curve
-    }
-
-    #[test]
-    fn the_cuts_keep_the_decay_inside_the_band() {
-        // A low and high cut inside the loop once cut on every circulation:
-        // a 7.5 s hall cut at 260 Hz died in 0.5 s at 110 Hz.
-        for character in [ReverbCharacter::Natural, ReverbCharacter::Vintage] {
-            for hz in [110.0, 440.0, 1760.0] {
-                let settings = Aetherform {
-                    space_model: SpaceModel::Hall,
-                    decay_seconds: 6.0,
-                    late_balance_percent: 100.0,
-                    low_cut_hz: 260.0,
-                    high_cut_hz: 4800.0,
-                    character,
-                    ..neutral()
-                };
-                let measured = rt60(&burst_curve(&mut reverb(&settings), hz, 12.5));
-                assert!(
-                    (measured / 6.0 - 1.0).abs() < 0.25,
-                    "{character:?} at {hz} Hz: {measured:.2} s for 6 s"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn the_high_cut_shortens_the_decay_above_it() {
-        let settings = Aetherform {
-            space_model: SpaceModel::Hall,
-            decay_seconds: 6.0,
-            late_balance_percent: 100.0,
-            high_cut_hz: 4800.0,
-            ..neutral()
-        };
-        let low = rt60(&burst_curve(&mut reverb(&settings), 1000.0, 12.5));
-        let high = rt60(&burst_curve(&mut reverb(&settings), 4800.0, 12.5));
-        assert!(
-            high < 0.8 * low && high > 0.4 * low,
-            "{high:.2} s at the high cut, {low:.2} s at 1 kHz"
-        );
-    }
-
-    #[test]
-    fn size_does_not_change_the_decay_and_models_differ() {
-        let measure = |size: f32, model| {
-            let settings = Aetherform {
-                space_model: model,
-                size_percent: size,
-                decay_seconds: 2.0,
-                late_balance_percent: 100.0,
-                ..neutral()
-            };
-            rt60(&decay_curve(&mut reverb(&settings), 3.5))
-        };
-        let (small, large) = (
-            measure(10.0, SpaceModel::Hall),
-            measure(100.0, SpaceModel::Hall),
-        );
-        assert!((small / large - 1.0).abs() < 0.25, "{small} vs {large}");
-        // The first late echo comes later in a hall than in a room.
-        let first = |model| {
-            let settings = Aetherform {
-                space_model: model,
-                late_balance_percent: 100.0,
-                diffusion_percent: 0.0,
-                ..neutral()
-            };
-            let mut core = reverb(&settings);
-            (0..20_000)
-                .position(|i| core.process(if i == 0 { 1.0 } else { 0.0 }, 0.0).0.abs() > 1e-4)
-                .unwrap()
-        };
-        assert!(first(SpaceModel::Hall) > first(SpaceModel::Room));
-    }
-
-    #[test]
-    fn pre_delay_holds_back_the_sound() {
-        let onset = |pre_delay_ms: f32| {
-            let settings = Aetherform {
-                pre_delay_ms,
-                late_balance_percent: 0.0,
-                ..neutral()
-            };
-            let mut core = reverb(&settings);
-            (0..30_000)
-                .position(|i| core.process(if i == 0 { 1.0 } else { 0.0 }, 0.0).0.abs() > 1e-4)
-                .unwrap()
-        };
-        let (none, long) = (onset(0.0), onset(120.0));
-        let gap = long - none;
-        assert!((gap as f64 - 0.12 * RATE).abs() < 3.0, "{gap}");
-    }
-
-    #[test]
-    fn extremes_stay_finite_and_bounded() {
-        let settings = Aetherform {
-            decay_seconds: 30.0,
-            shimmer_enabled: true,
-            shimmer_amount_percent: 100.0,
-            shimmer_interval_semitones: 24,
-            drive_percent: 100.0,
-            width_percent: 200.0,
-            mod_depth_percent: 100.0,
-            character: ReverbCharacter::Bloom,
-            ..Aetherform::default()
-        };
-        let mut core = reverb(&settings);
-        let mut peak: f64 = 0.0;
-        for i in 0..10 * 44_100 {
-            let x = if i < 44_100 {
-                0.9 * (i as f64 * 0.03).sin()
-            } else {
-                0.0
-            };
-            let (l, r) = core.process(x, -x);
-            assert!(l.is_finite() && r.is_finite());
-            peak = peak.max(l.abs()).max(r.abs());
-        }
-        assert!(peak < 8.0, "{peak}");
-    }
-
-    #[test]
-    fn the_shimmer_adds_energy_an_octave_up() {
-        // A 400 Hz tone; with the shimmer on, 800 Hz grows in the tail.
-        let level_at = |settings: &Aetherform, hz: f64| {
-            let mut core = reverb(settings);
-            let (mut re, mut im) = (0.0, 0.0);
-            for i in 0..4 * 44_100 {
-                let x = if i < 44_100 {
-                    0.3 * (2.0 * PI * 400.0 * i as f64 / RATE).sin()
-                } else {
-                    0.0
-                };
-                let (l, _) = core.process(x, x);
-                if i >= 44_100 + 4410 {
-                    let angle = 2.0 * PI * hz * i as f64 / RATE;
-                    re += l * angle.cos();
-                    im += l * angle.sin();
-                }
-            }
-            re.hypot(im)
-        };
-        let plain = Aetherform {
-            late_balance_percent: 100.0,
-            decay_seconds: 4.0,
-            ..neutral()
-        };
-        let shimmering = Aetherform {
-            shimmer_enabled: true,
-            shimmer_amount_percent: 80.0,
-            ..plain
-        };
-        let without = level_at(&plain, 800.0) / level_at(&plain, 400.0);
-        let with = level_at(&shimmering, 800.0) / level_at(&shimmering, 400.0);
-        assert!(with > 4.0 * without, "{without} vs {with}");
-    }
-
-    #[test]
-    fn a_shimmering_hall_dies_away() {
-        // A long bloom hall with the shimmer on, as songs set it. With the
-        // cuts out of the loop, the shimmer's octave-up return must still
-        // pass them, or each pass climbs an octave and the tail runs away.
-        for amount in [38.0, 100.0] {
-            let settings = Aetherform {
-                space_model: SpaceModel::Hall,
-                decay_seconds: 9.5,
-                character: ReverbCharacter::Bloom,
-                low_cut_hz: 340.0,
-                high_cut_hz: 7200.0,
-                shimmer_enabled: true,
-                shimmer_amount_percent: amount,
-                ..neutral()
-            };
-            let mut core = reverb(&settings);
-            let mut seed = 1u32;
-            let (mut during, mut late) = (0.0, 0.0);
-            for i in 0..(30.0 * RATE) as usize {
-                let x = if i < (2.0 * RATE) as usize {
-                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                    0.3 * (f64::from(seed >> 8) / f64::from(1u32 << 24) - 0.5)
-                } else {
-                    0.0
-                };
-                let (l, r) = core.process(x, x);
-                let energy = l * l + r * r;
-                if i < (2.0 * RATE) as usize {
-                    during += energy;
-                } else if i >= (28.0 * RATE) as usize {
-                    late += energy;
-                }
-            }
-            // 2 s against 2 s, 26 s after the input stopped: far under.
-            let drop = 10.0 * (late / during + 1e-30).log10();
-            assert!(drop < -40.0, "shimmer {amount} %: {drop:.1} dB");
-        }
-    }
-
-    #[test]
-    fn width_zero_is_mono_and_bypass_keeps_the_tail() {
-        let settings = Aetherform {
-            width_percent: 0.0,
-            ..neutral()
-        };
-        let mut core = reverb(&settings);
-        for i in 0..20_000 {
-            let (l, r) = core.process(if i == 0 { 1.0 } else { 0.0 }, 0.0);
-            assert!((l - r).abs() < 1e-12);
-        }
-        let mut core = reverb(&neutral());
-        core.process(1.0, 1.0);
-        core.set(
-            &Aetherform {
-                bypass: true,
-                ..neutral()
-            },
-            0.0,
-        );
-        core.settle();
-        for _ in 0..10_000 {
-            assert_eq!(core.process(0.0, 0.0), (0.0, 0.0));
-        }
-        core.set(&neutral(), 0.0);
-        core.settle();
-        let tail = (0..2000)
-            .map(|_| core.process(0.0, 0.0).0.abs())
-            .fold(0.0, f64::max);
-        assert!(tail > 1e-5, "{tail}");
-    }
-
-    #[test]
-    fn a_size_change_crossfades_without_a_jump() {
-        let mut core = reverb(&neutral());
-        let mut last = 0.0;
-        let mut worst: f64 = 0.0;
-        for i in 0..40_000 {
-            if i == 20_000 {
-                core.set(
-                    &Aetherform {
-                        size_percent: 20.0,
-                        ..neutral()
-                    },
-                    0.0,
-                );
-            }
-            let x = 0.3 * (2.0 * PI * 220.0 * i as f64 / RATE).sin();
-            let (l, _) = core.process(x, x);
-            if i > 19_000 {
-                worst = worst.max((l - last).abs());
-            }
-            last = l;
-        }
-        // A 220 Hz tone near unit level moves at most about 0.03 per frame.
-        assert!(worst < 0.1, "{worst}");
-    }
-}
+mod tests;

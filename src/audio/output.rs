@@ -1,18 +1,21 @@
 //! Device output with a selected buffer target. The device can use another
 //! callback interval; buffer capacity is not a callback deadline.
-use super::flight;
+use super::{
+    device_mixer::{DeviceMixer, MixerInput, Playback, device_mixer},
+    flight,
+    source::PlaybackSource,
+};
 use crate::options::PlaybackBufferTarget;
 use cpal::{
     BufferSize, SampleFormat, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
-use rodio::{Sink, dynamic_mixer};
 use serde_json::{Value, json};
 use std::{
     path::Path,
     sync::{
         Arc,
-        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicU64, Ordering},
     },
     time::Instant,
 };
@@ -58,9 +61,9 @@ impl CallbackMetrics {
 }
 
 pub(crate) struct Output {
-    // Keep the stream alive while the mixer accepts sources.
+    // Keep the stream alive while the mixer takes playback.
     _stream: cpal::Stream,
-    mixer: Arc<dynamic_mixer::DynamicMixerController<f32>>,
+    input: MixerInput,
     configuration: OutputConfiguration,
     metrics: Arc<CallbackMetrics>,
     device: cpal::Device,
@@ -192,8 +195,9 @@ impl Output {
         for range in ranges {
             let (min, max) = (range.min_sample_rate(), range.max_sample_rate());
             let mut rates = vec![max];
-            if min < SampleRate(44_100) && SampleRate(44_100) < max {
-                rates.push(SampleRate(44_100));
+            let mix = SampleRate(super::Mix::SAMPLE_RATE);
+            if min < mix && mix < max {
+                rates.push(mix);
             }
             if min != max {
                 rates.push(min);
@@ -336,8 +340,12 @@ impl Output {
     {
         let mut config = format.config();
         config.buffer_size = buffer_size;
-        let (mixer, source) = dynamic_mixer::mixer::<f32>(config.channels, config.sample_rate.0);
         let flight = flight::Flight::new(config.channels, config.sample_rate.0);
+        let (mixer, input) = device_mixer(
+            config.channels,
+            config.sample_rate.0,
+            Arc::clone(&flight.sources),
+        );
         let writer = flight.writer();
         // A stream error ends the stream: the audio library's thread stops.
         let errors = Arc::clone(&flight);
@@ -363,7 +371,7 @@ impl Output {
         };
         macro_rules! stream {
             ($sample:ty) => {
-                build::<$sample, _, _>(device, &config, source, writer, observe, error)
+                build::<$sample, _, _>(device, &config, mixer, writer, observe, error)
             };
         }
         let stream = match format.sample_format() {
@@ -383,7 +391,7 @@ impl Output {
         stream.play().map_err(|e| e.to_string())?;
         Ok(Self {
             _stream: stream,
-            mixer,
+            input,
             configuration: OutputConfiguration {
                 channels: config.channels,
                 sample_rate: config.sample_rate.0,
@@ -408,10 +416,14 @@ impl Output {
         })
     }
 
-    /// A sink on the device's mixer for one source of `channels` channels
-    /// at `sample_rate`.
-    pub(crate) fn sink(&self, channels: u16, sample_rate: u32) -> Sink {
-        sink_on(&self.mixer, channels, sample_rate, &self.flight.sources)
+    /// Play `source` at `volume` from the device's next buffer. Stop the
+    /// playback it replaces first.
+    pub(super) fn start(
+        &mut self,
+        source: PlaybackSource,
+        volume: f32,
+    ) -> Result<Playback, String> {
+        self.input.start(source, volume)
     }
 
     pub(crate) fn configuration(&self) -> OutputConfiguration {
@@ -459,77 +471,10 @@ fn status_text(
     status
 }
 
-/// Add a sink to `mixer` for one source of `channels` channels at
-/// `sample_rate`. The mixer reads the sink's queue in that format from its
-/// first sample: rodio's queue starts as a mono 48 kHz source, and the mixer
-/// would read the first 512 samples of the playback in that format, left
-/// and right interleaved as one channel. It would also restart its
-/// resampler every 512 samples, as the queue does not say how long its
-/// format lasts.
-/// `sources` counts the sinks that the mixer still reads.
-pub(super) fn sink_on(
-    mixer: &dynamic_mixer::DynamicMixerController<f32>,
-    channels: u16,
-    sample_rate: u32,
-    sources: &Arc<AtomicUsize>,
-) -> Sink {
-    let (sink, queue) = Sink::new_idle();
-    sources.fetch_add(1, Ordering::Relaxed);
-    mixer.add(Fixed {
-        queue,
-        channels,
-        sample_rate,
-        _counted: Counted(Arc::clone(sources)),
-    });
-    sink
-}
-
-/// A sink's queue read as one unending source of a fixed format. The queue
-/// holds one playback source of that format, between silences whose sample
-/// counts are whole frames of it.
-struct Fixed {
-    queue: rodio::queue::SourcesQueueOutput<f32>,
-    channels: u16,
-    sample_rate: u32,
-    _counted: Counted,
-}
-
-/// One count of the mixer's sources, given back when the mixer drops it.
-struct Counted(Arc<AtomicUsize>);
-
-impl Drop for Counted {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::Relaxed);
-    }
-}
-
-impl Iterator for Fixed {
-    type Item = f32;
-    #[inline]
-    fn next(&mut self) -> Option<f32> {
-        self.queue.next()
-    }
-}
-
-impl rodio::Source for Fixed {
-    fn current_frame_len(&self) -> Option<usize> {
-        None
-    }
-    fn channels(&self) -> u16 {
-        self.channels
-    }
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        None
-    }
-}
-
 fn build<T, F, E>(
     device: &cpal::Device,
     config: &StreamConfig,
-    mut source: dynamic_mixer::DynamicMixer<f32>,
+    mut mixer: DeviceMixer,
     mut writer: flight::Writer,
     mut observe: F,
     error: E,
@@ -547,7 +492,7 @@ where
             let started = Instant::now();
             let frames = data.len() / channels;
             observe(frames, info);
-            fill_into(data, &mut source, &mut writer);
+            mixer.fill(data, &mut writer);
             writer.record_fill(frames, started.elapsed());
         },
         error,
@@ -694,41 +639,6 @@ mod tests {
         let mut unsigned = [1_u16; 5];
         fill(&mut unsigned, &mut [-0.5, 0.0, 0.5].into_iter());
         assert_eq!(unsigned, [16384, 32768, 49152, 32768, 32768]);
-    }
-
-    #[test]
-    fn idle_sink_queue_plays_through_the_device_mixer() {
-        // Rodio's empty queue starts with mono 48 kHz metadata. Keep the
-        // fixture at that format so this checks the bridge, not rodio's
-        // separate queue metadata transition and resampling behavior.
-        let (controller, mut mixer) = dynamic_mixer::mixer::<f32>(1, 48_000);
-        let (sink, queue) = Sink::new_idle();
-        controller.add(queue);
-        sink.append(rodio::buffer::SamplesBuffer::new(
-            1,
-            48_000,
-            vec![0.25, -0.5, 0.75, -0.25],
-        ));
-        let mut output = [0.0_f32; 4];
-        fill(&mut output, &mut mixer);
-        assert_eq!(output, [0.25, -0.5, 0.75, -0.25]);
-        sink.stop();
-        let mut tail = [1.0_f32; 64];
-        fill(&mut tail, &mut mixer);
-        assert_eq!(tail, [0.0; 64]);
-    }
-
-    #[test]
-    fn stereo_mixer_keeps_the_source_channels_in_order() {
-        let (controller, mut mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
-        controller.add(rodio::buffer::SamplesBuffer::new(
-            2,
-            44_100,
-            vec![0.25, -0.5, 0.75, -0.25],
-        ));
-        let mut output = [1.0_f32; 8];
-        fill(&mut output, &mut mixer);
-        assert_eq!(output, [0.25, -0.5, 0.75, -0.25, 0.0, 0.0, 0.0, 0.0]);
     }
 
     #[derive(Default)]

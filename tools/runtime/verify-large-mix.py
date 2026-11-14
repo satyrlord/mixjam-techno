@@ -20,8 +20,10 @@ import subprocess
 import tempfile
 import time
 import wave
+import sys
 
-from mixjam_song import read_song
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from mixjam_song import read_song  # noqa: E402
 
 
 LIMIT = 500_000_000

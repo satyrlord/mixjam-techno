@@ -1,7 +1,7 @@
 //! A real-time check of live playback. It drives `PlaybackSource` with a
-//! live `MasterControl` through rodio's own sink and mixer, which convert it
-//! to the device's rate, in callbacks of a WASAPI shared-mode period, without
-//! an audio device. It reports the work done in each callback.
+//! live `MasterControl` through the device's mixer, which converts it to the
+//! device's rate, in callbacks of a shared-mode period, without an audio
+//! device. It reports the work done in each callback.
 //!
 //! Run it on a release build, at high priority on a quiet machine:
 //!
@@ -20,10 +20,25 @@
 //! `MIXJAM_BENCH_CONTINUOUS=1` plays from the song's start through the
 //! unmeasured stretch before `MIXJAM_BENCH_START`, then measures the selected
 //! stretch at both rates. Replacement measurements stay in the default mode.
-use super::*;
-use crate::playback_quality::{Oversampling, PlaybackQuality, SampleQuality};
-use rodio::{Sink, dynamic_mixer};
-use std::time::Instant;
+use super::{
+    Frames, Mix, Pcm,
+    device_mixer::{DeviceMixer, MixerInput, Playback, device_mixer},
+    prepare::mix_with_samples_quality,
+    prepare_project_with_quality, priority_failure,
+    source::{PlaybackSource, SYSTEM_PRIORITY},
+};
+use crate::{
+    engine::Project,
+    library::Library,
+    master::MasterControl,
+    playback_quality::{Oversampling, PlaybackQuality, SampleQuality},
+};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 /// The callback period that the deadline counts: 10 ms.
 const PERIOD_MS: f64 = 10.0;
@@ -154,21 +169,21 @@ impl Times {
     }
 }
 
-/// A device that pulls `frames` frames a callback at `rate` from rodio's
-/// mixer, as cpal's WASAPI callback does.
+/// A device that fills `frames` frames a callback at `rate` from the
+/// device's mixer, as the output callback does.
 struct Device {
-    controller: Arc<dynamic_mixer::DynamicMixerController<f32>>,
-    mixer: dynamic_mixer::DynamicMixer<f32>,
+    mixer: DeviceMixer,
+    input: MixerInput,
     buffer: Vec<f32>,
     cycles_per_ms: f64,
 }
 
 impl Device {
     fn new(rate: u32, frames: usize, cycles_per_ms: f64) -> Self {
-        let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, rate);
+        let (mixer, input) = device_mixer(2, rate, Arc::default());
         Self {
-            controller,
             mixer,
+            input,
             buffer: vec![0.0; frames * 2],
             cycles_per_ms,
         }
@@ -176,17 +191,16 @@ impl Device {
 
     /// Play `source` on this device in place of `old`, as `Player::play`
     /// does.
-    fn play(&self, source: PlaybackSource, old: Option<Current>) -> Current {
-        let (sink, queue) = Sink::new_idle();
-        self.controller.add(queue);
-        Current::start(sink, source, old)
+    fn play(&mut self, source: PlaybackSource, old: Option<Playback>) -> Playback {
+        if let Some(old) = old {
+            old.end();
+        }
+        self.input.start(source, 1.0).unwrap()
     }
 
     fn callback(&mut self, times: &mut Times) {
         let (start, cycles) = (Instant::now(), thread_cycles());
-        for sample in &mut self.buffer {
-            *sample = self.mixer.next().unwrap_or(0.0);
-        }
+        self.mixer.fill(&mut self.buffer, &mut ());
         times
             .cpu
             .push((thread_cycles() - cycles) as f64 / self.cycles_per_ms);

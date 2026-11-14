@@ -20,8 +20,9 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-const PACKED_BYTE_LIMIT: usize = 64 * 1024 * 1024;
-const WAV_BYTE_LIMIT: usize = 128 * 1024 * 1024;
+const PACKED_BYTE_LIMIT: usize = legacy_format::packed::MAX_PACKED_BYTES as usize;
+/// The original loader holds a file's byte length in a signed 32-bit value.
+const WAV_BYTE_LIMIT: usize = legacy_format::playback::NATIVE_FILE_BYTES as usize;
 const SOURCE_BPM: f64 = 180.0;
 const DEFAULT_KIT_REGIONS: [(u16, u16); 3] = [(4400, 4999), (5000, 5624), (5625, 6299)];
 
@@ -42,7 +43,9 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
         let sample = library
             .sample_by_id(global_id)
             .ok_or_else(|| library.describe_missing(Product::T1, u32::from(native_id)))?;
-        if sample.source_bpm != SOURCE_BPM || (native.is_some() && sample.sample_rate != 44_100) {
+        if sample.source_bpm != SOURCE_BPM
+            || (native.is_some() && sample.sample_rate != legacy_format::NATIVE_SAMPLE_RATE)
+        {
             return Err(format!(
                 "T1 sample {native_id} has incompatible source timing in the active library."
             ));
@@ -51,9 +54,12 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
             let metadata = native
                 .sample(native_id)
                 .ok_or_else(|| format!("T1 sample {native_id} is not in the installed catalog."))?;
-            let source_path = root.join("\x50XD").join(&metadata.path);
-            let source_bytes = read_bounded(&source_path, PACKED_BYTE_LIMIT, "T1 sample")?;
-            FileSample::from_bytes(source_path, &source_bytes)
+            let catalog_path = Path::new("\x50XD").join(&metadata.path);
+            let source_bytes =
+                read_bounded(&root.join(&catalog_path), PACKED_BYTE_LIMIT, "T1 sample")?;
+            // The original's path range applies to the path inside the product,
+            // not to the folder where this copy is kept.
+            FileSample::from_bytes(catalog_path, &source_bytes)
                 .map_err(|error| format!("Cannot use T1 sample {native_id}: {error}"))?;
             metadata
                 .nominal_bars
@@ -158,7 +164,7 @@ fn convert_with_catalog<'a>(
             group_name: decode_1252(&record.category.0),
             path: saved_path,
             source_bpm: SOURCE_BPM,
-            source_sample_rate: Some(44_100),
+            source_sample_rate: Some(legacy_format::NATIVE_SAMPLE_RATE),
             origin: Some(Product::T1),
         };
         let bars = match resolved {

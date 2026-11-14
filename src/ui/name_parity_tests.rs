@@ -93,7 +93,7 @@ fn app(with_clips: bool) -> (egui::Context, MixJamApp) {
         "Name parity".into(),
         false,
     );
-    app.capture_path = None;
+    app.capture.path = None;
     app.options = None;
     app.session.set_theme_fixture(theme::current());
     // A default launch folds the lower panel (Starting module Sounds); the
@@ -167,53 +167,53 @@ fn every_name() -> BTreeSet<String> {
     names(&context, &mut app, &mut found);
 
     let clip = app.session.project().clips[0].id;
-    app.selected_clip = Some(clip);
-    app.selected_clips = [clip].into_iter().collect();
+    app.selection.clip = Some(clip);
+    app.selection.clips = [clip].into_iter().collect();
     names(&context, &mut app, &mut found);
     // What Shift+F10 sets on a selected clip.
-    app.clip_menu_key = true;
+    app.clip_menu.by_key = true;
     names(&context, &mut app, &mut found);
     run(&context, &mut app, key(egui::Key::Escape));
-    app.selected_clip = None;
-    app.selected_clips.clear();
+    app.selection.clip = None;
+    app.selection.clips.clear();
 
     for lane in automation::Lane::ALL {
-        app.automation_lane = Some(lane);
+        app.score_tools.automation_lane = Some(lane);
         names(&context, &mut app, &mut found);
     }
-    app.automation_lane = None;
+    app.score_tools.automation_lane = None;
     for bus in 0..mixjam_techno::application::fx::BUSES {
-        app.return_lane = Some(bus);
+        app.score_tools.return_lane = Some(bus);
         names(&context, &mut app, &mut found);
     }
-    app.return_lane = None;
+    app.score_tools.return_lane = None;
 
     for module in BottomModule::ALL {
-        app.bottom_module = module;
+        app.boards.module = module;
         names(&context, &mut app, &mut found);
     }
     // Step synth with a source, as its former window was visited.
-    app.selected_sample = Some(1);
-    app.bottom_module = BottomModule::StepSynth;
+    app.selection.sample = Some(1);
+    app.boards.module = BottomModule::StepSynth;
     names(&context, &mut app, &mut found);
-    app.selected_sample = None;
-    app.bottom_module = BottomModule::Mixer;
+    app.selection.sample = None;
+    app.boards.module = BottomModule::Mixer;
     app.eq_track = Some(0);
     names(&context, &mut app, &mut found);
     app.eq_track = None;
 
-    app.selected_sample = Some(1);
+    app.selection.sample = Some(1);
     let windows: [fn(&mut MixJamApp) -> &mut bool; 10] = [
-        |app| &mut app.show_effects,
-        |app| &mut app.show_sample_edit,
-        |app| &mut app.show_stretch,
-        |app| &mut app.show_album_review,
-        |app| &mut app.show_help,
-        |app| &mut app.show_effects_help,
-        |app| &mut app.show_step_synth_help,
-        |app| &mut app.show_sample_edit_help,
-        |app| &mut app.show_stretch_help,
-        |app| &mut app.show_master_help,
+        |app| &mut app.effects.open,
+        |app| &mut app.sample_edit.open,
+        |app| &mut app.stretch.open,
+        |app| &mut app.album_review.open,
+        |app| &mut app.help.main,
+        |app| &mut app.help.effects,
+        |app| &mut app.help.step_synth,
+        |app| &mut app.help.sample_edit,
+        |app| &mut app.help.stretch,
+        |app| &mut app.help.master,
     ];
     for window in windows {
         *window(&mut app) = true;
@@ -232,10 +232,10 @@ fn every_name() -> BTreeSet<String> {
     }
     app.options = None;
 
-    app.pending_action = Some(PendingAction::New);
+    app.files.pending_action = Some(PendingAction::New);
     names(&context, &mut app, &mut found);
-    app.pending_action = None;
-    app.path_prompt = Some(PathPrompt {
+    app.files.pending_action = None;
+    app.files.path_prompt = Some(PathPrompt {
         request: FileRequest::ImportSound,
         open_token: None,
         text: String::new(),
@@ -243,8 +243,8 @@ fn every_name() -> BTreeSet<String> {
         focused: false,
     });
     names(&context, &mut app, &mut found);
-    app.path_prompt = None;
-    app.import_path = Some(PathBuf::from("parity.wav"));
+    app.files.path_prompt = None;
+    app.sample_import.path = Some(PathBuf::from("parity.wav"));
     names(&context, &mut app, &mut found);
     found
 }

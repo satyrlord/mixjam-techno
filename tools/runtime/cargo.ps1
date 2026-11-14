@@ -12,6 +12,12 @@ $toolchainRoot = Join-Path (& (Join-Path $PSScriptRoot 'local-data-root.ps1')) '
 $count = & git -C $workspace rev-list --count HEAD 2>$null
 if ($LASTEXITCODE -eq 0) {
     $encoding = [Text.UTF8Encoding]::new($false)
+    # Replace each file whole, so that a concurrent Cargo call never reads a half-written manifest.
+    function Write-Whole([string]$path, [string]$content) {
+        $staged = '{0}.{1}.tmp' -f $path, $PID
+        [IO.File]::WriteAllText($staged, $content, $encoding)
+        [IO.File]::Replace($staged, $path, [NullString]::Value)
+    }
     $manifest = Join-Path $workspace 'Cargo.toml'
     $text = [IO.File]::ReadAllText($manifest)
     $current = [regex]::Match($text, '(?m)^version = "(\d+)\.\d+\.\d+"')
@@ -19,11 +25,11 @@ if ($LASTEXITCODE -eq 0) {
     $version = '{0}.{1}.0' -f $current.Groups[1].Value, [int]$count
     $line = 'version = "' + $version + '"'
     if ($current.Value -ne $line) {
-        [IO.File]::WriteAllText($manifest, $text.Remove($current.Index, $current.Length).Insert($current.Index, $line), $encoding)
+        Write-Whole $manifest ($text.Remove($current.Index, $current.Length).Insert($current.Index, $line))
         $lock = Join-Path $workspace 'Cargo.lock'
         $text = [IO.File]::ReadAllText($lock)
         $text = [regex]::Replace($text, '(?<=name = "mixjam-techno"\r?\nversion = ")[^"]+', $version)
-        [IO.File]::WriteAllText($lock, $text, $encoding)
+        Write-Whole $lock $text
     }
 }
 

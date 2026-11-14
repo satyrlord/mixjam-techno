@@ -42,6 +42,7 @@ no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.
 Renders run below normal priority, so a game or a playing application keeps the
 processor. On Windows, they stop when the tool stops, even when it is killed.
 """
+import argparse
 import hashlib
 import json
 import math
@@ -59,7 +60,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import env  # noqa: E402
-from mixjam import (MAX_BARS, MAX_SECTION_NAME, TICKS_PER_BAR,
+from mixjam import (FORMAT_VERSION, MAX_BARS, MAX_SECTION_NAME, TICKS_PER_BAR,
                     board_off as _board_off, read_wav, write_wav)  # noqa: E402
 
 # Lane renders kept for later rounds; the lanes of a 7-minute song take about 1.6 GB.
@@ -332,7 +333,8 @@ def source_fingerprints(document):
     Read each distinct used file once per call. A path alone does not identify
     audio: the owner can replace its contents between rounds.
     """
-    if document.get('formatVersion') not in (18, 19, 20, 21, 22, 23, 24) or any(document.get(field) for field in
+    # Format 18 is the first that links WAVs directly; later formats keep that layout.
+    if document.get('formatVersion') not in range(18, FORMAT_VERSION + 1) or any(document.get(field) for field in
                                                 ('libraries', 'missingSamples', 'sampleConflicts')):
         return None
     if not cacheable_sections(document):
@@ -591,24 +593,34 @@ def fit_gain(song, peak, target_db, part_peaks=()):
     return scale
 
 
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('song', type=Path)
+    parser.add_argument('out', type=Path)
+    parser.add_argument('--fit-gain', type=float, metavar='DBFS')
+    parser.add_argument('--jobs', type=int, metavar='N')
+    parser.add_argument('--no-master', action='store_true')
+    caching = parser.add_mutually_exclusive_group()
+    caching.add_argument('--cache', type=Path, metavar='DIR')
+    caching.add_argument('--no-cache', action='store_true')
+    return parser.parse_args(argv)
+
+
 def main():
-    args = sys.argv[1:]
-    if len(args) < 2 or args[0].startswith('-'):
-        raise SystemExit(__doc__)
+    arguments = parse_arguments(sys.argv[1:])
     import audible  # it imports this module
-    song, out = Path(args[0]), Path(args[1])
+    song, out, jobs = arguments.song, arguments.out, arguments.jobs
     out.mkdir(parents=True, exist_ok=True)
-    jobs = int(args[args.index('--jobs') + 1]) if '--jobs' in args else None
-    cache = None if '--no-cache' in args else (
-        Path(args[args.index('--cache') + 1]) if '--cache' in args else out.resolve().parent / 'lane-cache')
+    cache = None if arguments.no_cache else (arguments.cache or out.resolve().parent / 'lane-cache')
     document = json.loads(song.read_text(encoding='utf-8'))
     meta = read_meta(song)
     groups = lane_groups(document, meta)
     lanes = render_lanes(document, groups, out, jobs, cache)
     rate, premaster, stems = mix_down(lanes, lane_roles(groups, meta))
     scale = 1.0
-    if '--fit-gain' in args:
-        target = float(args[args.index('--fit-gain') + 1])
+    if arguments.fit_gain is not None:
+        target = arguments.fit_gain
         if ducker_keys(document, range(1, len(document['lanes']) + 1)):
             for _ in range(5):
                 peak = float(np.abs(premaster).max())
@@ -645,7 +657,7 @@ def main():
     lines = audible.audibility(document, groups, rate, premaster.mean(axis=1),
                                lambda name: read_wav(lanes[name])[1].mean(axis=1), jobs)
     (out / 'audible.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
-    if '--no-master' not in args:
+    if not arguments.no_master:
         run(song, out / 'master.wav')
 
 

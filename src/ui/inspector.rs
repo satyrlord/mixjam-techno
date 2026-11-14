@@ -35,9 +35,9 @@ impl MixJamApp {
     /// The page the selection asks for: clips first, then a track, else the
     /// song.
     pub(super) fn inspector_page(&self) -> Page {
-        match self.selected_clips.len() {
-            0 => self.selected_track.map_or(Page::Song, Page::Track),
-            1 => self.selected_clip.map_or(Page::Song, Page::Clip),
+        match self.selection.clips.len() {
+            0 => self.selection.track.map_or(Page::Song, Page::Track),
+            1 => self.selection.clip.map_or(Page::Song, Page::Clip),
             count => Page::Clips(count),
         }
     }
@@ -54,9 +54,9 @@ impl MixJamApp {
     /// Select `track` for the Inspector's track page; the clip selection
     /// clears.
     pub(super) fn select_track(&mut self, track: usize) {
-        self.selected_track = Some(track);
-        self.selected_clip = None;
-        self.selected_clips.clear();
+        self.selection.track = Some(track);
+        self.selection.clip = None;
+        self.selection.clips.clear();
     }
 
     /// The Inspector at the right, or its folded strip. A maximised score
@@ -65,7 +65,7 @@ impl MixJamApp {
         if self.session.layout().maximised {
             return;
         }
-        if !self.room.inspector {
+        if !self.panels.room.inspector {
             egui::SidePanel::right("inspector-folded")
                 .exact_width(INSPECTOR_STRIP_WIDTH)
                 .resizable(false)
@@ -109,7 +109,7 @@ impl MixJamApp {
                     });
                 });
                 let page = self.inspector_page();
-                ui.push_id((self.master_view_generation, page), |ui| {
+                ui.push_id((self.boards.master_view_generation, page), |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("inspector-page")
                         .auto_shrink([false, false])
@@ -209,7 +209,7 @@ impl MixJamApp {
                 .hover_hint("Scroll the score to this section. The playhead stays where it is.")
                 .clicked()
             {
-                self.overview_target = Some((start + next) as f32 / 2.0);
+                self.overview.target = Some((start + next) as f32 / 2.0);
             }
         }
     }
@@ -307,9 +307,8 @@ impl MixJamApp {
             ),
         );
         let any_solo = project.any_solo();
-        let mut tracks = project.tracks.clone();
-        let before = tracks[index].clone();
-        let track = &mut tracks[index];
+        let mut edited = project.tracks[index].clone();
+        let track = &mut edited;
         let width = ui.available_width();
         let mut open_eq = false;
         let mut switched = false;
@@ -468,10 +467,10 @@ impl MixJamApp {
         if open_eq {
             self.eq_track = Some(index);
         }
-        if tracks[index] != before {
-            let command = EditCommand::SetMixer {
-                tracks,
-                master_gain: self.session.project().master_gain,
+        if edited != self.session.project().tracks[index] {
+            let command = EditCommand::SetTrack {
+                index,
+                track: Box::new(edited),
             };
             let result = if switched {
                 self.session.edit_discrete(command)
@@ -535,7 +534,7 @@ impl MixJamApp {
         let clips: Vec<&Clip> = project
             .clips
             .iter()
-            .filter(|clip| self.selected_clips.contains(&clip.id))
+            .filter(|clip| self.selection.clips.contains(&clip.id))
             .collect();
         let start = clips.iter().map(|clip| clip.start_tick).min().unwrap_or(0);
         let end = clips

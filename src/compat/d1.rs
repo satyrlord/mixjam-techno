@@ -32,7 +32,9 @@ pub fn load(path: &Path, library: &Library) -> Result<Project, String> {
         let sample = library
             .sample_by_id(id)
             .ok_or_else(|| library.describe_missing(Product::D1, u32::from(native_id)))?;
-        if sample.source_bpm != 140.0 || (!wav_product && sample.sample_rate != 44_100) {
+        if sample.source_bpm != 140.0
+            || (!wav_product && sample.sample_rate != legacy_format::NATIVE_SAMPLE_RATE)
+        {
             return Err("The D1 sample library has incompatible source timing.".into());
         }
         Ok((id, sample.bars, sample.code.clone()))

@@ -1,4 +1,25 @@
 use super::*;
+use super::{
+    assets::{MAX_PENDING_ASSET_BYTES, NEXT_ASSET_TEMP_ID, encode_float_wave},
+    layout::{
+        Event, Header, Reference, SENTINEL, Timeline, WaveReference, read_header, read_timeline,
+    },
+    project::{build_project, conflicting_placement_metadata},
+    waves::{
+        Wave, d2_embedded_sources, d2_source_wave, embedded_wave_records, packed_wave, retain_wave,
+    },
+};
+use crate::engine::{MissingReference, TRACK_COUNT, Track};
+use sha2::{Digest, Sha256};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    fs,
+    io::Cursor,
+    path::PathBuf,
+    sync::atomic::Ordering,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 struct Scratch {
     root: PathBuf,

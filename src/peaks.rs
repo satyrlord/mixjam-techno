@@ -181,6 +181,8 @@ impl Worker {
                 loop {
                     let mut next = None;
                     if queue.is_empty() {
+                        // An idle worker keeps no catalog alive.
+                        current = None;
                         match requests.recv() {
                             Ok(wanted) => next = Some(wanted),
                             Err(_) => return,
@@ -295,15 +297,19 @@ impl PeakStore {
 
     /// Move to the catalog of `revision`. Finished tables wait by their audio
     /// for the sounds of the new catalog; pending sounds are asked for again.
+    /// Only the previous catalog's tables wait: tables that no sound took
+    /// back by then are dropped, so a session of many catalogs stays bounded.
     fn new_catalog(&mut self, revision: u64) {
         self.revision = revision;
+        let mut earlier = HashMap::with_capacity(self.keys.len());
         for (sample, state) in self.entries.drain() {
             if let Some(key) = self.keys.remove(&sample)
                 && !matches!(state, PeakState::Pending)
             {
-                self.earlier.insert(key, state);
+                earlier.insert(key, state);
             }
         }
+        self.earlier = earlier;
         self.keys.clear();
         self.asked.clear();
         self.asked_set.clear();

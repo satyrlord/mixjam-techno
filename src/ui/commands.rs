@@ -230,34 +230,34 @@ impl MixJamApp {
             Command::SaveAs => self.save(true),
             Command::Import => self.import_wav(),
             Command::Export => self.export(),
-            Command::Erase => self.erase = !self.erase,
+            Command::Erase => self.score_tools.erase = !self.score_tools.erase,
             Command::Delete => self.delete_selection(),
             // Mixer switches the score between its Arrange and Mix views.
-            Command::Mixer => self.set_mix_view(!self.mix_view),
+            Command::Mixer => self.set_mix_view(!self.mix.shown),
             // Mastering, FX returns and Step synth open their tab, and fold
             // the lower panel when their tab already shows.
             Command::Mastering => self.toggle_board(BottomModule::Mastering),
             Command::FxReturns => self.toggle_board(BottomModule::FxReturns),
             Command::StepSynth => self.toggle_board(BottomModule::StepSynth),
-            Command::Effects => self.show_effects = !self.show_effects,
+            Command::Effects => self.effects.open = !self.effects.open,
             Command::Edit => {
-                self.show_sample_edit = !self.show_sample_edit;
-                if self.show_sample_edit {
-                    self.edit_start = 0;
-                    self.edit_end = 0;
+                self.sample_edit.open = !self.sample_edit.open;
+                if self.sample_edit.open {
+                    self.sample_edit.start = 0;
+                    self.sample_edit.end = 0;
                 }
             }
             Command::Stretch => {
-                self.show_stretch = !self.show_stretch;
-                if self.show_stretch {
-                    self.stretch_source_bpm = self.source_bpm().clamp(30.0, 300.0);
+                self.stretch.open = !self.stretch.open;
+                if self.stretch.open {
+                    self.stretch.source_bpm = self.source_bpm().clamp(30.0, 300.0);
                 } else {
                     self.close_stretch_request();
                 }
             }
-            Command::AlbumReview => self.show_album_review = !self.show_album_review,
+            Command::AlbumReview => self.album_review.open = !self.album_review.open,
             Command::Options => self.open_options(ctx),
-            Command::Help => self.show_help = true,
+            Command::Help => self.help.main = true,
             Command::PlayPause => {
                 if self.session.wants_playback() {
                     self.pause();
@@ -284,7 +284,7 @@ impl MixJamApp {
             Command::Boards => {
                 if self.session.layout().maximised {
                     self.set_layout(|layout| layout.maximised = false);
-                } else if self.room.boards {
+                } else if self.panels.room.boards {
                     self.set_layout(|layout| layout.boards = false);
                 } else {
                     self.set_layout(|layout| layout.boards = true);
@@ -306,7 +306,7 @@ impl MixJamApp {
             Command::Inspector => {
                 if self.session.layout().maximised {
                     self.set_layout(|layout| layout.maximised = false);
-                } else if self.room.inspector {
+                } else if self.panels.room.inspector {
                     self.set_layout(|layout| layout.inspector = false);
                 } else {
                     self.open_inspector();
@@ -319,26 +319,31 @@ impl MixJamApp {
     /// True while the command's tool, panel or lane is on.
     pub(super) fn command_active(&self, command: Command) -> bool {
         match command {
-            Command::Erase => self.erase,
-            Command::Mixer => self.mix_view,
+            Command::Erase => self.score_tools.erase,
+            Command::Mixer => self.mix.shown,
             Command::Mastering => self.board_shown(BottomModule::Mastering),
             Command::FxReturns => self.board_shown(BottomModule::FxReturns),
             Command::StepSynth => self.board_shown(BottomModule::StepSynth),
-            Command::Effects => self.show_effects,
-            Command::Edit => self.show_sample_edit,
-            Command::Stretch => self.show_stretch,
-            Command::AlbumReview => self.show_album_review,
+            Command::Effects => self.effects.open,
+            Command::Edit => self.sample_edit.open,
+            Command::Stretch => self.stretch.open,
+            Command::AlbumReview => self.album_review.open,
             Command::Options => self.options.is_some(),
             Command::Maximise => self.session.layout().maximised,
             Command::ToolNames => {
                 let layout = self.session.layout();
                 !layout.maximised && layout.tool_names
             }
-            Command::Boards => self.room.boards,
+            Command::Boards => self.panels.room.boards,
             Command::Sounds => self.sounds_panel_open(),
             Command::Overview => self.session.layout().overview,
-            Command::Inspector => self.room.inspector,
-            Command::Lane(lane, bus) => (self.automation_lane, self.return_lane) == (lane, bus),
+            Command::Inspector => self.panels.room.inspector,
+            Command::Lane(lane, bus) => {
+                (
+                    self.score_tools.automation_lane,
+                    self.score_tools.return_lane,
+                ) == (lane, bus)
+            }
             _ => false,
         }
     }

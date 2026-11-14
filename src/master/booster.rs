@@ -3,6 +3,7 @@
 //! ignored `tools/runtime/fx-reference.py` and match the library's recorded stereo renders
 //! sample for sample. They work on 16-bit samples, as the original does.
 use super::EQ_FREQUENCIES;
+use super::dsp::flush32;
 use std::sync::LazyLock;
 
 pub(super) fn clamp16(value: i32) -> i16 {
@@ -60,7 +61,9 @@ impl Equalizer {
             let y = (((f64::from(x0) * b0 + b1 * f64::from(*x1)) + b2 * f64::from(*x2)
                 - a1 * f64::from(*y1))
                 - a2 * f64::from(*y2)) as f32;
-            (*x2, *x1, *y2, *y1) = (*x1, x0, *y1, y);
+            // A silent input decays the feedback states into denormals.
+            let y = flush32(y);
+            (*x2, *x1, *y2, *y1) = (*x1, flush32(x0), *y1, y);
             x0 = y;
         }
         x0

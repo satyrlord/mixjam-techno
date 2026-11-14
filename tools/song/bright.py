@@ -28,7 +28,11 @@ def expand(pattern):
     roots = env.sample_folders()
     if not roots:
         env.require('SAMPLES_FOLDER_1')
-    return [path for root in roots for path in glob.glob(str(root / pattern), recursive=True)] or [pattern]
+    return [
+        path
+        for root in roots
+        for path in glob.glob(str(Path(glob.escape(str(root))) / pattern), recursive=True)
+    ] or [pattern]
 
 
 def brightness(mono, rate):

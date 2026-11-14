@@ -1,7 +1,13 @@
-//! Playback through the device's mixer and a sink, as the device callback
-//! reads it, without a device.
-use super::*;
-use rodio::dynamic_mixer::{DynamicMixer, DynamicMixerController, mixer};
+//! Playback through the device's mixer, as the device callback reads it,
+//! without a device.
+use super::{
+    Mix, Pcm,
+    device_mixer::{DeviceMixer, MixerInput, Playback},
+    flight, prepare_project_with_quality,
+    source::{PlaybackSource, play_offline},
+};
+use crate::{library::Library, master::MasterControl};
+use std::sync::Arc;
 
 fn playback(samples: Vec<f32>) -> PlaybackSource {
     PlaybackSource::with_quality_block(
@@ -18,19 +24,23 @@ fn playback(samples: Vec<f32>) -> PlaybackSource {
     )
 }
 
-fn sink(controller: &DynamicMixerController<f32>) -> Sink {
-    output::sink_on(
-        controller,
-        2,
-        Mix::SAMPLE_RATE,
-        &Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-    )
+fn mixer(device_rate: u32) -> (DeviceMixer, MixerInput) {
+    super::device_mixer::device_mixer(2, device_rate, Arc::default())
 }
 
-fn pull(out: &mut DynamicMixer<f32>, frames: usize) -> Vec<[f32; 2]> {
-    (0..frames)
-        .map(|_| [out.next().unwrap_or(0.0), out.next().unwrap_or(0.0)])
-        .collect()
+/// Play `source` in place of `old`, which plays out its block and ends.
+fn replace(input: &mut MixerInput, source: PlaybackSource, old: Option<Playback>) -> Playback {
+    if let Some(old) = old {
+        old.end();
+    }
+    input.start(source, 1.0).unwrap()
+}
+
+/// One device callback of `frames` stereo frames.
+fn pull(out: &mut DeviceMixer, frames: usize) -> Vec<[f32; 2]> {
+    let mut buffer = vec![[0.0_f32; 2]; frames];
+    out.fill(buffer.as_flattened_mut(), &mut ());
+    buffer
 }
 
 /// Left at +0.5 and right at -0.5 throughout.
@@ -41,41 +51,25 @@ fn apart(frames: usize) -> Vec<f32> {
 #[test]
 fn playback_keeps_left_and_right_apart_from_its_first_frame() {
     for device_rate in [44_100, 48_000] {
-        let (controller, mut out) = mixer::<f32>(2, device_rate);
-        let mut current = Some(Current::start(
-            sink(&controller),
-            playback(apart(44_100)),
-            None,
-        ));
-        // At another rate, the mixer's resampler reads ahead when the sink
-        // is added, before the playback joins it, so a short silence leads.
+        let (mut out, mut input) = mixer(device_rate);
+        let mut current = Some(replace(&mut input, playback(apart(44_100)), None));
+        // The playback starts at the device's next buffer, at any rate.
         let first = pull(&mut out, 400);
         assert!(
             first
-                .iter()
-                .all(|[left, right]| *left >= 0.0 && *right <= 0.0)
-        );
-        assert!(
-            first[300..]
                 .iter()
                 .all(|[left, right]| *left > 0.4 && *right < -0.4)
         );
         for (round, lead) in [0, 2, 74, 300, 1000].into_iter().enumerate() {
             pull(&mut out, lead);
             // Each replacement of the playback, after a different number of
-            // frames, starts with its own left and right. Before, the mixer
-            // read the first 512 samples of each playback as one channel.
-            current = Some(Current::start(
-                sink(&controller),
-                playback(apart(44_100)),
-                current.take(),
-            ));
-            // The old playback ends at its next block, and the new one can
-            // start after the same short silence; left and right never swap.
+            // frames, starts with its own left and right.
+            current = Some(replace(&mut input, playback(apart(44_100)), current.take()));
+            // The old playback plays out its block beside the new one and
+            // ends; left and right never swap.
             for (frame, [left, right]) in pull(&mut out, 2000).into_iter().enumerate() {
-                let settled = frame >= 300;
                 assert!(
-                    left >= 0.0 && right <= 0.0 && (!settled || (left > 0.4 && right < -0.4)),
+                    left > 0.4 && right < -0.4,
                     "{device_rate} Hz, replacement {round}, frame {frame}: {left} {right}"
                 );
             }
@@ -93,16 +87,16 @@ fn playback_resamples_for_the_device_without_seams() {
         })
         .collect();
     for device_rate in [44_100_u32, 48_000] {
-        let (controller, mut out) = mixer::<f32>(2, device_rate);
-        let _current = Current::start(sink(&controller), playback(sine.clone()), None);
+        let (mut out, mut input) = mixer(device_rate);
+        let _current = replace(&mut input, playback(sine.clone()), None);
         let left: Vec<f32> = pull(&mut out, device_rate as usize / 2)
             .into_iter()
             .map(|[left, _]| left)
             .skip_while(|left| *left == 0.0)
             .collect();
-        // The sine's own curvature, sample to sample. Before, the mixer
-        // restarted its resampler every 256 frames of the playback, and each
-        // restart left a seam of up to four times this.
+        // The sine's own curvature, sample to sample. A resampler that
+        // restarted at each 256-frame block of the playback would leave a
+        // seam of up to four times this.
         let own = 0.5 * (2.0 * (std::f32::consts::PI * 1000.0 / device_rate as f32).sin()).powi(2);
         let largest = left[10..]
             .windows(3)
@@ -115,8 +109,8 @@ fn playback_resamples_for_the_device_without_seams() {
     }
 }
 
-/// Plays a real song through the whole device chain, from a sink through
-/// the device's mixer, in callbacks of irregular sizes as a device asks,
+/// Plays a real song through the whole device chain, through the device's
+/// mixer, in callbacks of irregular sizes as a device asks,
 /// at 44.1 and 48 kHz. Compares what the device would get with the same
 /// chain read in callbacks of one size, and at 44.1 kHz with the playback
 /// source alone, and scans it for broadband noise.
@@ -175,7 +169,7 @@ fn device_chain_song_scan() {
                 (frames * u64::from(device_rate) / u64::from(Mix::SAMPLE_RATE)) as usize;
             let mut chains = Vec::new();
             for irregular in [false, true] {
-                let (controller, mut out) = mixer::<f32>(2, device_rate);
+                let (mut out, mut input) = mixer(device_rate);
                 let source = PlaybackSource::with_quality_block(
                     mix.clone(),
                     start,
@@ -184,7 +178,7 @@ fn device_chain_song_scan() {
                     PlaybackSource::BLOCK_FRAMES,
                     quality,
                 );
-                let _current = Current::start(sink(&controller), source, None);
+                let _current = replace(&mut input, source, None);
                 let mut device = Vec::with_capacity(device_frames * 2);
                 while device.len() < device_frames * 2 {
                     let callback = if irregular {
@@ -194,9 +188,7 @@ fn device_chain_song_scan() {
                     } else {
                         480
                     };
-                    for _ in 0..callback * 2 {
-                        device.push(out.next().unwrap_or(0.0));
-                    }
+                    device.extend(pull(&mut out, callback).into_iter().flatten());
                 }
                 device.truncate(device_frames * 2);
                 chains.push(device);
@@ -206,8 +198,7 @@ fn device_chain_song_scan() {
                 .iter()
                 .zip(irregular)
                 .position(|(a, b)| a.to_bits() != b.to_bits());
-            // At the source's rate the chain plays the source after a short
-            // lead of silence.
+            // At the source's rate the chain plays the source as it is.
             let against_source = (device_rate == Mix::SAMPLE_RATE).then(|| {
                 let lead = steady.iter().position(|x| *x != 0.0).unwrap_or(0)
                     - alone.iter().position(|x| *x != 0.0).unwrap_or(0);

@@ -66,8 +66,8 @@ pub fn pattern_beside(wav: &std::path::Path) -> std::path::PathBuf {
 pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
     source.validate()?;
     state.validate()?;
-    if source.frames() == 0 || source.frames() > 64_000_000 {
-        return Err("Choose a nonempty sample with a supported size.".into());
+    if source.frames() == 0 {
+        return Err("Choose a nonempty sample.".into());
     }
     let notes: Vec<_> = state
         .active_bars
@@ -77,10 +77,9 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
         .flat_map(|(bar, _)| state.steps[bar * 16..bar * 16 + 16].iter().copied())
         .collect();
     let frames_per_step = source.sample_rate as f64 * 60.0 / state.bpm / 4.0;
+    // At most 64 steps at 30 BPM and 384 kHz: about 12 million frames, far
+    // below what a WAV file holds, so the sequence needs no length check.
     let total_frames = (notes.len() as f64 * frames_per_step).round() as usize;
-    if total_frames > 32_000_000 {
-        return Err("The generated sequence is too large.".into());
-    }
     let mut samples = vec![0.0; total_frames];
     let source_frames = source.frames() as usize;
     let channel_count = source.channels as usize;

@@ -15,6 +15,18 @@ pub(super) const OVERVIEW_GAP: f32 = 8.0;
 const INSET: f32 = 12.0;
 const HIDE_SIZE: f32 = 22.0;
 
+/// The song overview's rect, the tick it asks the score to show, and its
+/// cached clip lines.
+#[derive(Default)]
+pub(super) struct OverviewState {
+    /// A tick the song overview asked the score to centre on.
+    pub(super) target: Option<f32>,
+    /// The song overview's rect, open or folded, as last laid out.
+    pub(super) rect: Option<Rect>,
+    /// The song overview's clip lines and what they were built from.
+    pub(super) lines: Option<(ClipLinesKey, Arc<egui::Mesh>)>,
+}
+
 /// The score's horizontal view, as the arrangement last laid it out.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct ScoreView {
@@ -93,7 +105,7 @@ impl MixJamApp {
     /// there is room again. If even the bar cannot fit, it hides entirely;
     /// the saved layout stays as it is.
     pub(super) fn song_overview(&mut self, ui: &mut egui::Ui) -> Option<OverviewSlot> {
-        self.overview_rect = None;
+        self.overview.rect = None;
         if ui.available_height() < overview_bar_reserve(ui.spacing().item_spacing.y) + SCORE_ROOM {
             return None;
         }
@@ -103,7 +115,7 @@ impl MixJamApp {
                 Vec2::new(ui.available_width(), OVERVIEW_BAR_HEIGHT),
                 Sense::hover(),
             );
-            self.overview_rect = Some(rect);
+            self.overview.rect = Some(rect);
             if overview_bar(ui, rect, wanted).clicked() && !wanted {
                 self.set_layout(|layout| layout.overview = true);
             }
@@ -114,7 +126,7 @@ impl MixJamApp {
             Vec2::new(ui.available_width(), OVERVIEW_HEIGHT),
             Sense::click_and_drag(),
         );
-        self.overview_rect = Some(rect);
+        self.overview.rect = Some(rect);
         // The hide button sits over the strip's lower right corner and takes
         // the pointer there.
         let hide = ui.interact(
@@ -125,7 +137,7 @@ impl MixJamApp {
             ui.id().with("hide-song-overview"),
             Sense::click(),
         );
-        if let Some(view) = self.score_view {
+        if let Some(view) = self.score.view {
             let span = overview_span(
                 self.session.project(),
                 self.session.cursor_tick(),
@@ -136,7 +148,7 @@ impl MixJamApp {
                 && let Some(pos) = strip.interact_pointer_pos()
             {
                 let tick = (pos.x - lane.min) / lane.span() * span;
-                self.overview_target = Some(tick.clamp(0.0, span));
+                self.overview.target = Some(tick.clamp(0.0, span));
                 strip.request_focus();
             }
             if strip.has_focus() {
@@ -168,7 +180,7 @@ impl MixJamApp {
                     }
                 });
                 if let Some(target) = target {
-                    self.overview_target = Some(target.clamp(0.0, span));
+                    self.overview.target = Some(target.clamp(0.0, span));
                 }
             }
         }
@@ -241,7 +253,7 @@ impl MixJamApp {
         let rect = slot.rect;
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 4.0, roles().panel);
-        let Some(view) = self.score_view else {
+        let Some(view) = self.score.view else {
             return;
         };
         let project = self.session.project();
@@ -249,7 +261,7 @@ impl MixJamApp {
         let span = overview_span(project, cursor, view.ticks());
         let lane = rect.x_range().shrink(INSET);
         let x = |tick: f32| lane.min + tick / span * lane.span();
-        let sections = self.section_bookmarks && !project.sections.is_empty();
+        let sections = self.sections.bookmarks && !project.sections.is_empty();
         if sections {
             let current = project
                 .sections
@@ -302,13 +314,14 @@ impl MixJamApp {
             canvas: roles().canvas,
         };
         if self
-            .overview_lines
+            .overview
+            .lines
             .as_ref()
             .is_none_or(|(old, _)| *old != key)
         {
-            self.overview_lines = Some((key, Arc::new(self.clip_lines(rect, span, sections))));
+            self.overview.lines = Some((key, Arc::new(self.clip_lines(rect, span, sections))));
         }
-        if let Some((_, mesh)) = &self.overview_lines
+        if let Some((_, mesh)) = &self.overview.lines
             && !mesh.is_empty()
         {
             painter.add(egui::Shape::Mesh(mesh.clone()));

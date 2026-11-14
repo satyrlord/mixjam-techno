@@ -5,6 +5,29 @@ use super::*;
 /// The tempo for WAVs whose own tempo cannot be recognized.
 const FALLBACK_TEMPO: &str = "Tempo for files without one";
 
+/// The sample libraries: the provider to add, the scan tempo, and the scan's
+/// status line.
+pub(super) struct LibrariesState {
+    pub(super) product: Product,
+    /// The tempo for unrecognized WAVs in the next sample folder scan.
+    pub(super) fallback_bpm: f64,
+    /// Close untouched startup Options after its scan fills the library.
+    pub(super) close_options_after_scan: bool,
+    /// The scan progress line last written to the status, while a scan runs.
+    pub(super) scan_status: Option<String>,
+}
+
+impl Default for LibrariesState {
+    fn default() -> Self {
+        Self {
+            product: Product::T1,
+            fallback_bpm: 140.0,
+            close_options_after_scan: false,
+            scan_status: None,
+        }
+    }
+}
+
 fn library_button(
     ui: &mut egui::Ui,
     label: &str,
@@ -78,15 +101,19 @@ impl MixJamApp {
         );
         ui.horizontal_wrapped(|ui| {
             ui.label(FALLBACK_TEMPO);
-            let fallback =
-                controls::number(ui, &mut self.fallback_bpm, 1.0..=999.0, FALLBACK_TEMPO)
-                    .hover_hint(
-                        "Recognized product audio keeps its original tempo. Folders \
+            let fallback = controls::number(
+                ui,
+                &mut self.libraries.fallback_bpm,
+                1.0..=999.0,
+                FALLBACK_TEMPO,
+            )
+            .hover_hint(
+                "Recognized product audio keeps its original tempo. Folders \
         use matching original audio when enough sources agree, then \
         loop lengths, then this tempo. Unresolved half/double \
         matches prefer 88–176 BPM unless this tempo selects the \
         other one.",
-                    );
+            );
             options::remember_focus(&fallback);
             ui.label("BPM");
         });
@@ -176,11 +203,11 @@ impl MixJamApp {
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let products = egui::ComboBox::from_id_salt("library_product")
-                        .selected_text(self.library_product.label())
+                        .selected_text(self.libraries.product.label())
                         .show_ui(ui, |ui| {
                             for product in Product::ALL {
                                 ui.selectable_value(
-                                    &mut self.library_product,
+                                    &mut self.libraries.product,
                                     product,
                                     product.label(),
                                 );
@@ -192,7 +219,7 @@ impl MixJamApp {
                     if library_button(ui, "Choose folder", "Choose provider folder", idle, busy)
                         .clicked()
                     {
-                        self.ask_path(FileRequest::ProviderFolder(self.library_product));
+                        self.ask_path(FileRequest::ProviderFolder(self.libraries.product));
                     }
                 });
                 ui.separator();

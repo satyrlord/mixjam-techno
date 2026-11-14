@@ -38,7 +38,8 @@ Read [REFERENCE.md](REFERENCE.md) for applicability and stop conditions.
 
 ## 3. Run applicable checks
 
-Use the current commands in `docs/DEVELOPMENT.md` and `docs/ARCHITECTURE.md`:
+Use the current commands in `docs/DEVELOPMENT.md` and
+`docs/architecture/safe-frontend-iteration.md`:
 
 1. Run `cargo.ps1 -CargoArguments @('fmt','--all','--','--check')` and
    `python tools/check-rust-format.py`.

@@ -94,16 +94,26 @@ pub(crate) fn write_many(
     result
 }
 
-/// Reserve a sibling name before using it, including backup names.
-fn sibling(path: &Path, extension: &str) -> Result<(PathBuf, fs::File), String> {
+/// The characters of the destination name kept in a sibling name. A sibling
+/// adds about 45 characters, so a destination name that is valid on its own
+/// must stay valid with them.
+const SIBLING_NAME_CHARS: usize = 24;
+
+/// Reserve a sibling name before using it, including backup names: a new,
+/// hidden file beside `path` that no other writer in any process can take.
+pub(crate) fn sibling(path: &Path, extension: &str) -> Result<(PathBuf, fs::File), String> {
     static WRITES: AtomicU64 = AtomicU64::new(0);
     let name = path.file_name().ok_or("Select a file name.")?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());
+    let prefix: String = name
+        .to_string_lossy()
+        .chars()
+        .take(SIBLING_NAME_CHARS)
+        .collect();
     let sibling = path.with_file_name(format!(
-        ".{}.{}-{stamp}-{}.{extension}",
-        name.to_string_lossy(),
+        ".{prefix}.{}-{stamp}-{}.{extension}",
         std::process::id(),
         WRITES.fetch_add(1, Ordering::Relaxed)
     ));
@@ -250,6 +260,17 @@ mod tests {
             .is_err()
         );
         assert_eq!(fs::read(&path).unwrap(), b"saved");
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn a_long_destination_name_is_written_and_replaced() {
+        let folder = folder("long-name");
+        let path = folder.join(format!("{}.json", "n".repeat(240)));
+        write(&path, b"old").unwrap();
+        write(&path, b"new").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new");
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
         fs::remove_dir_all(folder).unwrap();
     }

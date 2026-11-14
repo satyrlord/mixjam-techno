@@ -11,14 +11,22 @@ lookup = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(lookup)
 
 
+RELEASE = "9a2b5f1c-0d3e-4f6a-8b7c-1d2e3f4a5b6c"
+
+
 class LookupTests(unittest.TestCase):
+    def test_a_release_id_that_is_not_a_uuid_never_reaches_the_url(self):
+        with patch.object(lookup, "musicbrainz") as request, self.assertRaises(ValueError):
+            lookup.tracks("../artist/x")
+        request.assert_not_called()
+
     def test_missing_track_lengths_do_not_produce_a_partial_album_runtime(self):
         release = {"media": [{"tracks": [
             {"title": "Known", "length": 60000},
             {"title": "Unknown"},
         ]}]}
         with patch.object(lookup, "musicbrainz", return_value=release):
-            result = lookup.tracks("fixture")
+            result = lookup.tracks(RELEASE)
         self.assertEqual(result["tracks"][1]["duration"], "?:??")
         self.assertEqual(result["runtime"], "?:??")
 
@@ -27,7 +35,7 @@ class LookupTests(unittest.TestCase):
             {"title": "First", "length": 60000},
         ]}, {"tracks": [{"title": "Second", "length": 120000}]}]}
         with patch.object(lookup, "musicbrainz", return_value=release):
-            result = lookup.tracks("fixture")
+            result = lookup.tracks(RELEASE)
         self.assertEqual(result["runtime"], "3:00")
         self.assertEqual([track["num"] for track in result["tracks"]], [1, 2])
 

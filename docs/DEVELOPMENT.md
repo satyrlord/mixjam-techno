@@ -56,10 +56,13 @@ python -m unittest discover -s tools/tests -v
 
 The format check passes code that rustfmt does not format. Stable rustfmt
 leaves a statement as written when it cannot fit a line, such as one with a
-long string literal, and it does not visit `src/ui/tests.rs`, which reaches the
-crate through `include!`. `tools/check-rust-format.py` formats each Rust file on
-its own and reports each region that rustfmt skips. Split a long literal with
-`\` line continuations so that every line fits in 100 columns.
+long string literal, and it does not visit a file that the crate reaches only
+through `include!`. `src/lib.rs` includes `src/ui.rs` for the native UI tests,
+but `src/main.rs` also declares it as a module, so rustfmt formats it and
+follows its `#[path]` test modules. `tools/check-rust-format.py` formats each
+tracked or new Rust file on its own and reports each region that rustfmt
+skips, so a file that only `include!` reaches is still checked. Split a long
+literal with `\` line continuations so that every line fits in 100 columns.
 
 The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`

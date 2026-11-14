@@ -12,6 +12,10 @@ const PCM: u16 = 1;
 const IEEE_FLOAT: u16 = 3;
 const EXTENSIBLE: u16 = 0xFFFE;
 
+/// The longest WAV file: the RIFF size is 32-bit and the 8-byte RIFF header
+/// comes before it. This is a format limit; a longer file is not a WAV.
+pub(crate) const MAX_WAV_FILE_BYTES: u64 = u32::MAX as u64 + 8;
+
 /// A WAV's format and the byte span of its whole audio frames.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WavLayout {

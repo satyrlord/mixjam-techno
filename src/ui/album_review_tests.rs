@@ -80,8 +80,8 @@ fn fixture(name: &str, reviews: &[Review]) -> (egui::Context, MixJamApp, PathBuf
         "Album window".into(),
         false,
     );
-    app.capture_path = None;
-    app.album_review.use_folder(
+    app.capture.path = None;
+    app.album_review.state.use_folder(
         Some(root.join("reviews")),
         CoverCache::new(root.join("covers"), 1 << 20),
     );
@@ -179,7 +179,7 @@ fn the_rail_button_opens_the_grid_with_its_count_filters_and_sort() {
         "The window starts closed."
     );
     let output = click(&ctx, &mut app, "Album Review");
-    assert!(app.show_album_review);
+    assert!(app.album_review.open);
     assert!(has_text(&output, "3 / 3 albums"));
     for control in [
         "Search albums",
@@ -208,7 +208,7 @@ fn the_rail_button_opens_the_grid_with_its_count_filters_and_sort() {
     assert!(has_text(&output, "1 / 3 albums"));
     // A search for an accented title without its accent finds nothing here,
     // and the empty state offers Clear filters.
-    app.album_review.filter.search = "oxygene".into();
+    app.album_review.state.filter.search = "oxygene".into();
     let output = frame(&ctx, &mut app, Vec::new());
     let output = if has_text(&output, "No results") {
         output
@@ -220,9 +220,9 @@ fn the_rail_button_opens_the_grid_with_its_count_filters_and_sort() {
         "No results for the current search and filters."
     ));
     let output = click(&ctx, &mut app, "Clear filters");
-    assert!(app.album_review.filter.is_empty());
+    assert!(app.album_review.state.filter.is_empty());
     assert!(has_text(&output, "3 / 3 albums"));
-    app.album_review.filter.search = "OXYGENE".into();
+    app.album_review.state.filter.search = "OXYGENE".into();
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "1 / 3 albums"));
@@ -243,7 +243,7 @@ fn a_genre_that_would_leave_no_album_is_disabled_and_extra_genres_fold_away() {
     let mut reviews = vec![review("a-a", "A", "A", 1990, &genres)];
     reviews.push(review("b-b", "B", "B", 1991, &["Ambient"]));
     let (ctx, mut app, root) = fixture("genres", &reviews);
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(
@@ -276,10 +276,13 @@ fn an_album_page_shows_metadata_links_overview_and_each_timeline() {
             &["Electronic"],
         )],
     );
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = click(&ctx, &mut app, "Open review: Jean-Michel Jarre — Oxygène");
-    assert_eq!(app.album_review.page.as_deref(), Some("jarre-oxygene"));
+    assert_eq!(
+        app.album_review.state.page.as_deref(),
+        Some("jarre-oxygene")
+    );
     for text in [
         "Released",
         "1976",
@@ -317,7 +320,7 @@ fn an_album_page_shows_metadata_links_overview_and_each_timeline() {
     assert!(has_text(&output, "No cover: The download failed"));
     assert!(node(&output, "Display cover art").is_some());
     let output = click(&ctx, &mut app, "← All albums");
-    assert_eq!(app.album_review.page, None);
+    assert_eq!(app.album_review.state.page, None);
     assert!(has_text(&output, "1 / 1 album"));
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -325,11 +328,12 @@ fn an_album_page_shows_metadata_links_overview_and_each_timeline() {
 #[test]
 fn a_missing_folder_and_an_empty_folder_have_explicit_states() {
     let (ctx, mut app, root) = fixture("empty", &[]);
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "No albums available."));
     app.album_review
+        .state
         .use_folder(None, CoverCache::new(root.join("covers"), 1 << 20));
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
@@ -349,15 +353,19 @@ fn genre_chips_wrap_inside_supported_and_narrower_windows() {
                 style.animation_time = 0.0;
                 style.scroll_animation = egui::style::ScrollAnimation::none();
             });
-            app.album_review.use_folder(
+            app.album_review.state.use_folder(
                 bundled.folder().map(Path::to_path_buf),
                 CoverCache::new(root.join("covers"), 1 << 20),
             );
-            app.show_album_review = true;
+            app.album_review.open = true;
             app.options = None;
             if filtered {
-                app.album_review.filter.search = "eno".into();
-                app.album_review.filter.genres.insert("Ambient".into());
+                app.album_review.state.filter.search = "eno".into();
+                app.album_review
+                    .state
+                    .filter
+                    .genres
+                    .insert("Ambient".into());
             }
             let mut output = None;
             for _ in 0..6 {
@@ -427,7 +435,7 @@ fn opening_an_album_from_a_scrolled_grid_starts_at_the_top_of_its_page() {
         .collect();
     let (ctx, mut app, root) = fixture("page-scroll", &reviews);
     app.options = None;
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     let search_top = node(&output, "Search albums").unwrap().bounds().unwrap().y0;
@@ -467,8 +475,9 @@ fn opening_an_album_from_a_scrolled_grid_starts_at_the_top_of_its_page() {
 fn a_missing_reviews_folder_can_be_rediscovered_without_restarting() {
     let (ctx, mut app, root) = fixture("rediscover", &[]);
     app.album_review
+        .state
         .use_folder(None, CoverCache::new(root.join("covers"), 1 << 20));
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "No reviews folder"));
@@ -478,7 +487,7 @@ fn a_missing_reviews_folder_can_be_rediscovered_without_restarting() {
         "The bundled reviews are the restored folder."
     );
     let output = click(&ctx, &mut app, "Reload reviews");
-    assert_eq!(app.album_review.shelf().folder(), expected.folder());
+    assert_eq!(app.album_review.state.shelf().folder(), expected.folder());
     assert!(!has_text(&output, "No reviews folder"));
     assert!(node(&output, "Search albums").is_some());
     std::fs::remove_dir_all(root).unwrap();
@@ -491,7 +500,7 @@ fn clear_cover_cache_removes_the_downloaded_covers() {
     cache
         .store("a-a", include_bytes!("../../assets/rail/album-review.png"))
         .unwrap();
-    app.show_album_review = true;
+    app.album_review.open = true;
     frame(&ctx, &mut app, Vec::new());
     let output = frame(&ctx, &mut app, Vec::new());
     assert!(has_text(&output, "Cover cache: 1 cover"));

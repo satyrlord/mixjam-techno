@@ -305,7 +305,7 @@ fn switch(ui: &mut egui::Ui, name: &str, value: &mut bool) {
 
 impl MixJamApp {
     pub(super) fn open_options(&mut self, ctx: &egui::Context) {
-        self.close_options_after_scan = false;
+        self.libraries.close_options_after_scan = false;
         if let Some(draft) = &mut self.options {
             draft.focus_page = true;
         } else {
@@ -436,7 +436,7 @@ impl MixJamApp {
                                 }
                                 if response.clicked() {
                                     draft.page = page;
-                                    self.close_options_after_scan = false;
+                                    self.libraries.close_options_after_scan = false;
                                 }
                                 if response.has_focus() {
                                     let delta = ui.input_mut(|input| {
@@ -466,7 +466,7 @@ impl MixJamApp {
                                             .rem_euclid(pages.len() as isize)
                                             as usize];
                                         draft.focus_page = true;
-                                        self.close_options_after_scan = false;
+                                        self.libraries.close_options_after_scan = false;
                                     }
                                 }
                             }
@@ -637,7 +637,7 @@ impl MixJamApp {
                 Ok(_) => {
                     draft.reload(&self.session);
                     draft.saved = true;
-                    self.section_bookmarks = self.session.options().show_section_bookmarks;
+                    self.sections.bookmarks = self.session.options().show_section_bookmarks;
                     self.message("Options applied.");
                 }
                 Err(error) => {

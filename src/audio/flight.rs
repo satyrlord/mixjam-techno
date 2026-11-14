@@ -858,4 +858,4 @@ impl Watcher {
 }
 
 #[cfg(test)]
-mod tests;
+pub(in crate::audio) mod tests;

@@ -51,6 +51,29 @@ impl Default for Space {
     }
 }
 
+/// The folding panels: which show this frame, the space they were chosen
+/// for, and the order they were opened in.
+pub(super) struct Panels {
+    /// The panels that show this frame, and the space they were chosen for.
+    pub(super) room: Room,
+    pub(super) space: Space,
+    /// The folding panels, from the one opened last.
+    pub(super) order: [Panel; 3],
+    /// The Inspector was opened this session, so a narrow window shows it.
+    pub(super) inspector_opened: bool,
+}
+
+impl Default for Panels {
+    fn default() -> Self {
+        Self {
+            room: Room::default(),
+            space: Space::default(),
+            order: [Panel::Boards, Panel::Sounds, Panel::Inspector],
+            inspector_opened: false,
+        }
+    }
+}
+
 /// Which panels show. `order` lists the panels from the one opened last.
 /// The Inspector shows beside an open Sounds panel only where both fit; in a
 /// narrower window it starts folded until it is opened (`inspector_opened`).
@@ -100,35 +123,40 @@ impl MixJamApp {
                 || (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0),
                 |state| state.rect.height(),
             )
-            .max(self.bottom_module.minimum_height(available.height()));
+            .max(self.boards.module.minimum_height(available.height()));
         let space = Space {
             width: available.width() - rail,
             height: available.height(),
             board,
         };
-        if space != self.room_space {
-            self.room_space = space;
+        if space != self.panels.space {
+            self.panels.space = space;
             self.resolve_room();
         }
     }
 
     /// Decide again which panels show, after the layout or the space changed.
     pub(super) fn resolve_room(&mut self) {
-        self.room = resolve(
+        self.panels.room = resolve(
             self.session.layout(),
-            self.room_space,
-            self.panel_order,
-            self.inspector_opened,
+            self.panels.space,
+            self.panels.order,
+            self.panels.inspector_opened,
         );
     }
 
     /// `panel` was opened: it takes the room it shares first.
     pub(super) fn claim(&mut self, panel: Panel) {
         let mut order = vec![panel];
-        order.extend(self.panel_order.into_iter().filter(|other| *other != panel));
-        self.panel_order = [order[0], order[1], order[2]];
+        order.extend(
+            self.panels
+                .order
+                .into_iter()
+                .filter(|other| *other != panel),
+        );
+        self.panels.order = [order[0], order[1], order[2]];
         if panel == Panel::Inspector {
-            self.inspector_opened = true;
+            self.panels.inspector_opened = true;
         }
         self.resolve_room();
     }

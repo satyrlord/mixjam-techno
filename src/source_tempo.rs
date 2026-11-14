@@ -61,7 +61,10 @@ impl SourceTempos {
         let mut tempo = None;
         for probe in probes {
             total += 1;
-            if probe.channels != 1 || probe.sample_rate != 44_100 || probe.frame_count <= 2 {
+            if probe.channels != 1
+                || probe.sample_rate != legacy_format::NATIVE_SAMPLE_RATE
+                || probe.frame_count <= 2
+            {
                 continue;
             }
             let Some(bpm) = probe

@@ -43,7 +43,14 @@ fn replace_provider(library: &mut Library, binding: &LibraryBinding) -> Result<(
 }
 
 fn run() -> Result<(), String> {
-    let mut args = std::env::args().skip(1);
+    // Paths come through as the OS gave them; a non-Unicode argument is an
+    // error only where text is needed.
+    let mut args = std::env::args_os().skip(1);
+    let text = |value: std::ffi::OsString| {
+        value
+            .into_string()
+            .map_err(|value| format!("{} is not valid Unicode.", value.to_string_lossy()))
+    };
     let mut app: Option<PathBuf> = None;
     let mut samples: Vec<PathBuf> = Vec::new();
     let mut source_bpm: Option<f64> = None;
@@ -54,10 +61,11 @@ fn run() -> Result<(), String> {
     let mut additional_libraries = Vec::new();
     let mut agent_port: Option<u16> = None;
     while let Some(arg) = args.next() {
-        match arg.as_str() {
+        match text(arg)?.as_str() {
             // The rest of the line is a request for a running application.
             "agent" => {
-                return match agent::run_client(&args.collect::<Vec<_>>())? {
+                let request = args.map(text).collect::<Result<Vec<_>, _>>()?;
+                return match agent::run_client(&request)? {
                     true => Ok(()),
                     false => Err(String::new()),
                 };
@@ -66,7 +74,7 @@ fn run() -> Result<(), String> {
             "--agent-port" => {
                 agent_port = Some(
                     args.next()
-                        .and_then(|port| port.parse().ok())
+                        .and_then(|port| port.to_str()?.parse().ok())
                         .ok_or("--agent-port needs a port number.")?,
                 );
             }
@@ -76,7 +84,7 @@ fn run() -> Result<(), String> {
                 ))
             }
             "--library" => {
-                let value = args.next().ok_or("--library needs PRODUCT=PATH.")?;
+                let value = text(args.next().ok_or("--library needs PRODUCT=PATH.")?)?;
                 let (product, root) = value
                     .split_once('=')
                     .ok_or("--library needs PRODUCT=PATH.")?;
@@ -97,8 +105,7 @@ fn run() -> Result<(), String> {
             }
             "--source-bpm" => {
                 source_bpm = Some(
-                    args.next()
-                        .ok_or("--source-bpm needs a tempo.")?
+                    text(args.next().ok_or("--source-bpm needs a tempo.")?)?
                         .parse()
                         .map_err(|_| "The source tempo must be a number.")?,
                 );
@@ -118,14 +125,16 @@ fn run() -> Result<(), String> {
                     args.next().ok_or("--stems needs a folder path.")?,
                 ))
             }
-            "inspect" | "verify-fixtures" | "render" | "convert" | "gui" => command = arg,
+            name @ ("inspect" | "verify-fixtures" | "render" | "convert" | "gui") => {
+                command = name.to_string()
+            }
             "--help" | "-h" => {
                 println!(
                     "MixJam Techno\n\nUsage: mixjam-techno [gui|inspect|verify-fixtures|render|convert] [--app PATH] [--library PRODUCT=PATH] [--samples PATH ...] [--source-bpm BPM] [--mix PATH] [--output PATH] [--stems FOLDER] [--agent] [--agent-port PORT]\n       mixjam-techno agent [--port PORT] COMMAND [name=value ...]\n\nProducts: d1, d2, d3, d4, h1, t1, t2, t3.\nThe editor supports up to 64 tracks and 120, 125, 130, 135, 140, 160, or 180 BPM.\nSelect a WAV folder with --samples PATH, or up to 9 library folders with one --samples for each; the app merges them into one sound browser. Libraries in the app does the same. No original installation is required. --source-bpm sets the fallback tempo (default 140) for unrecognized WAVs in folders whose loop lengths do not agree on one.\nrender requires --mix and either --output or --stems; convert requires --mix and --output and saves a .mixjam song. render --stems FOLDER writes each track and each FX return to its own WAV in FOLDER, without the master pedalboard.\nverify-fixtures reads T2 demos.\ngui --agent lets a local agent operate the window through port 47800; --agent-port selects another port. `agent help` lists the requests."
                 );
                 return Ok(());
             }
-            _ => return Err(format!("Unknown argument: {arg}. Use --help for usage.")),
+            other => return Err(format!("Unknown argument: {other}. Use --help for usage.")),
         }
     }
     if source_bpm.is_some_and(|bpm| !bpm.is_finite() || bpm <= 0.0) {
@@ -184,7 +193,7 @@ fn run() -> Result<(), String> {
     if command == "gui" {
         // Libraries added in the Libraries panel persist in libraries.json. The
         // selected WAV folder already identifies its own products and wins.
-        match project_io::load_library_config() {
+        match project_io::load_library_config(&project_io::data_root()) {
             Ok(bindings) => {
                 for binding in bindings {
                     if library.source_root(binding.product).is_some()

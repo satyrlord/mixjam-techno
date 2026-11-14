@@ -127,8 +127,9 @@ pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, Strin
     if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
         return Err("Source tempo must be from 7.5 to 1200 BPM.".into());
     }
-    if input.frames() > 64_000_000 {
-        return Err("The sample is too large for effect processing.".into());
+    // The result is saved as a WAV, so it can be no longer than one holds.
+    if input.samples.len() > crate::audio::MAX_WAV_SAMPLES {
+        return Err("The sample is too long for a WAV file.".into());
     }
     let mut output = input.clone();
     let channels = input.channels as usize;

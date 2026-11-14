@@ -4,6 +4,7 @@ pub(super) struct Source<'a> {
     pub name: &'a str,
     pub id: Option<u32>,
     pub samples: &'a [Sample],
+    pub catalog_revision: u64,
     pub missing: bool,
     pub bpm: f64,
 }
@@ -90,12 +91,52 @@ pub(super) fn show(
                         ui.ctx()
                             .data_mut(|data| data.insert_temp(search_id, search.clone()));
                         let query = search.trim().to_lowercase();
-                        let matches: Vec<_> = source
-                            .samples
-                            .iter()
-                            .filter(|sample| {
-                                query.is_empty() || sample.name.to_lowercase().contains(&query)
+                        // Lowercasing every name each frame is the cost here, so
+                        // the matches stay until the search or the list changes.
+                        let matches_id = ui.id().with("source-matches");
+                        let count = source.samples.len();
+                        let cached = (!opened)
+                            .then(|| {
+                                ui.ctx().data(|data| {
+                                    data.get_temp::<(String, u64, usize, Vec<usize>)>(matches_id)
+                                })
                             })
+                            .flatten()
+                            .filter(|(seen, revision, seen_count, _)| {
+                                *seen == query
+                                    && *revision == source.catalog_revision
+                                    && *seen_count == count
+                            });
+                        let indices = cached.map_or_else(
+                            || {
+                                let indices: Vec<usize> = source
+                                    .samples
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, sample)| {
+                                        query.is_empty()
+                                            || sample.name.to_lowercase().contains(&query)
+                                    })
+                                    .map(|(index, _)| index)
+                                    .collect();
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(
+                                        matches_id,
+                                        (
+                                            query.clone(),
+                                            source.catalog_revision,
+                                            count,
+                                            indices.clone(),
+                                        ),
+                                    );
+                                });
+                                indices
+                            },
+                            |(_, _, _, indices)| indices,
+                        );
+                        let matches: Vec<_> = indices
+                            .iter()
+                            .map(|&index| &source.samples[index])
                             .collect();
                         if matches.is_empty() {
                             ui.label("No matching sounds. Clear the search or enter another name.");

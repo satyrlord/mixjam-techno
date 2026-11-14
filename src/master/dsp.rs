@@ -18,7 +18,7 @@ pub(crate) fn prepare_tables() {
 }
 
 /// The mix rate, in frames per second.
-pub(crate) const RATE: f64 = 44_100.0;
+pub(crate) const RATE: f64 = crate::audio::Mix::SAMPLE_RATE as f64;
 
 pub(crate) fn db_to_gain(db: f64) -> f64 {
     10f64.powf(db / 20.0)
@@ -33,6 +33,50 @@ pub(crate) fn gain_to_db(gain: f64) -> f64 {
 #[inline]
 pub(crate) fn flush(value: f64) -> f64 {
     if value.abs() < 1e-30 { 0.0 } else { value }
+}
+
+/// `flush` for single-precision states.
+#[inline]
+pub(crate) fn flush32(value: f32) -> f32 {
+    if value.abs() < 1e-30 { 0.0 } else { value }
+}
+
+/// The smallest of the last `span` values pushed, `span` at most `N`: a
+/// queue of the values that can still become the smallest. The limiters
+/// keep the lowest gain need of their hold with it.
+#[derive(Clone, Copy)]
+pub(crate) struct MovingMin<const N: usize> {
+    pub(crate) values: [f64; N],
+    pub(crate) times: [u32; N],
+    pub(crate) len: usize,
+    pub(crate) head: usize,
+    pub(crate) now: u32,
+}
+impl<const N: usize> MovingMin<N> {
+    pub(crate) const EMPTY: Self = Self {
+        values: [0.0; N],
+        times: [0; N],
+        head: 0,
+        len: 0,
+        now: 0,
+    };
+
+    pub(crate) fn push(&mut self, value: f64, span: usize) -> f64 {
+        // Expire before insertion: a full rising queue otherwise overwrites
+        // its oldest value before its timestamp can be checked.
+        while self.len > 0 && self.now.wrapping_sub(self.times[self.head]) as usize >= span {
+            self.head = (self.head + 1) % N;
+            self.len -= 1;
+        }
+        while self.len > 0 && self.values[(self.head + self.len - 1) % N] >= value {
+            self.len -= 1;
+        }
+        let at = (self.head + self.len) % N;
+        (self.values[at], self.times[at]) = (value, self.now);
+        self.len += 1;
+        self.now = self.now.wrapping_add(1);
+        self.values[self.head]
+    }
 }
 
 /// The feedback coefficient of a one-pole filter with this time constant.

@@ -2,14 +2,23 @@ use super::*;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
-/// Counts the allocations of a thread while it is counting, so a test can
-/// show that the callback's side does not allocate. Other threads, and this
-/// one when it is not counting, allocate as usual.
+/// Counts the allocations and frees of a thread while it is counting, so a
+/// test can show that the callback's side neither allocates nor frees. Other
+/// threads, and this one when it is not counting, allocate as usual.
 struct Counting;
 
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static FREES: Cell<usize> = const { Cell::new(0) };
+}
+
+fn note_free() {
+    let _ = COUNTING.try_with(|counting| {
+        if counting.get() {
+            let _ = FREES.try_with(|count| count.set(count.get() + 1));
+        }
+    });
 }
 
 fn note_allocation() {
@@ -38,6 +47,7 @@ unsafe impl GlobalAlloc for Counting {
         unsafe { System.realloc(ptr, layout, new_size) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        note_free();
         // SAFETY: the caller's contract is passed on.
         unsafe { System.dealloc(ptr, layout) }
     }
@@ -45,6 +55,22 @@ unsafe impl GlobalAlloc for Counting {
 
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
+
+/// What a run allocated and freed on its thread.
+pub(in crate::audio) struct HeapUse {
+    pub(in crate::audio) allocations: usize,
+    pub(in crate::audio) frees: usize,
+}
+
+/// Count the allocations and frees of `run` on this thread.
+pub(in crate::audio) fn heap_use(run: impl FnOnce()) -> HeapUse {
+    FREES.with(|count| count.set(0));
+    let allocations = allocations(run);
+    HeapUse {
+        allocations,
+        frees: FREES.with(Cell::get),
+    }
+}
 
 /// The allocations that `run` makes on this thread.
 fn allocations(run: impl FnOnce()) -> usize {
