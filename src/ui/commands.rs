@@ -170,6 +170,50 @@ impl Command {
         }
     }
 
+    /// What the command does, in one line after its name in the list.
+    pub(super) fn description(self) -> &'static str {
+        match self {
+            Self::New => "Start an empty song",
+            Self::Open => "Open a song file",
+            Self::Save => "Save this song",
+            Self::SaveAs => "Save the song to a new file",
+            Self::Import => "Bring in a WAV file as a sound",
+            Self::Export => "Render the song to a stereo WAV through the master board",
+            Self::Erase => "Click clips to delete them; Esc ends",
+            Self::Delete => "Delete the selected clips",
+            Self::Mixer => "The tracks become mixer strips",
+            Self::Mastering => "The pedalboard on the master bus",
+            Self::FxReturns => "Four send and return effect buses",
+            Self::Effects => "Process a sound into a new one",
+            Self::StepSynth => "Write a note sequence and save it as a sound",
+            Self::Edit => "Trim, fade and level a sound",
+            Self::Stretch => "Fit a sound to the tempo",
+            Self::AlbumReview => "Listening notes on an album",
+            Self::Options => "Audio device, theme, workspace and folders",
+            Self::Help => "Manual and shortcuts",
+            Self::PlayPause => "Play or pause the song",
+            Self::Undo => "Take back the last edit",
+            Self::Redo => "Put back the edit you undid",
+            Self::Duplicate => "Copy the selected clips to the bars after them",
+            Self::SelectAll => "Select all clips in the song",
+            Self::Maximise => "Hide the side and lower panels around the score",
+            Self::ToolNames => "Show names under the rail icons, or icons only",
+            Self::Boards => "Show or fold Mixer, Mastering, FX returns and Step synth",
+            Self::Sounds => "The sound list beside the score",
+            Self::Overview => "The whole song in one strip above the score",
+            Self::Inspector => "Settings of the song, a track or the selected clips",
+            Self::Lane(None, None) => "Hide automation and edit clips again",
+            Self::Lane(Some(Lane::Volume), _) => "Decibels over the fader, on every track",
+            Self::Lane(Some(Lane::Pan), _) => "Left to right, on every track",
+            Self::Lane(Some(Lane::Filter), _) => "Low-pass below the middle, high-pass above",
+            Self::Lane(Some(Lane::Pitch), _) => "Bend the playback speed, like a tape machine",
+            Self::Lane(Some(Lane::Repeat), _) => "Rolls and ratchets from the track's own sound",
+            Self::Lane(Some(Lane::RepeatGate), _) => "How much of each repeat sounds",
+            Self::Lane(Some(Lane::Send(_)), _) => "How much each track sends to this bus",
+            Self::Lane(None, Some(_)) => "The bus's return level, one line across the song",
+        }
+    }
+
     /// The command's shortcut, as the list prints it.
     pub(super) fn shortcut(self) -> Option<&'static str> {
         Some(match self {
@@ -476,8 +520,8 @@ impl MixJamApp {
     }
 }
 
-/// One row of the command list: the name, its group's state mark, and the
-/// shortcut at the right.
+/// One row of the command list: the state mark, the name, what it does,
+/// and the shortcut at the right.
 fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bool) -> Response {
     let width = ui.available_width();
     // The arrows choose the row, so Tab never lands on one: a focused row
@@ -489,6 +533,9 @@ fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bo
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, &name)
     });
+    let description = command.description();
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_description(description));
     if current || response.hovered() {
         ui.painter().rect_filled(rect, 4.0, roles().hover);
     }
@@ -530,11 +577,29 @@ fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bo
     job.wrap.break_anywhere = true;
     job.wrap.overflow_character = Some('…');
     let galley = ui.painter().layout_job(job);
+    let after = x + galley.size().x + 8.0;
     ui.painter().galley(
         Pos2::new(x, rect.center().y - galley.size().y / 2.0),
         galley,
         roles().text,
     );
+    // The description takes what the name leaves and ends in an ellipsis.
+    if right - after >= 24.0 {
+        let mut job = egui::text::LayoutJob::single_section(
+            description.to_owned(),
+            egui::TextFormat::simple(egui::FontId::proportional(12.0), roles().muted),
+        );
+        job.wrap.max_width = right - after;
+        job.wrap.max_rows = 1;
+        job.wrap.break_anywhere = true;
+        job.wrap.overflow_character = Some('…');
+        let galley = ui.painter().layout_job(job);
+        ui.painter().galley(
+            Pos2::new(after, rect.center().y - galley.size().y / 2.0),
+            galley,
+            roles().muted,
+        );
+    }
     response
 }
 

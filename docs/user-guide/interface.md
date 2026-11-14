@@ -38,8 +38,9 @@ list of everything the app can do: the rail's tools, Options and Help,
 playback, Undo, Redo and the other edits, Maximise, the status bar's panel
 switches, and every automation lane. The whole list shows in its groups before
 you type; type words to narrow it. Up and Down move through it, Enter or a click
-runs the command, and Esc closes the list. Shortcuts show at the right of
-their commands, and a dot marks a tool, panel or lane that is on.
+runs the command, and Esc closes the list. Each command says in one line what
+it does, its shortcut shows at the right, and a dot marks a tool, panel or
+lane that is on.
 
 The **Sounds** switch, or the strip named SOUNDS beside the rail, opens the
 Sounds panel: the library as a list, with each sound's name, category, length

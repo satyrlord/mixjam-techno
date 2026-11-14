@@ -83,7 +83,10 @@ drawn mixer refreshes even if the pointer stops. Pan remains independent of L/R.
 The sample-conflict modal confirms only through Keep choices, because
 confirmation is an undoable project change; Esc hides it without an edit and
 the status bar reopens it.
-The idle status reads Ready. Errors and application notices remain visible.
+The idle status is a usage hint in Muted: "Space plays the song. Drag a sound
+from the Sounds panel onto the score. Ctrl+K lists every command." It
+truncates with the full text as a hover hint. Errors and application notices
+replace it and remain visible.
 The empty mixer has one instruction for adding a sound to the arrangement.
 All tool windows and utility dialogs use the same Folded Metal shell. The
 frontend submits edits to the application layer; visual changes preserve those

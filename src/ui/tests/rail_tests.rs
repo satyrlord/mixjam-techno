@@ -384,7 +384,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
         Pos2::new(rail_width(names), size.y - 30.0),
     );
     let target = rail_button_size(names);
-    let state = format!("names {names}, {size:?}, {density}x");
+    let state = format!("names {names}, {size:?}");
     let mut output = egui::FullOutput::default();
     for _ in 0..3 {
         output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
@@ -585,10 +585,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                     }
                 }
             }
-            assert!(
-                painted,
-                "The rail must paint its {part} material at {density}x."
-            );
+            assert!(painted, "The rail must paint its {part} material.");
         }
     }
 }

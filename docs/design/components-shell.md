@@ -62,8 +62,10 @@ below. Type to narrow it." Below it, every command shows in its group before
 anything is typed: File, Clips, Tools, Application, Transport, Edit, Panels,
 Automation, each under the Automation menu's muted uppercase heading. A row is
 30 points tall: a 6-point Accent dot when the tool, panel or lane is on, the
-name in 13-point Text, and the shortcut in 11-point muted monospace at the
-right. The current row has the Hover fill and a 3-point Accent bar; Up and Down
+name in 13-point Text, a one-line description of what the command does in
+12-point Muted 8 points after it (cut with an ellipsis before the shortcut, and
+the row's accessible description), and the shortcut in 11-point muted
+monospace at the right. The current row has the Hover fill and a 3-point Accent bar; Up and Down
 move it and scroll it into view. Typed words narrow the list to commands whose
 name or group holds every word. A changed search returns to the top of the list.
 Enter uses the current search, including text received in the same frame.

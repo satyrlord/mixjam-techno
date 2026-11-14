@@ -64,7 +64,6 @@ fn stretch_hover_does_not_change_tempo_and_wheel_input_changes_it_once() {
 
 #[test]
 fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
-    let density = 1.0;
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.selection.sample = Some(1);
@@ -95,10 +94,7 @@ fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
                 egui::Modifiers::NONE,
             );
             let expected = 140.0 + f64::from(offset);
-            assert_eq!(
-                app.stretch.source_bpm, expected,
-                "{label} at {density}x, offset {offset}"
-            );
+            assert_eq!(app.stretch.source_bpm, expected, "{label}, offset {offset}");
             for _ in 0..3 {
                 frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
                 assert_eq!(
@@ -134,7 +130,7 @@ fn stretch_knob_drag_tracks_total_motion_and_holds_when_pointer_stops() {
             vec![egui::Event::PointerMoved(position)],
             egui::Modifiers::NONE,
         );
-        assert_eq!(app.stretch.target_bpm, expected, "Target BPM at {density}x");
+        assert_eq!(app.stretch.target_bpm, expected, "Target BPM");
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_eq!(
             app.stretch.target_bpm, expected,
@@ -923,7 +919,7 @@ fn stretch_action_labels_remain_centered_in_every_playback_state() {
                 .unwrap_or_else(|| panic!("Missing action label: {visible_text}"));
             assert!(
                 button.contains_rect(painted),
-                "{visible_text} leaves its button at {density}x: {painted:?} / {button:?}"
+                "{visible_text} leaves its button: {painted:?} / {button:?}"
             );
             let offset = painted.center() - (button.center() - Vec2::new(0.0, 1.0));
             assert!(

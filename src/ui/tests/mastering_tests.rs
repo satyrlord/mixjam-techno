@@ -54,7 +54,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         let window = effects_control_rect(&output, "Mastering board");
         assert!(
             Rect::from_min_size(Pos2::ZERO, size).contains_rect(window),
-            "The board must fit the minimum window at {density}x."
+            "The board must fit the minimum window."
         );
         assert_folded_assets(&ctx, &output, density, "Indigo");
         // The input and output units and the pedals stay in view however
@@ -62,7 +62,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         for name in ["Trim", "Trim value", "Clear OVER"] {
             assert!(
                 window.contains_rect(effects_control_rect(&output, name)),
-                "{name} must fit at {density}x."
+                "{name} must fit."
             );
         }
         let first = effects_control_rect(&output, "Drag Booster EQ");
@@ -71,7 +71,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 first.min,
                 Vec2::new(first.width(), 304.0)
             )),
-            "The pedals must fit at {density}x."
+            "The pedals must fit."
         );
         for name in NAMES {
             effects_control_rect(&output, &format!("Show {name}"));
@@ -82,7 +82,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         ] {
             assert!(
                 window.contains_rect(accessible_label(&output, label)),
-                "{label} must fit at {density}x."
+                "{label} must fit."
             );
         }
         // Every pedal starts off, and its knobs wait for its switch.
@@ -183,7 +183,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 if dial.contains("reduction") {
                     assert!(
                         bounds.contains_rect(accessible_label(&output, dial)),
-                        "{dial} at {density}x."
+                        "{dial}."
                     );
                 } else {
                     parts.push(dial.to_string());
@@ -193,7 +193,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
             for part in parts {
                 assert!(
                     bounds.contains_rect(effects_control_rect(&output, &part)),
-                    "{part} must keep clear of the {name} pedal's edge at {density}x."
+                    "{part} must keep clear of the {name} pedal's edge."
                 );
             }
         }
@@ -240,7 +240,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         let window = effects_control_rect(&output, "Mastering board");
         assert!(
             window.contains_rect(pedal(&output, "Limiter")),
-            "The Limiter must come into view at {density}x."
+            "The Limiter must come into view."
         );
         assert!(!window.contains_rect(pedal(&output, "Booster EQ")));
         // A pedal dropped past the limiter stays before it.
@@ -274,7 +274,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert!(
             window.contains_rect(effects_control_rect(&output, "Booster wide")),
-            "A focused switch must scroll into view at {density}x."
+            "A focused switch must scroll into view."
         );
 
         // Arrow buttons and dragging both move a pedal; each move is one undo step.

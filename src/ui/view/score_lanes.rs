@@ -559,7 +559,7 @@ fn paint_lane_grid(
         )
         .intersect(canvas_clip);
         let hint = painter.layout_no_wrap(
-            "Drop a sound here".into(),
+            "Drop a sound here for a new track".into(),
             FontId::proportional(13.0),
             roles().muted,
         );

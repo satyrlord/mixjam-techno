@@ -137,7 +137,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         let footer = step_synth_control_rect(&output, "Step synth status");
         assert!(
             viewport.contains_rect(footer) && footer.bottom() <= window.top(),
-            "Status {footer:?} must sit in the tab row above {window:?} at {density}x"
+            "Status {footer:?} must sit in the tab row above {window:?}"
         );
         assert_eq!(
             accessible_node(&output, "Step synth source sound")
@@ -165,7 +165,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             let bounds = step_synth_control_rect(&output, label);
             assert!(
                 bounds.left() >= window.left() && bounds.top() >= window.top(),
-                "{label} must start on the board at {density}x."
+                "{label} must start on the board."
             );
             assert!(
                 !bounds.intersects(footer),
@@ -212,11 +212,11 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             let button = step_synth_control_rect(&output, label);
             assert!(
                 step_synth_board_rect(&output).contains_rect(button),
-                "{label} must scroll into view at {density}x."
+                "{label} must scroll into view."
             );
             assert!(
                 button.shrink(2.0).contains_rect(glyphs),
-                "{label} must have clear space inside its button at {density}x."
+                "{label} must have clear space inside its button."
             );
         }
         for bar in 1..=3 {
@@ -224,7 +224,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             let next_switch = step_synth_control_rect(&output, &format!("Active {}", bar + 1));
             assert!(
                 next_switch.left() - caption.right() >= 12.0,
-                "Active bar captions need clear space before the next switch at {density}x."
+                "Active bar captions need clear space before the next switch."
             );
         }
         let bottom_note = "Step 16, -12 semitones";
@@ -248,7 +248,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         let cell = step_synth_control_rect(&output, bottom_note);
         assert!(
             step_synth_board_rect(&output).contains_rect(cell),
-            "Keyboard focus must scroll the lowest pitch into view at {density}x."
+            "Keyboard focus must scroll the lowest pitch into view."
         );
         assert!(!cell.intersects(step_synth_control_rect(&output, "Load pattern")));
         let output = activate_control(&ctx, &mut app, &output, "Sequence effects");

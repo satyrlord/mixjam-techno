@@ -245,7 +245,9 @@ fn lane_heights_keep_the_new_track_drop_hint_visible() {
                 .shapes
                 .iter()
                 .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == "Drop a sound here" => {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text == "Drop a sound here for a new track" =>
+                    {
                         Some((
                             text.galley.mesh_bounds.translate(text.pos.to_vec2()),
                             shape.clip_rect,

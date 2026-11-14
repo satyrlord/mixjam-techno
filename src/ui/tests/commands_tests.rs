@@ -267,6 +267,38 @@ fn command_list_search_reveals_the_first_match_after_scrolling() {
 }
 
 #[test]
+fn every_command_row_says_what_it_does_after_its_name() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.commands = Some(commands::CommandList::new());
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for command in commands::Command::all() {
+        let text = command.description();
+        assert!(!text.is_empty(), "{command:?} needs a description");
+        assert!(!text.ends_with('.'), "{text}: one line, no full stop");
+    }
+    // The row paints the description after the name and gives it to the
+    // screen reader; the accessible name stays the command's name.
+    let painted = |wanted: &str| {
+        output.shapes.iter().find_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if text.galley.job.text == wanted => Some(text.pos.x),
+            _ => None,
+        })
+    };
+    let name = painted("New").expect("New is painted");
+    let description = painted("Start an empty song").expect("its description is painted");
+    assert!(description > name, "The description follows the name");
+    let update = output.platform_output.accesskit_update.as_ref().unwrap();
+    let row = update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.label() == Some("New") && node.description().is_some())
+        .expect("The New row carries its description");
+    assert_eq!(row.1.description(), Some("Start an empty song"));
+}
+
+#[test]
 fn command_list_registers_its_modal_and_rejects_song_drops() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();

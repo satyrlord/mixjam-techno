@@ -255,7 +255,7 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
             let offset = (text_bounds.center() - painted.0.clip_rect.center()) * density;
             assert!(
                 offset.x.abs() <= 1.0 && offset.y.abs() <= 1.0,
-                "Footer message is not visibly centered at {density}x: {offset:?}"
+                "Footer message is not visibly centered: {offset:?}"
             );
         }
         if missing {

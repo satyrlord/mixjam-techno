@@ -672,7 +672,6 @@ mod tests {
 
     #[test]
     fn resized_window_collapses_in_place_and_restores_its_size_and_draft() {
-        let density = 1.0;
         let ctx = egui::Context::default();
         configure_style(&ctx);
         let mut open = true;
@@ -716,7 +715,7 @@ mod tests {
         let resized = geometry();
         assert!(
             resized.size.x > before.size.x + 60.0,
-            "Right edge must resize at {density}x"
+            "Right edge must resize"
         );
         assert!(resized.size.y > before.size.y + 30.0);
         let collapse = resized.position + Vec2::new(24.0, HEADER / 2.0);

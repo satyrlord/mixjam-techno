@@ -372,12 +372,12 @@ fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_in_eve
             assert_folded_assets(&ctx, &output, density, "Utility");
             assert!(
                 viewport.contains_rect(text_rect(&output, "UTILITY FIXTURE")),
-                "The title must fit at {density}x."
+                "The title must fit."
             );
             let first = text_rect(&output, "First instruction");
             assert!(
                 viewport.contains_rect(first),
-                "The first instruction must fit at {density}x."
+                "The first instruction must fit."
             );
             let visible = |output: &egui::FullOutput| {
                 output.shapes.iter().any(|shape| match &shape.shape {
@@ -406,7 +406,7 @@ fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_in_eve
             }
             assert!(
                 visible(&output),
-                "The last action must remain reachable in a {tall:?} dialog at {density}x."
+                "The last action must remain reachable in a {tall:?} dialog."
             );
             assert!(
                 viewport.contains_rect(text_rect(&output, "UTILITY FIXTURE")),

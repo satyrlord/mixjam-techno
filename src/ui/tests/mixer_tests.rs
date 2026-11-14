@@ -430,15 +430,15 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 viewport.contains_rect(gain)
                     && viewport.contains_rect(value)
                     && viewport.contains_rect(unity),
-                "{track} gain controls must fit at {density}x."
+                "{track} gain controls must fit."
             );
             assert!(
                 gain.height() >= 86.0,
-                "The minimum-window rail must remain usable at {density}x."
+                "The minimum-window rail must remain usable."
             );
             assert!(
                 gain.height() - 32.0 >= 68.0,
-                "The physical rail must retain at least 68 points of travel at {density}x."
+                "The physical rail must retain at least 68 points of travel."
             );
             assert!(
                 value.bottom() <= gain.top(),
@@ -472,10 +472,7 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                     .then_some(bounds)
                 })
                 .unwrap_or_else(|| {
-                    panic!(
-                        "Missing {track} fader cap at {density}x in {}.",
-                        theme::current().label()
-                    )
+                    panic!("Missing {track} fader cap in {}.", theme::current().label())
                 });
             assert!(
                 cap.top() - value.bottom() >= 4.0 - 1.0 / density,
@@ -507,7 +504,7 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
             for rect in [pan, center, polarity, left, right, mute, solo, eq] {
                 assert!(
                     viewport.contains_rect(rect),
-                    "{track} lower controls must fit at {density}x."
+                    "{track} lower controls must fit."
                 );
             }
             assert!(
@@ -528,16 +525,16 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 let send = effects_control_rect(&output, &format!("{track} send FX {bus}"));
                 assert!(
                     !send.intersects(cap),
-                    "{track} send FX {bus} must clear the fader cap at {density}x."
+                    "{track} send FX {bus} must clear the fader cap."
                 );
                 assert!(
                     !send.intersects(pan),
-                    "{track} send FX {bus} must clear pan at {density}x."
+                    "{track} send FX {bus} must clear pan."
                 );
                 let gain = effects_control_rect(&output, &format!("{track} gain"));
                 assert!(
                     !send.intersects(gain),
-                    "{track} send FX {bus} must clear the gain hit area at {density}x."
+                    "{track} send FX {bus} must clear the gain hit area."
                 );
             }
             assert!(
@@ -568,7 +565,7 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
             viewport.contains_rect(bypass)
                 && bypass.top() > master.bottom()
                 && bypass.width() <= 108.0,
-            "Master bypass must fit under the master rail at {density}x."
+            "Master bypass must fit under the master rail."
         );
     }
 }
@@ -578,7 +575,7 @@ fn empty_mixer_keeps_guidance_master_and_action_errors_visible() {
     let (ctx, mut app) = fixture();
     app.new_mix();
     app.boards.module = BottomModule::Mixer;
-    assert_eq!(DEFAULT_STATUS, "Ready");
+    assert!(DEFAULT_STATUS.starts_with("Space plays the song."));
     let (status, status_error) = startup_status(&mut app.session);
     assert_eq!((status.as_str(), status_error), (DEFAULT_STATUS, false));
     app.status = status;

@@ -288,10 +288,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
         ];
         let bounds = controls.map(|label| effects_control_rect(&output, label));
         for (label, bounds) in controls.iter().zip(bounds) {
-            assert!(
-                panel.contains_rect(bounds),
-                "{label} must fit the skin at {density}x."
-            );
+            assert!(panel.contains_rect(bounds), "{label} must fit the skin.");
             assert!(!bounds.intersects(footer), "{label} must not touch status.");
         }
         let start_value = effects_control_rect(&output, "Start frame");
@@ -323,7 +320,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
             let offset = (glyph.center() - container.center()).abs() * density;
             assert!(
                 offset.x <= 1.0 && offset.y <= 1.0,
-                "{name} glyph offset {offset:?} at {density}x"
+                "{name} glyph offset {offset:?}"
             );
         }
         let pitch_value = effects_control_rect(&output, "Pitch value");
@@ -336,7 +333,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
             for (second, name) in bounds.iter().zip(controls).skip(index + 1) {
                 assert!(
                     !first.intersects(*second),
-                    "Controls must not overlap at {density}x: {} and {name}.",
+                    "Controls must not overlap: {} and {name}.",
                     controls[index]
                 );
             }
@@ -351,7 +348,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
         ] {
             assert!(
                 panel.contains_rect(text_rect(&output, label)),
-                "{label} must remain readable inside the panel at {density}x."
+                "{label} must remain readable inside the panel."
             );
         }
         for label in ["Listen edit", "Save edited sound"] {
@@ -359,7 +356,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
                 effects_control_rect(&output, label)
                     .shrink(2.0)
                     .contains_rect(effects_text_mesh_bounds(&output, label)),
-                "{label} needs clear space inside its button at {density}x."
+                "{label} needs clear space inside its button."
             );
         }
         focus_control(&ctx, &mut app, &output, "Collapse Sample editor");

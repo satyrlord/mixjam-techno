@@ -133,7 +133,9 @@ pub(super) fn display_paths(text: &str) -> String {
 // Colors come from the theme roles in `theme.rs`. Application state and rules
 // live outside this module.
 
-pub(super) const DEFAULT_STATUS: &str = "Ready";
+/// The idle status line: how to start, until the first notice replaces it.
+pub(super) const DEFAULT_STATUS: &str = "Space plays the song. Drag a sound from the Sounds panel \
+     onto the score. Ctrl+K lists every command.";
 pub(super) const GROUPS: [&str; 10] = [
     "Loop",
     "Drum",

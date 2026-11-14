@@ -66,7 +66,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         let panel = window;
         assert!(
             viewport.contains_rect(window),
-            "The complete module must fit at {density}x."
+            "The complete module must fit."
         );
         let footer = effects_control_rect(&output, "Effect Studio status");
         assert!(window.contains_rect(footer));
@@ -96,7 +96,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
             let bounds = effects_control_rect(&output, name);
             assert!(
                 panel.contains_rect(bounds),
-                "{name} must fit the compact skin at {density}x."
+                "{name} must fit the compact skin."
             );
             assert!(
                 !bounds.intersects(footer),
@@ -122,7 +122,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         ] {
             assert!(
                 panel.contains_rect(text_rect(&output, text)),
-                "{text} must remain readable at {density}x."
+                "{text} must remain readable."
             );
         }
         for name in [
@@ -160,12 +160,12 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
                     _ => None,
                 })
                 .reduce(|bounds, next| bounds.union(next))
-                .unwrap_or_else(|| panic!("Missing numeric glyphs for {name} at {density}x."));
+                .unwrap_or_else(|| panic!("Missing numeric glyphs for {name}."));
             let caption = effects_text_mesh_bounds(&output, name);
             let gap = caption.top() - number.bottom();
             assert!(
                 gap >= 4.0,
-                "{name} needs 4 logical pixels between number and caption glyphs at {density}x; measured {gap:.3}, number={number:?}, caption={caption:?}."
+                "{name} needs 4 logical pixels between number and caption glyphs; measured {gap:.3}, number={number:?}, caption={caption:?}."
             );
         }
         for (section, controls) in [
@@ -201,7 +201,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
                     marks += 1;
                     assert!(
                         !heading.intersects(bounds),
-                        "{section} heading glyphs must not touch {name} scale marks at {density}x: heading={heading:?}, mark={bounds:?}."
+                        "{section} heading glyphs must not touch {name} scale marks: heading={heading:?}, mark={bounds:?}."
                     );
                 }
                 assert!(marks > 0, "{name} must have a native scale to check.");
@@ -404,7 +404,6 @@ fn effects_switches_discard_settings_and_disable_only_their_own_controls() {
 
 #[test]
 fn effects_knob_input_is_stable_bounded_and_accessible() {
-    let density = 1.0;
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.effects.open = true;
@@ -454,7 +453,7 @@ fn effects_knob_input_is_stable_bounded_and_accessible() {
         let expected = 1.01 + offset / 75.0;
         assert!(
             (app.effects.state.volume - expected).abs() < 0.0001,
-            "Drag must track motion and reversal at {density}x."
+            "Drag must track motion and reversal."
         );
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
