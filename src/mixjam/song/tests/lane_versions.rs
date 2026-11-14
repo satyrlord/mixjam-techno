@@ -125,7 +125,7 @@ fn only_version_23_songs_hold_return_lanes_repeat_gates_and_reversed_clips() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 24);
+    assert_eq!(document["formatVersion"], 25);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened, project);
     // Version 22 and earlier reject each key, even when it holds nothing.
@@ -359,7 +359,7 @@ fn only_version_24_lanes_hold_pitch_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 24);
+    assert_eq!(document["formatVersion"], 25);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 23 rejects the key, even as an empty list, and opens the
@@ -435,7 +435,7 @@ fn only_version_21_lanes_hold_repeat_automation() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 24);
+    assert_eq!(document["formatVersion"], 25);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 20 rejects the key, even as an empty list, and opens the
@@ -559,7 +559,7 @@ fn only_version_22_lanes_hold_a_drive() {
         timestamp(0),
     ))
     .unwrap();
-    assert_eq!(document["formatVersion"], 24);
+    assert_eq!(document["formatVersion"], 25);
     let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
     assert_eq!(reopened.tracks, project.tracks);
     // Version 21 and earlier reject the key, on or off, and open the
@@ -711,4 +711,34 @@ b"}]),
             "{error_text:?}"
         );
     }
+}
+
+#[test]
+fn only_version_25_songs_hold_the_emberform_drive() {
+    let mut project = project();
+    project.fx.buses[2].module =
+        crate::fx::Module::EmberformDrive(crate::fx::Emberform::preset("Fuzz Wall").unwrap());
+    let document = serde_json::to_value(Document::new(
+        &project,
+        "2020-01-02T03:04:05Z".into(),
+        timestamp(0),
+    ))
+    .unwrap();
+    assert_eq!(document["fxBuses"][2]["module"]["type"], "emberform-drive");
+    let reopened = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+    assert_eq!(reopened.fx, project.fx);
+    let mut earlier = document.clone();
+    earlier["formatVersion"] = 24.into();
+    assert_eq!(
+        parse(&serde_json::to_vec(&earlier).unwrap()).unwrap_err(),
+        "Version 24 songs cannot contain the Emberform Drive."
+    );
+    // Without the drive, version 24 opens the same buses.
+    earlier["fxBuses"][2]["module"] = serde_json::json!({"type": "empty"});
+    let mut expected = project.fx;
+    expected.buses[2].module = crate::fx::Module::Empty;
+    assert_eq!(
+        parse(&serde_json::to_vec(&earlier).unwrap()).unwrap().fx,
+        expected
+    );
 }

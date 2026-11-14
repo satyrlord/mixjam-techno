@@ -36,6 +36,43 @@ fn every_preset_is_valid_and_the_defaults_are_the_first() {
         assert!((0.0..=100.0).contains(&mix));
     }
     assert_eq!(Echoform::preset("Nope"), None);
+    assert_eq!(Emberform::preset("Warm Tube"), Some(Emberform::default()));
+    let mut names = Vec::new();
+    for (name, mix) in Emberform::PRESETS {
+        let drive = Emberform::preset(name).unwrap();
+        drive.validate().unwrap();
+        assert!((0.0..=100.0).contains(&mix));
+        assert!(!names.contains(&name), "{name} repeats");
+        names.push(name);
+    }
+    // Every curve has a preset.
+    for shape in DistortionShape::ALL {
+        assert!(
+            Emberform::PRESETS
+                .iter()
+                .any(|(name, _)| Emberform::preset(name).unwrap().shape == shape),
+            "{shape:?}"
+        );
+    }
+}
+
+#[test]
+fn a_drive_saves_its_shape_and_holds_its_ranges() {
+    let mut buses = FxBuses::default();
+    buses.buses[3].module = Module::EmberformDrive(Emberform::preset("Industrial Clip").unwrap());
+    let json = serde_json::to_value(buses).unwrap();
+    assert_eq!(json[3]["module"]["type"], "emberform-drive");
+    assert_eq!(json[3]["module"]["shape"], "hard-clip");
+    assert!(json[3]["module"].get("duckKey").is_none());
+    let back: FxBuses = serde_json::from_value(json).unwrap();
+    assert_eq!(back, buses);
+    let mut drive = Emberform::default();
+    DistortionParam::Bits.set(&mut drive, 40.0);
+    assert_eq!(drive.bits, 16);
+    DistortionParam::Drive.set(&mut drive, f32::NAN);
+    assert_eq!(drive.drive_db, 12.0);
+    drive.bits = 0;
+    assert!(drive.validate().is_err());
 }
 
 #[test]

@@ -1,8 +1,8 @@
 # Song format
 
-A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 24 is
+A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 25 is
 the current song format, and it is the only version that the application
-writes. Versions 8 to 23 open and migrate. Version 7 is the earlier MixJam
+writes. Versions 8 to 24 open and migrate. Version 7 is the earlier MixJam
 project format, which is import-only: **Save** never replaces a version-7 file.
 `src/mixjam/song.rs` owns the format; its tests cover each version.
 
@@ -24,7 +24,7 @@ document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
 from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
 the original product saved with an imported song; a song without such settings
 omits it. Every other key is required. Saving to an existing file of version 8
-to 24 keeps its `createdAt`.
+to 25 keeps its `createdAt`.
 Master settings reject duplicate fields, including nested fields and escaped
 spellings of the same key. Versions 11 to 15 perform this check before renaming
 the earlier Booster keys during migration.

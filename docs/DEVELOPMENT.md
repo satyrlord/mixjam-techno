@@ -68,7 +68,7 @@ The Python tests check Rust literal handling in the format checker, the song
 tools in `tools/song/`, the Album Review lookup tool in `tools/album-review/`
 (offline), byte preservation of pinned font assets through Git line-ending
 conversion, and the `.mixjam` projection used by artifact
-verification. The projection reads formats 8 through 24 and preserves sections, the
+verification. The projection reads formats 8 through 25 and preserves sections, the
 master pedalboard and its bypass, FX buses and their return lanes, sends, automation,
 channel EQs, clip fades, pitch, and reverse, lane duckers, drives, compressors, and
 widths, and master and FX

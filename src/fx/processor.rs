@@ -2,13 +2,19 @@
 //! their returns to the dry mix, for playback and export alike. A bus's
 //! return lane, when it has points, replaces its return level frame by
 //! frame.
-use super::parts::{Glide, SafetyLimiter};
-use super::{BUSES, FxBus, FxBuses, Module, delay, reverb};
+//!
+//! The delay and the reverb shorten their own delays by the safety
+//! limiter's lookahead, so their sound arrives in time. A drive has no delay
+//! to shorten, and its return sums with the dry sound it came from, so the
+//! drive's bus adds no latency: an instant ceiling replaces the lookahead.
+use super::parts::{Glide, SafetyLimiter, ceiling};
+use super::{BUSES, FxBus, FxBuses, Module, delay, distortion, reverb};
 use crate::master::MasterControl;
 use std::sync::Arc;
 
-/// The safety limiters' lookahead: 5 ms. Every return is this much late,
-/// and the effects shorten their own delays by as much.
+/// The safety limiters' lookahead: 5 ms. A delay's or a reverb's return is
+/// this much late, and the effect shortens its own delays by as much. A
+/// drive's return has no limiter and is not late.
 pub(crate) const LOOKAHEAD: usize = RATE / 200;
 /// The longest tail that playback and export let ring after the song: one
 /// minute. A delay with feedback above 100% never dies away by itself.
@@ -26,18 +32,30 @@ enum Kind {
     Empty,
     Delay,
     Reverb,
+    Drive,
 }
 fn kind(module: &Module) -> Kind {
     match module {
         Module::Empty => Kind::Empty,
         Module::EchoformDelay(_) => Kind::Delay,
         Module::AetherformReverb(_) => Kind::Reverb,
+        Module::EmberformDrive(_) => Kind::Drive,
+    }
+}
+impl Kind {
+    /// The frames by which the bus's return follows its input.
+    fn latency(self) -> usize {
+        match self {
+            Self::Drive => 0,
+            _ => LOOKAHEAD,
+        }
     }
 }
 
 struct Bus {
     delay: delay::Core,
     reverb: reverb::Core,
+    drive: distortion::Core,
     kind: Kind,
     settings: FxBus,
     /// The input switch, gliding so a switch does not click.
@@ -59,6 +77,7 @@ impl Bus {
         Self {
             delay: delay::Core::new(),
             reverb: reverb::Core::new(),
+            drive: distortion::Core::new(),
             kind: Kind::Empty,
             settings: FxBus::default(),
             input: Glide::new(1.0, 0.003),
@@ -103,6 +122,12 @@ impl Bus {
                     self.reverb.settle();
                 }
             }
+            Module::EmberformDrive(drive) => {
+                self.drive.set(drive);
+                if fresh {
+                    self.drive.settle();
+                }
+            }
         }
         self.input.set(if settings.powered { 1.0 } else { 0.0 });
         self.level.set(f64::from(settings.return_level));
@@ -115,6 +140,7 @@ impl Bus {
     fn silence(&mut self) {
         self.delay.clear();
         self.reverb.clear();
+        self.drive.clear();
         self.limiter.clear();
         self.awake = false;
         self.quiet = 0;
@@ -127,11 +153,7 @@ impl Bus {
     }
     /// The ducker's key setting of the bus's effect: 0 is its own input.
     fn duck_key(&self) -> u8 {
-        match &self.settings.module {
-            Module::Empty => 0,
-            Module::EchoformDelay(delay) => delay.duck_key,
-            Module::AetherformReverb(reverb) => reverb.duck_key,
-        }
+        self.settings.module.duck_key()
     }
     /// `key` is the ducker's key at this frame, or `None` for the bus's input.
     /// `lane` is the return lane's value at this frame, which replaces the
@@ -156,7 +178,8 @@ impl Bus {
             match self.kind {
                 Kind::Delay => self.delay.skip(self.slept),
                 Kind::Reverb => self.reverb.skip(self.slept),
-                Kind::Empty => {}
+                // The drive has no modulation to move on.
+                Kind::Drive | Kind::Empty => {}
             }
             self.awake = true;
             self.quiet = 0;
@@ -166,6 +189,7 @@ impl Bus {
             Kind::Empty => (0.0, 0.0),
             Kind::Delay => self.delay.process_keyed(left, right, key),
             Kind::Reverb => self.reverb.process_keyed(left, right, key),
+            Kind::Drive => self.drive.process_keyed(left, right, key),
         };
         // The lane moves at every frame, in straight lines, so it has no
         // steps. The level's glide starts from the lane's value when a new
@@ -188,12 +212,16 @@ impl Bus {
                 return (0.0, 0.0);
             }
         }
-        let out = self
-            .limiter
-            .process(wet_l * level, wet_r * level, self.settings.limiter);
+        let out = if self.kind == Kind::Drive {
+            ceiling(wet_l * level, wet_r * level, self.settings.limiter)
+        } else {
+            self.limiter
+                .process(wet_l * level, wet_r * level, self.settings.limiter)
+        };
         let (activity, wait) = match self.kind {
             Kind::Delay => (self.delay.activity(), SLEEP_AFTER + self.delay.silent_gap()),
             Kind::Reverb => (self.reverb.activity(), SLEEP_AFTER),
+            Kind::Drive => (self.drive.activity(), SLEEP_AFTER),
             Kind::Empty => (0.0, SLEEP_AFTER),
         };
         if fed || activity > SILENCE {
@@ -226,9 +254,9 @@ impl ReturnLanes {
         lanes.iter().any(Option::is_some).then_some(Self { lanes })
     }
     /// Bus `bus`'s return level at song frame `frame`, if its lane has
-    /// points. The bus applies it `LOOKAHEAD` frames before that frame
-    /// leaves its safety limiter, so each returned frame has the lane's
-    /// value at its own time.
+    /// points. The bus applies it its latency's frames before that frame
+    /// leaves it, so each returned frame has the lane's value at its own
+    /// time.
     fn at(&self, bus: usize, frame: u64) -> Option<f64> {
         self.lanes[bus]
             .as_ref()
@@ -239,9 +267,9 @@ impl ReturnLanes {
 /// The return lanes, the block's first song frame, and an optional loop.
 pub type Lanes<'a> = Option<(&'a ReturnLanes, u64, Option<[u64; 2]>)>;
 
-fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize) -> Option<f64> {
+fn lane_at(lanes: Lanes<'_>, bus: usize, frame: usize, latency: usize) -> Option<f64> {
     lanes.and_then(|(lanes, first, loop_region)| {
-        let mut at = first + (frame + LOOKAHEAD) as u64;
+        let mut at = first + (frame + latency) as u64;
         if let Some([start, end]) = loop_region.filter(|[start, end]| start < end)
             && at >= end
         {
@@ -346,7 +374,7 @@ impl ReturnsProcessor {
                         (f64::from(sends[at]), f64::from(sends[at + 1]))
                     });
                     let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                    let lane = lane_at(lanes, index, frame);
+                    let lane = lane_at(lanes, index, frame, bus.kind.latency());
                     let (l, r) = bus.process(left, right, key, lane, bpm);
                     sum.0 += l;
                     sum.1 += r;
@@ -395,7 +423,7 @@ impl ReturnsProcessor {
                     (f64::from(sends[at]), f64::from(sends[at + 1]))
                 });
                 let key = slots[index].frame(&keys, bus.duck_key(), frame);
-                let lane = lane_at(lanes, index, frame);
+                let lane = lane_at(lanes, index, frame, bus.kind.latency());
                 let (l, r) = bus.process(left, right, key, lane, bpm);
                 out[index * 2] = l as f32;
                 out[index * 2 + 1] = r as f32;
@@ -690,6 +718,57 @@ mod tests {
                 "the second burst differs by {:.1} dB",
                 10.0 * (error / signal).log10()
             );
+        }
+    }
+
+    /// A drive return sums with the dry sound, so it must arrive with it:
+    /// a parallel copy at a few milliseconds would comb-filter the pair.
+    #[test]
+    fn a_drive_return_arrives_with_its_input_and_holds_the_ceiling() {
+        let drive = crate::fx::Emberform {
+            shape: crate::fx::DistortionShape::HardClip,
+            drive_db: 0.0,
+            low_cut_hz: 20.0,
+            high_cut_hz: 20_000.0,
+            ..crate::fx::Emberform::default()
+        };
+        let mut processor = ReturnsProcessor::new(&buses(Module::EmberformDrive(drive)), 120.0);
+        // Noise, which matches itself at no other lag.
+        let noise: Vec<f32> = (0..44_100u32)
+            .scan(12_345u32, |seed, _| {
+                *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                Some(0.2 * ((*seed >> 8) as f32 / (1u32 << 23) as f32 - 1.0))
+            })
+            .collect();
+        let tone = |i: usize| noise[i];
+        let out = feed(&mut processor, 44_100, tone);
+        // The best match of the return against its input is at no delay.
+        let lag = (0..400)
+            .max_by(|&a, &b| {
+                let score = |lag: usize| -> f64 {
+                    (20_000..30_000)
+                        .map(|i| f64::from(out[i * 2]) * f64::from(tone(i - lag)))
+                        .sum()
+                };
+                score(a).total_cmp(&score(b))
+            })
+            .unwrap();
+        assert!(lag <= 1, "{lag}");
+        for (name, _) in crate::fx::Emberform::PRESETS {
+            let mut settings = buses(Module::EmberformDrive(
+                crate::fx::Emberform::preset(name).unwrap(),
+            ));
+            let drive = settings.buses[0].module;
+            if let Module::EmberformDrive(mut drive) = drive {
+                drive.output_db = 12.0;
+                settings.buses[0].module = Module::EmberformDrive(drive);
+            }
+            settings.buses[0].return_level = 1.0;
+            let mut processor = ReturnsProcessor::new(&settings, 120.0);
+            let out = feed(&mut processor, 22_050, |i| 0.95 * (i as f32 * 0.03).sin());
+            let peak = out.iter().fold(0.0_f32, |a, v| a.max(v.abs()));
+            assert!(peak <= 0.892, "{name}: {peak}");
+            assert!(peak > 0.05, "{name} is silent");
         }
     }
 

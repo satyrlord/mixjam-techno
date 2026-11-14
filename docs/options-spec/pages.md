@@ -86,7 +86,8 @@ folder registration and removal, configured order, scan progress and cancellatio
 fallback BPM, individual folder-tempo reports, skipped WAV and unreadable-folder
 messages, and optional product-provider management. Use `Cancel library scan` to
 distinguish scan cancellation from Options Cancel. Retire the standalone window
-and its rail action. The Options rail entry is a gear with prepared PNG variants.
+and its rail action. The Options entry is a gear with prepared PNG variants at the left end of the
+status bar.
 Show `Changes here take effect right away.` Use a single Done action on this
 page. Done follows the same draft-close rules as Cancel on the other pages.
 Keep the options preference draft intact while navigating to this page.

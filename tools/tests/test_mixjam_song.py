@@ -145,7 +145,7 @@ class SongProjectionTests(unittest.TestCase):
 
     def test_unknown_version_still_rejects(self):
         with self.assertRaises(RuntimeError):
-            self.project(self.document(25))
+            self.project(self.document(26))
 
     def test_version_24_keeps_pitch_automation_in_the_json_project(self):
         document = self.document(24)

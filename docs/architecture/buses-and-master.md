@@ -3,7 +3,8 @@
 ## FX buses
 
 `src/fx.rs` owns the buses:
-`FxBuses` is the saved settings, `DelayParam` and `ReverbParam` name each
+`FxBuses` is the saved settings, `DelayParam`, `ReverbParam`, and
+`DistortionParam` name each
 continuous control with its range, and `ReturnsProcessor` (`src/fx/processor.rs`) runs the buses on
 the feeds and adds their returns to the dry sum, before the master pedalboard.
 Its delay lines are sized and allocated when the processor is built, so the
@@ -12,8 +13,9 @@ lane (`Project::return_automation`, resolved by the mix into `ReturnLanes`)
 replaces its return level frame by frame: the mix passes the lanes and the
 block's song frame to `ReturnsProcessor::process_at` and `split`, and the bus
 multiplies its effect's output by the lane's straight-line value just before
-its safety limiter, read `LOOKAHEAD` frames ahead so that each returned frame
-carries the lane's value at its own time. The song frame keeps counting
+its safety stage, read as many frames ahead as the bus's return is late
+(`LOOKAHEAD` for a delay or a reverb, none for a drive) so that each returned
+frame carries the lane's value at its own time. The song frame keeps counting
 through the tail, in export and playback alike, so a lane that moves after
 the song's end shapes the tail the same way. The lane only scales the return;
 the effect's state runs on whatever the lane does, as it does behind a zero
@@ -22,7 +24,11 @@ input and no remaining internal tail sleeps; delay sleep allows enough time
 for a pending long echo. Bypass does not hide internal tail activity from this
 check. The safety limiter's fixed 220-frame lookahead comes off the delay's
 output tap, while feedback keeps the full selected time, so every repeat stays
-on the beat. Reverb compensates its pre-delay where possible. Export runs the stage on silence after the song
+on the beat. Reverb compensates its pre-delay where possible. The Emberform
+Drive (`src/fx/distortion.rs`) has no delay to shorten, and its return sums
+with the dry sound it came from, so its bus adds no latency: an instant
+ceiling (`ceiling` in `src/fx/parts.rs`) replaces the limiter and its
+lookahead. Export runs the stage on silence after the song
 while any bus rings, for at most `TAIL_LIMIT`, in 1024-frame blocks
 (`Mix::TAIL_BLOCK`). Playback also asks whether a bus still rings once a tail
 block, however short its own blocks are, so export and playback give the same

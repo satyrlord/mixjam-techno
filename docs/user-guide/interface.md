@@ -26,14 +26,17 @@ The title branding, window, taskbar, and Windows executable use the tribal mask.
 See [the icon assets](../../assets/app/README.md) for source and regeneration details.
 [DESIGN.md](../DESIGN.md) is the visual contract.
 
-The tool rail at the left groups File, Clips, and Tools, with each tool's name
-under its icon. Hover a tool for its window and shortcut. The **Tools** switch
+The tool rail at the left groups File, Clips, Mix (the Mixer and the lower
+panel's boards), Sound (the windows that make a new sample), and Library, with
+each tool's name under its icon. In a shorter window the rail tightens its
+tools and divides the groups with lines instead of headings. Hover a tool for its window and shortcut. The **Tools** switch
 at the right of the status bar, or the double chevron at the top of the rail,
 shrinks the rail to icons. The **Boards** switch folds the lower panel to its
 toolbar row; pick a tab there, or select Mastering, FX returns, or Step synth
 in the rail, to open it again. In a short window, scroll the rail with the mouse wheel.
 
-**Commands**, at the foot of the rail under Options, or **Ctrl+K**, opens a
+The magnifier at the left end of the status bar, beside the Options gear, or
+**Ctrl+K**, opens a
 list of everything the app can do: the rail's tools, Options and Help,
 playback, Undo, Redo and the other edits, Maximise, the status bar's panel
 switches, and every automation lane. The whole list shows in its groups before

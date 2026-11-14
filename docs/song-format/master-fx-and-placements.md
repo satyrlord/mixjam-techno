@@ -51,7 +51,14 @@ follows it. Versions 22 and earlier reject the key, even as an empty list.
 A `module` is `{"type": "empty"}`, or
 `echoform-delay` or `aetherform-reverb` with every setting under the
 version-7 names (`mode`, `divisionL`, `timeMsL`, `feedback`, ...;
-`spaceModel`, `preDelayMs`, `decaySeconds`, ...). From version 17 either
+`spaceModel`, `preDelayMs`, `decaySeconds`, ...). From version 25 it may
+also be `emberform-drive` with `shape` (`tube`, `tape`, `overdrive`, `fuzz`,
+`hard-clip`, `foldback`, `rectifier`, or `bitcrush`), `driveDb` from 0 to 48,
+`asymmetryPercent` from 0 to 100, `lowCutHz` from 20 to 2000, `highCutHz`
+from 1000 to 20000, `bits` from 1 to 16, `crushRateHz` from 500 to 44100,
+`widthPercent` from 0 to 200, `duckAmountPercent` from 0 to 100,
+`duckReleaseMs` from 50 to 2500, `outputDb` from -24 to 12, and `bypass`;
+versions 24 and earlier reject it. From version 17 any
 effect may hold `duckKey`, the track from 1 to 64 whose sound ducks the
 effect instead of its input; an effect whose ducker follows its input omits
 it. The duckers that are on, the pedals that are on, and the effects use at

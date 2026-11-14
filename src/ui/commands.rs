@@ -42,9 +42,10 @@ pub(super) enum Command {
     Lane(Option<Lane>, Option<usize>),
 }
 
-/// The rail's groups and their tools, top to bottom. Options and All
-/// commands sit at the rail's foot.
-pub(super) const RAIL: [(&str, &[Command]); 3] = [
+/// The rail's groups and their tools, top to bottom: Mix holds the boards and
+/// the Mix view, Sound the windows that make a new sample. Options and All
+/// commands lead the status bar.
+pub(super) const RAIL: [(&str, &[Command]); 5] = [
     (
         "File",
         &[
@@ -58,18 +59,19 @@ pub(super) const RAIL: [(&str, &[Command]); 3] = [
     ),
     ("Clips", &[Command::Erase, Command::Delete]),
     (
-        "Tools",
+        "Mix",
         &[
             Command::Mixer,
             Command::Mastering,
             Command::FxReturns,
-            Command::Effects,
             Command::StepSynth,
-            Command::Edit,
-            Command::Stretch,
-            Command::AlbumReview,
         ],
     ),
+    (
+        "Sound",
+        &[Command::Edit, Command::Stretch, Command::Effects],
+    ),
+    ("Library", &[Command::AlbumReview]),
 ];
 
 /// The status bar's panel switches, left to right.
@@ -603,22 +605,25 @@ fn command_row(ui: &mut egui::Ui, app: &MixJamApp, command: Command, current: bo
     response
 }
 
-/// The rail's All commands button: a magnifier drawn over its name, or the
-/// magnifier alone when the rail shows icons only.
-pub(super) fn rail_commands_button(ui: &mut egui::Ui, names: bool, open: bool) -> Response {
-    // The rail prints the short "Commands"; the accessible name stays full.
-    let response = view::rail_item(ui, names, open, "Commands", |ui, centre, color| {
-        // The rail icons' 1.6-point stroke throughout, with a round-capped
-        // handle, balanced in the 20-point icon square.
-        let stroke = Stroke::new(1.6_f32, color);
-        let lens = centre - Vec2::splat(1.5);
-        let tip = centre + Vec2::splat(7.5);
-        ui.painter().circle_stroke(lens, 6.0, stroke);
-        ui.painter()
-            .line_segment([lens + Vec2::splat(6.0 / std::f32::consts::SQRT_2), tip], stroke);
-        ui.painter().circle_filled(tip, 0.8, color);
-    });
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "All commands"));
-    response.hover_hint("All commands: everything the app can do, in one list (Ctrl+K)")
+/// The All commands button's accessible name and tooltip.
+pub(super) const ALL_COMMANDS: &str = "All commands";
+pub(super) const ALL_COMMANDS_HINT: &str =
+    "All commands: everything the app can do, in one list (Ctrl+K)";
+
+/// The All commands magnifier at a 20-point icon's `centre`, drawn on the
+/// rail icons' 24-unit grid: their 2-unit stroke, a lens of radius 6.6 units
+/// centred 1.8 units up and left, and a round-capped handle to 8.4 units
+/// down and right.
+pub(super) fn paint_magnifier(painter: &egui::Painter, centre: Pos2, color: Color32) {
+    const UNIT: f32 = 20.0 / 24.0;
+    let stroke = Stroke::new(2.0 * UNIT, color);
+    let radius = 6.6 * UNIT;
+    let lens = centre - Vec2::splat(1.8 * UNIT);
+    let tip = centre + Vec2::splat(8.4 * UNIT);
+    painter.circle_stroke(lens, radius, stroke);
+    painter.line_segment(
+        [lens + Vec2::splat(radius / std::f32::consts::SQRT_2), tip],
+        stroke,
+    );
+    painter.circle_filled(tip, UNIT, color);
 }

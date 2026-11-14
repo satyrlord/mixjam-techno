@@ -75,7 +75,9 @@ fn ctrl_k_lists_every_command_in_groups_filters_and_runs_on_enter() {
     for name in [
         "FILE",
         "New",
-        "TOOLS",
+        "MIX",
+        "SOUND",
+        "LIBRARY",
         "Album Review",
         "APPLICATION",
         "PANELS",

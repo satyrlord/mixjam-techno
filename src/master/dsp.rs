@@ -569,6 +569,12 @@ impl DcBlocker {
         output: 0.0,
     };
 
+    /// A blocker that has held `input` long enough for its output to die
+    /// away.
+    pub(crate) fn resting(input: f64) -> Self {
+        Self { input, output: 0.0 }
+    }
+
     #[inline]
     pub(crate) fn process(&mut self, sample: f64, pole: f64) -> f64 {
         self.output = flush(sample - self.input + pole * self.output);

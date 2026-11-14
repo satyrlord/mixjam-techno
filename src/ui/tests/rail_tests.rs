@@ -80,7 +80,7 @@ fn panel_switches_show_names_fold_the_lower_panel_and_keep_every_tool() {
     assert!(selected(&output, "Boards"));
     assert_eq!(
         effects_control_rect(&output, "New").size(),
-        rail_button_size(true)
+        rail_button_size(RailForm::Names)
     );
     // The status-bar switch and the rail's own switch both change the names.
     output = click_named(&ctx, &mut app, "Tools");
@@ -88,7 +88,7 @@ fn panel_switches_show_names_fold_the_lower_panel_and_keep_every_tool() {
     assert!(!selected(&output, "Tools"));
     assert_eq!(
         effects_control_rect(&output, "New").size(),
-        rail_button_size(false)
+        rail_button_size(RailForm::Icons)
     );
     output = click_named(&ctx, &mut app, "Show the tool names");
     assert!(app.session.layout().tool_names);
@@ -367,10 +367,11 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
         RailIcon::Delete,
         RailIcon::Mixer,
         RailIcon::Master,
-        RailIcon::Effects,
+        RailIcon::FxReturns,
         RailIcon::StepSynth,
         RailIcon::Edit,
         RailIcon::Stretch,
+        RailIcon::Effects,
         RailIcon::AlbumReview,
     ];
     let (ctx, mut app) = fixture();
@@ -383,8 +384,17 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
         Pos2::new(0.0, 64.0),
         Pos2::new(rail_width(names), size.y - 30.0),
     );
-    let target = rail_button_size(names);
-    let state = format!("names {names}, {size:?}");
+    // Names keep their headings only where every tool fits under them; a
+    // shorter window tightens the targets and turns headings into separators.
+    let form = if !names {
+        RailForm::Icons
+    } else if size.y >= 1000.0 {
+        RailForm::Names
+    } else {
+        RailForm::Compact
+    };
+    let target = rail_button_size(form);
+    let state = format!("{form:?}, {size:?}");
     let mut output = egui::FullOutput::default();
     for _ in 0..3 {
         output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
@@ -419,10 +429,8 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                 "{} artwork must stay inside its target ({state}).",
                 icon.label()
             );
-            // In view: above the foot that holds Options and All commands.
-            if rail.contains_rect(rect)
-                && rect.bottom() < rail.bottom() - 2.0 * target.y - 2.0 - 12.0
-            {
+            // In view: inside the rail's 6-point margins.
+            if rail.shrink(6.0).contains_rect(rect) {
                 assert!(
                     clip.contains_rect(image),
                     "{} artwork must be fully visible ({state}).",
@@ -445,14 +453,19 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             "File, clip and tool actions keep their order without overlap ({state})."
         );
     }
-    // Each group starts under a heading with names on, and
-    // under a separator with icons only.
-    for (before, after, heading) in [(5, 6, "Clips"), (7, 8, "Tools")] {
+    // Each group starts under a heading with full names, and under a
+    // separator otherwise.
+    for (before, after, heading) in [
+        (5, 6, "Clips"),
+        (7, 8, "Mix"),
+        (11, 12, "Sound"),
+        (14, 15, "Library"),
+    ] {
         let gap = Rect::from_min_max(
             Pos2::new(bounds[before].left(), bounds[before].bottom()),
             Pos2::new(bounds[after].right(), bounds[after].top()),
         );
-        if names {
+        if form.headings() {
             let title = accessible_label(&output, heading);
             assert!(
                 gap.contains_rect(title),
@@ -483,21 +496,18 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
             "{label} sits in the top bar, not the rail ({state}): {rect:?}."
         );
     }
-    // Options and All commands sit at the rail's foot, always in view.
-    let options = effects_control_rect(&output, "Options");
-    let commands = effects_control_rect(&output, "All commands");
-    assert!(
-        rail.contains_rect(options)
-            && (options.size() - target).abs().max_elem() < 0.01
-            && (commands.size() - target).abs().max_elem() < 0.01
-            && rail.contains_rect(commands)
-            && options.bottom() <= commands.top() + 0.01
-            && commands.bottom() > rail.bottom() - 12.0,
-        "Options and All commands must sit at the foot of the rail ({state}):              {options:?} {commands:?}."
-    );
-    let fits = |rect: Rect| rail.contains_rect(rect) && rect.bottom() < options.top();
-    let last = *bounds.last().unwrap();
-    if !names || size.y >= 1000.0 || fits(last) {
+    // Options and All commands lead the 30-point status bar, under the rail.
+    for label in ["Options", "All commands"] {
+        let rect = effects_control_rect(&output, label);
+        assert!(
+            rect.top() >= size.y - 30.0 && rect.left() >= 18.0 && rect.right() <= 18.0 + 64.0,
+            "{label} leads the status bar ({state}): {rect:?}."
+        );
+    }
+    let fits = |rect: Rect| rail.shrink(6.0).contains_rect(rect);
+    // Icons alone, and the compact form, fit every tool from a 768-point
+    // window up.
+    if !names || size.y >= 768.0 {
         for rect in &bounds {
             assert!(
                 viewport.contains_rect(*rect) && fits(*rect),
@@ -596,13 +606,11 @@ fn rail_names_share_one_size_and_fit_their_targets() {
     for _ in 0..3 {
         output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
     }
-    let mut tools: Vec<(&str, &str)> = commands::RAIL
+    let tools: Vec<(&str, &str)> = commands::RAIL
         .iter()
         .flat_map(|(_, tools)| tools.iter().filter_map(|command| command.icon()))
-        .chain([RailIcon::Options])
         .map(|icon| (icon.label(), icon.rail_name()))
         .collect();
-    tools.push(("All commands", "Commands"));
     for (label, name) in tools {
         let target = effects_control_rect(&output, label);
         let text = output
@@ -721,24 +729,20 @@ fn rail_tool_faces_and_active_marks_follow_the_themes_rail_keys_role() {
         );
         let active = effects_control_rect(&output, "Erase");
         let marks = painted(active);
-        let outline = marks.iter().any(|mark| {
-            mark.fill == Color32::TRANSPARENT
-                && mark.stroke.color == roles().accent
-                && mark.stroke.width == 1.0
-                && (mark.rect.size() - active.shrink(0.5).size())
-                    .abs()
-                    .max_elem()
-                    < 0.01
-        });
+        let outline = marks
+            .iter()
+            .any(|mark| mark.fill == Color32::TRANSPARENT && mark.stroke.color == roles().accent);
+        // Bare, the bar sits on the target's edge; on a key, inside its border.
+        let inset = if keys { 2.0 } else { 0.0 };
         let bar = marks.iter().any(|mark| {
             mark.fill == roles().accent
                 && (mark.rect.width() - 2.0).abs() < 0.01
-                && (mark.rect.left() - active.left()).abs() < 0.01
+                && (mark.rect.left() - active.left() - inset).abs() < 0.01
         });
-        assert_eq!(
-            (outline, bar),
-            (keys, !keys),
-            "The active tool is outlined on keys and carries the accent bar when bare."
+        assert!(
+            bar && !outline,
+            "The active tool carries the accent bar in every theme; an accent \
+             outline means focus alone."
         );
         assert!(
             marks.len() > 1,
@@ -771,7 +775,7 @@ fn a_short_rail_marks_each_edge_that_hides_tools() {
                 .collect()
         };
         // Where the scrolling view stops drawing its tools: the widest reach
-        // of the clip rectangles that end above the rail's foot.
+        // of the clip rectangles inside the rail panel's margins.
         let drawn = |output: &egui::FullOutput, foot: f32| -> (f32, f32) {
             output
                 .shapes
@@ -801,17 +805,18 @@ fn a_short_rail_marks_each_edge_that_hides_tools() {
 
         let size = Vec2::new(960.0, 720.0);
         let (ctx, mut app, output) = draw(size);
-        let options = effects_control_rect(&output, "Options");
+        // The rail ends at the 30-point status bar.
+        let foot = size.y - 30.0;
         let hidden = effects_control_rect(&output, RailIcon::AlbumReview.label());
         let marks = edges(&output);
         assert!(
             marks.len() == 1
-                && marks[0] < options.top()
-                && marks[0] > options.top() - 16.0
+                && marks[0] < foot
+                && marks[0] > foot - 16.0
                 && hidden.bottom() > marks[0],
-            "Tools below the view need the lower edge only: {marks:?} above {options:?}."
+            "Tools below the view need the lower edge only: {marks:?} above {foot}."
         );
-        let (_, bottom) = drawn(&output, options.top());
+        let (_, bottom) = drawn(&output, foot - 0.5);
         assert!(
             (0.0..=2.0).contains(&(bottom - marks[0])),
             "The lower edge ends the tools, not crosses them: {} against {bottom}.",
@@ -840,8 +845,7 @@ fn a_short_rail_marks_each_edge_that_hides_tools() {
             marks.len() == 1 && marks[0] < 64.0 + 8.0 && first.top() < marks[0],
             "Scrolled to the end, tools above the view need the upper edge only: {marks:?}."
         );
-        let options = effects_control_rect(&output, "Options");
-        let (top, _) = drawn(&output, options.top());
+        let (top, _) = drawn(&output, foot - 0.5);
         assert!(
             (0.0..=2.0).contains(&(marks[0] - top)),
             "The upper edge ends the tools, not crosses them: {} against {top}.",

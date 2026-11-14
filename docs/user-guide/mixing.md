@@ -135,10 +135,22 @@ presets leave the switch alone.
 ## FX returns
 
 Use FX returns, a board of the lower panel, for the four FX buses
-that the Mixer's sends feed. Choose Echoform Delay or Aetherform Reverb for
-a bus, load a preset, and set its controls; the returns join the mix before
-the master pedalboard. Sync sets the delay in note lengths at the song's
-tempo. Input off lets the tail ring out; Clear tail cuts it at once. Export
+that the Mixer's sends feed. Choose Echoform Delay, Aetherform Reverb, or
+Emberform Drive for a bus, load a preset, and set its controls; the returns
+join the mix before the master pedalboard. Sync sets the delay in note
+lengths at the song's tempo. Input off lets the tail ring out; Clear tail
+cuts it at once. Export
 lets the tails ring past the song's end. Each effect's ducker lowers its
 repeats or tail while its input plays; set its Key to a track's number and it
 follows that track instead, such as the kick. A preset keeps the Key.
+
+Emberform Drive is a parallel distortion: the sends' dry sound stays clean
+and the bus adds its saturation beside it. Its Type sets the curve: Tube,
+Tape, Overdrive, Fuzz, Hard clip, Foldback, Rectifier (an octave up), or
+Bitcrush, whose Bits and Rate controls set the steps and the sample rate.
+Drive pushes the input into the curve while the output keeps its level; Asym
+adds even harmonics; Low cut and High cut set the band that distorts, so a
+bass can keep a clean sub. Twelve presets cover glue, drum crunch, bass grit,
+fuzz, clipping, a telephone band, an octave, folding, crushing, and a ducked
+pump. A drive return has no delay, so it stays in phase with the dry sound;
+its safety limiter bends the peaks at once instead of looking ahead.

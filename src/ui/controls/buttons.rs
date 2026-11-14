@@ -46,16 +46,13 @@ pub(crate) fn rail_surface(ui: &egui::Ui, response: &Response, active: bool) {
     key_face(ui, response, ButtonRole::Secondary, raised);
     let rect = response.rect;
     let painter = ui.painter();
-    if active && keys {
-        painter.rect_stroke(
-            rect.shrink(0.5),
-            5.0,
-            Stroke::new(1.0_f32, roles().accent),
-            egui::StrokeKind::Inside,
-        );
-    } else if active {
+    // The active mark is a 2-point accent bar at the left in every theme, so
+    // it never reads as the focus outline. Bare, it sits on the target's
+    // edge; on a key, inside the key's border.
+    if active {
+        let inset = if keys { 3.0 } else { 1.0 };
         let bar = Rect::from_center_size(
-            Pos2::new(rect.left() + 1.0, rect.center().y),
+            Pos2::new(rect.left() + inset, rect.center().y),
             Vec2::new(2.0, (rect.height() * 0.45).round()),
         );
         painter.rect_filled(bar, 1.0, roles().accent);

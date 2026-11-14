@@ -29,7 +29,7 @@ A tool that needs a missing key stops and names the key.
 
 | Tool | Usage | What it does |
 |---|---|---|
-| `mixjam.py` | `from mixjam import Song, board, delay, reverb` | Library: writes format-24 songs with lanes, sections, clips, loops, phrases, fades, clip pitch and reverse, automation (the Repeat gate and Pitch lane too), FX buses and their return lanes, channel EQ (two peaks), drives, compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
+| `mixjam.py` | `from mixjam import Song, board, delay, reverb, drive` | Library: writes format-25 songs with lanes, sections, clips, loops, phrases, fades, clip pitch and reverse, automation (the Repeat gate and Pitch lane too), FX buses (delay, reverb, and drive returns) and their return lanes, channel EQ (two peaks), drives, compressors, widths, duckers, pedal and FX keys, and the master board, plus `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, up to 4 at a time by default, and the master once. Renders run below normal priority and, on Windows, stop when the tool stops. The premaster and role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the premaster's peak and rescales the lane files, premaster and stems to it. Eligible unchanged lanes come from the cache described below. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, targets. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`; run this alone only for a song that `render.py` did not render. |
@@ -96,10 +96,10 @@ slowed, it ends at its end; sped up, its sound ends where its source runs out.
 The mechanical gate follows this speed clock when it checks source duration,
 silent gaps, and the source window at a clip's ending, including reversal.
 
-The song tools expect format 24 (18 to 23 also work). `render.py` does not pass sample folders to
+The song tools expect format 25 (18 to 24 also work). `render.py` does not pass sample folders to
 the application, and `measure.py` checks linked paths from its working
 directory. For an earlier song or a library-relative WAV, use the native
-`convert` command to make a format-24 working copy with the required
+`convert` command to make a format-25 working copy with the required
 `--samples` folders and an isolated `MIXJAM_TECHNO_DATA_DIR`. Copy any
 `.meta.json` beside the new song with the matching name. Check for missing
 sources and unconfirmed conflicts before using its renders. Do not replace the
@@ -123,7 +123,7 @@ continue after the lane's last clip. Their cache keys include that duration.
 The audibility report follows Repeat captures when it selects the bars to
 measure; FX tails remain outside that selection.
 
-Caching requires format 18 to 24, directly linked absolute imported WAV paths with
+Caching requires format 18 to 25, directly linked absolute imported WAV paths with
 source tempo, and no native, library, missing-source, conflict, or origin
 dependencies. Other songs still render, with no cache reuse. Cache keys include
 source-file content, render settings, global Solo state, master gain, and the

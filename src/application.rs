@@ -51,8 +51,9 @@ pub mod automation {
 /// The FX buses, their effects, and the controls of both.
 pub mod fx {
     pub use crate::fx::{
-        Aetherform, BUSES, DelayCharacter, DelayParam, Division, Echoform, FxBus, FxBuses, Module,
-        Range, ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel, TimeMode,
+        Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division,
+        Echoform, Emberform, FxBus, FxBuses, Module, Range, ReverbCharacter, ReverbParam,
+        SHIMMER_INTERVALS, SpaceModel, TimeMode,
     };
 }
 use crate::{

@@ -12,11 +12,11 @@ fn unsupported_song_version_lists_all_supported_versions() {
         std::process::id()
     ));
     let mut document = fixture();
-    document["formatVersion"] = json!(25);
+    document["formatVersion"] = json!(26);
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let error = load_song(&path, &Library::empty()).unwrap_err();
     fs::remove_file(path).unwrap();
-    assert_eq!(error, "Only MixJam format versions 7 to 24 are supported.");
+    assert_eq!(error, "Only MixJam format versions 7 to 25 are supported.");
 }
 
 #[test]

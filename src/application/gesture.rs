@@ -34,6 +34,7 @@ pub(super) enum FxControl {
     Return,
     Delay(crate::fx::DelayParam),
     Reverb(crate::fx::ReverbParam),
+    Drive(crate::fx::DistortionParam),
 }
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum ClipControl {
@@ -187,7 +188,7 @@ impl Gesture {
     /// Only one continuous FX control can continue a drag. A switch, module
     /// choice, preset, or multiple controls form a separate history step.
     fn fx(before: &crate::fx::FxBuses, after: &crate::fx::FxBuses) -> Option<Self> {
-        use crate::fx::{DelayParam, Module, ReverbParam};
+        use crate::fx::{DelayParam, DistortionParam, Module, ReverbParam};
         let mut changed = before
             .buses
             .iter()
@@ -214,6 +215,13 @@ impl Gesture {
                     let mut candidate = old;
                     param.set(&mut candidate, param.get(&new));
                     (candidate == new).then_some(Self::Fx(index, FxControl::Reverb(param)))
+                })
+            }
+            (Module::EmberformDrive(old), Module::EmberformDrive(new)) => {
+                DistortionParam::ALL.into_iter().find_map(|param| {
+                    let mut candidate = old;
+                    param.set(&mut candidate, param.get(&new));
+                    (candidate == new).then_some(Self::Fx(index, FxControl::Drive(param)))
                 })
             }
             _ => None,

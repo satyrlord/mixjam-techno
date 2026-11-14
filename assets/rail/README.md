@@ -23,29 +23,34 @@ They are not current asset inputs. The following table records that adaptation.
 See the [donor provenance](../donors/ravefold/README.md) for its notices and
 license status. This adaptation does not assign a new license to donor work.
 
+Every icon is now drawn with Pillow on a 24-unit grid at 16 times the size and
+reduced once: a 2-unit stroke with round caps and joins, its straight strokes
+centred on pixel boundaries of the 20-pixel display size. Icons marked as a
+donor form follow that donor path's shape; the rest are new in its family.
+
 | Asset | Source or adaptation |
 | --- | --- |
-| `save` | Exact donor `save` path |
-| `export` | Exact donor `export` path |
-| `mixer` | Exact donor `mixer` path |
-| `erase` | Exact donor `erase` path |
-| `delete` | Exact donor `trash` path |
-| `effects` | New "fx" lettering in the donor family |
-| `undo` | Exact donor `undo` path |
-| `redo` | Exact donor `redo` path |
+| `save` | Donor `save` form |
+| `export` | Donor `export` form |
+| `mixer` | Donor `mixer` form |
+| `erase` | Donor `erase` form |
+| `delete` | Donor `trash` form |
+| `effects` | New "fx" lettering |
+| `undo` | Donor `undo` form |
+| `redo` | Donor `redo` form |
 | `save-as` | Donor `save` outline, opened at lower right for a new pencil |
 | `import` | Donor `export` tray with its arrow reversed |
-| `open` | New open-folder path in the donor family |
-| `options` | New eight-tooth gear in the donor family, drawn with Pillow at eight times the size and reduced once |
-| `new` | New document and plus path in the donor family |
-| `step-synth` | New framed pattern of three stepped notes in the donor family |
-| `edit` | New waveform between two brackets, the sample's edges, in the donor family |
-| `stretch` | New outward arrows and sample boundaries in the donor family |
-| `record` | New microphone path in the donor family |
-| `help` | New ringed question mark in the donor family, drawn with Pillow at eight times the size and reduced once |
-| `master` | New level gauge for Mastering in the donor family, drawn with Pillow at eight times the size and reduced once |
-| `album-review` | New vinyl record with two groove arcs for Album Review, in the donor family |
-| `fx-returns` | New arrow that turns back down to a baseline, the return to the mix, in the donor family |
+| `open` | New open folder |
+| `options` | New eight-tooth gear with shallow teeth |
+| `new` | New document with a plus |
+| `step-synth` | New piano roll: a key ladder and three notes stepping up |
+| `edit` | New waveform between two brackets, the sample's edges |
+| `stretch` | New outward arrows between two sample boundaries |
+| `record` | New microphone on its stand |
+| `help` | New ringed question mark |
+| `master` | New level gauge for Mastering |
+| `album-review` | New record with its tonearm, for Album Review |
+| `fx-returns` | New square-cornered loop that leaves a baseline and returns into it, the return to the mix |
 
 ## Update and check
 

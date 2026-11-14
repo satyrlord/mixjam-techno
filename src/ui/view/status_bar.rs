@@ -1,5 +1,5 @@
-//! The status bar at the foot of the window: the status line, the panel
-//! switches, and the version.
+//! The status bar at the foot of the window: Options and All commands, the
+//! status line, the panel switches, and the version.
 use super::*;
 
 impl MixJamApp {
@@ -70,11 +70,45 @@ impl MixJamApp {
                     .min_size(Vec2::new(0.0, 24.0)),
             )
         };
+        let icons = self.icons(ctx);
         ui.scope_builder(
             egui::UiBuilder::new()
                 .max_rect(left)
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
             |ui| {
+                // Options and All commands lead the bar, so the rail's whole
+                // height goes to the tools.
+                let options = status_icon_button(
+                    ui,
+                    RailIcon::Options.label(),
+                    RailIcon::Options.hint(),
+                    Some(self.options.is_some()),
+                    |ui, centre, color| {
+                        if let Some(icons) = &icons {
+                            ui.painter().image(
+                                icons.texture_id(RailIcon::Options),
+                                icons.icon_rect(ui.ctx(), centre),
+                                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                                color,
+                            );
+                        }
+                    },
+                );
+                if options.clicked() {
+                    self.run_command(commands::Command::Options, ctx);
+                }
+                if status_icon_button(
+                    ui,
+                    commands::ALL_COMMANDS,
+                    commands::ALL_COMMANDS_HINT,
+                    None,
+                    |ui, centre, color| commands::paint_magnifier(ui.painter(), centre, color),
+                )
+                .clicked()
+                {
+                    self.commands = Some(commands::CommandList::new());
+                }
+                ui.add_space(STATUS_ICONS_GAP);
                 if !self.session.sample_conflicts().is_empty()
                     && notice(ui, "Sample conflicts").clicked()
                 {
@@ -192,10 +226,44 @@ impl MixJamApp {
     }
 }
 
-/// A status-bar switch that shows or folds a panel. On, its name is bright
-/// and underlined in the accent.
 /// Space between the panel switches and the version link.
 const STATUS_VERSION_GAP: f32 = 14.0;
+
+/// Space between Options and All commands and the status that follows.
+const STATUS_ICONS_GAP: f32 = 10.0;
+
+/// A bare 28 by 24-point icon button at the status bar's left end, with
+/// `glyph` painted at its centre: muted like the status text, bright under
+/// the pointer, and in the accent when `open` says its window is open.
+fn status_icon_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    hint: &str,
+    open: Option<bool>,
+    glyph: impl FnOnce(&egui::Ui, Pos2, Color32),
+) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(28.0, 24.0), Sense::click());
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 3.0, ui.visuals().widgets.hovered.weak_bg_fill);
+    }
+    let color = if open == Some(true) {
+        roles().accent
+    } else if response.hovered() {
+        roles().text
+    } else {
+        roles().muted
+    };
+    glyph(ui, rect.center(), color);
+    focus_outline(ui, &response, roles().accent);
+    response.widget_info(|| match open {
+        Some(open) => {
+            egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, open, label)
+        }
+        None => egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label),
+    });
+    response.hover_hint(hint)
+}
 
 /// The width `panel_switch` takes for `label`.
 fn panel_switch_width(ui: &egui::Ui, label: &str) -> f32 {
@@ -210,6 +278,8 @@ fn panel_switch_width(ui: &egui::Ui, label: &str) -> f32 {
         + 14.0
 }
 
+/// A status-bar switch that shows or folds a panel. On, its name is bright
+/// and underlined in the accent.
 pub(in super::super) fn panel_switch(ui: &mut egui::Ui, label: &str, on: bool) -> Response {
     let color = if on { roles().text } else { roles().muted };
     let galley =

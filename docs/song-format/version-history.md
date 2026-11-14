@@ -1,7 +1,7 @@
 # Version history
 
 Migration preserves the earlier settings within the limits below. Saving an
-earlier song writes version 24, which earlier builds cannot open.
+earlier song writes version 25, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
 |---|---|---|
@@ -22,6 +22,7 @@ earlier song writes version 24, which earlier builds cannot open.
 | 22 | Adds the lane `drive`. | Every drive off. |
 | 23 | Adds FX bus return automation, the lane automation `repeatGate`, and the placement `reverse`. | Static returns, full-length repeats, no reversed clips. |
 | 24 | Adds the lane automation `pitch`. | No pitch automation. |
+| 25 | Adds the FX bus module `emberform-drive`. | No drive returns. |
 
 The readers reject later-version settings in earlier songs. Some optional fields
 encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept

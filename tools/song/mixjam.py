@@ -1,4 +1,4 @@
-"""Write format-24 .mixjam songs from Python.
+"""Write format-25 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
 A sound is a WAV path; the writer links it as an imported sample by path.
@@ -37,7 +37,7 @@ TICKS_PER_BAR = 256
 MAX_BARS = 4096  # MAX_TICKS / TICKS_PER_BAR in src/engine.rs
 MAX_SECTION_NAME = 48  # src/engine.rs
 TICKS_PER_BEAT = 64
-FORMAT_VERSION = 24
+FORMAT_VERSION = 25
 IMPORTED_ID_START = 1_000_000
 TRACKS = 64
 # The repeat lane's values: off, then 1/4 to 1/64 notes (REPEAT_STEPS in src/automation.rs).
@@ -463,7 +463,7 @@ class Song:
             automation[lane] = entries
 
     def bus(self, index, module, return_level=None, powered=True, limiter=True):
-        """index 1-4; module from delay()/reverb(); return_level 0-1 (default: the preset's).
+        """index 1-4; module from delay()/reverb()/drive(); return_level 0-1 (default: the preset's).
         A module's `duckKey` (a track from 1 to 64) ducks the effect while that track sounds,
         instead of its own input; 0 is its own input and is not written."""
         index = _whole_index(index, 4, 'FX bus')
@@ -769,6 +769,35 @@ _REVERBS = {
 }
 
 
+_DRIVE = dict(type='emberform-drive', shape='tube', driveDb=12.0, asymmetryPercent=20.0, lowCutHz=90.0,
+              highCutHz=12000.0, bits=8, crushRateHz=11025.0, widthPercent=100.0, duckAmountPercent=0.0,
+              duckReleaseMs=250.0, outputDb=0.0, bypass=False)
+_DRIVES = {
+    'Warm Tube': ({}, 0.45),
+    'Tape Glue': (dict(shape='tape', driveDb=9.0, asymmetryPercent=10.0, lowCutHz=30.0, highCutHz=15000.0), 0.35),
+    'Drum Crunch': (dict(shape='overdrive', driveDb=24.0, asymmetryPercent=0.0, lowCutHz=120.0,
+                         highCutHz=9000.0), 0.40),
+    'Bass Grit': (dict(shape='fuzz', driveDb=15.0, asymmetryPercent=30.0, lowCutHz=220.0, highCutHz=5500.0,
+                       widthPercent=0.0), 0.50),
+    'Fuzz Wall': (dict(shape='fuzz', driveDb=30.0, asymmetryPercent=40.0, lowCutHz=160.0, highCutHz=7000.0,
+                       widthPercent=140.0, outputDb=-1.0), 0.50),
+    'Industrial Clip': (dict(shape='hard-clip', driveDb=30.0, asymmetryPercent=0.0, lowCutHz=200.0,
+                             highCutHz=11000.0, outputDb=-1.5), 0.45),
+    'Telephone': (dict(shape='overdrive', driveDb=18.0, asymmetryPercent=15.0, lowCutHz=600.0,
+                       highCutHz=3200.0, widthPercent=0.0), 0.55),
+    'Octave Up': (dict(shape='rectifier', driveDb=6.0, asymmetryPercent=0.0, lowCutHz=300.0,
+                       highCutHz=9000.0, widthPercent=120.0), 0.35),
+    'Wavefolder': (dict(shape='foldback', driveDb=15.0, asymmetryPercent=15.0, lowCutHz=180.0,
+                        highCutHz=10000.0, widthPercent=150.0, outputDb=-1.0), 0.40),
+    'Lo-Fi Crush': (dict(shape='bitcrush', driveDb=3.0, asymmetryPercent=0.0, lowCutHz=60.0, highCutHz=8000.0,
+                         bits=10, crushRateHz=16000.0), 0.45),
+    '8-Bit Grit': (dict(shape='bitcrush', driveDb=6.0, asymmetryPercent=0.0, lowCutHz=150.0, highCutHz=14000.0,
+                        bits=5, crushRateHz=6000.0, outputDb=-2.0), 0.40),
+    'Pumping Heat': (dict(driveDb=18.0, asymmetryPercent=35.0, lowCutHz=120.0, highCutHz=10000.0,
+                          widthPercent=130.0, duckAmountPercent=70.0, duckReleaseMs=180.0), 0.55),
+}
+
+
 def delay(preset='Wide Tape Echo', **changes):
     """An Echoform delay module from one of the app's presets, with changed keys."""
     settings, level = _DELAYS[preset]
@@ -779,3 +808,9 @@ def reverb(preset='Warm Chamber', **changes):
     """An Aetherform reverb module from one of the app's presets, with changed keys."""
     settings, level = _REVERBS[preset]
     return dict(_REVERB, **{**settings, **changes}, _return=level)
+
+
+def drive(preset='Warm Tube', **changes):
+    """An Emberform drive module from one of the app's presets, with changed keys."""
+    settings, level = _DRIVES[preset]
+    return dict(_DRIVE, **{**settings, **changes}, _return=level)

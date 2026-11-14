@@ -188,14 +188,11 @@ impl Project {
     /// with an effect listen to, apart from the lanes' duckers, in that order
     /// and without repeats.
     pub fn side_keys(&self) -> Vec<usize> {
-        let buses = self.fx.buses.iter().filter_map(|bus| {
-            let key = match &bus.module {
-                crate::fx::Module::Empty => 0,
-                crate::fx::Module::EchoformDelay(delay) => delay.duck_key,
-                crate::fx::Module::AetherformReverb(reverb) => reverb.duck_key,
-            };
-            usize::from(key).checked_sub(1)
-        });
+        let buses = self
+            .fx
+            .buses
+            .iter()
+            .filter_map(|bus| usize::from(bus.module.duck_key()).checked_sub(1));
         let mut keys: Vec<usize> = Vec::new();
         for key in self.master.key_tracks().chain(buses) {
             if !keys.contains(&key) {

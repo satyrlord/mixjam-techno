@@ -98,8 +98,8 @@ The FX returns board shows four bus units side by side on a Marine board. The
 row scrolls in both directions when necessary. Each raised unit identifies its
 bus and effect, and provides the effect and preset selectors, settings, return
 level, input and limiter switches, and Clear tail. Empty units ask the user to
-choose an effect. Echoform Delay uses blue enamel and Aetherform Reverb uses
-violet enamel. An inactive or empty unit dims its enclosure and lamp.
+choose an effect. Echoform Delay uses blue enamel, Aetherform Reverb uses
+violet enamel, and Emberform Drive uses ember enamel. An inactive or empty unit dims its enclosure and lamp.
 
 ## Shared shell and controls
 

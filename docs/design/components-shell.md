@@ -27,43 +27,44 @@ The rail at the left uses the utility Folded Metal finish: dark neutral
 paint, subtle monochromatic grain and smooth folded edges. The theme's
 workspace accent (lime in Studio and Aero, orange in Vintage) marks active
 tools and focus. It has two widths. With names (the default) it is 84 points
-wide; each tool is a 68 by 40-point target with its 20-point icon above a
-10.5-point name. Every name prints at that one size; a name too long for it
-is shortened on the rail only (Album Review shows "Review", All commands
-"Commands"), while the tooltip, accessible name and window title keep the
+wide; each tool is a 68 by 44-point target with its 20-point icon (centre 15
+points below the top) above a 10.5-point name (5 points above the bottom). Every name prints at that one size; a name too long for it
+is shortened on the rail only (Album Review shows "Review"), while the tooltip, accessible name and window title keep the
 full name. Icons only, it is 64 points wide with 48 by 30-point targets.
 Tools stack with no gap between them. A double-chevron switch at the right of
-the first heading changes the width (icons only, it has its own row at the
-top); the Tools switch in the status bar does the same.
+the first heading changes the width (without headings, icons only or
+compact, it has its own row at the top); the Tools switch in the status bar does the same.
 
 Tool faces follow the theme's `rail_keys` role. On Vintage every tool rests on
 a dark key face. On Studio and Aero a tool is bare until hover or press shows
-its face. An active tool keeps its face and adds the accent: on keys, a
-1-point accent outline; bare, a 2-point accent bar at the left edge. The icon
+its face. An active tool keeps its face and adds a 2-point accent bar at the
+left in every theme: at the target's edge when bare, 2 points inside the key's
+border on keys. An accent outline means keyboard focus alone. The icon
 of an active tool takes the accent too, and its name brightens to the text
 color, as it does under the pointer.
 
-Three groups run from top to bottom: File (New, Open, Save, Save as, Import,
-Export), Clips (Erase, Delete), and Tools (Mixer, Mastering, FX returns,
-Effects, Step synth, Edit, Stretch, Album Review); Effects opens Effect Studio, Edit
-the Sample Editor, and Stretch the Time Stretcher. With names, each group
-has an uppercase 10-point muted heading with 0.6-point letter spacing, 8
-points of space above it and 4 below; icons only, recessed separators divide
-them. Options and Commands sit at the foot of the rail, 12 points below the
-tools; icons only, a separator divides that space.
-When the window is too short for every name, the rail scrolls under the mouse
-wheel or to keep the keyboard-focused tool visible. An engraved line marks
-each edge past which more tools lie. The foot stays fixed.
-Commands draws a magnifier with the painter (no icon asset) in the rail
-icon's colors and target sizes. Material and icons paint one texel per physical
-pixel; the narrow chassis omits the windows' wide corner patches.
+Five groups run from top to bottom: File (New, Open, Save, Save as, Import,
+Export), Clips (Erase, Delete), Mix (Mixer, Mastering, FX returns, Step
+synth: the Mix view and the lower panel's boards), Sound (Edit, Stretch,
+Effects: the windows that write a new sample) and Library (Album Review).
+Edit opens the Sample Editor, Stretch the Time Stretcher, and Effects Effect
+Studio. With names, each group has an uppercase 10-point muted heading with
+0.6-point letter spacing, 14 points of space above it and 6 below; icons only,
+recessed separators divide them. The rail holds the tools alone: Options and
+All commands lead the status bar. When the window is too short for every tool
+under its heading, the rail turns compact: names stay, targets shrink to 68 by
+36 points (icon centre 12 points below the top, name 2 points above the
+bottom), and separators replace the headings, each centred in a 12-point gap.
+That fits every tool in a 768-point window. Shorter still, the rail scrolls
+under the mouse wheel or to keep the keyboard-focused tool visible. An
+engraved line marks each edge past which more tools lie. Material and icons
+paint one texel per physical pixel; the narrow chassis omits the windows'
+wide corner patches.
 
 Musical tools toggle their open state. Erase toggles its editing
 mode. Active toggles expose their selected state to accessibility. A
 collapsed window stays active until closed.
 File commands and Delete remain one-shot actions.
-Options uses a gear PNG icon at the foot of the rail. Its second activation
-focuses the existing window and retains its draft.
 
 ## Command list
 
@@ -73,7 +74,7 @@ keyboard and the command list read it. All commands or Ctrl+K opens the list
 as a modal over a dimmed window, up to 580 points wide and centered. A Raised
 field at the top holds the text cursor and the muted hint "Everything is listed
 below. Type to narrow it." Below it, every command shows in its group before
-anything is typed: File, Clips, Tools, Application, Transport, Edit, Panels,
+anything is typed: File, Clips, Mix, Sound, Library, Application, Transport, Edit, Panels,
 Automation, each under the Automation menu's muted uppercase heading. A row is
 30 points tall: a 6-point Accent dot when the tool, panel or lane is on, the
 name in 13-point Text, a one-line description of what the command does in
@@ -92,6 +93,14 @@ controls, arrangement requests, and song drops. A file or confirmation modal
 dismisses the command list before it can consume more input.
 
 ## Status bar panel switches
+
+The left end of the status bar holds Options and All commands: bare 28 by
+24-point buttons, 10 points before the status text, with Muted icons that
+brighten to Text under the pointer. Options is the gear PNG; its icon takes
+the accent while the window is open, and its second activation focuses the
+existing window and retains its draft. All commands draws a magnifier with the
+painter (no icon asset), on the rail icons' 24-unit grid with their 2-unit
+stroke.
 
 The right end of the status bar holds a muted 12-point Panels label, five
 switches, and the version link. Tools shows or hides the rail's names. Boards

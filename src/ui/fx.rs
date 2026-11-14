@@ -7,8 +7,9 @@ use super::master::{Dial, Format, dial, enamel_of, enclosure_of, heading, lamp};
 use super::*;
 use mixjam_techno::application::KnobRange;
 use mixjam_techno::application::fx::{
-    Aetherform, BUSES, DelayCharacter, DelayParam, Division, Echoform, FxBus, FxBuses, Module,
-    Range, ReverbCharacter, ReverbParam, SHIMMER_INTERVALS, SpaceModel, TimeMode,
+    Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division,
+    Echoform, Emberform, FxBus, FxBuses, Module, Range, ReverbCharacter, ReverbParam,
+    SHIMMER_INTERVALS, SpaceModel, TimeMode,
 };
 
 pub(super) enum Action {
@@ -40,6 +41,7 @@ pub(super) const MODULE_HEIGHT: f32 = ROW_HEIGHT + 2.0 * BOARD_INSET + 64.0;
 
 const DELAY_ENAMEL: [u8; 3] = [112, 192, 214];
 const REVERB_ENAMEL: [u8; 3] = [184, 168, 234];
+const DRIVE_ENAMEL: [u8; 3] = [234, 164, 120];
 const EMPTY_ENAMEL: [u8; 3] = [196, 194, 186];
 
 fn enamel(module: &Module) -> [u8; 3] {
@@ -47,6 +49,7 @@ fn enamel(module: &Module) -> [u8; 3] {
         Module::Empty => EMPTY_ENAMEL,
         Module::EchoformDelay(_) => DELAY_ENAMEL,
         Module::AetherformReverb(_) => REVERB_ENAMEL,
+        Module::EmberformDrive(_) => DRIVE_ENAMEL,
     }
 }
 
@@ -55,6 +58,7 @@ enum Slot {
     Return,
     Delay(DelayParam),
     Reverb(ReverbParam),
+    Drive(DistortionParam),
 }
 
 fn slots(module: &Module) -> Vec<Slot> {
@@ -87,6 +91,9 @@ fn slots(module: &Module) -> Vec<Slot> {
                 .into_iter()
                 .map(Slot::Reverb),
             )
+            .collect(),
+        Module::EmberformDrive(_) => std::iter::once(Slot::Return)
+            .chain(DistortionParam::ALL.into_iter().map(Slot::Drive))
             .collect(),
     }
 }
@@ -284,6 +291,73 @@ fn reverb_face(param: ReverbParam) -> (&'static str, &'static str, &'static str,
     }
 }
 
+fn drive_face(param: DistortionParam) -> (&'static str, &'static str, &'static str, Format) {
+    match param {
+        DistortionParam::Drive => (
+            "Drive",
+            "drive",
+            "How hard the sound goes into the curve. The level stays; the tone changes.",
+            Format::tenths("dB"),
+        ),
+        DistortionParam::Asymmetry => (
+            "Asym",
+            "asymmetry",
+            "Bends one half of the wave more than the other: more even harmonics.",
+            Format::whole("%"),
+        ),
+        DistortionParam::LowCut => (
+            "Low cut",
+            "low cut",
+            "Takes the lows out before the curve, so they stay clean in the dry sound.",
+            Format::whole("Hz"),
+        ),
+        DistortionParam::HighCut => (
+            "High cut",
+            "high cut",
+            "Softens the fizz above this after the curve.",
+            Format::whole("Hz"),
+        ),
+        DistortionParam::Bits => (
+            "Bits",
+            "bits",
+            "The crusher's bit depth. It acts with the Bitcrush type.",
+            Format::whole(""),
+        ),
+        DistortionParam::CrushRate => (
+            "Rate",
+            "crush rate",
+            "The crusher's sample rate: lower folds more aliasing in. It acts with the Bitcrush \
+             type.",
+            Format::whole("Hz"),
+        ),
+        DistortionParam::Width => (
+            "Width",
+            "width",
+            "0% is mono, 100% unchanged, 200% doubles the sides.",
+            Format::whole("%"),
+        ),
+        DistortionParam::DuckAmount => (
+            "Duck",
+            "duck amount",
+            "Lowers the distortion while the input plays.",
+            Format::whole("%"),
+        ),
+        DistortionParam::DuckRelease => (
+            "Release",
+            "duck release",
+            "How fast the distortion returns.",
+            Format::whole("ms"),
+        ),
+        DistortionParam::DuckKey => (
+            "Key",
+            "duck key",
+            "The track that lowers the distortion, as it sounds after its fader. Own: the input.",
+            Format::Key,
+        ),
+        DistortionParam::Output => ("Output", "output", "", Format::db(true)),
+    }
+}
+
 /// The preset whose settings and return level a bus has, if any.
 fn matching_preset(bus: &FxBus) -> Option<&'static str> {
     let level = (bus.return_level * 100.0).round();
@@ -306,6 +380,16 @@ fn matching_preset(bus: &FxBus) -> Option<&'static str> {
                     duck_key: reverb.duck_key,
                     ..preset
                 }) == Some(*reverb)
+                    && *mix == level
+            })
+            .map(|(name, _)| *name),
+        Module::EmberformDrive(drive) => Emberform::PRESETS
+            .iter()
+            .find(|(name, mix)| {
+                Emberform::preset(name).map(|preset| Emberform {
+                    duck_key: drive.duck_key,
+                    ..preset
+                }) == Some(*drive)
                     && *mix == level
             })
             .map(|(name, _)| *name),
@@ -457,6 +541,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
             Module::Empty => 0,
             Module::EchoformDelay(_) => 1,
             Module::AetherformReverb(_) => 2,
+            Module::EmberformDrive(_) => 3,
         };
         let before = kind;
         choice(
@@ -468,6 +553,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                 (0, "Empty"),
                 (1, "Echoform Delay"),
                 (2, "Aetherform Reverb"),
+                (3, "Emberform Drive"),
             ],
             "The effect on this bus. A new effect starts from its first preset; the old one's \
              tail is cut.",
@@ -482,6 +568,10 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                     Module::AetherformReverb(Aetherform::default()),
                     Aetherform::PRESETS[0].1 / 100.0,
                 ),
+                3 => (
+                    Module::EmberformDrive(Emberform::default()),
+                    Emberform::PRESETS[0].1 / 100.0,
+                ),
                 _ => (Module::Empty, bus.return_level),
             };
         }
@@ -491,6 +581,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
             Module::AetherformReverb(_) => {
                 Aetherform::PRESETS.iter().map(|(name, _)| *name).collect()
             }
+            Module::EmberformDrive(_) => Emberform::PRESETS.iter().map(|(name, _)| *name).collect(),
         };
         if !presets.is_empty() {
             let current = matching_preset(bus).unwrap_or("Custom");
@@ -533,6 +624,19 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                         }
                         if let Some((_, mix)) =
                             Aetherform::PRESETS.iter().find(|(name, _)| *name == chosen)
+                        {
+                            bus.return_level = mix / 100.0;
+                        }
+                    }
+                    Module::EmberformDrive(old) => {
+                        if let Some(drive) = Emberform::preset(chosen) {
+                            bus.module = Module::EmberformDrive(Emberform {
+                                duck_key: old.duck_key,
+                                ..drive
+                            });
+                        }
+                        if let Some((_, mix)) =
+                            Emberform::PRESETS.iter().find(|(name, _)| *name == chosen)
                         {
                             bus.return_level = mix / 100.0;
                         }
@@ -667,6 +771,17 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                     );
                 });
             }
+            Module::EmberformDrive(drive) => {
+                choice(
+                    ui,
+                    Rect::from_min_size(at(PADDING, MODE_Y), Vec2::new(132.0, 24.0)),
+                    &format!("{bus_name} type"),
+                    &mut drive.shape,
+                    &DistortionShape::ALL.map(|shape| (shape, shape.label())),
+                    "The curve: Tube and Tape are warm, Overdrive crunches, Fuzz buzzes, Hard \
+                     clip cuts, Foldback rings, Rectifier adds the octave, Bitcrush steps.",
+                );
+            }
         }
         // The dials, in two rows.
         let all = slots(&bus.module);
@@ -763,6 +878,34 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
                         param.set(reverb, value as f32);
                     }
                 }
+                Slot::Drive(param) => {
+                    let Module::EmberformDrive(drive) = &mut bus.module else {
+                        continue;
+                    };
+                    let (label, name, hint, format) = drive_face(*param);
+                    let enabled =
+                        !matches!(param, DistortionParam::Bits | DistortionParam::CrushRate)
+                            || drive.shape == DistortionShape::Bitcrush;
+                    let mut value = f64::from(param.get(drive));
+                    let before = value;
+                    dial(
+                        ui,
+                        positions,
+                        &mut value,
+                        Dial {
+                            name: &format!("{bus_name} {name}"),
+                            label,
+                            hint,
+                            range: knob(param.range()),
+                            format,
+                            choices: &[],
+                        },
+                        enabled,
+                    );
+                    if value != before {
+                        param.set(drive, value as f32);
+                    }
+                }
             }
         }
         // The bus's own switches.
@@ -786,6 +929,7 @@ fn unit(ui: &mut egui::Ui, rect: Rect, index: usize, bus: &mut FxBus) -> bool {
         let bypass = match &mut bus.module {
             Module::EchoformDelay(delay) => Some(&mut delay.bypass),
             Module::AetherformReverb(reverb) => Some(&mut reverb.bypass),
+            Module::EmberformDrive(drive) => Some(&mut drive.bypass),
             Module::Empty => None,
         };
         if let Some(bypass) = bypass {
@@ -830,7 +974,7 @@ mod tests {
 
     #[test]
     fn ink_stays_legible_on_every_unit_lit_or_off() {
-        for colour in [DELAY_ENAMEL, REVERB_ENAMEL, EMPTY_ENAMEL] {
+        for colour in [DELAY_ENAMEL, REVERB_ENAMEL, DRIVE_ENAMEL, EMPTY_ENAMEL] {
             for on in [true, false] {
                 let ratio = controls::contrast(enamel_of(colour, on), roles().ink);
                 assert!(ratio >= 5.0, "{colour:?} ({on}) gives {ratio:.2}:1");
@@ -844,6 +988,7 @@ mod tests {
             Module::Empty,
             Module::EchoformDelay(Echoform::default()),
             Module::AetherformReverb(Aetherform::default()),
+            Module::EmberformDrive(Emberform::default()),
         ] {
             let count = slots(&module).len();
             assert!(count <= 2 * columns(&module));
@@ -865,5 +1010,17 @@ mod tests {
         assert_eq!(matching_preset(&bus), Some("Dark Hall"));
         bus.return_level = 0.5;
         assert_eq!(matching_preset(&bus), None);
+    }
+
+    #[test]
+    fn every_drive_preset_matches_itself() {
+        for (name, level) in Emberform::PRESETS {
+            let bus = FxBus {
+                module: Module::EmberformDrive(Emberform::preset(name).unwrap()),
+                return_level: level / 100.0,
+                ..FxBus::default()
+            };
+            assert_eq!(matching_preset(&bus), Some(name));
+        }
     }
 }

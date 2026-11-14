@@ -21,9 +21,9 @@ In scope: the controls below, preference persistence, safe application of
 changes, existing-control synchronization, agent access, and verification.
 Out of scope: device selection, ASIO or exclusive audio, sample-rate changes,
 plugins, autosave, theme editing or custom themes, arbitrary UI
-scaling, new song DSP parameters, and a change to song format 24. Do not expose
+scaling, new song DSP parameters, and a change to song format 25. Do not expose
 an internal processing block size as a device latency control. The current
-song format is 24; options use their own schema.
+song format is 25; options use their own schema.
 
 ## Current evidence
 

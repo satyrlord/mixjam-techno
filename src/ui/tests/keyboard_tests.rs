@@ -61,13 +61,11 @@ fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
         "Mixer",
         "Mastering",
         "FX returns",
-        "Effects",
         "Step synth",
         "Edit",
         "Stretch",
+        "Effects",
         "Album Review",
-        "Options",
-        "All commands",
     ];
     let after = top_bar.len();
     assert_eq!(
@@ -102,6 +100,14 @@ fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
         &order[at..at + toolbar.len()],
         toolbar.as_slice(),
         "{order:?}"
+    );
+    // The status bar leads with Options and All commands.
+    let options = order.iter().position(|name| name == "Options");
+    assert!(
+        options.is_some()
+            && order.get(options.unwrap() + 1).map(String::as_str) == Some("All commands")
+            && options < order.iter().position(|name| name == "Tools"),
+        "Options and All commands lead the status bar: {order:?}"
     );
     let tools = order.iter().position(|name| name == "Tools");
     let boards = order.iter().position(|name| name == "Boards");
@@ -161,9 +167,9 @@ fn tab_scrolls_rail_controls_into_view_in_short_windows() {
                 let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
                 let label = focused_label(&output).expect("A rail control must have focus.");
                 let rect = effects_control_rect(&output, &label);
-                let options = effects_control_rect(&output, "Options");
+                // The rail ends at the 30-point status bar.
                 assert!(
-                    rect.top() >= 64.0 && rect.bottom() < options.top(),
+                    rect.top() >= 64.0 && rect.bottom() <= size.y - 30.0,
                     "Focused {label} must be visible at {size:?}: {rect:?}."
                 );
                 if label == "Album Review" {

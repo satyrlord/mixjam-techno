@@ -153,7 +153,8 @@ pub(super) fn point_arrays_have_objects(value: &serde_json::Value) -> bool {
 }
 
 /// The FX buses of a saved song and their return lanes. Versions 13 to 22
-/// reject a bus's `returnAutomation`, even as an empty list.
+/// reject a bus's `returnAutomation`, even as an empty list, and versions
+/// 13 to 24 the Emberform Drive.
 pub(super) fn saved_buses(
     buses: &Saved<SongBuses>,
     version: u32,
@@ -168,6 +169,19 @@ pub(super) fn saved_buses(
     let Saved::Raw(raw) = buses else {
         return Err("The FX buses are not a saved record.".into());
     };
+    if version < 25
+        && buses.json().as_array().is_some_and(|buses| {
+            buses.iter().any(|bus| {
+                bus.pointer("/module/type")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("emberform-drive")
+            })
+        })
+    {
+        return Err(format!(
+            "Version {version} songs cannot contain the Emberform Drive."
+        ));
+    }
     if version < 23 {
         let lanes = buses.json().as_array().is_some_and(|buses| {
             buses

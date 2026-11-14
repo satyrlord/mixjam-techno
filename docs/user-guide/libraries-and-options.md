@@ -67,7 +67,7 @@ Set `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 
 ## Options
 
-Select the **Options** gear at the foot of the tool rail, or press **Ctrl+,**.
+Select the **Options** gear at the left end of the status bar, or press **Ctrl+,**.
 The window has Audio, Workspace, Files, and Sample libraries pages. It fits the
 current page, up to the screen height; a longer page scrolls. **Apply** saves
 preference changes and keeps the window open. It is available only when

@@ -34,68 +34,46 @@ impl MixJamApp {
                 controls::rail_panel(ui, ui.max_rect().expand(4.0));
                 // Tools touch: their faces and hover states carry the rhythm.
                 ui.spacing_mut().item_spacing.y = 0.0;
-                // Options sits at the foot. Its place is kept first, but it is
-                // drawn last, so Tab still reaches the tools from the top.
+                // Options and All commands lead the status bar, so the
+                // whole rail height goes to the tools.
                 let area = ui.available_rect_before_wrap();
-                let foot_height = RAIL_FOOT_GAP + 2.0 * rail_button_size(names).y;
-                let (body, foot) = area.split_top_bottom_at_y(area.bottom() - foot_height);
-                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                    let output = egui::ScrollArea::vertical()
-                        .id_salt("tool-rail")
-                        .auto_shrink(false)
-                        .show(ui, |ui| {
-                            ui.vertical_centered(|ui| self.rail_tools(ui, ctx, &icons, names));
-                        });
-                    rail_scroll_edges(ui, &output);
-                });
-                ui.scope_builder(egui::UiBuilder::new().max_rect(foot), |ui| {
-                    ui.vertical_centered(|ui| {
-                        // With names, the foot stands apart by space alone, as
-                        // the groups do; icons only, a separator divides it.
-                        if names {
-                            ui.add_space(RAIL_FOOT_GAP);
-                        } else {
-                            ui.add_space((RAIL_FOOT_GAP - RAIL_SEPARATOR) / 2.0);
-                            controls::rail_separator(ui);
-                            ui.add_space((RAIL_FOOT_GAP - RAIL_SEPARATOR) / 2.0);
-                        }
-                        if rail_tool(ui, &icons, RailIcon::Options, self.options.is_some(), names)
-                            .clicked()
-                        {
-                            self.run_command(commands::Command::Options, ctx);
-                        }
-                        if commands::rail_commands_button(ui, names, self.commands.is_some())
-                            .clicked()
-                        {
-                            self.commands = Some(commands::CommandList::new());
-                        }
+                let form = rail_form(ui, names, area.height());
+                let output = egui::ScrollArea::vertical()
+                    .id_salt("tool-rail")
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        ui.vertical_centered(|ui| self.rail_tools(ui, ctx, &icons, form));
                     });
-                });
+                rail_scroll_edges(ui, &output);
             });
     }
 
-    /// The rail's tools in their groups: File, Clips and Tools. With names
-    /// off, each group heading is a separator.
+    /// The rail's tools in their groups, from the command registry. Without
+    /// headings, a separator divides the groups.
     fn rail_tools(
         &mut self,
         ui: &mut egui::Ui,
         ctx: &egui::Context,
         icons: &RailIcons,
-        names: bool,
+        form: RailForm,
     ) {
         let tool = |ui: &mut egui::Ui, icon: RailIcon, active: bool| {
-            rail_tool(ui, icons, icon, active, names)
+            rail_tool(ui, icons, icon, active, form)
         };
         let mut switch = None;
-        if !names {
-            // Icons only, there is no heading row: the switch has its own.
-            let size = Vec2::new(rail_button_size(false).x.min(ui.available_width()), 16.0);
+        if !form.headings() {
+            // Without a heading row, the switch has its own.
+            let size = Vec2::new(
+                rail_button_size(RailForm::Icons)
+                    .x
+                    .min(ui.available_width()),
+                16.0,
+            );
             let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-            switch = Some(rail_names_switch(ui, rect, names));
+            switch = Some(rail_names_switch(ui, rect, form.names()));
         }
-        // The rail draws its groups and tools from the command registry.
         for (index, (group, tools)) in commands::RAIL.iter().enumerate() {
-            if let Some(response) = rail_group(ui, group, names, index == 0) {
+            if let Some(response) = rail_group(ui, group, form, index == 0) {
                 switch = Some(response);
             }
             for command in tools.iter().copied() {
@@ -139,26 +117,74 @@ pub(in super::super) fn rail_width(names: bool) -> f32 {
     if names { 84.0 } else { 64.0 }
 }
 
-/// One rail tool's target: an icon over its name, or the icon alone. Both
-/// leave a 6-point gutter to the chassis edge.
-pub(in super::super) fn rail_button_size(names: bool) -> Vec2 {
-    if names {
-        Vec2::new(68.0, 40.0)
-    } else {
-        Vec2::new(48.0, 30.0)
+/// How the rail draws its tools: names under headings; names between
+/// separators on tighter targets, when a window is too short for the
+/// headings; or icons alone between separators.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum RailForm {
+    Names,
+    Compact,
+    Icons,
+}
+
+impl RailForm {
+    pub(in super::super) fn names(self) -> bool {
+        self != Self::Icons
+    }
+
+    pub(in super::super) fn headings(self) -> bool {
+        self == Self::Names
     }
 }
 
-/// The space above Options at the rail's foot, its separator included.
-const RAIL_FOOT_GAP: f32 = 12.0;
+/// With names on, the full form when every tool fits under its heading, else
+/// the compact one, which fits a 768-point window.
+fn rail_form(ui: &egui::Ui, names: bool, height: f32) -> RailForm {
+    if !names {
+        return RailForm::Icons;
+    }
+    let target = rail_button_size(RailForm::Names).y;
+    let content: f32 = commands::RAIL
+        .iter()
+        .enumerate()
+        .map(|(index, (group, tools))| {
+            rail_heading_height(ui, group, index == 0) + target * tools.len() as f32
+        })
+        .sum();
+    if content <= height + 0.5 {
+        RailForm::Names
+    } else {
+        RailForm::Compact
+    }
+}
+
+/// One rail tool's target: an icon over its name, or the icon alone. All
+/// leave a 6-point gutter to the chassis edge.
+pub(in super::super) fn rail_button_size(form: RailForm) -> Vec2 {
+    match form {
+        RailForm::Names => Vec2::new(68.0, 44.0),
+        RailForm::Compact => Vec2::new(68.0, 36.0),
+        RailForm::Icons => Vec2::new(48.0, 30.0),
+    }
+}
+
+/// With names, the icon's centre below the target's top, and the name's
+/// bottom above the target's bottom. Compact keeps three points between
+/// the icon and the name's capitals, the full form five.
+fn rail_name_layout(form: RailForm) -> (f32, f32) {
+    if form == RailForm::Compact {
+        (12.0, 2.0)
+    } else {
+        (15.0, 5.0)
+    }
+}
+
+/// The space a compact group's separator takes, the line centred in it.
+const RAIL_COMPACT_GAP: f32 = 12.0;
 /// The height `controls::rail_separator` takes.
 const RAIL_SEPARATOR: f32 = 8.0;
 /// Every tool name's size. A long name is shortened, never shrunk.
 const RAIL_NAME_SIZE: f32 = 10.5;
-/// With names, the icon's centre below the target's top, and the name's
-/// bottom above the target's bottom.
-const RAIL_ICON_CENTRE: f32 = 13.0;
-const RAIL_NAME_BOTTOM: f32 = 4.0;
 /// How far the engraved scroll edge stops short of each side of the view.
 const RAIL_EDGE_INSET: f32 = 6.0;
 
@@ -187,12 +213,14 @@ fn rail_mark_color(ui: &egui::Ui, active: bool) -> Color32 {
 /// the accessible name and the tooltip.
 pub(in super::super) fn rail_item(
     ui: &mut egui::Ui,
-    names: bool,
+    form: RailForm,
     active: bool,
     name: &str,
     glyph: impl FnOnce(&egui::Ui, Pos2, Color32),
 ) -> Response {
-    let size = rail_button_size(names);
+    let names = form.names();
+    let (icon_centre, name_bottom) = rail_name_layout(form);
+    let size = rail_button_size(form);
     let width = size.x.min(ui.available_width().max(1.0));
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, size.y), Sense::click());
     if response.gained_focus() {
@@ -201,7 +229,7 @@ pub(in super::super) fn rail_item(
     controls::rail_surface(ui, &response, active);
     let color = rail_mark_color(ui, active);
     let centre = if names {
-        Pos2::new(rect.center().x, rect.top() + RAIL_ICON_CENTRE)
+        Pos2::new(rect.center().x, rect.top() + icon_centre)
     } else {
         rect.center()
     };
@@ -221,7 +249,7 @@ pub(in super::super) fn rail_item(
         );
         let origin = Pos2::new(
             rect.center().x - galley.size().x / 2.0,
-            rect.bottom() - RAIL_NAME_BOTTOM - galley.size().y,
+            rect.bottom() - name_bottom - galley.size().y,
         );
         ui.painter()
             .with_clip_rect(rect.intersect(ui.clip_rect()))
@@ -238,9 +266,9 @@ pub(in super::super) fn rail_tool(
     icons: &RailIcons,
     icon: RailIcon,
     active: bool,
-    names: bool,
+    form: RailForm,
 ) -> Response {
-    let response = rail_item(ui, names, active, icon.rail_name(), |ui, centre, color| {
+    let response = rail_item(ui, form, active, icon.rail_name(), |ui, centre, color| {
         ui.painter().image(
             icons.texture_id(icon),
             icons.icon_rect(ui.ctx(), centre),
@@ -313,9 +341,10 @@ pub(in super::super) fn rail_names_switch(ui: &mut egui::Ui, rect: Rect, names: 
     } else {
         roles().muted
     };
+    // Two chevrons, together 9 points wide and centred in `rect`.
     let stroke = Stroke::new(1.5_f32, color);
-    for offset in [-3.0, 3.0] {
-        let tip = rect.center() + Vec2::new(offset + direction * 2.5, 0.0);
+    for offset in [-2.5, 2.5] {
+        let tip = rect.center() + Vec2::new(offset + direction * 2.0, 0.0);
         let back = tip - Vec2::new(direction * 4.0, 0.0);
         ui.painter()
             .line_segment([back + Vec2::new(0.0, -4.0), tip], stroke);
@@ -326,22 +355,8 @@ pub(in super::super) fn rail_names_switch(ui: &mut egui::Ui, rect: Rect, names: 
     response.hover_hint(label)
 }
 
-/// A group heading over the rail's tools: a short, tracked uppercase title
-/// with names on, a separator with icons only (none above the first group).
-/// The first heading also holds the switch that shows or hides the names, at
-/// its right end, and returns that switch's response.
-pub(in super::super) fn rail_group(
-    ui: &mut egui::Ui,
-    title: &str,
-    names: bool,
-    first: bool,
-) -> Option<Response> {
-    if !names {
-        if !first {
-            controls::rail_separator(ui);
-        }
-        return None;
-    }
+/// A group heading's title: short, tracked and uppercase.
+fn rail_heading_galley(ui: &egui::Ui, title: &str) -> Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::default();
     job.append(
         &title.to_uppercase(),
@@ -353,11 +368,51 @@ pub(in super::super) fn rail_group(
             ..Default::default()
         },
     );
-    let galley = ui.painter().layout_job(job);
-    // More space above a heading than below it: it belongs to its group.
-    let above = if first { 2.0 } else { 8.0 };
-    let height = (above + galley.size().y + 4.0).round();
-    let width = rail_button_size(true).x.min(ui.available_width().max(1.0));
+    ui.painter().layout_job(job)
+}
+
+/// More space above a heading than below it: it belongs to its group.
+fn rail_heading_above(first: bool) -> f32 {
+    if first { 4.0 } else { 14.0 }
+}
+
+/// The space between a heading and its group's first tool.
+const RAIL_HEADING_BELOW: f32 = 6.0;
+
+fn rail_heading_height(ui: &egui::Ui, title: &str, first: bool) -> f32 {
+    (rail_heading_above(first) + rail_heading_galley(ui, title).size().y + RAIL_HEADING_BELOW)
+        .round()
+}
+
+/// A group heading over the rail's tools: a title under full names, else a
+/// separator (none above the first group). The first heading also holds the
+/// switch that shows or hides the names, at its right end, and returns that
+/// switch's response.
+pub(in super::super) fn rail_group(
+    ui: &mut egui::Ui,
+    title: &str,
+    form: RailForm,
+    first: bool,
+) -> Option<Response> {
+    if !form.headings() {
+        if !first {
+            // Compact groups keep a wider gap than icons alone, so the
+            // names under them still breathe.
+            let margin = if form.names() {
+                (RAIL_COMPACT_GAP - RAIL_SEPARATOR) / 2.0
+            } else {
+                0.0
+            };
+            ui.add_space(margin);
+            controls::rail_separator(ui);
+            ui.add_space(margin);
+        }
+        return None;
+    }
+    let galley = rail_heading_galley(ui, title);
+    let above = rail_heading_above(first);
+    let height = rail_heading_height(ui, title, first);
+    let width = rail_button_size(form).x.min(ui.available_width().max(1.0));
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
     // The tracking trails the last letter; half of it is not part of the word.
     let text = Rect::from_min_size(
@@ -370,10 +425,11 @@ pub(in super::super) fn rail_group(
     ui.painter().galley(text.min, galley, roles().muted);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, title));
     first.then(|| {
+        // Flush with the row's right end, about 10 points clear of the title.
         let switch = Rect::from_center_size(
-            Pos2::new(rect.right() - 9.0, text.center().y),
-            Vec2::splat(18.0),
+            Pos2::new(rect.right() - 8.0, text.center().y),
+            Vec2::splat(16.0),
         );
-        rail_names_switch(ui, switch, names)
+        rail_names_switch(ui, switch, form.names())
     })
 }

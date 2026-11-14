@@ -330,6 +330,22 @@ impl SafetyLimiter {
     }
 }
 
+/// A drive return's safety ceiling, which adds no latency: stereo-linked,
+/// unchanged up to -3.5 dBFS, then bending toward -1 dBFS and never past it.
+/// Off, it passes the frame unchanged.
+#[inline]
+pub(super) fn ceiling(left: f64, right: f64, on: bool) -> (f64, f64) {
+    const KNEE: f64 = 0.668_343_917_568_740_6; // -3.5 dBFS
+    let peak = left.abs().max(right.abs());
+    if !on || peak <= KNEE {
+        return (left, right);
+    }
+    // A hair under the ceiling, so rounding cannot pass it.
+    let room = SafetyLimiter::CEILING * (1.0 - 1e-9) - KNEE;
+    let gain = (KNEE + room * ((peak - KNEE) / room).tanh()) / peak;
+    (left * gain, right * gain)
+}
+
 /// A Schroeder all-pass of fixed length: it smears a sound in time
 /// without colouring its spectrum.
 pub(super) struct AllPass {
@@ -437,6 +453,18 @@ mod tests {
             );
         }
         assert!(loud > 1.4);
+    }
+
+    #[test]
+    fn the_ceiling_holds_minus_one_dbfs_without_delay() {
+        assert_eq!(ceiling(0.5, -0.6, true), (0.5, -0.6));
+        assert_eq!(ceiling(3.0, -2.0, false), (3.0, -2.0));
+        for step in 0..400 {
+            let x = 0.6 + f64::from(step) * 0.05;
+            let (l, r) = ceiling(x, -0.5 * x, true);
+            assert!(l <= SafetyLimiter::CEILING && l > 0.59, "{x}: {l}");
+            assert!((r / l + 0.5).abs() < 1e-12, "the image stays put");
+        }
     }
 
     #[test]

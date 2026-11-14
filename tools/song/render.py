@@ -29,7 +29,7 @@ part's gain before you try again.
 
 Lane renders are cached in DIR (default: lane-cache beside OUT_DIR). A lane
 whose tracks, source audio, FX buses, tempo, master gain, and renderer build did
-not change since an earlier render comes from the cache. Only format-18 to 24 songs
+not change since an earlier render comes from the cache. Only format-18 to 25 songs
 with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
