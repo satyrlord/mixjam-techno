@@ -3,7 +3,7 @@
 //! session once per frame, and implements the `eframe` application trait.
 use super::*;
 
-/// The boards of the lower panel, one tab each. The tab row owns navigation.
+/// The boards of the lower panel. The tool rail chooses one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum BottomModule {
     #[default]
@@ -53,17 +53,6 @@ impl BottomModule {
             Self::StepSynth => "Step synth",
         }
     }
-
-    /// The tab's accessible name. The rail and the status bar already use
-    /// the bare labels.
-    pub(super) fn tab_name(self) -> &'static str {
-        match self {
-            Self::Mixer => "Mixer tab",
-            Self::Mastering => "Mastering tab",
-            Self::FxReturns => "FX returns tab",
-            Self::StepSynth => "Step synth tab",
-        }
-    }
 }
 
 /// Native frontend. It owns view state and submits commands to the headless session.
@@ -91,7 +80,7 @@ pub struct MixJamApp {
     pub(super) sections: SectionState,
     /// The score's Mix view.
     pub(super) mix: mix_view::MixViewState,
-    /// The lower panel's tabs and boards.
+    /// The lower panel's boards.
     pub(super) boards: BoardsState,
     /// The Step synth board's pattern and file.
     pub(super) step_synth: StepSynthBoard,
@@ -295,10 +284,10 @@ impl MixJamApp {
         let section_bookmarks = session.section_bookmarks_setting();
         let follow_on_startup = session.options().follow_on_startup;
         // Starting with Mixer opens the score's Mix view; the lower panel
-        // then shows Mastering, since the Mixer tab never shows with it.
+        // then shows Mastering, since the Mixer board never shows with it.
         // Starting with Sounds opens the Sounds panel and folds the lower
         // panel, which keeps Mixer for when it opens. Starting with Mastering
-        // or Effects opens the lower panel on that tab.
+        // or Effects opens the lower panel on that board.
         use mixjam_techno::application::options::StartingModule;
         let start_in_mix_view = session.options().starting_module == StartingModule::Mixer;
         let starting_module = match session.options().starting_module {

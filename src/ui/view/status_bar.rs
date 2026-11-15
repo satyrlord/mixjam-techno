@@ -26,8 +26,11 @@ impl MixJamApp {
         );
         ui.set_clip_rect(rect);
         let ui = &mut ui;
-        let panels = egui::RichText::new("Panels")
-            .size(12.0)
+        // A group heading, styled like the rail's: small, tracked uppercase,
+        // so it never reads as one of the switches beside it.
+        let panels = egui::RichText::new("PANELS")
+            .size(10.0)
+            .extra_letter_spacing(0.6)
             .color(roles().muted);
         let version = egui::RichText::new(format!("v{}", mixjam_techno::application::APP_VERSION))
             .size(12.0)

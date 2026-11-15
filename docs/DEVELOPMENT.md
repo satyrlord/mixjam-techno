@@ -120,7 +120,7 @@ The sections case includes named bookmarks and a long section name.
 Options capture views are `options-audio`, `options-workspace`, and `options-files`;
 `options-unapplied` adds unapplied edits on two pages, and `options-discard`
 shows its Discard changes? prompt. `rail-icons` shows the tool rail without
-names, `boards-folded` folds the lower panel to its toolbar row, and
+names, `boards-folded` folds the lower panel away, and
 `maximised` hides the tool rail, the Sounds panel, the Inspector, and the
 lower panel so the score fills the window, `sounds-panel` opens the Sounds panel with the lower
 panel on Mixer, and `overview-folded` folds the song overview to its bar.

@@ -126,7 +126,7 @@ fn f_maximises_the_score_and_f_again_restores_the_rail_and_the_lower_panel() {
     ctx.enable_accesskit();
     app.set_layout(|layout| layout.sounds = true);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
+    assert!(has_control(&output, "New") && shows_text(&output, "MIXER"));
     let press = |app: &mut MixJamApp| {
         frame(
             &ctx,
@@ -154,7 +154,7 @@ fn f_maximises_the_score_and_f_again_restores_the_rail_and_the_lower_panel() {
     let output = press(&mut app);
     assert!(app.session.layout().maximised);
     assert!(!has_control(&output, "New"), "The rail hides.");
-    assert!(!has_control(&output, "Mixer tab"), "The lower panel hides.");
+    assert!(!shows_text(&output, "MIXER"), "The lower panel hides.");
     // The top bar, the score toolbar and the status bar stay.
     for name in ["Play / pause (Space)", "Help", "Follow", "Tools", "Boards"] {
         assert!(has_control(&output, name), "{name} stays.");
@@ -167,7 +167,7 @@ fn f_maximises_the_score_and_f_again_restores_the_rail_and_the_lower_panel() {
     assert!(app.session.layout().tool_names && app.session.layout().boards);
     let output = press(&mut app);
     assert!(!app.session.layout().maximised);
-    assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
+    assert!(has_control(&output, "New") && shows_text(&output, "MIXER"));
 
     // Typing keeps the letter.
     focus_control(&ctx, &mut app, &output, "Find a sound");
@@ -212,7 +212,7 @@ fn maximise_button_and_either_panel_switch_restore_the_layout() {
             layout, original,
             "{switch} keeps the previous panel choices."
         );
-        assert!(has_control(&output, "New") && has_control(&output, "Mixer tab"));
+        assert!(has_control(&output, "New") && shows_text(&output, "MIXER") == boards);
         click_named(&ctx, &mut app, "Maximise the score");
         click_named(&ctx, &mut app, "Maximise the score");
         assert!(!app.session.layout().maximised, "The button toggles.");
@@ -409,9 +409,22 @@ fn small_windows_give_the_sounds_list_room_and_the_panel_opened_last_wins() {
             panel.height() >= room::SOUNDS_MIN_HEIGHT,
             "{size:?} {panel:?}"
         );
-        assert!(has_control(&output, "Mixer tab"));
-        // A board tab takes the height back.
-        click_named(&ctx, &mut app, "Mixer tab");
+        assert!(!shows_text(&output, "MIXER"));
+        // A board button in the rail takes the height back. Click it at this
+        // size: in a larger window both panels fit and it would fold.
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Click,
+                    target: accessible_node(&output, "Mixer").0,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+            size,
+        );
         frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         assert!(
             app.panels.room.boards && !app.sounds_panel_open(),

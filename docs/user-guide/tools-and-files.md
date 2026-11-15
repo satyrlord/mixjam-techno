@@ -9,8 +9,10 @@
   previews the draft; Save edited sound writes a new WAV in Wave.
 - Use the other sample tools to stretch tempo or apply effects, then save a new
   WAV sample.
-- Use Step synth, a board of the lower panel, to sequence one note per
-  sixteenth step across up to four bars. Save sequence writes the WAV and,
+- Use Step synth, a board of the lower panel, to sequence notes on sixteenth
+  steps over a pattern of 1 to 64 steps. Drag a note's last step to hold it,
+  and accent or slide notes in the lanes under the grid; a wide panel shows
+  all four bars at once. Save sequence writes the WAV and,
   beside it, its pattern as `Name.pattern.json`, which Load pattern also
   opens; the arrangement draws the sound's clips as notes from it. If the
   pattern cannot be saved, the tool reports the error and preserves existing files.

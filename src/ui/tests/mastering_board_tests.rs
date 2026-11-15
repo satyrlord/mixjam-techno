@@ -221,7 +221,7 @@ fn mastering_shows_its_whole_board_from_1024_by_768() {
             );
         }
         // The toolbar holds the preset, the board's state, and its help.
-        let toolbar = effects_control_rect(&output, "Step synth tab");
+        let toolbar = text_rect(&output, "MASTERING");
         let preset = effects_control_rect(&output, "Mastering preset");
         let status = text_rect(
             &output,

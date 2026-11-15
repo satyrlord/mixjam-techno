@@ -102,7 +102,7 @@ catalog revision, or peak table. The catalog revision prevents a replacement
 sound from reusing a stale waveform when its peak table reuses an address.
 A clip of a Step synth sound with a pattern beside its WAV draws notes instead:
 `src/ui/view/clip_paint.rs` loads each such pattern once per catalog
-revision, and `waveform::ClipNotes` places the active bars' notes on the clip's ticks. Note
+revision, and `waveform::ClipNotes` places the notes of `StepSynthState::notes` on the clip's ticks. Note
 positions use the pattern's render tempo for source frames and the catalog's
 effective playback tempo for song ticks.
 

@@ -40,8 +40,8 @@ take horizontal wheel input after their controls and before the score scrolls.
 Track rows and the pinned Master and returns block include the frontend
 generation in their control identities, so drafts and held controls cannot
 edit a replacement project. The Mix view
-and the Mixer tab never show together: `set_mix_view` moves the lower panel to
-Mastering, and selecting the Mixer tab turns the Mix view off.
+and the Mixer board never show together: `set_mix_view` moves the lower panel to
+Mastering, and the rail's Mixer turns the Mix view off.
 
 ## Mixer controls and artwork
 
@@ -64,21 +64,20 @@ instruction and leaves Master available.
 units on a Marine surface, with the effect and preset choices, dials, return
 level, switches, and Clear tail. `src/ui/view/boards.rs` sends a changed bus set as
 an edit and sends Clear tail to the session. The Mixer's return-strip Edit
-button selects the FX returns tab and brings that bus into view.
+button shows the FX returns board and brings that bus into view.
 
-## The lower panel and its tabs
+## The lower panel
 
 The frontend's `BottomModule` enum selects the lower panel's board: Mixer,
-Mastering, FX returns, or Step synth. `src/ui/view/boards.rs` owns the panel's
-28-point tab row: one tab per board in that order, each named after its board
-and "tab". The selected tab has a raised fill and an accent underline, and its
-accessible state is toggled. The shown board's own controls follow a separator:
+Mastering, FX returns, or Step synth. The tool rail's four Mix buttons choose
+it: each shows its board, and folds the lower panel when that board already
+shows. `src/ui/view/boards.rs` owns the panel's 28-point top row: the shown
+board's name as a heading, a separator, then the board's own controls:
 Mastering's preset, Bypass all, status, and help; Mixer's Export tracks…; and
-Step synth's status line, Import details, and help. The tabs keep their
-identity and position across boards. Each board renders only its body below
-the tab row. The tool rail's Mixer shortcut toggles the score's Mix view; Mastering
-and Step synth show their tab, and fold the lower panel when it already
-shows. Selection and shared panel height are frontend
+Step synth's status line, Import details, and help. Each board renders only
+its body below that row. Folded, the lower panel leaves no strip. The score's
+Mix view has its own Arrange and Mix switch in the score toolbar and a Mix
+view command in the command list. Selection and shared panel height are frontend
 session state. Switching preserves resized height; opening a board raises a
 shorter panel to its minimum: 400 points for Mixer, or the whole board for
 Mastering, FX returns, and Step synth. Each yields down to 370 points in a
@@ -121,12 +120,12 @@ its latched state as text to assistive technology.
 `src/ui/step_synth.rs` owns Step synth's source, bar, grid, effects, and action
 content on an Olive board in the lower panel. The board is an accessible tab
 panel named Step synth, so agents scope to it as they did to its window. Its
-status line and Import details sit in a named Step synth toolbar in the tab
-row. The agent scopes this toolbar with the board. This keeps the board no
+status line and Import details sit in a named Step synth toolbar in the
+panel's top row. The agent scopes this toolbar with the board. This keeps the board no
 taller than the Mastering board. Text, grid cells, switches, and input stay live.
 The pitch grid and replacement effects form have bounded scrolling; source,
-step labels, actions, and feedback remain reachable. The grid exposes sixteen
-steps and twenty-five pitch rows. The shared `effects_controls` form retains its
+step labels, actions, and feedback remain reachable. The grid exposes one, two,
+or four bars of sixteen steps and twenty-five pitch rows. The shared `effects_controls` form retains its
 algorithms and ranges and uses the common controls.
 
 `MixJamApp` in `src/ui/app.rs` owns the source path, viewed bar, effects-view
@@ -149,4 +148,19 @@ Pattern save/load uses `Session::save_pattern` and `Session::load_pattern`.
 It replaces only the four-bar draft; the source path and viewed bar remain.
 Clear bar clears only the viewed sixteen steps. The visible +12 through -12
 pitch rows do not narrow the existing -48 through +48 serialized-note range.
+
+`synth::render` plays `StepSynthState::notes`: each note runs through its ties,
+then sounds for the gate's share of its last step, or up to the next note when it
+slides into it. A slide glides pitch and level over the slide time without
+restarting the source; a new target starts from the pitch and level already
+reached. Accent headroom passes through sequence effects and output gain before
+the final sample clamp. Public PCM boundaries still require normalized samples.
+Swing delays every second sixteenth. The audition marker uses that timing and
+the preview revision, so another preview cannot retain an old marker. A pattern repeats
+until its length lines up with the bar, so twelve steps render 48. Every note
+that does not slide ends with a 3 ms fade. Patterns saved with Active bar
+switches and the 1/16 cut still load: the Active bars come first and set the
+length, the other bars follow, and without the cut the empty steps after a note
+become ties. Legacy patterns with no Active bar remain invalid. The new end fade
+means migration does not establish sample-exact historical rendering.
 This presentation does not add a worker.

@@ -16,7 +16,7 @@ pub use crate::{
     },
     peaks::{PeakState, Peaks},
     products::Product,
-    synth::{StepSynthState, pattern_beside},
+    synth::{Step, StepSynthState, Trig, pattern_beside},
 };
 /// The channel EQ of each track and its controls.
 pub mod eq {

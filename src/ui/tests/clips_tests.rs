@@ -317,8 +317,8 @@ fn a_step_synth_sound_saved_with_its_pattern_draws_notes_instead_of_a_waveform()
         bpm: 120.0,
         ..StepSynthState::default()
     };
-    state.steps.fill(None);
-    state.steps[4] = Some(7);
+    state.steps.fill(Step::default());
+    state.steps[4] = Step::note(7);
     app.session.save_pattern(&pattern, &state).unwrap();
     for _ in 0..3 {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);

@@ -18,7 +18,7 @@ rail, the Sounds panel, the Inspector, and the lower panel so the score fills th
 press **F** again, or use the Tools, Boards, Sounds, or Inspector switch, to
 restore them. Mixer,
 Mastering, FX returns, and Step synth share the lower panel; choose one with
-its tab on the left of the panel's top row. Sample categories, search, and
+its button in the tool rail, and its name heads the panel's top row. Sample categories, search, and
 library filters stay together in the Sounds panel. Sort sounds in library order, by name, length, BPM, or
 category. The arrow beside the sort list reverses the order: for example, longest
 or fastest first.
@@ -26,14 +26,14 @@ The title branding, window, taskbar, and Windows executable use the tribal mask.
 See [the icon assets](../../assets/app/README.md) for source and regeneration details.
 [DESIGN.md](../DESIGN.md) is the visual contract.
 
-The tool rail at the left groups File, Clips, Mix (the Mixer and the lower
-panel's boards), Sound (the windows that make a new sample), and Library, with
+The tool rail at the left groups File, Clips, Mix (the lower panel's
+boards), Sound (the windows that make a new sample), and Library, with
 each tool's name under its icon. In a shorter window the rail tightens its
 tools and divides the groups with lines instead of headings. Hover a tool for its window and shortcut. The **Tools** switch
 at the right of the status bar, or the double chevron at the top of the rail,
-shrinks the rail to icons. The **Boards** switch folds the lower panel to its
-toolbar row; pick a tab there, or select Mastering, FX returns, or Step synth
-in the rail, to open it again. In a short window, scroll the rail with the mouse wheel.
+shrinks the rail to icons. The **Boards** switch folds the lower panel away;
+use it again, or select Mixer, Mastering, FX returns, or Step synth in the
+rail, to open it. Selecting the board that already shows folds the panel. In a short window, scroll the rail with the mouse wheel.
 
 The magnifier at the left end of the status bar, beside the Options gear, or
 **Ctrl+K**, opens a

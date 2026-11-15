@@ -344,8 +344,8 @@ fn musical_tools_collapsed_help_icons_preserve_processing_drafts() {
         app.stretch.target_bpm = 120.0;
         app.effects.state.echo = Some(Default::default());
         app.effects.state.dirty = 0.375;
-        app.step_synth.state.steps[19] = Some(-7);
-        app.step_synth.state.active_bars = [true, false, true, false];
+        app.step_synth.state.steps[19] = Step::note(-7);
+        app.step_synth.state.length = 32;
         app.step_synth.state.bpm = 160.0;
         match tool {
             "stretch" => app.stretch.open = true,

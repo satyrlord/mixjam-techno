@@ -27,8 +27,7 @@ keeps its shape until its sound, trim, length, fades, Reverse, tempo, or zoom
 changes. A clip of a Step synth sound saved with its pattern draws notes in
 place of the waveform, in the same band and tones: one bar per note, 2 to 4
 points thick by the lane's height, its pitch mapped over at least an octave,
-held to the next note or for one sixteenth with the 1/16 cut, and mirrored by
-Reverse. WAV clips never draw notes.
+held through its ties and its gate, and mirrored by Reverse. WAV clips never draw notes.
 A selected clip can show a gain line; it is a control indicator.
 A clip whose source is missing uses Raised with a one-point Coral outline and
 a Text-colored name that begins with Missing. While a sound or clip is dragged

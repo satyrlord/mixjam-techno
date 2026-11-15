@@ -33,6 +33,7 @@ pub(super) enum Command {
     Duplicate,
     SelectAll,
     Maximise,
+    MixView,
     ToolNames,
     Boards,
     Sounds,
@@ -42,8 +43,8 @@ pub(super) enum Command {
     Lane(Option<Lane>, Option<usize>),
 }
 
-/// The rail's groups and their tools, top to bottom: Mix holds the boards and
-/// the Mix view, Sound the windows that make a new sample. Options and All
+/// The rail's groups and their tools, top to bottom: Mix holds the boards,
+/// Sound the windows that make a new sample. Options and All
 /// commands lead the status bar.
 pub(super) const RAIL: [(&str, &[Command]); 5] = [
     (
@@ -100,6 +101,7 @@ impl Command {
             Self::Duplicate,
             Self::SelectAll,
             Self::Maximise,
+            Self::MixView,
         ]);
         all.extend(PANELS);
         all.push(Self::Lane(None, None));
@@ -160,6 +162,7 @@ impl Command {
             Self::Duplicate => "Duplicate selection".into(),
             Self::SelectAll => "Select every clip".into(),
             Self::Maximise => "Maximise the score".into(),
+            Self::MixView => "Mix view".into(),
             Self::ToolNames => "Tool names in the rail".into(),
             Self::Boards => "Lower panel".into(),
             Self::Sounds => "Sounds panel".into(),
@@ -183,7 +186,7 @@ impl Command {
             Self::Export => "Render the song to a stereo WAV through the master board",
             Self::Erase => "Click clips to delete them; Esc ends",
             Self::Delete => "Delete the selected clips",
-            Self::Mixer => "The tracks become mixer strips",
+            Self::Mixer => "Track strips under the arrangement",
             Self::Mastering => "The pedalboard on the master bus",
             Self::FxReturns => "Four send and return effect buses",
             Self::Effects => "Process a sound into a new one",
@@ -199,6 +202,7 @@ impl Command {
             Self::Duplicate => "Copy the selected clips to the bars after them",
             Self::SelectAll => "Select all clips in the song",
             Self::Maximise => "Hide the side and lower panels around the score",
+            Self::MixView => "The score's tracks become mixer strips",
             Self::ToolNames => "Show names under the rail icons, or icons only",
             Self::Boards => "Show or fold Mixer, Mastering, FX returns and Step synth",
             Self::Sounds => "The sound list beside the score",
@@ -278,10 +282,13 @@ impl MixJamApp {
             Command::Export => self.export(),
             Command::Erase => self.score_tools.erase = !self.score_tools.erase,
             Command::Delete => self.delete_selection(),
-            // Mixer switches the score between its Arrange and Mix views.
-            Command::Mixer => self.set_mix_view(!self.mix.shown),
-            // Mastering, FX returns and Step synth open their tab, and fold
-            // the lower panel when their tab already shows.
+            // Each board button shows its board, and folds the lower panel
+            // when that board already shows. The Mixer board and the Mix
+            // view never show at once, so Mixer leaves the Mix view.
+            Command::Mixer => {
+                self.set_mix_view(false);
+                self.toggle_board(BottomModule::Mixer);
+            }
             Command::Mastering => self.toggle_board(BottomModule::Mastering),
             Command::FxReturns => self.toggle_board(BottomModule::FxReturns),
             Command::StepSynth => self.toggle_board(BottomModule::StepSynth),
@@ -316,6 +323,7 @@ impl MixJamApp {
             Command::Duplicate => self.duplicate_selection(),
             Command::SelectAll => self.select_all_clips(),
             Command::Maximise => self.set_layout(|layout| layout.maximised = !layout.maximised),
+            Command::MixView => self.set_mix_view(!self.mix.shown),
             // In a maximised score each panel switch restores the score with
             // the previous panel choices.
             Command::ToolNames => {
@@ -366,7 +374,8 @@ impl MixJamApp {
     pub(super) fn command_active(&self, command: Command) -> bool {
         match command {
             Command::Erase => self.score_tools.erase,
-            Command::Mixer => self.mix.shown,
+            Command::Mixer => self.board_shown(BottomModule::Mixer),
+            Command::MixView => self.mix.shown,
             Command::Mastering => self.board_shown(BottomModule::Mastering),
             Command::FxReturns => self.board_shown(BottomModule::FxReturns),
             Command::StepSynth => self.board_shown(BottomModule::StepSynth),

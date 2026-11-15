@@ -44,6 +44,131 @@ fn step_synth_text_mesh_bounds(output: &egui::FullOutput, label: &str) -> Rect {
 }
 
 #[test]
+fn step_synth_keyboard_selection_edits_flags_and_velocity_in_the_value_lanes() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.steps[0] = Step {
+        velocity: 40,
+        ..Step::note(0)
+    };
+    app.step_synth.state.steps[1] = Step {
+        velocity: 70,
+        ..Step::note(7)
+    };
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Step ruler");
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowRight, egui::Modifiers::SHIFT)],
+        egui::Modifiers::SHIFT,
+    );
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.step_synth.grid.selection, Some((0, 1)));
+    for label in ["Accent lane", "Slide lane"] {
+        focus_control(&ctx, &mut app, &output, label);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    assert!(
+        app.step_synth.state.steps[..2]
+            .iter()
+            .all(|step| step.accent && step.slide)
+    );
+    focus_control(&ctx, &mut app, &output, "Velocity lane");
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(app.step_synth.state.steps[0].velocity, 39);
+    assert_eq!(app.step_synth.state.steps[1].velocity, 69);
+}
+
+#[test]
+fn step_synth_tab_leaves_the_grid_without_stopping_on_its_cells() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Step 1, +0 semitones");
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for _ in 0..4 {
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        assert!(
+            !update.nodes.iter().any(|(id, node)| {
+                *id == update.focus
+                    && node.label().is_some_and(|label| {
+                        label.starts_with("Step ") && label.ends_with("semitones")
+                    })
+            }),
+            "The grid's cells must not become individual Tab stops."
+        );
+        if update.focus == accessible_node(&output, "Accent lane").0 {
+            return;
+        }
+    }
+    panic!("Tab must leave the pitch grid and its scroll bar for the Accent lane.");
+}
+
+#[test]
+fn step_synth_pointer_note_keeps_arrow_and_enter_navigation_in_the_grid() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    click(
+        &ctx,
+        &mut app,
+        step_synth_control_rect(&output, "Step 1, +12 semitones").center(),
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for key in [egui::Key::ArrowRight, egui::Key::Enter] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(key, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    assert_eq!(
+        app.step_synth.state.steps[1],
+        Step::note(12),
+        "A pointer edit must leave focus on the grid for keyboard edits."
+    );
+}
+
+#[test]
 fn step_synth_edits_one_note_per_step_and_clears_only_the_viewed_bar() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -53,9 +178,9 @@ fn step_synth_edits_one_note_per_step_and_clears_only_the_viewed_bar() {
     });
     app.selection.sample = Some(1);
     app.boards.module = BottomModule::StepSynth;
-    app.step_synth.state.steps[1] = Some(-36);
-    app.step_synth.state.steps[16] = Some(-48);
-    app.step_synth.state.steps[48] = Some(48);
+    app.step_synth.state.steps[1] = Step::note(-36);
+    app.step_synth.state.steps[16] = Step::note(-48);
+    app.step_synth.state.steps[48] = Step::note(48);
     for _ in 0..3 {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
@@ -63,40 +188,41 @@ fn step_synth_edits_one_note_per_step_and_clears_only_the_viewed_bar() {
     let output = activate_control(&ctx, &mut app, &output, "Step 1, +12 semitones");
     assert_eq!(
         app.step_synth.state.steps[0],
-        Some(12),
+        Step::note(12),
         "A new pitch must replace the existing note."
     );
     let output = activate_control(&ctx, &mut app, &output, "Step 1, +12 semitones");
     assert_eq!(
-        app.step_synth.state.steps[0], None,
+        app.step_synth.state.steps[0],
+        Step::default(),
         "Activating the selected note must clear it."
     );
     let output = activate_control(&ctx, &mut app, &output, "Step 1, +11 semitones");
     let output = activate_control(&ctx, &mut app, &output, "View bar 2");
     assert_eq!(app.step_synth.bar, 1);
-    let output = activate_control(&ctx, &mut app, &output, "Step 5, +12 semitones");
-    assert_eq!(app.step_synth.state.steps[20], Some(12));
+    let output = activate_control(&ctx, &mut app, &output, "Step 21, +12 semitones");
+    assert_eq!(app.step_synth.state.steps[20], Step::note(12));
     let before_clear = app.step_synth.state.clone();
     let output = activate_control(&ctx, &mut app, &output, "Clear bar");
     assert!(
         app.step_synth.state.steps[16..32]
             .iter()
-            .all(Option::is_none)
+            .all(|step| *step == Step::default())
     );
     assert_eq!(&app.step_synth.state.steps[..16], &before_clear.steps[..16]);
     assert_eq!(&app.step_synth.state.steps[32..], &before_clear.steps[32..]);
     let output = activate_control(&ctx, &mut app, &output, "View bar 4");
     assert_eq!(
         app.step_synth.state.steps[48],
-        Some(48),
+        Step::note(48),
         "Viewing a bar must retain loaded pitches outside the visible grid."
     );
     activate_control(&ctx, &mut app, &output, "View bar 1");
-    assert_eq!(app.step_synth.state.steps[0], Some(11));
-    assert_eq!(app.step_synth.state.steps[1], Some(-36));
+    assert_eq!(app.step_synth.state.steps[0], Step::note(11));
+    assert_eq!(app.step_synth.state.steps[1], Step::note(-36));
     assert_eq!(
-        app.step_synth.state.active_bars, before_clear.active_bars,
-        "Viewing a bar must not enable it for playback."
+        app.step_synth.state.length, before_clear.length,
+        "Viewing a bar must not change the pattern length."
     );
 }
 
@@ -120,7 +246,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         }
         app.selection.sample = Some(1);
         app.boards.module = BottomModule::StepSynth;
-        app.step_synth.state.steps[63] = Some(-48);
+        app.step_synth.state.steps[63] = Step::note(-48);
         app.step_synth.state.effects.echo = Some(Default::default());
         let before = app.step_synth.state.clone();
         let size = Vec2::new(960.0, 720.0);
@@ -132,11 +258,11 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         let window = step_synth_board_rect(&output);
         assert_folded_assets(&ctx, &output, "Olive");
         assert!(viewport.contains_rect(window));
-        // The status line sits in the tab row, above the board.
+        // The status line sits in the top row, above the board.
         let footer = step_synth_control_rect(&output, "Step synth status");
         assert!(
             viewport.contains_rect(footer) && footer.bottom() <= window.top(),
-            "Status {footer:?} must sit in the tab row above {window:?}"
+            "Status {footer:?} must sit in the top row above {window:?}"
         );
         assert_eq!(
             accessible_node(&output, "Step synth source sound")
@@ -149,9 +275,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             "Use palette sound",
             "View bar 1",
             "View bar 4",
-            "Active 1",
-            "Active 4",
-            "1/16 cut",
+            "Length",
+            "Gate",
             "Loop source",
             "Step synth BPM",
             "Clear bar",
@@ -181,8 +306,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             "Save pattern",
             "Load pattern",
         ] {
-            // A short lower panel scrolls the board: the wheel brings
-            // the control in.
+            // A short lower panel scrolls the settings column: the wheel
+            // over the control's column brings it in.
             let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             for _ in 0..12 {
                 let board = step_synth_board_rect(&output);
@@ -195,7 +320,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                     &ctx,
                     &mut app,
                     vec![
-                        egui::Event::PointerMoved(board.center()),
+                        egui::Event::PointerMoved(Pos2::new(control.center().x, board.center().y)),
                         egui::Event::MouseWheel {
                             unit: egui::MouseWheelUnit::Point,
                             delta: Vec2::new(0.0, if down { -80.0 } else { 80.0 }),
@@ -218,14 +343,22 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 "{label} must have clear space inside its button."
             );
         }
-        for bar in 1..=3 {
-            let caption = step_synth_text_mesh_bounds(&output, &format!("Active {bar}"));
-            let next_switch = step_synth_control_rect(&output, &format!("Active {}", bar + 1));
-            assert!(
-                next_switch.left() - caption.right() >= 12.0,
-                "Active bar captions need clear space before the next switch."
-            );
-        }
+        let caption = step_synth_text_mesh_bounds(&output, "Length");
+        assert!(
+            step_synth_control_rect(&output, "Length").left() - caption.right() >= 4.0,
+            "The Length caption needs clear space before its well."
+        );
+        let caption = step_synth_text_mesh_bounds(&output, "Gate");
+        assert!(
+            caption.bottom() <= step_synth_control_rect(&output, "Gate").top(),
+            "A dial's name sits above it."
+        );
+        assert!(
+            step_synth_text_mesh_bounds(&output, "Length").left()
+                - step_synth_control_rect(&output, "View bar 4").right()
+                >= 12.0,
+            "Length needs clear space after the View bar buttons."
+        );
         let bottom_note = "Step 16, -12 semitones";
         frame_at_size(
             &ctx,
@@ -262,7 +395,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 egui::Shape::Circle(circle) if echo.contains(circle.center)
                     && circle.fill == controls::Palette::Olive.accent()
             )),
-            "Enabled sequence effects must retain the same olive accent as Active bars."
+            "Enabled sequence effects must retain the board's olive accent."
         );
         let row_y = step_synth_control_rect(&output, "Cutoff").center().y;
         for name in ["Cutoff", "Resonance", "Overdrive", "Filter volume"] {
@@ -302,9 +435,13 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             !app.session.layout().boards,
             "A second rail press folds the board."
         );
-        // The status line stays in the folded tab row, as Mastering's does.
-        accessible_node(&output, "Step synth status");
-        for hidden in ["Step synth source sound", "Note grid", "Load pattern"] {
+        // Folded, the lower panel goes with its top row and status line.
+        for hidden in [
+            "Step synth status",
+            "Step synth source sound",
+            "Note grid",
+            "Load pattern",
+        ] {
             assert!(
                 !output
                     .platform_output
@@ -354,20 +491,16 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
 
 #[test]
 fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recovery_available() {
-    for (available, missing, explicit_file, active) in [
-        (false, false, false, true),
-        (false, true, false, true),
-        (true, false, false, true),
-        (true, true, true, true),
-        (true, false, false, false),
+    for (available, missing, explicit_file) in [
+        (false, false, false),
+        (false, true, false),
+        (true, false, false),
+        (true, true, true),
     ] {
         let ctx = egui::Context::default();
         configure_style(&ctx);
         ctx.enable_accesskit();
         let mut state = StepSynthState::default();
-        if !active {
-            state.active_bars.fill(false);
-        }
         let (mut view_bar, mut effects) = (0, false);
         let mut render = |events| {
             let mut action = step_synth::Action::None;
@@ -387,7 +520,7 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
                             explicit_file,
                         };
                         // The status line and Import details sit in the
-                        // tab row above the board.
+                        // top row above the board.
                         let bar = ui
                             .horizontal(|ui| {
                                 step_synth::toolbar(
@@ -398,13 +531,19 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
                                         message: None,
                                         error: false,
                                     },
-                                    &state,
                                     effects,
                                 )
                             })
                             .inner;
-                        action =
-                            step_synth::show(ui, source(), &mut state, &mut view_bar, &mut effects);
+                        action = step_synth::show(
+                            ui,
+                            source(),
+                            &mut state,
+                            &mut view_bar,
+                            &mut effects,
+                            &mut Default::default(),
+                            None,
+                        );
                         if matches!(bar, step_synth::Action::Details) {
                             action = bar;
                         }
@@ -417,12 +556,12 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
             render(vec![]);
         }
         let (mut output, _) = render(vec![]);
-        let ready = available && (!missing || explicit_file) && active;
+        let ready = available && (!missing || explicit_file);
         for label in ["Listen sequence", "Save sequence"] {
             assert_eq!(
                 !accessible_node(&output, label).1.is_disabled(),
                 ready,
-                "{label}: available={available}, missing={missing}, file={explicit_file}, active={active}"
+                "{label}: available={available}, missing={missing}, file={explicit_file}"
             );
         }
         for label in [
@@ -430,8 +569,8 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
             "Use palette sound",
             "Save pattern",
             "Load pattern",
-            "Active 1",
-            "1/16 cut",
+            "Length",
+            "Gate",
             "Loop source",
             "Step synth BPM",
             "Step 1, +12 semitones",
@@ -486,41 +625,36 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     app.session.take_notice();
-    let output = activate_control(&ctx, &mut app, &output, "Active 2");
-    assert_eq!(app.step_synth.state.active_bars, [true, true, false, false]);
-    let output = activate_control(&ctx, &mut app, &output, "Active 1");
-    assert_eq!(
-        app.step_synth.state.active_bars,
-        [false, true, false, false]
-    );
-    let output = activate_control(&ctx, &mut app, &output, "1/16 cut");
     let output = activate_control(&ctx, &mut app, &output, "Loop source");
-    assert!(app.step_synth.state.cut_sixteenth && app.step_synth.state.loop_source);
-    focus_control(&ctx, &mut app, &output, "Step synth BPM");
-    for key in [egui::Key::End, egui::Key::ArrowLeft] {
+    assert!(app.step_synth.state.loop_source);
+    for (name, key, check) in [
+        ("Length", egui::Key::End, 64.0),
+        ("Gate", egui::Key::Home, 5.0),
+        ("Step synth BPM", egui::Key::End, 180.0),
+    ] {
+        focus_control(&ctx, &mut app, &output, name);
         frame(
             &ctx,
             &mut app,
             vec![key_event(key, egui::Modifiers::NONE)],
             egui::Modifiers::NONE,
         );
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let state = &app.step_synth.state;
+        let value = match name {
+            "Length" => f64::from(state.length),
+            "Gate" => f64::from(state.gate),
+            _ => state.bpm,
+        };
+        assert_eq!(value, check, "{name}");
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(app.step_synth.state.bpm, 160.0);
-    let output = activate_control(&ctx, &mut app, &output, "Active 2");
-    for label in ["Listen sequence", "Save sequence"] {
-        assert!(
-            accessible_node(&output, label).1.is_disabled(),
-            "Audio actions need at least one active bar."
-        );
-    }
-    let output = activate_control(&ctx, &mut app, &output, "Active 4");
     for label in ["Listen sequence", "Save sequence"] {
         assert!(!accessible_node(&output, label).1.is_disabled());
     }
     assert_eq!(
         app.step_synth.bar, 0,
-        "Active bars and viewed bars must stay independent."
+        "The pattern length and the viewed bar must stay independent."
     );
     assert!(app.step_synth.state.validate().is_ok());
     // Without an audio device, a Play request leaves this notice.

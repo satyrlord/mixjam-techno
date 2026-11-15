@@ -1,9 +1,10 @@
-//! Tool rail and lower-panel tabs: switches, toggles, icons, grouping and rail state.
+//! Tool rail and the lower panel's boards: switches, toggles, icons, grouping
+//! and rail state.
 
 use super::*;
 
 #[test]
-fn the_rail_mastering_and_step_synth_buttons_show_their_tab_and_fold_the_lower_panel() {
+fn the_rail_mastering_and_step_synth_buttons_show_their_board_and_fold_the_lower_panel() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     let rail = |output: &egui::FullOutput, name: &str| {
@@ -43,7 +44,7 @@ fn the_rail_mastering_and_step_synth_buttons_show_their_tab_and_fold_the_lower_p
                 egui::Modifiers::NONE,
             );
             output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            assert_eq!(app.boards.module, module, "{name} keeps its tab chosen.");
+            assert_eq!(app.boards.module, module, "{name} keeps its board chosen.");
             assert_eq!(app.session.layout().boards, boards, "{name}");
             assert_eq!(app.board_shown(module), shown, "{name}");
             assert_eq!(
@@ -56,11 +57,8 @@ fn the_rail_mastering_and_step_synth_buttons_show_their_tab_and_fold_the_lower_p
                 "The {name} highlight follows its board."
             );
         }
-        // Its tab is selected while the board shows.
-        assert_eq!(
-            accessible_node(&output, module.tab_name()).1.toggled(),
-            Some(egui::accesskit::Toggled::True)
-        );
+        // The lower panel's title names the board it shows.
+        assert!(shows_text(&output, &view::title_text(module.label())));
     }
     assert!(
         !app.session.unsaved(),
@@ -93,23 +91,22 @@ fn panel_switches_show_names_fold_the_lower_panel_and_keep_every_tool() {
     output = click_named(&ctx, &mut app, "Show the tool names");
     assert!(app.session.layout().tool_names);
     accessible_node(&output, "Shrink the tool rail to icons");
-    // Folded, the lower panel keeps its toolbar row and the rail keeps
-    // every tool; the Mixer tab opens it again.
-    let open_top = effects_control_rect(&output, "Mixer tab").top();
+    // Folded, the lower panel leaves nothing behind and the rail keeps
+    // every tool; the Mixer rail button opens it again.
+    assert!(shows_text(&output, "MIXER"));
     output = click_named(&ctx, &mut app, "Boards");
     assert!(!app.session.layout().boards);
     assert!(!selected(&output, "Boards"));
-    let folded_top = effects_control_rect(&output, "Mixer tab").top();
     assert!(
-        folded_top > open_top + 150.0,
-        "Folded, only the toolbar row stays: {open_top} then {folded_top}."
+        !shows_text(&output, "MIXER"),
+        "Folded, the lower panel's title row goes with it."
     );
     for icon in RailIcon::ALL {
         if !matches!(icon, RailIcon::Undo | RailIcon::Redo | RailIcon::Help) {
             accessible_node(&output, icon.label());
         }
     }
-    click_named(&ctx, &mut app, "Mixer tab");
+    click_named(&ctx, &mut app, "Mixer");
     assert!(app.session.layout().boards);
     assert_eq!(app.boards.module, BottomModule::Mixer);
 }
@@ -141,7 +138,7 @@ fn folded_boards_reopen_from_their_rail_button_and_a_second_press_folds_them() {
 }
 
 #[test]
-fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_methods() {
+fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
     fn action(action: egui::accesskit::Action, target: egui::accesskit::NodeId) -> egui::Event {
         egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
             action,
@@ -178,30 +175,36 @@ fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_met
             frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         }
         let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
-        let tabs: Vec<(BottomModule, egui::accesskit::NodeId, Rect)> = BottomModule::ALL
-            .into_iter()
-            .map(|module| {
-                (
-                    module,
-                    accessible_node(&output, module.tab_name()).0,
-                    effects_control_rect(&output, module.tab_name()),
-                )
-            })
-            .collect();
+        // The rail's board buttons, found by their role: board controls
+        // can share a name.
+        let rail_button = |output: &egui::FullOutput, module: BottomModule| {
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == egui::accesskit::Role::Button
+                        && node.label() == Some(module.label())
+                })
+                .map(|(id, node)| {
+                    let bounds = node.bounds().unwrap();
+                    (
+                        *id,
+                        Rect::from_min_max(
+                            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
+                            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
+                        ),
+                    )
+                })
+                .unwrap_or_else(|| panic!("Missing rail button {module:?}"))
+        };
         let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
             .unwrap()
             .rect;
         assert!(panel.height() >= 370.0);
-        for pair in tabs.windows(2) {
-            assert!(
-                pair[0].2.right() <= pair[1].2.left(),
-                "Tabs run left to right in their order at {size:?}."
-            );
-        }
-        for (module, _, rect) in &tabs {
-            assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(*rect));
-            assert!(panel.contains_rect(*rect), "{module:?} tab at {size:?}");
-        }
         accessible_node(&output, "Step synth BPM");
 
         // Choose Mixer with the pointer, Mastering with focus and Enter,
@@ -213,11 +216,7 @@ fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_met
             (0, BottomModule::StepSynth),
             (2, BottomModule::Mixer),
         ] {
-            let (_, tab_id, tab) = tabs
-                .iter()
-                .copied()
-                .find(|(candidate, _, _)| *candidate == module)
-                .unwrap();
+            let (tab_id, tab) = rail_button(&output, module);
             match method {
                 0 => {
                     frame_at_size(
@@ -268,36 +267,14 @@ fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_met
                 app.boards.module, module,
                 "Method {method}, viewport {size:?}."
             );
-            for (other, id, rect) in &tabs {
-                assert_eq!(
-                    accessible_node(&output, other.tab_name()).0,
-                    *id,
-                    "Tabs keep their identity."
-                );
-                assert_eq!(
-                    effects_control_rect(&output, other.tab_name()),
-                    *rect,
-                    "Board navigation to {module:?} must not move the tabs at {size:?}."
-                );
-                assert_eq!(
-                    accessible_node(&output, other.tab_name()).1.toggled()
-                        == Some(egui::accesskit::Toggled::True),
-                    *other == module,
-                    "Only the shown board's tab is selected."
-                );
-            }
+            let title = view::title_text(module.label());
             let painted = output.shapes.iter().any(|shape| {
                 matches!(&shape.shape, egui::Shape::Text(text)
-                    if text.galley.job.text == module.label()
+                    if text.galley.job.text == title
                         && !text.galley.elided
-                        && tab.contains_rect(
-                            text.galley.mesh_bounds.translate(text.pos.to_vec2())))
+                        && panel.contains(text.pos))
             });
-            assert!(
-                painted,
-                "The {} tab must show its whole name.",
-                module.label()
-            );
+            assert!(painted, "The lower panel's title must name {title} whole.");
             assert_eq!(
                 egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
                     .unwrap()
@@ -321,7 +298,7 @@ fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_met
                     .iter()
                     .any(|(_, node)| node.label() == Some("Show Mixer")
                         || node.label() == Some("Bottom module")),
-                "The tabs replace the former module selector and swap buttons."
+                "The rail replaces the former module selector and swap buttons."
             );
             let shown = |name: &str| nodes.iter().any(|(_, node)| node.label() == Some(name));
             let expected = match module {
@@ -1028,6 +1005,8 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         let (_, node) = accessible_node(&hovered_undo, label);
         assert_eq!(node.role(), egui::accesskit::Role::Button, "{label}");
     }
+    // From the Mix view, the rail's Mixer shows the Mixer board instead.
+    app.set_mix_view(true);
     pointer(&ctx, &mut app, mixer, true, egui::Modifiers::NONE);
     let clicked = frame(
         &ctx,
@@ -1041,8 +1020,8 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         egui::Modifiers::NONE,
     );
     assert!(
-        app.mix.shown,
-        "The rail's Mixer switches the score to the Mix view (R5)."
+        !app.mix.shown && app.board_shown(BottomModule::Mixer),
+        "The rail's Mixer leaves the Mix view and shows the Mixer board."
     );
     assert!(
         clicked.platform_output.events.iter().any(|event| {
@@ -1061,8 +1040,8 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
     );
     click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
     assert!(
-        !app.mix.shown,
-        "A repeated click returns the score to the Arrange view (R5)."
+        !app.mix.shown && !app.session.layout().boards,
+        "A repeated click folds the lower panel."
     );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(

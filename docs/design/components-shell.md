@@ -45,7 +45,7 @@ color, as it does under the pointer.
 
 Five groups run from top to bottom: File (New, Open, Save, Save as, Import,
 Export), Clips (Erase, Delete), Mix (Mixer, Mastering, FX returns, Step
-synth: the Mix view and the lower panel's boards), Sound (Edit, Stretch,
+synth: the lower panel's boards), Sound (Edit, Stretch,
 Effects: the windows that write a new sample) and Library (Album Review).
 Edit opens the Sample Editor, Stretch the Time Stretcher, and Effects Effect
 Studio. With names, each group has an uppercase 10-point muted heading with
@@ -102,13 +102,12 @@ existing window and retains its draft. All commands draws a magnifier with the
 painter (no icon asset), on the rail icons' 24-unit grid with their 2-unit
 stroke.
 
-The right end of the status bar holds a muted 12-point Panels label, five
+The right end of the status bar holds a PANELS heading in the rail's group
+heading style (10-point muted uppercase, 0.6-point tracking), five
 switches, and the version link. Tools shows or hides the rail's names. Boards
-folds the lower panel to its 28-point toolbar row (44 points with its
-margins), which keeps the board
-tabs; choosing a tab there, or the rail's Mastering or Step synth, opens
-the requested board again. Repeating that rail action while open folds the
-panel.
+folds the lower panel away, leaving the score its height; Boards again, or
+a board button in the rail, opens the panel on that board. Repeating that
+rail action while the board shows folds the panel.
 Sounds opens or folds the Sounds panel. Overview opens or folds the song
 overview; it belongs to the score, so it keeps its state when the score is
 maximised. Inspector opens or folds the Inspector. Boards, Sounds, and

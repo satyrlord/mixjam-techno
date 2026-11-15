@@ -170,7 +170,7 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
     for (label, role) in [
         ("Play / pause (Space)", "button"),
         ("Project BPM", "slider"),
-        ("Mixer tab", "button"),
+        ("Mixer", "button"),
         ("Zoom", "slider"),
         ("Find a sound", "text_input"),
         ("Library filter", "combo_box"),
@@ -260,7 +260,7 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
     send(&mut app, &["click", "target=Show Step synth sounds"]);
     assert_eq!(app.sounds.group.as_deref(), Some("Step synth"));
     send(&mut app, &["click", "target=Show All sounds"]);
-    let reply = send(&mut app, &["click", "target=Mixer tab"]);
+    let reply = send(&mut app, &["click", "target=Mixer"]);
     assert_eq!(reply["ok"], true, "{reply}");
     assert_eq!(app.boards.module, BottomModule::Mixer);
     // A name that several controls contain needs a selector.

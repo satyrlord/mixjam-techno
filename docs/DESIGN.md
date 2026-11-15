@@ -324,8 +324,8 @@ defects.
 
 - Mixer Unity, Center, pan rail, and gain value stay below 24 points high. The
   compact strip is intended.
-- Step synth note cells stay 14 points high so that 19 of 25 pitch rows show at
-  once. Arrow keys reach every cell.
+- Step synth note cells stay 14 points high on a 16-point row pitch, so that most
+  of the 25 pitch rows show beside the lanes. Arrow keys reach every cell.
 - The tool rail shows each tool's name by default, and the Tools switch in the
   status bar shrinks it to icons. Tooltips name each action, its window, and its
   shortcut. (Changed by the 2026 UI concept migration.)

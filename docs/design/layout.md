@@ -8,8 +8,8 @@ later ones share:
 2. The 30-point status bar across the bottom.
 3. The tool rail at the left, below the top bar: 84 points wide with tool
    names, 64 points with icons only (see Tool rail).
-4. The lower panel, from the rail's edge to the window's right edge, or its
-   folded toolbar row.
+4. The lower panel, from the rail's edge to the window's right edge, when it
+   is open.
 5. The Sounds panel after the rail, above the lower panel: 250 points open, or
    a 28-point strip that names it when folded (see Sounds panel).
 6. The Inspector at the right, above the lower panel: 280 points open, or a
@@ -24,7 +24,7 @@ the content height, clamped to 220-290 points. Drag its top divider to resize
 it. A centered grip marks the divider. The panel keeps its height for the
 current session. Each board has a minimum panel height: Mixer 400 points,
 Mastering 432, FX returns 462, and Step synth 580, so each shows its whole
-board under the tab row. Opening a board raises a shorter panel to its minimum;
+board under the top row. Opening a board raises a shorter panel to its minimum;
 switching boards otherwise keeps the resized height. In a short window a board
 yields down to 370 points so the lane viewport keeps 150 points, and the board
 then scrolls (Mastering scrolls its chip strip below the pedals). When space
@@ -43,16 +43,13 @@ browser.
 
 The lower panel has 18-point side margins, 10 points above the header row, and 6
 below its content. Mixer, Mastering, FX returns, and Step synth boards start 8
-points under the tab row, so a board never touches the tabs; the margins give up that
-space, so the boards keep their height.
+points under the top row, so a board never touches its controls; the margins give up
+that space, so the boards keep their height.
 
-Tabs occupy the left of the lower panel's 28-point tab row, in the order
-Mixer, Mastering, FX returns, and Step synth. Each tab shows its whole
-board name in the 14-point body face; the selected tab has a raised fill, a
-2-point accent underline, and the text color, and the others are muted. While
-the panel is folded, the chosen tab keeps only its text color. The
-tabs keep their position and identity for every board. A separator follows,
-then the shown board's own controls. With Mastering,
+The lower panel's 28-point top row starts with the shown board's name as a
+16-point heading, 6 points in from the margin. A separator follows, then the
+board's own controls. The tool rail's Mixer, Mastering, FX returns, and Step
+synth buttons choose the board. With Mastering,
 the row holds the 150-point preset selector, the 112-point Bypass all switch,
 the board's state in 12-point text that truncates, and the Mastering help
 button at the right margin. With Mixer, it holds the Export tracks… button.
@@ -61,15 +58,15 @@ sound's audio is missing, and the Step synth help button. The
 preset list puts a rule after Subtle, Revive, and Loud, before the genres; the
 selector reads Choose a preset while every pedal is off at its defaults, and
 Custom when changed pedals match no preset. The trim, which belongs to the
-mix, affects neither. The board bodies start below the tab row. The tool
-rail's Mixer shortcut switches the score between its Arrange and Mix views.
-The Mix view and the Mixer tab never show together: the Mix view moves a lower
-panel on Mixer to Mastering, and the Mixer tab returns the score to Arrange.
-A launch whose Starting module is Mixer opens the Mix view over Mastering; one
-whose Starting module is Mastering or FX returns opens the lower panel on that
-tab. The Mix view is session state, not part of `layout.json`. Its Mastering
-and Step synth buttons open their tab and fold the lower panel when that board
-already shows.
+mix, affects neither. The board bodies start below the top row. Each of the
+rail's four board buttons shows its board, and folds the lower panel when that
+board already shows. The score toolbar's Arrange and Mix switch, or the Mix
+view command, switches the score's view. The Mix view and the Mixer board
+never show together: the Mix view moves a lower panel on Mixer to Mastering,
+and the rail's Mixer returns the score to Arrange. A launch whose Starting
+module is Mixer opens the Mix view over Mastering; one whose Starting module
+is Mastering or FX returns opens the lower panel on that board. The Mix view
+is session state, not part of `layout.json`.
 
 The arrangement shows occupied tracks and one drop target for a new track, while
 the model retains 64 slots. A soloed track counts as occupied even without

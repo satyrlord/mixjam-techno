@@ -264,7 +264,7 @@ fn a_locked_sequence_pattern_rolls_back_the_existing_pair_without_session_change
         .open(&pattern)
         .unwrap();
     pcm.samples.fill(-0.5);
-    state.steps[4] = Some(7);
+    state.steps[4] = crate::synth::Step::note(7);
     assert!(session.save_sequence(&pcm, &path, &state).is_err());
     drop(lock);
     assert_eq!(std::fs::read(&path).unwrap(), wav_before);

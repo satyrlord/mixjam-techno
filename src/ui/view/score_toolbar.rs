@@ -76,7 +76,7 @@ impl MixJamApp {
                     "Mix view",
                     "Mix view: each lane header widens into a mixer row with its level, exact \
                      dB, pan, sends, EQ, outputs, and polarity; the Master and the FX returns \
-                     stay below the lanes. The tool rail's Mixer button switches views too.",
+                     stay below the lanes. Mix view in the command list (Ctrl+K) switches too.",
                 ),
             ] {
                 let selected = self.mix.shown == mix;

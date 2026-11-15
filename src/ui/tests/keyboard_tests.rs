@@ -75,7 +75,7 @@ fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
     );
     assert_eq!(
         order.get(after + rail.len()).map(String::as_str),
-        Some("Mixer tab"),
+        Some("Export tracks"),
         "The lower panel follows the rail: {order:?}"
     );
     // The song overview leads the arrangement, then the score toolbar,
@@ -305,16 +305,17 @@ fn step_grid_is_one_tab_stop_with_arrow_key_navigation() {
         .as_ref()
         .unwrap()
         .nodes;
-    assert_eq!(
-        nodes
-            .iter()
-            .filter(|(_, node)| {
-                node.label()
-                    .is_some_and(|label| label.starts_with("Step ") && label.ends_with("semitones"))
-            })
-            .count(),
-        400,
-        "Every cell stays available to assistive technology."
+    let cells = nodes
+        .iter()
+        .filter(|(_, node)| {
+            node.label()
+                .is_some_and(|label| label.starts_with("Step ") && label.ends_with("semitones"))
+        })
+        .count();
+    // 25 pitch rows over one, two, or four bars, as the board's width allows.
+    assert!(
+        [400, 800, 1600].contains(&cells),
+        "Every cell in view stays available to assistive technology: {cells}"
     );
     focus_control(&ctx, &mut app, &output, "Step 1, +0 semitones");
     // egui holds arrow keys for a control from its second focused frame.
@@ -341,7 +342,7 @@ fn step_grid_is_one_tab_stop_with_arrow_key_navigation() {
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(
         app.step_synth.state.steps[2],
-        Some(1),
+        Step::note(1),
         "Arrow keys move the cell cursor and Enter sets its note."
     );
     assert!(

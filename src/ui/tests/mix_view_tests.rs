@@ -556,7 +556,7 @@ fn an_empty_mix_view_says_no_tracks_and_keeps_master_and_returns() {
 }
 
 #[test]
-fn mix_view_and_the_mixer_tab_never_show_at_once() {
+fn mix_view_and_the_mixer_board_never_show_at_once() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.boards.module = BottomModule::Mixer;
@@ -568,17 +568,19 @@ fn mix_view_and_the_mixer_tab_never_show_at_once() {
         accessible_node(&output, "Mix view").1.toggled(),
         Some(egui::accesskit::Toggled::True)
     );
-    click_named(&ctx, &mut app, "Mixer tab");
+    // The rail's Mixer returns the score to Arrange and shows the board.
+    click_named(&ctx, &mut app, "Mixer");
     assert!(
-        !app.mix.shown,
-        "The Mixer tab returns the score to Arrange."
+        !app.mix.shown && app.board_shown(BottomModule::Mixer),
+        "The rail's Mixer returns the score to Arrange."
     );
-    assert_eq!(app.boards.module, BottomModule::Mixer);
-    // R5: the rail's Mixer toggles the Mix view.
+    // Clicked again, it folds the lower panel and leaves the score alone.
     click_named(&ctx, &mut app, "Mixer");
+    assert!(!app.mix.shown && !app.panels.room.boards);
+    // The command list's Mix view toggles the score's view.
+    app.run_command(commands::Command::MixView, &ctx);
     assert!(app.mix.shown);
-    assert_ne!(app.boards.module, BottomModule::Mixer);
-    click_named(&ctx, &mut app, "Mixer");
+    app.run_command(commands::Command::MixView, &ctx);
     assert!(!app.mix.shown);
     click_named(&ctx, &mut app, "Mix view");
     click_named(&ctx, &mut app, "Arrange view");

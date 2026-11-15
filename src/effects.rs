@@ -123,6 +123,18 @@ impl EffectsState {
 /// sample boundary. No effect state is shared between calls or channels.
 pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
     input.validate()?;
+    process_validated(input, state, bpm)
+}
+
+/// A normalized source with the synth's maximum 12 dB accent stays below
+/// four times full scale. Keep that headroom through effects and output gain;
+/// the shared output stage clamps the result before it leaves processing.
+pub(crate) fn process_synth(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
+    input.validate_with_peak_limit(4.0)?;
+    process_validated(input, state, bpm)
+}
+
+fn process_validated(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
     state.validate()?;
     if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
         return Err("Source tempo must be from 7.5 to 1200 BPM.".into());
@@ -219,6 +231,30 @@ pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn synth_headroom_is_bounded_and_does_not_relax_public_pcm() {
+        let mut source = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![4.0],
+        };
+        let state = EffectsState {
+            volume: 0.2,
+            ..Default::default()
+        };
+        assert!(source.validate().is_err());
+        assert!(process(&source, &state, 120.0).is_err());
+        assert_eq!(
+            process_synth(&source, &state, 120.0).unwrap().samples,
+            vec![0.8]
+        );
+        for invalid in [4.01, f32::INFINITY, f32::NAN] {
+            source.samples[0] = invalid;
+            assert!(process_synth(&source, &state, 120.0).is_err());
+        }
+    }
+
     #[test]
     fn bypass_preserves_audio_and_each_call_has_fresh_state() {
         let source = Pcm {

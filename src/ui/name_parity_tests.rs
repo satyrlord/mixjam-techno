@@ -7,6 +7,10 @@
 //! `MIXJAM_TECHNO_WRITE_UI_NAMES=1 cargo test name_parity`.
 
 use super::*;
+use mixjam_techno::application::album_review::{
+    Shelf,
+    covers::{CACHE_LIMIT_BYTES, CoverCache},
+};
 use mixjam_techno::library::Library;
 
 const BASELINE: &str = include_str!("ui-names.txt");
@@ -20,20 +24,21 @@ const RENAMED: &[(&str, &str)] = &[
     // Phase 6, decision B: the board has no window; the rail button folds it.
     ("button\tClose Step synth", "button\tStep synth"),
     ("button\tCollapse Step synth", "button\tStep synth"),
-    // Phase 6: tabs replace the module selector.
-    ("combo_box\tBottom module", "button\tMixer tab"),
+    // Phase 6: the rail buttons replace the module selector; the board tabs
+    // that once sat beside them are gone (owner, 2026-11-15).
+    ("combo_box\tBottom module", "button\tMixer"),
     (
         "label\tMastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
-        "label\tMastering processes the whole mix after the tracks are summed. Choose its tab in the lower panel, or its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "label\tMastering processes the whole mix after the tracks are summed. Choose it with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
     ),
     // Decision L: Effects becomes FX returns.
     ("other\tEffects board", "other\tFX returns board"),
-    // The window title becomes the board tab.
-    ("other\tSTEP SYNTH", "button\tStep synth tab"),
+    // The window title becomes the board title in the lower panel's top row.
+    ("other\tSTEP SYNTH", "label\tSTEP SYNTH"),
     // Step synth's help describes its board and rail action.
     (
         "label\tThe upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.",
-        "label\tThe Step synth button in the tool rail folds the lower panel without changing the draft. Choose the Step synth tab to open it again. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the board.",
+        "label\tThe Step synth button in the tool rail folds the lower panel without changing the draft; choose it again to open the board. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step in view, Ctrl with Left or Right turns the bar page, Page Up and Page Down shift the octave, and Space or Enter places or clears the note; the focused cell scrolls into view. On the ruler and value lanes, Left and Right move the shared step cursor, and Home and End jump to the first and last step in view. On the ruler, Shift with Left or Right selects a range; Space or Enter selects the current step. On Accent and Slide, Space or Enter toggles the flag, and Up or Down sets or clears it. On Velocity, Up or Down changes the level by one. Lane edits also apply to the selected notes. Esc first cancels an active value or list, or goes to a window above the board.",
     ),
     // Phase 6c: the Sounds panel's count replaces the Sounds module's.
     ("label\t4 sounds", "label\t4 of 4"),
@@ -41,6 +46,33 @@ const RENAMED: &[(&str, &str)] = &[
     (
         "label\tEffects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
         "label\tSequence effects replaces the note grid with the effects form. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+    ),
+    // The step model: Length replaces the Active bar switches and Gate the
+    // 1/16 cut (owner decision 1, 2026-11-15).
+    ("checkbox\t1/16 cut", "slider\tGate"),
+    ("checkbox\tActive 1", "slider\tLength"),
+    ("checkbox\tActive 2", "slider\tLength"),
+    ("checkbox\tActive 3", "slider\tLength"),
+    ("checkbox\tActive 4", "slider\tLength"),
+    (
+        "label\tChoose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.",
+        "label\tChoose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the pattern. Save sequence writes a WAV to Step synth at the sequence tempo.",
+    ),
+    (
+        "label\tView bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
+        "label\tThe grid shows four, two, or one bar, as many as the board's width allows; the bar buttons bring a bar into view. Click a cell to place a note and click a note to clear it. Drag a note's last step sideways to hold it longer. Shift-click a note to accent it and Alt-click it to slide into the next note, or use the Accent and Slide lanes. Drag on the Velocity lane to set levels. Drag along the step ruler to select steps; lane edits then apply to all of them. Length sets how many steps the pattern repeats over; drag its end marker on the ruler. The steps after it keep their notes. Copy bar and Clear bar act on the viewed bar, the one picked last.",
+    ),
+    (
+        "label\t1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
+        "label\tSwing delays every second sixteenth, from 50% (straight) to 75%. Gate sets how much of its last step a note sounds for; a note that slides into the next ignores it. Accent sets how much louder an accented note plays, up to 12 dB, and Slide time how long a slide takes to reach the next pitch, from 1 to 1000 ms. Every note ends with a short fade, so a cut does not click. Loop source repeats audio while a note sounds. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
+    ),
+    (
+        "label\tEach of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
+        "label\tThe pattern has four bars of sixteen steps. The grid shows 25 pitch rows, +12 to -12 semitones around the octave in view, and A 0 keeps the source pitch. The - and + buttons beside the step ruler, or Page Up and Page Down, shift the rows by up to three octaves; a coral edge marks a note above or below them. Scale and its root shade the rows outside the scale but never block a pitch. Randomise, under Scale, writes a new line in the scale over the pattern's length.",
+    ),
+    (
+        "label\tClick a note to set it. Click it again to clear it.",
+        "label\tClick places or clears a note. Drag a note's end to hold it.",
     ),
 ];
 
@@ -62,7 +94,37 @@ fn sample(id: u32, name: &str, group: &str) -> Sample {
     }
 }
 
-fn app(with_clips: bool) -> (egui::Context, MixJamApp) {
+/// Keep the baseline's cache summary independent of the owner's downloaded covers.
+struct ParityCache(CoverCache);
+
+impl ParityCache {
+    fn new() -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let folder = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tmp")
+            .join(format!(
+                "name-parity-covers-{}-{serial}",
+                std::process::id()
+            ));
+        let cache = CoverCache::new(folder, CACHE_LIMIT_BYTES);
+        let mut png = include_bytes!("../../assets/rail/album-review.png").to_vec();
+        png.resize(200 * 1024, 0);
+        for id in ["parity-first", "parity-second"] {
+            cache.store(id, &png).unwrap();
+        }
+        assert_eq!(cache.usage(), (2, 400 * 1024));
+        Self(cache)
+    }
+}
+
+impl Drop for ParityCache {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(self.0.folder());
+    }
+}
+
+fn app(with_clips: bool, cache: &CoverCache) -> (egui::Context, MixJamApp) {
     let context = egui::Context::default();
     configure_style(&context);
     context.enable_accesskit();
@@ -94,6 +156,10 @@ fn app(with_clips: bool) -> (egui::Context, MixJamApp) {
     );
     app.capture.path = None;
     app.options = None;
+    app.album_review.state.use_folder(
+        Shelf::open_default().folder().map(Path::to_path_buf),
+        cache.clone(),
+    );
     app.session.set_theme_fixture(theme::current());
     // A default launch folds the lower panel (Starting module Sounds); the
     // walk opens it to reach the boards.
@@ -148,11 +214,12 @@ fn key(key: egui::Key) -> Vec<egui::Event> {
 /// Every name of every state that the agent baseline of phase 0 visited.
 fn every_name() -> BTreeSet<String> {
     let mut found = BTreeSet::new();
+    let cache = ParityCache::new();
 
-    let (context, mut empty) = app(false);
+    let (context, mut empty) = app(false, &cache.0);
     names(&context, &mut empty, &mut found);
 
-    let (context, mut app) = app(true);
+    let (context, mut app) = app(true, &cache.0);
     let section = |bar: u32, name: &str| crate::engine::Section {
         start_tick: bar * TICKS_PER_BAR,
         name: name.into(),

@@ -10,16 +10,17 @@ control, the wheel scrolls the view. Drag or use the arrow keys to change pan.
 Gain and pan change smoothly while the song plays, including when you undo or
 redo them.
 
-The mixer has two places. The Mixer tab in the lower panel shows a strip per
-track. Mix, in the score toolbar, or the Mixer button in the tool rail, turns
-each lane's header into a mixer row instead, while the clips stay beside it:
+The mixer has two places. The Mixer board in the lower panel, opened with
+the Mixer button in the tool rail, shows a strip per track. Mix, in the score
+toolbar, or Mix view in the command list (**Ctrl+K**), turns each lane's
+header into a mixer row instead, while the clips stay beside it:
 the sound names, M, S, L, R, polarity, the fader with its exact dB value and
 Unity, pan with Center, the track's state, the four sends, and EQ. Below the
 lanes, the Master row (with Bypass and Export tracks…) and the four FX returns
 stay in view while the lanes scroll. The rows and the strips are the same
 controls with the same names, so everything below applies to both. The Mix
-view and the Mixer tab never show together: choosing Mix moves the lower panel
-to Mastering, and choosing the Mixer tab returns the score to Arrange. In a
+view and the Mixer board never show together: choosing Mix moves the lower
+panel to Mastering, and the rail's Mixer returns the score to Arrange. In a
 narrow window, drag the bar under the column captions, or use Shift and the
 wheel over the rows, to see the other columns; a control reached with Tab
 scrolls into view. When Starting module is Mixer, the score opens in the Mix

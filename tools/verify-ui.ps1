@@ -116,8 +116,10 @@ with wave.open(str(step_path), 'wb') as output:
     output.setframerate(sample_rate)
     output.writeframes(audio)
 (step_folder / 'Lead sequence.pattern.json').write_text(json.dumps(dict(
-    bpm=140.0, active_bars=[True, False, False, False],
-    steps=[step_notes.get(step) for step in range(64)], cut_sixteenth=False, loop_source=False,
+    bpm=140.0, length=16,
+    steps=[dict(trig=dict(note=step_notes[step])) if step in step_notes
+           else dict(trig='tie') if step < 16 else {} for step in range(64)],
+    gate=100, swing=50, accent_db=6.0, slide_ms=60.0, loop_source=False,
     effects=dict(filter=None, echo=None, robotize=None, dirty=0.0, noise=0.0, volume=1.0)),
     indent=2), encoding='utf-8')
 step_sample = dict(id=1000000 + len(definitions), name='Lead sequence', group_name='Step synth',

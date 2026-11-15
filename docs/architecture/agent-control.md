@@ -46,7 +46,7 @@ chosen one, including the file extension that a save dialog adds.
 A control is usable by an agent, and by a screen reader, only when it has an
 accessible name. Give a new control visible label text, `widget_info`, or
 `name_control`. Keep each name unique among the controls that can be on screen
-together: the lower panel names its tabs `Mixer tab`, `Mastering tab`, and so
-on, while the tool rail has a `Mixer` shortcut. Sound-library filters keep their own names.
+together: the tool rail's `Mixer` button is the only control with that
+name, and each board's controls carry the board's name. Sound-library filters keep their own names.
 Add a control that is painted on a shared surface to the
 arrangement requests instead.

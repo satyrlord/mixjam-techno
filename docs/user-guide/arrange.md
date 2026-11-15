@@ -34,8 +34,7 @@ double-click it for unity.
   reversed and faded as you hear it. The trim and length still describe the forward stretch: dragging
   the left edge trims what is heard at the clip's end. A clip of a Step
   synth sequence draws its notes instead: each note is a short bar, higher
-  notes higher up, held to the next note (or for one sixteenth with the 1/16
-  cut). Save sequence keeps the pattern beside the WAV for this; a Step synth
+  notes higher up, held through its ties and its gate. Save sequence keeps the pattern beside the WAV for this; a Step synth
   sound without one shows its waveform.
 - Choose a lane in Automation above the arrangement to draw it on every track.
   The menu lists all 14 lanes in three groups. On every track: Volume (dB
@@ -116,9 +115,7 @@ double-click it for unity.
 - Use Follow beside Zoom to keep the playhead visible. Turn it off to browse
   the timeline independently during playback.
 - Drag the divider above the lower panel to give it more or less room.
-- Choose Mixer, Mastering, FX returns, or Step synth with the tabs at
-  the lower panel's top left. The panel retains its resized height; opening a
-  board raises a shorter panel to fit its controls, and in a short window the
-  board scrolls. The Mixer tool-rail button switches the score between its
-  Arrange and Mix views. The Mastering, FX returns, and Step synth buttons open
-  their tab, and fold the lower panel when that board already shows.
+- Choose Mixer, Mastering, FX returns, or Step synth with its button in the
+  tool rail; the button folds the lower panel when that board already shows.
+  The panel retains its resized height; opening a board raises a shorter
+  panel to fit its controls, and in a short window the board scrolls.

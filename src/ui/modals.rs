@@ -163,10 +163,22 @@ impl MixJamApp {
                                  data folder. Press it while something sounds wrong.",
                             ),
                             (
+                                "Boards",
+                                "Mixer, Mastering, FX returns, and Step synth in the tool rail \
+                                 show their board in the lower panel; choose it again to fold \
+                                 the panel.",
+                            ),
+                            (
+                                "Mix view",
+                                "Mix in the score toolbar turns the lane headers into mixer \
+                                 rows. The rail's Mixer returns the score to Arrange.",
+                            ),
+                            (
                                 "Maximise",
                                 "F hides the tool rail, the Sounds panel, the Inspector and \
                                  the lower panel; F again restores them.",
                             ),
+                            ("Commands", "Ctrl+K lists everything the app can do."),
                             ("Help", "F1"),
                         ] {
                             ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
@@ -470,7 +482,7 @@ fn stretch_help(ui: &mut egui::Ui) {
 
 fn master_help(ui: &mut egui::Ui) {
     for text in [
-        "Mastering processes the whole mix after the tracks are summed. Choose its tab in the lower panel, or its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
+        "Mastering processes the whole mix after the tracks are summed. Choose it with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
         "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
         "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
         "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
@@ -501,12 +513,12 @@ fn effects_help(ui: &mut egui::Ui) {
 
 fn step_synth_help(ui: &mut egui::Ui) {
     for text in [
-        "Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.",
-        "Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
-        "View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
-        "1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
+        "Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the pattern. Save sequence writes a WAV to Step synth at the sequence tempo.",
+        "The pattern has four bars of sixteen steps. The grid shows 25 pitch rows, +12 to -12 semitones around the octave in view, and A 0 keeps the source pitch. The - and + buttons beside the step ruler, or Page Up and Page Down, shift the rows by up to three octaves; a coral edge marks a note above or below them. Scale and its root shade the rows outside the scale but never block a pitch. Randomise, under Scale, writes a new line in the scale over the pattern's length.",
+        "The grid shows four, two, or one bar, as many as the board's width allows; the bar buttons bring a bar into view. Click a cell to place a note and click a note to clear it. Drag a note's last step sideways to hold it longer. Shift-click a note to accent it and Alt-click it to slide into the next note, or use the Accent and Slide lanes. Drag on the Velocity lane to set levels. Drag along the step ruler to select steps; lane edits then apply to all of them. Length sets how many steps the pattern repeats over; drag its end marker on the ruler. The steps after it keep their notes. Copy bar and Clear bar act on the viewed bar, the one picked last.",
+        "Swing delays every second sixteenth, from 50% (straight) to 75%. Gate sets how much of its last step a note sounds for; a note that slides into the next ignores it. Accent sets how much louder an accented note plays, up to 12 dB, and Slide time how long a slide takes to reach the next pitch, from 1 to 1000 ms. Every note ends with a short fade, so a cut does not click. Loop source repeats audio while a note sounds. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
         "Sequence effects replaces the note grid with the effects form. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
-        "The Step synth button in the tool rail folds the lower panel without changing the draft. Choose the Step synth tab to open it again. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the board.",
+        "The Step synth button in the tool rail folds the lower panel without changing the draft; choose it again to open the board. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step in view, Ctrl with Left or Right turns the bar page, Page Up and Page Down shift the octave, and Space or Enter places or clears the note; the focused cell scrolls into view. On the ruler and value lanes, Left and Right move the shared step cursor, and Home and End jump to the first and last step in view. On the ruler, Shift with Left or Right selects a range; Space or Enter selects the current step. On Accent and Slide, Space or Enter toggles the flag, and Up or Down sets or clears it. On Velocity, Up or Down changes the level by one. Lane edits also apply to the selected notes. Esc first cancels an active value or list, or goes to a window above the board.",
         "Resampling, source looping, and effects are the application's own algorithms.",
     ] {
         ui.add(egui::Label::new(text).wrap());

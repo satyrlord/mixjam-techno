@@ -58,40 +58,73 @@ from this presentation change.
 
 ## Step synth
 
-Step synth is an Olive board in the lower panel, chosen by its tab or its tool
-rail button; the rail button folds the lower panel when the board already
-shows. `src/ui/step_synth.rs` supplies the note grid, source and bar controls,
-options, effects body, and actions on the board, and the status line in the tab
-row. A short lower panel scrolls the board, and the focused grid cell scrolls
-both the grid and the board into view. Source names truncate
+Step synth is an Olive board in the lower panel, chosen by its tool rail
+button; the button folds the lower panel when the board already shows.
+`src/ui/step_synth.rs` supplies the board and the status line in the panel's
+top row. A settings column 232 points wide holds Source, Pattern (the actions),
+Tempo, Voice, and Scale, and scrolls on its own when the lower panel is short.
+The grid column fills the rest of the width and keeps the panel's height: the bar
+strip, the step ruler, the pitch grid, and the Accent, Slide, and Velocity lanes.
+It shows four bars when each step gets at least 28 points, otherwise two, then
+one. The focused grid cell scrolls into view. Source names truncate
 with full tooltips and accessible values. Choose source file selects a WAV or PXD
 path; Use palette sound returns to the selected sound or clip. An explicit file
 takes precedence over missing palette audio and is read only when Listen sequence
 or Save sequence requests processing.
 
-View bar selects one of four editable bars. Active 1-4 chooses rendered bars in
-ascending order. Each bar has sixteen sixteenth steps with one optional note per
-step. Another pitch replaces the note; selecting the current note clears it.
-Clear bar affects only the viewed bar. The grid shows +12 through -12 semitones,
-with A 0 as source pitch. Loaded notes outside that display remain valid under
-the existing -48 through +48 range. Tab reaches named controls and the grid as
-one stop. Arrow keys move a cell cursor, Home and End jump to the first and last
-step, and Space or Enter sets or clears the note; the cursor cell scrolls into
-view. Every cell stays a named pointer and assistive target. Expose selected
-state through accessible names and states.
+The bar buttons pick the viewed bar and bring its page of bars into view; the
+other bars in view keep an olive outline, a bar in the loop has an olive mark
+under its button, and a coral dot marks the bar Listen sequence is playing.
+Copy bar copies the viewed bar onto the next one, and Clear bar clears only the
+viewed bar. Length sets the steps the pattern repeats over, from 1 to 64: drag
+or scroll its well, use x2 and /2, or drag the coral end marker on the step
+ruler. The steps after it keep their contents and show dimmed.
 
-BPM is the compact tempo slider over 120, 125, 130, 135, 140, 160, and 180. 1/16
-cut ends a trigger after one sixteenth;
-otherwise it continues until the next trigger or sequence end. Loop source repeats
-audio within that interval. Keep tooltips that explain retriggering, duration,
-combined behavior, whole-file repetition, and effects after source gating.
+Each bar has sixteen sixteenth steps. A step is a rest, a note, or a tie that
+holds the note before it, and a note carries an accent, a slide, and a velocity.
+A note draws as one coral bar across its ties, with a bright top edge when
+accented and a line into the next note when it slides. Click a cell to place a
+note, replacing the step's note; click a note to clear it with its ties. Drag a
+note's last step sideways to tie it on or shorten it; the tie replaces the notes
+it covers. Shift-click a note to accent it and Alt-click it to slide. The Accent
+and Slide lanes toggle on click and paint on drag; the Velocity lane draws
+levels. Drag along the step ruler to select steps: lane edits then apply to
+every selected note, a level edit shifting each by the same amount, and a coral
+dot by a lane's name shows that the selected notes differ there.
+The ruler and each value lane are keyboard stops. Left and Right move their
+shared step cursor; Home and End go to the first and last step in view.
+On the ruler, Shift with Left or Right selects a range, and Space or Enter
+selects the current step. On Accent and Slide, Space or Enter toggles the flag,
+and Up or Down sets or clears it. On Velocity, Up or Down changes the level by
+one. These lane edits also apply to the selected notes.
+
+The grid shows 25 rows, +12 through -12 semitones around the octave in view,
+with A 0 as source pitch; the octave buttons and Page Up and Page Down shift it
+by up to three octaves. A note outside the rows marks the grid's top or bottom
+edge in coral, and every note stays valid under the -48 through +48 range. Scale
+and its root shade the rows outside the scale and notch the corner of a note
+outside it; they never block a pitch, and they are not saved with the pattern.
+Randomise, under Scale, writes a new line in the scale over the pattern's
+length. Tab reaches named controls and the grid as one stop. Arrow keys move a
+cell cursor, Home and End jump to the first and last step in view, Ctrl with Left or Right turns the
+bar page, and Space or Enter places or clears the note; the cursor cell scrolls
+into view. Every cell stays a named pointer and assistive target. Expose
+selected state through accessible names and states.
+
+BPM is the compact tempo slider over 120, 125, 130, 135, 140, 160, and 180.
+Swing (50 to 75 percent), Gate (5 to 100 percent), Accent (0 to 12 dB), and
+Slide time (1 to 1000 ms) are dials with value wells. Gate sets how much of its
+last step a note sounds for; a note that slides into the next ignores it. Loop
+source repeats audio while a note sounds. Keep tooltips that explain
+retriggering, duration, whole-file repetition, and slides.
 Sequence effects replaces the grid with the common effects form; Note grid
 restores it.
-Keep actions reachable while the body scrolls. The pane switch retains keyboard
-focus when its label changes.
+The actions sit high in the settings column, so they show without scrolling at
+the usual panel height. The pane switch retains keyboard focus when its label
+changes.
 
-Listen and Save sequence need a source and active bar. Disabled actions explain
-why. Pattern saving retains validation, including one active bar. Processing is
+Listen and Save sequence need a source. Disabled actions explain why. Pattern
+saving retains validation. Processing is
 synchronous. Save sequence writes a WAV in Step synth at draft BPM and selects it,
 and keeps its pattern beside it as `Name.pattern.json`.
 Pattern JSON does not replace the source file or viewed bar. Local feedback covers

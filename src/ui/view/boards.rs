@@ -1,4 +1,4 @@
-//! The lower panel and its boards: the tab row, the toolbars, and the Mixer,
+//! The lower panel and its boards: the top row, the toolbars, and the Mixer,
 //! Mastering, FX returns, and Step synth boards, with the Mix view's block of
 //! Master and return rows below the lanes.
 use super::*;
@@ -23,7 +23,7 @@ const TOOLBAR_HEIGHT: f32 = 28.0;
 /// Effects). The margins give it up, so a board keeps its height.
 const BOARD_GAP: f32 = 8.0;
 
-/// The lower panel: its open tab, its meters, and what its boards bring into
+/// The lower panel: its shown board, its meters, and what its boards bring into
 /// view.
 #[derive(Default)]
 pub(in super::super) struct BoardsState {
@@ -46,11 +46,36 @@ pub(in super::super) struct StepSynthBoard {
     pub(in super::super) file: Option<PathBuf>,
     pub(in super::super) effects_expanded: bool,
     pub(in super::super) feedback: StepSynthFeedback,
+    /// The grid's view: octave, scale, and the selected steps.
+    pub(in super::super) grid: step_synth::Editor,
+    pub(in super::super) listening: Option<StepSynthAudition>,
+}
+
+/// Timing and identity of the rendered preview, independent of later draft edits.
+pub(in super::super) struct StepSynthAudition {
+    pub(in super::super) start: std::time::Instant,
+    pub(in super::super) bpm: f64,
+    pub(in super::super) length: u8,
+    pub(in super::super) swing: u8,
+    pub(in super::super) preview_revision: u64,
+}
+
+impl StepSynthAudition {
+    pub(in super::super) fn is_current(&self, previewing: bool, revision: u64) -> bool {
+        previewing && revision == self.preview_revision
+    }
+
+    pub(in super::super) fn step(&self, elapsed: std::time::Duration) -> usize {
+        let steps = elapsed.as_secs_f64() * self.bpm / 15.0;
+        let pair = (steps / 2.0).floor() as usize;
+        let second = steps - pair as f64 * 2.0 >= f64::from(self.swing) / 50.0;
+        (pair * 2 + usize::from(second)) % usize::from(self.length.max(1))
+    }
 }
 
 impl MixJamApp {
     /// Show the score's Mix view or its Arrange view. The Mix view and the
-    /// Mixer tab never show at once, so the lower panel leaves Mixer for
+    /// Mixer board never show at once, so the lower panel leaves Mixer for
     /// Mastering.
     pub(in super::super) fn set_mix_view(&mut self, on: bool) {
         self.mix.shown = on;
@@ -106,28 +131,10 @@ impl MixJamApp {
         if self.session.layout().maximised {
             return;
         }
+        // Folded, the lower panel leaves the score its height; the rail's
+        // board buttons and the status bar's Boards switch open it again.
         if self.panels.room.boards {
             self.lower_panel(ctx);
-        } else {
-            // Folded: only the toolbar row, so the module choice and the
-            // filters stay in reach. Its own panel id keeps the open panel's
-            // height for when it opens again.
-            egui::TopBottomPanel::bottom("boards-folded")
-                .exact_height(
-                    TOOLBAR_HEIGHT
-                        + f32::from(BOTTOM_PANEL_MARGIN.top)
-                        + f32::from(BOTTOM_PANEL_MARGIN.bottom),
-                )
-                .resizable(false)
-                .frame(
-                    egui::Frame::new()
-                        .fill(roles().panel)
-                        .inner_margin(BOTTOM_PANEL_MARGIN),
-                )
-                .show(ctx, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    self.bottom_toolbar(ui);
-                });
         }
     }
 
@@ -181,28 +188,16 @@ impl MixJamApp {
             .rect_filled(grip, 2.0, roles().muted);
     }
 
-    /// The lower panel's tab row: one tab per board, then the shown board's
-    /// own controls.
+    /// The lower panel's top row: the shown board's title, then its own
+    /// controls. The tool rail chooses the board.
     fn bottom_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.push_id("bottom-module-toolbar", |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().interact_size.y = TOOLBAR_HEIGHT;
-                let spacing = ui.spacing().item_spacing.x;
-                ui.spacing_mut().item_spacing.x = 2.0;
-                let boards = self.panels.room.boards;
-                for module in BottomModule::ALL {
-                    let selected = self.boards.module == module;
-                    // Choosing a tab opens a folded lower panel.
-                    if board_tab(ui, module, selected, boards).clicked() {
-                        self.boards.module = module;
-                        if module == BottomModule::Mixer {
-                            self.mix.shown = false;
-                        }
-                        self.set_layout(|layout| layout.boards = true);
-                        self.claim(room::Panel::Boards);
-                    }
-                }
-                ui.spacing_mut().item_spacing.x = spacing;
+                ui.add_space(6.0);
+                ui.add(
+                    egui::Label::new(heading(self.boards.module.label(), 16.0)).selectable(false),
+                );
                 ui.add_space(4.0);
                 ui.separator();
                 match self.boards.module {
@@ -215,7 +210,7 @@ impl MixJamApp {
         });
     }
 
-    /// The Step synth tab's status line, Import details for missing audio, and
+    /// The Step synth board's status line, Import details for missing audio, and
     /// its help at the row's end.
     fn step_synth_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.scope(|ui| {
@@ -233,7 +228,6 @@ impl MixJamApp {
                     message: self.step_synth.feedback.message.as_deref(),
                     error: self.step_synth.feedback.error,
                 },
-                &self.step_synth.state,
                 self.step_synth.effects_expanded,
             );
             if matches!(action, step_synth::Action::Details) {
@@ -298,6 +292,19 @@ impl MixJamApp {
     /// The Step synth board of the lower panel, and what its controls ask for.
     fn step_synth_board(&mut self, ui: &mut egui::Ui) {
         let (name, available, missing, explicit_file) = self.step_synth_source();
+        // The step Listen sequence is playing, while its preview lasts.
+        if self.step_synth.listening.as_ref().is_some_and(|heard| {
+            !heard.is_current(
+                self.session.is_previewing(),
+                self.session.preview_revision(),
+            )
+        }) {
+            self.step_synth.listening = None;
+        }
+        let playing = self.step_synth.listening.as_ref().map(|heard| {
+            ui.ctx().request_repaint();
+            heard.step(heard.start.elapsed())
+        });
         let action = step_synth::show(
             ui,
             step_synth::Source {
@@ -309,6 +316,8 @@ impl MixJamApp {
             &mut self.step_synth.state,
             &mut self.step_synth.bar,
             &mut self.step_synth.effects_expanded,
+            &mut self.step_synth.grid,
+            playing,
         );
         match action {
             step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
@@ -318,7 +327,20 @@ impl MixJamApp {
             }
             step_synth::Action::Listen => {
                 match self.step_synth_pcm() {
-                    Ok(pcm) => self.play_pcm(pcm, "Listening to Step synth sequence."),
+                    Ok(pcm) => {
+                        let previous = self.session.preview_revision();
+                        self.play_pcm(pcm, "Listening to Step synth sequence.");
+                        let state = &self.step_synth.state;
+                        self.step_synth.listening = (self.session.is_previewing()
+                            && self.session.preview_revision() != previous)
+                            .then(|| StepSynthAudition {
+                                start: std::time::Instant::now(),
+                                bpm: state.bpm,
+                                length: state.length,
+                                swing: state.swing,
+                                preview_revision: self.session.preview_revision(),
+                            });
+                    }
                     Err(error) => self.error(error),
                 }
                 self.step_synth_notice();
@@ -649,53 +671,39 @@ impl MixJamApp {
     }
 }
 
-/// A tab of the lower panel's tab row. The shown board's tab is bright, on
-/// a raised face, and underlined in the accent. On a folded panel the chosen
-/// tab keeps its bright name only.
-fn board_tab(ui: &mut egui::Ui, module: BottomModule, selected: bool, open: bool) -> Response {
-    let label = module.label();
-    let color = if selected {
-        roles().text
-    } else {
-        roles().muted
-    };
-    let galley =
-        ui.painter()
-            .layout_no_wrap(label.to_owned(), egui::FontId::proportional(14.0), color);
-    let size = Vec2::new(galley.size().x + 20.0, TOOLBAR_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    if selected && open {
-        ui.painter().rect_filled(rect, 4.0, roles().raised);
-    } else if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.weak_bg_fill);
-    }
-    let text = Pos2::new(
-        rect.center().x - galley.size().x / 2.0,
-        rect.center().y - galley.size().y / 2.0,
-    );
-    ui.painter().galley(text, galley, color);
-    if selected && open {
-        ui.painter().rect_filled(
-            Rect::from_min_max(
-                Pos2::new(rect.left() + 6.0, rect.bottom() - 2.0),
-                Pos2::new(rect.right() - 6.0, rect.bottom()),
-            ),
-            1.0,
-            roles().accent,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn step_synth_audition_marker_follows_swing_and_preview_identity() {
+        let mut heard = StepSynthAudition {
+            start: std::time::Instant::now(),
+            bpm: 120.0,
+            length: 3,
+            swing: 75,
+            preview_revision: 7,
+        };
+        let step = |heard: &StepSynthAudition, ms| heard.step(std::time::Duration::from_millis(ms));
+        assert_eq!(
+            step(&heard, 125),
+            0,
+            "The swung second step has not started."
+        );
+        assert_eq!(step(&heard, 188), 1);
+        assert_eq!(step(&heard, 250), 2);
+        assert_eq!(step(&heard, 375), 2, "Swing uses the full render clock.");
+        assert_eq!(step(&heard, 438), 0, "The pattern wraps after three steps.");
+        heard.swing = 50;
+        assert_eq!(step(&heard, 125), 1);
+        assert!(heard.is_current(true, 7));
+        assert!(
+            !heard.is_current(true, 8),
+            "A replacement preview has no marker."
+        );
+        assert!(
+            !heard.is_current(false, 7),
+            "A stopped preview has no marker."
         );
     }
-    focus_outline(ui, &response, roles().accent);
-    let name = module.tab_name();
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, name)
-    });
-    response.hover_hint(match module {
-        BottomModule::Mixer => {
-            "Mixer: track levels, pan, EQ, sends, polarity and outputs, on mixer strips."
-        }
-        BottomModule::Mastering => "Mastering: the master pedalboard that processes the whole mix.",
-        BottomModule::FxReturns => "FX returns: the four FX buses that the sends feed.",
-        BottomModule::StepSynth => "Step synth: sequence a sound across up to four bars of notes.",
-    })
 }

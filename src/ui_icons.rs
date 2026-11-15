@@ -119,7 +119,7 @@ impl RailIcon {
             Self::Import => "Import a WAV sound",
             Self::Options => "Options: open or focus preferences (Ctrl+,)",
             Self::New => "New song (Ctrl+N)",
-            Self::Mixer => "Mixer: switch the score between its Arrange and Mix views",
+            Self::Mixer => "Mixer: show the track strips, or fold the lower panel",
             Self::Master => "Mastering: show the master pedalboard, or fold the lower panel",
             Self::Erase => "Erase: click clips to delete them (Esc ends)",
             Self::Delete => "Delete the selected clips (Delete)",

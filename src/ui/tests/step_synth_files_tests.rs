@@ -66,10 +66,19 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
     std::fs::create_dir_all(&dir).unwrap();
     app.boards.module = BottomModule::StepSynth;
     app.step_synth.state.bpm = 160.0;
-    app.step_synth.state.active_bars = [true, false, true, false];
-    app.step_synth.state.steps[1] = Some(-48);
-    app.step_synth.state.steps[63] = Some(48);
-    app.step_synth.state.cut_sixteenth = true;
+    app.step_synth.state.length = 12;
+    app.step_synth.state.steps[1] = Step {
+        velocity: 30,
+        accent: true,
+        slide: true,
+        ..Step::note(-48)
+    };
+    app.step_synth.state.steps[2] = Step::tie();
+    app.step_synth.state.steps[63] = Step::note(48);
+    app.step_synth.state.gate = 25;
+    app.step_synth.state.swing = 62;
+    app.step_synth.state.accent_db = 9.0;
+    app.step_synth.state.slide_ms = 120.0;
     app.step_synth.state.loop_source = true;
     app.step_synth.state.effects.dirty = 0.25;
     let saved = app.step_synth.state.clone();
@@ -309,7 +318,7 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
             .focus,
         step_synth_accessible_node(&output, "Sequence effects").0
     );
-    app.step_synth.state.active_bars.fill(false);
+    app.selection.sample = None;
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let listen = step_synth_control_rect(&output, "Listen sequence");
     // The footer shows the same sentence, so count the tooltip as an added copy.
@@ -318,8 +327,12 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
             .shapes
             .iter()
             .filter(|shape| {
-                matches!(&shape.shape,
-        egui::Shape::Text(text) if text.galley.job.text == "Switch on at least one Active bar.")
+                matches!(
+                    &shape.shape,
+                    egui::Shape::Text(text)
+                        if text.galley.job.text
+                            == "Choose an available source file or palette sound."
+                )
             })
             .count()
     };

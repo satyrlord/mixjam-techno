@@ -19,8 +19,8 @@ Keep every font's license and provenance with the application; see
 
 Display is the MixJam name; Techno follows it in 14-point Syncopate and Muted.
 Headline is the standard native heading. Section
-labels identify Arrangement. Bottom Module supplies the lower panel's board
-tabs their 14-point text-face names. Title names the project. Body
+labels identify Arrangement. The lower panel's top row names the shown
+board in a 16-point heading. Title names the project. Body
 serves fields and explanatory text. Body, Button, Clip, Small, and Metadata all
 use the text face. Track labels and numeric controls also use it. Clip labels use
 the clip size, reduced to metadata size when their rectangle is below 28 points

@@ -197,7 +197,7 @@ pub(super) enum ClipBody<'a> {
 
 /// A Step synth clip's notes, which it draws instead of a waveform. Save
 /// sequence keeps the pattern beside the WAV, so the notes are known: each
-/// note is held to the next one, or for one sixteenth with the 1/16 cut.
+/// note lasts through its ties and its gate.
 pub(super) struct ClipNotes {
     /// Each note's start and end in ticks from the clip's left edge, and its
     /// pitch in semitones.
@@ -218,39 +218,18 @@ impl ClipNotes {
         frames_per_tick: f64,
         sound_frames: f64,
     ) -> Self {
-        let steps: Vec<Option<i8>> = pattern
-            .active_bars
-            .iter()
-            .enumerate()
-            .filter(|(_, active)| **active)
-            .flat_map(|(bar, _)| {
-                pattern
-                    .steps
-                    .get(bar * 16..bar * 16 + 16)
-                    .unwrap_or_default()
-                    .iter()
-                    .copied()
-            })
-            .collect();
         let mut notes = Vec::new();
         if frames_per_step > 0.0 && frames_per_tick > 0.0 {
             let length = f64::from(clip.length_ticks);
             let offset = f64::from(clip.offset_frames);
             let sound = ((sound_frames - offset).max(0.0) / frames_per_tick).min(length);
-            for (step, note) in steps.iter().enumerate() {
-                let Some(note) = *note else { continue };
-                let next = if pattern.cut_sixteenth {
-                    step + 1
-                } else {
-                    steps
-                        .iter()
-                        .enumerate()
-                        .skip(step + 1)
-                        .find(|(_, note)| note.is_some())
-                        .map_or(steps.len(), |(index, _)| index)
-                };
-                let tick = |step: usize| (step as f64 * frames_per_step - offset) / frames_per_tick;
-                let (start, end) = (tick(step).max(0.0), tick(next).min(sound));
+            let tick = |step: f64| (step * frames_per_step - offset) / frames_per_tick;
+            for note in pattern.notes() {
+                let (start, end, note) = (
+                    tick(note.start).max(0.0),
+                    tick(note.end).min(sound),
+                    note.note,
+                );
                 if start >= end {
                     continue;
                 }
@@ -467,40 +446,41 @@ mod tests {
     /// A one-bar pattern: the source pitch on the first step and a fifth up
     /// on the fifth, read at 100 source frames per step and 10 per tick, so
     /// each step is 10 ticks.
-    fn notes(clip: &Clip, cut_sixteenth: bool) -> Vec<(f64, f64, i8)> {
-        let mut steps = vec![None; 64];
-        steps[0] = Some(0);
-        steps[4] = Some(7);
+    /// Held, each note is tied through the steps before the next one.
+    fn notes(clip: &Clip, held: bool) -> Vec<(f64, f64, i8)> {
+        let fill = if held { Step::tie() } else { Step::default() };
+        let mut steps = vec![fill; 64];
+        steps[0] = Step::note(0);
+        steps[4] = Step::note(7);
         let pattern = StepSynthState {
             steps,
-            cut_sixteenth,
             ..StepSynthState::default()
         };
         ClipNotes::new(clip, &pattern, 100.0, 10.0, 1600.0).notes
     }
 
     #[test]
-    fn a_step_synth_clip_holds_each_note_to_the_next_and_mirrors_when_reversed() {
+    fn a_step_synth_clip_holds_each_note_through_its_ties_and_mirrors_when_reversed() {
         assert_eq!(
-            notes(&clip(160, 0, false), false),
+            notes(&clip(160, 0, false), true),
             vec![(0.0, 40.0, 0), (40.0, 160.0, 7)]
         );
         assert_eq!(
-            notes(&clip(160, 0, false), true),
+            notes(&clip(160, 0, false), false),
             vec![(0.0, 10.0, 0), (40.0, 50.0, 7)],
-            "The 1/16 cut ends each note after one step."
+            "Without ties each note lasts one step."
         );
         assert_eq!(
-            notes(&clip(160, 0, true), false),
+            notes(&clip(160, 0, true), true),
             vec![(120.0, 160.0, 0), (0.0, 120.0, 7)]
         );
         // A trimmed start moves the notes left; the sound ends before a
         // longer clip does.
         assert_eq!(
-            notes(&clip(400, 200, false), false),
+            notes(&clip(400, 200, false), true),
             vec![(0.0, 20.0, 0), (20.0, 140.0, 7)]
         );
         // A clip shorter than the pattern shows only what it plays.
-        assert_eq!(notes(&clip(30, 0, false), false), vec![(0.0, 30.0, 0)]);
+        assert_eq!(notes(&clip(30, 0, false), true), vec![(0.0, 30.0, 0)]);
     }
 }

@@ -15,7 +15,7 @@ use mixjam_techno::application::fx::{BUSES, FxBuses};
 #[derive(Default)]
 pub(super) struct MixViewState {
     /// The score shows the Mix view's mixer rows instead of the lane headers.
-    /// It never shows with the Mixer tab.
+    /// It never shows with the Mixer board.
     pub(super) shown: bool,
     /// How far the Mix view's columns are scrolled to the left.
     pub(super) scroll: f32,

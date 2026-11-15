@@ -82,7 +82,7 @@ fn status_notices_stay_clear_of_panel_switches() {
                 if let egui::Shape::Text(text) = &shape.shape {
                     let rect = text.galley.rect.translate(text.pos.to_vec2());
                     if rect.top() >= size.y - 30.0
-                        && text.galley.job.text != "Panels"
+                        && text.galley.job.text != "PANELS"
                         && rect.left() < tools.left()
                     {
                         assert!(

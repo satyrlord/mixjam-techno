@@ -60,7 +60,7 @@ both channels' polarity. Amber means inverted and its checked state is named.
 Polarity stays independent of gain and pan, even at silence; Unity leaves it
 unchanged. Pan retains a readable left/center/right value. Every control has
 a track-specific accessible name; Master has its own gain labels. The header
-is the lower panel's tab row. Control-specific tooltips and the Help
+is the lower panel's top row. Control-specific tooltips and the Help
 window explain silence, unity, attenuation, and independent polarity.
 
 `src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a separate

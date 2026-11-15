@@ -13,11 +13,19 @@ impl Pcm {
         self.samples.len() as u64 / u64::from(self.channels.max(1))
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_with_peak_limit(1.0)
+    }
+    /// Validate an internal processing buffer with an explicit peak bound.
+    /// Public PCM and file boundaries still require normalized samples.
+    pub(crate) fn validate_with_peak_limit(&self, peak_limit: f32) -> Result<(), String> {
         if self.sample_rate == 0
             || self.sample_rate > 384_000
             || !(1..=2).contains(&self.channels)
             || !self.samples.len().is_multiple_of(self.channels as usize)
-            || self.samples.iter().any(|x| !x.is_finite() || x.abs() > 1.0)
+            || self
+                .samples
+                .iter()
+                .any(|x| !x.is_finite() || x.abs() > peak_limit)
         {
             return Err(
                 "The audio must contain normalized finite mono or stereo PCM samples.".into(),
