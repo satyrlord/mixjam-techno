@@ -50,6 +50,47 @@ together. Inspector controls start with `Inspector track` or `Inspector clip`.
 A modal blocks the controls behind it, as it does for a person. Each reply
 names the open modal and the open tool windows, and has the status line.
 
+## Keyboard focus
+
+`state` and `ui` have a `focus` field. It is the control that has the keyboard
+focus, in the form of a `ui` entry. It is `null` when no control has focus. Use
+it to check the Tab order: send `key key=Tab`, then read `focus`. A control
+without an accessible name is not in `focus`.
+
+`click` without `pointer=true` sends an accessibility action, and no pointer
+moves. The driver then takes the focus from the control that had it, as a
+pointer click on another control does. The control that you click keeps its
+focus. The keys that follow thus go where they go for a person. For example,
+Ctrl+Z after `click target="Arrange view"` undoes the song, and not the Step
+synth board.
+
+## Step synth board
+
+The Step synth board is in `state.windows` as `Step synth` while the board
+shows. It is a board in the lower panel and not a tool window. Use
+`window="Step synth"` to scope `ui`, `click`, and `set` to it.
+
+`state.step_synth` has these fields:
+
+- `shown` and `effects_shown`: the board shows, and its Effects pane shows.
+- `view_bar`: the first bar in view, counted from 1.
+- `octave`: the octave in view, -3 to 3. The 25 pitch rows go from
+  `12 * octave - 12` to `12 * octave + 12` semitones.
+- `selection`: the first and last selected step, or `null`.
+- `mixed_lanes`: the value lanes (`Accent`, `Slide`, `Velocity`) in which the
+  selected notes differ. The board draws a dot at the left of such a lane. An
+  edit of such a lane shifts the selected notes together. With `ui all=true`,
+  the control of that lane (`Accent lane`) has a description that starts with
+  `Mixed`.
+- `root_name`, `notes`, and `pattern`: the scale root, each note, and the whole
+  pattern. Each note has its `pitch` in semitones from the source pitch, and its
+  `note` name. The names go from `A` (the source pitch) up to `G#`.
+
+Each pitch cell is named from its step and its pitch, such as
+`Step 16, -12 semitones`. The description of the cell has the note name and
+the scale: `Note A, in scale.` or `Note C#, not in scale.` Read it with
+`ui all=true contains="Step 16"`.
+
 ## Arrangement edits
 
 The arrangement lanes are one painted surface. These requests edit them
@@ -189,7 +230,10 @@ and gives the reason.
 
 While an agent is attached, a file choice opens a **Choose path** modal in the
 window, in place of the native dialog. Set its **Path** field and select
-**Confirm path**. A person can also type the path. If the song changes while an
+**Confirm path**. A person can also type the path. When the path is not valid,
+the modal stays open and shows an error under the field, such as "That file
+does not exist." `state.path_prompt.error` has that text. It is `null` when
+there is no error. If the song changes while an
 Open path choice is collapsed, cancel that choice and start Open again. The old
 choice keeps its path draft and cannot replace the later edits.
 

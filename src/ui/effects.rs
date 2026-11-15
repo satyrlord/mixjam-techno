@@ -160,7 +160,7 @@ pub(super) fn show(
                     423.0,
                     &mut echo.delay_beats,
                     "Delay (beats)",
-                    0.001,
+                    mixjam_techno::application::MIN_ECHO_BEATS,
                     2.0,
                     0.5,
                     0.01,
@@ -214,7 +214,7 @@ pub(super) fn show(
                     &mut robot.frequency_hz,
                     "Color",
                     1.0,
-                    2000.0,
+                    20000.0,
                     80.0,
                     1.0,
                     0,
@@ -372,6 +372,13 @@ fn control(
     enabled: bool,
 ) {
     let [center, well, label] = positions;
+    // The logarithmic dials are the frequency dials, Cutoff and Color: their
+    // values show Hz, in a wider well.
+    let (unit, width) = if spec.logarithmic {
+        (" Hz", 72.0)
+    } else {
+        ("", 60.0)
+    };
     ui.painter().text(
         label,
         Align2::CENTER_CENTER,
@@ -379,7 +386,7 @@ fn control(
         FontId::proportional(12.0),
         roles().legend,
     );
-    controls::well(ui, Rect::from_center_size(well, Vec2::new(60.0, 20.0)));
+    controls::well(ui, Rect::from_center_size(well, Vec2::new(width, 20.0)));
     ui.add_enabled_ui(enabled, |ui| {
         let mut draft = f64::from(*value);
         let before = draft;
@@ -404,11 +411,13 @@ fn control(
         ui.scope(|ui| {
             controls::value_style(ui);
             let response = ui.put(
-                Rect::from_center_size(well, Vec2::new(58.0, 24.0)),
+                Rect::from_center_size(well, Vec2::new(width - 2.0, 24.0)),
                 egui::DragValue::new(value)
                     .range(spec.low..=spec.high)
+                    .clamp_existing_to_range(false)
                     .speed(spec.step)
-                    .fixed_decimals(spec.decimals),
+                    .fixed_decimals(spec.decimals)
+                    .suffix(unit),
             );
             name_control(response, &format!("{} value", spec.name))
                 .hover_hint(format!("{}: drag, or click to enter a value.", spec.name));

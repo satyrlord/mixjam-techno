@@ -17,10 +17,12 @@ If the user does not permit workspace edits, stay read-only.
    Completion criterion: You know the approved contract and the open questions.
 2. Inspect the implementation that the plan claims already exists.
    Completion criterion: Each implementation claim has direct evidence.
-3. Answer the factual questions that current repository files or primary sources can answer.
+3. Answer the factual questions that current repository files or primary sources
+   can answer.
    Completion criterion: Only real product choices remain.
 4. List the decision branches from parent to child.
-   Completion criterion: The branch with the highest risk and the least reversibility is first.
+   Completion criterion: The branch with the highest risk and the least
+   reversibility is first.
 
 Do not ask a question that available evidence can answer.
 
@@ -50,10 +52,12 @@ If you need a concrete question sequence, read [EXAMPLES.md](EXAMPLES.md).
 2. If the user permits edits, update only the owning document.
    Completion criterion: No parallel decision document exists.
 3. If the user does not permit edits, report the exact document change for later.
-   Completion criterion: Another agent can apply it without a new discussion of the decision.
+   Completion criterion: Another agent can apply it without a new discussion of
+   the decision.
 
 ## Completion criterion
 
 The session is complete when you resolve or defer every branch in the tree.
 Each deferral names an owner, a reason, and a verification step. After you
-record the decisions, send permitted implementation work to the skill that owns it.
+record the decisions, send permitted implementation work to the skill that owns
+it.

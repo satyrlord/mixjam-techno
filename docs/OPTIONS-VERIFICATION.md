@@ -33,7 +33,7 @@ The checks below confirm these points of the contract:
 ## Automated and native checks, v1.062
 
 | Check | Result |
-|---|---|
+| --- | --- |
 | Default-feature workspace and all-target tests | 909 passed; 17 optional tests ignored |
 | No-default-feature workspace and all-target tests | 640 passed; 17 optional tests ignored |
 | Clippy, workspace and all targets, warnings denied | Pass |
@@ -81,7 +81,7 @@ height. They cover clip names and reverse marks in compact rows, and the drop
 hint for a new track at 20 px.
 
 | Check | Result |
-|---|---|
+| --- | --- |
 | Default-feature workspace and all-target tests | 986 passed; 26 optional tests ignored |
 | No-default-feature workspace and all-target tests | 686 passed; 26 optional tests ignored |
 | Clippy, warnings denied | Pass |
@@ -107,7 +107,7 @@ playback performance are in
 ## Manual checks
 
 | Procedure | Status |
-|---|---|
+| --- | --- |
 | Physical output stream opening and silent buffer probe at 48 kHz | Passed |
 | Physical listening to bass, bright tones, drums, and dense mixes | Not available |
 | Physical playback at 44.1 kHz | Not available; the modeled conversion is tested |

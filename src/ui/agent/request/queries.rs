@@ -117,6 +117,7 @@ impl MixJamApp {
         let contains = contains.map(|text| text.to_lowercase());
         Start::Reply(Body::Ui {
             modal: self.blocking_modal(ctx),
+            focus: self.agent_focus(ctx),
             nodes: self
                 .agent_nodes(ctx)
                 .into_iter()

@@ -20,7 +20,8 @@ description: >
    `AGENTS.md`, `local-data/research/PRODUCT.md`, and
    `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know the approved architecture and product boundary.
-2. Read [ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) and the Cargo manifests that apply.
+2. Read [ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) and the Cargo manifests
+   that apply.
    Completion criterion: You know the `Session` API, the native UI, the
    composition root, and the crate boundaries.
 3. Inspect the source tree, the dependency graph, and the tests that apply.
@@ -40,7 +41,8 @@ description: >
    - a local feature needs broad unrelated edits
    - tests do not isolate one owner
 
-   Completion criterion: Every problem has a concrete path, dependency, or contract check.
+   Completion criterion: Every problem has a concrete path, dependency, or
+   contract check.
 
 Prefer a change that removes caller dependencies and gives the complexity to
 one owner.
@@ -52,7 +54,8 @@ one owner.
 2. Name the target owner and the necessary contract change.
    Completion criterion: The new boundary has one accountable owner.
 3. Define a before-and-after measure.
-   Completion criterion: The measure shows fewer imports, branches, owners, or changed files.
+   Completion criterion: The measure shows fewer imports, branches, owners, or
+   changed files.
 4. State the migration effects, the risks, and the objective verifier.
    Completion criterion: The proposal includes all necessary transition work.
 5. Rank the proposals by benefit, risk, and prerequisite order.

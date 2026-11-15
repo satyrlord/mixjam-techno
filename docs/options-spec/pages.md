@@ -5,7 +5,7 @@
 ### Audio
 
 | Control | Choices and default | Required behavior |
-|---|---|---|
+| --- | --- | --- |
 | Drive playback oversampling | `4x` (default), `Off` | Applies to all track Drives during song playback, also to separate sidechain-key chains. Does not switch the Drives off or change their saved knobs. |
 | Master playback oversampling | `4x` (default), `Off` | Applies only to Soft clip, Tube, Maximizer, and Tape during playback. Does not disable limiter lookahead, true-peak detection, metering filters, or other processors. |
 | Sample playback quality | `High` (default), `Low` | High uses band-limited sample reads. Low uses linear interpolation during playback. Exports always use High. This preference does not change source identity, song timing, or saved song data. |
@@ -28,7 +28,7 @@ The buffer target is a request to the audio backend. It is not a relaxed
 benchmark threshold. These are the target sizes:
 
 | Target | 44.1 kHz | 48 kHz |
-|---|---|---|
+| --- | --- | --- |
 | 20 ms | 882 frames | 960 frames |
 | 40 ms | 1,764 frames | 1,920 frames |
 
@@ -64,7 +64,7 @@ also as an accessible workspace status.
 ### Workspace
 
 | Control | Default | Required behavior |
-|---|---|---|
+| --- | --- | --- |
 | Theme | Studio | Choices: Studio, Aero, Vintage. The first control on the page. Apply repaints the full application immediately, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data, undo history, renders, the audio device, or parameter ranges. All themes keep the same layout, controls, and features. |
 | Lane height | 30 px | Choices: 20 px, 30 px, 40 px: the height of each arrangement row. Apply resizes the rows immediately, with no restart and no live preview while the draft is open. Allowed during playback, previews, and recording: it is not an audio option. It never changes song data or undo history. |
 | Follow playhead on startup | On | Sets the initial Follow state at the next start of the application. The Follow toggle in the toolbar still controls the current session. Do not turn Follow on again silently after a user turns it off. |
@@ -75,7 +75,7 @@ also as an accessible workspace status.
 ### Files
 
 | Control | Default | Required behavior |
-|---|---|---|
+| --- | --- | --- |
 | Song dialog folder | Last used | Choices: Last used, Fixed folder. Last used starts song Open and Save as in the last-used folder. Fixed folder uses a folder that the user selects, as an absolute path, as the initial location for song Open and Save as. |
 | Fixed song folder | None | Visible only when Fixed folder is selected. Apply validates that the directory exists. If it is not available later, keep the configured path, show a useful message, and use the last-used or default folder. Never move existing songs. |
 

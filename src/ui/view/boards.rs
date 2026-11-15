@@ -37,13 +37,12 @@ pub(in super::super) struct BoardsState {
     pub(in super::super) fx_reveal: Option<usize>,
 }
 
-/// The Step synth board: its pattern, the bar it shows, its file, and the
+/// The Step synth board: its pattern with its source, the bar it shows, and the
 /// result of its last action.
 #[derive(Default)]
 pub(in super::super) struct StepSynthBoard {
     pub(in super::super) state: StepSynthState,
     pub(in super::super) bar: usize,
-    pub(in super::super) file: Option<PathBuf>,
     pub(in super::super) effects_expanded: bool,
     pub(in super::super) feedback: StepSynthFeedback,
     /// The grid's view: octave, scale, and the selected steps.
@@ -51,6 +50,35 @@ pub(in super::super) struct StepSynthBoard {
     pub(in super::super) listening: Option<StepSynthAudition>,
     /// The toolbar's rectangle and layer, for the board's keyboard shortcuts.
     pub(in super::super) toolbar: Option<(Rect, egui::LayerId)>,
+    /// The source that Start and Loop source were last set for, and its
+    /// length in ms. A load clears it, so the loaded Start stays.
+    pub(in super::super) adopted: Option<(SourceKey, Option<f64>)>,
+    /// The catalog observed for the cached source, and its decoded audio.
+    /// A catalog change refreshes the cache without resetting an unchanged sound.
+    pub(in super::super) adopted_revision: u64,
+    pub(in super::super) adopted_audio: Option<u64>,
+    /// What Save sound tells after the save, such as a level change.
+    pub(in super::super) save_note: Option<String>,
+}
+
+/// Which audio the pattern plays: a source file, or a palette sound.
+#[derive(Clone, Debug, PartialEq)]
+pub(in super::super) enum SourceKey {
+    File(std::path::PathBuf),
+    Palette(Option<u32>),
+}
+
+/// Identify decoded audio only when the source or its catalog changes.
+fn source_audio_signature(source: &Pcm) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    source.sample_rate.hash(&mut hash);
+    source.channels.hash(&mut hash);
+    source.samples.len().hash(&mut hash);
+    for sample in &source.samples {
+        sample.to_bits().hash(&mut hash);
+    }
+    hash.finish()
 }
 
 /// Timing and identity of the rendered preview, independent of later draft edits.
@@ -217,6 +245,7 @@ impl MixJamApp {
     fn step_synth_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.scope(|ui| {
             let (name, available, missing, explicit_file) = self.step_synth_source();
+            let icons = self.icons(ui.ctx());
             let action = step_synth::toolbar(
                 ui,
                 ui.available_width() - 40.0,
@@ -225,15 +254,24 @@ impl MixJamApp {
                     available,
                     missing,
                     explicit_file,
+                    length_ms: self.step_synth.adopted.as_ref().and_then(|(_, ms)| *ms),
                 },
                 step_synth::Feedback {
                     message: self.step_synth.feedback.message.as_deref(),
                     error: self.step_synth.feedback.error,
                 },
                 &mut self.step_synth.effects_expanded,
+                step_synth::History {
+                    undo: self.step_synth.grid.can_undo(false),
+                    redo: self.step_synth.grid.can_undo(true),
+                    icons: icons.as_deref(),
+                },
             );
-            if matches!(action, step_synth::Action::Details) {
-                self.sample_import.details_open = true;
+            match action {
+                step_synth::Action::Details => self.sample_import.details_open = true,
+                step_synth::Action::Undo => self.step_synth_undo(false),
+                step_synth::Action::Redo => self.step_synth_undo(true),
+                _ => {}
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (rect, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
@@ -267,7 +305,7 @@ impl MixJamApp {
     /// The Step synth source: its name, and whether it is available, missing,
     /// or an explicit file. A new palette source clears the old feedback.
     fn step_synth_source(&mut self) -> (String, bool, bool, bool) {
-        let explicit_file = self.step_synth.file.is_some();
+        let explicit_file = self.step_synth.state.source.is_some();
         let source_id = self.source_id();
         let palette_source = source_id.filter(|_| !explicit_file);
         if self.step_synth.feedback.source != palette_source {
@@ -276,7 +314,7 @@ impl MixJamApp {
                 ..Default::default()
             };
         }
-        let name = self.step_synth.file.as_ref().map_or_else(
+        let name = self.step_synth.state.source.as_ref().map_or_else(
             || self.source_name(),
             |path| {
                 path.file_stem()
@@ -292,9 +330,75 @@ impl MixJamApp {
         (name, available, missing, explicit_file)
     }
 
+    /// Set Start and Loop source for a new source: a new sound starts from
+    /// its own first hit, and does not loop until asked. The change is one
+    /// undo step. The first source after a load or a start keeps the pattern's
+    /// settings. Returns the source's length in ms, when it can be read.
+    fn step_synth_adopt_source(&mut self) -> Option<f64> {
+        let revision = if self.step_synth.state.source.is_some() {
+            0
+        } else {
+            self.session.catalog_revision()
+        };
+        let key = match &self.step_synth.state.source {
+            Some(path) => SourceKey::File(path.clone()),
+            None => SourceKey::Palette(self.source_id()),
+        };
+        if let Some((adopted, length)) = &self.step_synth.adopted
+            && *adopted == key
+            && self.step_synth.adopted_revision == revision
+        {
+            return *length;
+        }
+        let source = self
+            .session
+            .step_synth_source(self.source_id(), &self.step_synth.state)
+            .ok();
+        let length = source
+            .as_ref()
+            .filter(|pcm| pcm.sample_rate > 0)
+            .map(|pcm| pcm.frames() as f64 * 1000.0 / f64::from(pcm.sample_rate));
+        let first = self.step_synth.adopted.is_none();
+        let audio = source.as_ref().map(source_audio_signature);
+        let changed = self
+            .step_synth
+            .adopted
+            .as_ref()
+            .is_some_and(|(adopted, _)| *adopted != key)
+            || self.step_synth.adopted_audio != audio;
+        self.step_synth.adopted = Some((key, length));
+        self.step_synth.adopted_revision = revision;
+        self.step_synth.adopted_audio = audio;
+        let Some(source) = source.filter(|_| !first && changed) else {
+            return length;
+        };
+        let start = mixjam_techno::application::pattern::first_hit(&source);
+        let state = &mut self.step_synth.state;
+        let looped = state.loop_source;
+        if state.start_ms == start && !looped {
+            return length;
+        }
+        self.step_synth.grid.edit("the source change");
+        state.start_ms = start;
+        state.loop_source = false;
+        self.step_synth_say(
+            if looped {
+                format!(
+                    "New source: Start set to its first hit, {start:.0} ms, and Loop source \
+                     turned off."
+                )
+            } else {
+                format!("New source: Start set to its first hit, {start:.0} ms.")
+            },
+            false,
+        );
+        length
+    }
+
     /// The Step synth board of the lower panel, and what its controls ask for.
     fn step_synth_board(&mut self, ui: &mut egui::Ui) {
         let (name, available, missing, explicit_file) = self.step_synth_source();
+        let length_ms = self.step_synth_adopt_source();
         let playing = self
             .step_synth_playing()
             .inspect(|_| ui.ctx().request_repaint());
@@ -306,6 +410,7 @@ impl MixJamApp {
                 available,
                 missing,
                 explicit_file,
+                length_ms,
             },
             &mut self.step_synth.state,
             &mut self.step_synth.bar,
@@ -314,18 +419,25 @@ impl MixJamApp {
             playing,
             icons.as_deref(),
         );
+        if let Some(notice) = self.step_synth.grid.take_notice() {
+            self.step_synth_say(notice, false);
+        }
         match action {
             step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
             step_synth::Action::PaletteSource => {
-                self.step_synth.file = None;
-                self.step_synth.feedback = StepSynthFeedback::default();
+                self.step_synth.grid.edit("the source change");
+                self.step_synth.state.source = None;
+                // The board then shows its guidance for the palette source,
+                // such as missing audio; the main line goes back to idle.
+                self.step_synth.feedback = Default::default();
+                self.message(DEFAULT_STATUS);
             }
+            step_synth::Action::FindStart => self.step_synth_find_start(),
             step_synth::Action::Listen | step_synth::Action::Stop => self.step_synth_listen(),
             step_synth::Action::SaveSound => match self.step_synth_pcm() {
-                Ok(pcm) => {
-                    self.step_synth.feedback.message =
-                        Some("Choose a WAV path to save the sound.".into());
-                    self.step_synth.feedback.error = false;
+                Ok((pcm, note)) => {
+                    self.step_synth_say("Choose a WAV path to save the sound.", false);
+                    self.step_synth.save_note = note;
                     self.save_pcm(
                         pcm,
                         "Step synth sound",
@@ -333,14 +445,13 @@ impl MixJamApp {
                         self.step_synth.state.bpm,
                     );
                 }
-                Err(error) => {
-                    self.error(error);
-                    self.step_synth_notice();
-                }
+                Err(error) => self.step_synth_say(error, true),
             },
             step_synth::Action::SavePattern => self.ask_path(FileRequest::SavePattern),
             step_synth::Action::LoadPattern => self.ask_path(FileRequest::LoadPattern),
             step_synth::Action::Details => self.sample_import.details_open = true,
+            step_synth::Action::Undo => self.step_synth_undo(false),
+            step_synth::Action::Redo => self.step_synth_undo(true),
             step_synth::Action::None => {}
         }
     }
@@ -354,6 +465,16 @@ impl MixJamApp {
             )
         }) {
             self.step_synth.listening = None;
+            // The preview ended on its own: its Listening text is stale.
+            let feedback = &mut self.step_synth.feedback;
+            if !feedback.error
+                && feedback
+                    .message
+                    .as_deref()
+                    .is_some_and(|message| message.starts_with("Listening"))
+            {
+                feedback.message = Some("Preview ended.".into());
+            }
         }
         self.step_synth
             .listening
@@ -364,21 +485,20 @@ impl MixJamApp {
     /// Take back the Step synth board's last note edit, or with `redo` put
     /// it back. The board's undo is apart from the song's.
     pub(in super::super) fn step_synth_undo(&mut self, redo: bool) {
-        let feedback = &mut self.step_synth.feedback;
-        feedback.error = false;
-        if self.step_synth.grid.can_undo(redo) {
-            self.step_synth.grid.undo(&mut self.step_synth.state, redo);
-            feedback.message = None;
-        } else {
-            feedback.message = Some(
-                if redo {
-                    "No Step synth edit to redo."
-                } else {
-                    "No Step synth edit to undo."
-                }
-                .into(),
-            );
+        let source = self.step_synth.state.source.clone();
+        let restored = self.step_synth.grid.undo(&mut self.step_synth.state, redo);
+        if restored.is_some() && source != self.step_synth.state.source {
+            // History restores Start and Loop source with the source itself.
+            // Refresh its length without applying the new-source defaults.
+            self.step_synth.adopted = None;
         }
+        let text = match restored {
+            Some(what) if redo => format!("Redid {what}."),
+            Some(what) => format!("Undid {what}."),
+            None if redo => "No Step synth edit to redo.".into(),
+            None => "No Step synth edit to undo.".into(),
+        };
+        self.step_synth_say(text, false);
     }
 
     /// Listen to the Step synth pattern, or stop it while it plays. The
@@ -388,14 +508,20 @@ impl MixJamApp {
             // Pause keeps the song's position, as stopping a preview should.
             self.pause();
             self.step_synth.listening = None;
-            self.step_synth.feedback.message = Some("Preview stopped.".into());
-            self.step_synth.feedback.error = false;
+            self.message("Preview stopped.");
+            self.step_synth_notice();
             return;
         }
         match self.step_synth_pcm() {
-            Ok(pcm) => {
+            Ok((pcm, note)) => {
                 let previous = self.session.preview_revision();
-                self.play_pcm(pcm, "Listening to the Step synth pattern.");
+                self.play_pcm(
+                    pcm,
+                    &format!(
+                        "Listening to the Step synth pattern.{}",
+                        note.unwrap_or_default()
+                    ),
+                );
                 let state = &self.step_synth.state;
                 self.step_synth.listening = (self.session.is_previewing()
                     && self.session.preview_revision() != previous)

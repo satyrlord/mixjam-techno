@@ -626,3 +626,201 @@ fn agent_quit_asks_about_unsaved_work_and_replies_before_the_window_closes() {
     assert_eq!(reply["closing"], true, "{reply}");
     assert!(app.files.allow_close);
 }
+
+#[test]
+fn agent_click_moves_keyboard_focus_and_state_names_the_focused_control() {
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.steps.fill(Step::default());
+    let note = "Step 1, +12 semitones";
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["focus"], serde_json::Value::Null, "{state}");
+
+    // A click on a cell puts a note and gives the pitch grid the focus. The
+    // state names the grid, and `ui` names it too.
+    let reply = send(&mut app, &["click", &format!("target={note}")]);
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+    let state = send(&mut app, &["state"]);
+    assert_eq!(
+        state["focus"]["label"], "Pitch grid: step 1, +12 semitones",
+        "{state}"
+    );
+    let ui = send(&mut app, &["ui", "all=true", "window=Step synth"]);
+    assert_eq!(ui["focus"], state["focus"], "{ui}");
+
+    // With the focus in the board, Ctrl+Z undoes the board.
+    send(&mut app, &["key", "key=Z", "modifiers=[\"ctrl\"]"]);
+    assert_eq!(app.step_synth.state.steps[0], Step::default());
+
+    // A click on a control outside the board takes the focus, as a click of
+    // a person does, so Ctrl+Z then acts on the song and not on the board.
+    send(&mut app, &["click", &format!("target={note}")]);
+    assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+    let reply = send(&mut app, &["click", "target=Arrange view"]);
+    assert_eq!(reply["ok"], true, "{reply}");
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["focus"], serde_json::Value::Null, "{state}");
+    send(&mut app, &["key", "key=Z", "modifiers=[\"ctrl\"]"]);
+    assert_eq!(
+        app.step_synth.state.steps[0],
+        Step::note(12),
+        "Ctrl+Z after a click elsewhere must not undo the board."
+    );
+
+    // A click on the control that has the focus keeps it.
+    send(&mut app, &["click", &format!("target={note}")]);
+    let state = send(&mut app, &["state"]);
+    assert_eq!(
+        state["focus"]["label"], "Pitch grid: step 1, +12 semitones",
+        "{state}"
+    );
+}
+
+#[test]
+fn agent_state_gives_the_step_synth_octave_notes_and_mixed_lanes() {
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    app.boards.module = BottomModule::StepSynth;
+    let steps = &mut app.step_synth.state.steps;
+    steps.fill(Step::default());
+    for (index, step) in steps[2..6].iter_mut().enumerate() {
+        *step = Step {
+            accent: index == 1,
+            ..Step::note(-1)
+        };
+    }
+    app.step_synth.grid.selection = Some((2, 5));
+    send(&mut app, &["state"]);
+    let state = send(&mut app, &["state"]);
+    let board = &state["step_synth"];
+    assert_eq!(board["octave"], 0, "{board}");
+    assert_eq!(
+        board["mixed_lanes"],
+        serde_json::json!(["Accent"]),
+        "{board}"
+    );
+    // -1 semitone is G#, the note below the source pitch A.
+    assert_eq!(board["notes"][0]["note"], "G#", "{board}");
+    assert_eq!(board["notes"][0]["pitch"], -1, "{board}");
+    assert!(
+        state["windows"]
+            .as_array()
+            .unwrap()
+            .contains(&"Step synth".into()),
+        "The shown board is a window named Step synth: {state}"
+    );
+
+    // The lane control says it too. The dot has no control of its own.
+    let ui = send(&mut app, &["ui", "all=true", "contains=Accent lane"]);
+    let nodes = ui["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 1, "{ui}");
+    assert!(
+        nodes[0]["description"]
+            .as_str()
+            .unwrap()
+            .starts_with("Mixed"),
+        "{ui}"
+    );
+    let ui = send(&mut app, &["ui", "all=true", "contains=Slide lane"]);
+    assert_eq!(ui["nodes"][0].get("description"), None, "{ui}");
+    app.step_synth.grid.selection = Some((2, 2));
+    send(&mut app, &["state"]);
+    let state = send(&mut app, &["state"]);
+    assert_eq!(
+        state["step_synth"]["mixed_lanes"],
+        serde_json::json!([]),
+        "One selected note has nothing to differ from."
+    );
+
+    // The octave keys change the octave in view.
+    send(&mut app, &["click", "target=Step 3, -1 semitone"]);
+    send(&mut app, &["key", "key=PageUp"]);
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["step_synth"]["octave"], 1, "{state}");
+    send(&mut app, &["key", "key=PageDown"]);
+    send(&mut app, &["key", "key=PageDown"]);
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["step_synth"]["octave"], -1, "{state}");
+}
+
+#[test]
+fn agent_pitch_cells_describe_their_note_and_scale_without_a_new_name() {
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.root = 0;
+    app.step_synth.state.scale = crate::synth::edit::Scale::Minor;
+    send(&mut app, &["state"]);
+    send(&mut app, &["state"]);
+    let cell = |app: &mut MixJamApp, name: &str| {
+        let ui = send(app, &["ui", "all=true", &format!("contains={name}")]);
+        let found: Vec<_> = ui["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|node| node["label"] == name)
+            .cloned()
+            .collect();
+        assert_eq!(found.len(), 1, "{name}: {ui}");
+        found[0]["description"].clone()
+    };
+    // The name still gives the semitones only; the description has the rest.
+    for (name, description) in [
+        ("Step 1, +12 semitones", "Note A, in scale."),
+        ("Step 1, +1 semitone", "Note A#, not in scale."),
+        ("Step 1, -1 semitone", "Note G#, not in scale."),
+        ("Step 16, -12 semitones", "Note A, in scale."),
+        ("Step 4, +3 semitones", "Note C, in scale."),
+    ] {
+        assert_eq!(cell(&mut app, name), description, "{name}");
+    }
+    // The root moves the scale: with root C, A is out of the minor scale.
+    app.step_synth.state.root = 3;
+    send(&mut app, &["state"]);
+    assert_eq!(
+        cell(&mut app, "Step 1, +12 semitones"),
+        "Note A, not in scale."
+    );
+}
+
+#[test]
+fn agent_state_gives_the_inline_error_of_the_choose_path_modal() {
+    let (context, mut app, port) = agent_fixture();
+    let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    let reply = send(&mut app, &["click", "target=Open"]);
+    assert_eq!(reply["modal"], "Choose path", "{reply}");
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["path_prompt"]["error"], serde_json::Value::Null);
+    let missing = std::env::temp_dir().join("mixjam-no-such-file.mixjam");
+    send(
+        &mut app,
+        &[
+            "set",
+            "target=Path",
+            &format!("value={}", missing.display()),
+        ],
+    );
+    let reply = send(&mut app, &["click", "target=Confirm path"]);
+    assert_eq!(reply["modal"], "Choose path", "{reply}");
+    let state = send(&mut app, &["state"]);
+    assert_eq!(
+        state["path_prompt"]["error"], "That file does not exist.",
+        "{state}"
+    );
+    send(&mut app, &["set", "target=Path", "value=song.mixjam"]);
+    send(&mut app, &["click", "target=Confirm path"]);
+    let state = send(&mut app, &["state"]);
+    assert!(
+        state["path_prompt"]["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Enter a full path"),
+        "{state}"
+    );
+    // Cancel closes the modal and its error with it.
+    send(&mut app, &["click", "target=Cancel"]);
+    let state = send(&mut app, &["state"]);
+    assert_eq!(state["path_prompt"], serde_json::Value::Null, "{state}");
+}

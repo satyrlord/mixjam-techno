@@ -15,8 +15,8 @@ pub use client::{request_line, run_client, send};
 pub use reply::{
     ArrangementView, Body, BusView, Busy, ClipView, ConflictView, LibraryState, MissingView,
     Outcome, PathPromptView, ProviderView, ReviewProblem, SampleView, ScanView, SectionArgs,
-    SectionView, Selection, SongView, StateView, Status, Tools, TrackView, Transport, UiNode,
-    UnloadedView, encode,
+    SectionView, Selection, SongView, StateView, Status, StepNoteView, StepSynthView, Tools,
+    TrackView, Transport, UiNode, UnloadedView, encode,
 };
 pub use request::{Modifier, PointerAction, Request, Value};
 pub use server::{Responder, Server};
@@ -36,10 +36,12 @@ Each reply is one JSON object with \"ok\". Tracks and bars count from 1.
 One bar has 256 ticks. Screen positions are in points from the top left.
 
 Read
-  state                  Song, transport, selection, open windows, modal, status.
+  state                  Song, transport, selection, open windows, modal,
+                         focused control, Step synth board, status.
   samples [search= group= library= offset= limit=]   Sounds in the library.
   ui [all=true window= contains=]   Controls on screen. all=true adds text and
                          disabled controls. window= takes a window or modal title.
+                         The reply names the control that has the keyboard focus.
   screenshot path=FILE.png   The reply has pixels_per_point for positions.
   wait [ms=N | idle=true timeout_ms=N]   idle waits for a scan or export.
 

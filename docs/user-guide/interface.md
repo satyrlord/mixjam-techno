@@ -47,7 +47,7 @@ The tool rail at the left has five groups. Each tool shows its name under its
 icon.
 
 | Group | Tools |
-|---|---|
+| --- | --- |
 | File | New, Open, Save, Save as, Import, Export |
 | Clips | Erase, Delete |
 | Mix | Mixer, Mastering, FX returns, Step synth: the boards of the lower panel |

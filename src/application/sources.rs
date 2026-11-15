@@ -112,27 +112,35 @@ impl Session {
     pub fn processed_pcm(&self, id: Option<u32>, effects: &EffectsState) -> Result<Pcm, String> {
         crate::effects::process(&self.source_pcm(id)?, effects, self.source_bpm(id))
     }
+    /// The rendered pattern, and the dB it was turned down to stay within
+    /// full scale.
     pub fn step_synth_pcm(
         &self,
         id: Option<u32>,
-        path: Option<&Path>,
+        state: &StepSynthState,
+    ) -> Result<(Pcm, f64), String> {
+        crate::synth::render_measured(&self.step_synth_source(id, state)?, state)
+    }
+    /// The Step synth pattern's source audio: its source file, or else the
+    /// palette sound `id`.
+    pub fn step_synth_source(
+        &self,
+        id: Option<u32>,
         state: &StepSynthState,
     ) -> Result<Pcm, String> {
-        let source = if let Some(path) = path {
-            let mut source = if path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"))
-            {
-                audio::read_wav(path)?
-            } else {
-                crate::library::read_packed_file(path)?
-            };
-            audio::hide_stray_end(&mut source);
-            source
-        } else {
-            self.source_pcm(id)?
+        let Some(path) = state.source.as_deref() else {
+            return self.source_pcm(id);
         };
-        crate::synth::render(&source, state)
+        let mut source = if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"))
+        {
+            audio::read_wav(path)?
+        } else {
+            crate::library::read_packed_file(path)?
+        };
+        audio::hide_stray_end(&mut source);
+        Ok(source)
     }
     pub fn edited_pcm(
         &self,
@@ -209,6 +217,11 @@ impl Session {
         crate::atomic_file::write(path, &bytes)
     }
     pub fn load_pattern(&self, path: &Path) -> Result<StepSynthState, String> {
+        self.load_pattern_snapped(path).map(|(state, _)| state)
+    }
+    /// Load a pattern, and give the file's own BPM too: the load moves it to
+    /// the nearest supported tempo.
+    pub fn load_pattern_snapped(&self, path: &Path) -> Result<(StepSynthState, f64), String> {
         use std::io::Read;
         const MAX_BYTES: u64 = 1024 * 1024;
         let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
@@ -222,7 +235,8 @@ impl Session {
         let mut state: StepSynthState =
             serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
         state.validate()?;
+        let stored = state.bpm;
         state.bpm = crate::engine::nearest_supported_bpm(state.bpm)?;
-        Ok(state)
+        Ok((state, stored))
     }
 }

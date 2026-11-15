@@ -1,0 +1,27 @@
+{
+  // Lint the Markdown files that Git tracks or does not ignore.
+  "globs": ["**/*.md"],
+  "gitignore": true,
+  "ignores": [
+    "node_modules/**",
+    // Symbolic links to .github/skills, which is linted once.
+    ".agents/skills/**",
+    ".claude/skills/**",
+    ".codex/skills/**"
+  ],
+  "config": {
+    "default": true,
+    // Wrap prose at 80 columns. Tables, code, and headings can be longer.
+    "MD013": {
+      "line_length": 80,
+      "tables": false,
+      "code_blocks": false,
+      "headings": false
+    },
+    // Only a top-level front matter key gives a document its title. Nested
+    // keys, such as the typography titles in docs/DESIGN.md, do not.
+    "MD025": { "front_matter_title": "^title\\s*[:=]" },
+    // Agent and skill files take their title from the front matter name.
+    "MD041": { "front_matter_title": "^(title|name)\\s*[:=]" }
+  }
+}

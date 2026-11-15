@@ -15,7 +15,7 @@ same name overrides the file. A relative path is read from the repository
 root. If a tool needs a key that is missing, it stops and names the key.
 
 | Key | Used by |
-|---|---|
+| --- | --- |
 | `SAMPLES_FOLDER_1` to `SAMPLES_FOLDER_9` | `samples.py` (the libraries it indexes) and `bright.py` (it tries relative patterns under each library) |
 | `SAMPLE_INDEX` | `samples.py`. Optional. Default `local-data/samples/index.tsv`. |
 | `SAMPLE_TAGS`, `SAMPLE_VERDICTS`, `SAMPLE_OWNER_VERDICTS` | `sampletags.py`, `verdicts.py`, and `palette.py`. Optional. Defaults `tags.tsv`, `verdicts.tsv`, and `owner-verdicts.tsv` beside the index. |
@@ -29,7 +29,7 @@ root. If a tool needs a key that is missing, it stops and names the key.
 ## Tools
 
 | Tool | Usage | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb, drive` | Library. It writes format-25 songs. A song can hold lanes, sections, clips, loops, phrases, fades, clip pitch and reverse, and automation (including the Repeat gate and Pitch lanes). It can also hold FX buses (delay, reverb, and drive returns) with their return lanes, channel EQ (two peaks), drives, compressors, widths, duckers, pedal and FX keys, and the master board. It also writes `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, up to 4 at a time by default, and the master once. Renders run below normal priority. On Windows, they stop when the tool stops. The premaster and the role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the peak of the premaster. It rescales the lane files, the premaster, and the stems to that gain. Unchanged lanes come from the cache that this file describes below, when they are eligible. |
 | `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, and targets. |

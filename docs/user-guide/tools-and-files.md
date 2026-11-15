@@ -21,10 +21,13 @@ maximum of four bars. A wide panel shows all four bars at the same time.
 
 To make a sound:
 
-1. Choose the source: select **File…**, or select a sound in the Sounds panel
-   and then **Palette**.
-2. Set **Length**, or drag the end marker on the step ruler. **×2** doubles
-   the length and **÷2** halves it. Steps after the length keep their notes.
+1. Choose the source: select **Source file…**, or select a sound in the
+   Sounds panel and then **Palette sound**. A new source sets **Start** to
+   its first hit and turns **Loop source** off.
+2. Set **Length**, under Pattern, or drag the end marker on the step ruler.
+   **×2** doubles the length and **÷2** halves it. If the new steps are
+   empty, **×2** repeats the loop into them. Steps after the length keep
+   their notes.
 3. To add or remove a note, click a step on the note grid.
 4. To hold a note over more steps, drag its last step.
 5. To accent a note or slide it into the next note, click its dot in the
@@ -34,27 +37,45 @@ To make a sound:
    press L. Select **Stop**, or press L again, to stop it.
 8. Select **Save sound**, then choose a WAV path.
 
+If the pattern peaks over full scale, for example from accents and filter
+drive, **Listen** and **Save sound** turn all of it down to full scale. The
+status line tells how many dB.
+
 **Save sound** writes the WAV file and adds it to the Step synth category.
 Beside the WAV file, it writes the pattern as `Name.pattern.json`. **Load**,
 under Pattern, opens this file. The arrangement uses it to show the clips of
 the sound as notes. **Save**, under Pattern, saves only the editable pattern
-as JSON. If the application cannot save the pattern, it shows the error and
+as JSON. If the BPM of a loaded pattern is not one of the tempo choices, it
+moves to the nearest one, and the status line tells you. If the application
+cannot save the pattern, it shows the error and
 does not change the existing files.
 
 Other Step synth controls:
 
-- **Gate** sets how much of its last step a note plays, in percent.
+- **Gate** sets how much of its last step a note plays, in percent. With
+  swing, the step is the swung one, so a note on the beat plays longer than
+  a note off the beat.
 - **Swing**, **Accent**, and **Slide time** set the timing and the voice.
-- **Scale** and its root shade the pitch rows. All notes stay playable.
-  **Randomise** writes a new line in the scale for the length of the pattern.
+- **Scale** and its root, in the top row of the grid, shade the pitch rows.
+  All notes stay playable. **Randomise**, beside them, writes a new line in
+  the scale for the length of the pattern.
+- The grid opens on the octave of the notes. The olive **0** row is the
+  source pitch.
 - To apply a lane edit to many steps, drag on the step ruler to select them.
 - **Copy to 2** (or 3, or 4) copies the bar in view onto the next bar.
   **Clear bar** clears the bar in view.
-- With the pointer over the board, Ctrl+Z takes back the last note edit,
-  copy, clear, or Randomise, and Ctrl+Y puts it back. Elsewhere they act on
-  the song.
+- The undo and redo keys after **Notes** and **Effects** take back and put
+  back the last edit of the board. The status line names the edit. With
+  the pointer over the board, or the keyboard focus in it, Ctrl+Z and
+  Ctrl+Y do the same. Elsewhere they act on the song.
+- **Fill** copies the bar in view onto every bar. **Clear**, under Pattern,
+  clears every bar.
 - **Effects** shows the effects of the pattern. **Notes** shows the note grid
-  again.
+  again. In the effects view, the strip beside **Listen** shows the step that
+  plays. The pattern plays as a loop, so the echo and filter tails at its end
+  come back at its start. **Delay (beats)** of the echo is from 1/16 to 2
+  beats. A shorter delay in an older pattern file opens at 1/16 beat.
+  **Cutoff** and **Color** show their values in Hz.
 
 ### Recording
 

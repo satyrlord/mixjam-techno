@@ -4,7 +4,7 @@ Migration keeps the earlier settings within the limits below. A save of an
 earlier song writes version 25, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
-|---|---|---|
+| --- | --- | --- |
 | 8 | Adapts the version-7 document to this editor. | — |
 | 9 | Separates nonnegative lane amplitude from `polarityInverted`. | Version 8 signed gains split into amplitude and polarity. |
 | 10 | Adds lane `muted` and `solo`. | Mute and Solo off, L/R outputs as saved. |

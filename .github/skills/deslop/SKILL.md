@@ -27,7 +27,8 @@ preserved originals and generated assets separate.
 
 1. For each family in the scope, read its reference:
    - [CODE.md](CODE.md) for source code
-   - [PROSE.md](PROSE.md) for documentation, skills, agent definitions, and other prose
+   - [PROSE.md](PROSE.md) for documentation, skills, agent definitions, and
+     other prose
    - [DATA.md](DATA.md) for data and configuration
    - [TEST.md](TEST.md) for tests
 
@@ -50,9 +51,11 @@ Do not use syntax, file size, test count, coverage, or tone alone as proof.
 ## 4. Remove proven slop
 
 1. Edit only enough to remove the proven problem.
-   Completion criterion: True behavior, information, constraints, and required voice remain.
+   Completion criterion: True behavior, information, constraints, and required
+   voice remain.
 2. After each related group of edits, run the narrowest repository check that applies.
-   Completion criterion: The check passes, or you record the exact pre-existing failure.
+   Completion criterion: The check passes, or you record the exact pre-existing
+   failure.
 
 If the question is reachability, use `dead-code-audit`. Do not remove generated
 output, preserved originals, Git bundles, vendored code, lockfiles, or binary

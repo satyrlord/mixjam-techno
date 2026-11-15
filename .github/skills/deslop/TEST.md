@@ -1,7 +1,8 @@
 # Test slop
 
 Test slop gives no unique defect signal, gives false confidence, or checks the
-wrong contract. It can also be unstable, or it can cost more than its evidence is worth.
+wrong contract. It can also be unstable, or it can cost more than its evidence
+is worth.
 
 A smell starts an inspection. It does not prove that a test is slop.
 
@@ -13,11 +14,14 @@ defect. Require current code, an owning contract, and a sibling test.
 If evidence proves one of these findings, classify a test as slop:
 
 - **No signal:** No observable postcondition exists, or the assertion is tautological.
-- **False signal:** The expected value repeats the production algorithm or mock value.
+- **False signal:** The expected value repeats the production algorithm or mock
+  value.
 - **Wrong contract:** The test checks an unowned internal detail.
-- **Unreliable signal:** The test depends on leaked state, order, random input, or arbitrary delay.
+- **Unreliable signal:** The test depends on leaked state, order, random input,
+  or arbitrary delay.
 - **Duplicate signal:** Another test catches the same defect under the same conditions.
-- **Disproportionate cost:** The test adds maintenance or runtime without distinct evidence.
+- **Disproportionate cost:** The test adds maintenance or runtime without
+  distinct evidence.
 
 Coverage, test count, file size, mock count, and assertion count are not proof.
 Coverage shows execution. It does not prove that a test checked a meaningful result.
@@ -26,10 +30,12 @@ Coverage shows execution. It does not prove that a test checked a meaningful res
 
 Inspect these candidates first:
 
-- empty bodies, tautologies, self-equality, and assertions that accept almost any result
+- empty bodies, tautologies, self-equality, and assertions that accept almost
+  any result
 - stale `#[ignore]` markers or disabled test modules
 - files that current runner configuration cannot discover
-- missing imports, feature-only compile failures, and fixtures that conflict with contracts
+- missing imports, feature-only compile failures, and fixtures that conflict
+  with contracts
 - a mocked subject under test
 - assertions that repeat a configured mock result
 - leaked environment variables, files, device state, or fixture state
@@ -55,7 +61,8 @@ After you trace the contract, inspect these candidates:
 
 If context proves one of these values, keep the test:
 
-- the Rust test runner detects a panic, compile, callback, or non-panic contract without an explicit assertion
+- the Rust test runner detects a panic, compile, callback, or non-panic contract
+  without an explicit assertion
 - several assertions describe one coherent outcome
 - a table or literal makes boundaries clear
 - a mock controls a slow, destructive, random, or external boundary
@@ -67,8 +74,10 @@ If context proves one of these values, keep the test:
 
 ## Cleanup process
 
-1. Read Cargo manifests, feature settings, production code, contract, test, and one sibling.
-   Completion criterion: You know the runner, environment, fixtures, and claimed behavior.
+1. Read Cargo manifests, feature settings, production code, contract, test, and
+   one sibling.
+   Completion criterion: You know the runner, environment, fixtures, and claimed
+   behavior.
 2. Run the candidate unchanged with the narrowest configured command.
    Completion criterion: You record the pre-edit result and pre-existing failures.
 3. State the unique behavior and defect for each candidate.
@@ -79,7 +88,8 @@ If context proves one of these values, keep the test:
 5. Select the smallest safe disposition.
    Completion criterion: The choice follows the rules below.
 6. Run every changed test and the test suite that owns it.
-   Completion criterion: The full affected suite passes, or you report a pre-existing blocker.
+   Completion criterion: The full affected suite passes, or you report a
+   pre-existing blocker.
 7. Report each disposition and skipped proof.
    Completion criterion: You account for every candidate and runtime area.
 

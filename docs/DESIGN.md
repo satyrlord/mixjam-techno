@@ -226,7 +226,7 @@ components:
 
 ## Overview
 
-**Design goal: "A clear live-set score"**
+Design goal: **"A clear live-set score"**
 
 The arrangement is the main work area. Graphite surfaces separate clip names,
 track numbers, and playback controls. Lime marks primary actions. Category
@@ -301,19 +301,27 @@ components or application behavior.
 ## Foundations
 
 - [Themes](design/themes.md): Studio, Aero, and Vintage, and what each changes.
-- [Colors](design/colors.md): primary, secondary, and neutral roles, Folded Metal palettes, the Mastering board, and Mixer tokens.
+- [Colors](design/colors.md): primary, secondary, and neutral roles, Folded
+  Metal palettes, the Mastering board, and Mixer tokens.
 - [Typography](design/typography.md): faces, sizes, and text roles.
 - [Layout](design/layout.md): window regions, sizes, and spacing.
-- [Elevation, depth, and shapes](design/elevation-and-shapes.md): layering and corner rules.
+- [Elevation, depth, and shapes](design/elevation-and-shapes.md): layering and
+  corner rules.
 
 ## Components
 
-- [Actions, rail, and Sounds panel](design/components-shell.md): transport, library loading, tool rail, command list, status bar, Sounds panel.
-- [Inspector, overview, and score toolbar](design/components-score.md): Inspector, panel room, song overview, top bar, score toolbar and Maximise.
-- [Sounds, clips, and Mix view](design/components-clips.md): clip drawing and the Mix view.
-- [Mixer, tool windows, and FX returns](design/components-boards.md): the boards of the lower panel, and the shared window shell and controls.
-- [Sound tools and Album Review](design/components-tools.md): Time Stretcher, Effect Studio, Step synth, Sample Editor, Album Review.
-- [Options, dialogs, and feedback](design/components-dialogs.md): Options, utility windows, blocking dialogs, empty states.
+- [Actions, rail, and Sounds panel](design/components-shell.md): transport,
+  library loading, tool rail, command list, status bar, Sounds panel.
+- [Inspector, overview, and score toolbar](design/components-score.md):
+  Inspector, panel room, song overview, top bar, score toolbar and Maximise.
+- [Sounds, clips, and Mix view](design/components-clips.md): clip drawing and
+  the Mix view.
+- [Mixer, tool windows, and FX returns](design/components-boards.md): the boards
+  of the lower panel, and the shared window shell and controls.
+- [Sound tools and Album Review](design/components-tools.md): Time Stretcher,
+  Effect Studio, Step synth, Sample Editor, Album Review.
+- [Options, dialogs, and feedback](design/components-dialogs.md): Options,
+  utility windows, blocking dialogs, empty states.
 
 ## Design rules
 

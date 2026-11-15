@@ -32,6 +32,15 @@ impl MixJamApp {
         }
     }
 
+    /// The control that has the keyboard focus, as `ui` lists it. `None`
+    /// when no control has focus, or the focused widget has no accessible
+    /// node.
+    pub(super) fn agent_focus(&self, ctx: &egui::Context) -> Option<UiNode> {
+        let focused = ctx.memory(|memory| memory.focused())?;
+        let id = format!("#{}", focused.value());
+        self.agent_nodes(ctx).into_iter().find(|node| node.id == id)
+    }
+
     /// A sound by id, or by a name that only one sound has.
     pub(super) fn agent_sample(&self, sample: &Value) -> Result<u32, String> {
         let library = self.session.library();
@@ -158,8 +167,10 @@ impl MixJamApp {
                         .map(|(_, extensions)| extensions.to_vec())
                         .unwrap_or_default(),
                     suggested_name: spec.file_name,
+                    error: prompt.error.clone(),
                 }
             }),
+            focus: self.agent_focus(ctx),
             windows: self.open_windows(),
             selection: Selection {
                 sample: self.selection.sample,
@@ -184,6 +195,49 @@ impl MixJamApp {
                     row_height: self.score.row_height,
                     tracks: self.score.tracks.iter().map(|track| track + 1).collect(),
                 }),
+            step_synth: self.agent_step_synth(),
+        }
+    }
+
+    fn agent_step_synth(&self) -> mixjam_techno::application::agent::StepSynthView {
+        use mixjam_techno::application::pattern;
+        let board = &self.step_synth;
+        let state = &board.state;
+        let notes = pattern::note_steps(&state.steps)
+            .into_iter()
+            .filter_map(|step| {
+                let note = state.steps[step];
+                let mixjam_techno::application::Trig::Note(pitch) = note.trig else {
+                    return None;
+                };
+                Some(mixjam_techno::application::agent::StepNoteView {
+                    step: step + 1,
+                    pitch,
+                    note: pattern::ROOTS[usize::from(pitch.rem_euclid(12) as u8)],
+                    steps: pattern::note_end(&state.steps, step) - step + 1,
+                    velocity: note.velocity,
+                    accent: note.accent,
+                    slide: note.slide,
+                })
+            })
+            .collect();
+        mixjam_techno::application::agent::StepSynthView {
+            shown: self.board_shown(BottomModule::StepSynth),
+            effects_shown: board.effects_expanded,
+            view_bar: board.bar + 1,
+            octave: board.grid.octave,
+            selection: board
+                .grid
+                .selection
+                .map(|(first, last)| [first + 1, last + 1]),
+            mixed_lanes: pattern::Lane::ALL
+                .into_iter()
+                .filter(|lane| pattern::lane_mixed(state, *lane, board.grid.selection))
+                .map(pattern::Lane::label)
+                .collect(),
+            root_name: pattern::ROOTS[usize::from(state.root % 12)],
+            notes,
+            pattern: state.clone(),
         }
     }
 }

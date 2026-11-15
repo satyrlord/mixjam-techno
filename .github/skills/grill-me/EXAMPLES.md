@@ -12,8 +12,8 @@ buffering, latency, sample rates, offline output, and audio evidence.
 Prompt: "Challenge the plan to store interface preferences in projects."
 
 Inspect `local-data/research/PRODUCT.md`, if it exists, and the current project
-schema. The product notes assign settings to the user's application-data folder. State the conflict. Ask whether
-the owner intends to change that product rule.
+schema. The product notes assign settings to the user's application-data folder.
+State the conflict. Ask whether the owner intends to change that product rule.
 
 ## UI scope
 

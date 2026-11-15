@@ -39,3 +39,6 @@
 *.wav
 __pycache__/
 *.pyc
+
+# Node development tooling
+/node_modules/

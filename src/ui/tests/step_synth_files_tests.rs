@@ -28,7 +28,7 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
     assert!(!absent_source.exists());
     app.finish_path(FileRequest::SynthSource, Some(absent_source.clone()));
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(app.step_synth.file.as_ref(), Some(&absent_source));
+    assert_eq!(app.step_synth.state.source.as_ref(), Some(&absent_source));
     assert!(
         !step_synth_accessible_node(&output, "Listen")
             .1
@@ -41,9 +41,16 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
         app.step_synth.feedback.message.as_deref(),
         Some(app.status.as_str())
     );
-    assert_eq!(app.step_synth.state, draft);
-    let output = activate_control(&ctx, &mut app, &output, "Use palette sound");
-    assert!(app.step_synth.file.is_none());
+    // The file is part of the pattern now; a failed Listen changes nothing else.
+    assert_eq!(
+        StepSynthState {
+            source: None,
+            ..app.step_synth.state.clone()
+        },
+        draft
+    );
+    let output = activate_control(&ctx, &mut app, &output, "Palette sound");
+    assert!(app.step_synth.state.source.is_none());
     assert!(app.step_synth.feedback.message.is_none());
     assert!(!app.step_synth.feedback.error);
     assert!(
@@ -99,7 +106,7 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
     );
     assert!(!app.step_synth.feedback.error);
     assert_eq!(app.step_synth.state, saved);
-    assert!(app.step_synth.file.is_none());
+    assert!(app.step_synth.state.source.is_none());
     let pattern = dir.join("sequence.json");
     app.finish_path(FileRequest::SavePattern, Some(pattern.clone()));
     assert!(!app.status_error);
@@ -203,7 +210,7 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
         Some("Selected a source file. Listen before saving."),
         "Palette selection must not affect feedback while an explicit file is the source."
     );
-    app.step_synth.file = None;
+    app.step_synth.state.source = None;
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     app.finish_path(
         FileRequest::SaveSound {
@@ -219,10 +226,20 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
         },
         Some(dir.join("sequence.wav")),
     );
-    assert_ne!(
+    // The saved sound joins the palette; the palette source stays selected.
+    assert_eq!(
         app.selection.sample,
         Some(1),
-        "Saving must select the new Step synth sound."
+        "Saving must keep the palette source: {}",
+        app.status
+    );
+    assert!(
+        app.session
+            .library()
+            .samples
+            .iter()
+            .any(|sample| sample.group_name == "Step synth" && sample.name == "sequence"),
+        "Saving must add the sound to Step synth."
     );
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(
@@ -268,10 +285,9 @@ fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
     assert!(app.selection.sample.is_none());
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(app.status_error && app.step_synth.feedback.error);
-    assert_eq!(
-        app.step_synth.feedback.message,
-        Some(format!("Cannot save the sound: {}", app.status))
-    );
+    // The board and the main status line show the same message.
+    assert!(app.status.starts_with("Cannot save the sound: "));
+    assert_eq!(app.step_synth.feedback.message, Some(app.status.clone()));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -294,11 +310,11 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
             .unwrap()
             .focus
     };
-    let output = activate_control(&ctx, &mut app, &output, "Pattern effects");
+    let output = activate_control(&ctx, &mut app, &output, "Effects pane");
     assert!(app.step_synth.effects_expanded);
     assert_eq!(
         focus(&output),
-        step_synth_accessible_node(&output, "Pattern effects").0,
+        step_synth_accessible_node(&output, "Effects pane").0,
         "Switching panes from the keyboard must keep focus on the switch."
     );
     frame(
@@ -312,14 +328,14 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
         app.step_synth.effects_expanded,
         "Pressing the chosen side again keeps its pane."
     );
-    let output = activate_control(&ctx, &mut app, &output, "Note grid");
+    let output = activate_control(&ctx, &mut app, &output, "Notes pane");
     assert!(
         !app.step_synth.effects_expanded,
         "Notes must return to the note grid."
     );
     assert_eq!(
         focus(&output),
-        step_synth_accessible_node(&output, "Note grid").0
+        step_synth_accessible_node(&output, "Notes pane").0
     );
     app.selection.sample = None;
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -371,7 +387,7 @@ fn step_synth_listen_key_works_with_focus_on_the_pane_toolbar() {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
     let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    for pane in ["Pattern effects", "Note grid"] {
+    for pane in ["Effects pane", "Notes pane"] {
         activate_control(&ctx, &mut app, &output, pane);
         app.step_synth.feedback.message = None;
         frame(
@@ -413,7 +429,7 @@ fn step_synth_shortcuts_do_not_claim_an_overlapping_window() {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        let output = activate_control(&ctx, &mut app, &output, "Copy bar");
+        let output = activate_control(&ctx, &mut app, &output, "Copy to 2");
         let bounds = step_synth_board_node(&output).1.bounds().unwrap();
         let at = Pos2::new(
             (bounds.x0 + bounds.x1) as f32 / 2.0,

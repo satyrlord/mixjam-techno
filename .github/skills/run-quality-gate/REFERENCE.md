@@ -4,7 +4,8 @@
 
 Use the phase rule for the scope:
 
-- For documentation work, inspect links, claims, and `git diff --check`.
+- For documentation work, run `npm run lint:md`, and inspect links, claims,
+  and `git diff --check`.
 - For project or compatibility work, test serialization, migrations, sample
   identity, and import and export cases under the supported feature sets.
 - For frontend work, run the Rust tests that apply and a release build. Then

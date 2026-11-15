@@ -1,5 +1,8 @@
 # The Devil's advocate's deck
 
+<!-- The card numbers continue across the sections. -->
+<!-- markdownlint-disable-file MD029 -->
+
 Read this file only in the Devil's advocate role. Draw cards as
 [DEVILS-ADVOCATE.md](DEVILS-ADVOCATE.md) describes. A card is a provocation, not
 a proposal. Turn each card that you draw into a concrete move on this song.

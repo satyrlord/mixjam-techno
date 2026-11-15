@@ -1,10 +1,10 @@
 # Native UI icons
 
-The native left-hand tool rail and the header Undo, Redo, and Help actions use the PNG
-files in this directory. Each PNG is 96 by 96 pixels with a transparent
+The native left-hand tool rail and the header Undo, Redo, and Help actions use
+the PNG files in this directory. Each PNG is 96 by 96 pixels with a transparent
 background, antialiased edges, and navy (`#05092a`) artwork. These PNGs are the
-canonical source assets. Edit them directly with raster tools. The UI supplies each action's
-name as a tooltip and accessible name.
+canonical source assets. Edit them directly with raster tools. The UI supplies
+each action's name as a tooltip and accessible name.
 Help has its own question-mark artwork. Options uses a gear. Sample library
 management is part of Options; its former books icon is retired.
 

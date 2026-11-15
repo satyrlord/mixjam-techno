@@ -62,7 +62,7 @@ Track fields, in file order:
 | `duration` | Required | `M:SS` or `MM:SS`. |
 | `energy` | Required | `low`, `mid`, `high`, or `peak`. |
 | `tags` | Required | 2–5 non-empty strings. |
-| `role` | Required | Starts with `Album role: ` and says more. |
+| `role` | Required | Starts with `Album role:` and a space, and says more. |
 | `events` | Required | 2–14 events, in time order, each before the end of the track. |
 | `localAudio` | Own work only | The track's `.wav` master. |
 | `songFile` | Own work only | The track's song file. |

@@ -39,7 +39,8 @@ against the premaster. Report the limits of `master.py` in
 2. Try each pedal alone at three or more settings, at the same loudness.
    Completion criterion: A table says what each pedal does to this mix.
 3. Measure the factory presets with the trim of the song.
-   Completion criterion: You know which presets come close, and why the rest do not.
+   Completion criterion: You know which presets come close, and why the rest do
+   not.
 4. Combine the pedals that helped. Fit each candidate to the loudness target
    with `--fit DB`, to compare the boards at equal loudness.
    Completion criterion: Each candidate has a fitted limiter gain and a full measurement.
@@ -58,7 +59,7 @@ These notes come from measurements of the pedals on one mix. They are a start
 for step 2, not a result. Measure the pedals again on this mix.
 
 | Pedal | Notes |
-|---|---|
+| --- | --- |
 | trim | Gain before every pedal. It also sets how hard `boosterCompressor` works. |
 | boosterEq | 10 bands, 50 is flat: 60 Hz and 12 kHz shelves (about 0.24 dB per step) and Q 4 peaks from 80 Hz to 9 kHz (about 0.36 dB per step). The only narrow tool on the board. |
 | boosterCompressor | A level-riding compressor with a treble-weighted detector and a saturator: drive levels, speed sets the release, gain is makeup. Moderate drive carries several dB of loudness. High drive flattens the crest. |

@@ -24,7 +24,7 @@ A saved review is a repository file. Commit it only when the user asks.
 ## Branches
 
 | Request | Branch | Differences |
-|---|---|---|
+| --- | --- | --- |
 | Review a released album | Reference | All steps |
 | Correct an existing review | Correction | Step 1 finds the review; steps 2 to 5 apply only to the fields that change; step 7 uses `update_review` |
 | Review the owner's own album or song | Own work | Steps 2 and 3 use local files; `kind` is `own` |
@@ -54,7 +54,8 @@ the drafts one after the other.
 1. For a released album, run
    `python -I tools/album-review/lookup.py release "ARTIST" "TITLE" --year YEAR`.
    If you do not know the year, omit `--year YEAR`.
-   Completion criterion: You selected the official release that agrees with the album.
+   Completion criterion: You selected the official release that agrees with the
+   album.
 2. For that release, run `python -I tools/album-review/lookup.py tracks MBID`.
    Completion criterion: You have the track list, the durations, and the
    runtime, or you know which values need a different source.
@@ -128,7 +129,7 @@ cover, leave out `coverUrl`. The window then shows its placeholder.
 3. Check the analysis against these rules.
    Completion criterion: All of these are true:
    - No placeholder text stays in the review.
-   - Each track has a `role` that starts with `Album role: `.
+   - Each track has a `role` that starts with `Album role:` and a space.
    - Each track has 2–5 `tags`, and no tag names the energy level.
    - Each track has a number of `events` that agrees with the event table of
      the writing guide. The events are in time order and before the end of the

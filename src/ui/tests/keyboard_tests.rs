@@ -308,8 +308,10 @@ fn step_grid_is_one_tab_stop_with_arrow_key_navigation() {
     let cells = nodes
         .iter()
         .filter(|(_, node)| {
-            node.label()
-                .is_some_and(|label| label.starts_with("Step ") && label.ends_with("semitones"))
+            node.label().is_some_and(|label| {
+                label.starts_with("Step ")
+                    && (label.ends_with("semitones") || label.ends_with("semitone"))
+            })
         })
         .count();
     // 25 pitch rows over one, two, or four bars, as the board's width allows.

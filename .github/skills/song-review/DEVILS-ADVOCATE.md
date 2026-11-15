@@ -49,7 +49,8 @@ Your own taste converges on the same safe ideas as the other critics. The deck
 in [PROVOCATIONS.md](PROVOCATIONS.md) moves you out of it.
 
 1. Draw 8 card numbers at random:
-   `python -I -c "import secrets; print(sorted(secrets.SystemRandom().sample(range(1, 49), 8)))"`.
+   `python -I -c "import secrets;
+   print(sorted(secrets.SystemRandom().sample(range(1, 49), 8)))"`.
    Do not choose the cards.
    Completion criterion: Your output records the 8 numbers that you drew.
 2. Turn each card into one concrete move on this song. Trust the card when its

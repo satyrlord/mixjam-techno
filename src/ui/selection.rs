@@ -130,9 +130,19 @@ impl MixJamApp {
         match self.session.history_step(redo) {
             Ok(true) => {
                 self.reconcile_selection();
-                self.sync_notice();
+                if !self.sync_notice() {
+                    self.message(if redo {
+                        "Redid the song edit."
+                    } else {
+                        "Undid the last song edit."
+                    });
+                }
             }
-            Ok(false) => {}
+            Ok(false) => self.message(if redo {
+                "No song edit to redo."
+            } else {
+                "No song edit to undo."
+            }),
             Err(error) => self.error(error),
         }
     }

@@ -24,9 +24,11 @@ Start with a read-only review. Repair findings only when the user asks for fixes
    - `docs/ARCHITECTURE.md` for application ownership
    - `docs/DESIGN.md` for native UI work
 
-   Completion criterion: Each changed behavior has a current contract or a stated gap.
+   Completion criterion: Each changed behavior has a current contract or a
+   stated gap.
 5. Map the affected behavior to current tests and artifact evidence.
-   Completion criterion: Each check that applies is passed, failed, blocked, or not run.
+   Completion criterion: Each check that applies is passed, failed, blocked, or
+   not run.
 
 Treat donor material as dated evidence. Use original product artifacts and
 measured behavior to assess parity claims. If skills are in scope, read them
@@ -41,12 +43,15 @@ once in `.github/skills`. The folders `.agents/skills`, `.claude/skills`, and
    - typed edits, history, gesture boundaries, and project validation
    - JSON schema, migrations, import rejection, and file replacement
    - product and sample identity, catalogs, WAV folders, and source tempo
-   - render timing, channel routing, recording, device lifetime, and background work
+   - render timing, channel routing, recording, device lifetime, and background
+     work
    - native input, focus, accessibility, layout, and bundled assets
    - original-product parity claims and preservation boundaries
-   - focused tests, both Cargo feature sets, release artifact, visual, and audio evidence
+   - focused tests, both Cargo feature sets, release artifact, visual, and audio
+     evidence
 
-   Completion criterion: Each item that applies has a result from current source and evidence.
+   Completion criterion: Each item that applies has a result from current source
+   and evidence.
 2. If a confirmed defect needs a common repair pattern, read [REFERENCE.md](REFERENCE.md).
    Completion criterion: The remedy agrees with the owning contract.
 
@@ -58,10 +63,12 @@ cohesion, and edit cost.
 
 1. Order the confirmed findings by user impact and release risk.
    Completion criterion: Blocking findings come first.
-2. For each finding, give the path, location, broken contract, evidence, impact, and remedy.
+2. For each finding, give the path, location, broken contract, evidence, impact,
+   and remedy.
    Completion criterion: Another agent can reproduce each finding.
 3. Account for every scoped path and affected contract.
-   Completion criterion: The report keeps findings separate from areas that are not verified.
+   Completion criterion: The report keeps findings separate from areas that are
+   not verified.
 
 Treat existing review comments as hypotheses until current evidence confirms
 them. If no defect is confirmed, say so and state the limits of the review.

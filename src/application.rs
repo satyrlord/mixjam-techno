@@ -2,7 +2,7 @@
 pub use crate::{
     APP_VERSION, agent, album_review,
     audio::Pcm,
-    effects::EffectsState,
+    effects::{EffectsState, MIN_ECHO_BEATS},
     engine::{
         Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_SECTION_NAME,
         MAX_TICKS, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
@@ -57,6 +57,20 @@ pub mod fx {
         Aetherform, BUSES, DelayCharacter, DelayParam, DistortionParam, DistortionShape, Division,
         Echoform, Emberform, FxBus, FxBuses, Module, Range, ReverbCharacter, ReverbParam,
         SHIMMER_INTERVALS, SpaceModel, TimeMode,
+    };
+}
+/// Step synth pattern edits and the board's undo, apart from the screen.
+pub mod pattern {
+    pub use crate::synth::{
+        BAR_STEPS, LENGTH_RANGE, NOTE_RANGE, START_MS_RANGE, STEPS, VELOCITY_RANGE,
+        edit::{
+            BARS, Lane, Line, NoteEdit, ROOTS, Scale, bar_in_loop, bar_is_empty, clamp_length,
+            clear_bar, clear_pattern, copy_bar, copy_target, covers, double_length, doubled_length,
+            fill_bars, halved_length, in_selection, is_note, lane_mixed, lane_targets, note_end,
+            note_steps, pattern_is_empty, pitch_middle, randomise, set_lane,
+        },
+        first_hit,
+        history::PatternHistory,
     };
 }
 use crate::{

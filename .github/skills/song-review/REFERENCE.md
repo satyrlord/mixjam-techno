@@ -15,7 +15,7 @@
 The evidence package of a pass is a set of paths:
 
 | Item | Source |
-|---|---|
+| --- | --- |
 | The song | `SONG.mixjam` |
 | Lane names and roles, sections, tempo, key | `SONG.meta.json`, when present, from `tools/song/mixjam.py` |
 | Renders | `OUT/master.wav`, `OUT/lane-NN.wav`, `OUT/premaster.wav`, and one `OUT/stem-ROLE.wav` for each role, from `render.py` |
@@ -33,7 +33,7 @@ Each role gets the evidence package and the items in its row. A role must not
 read an item in its "Never" column.
 
 | Role | Also gets | Never |
-|---|---|---|
+| --- | --- | --- |
 | Composition critic | from round 2, the round log | the critiques of the current round; a rating |
 | Mix critic | from round 2, the round log | the critiques of the current round; a rating |
 | Rhythm critic | the composer script, with the drum map and the lists of glitches and ratchets; the owner's earlier notes on drums and glitches, or the file that holds them; from round 2, the round log | the critiques of the current round; a rating |
@@ -61,7 +61,7 @@ each tool and the `.env.local` keys that it needs. Run each tool with
 `python -I`. The tools render headless with the release build and play no sound.
 
 | Task | Tool |
-|---|---|
+| --- | --- |
 | Build or change a song from a script | `mixjam.py` (library) |
 | Render the lanes and the master; sum the premaster, the stems, and the audibility table; fit the master gain | `render.py` |
 | Gate and measure | `measure.py` |
@@ -127,11 +127,11 @@ Critiques: `roundN-composition.md` (C1-C8), `roundN-mix.md` (M1-M8).
 
 ### Accepted
 | Finding | Fix as built in pass N+1 |
-|---|---|
+| --- | --- |
 
 ### Rejected
 | Finding | Reason |
-|---|---|
+| --- | --- |
 
 ### Rating
 Score X.X (parts ...). Three reasons. Judgements that need ears.

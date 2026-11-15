@@ -16,6 +16,7 @@ first sentence of that description. If you change a description, change its row.
 | [create-skill](create-skill/SKILL.md) | Create, change, or audit a repository skill: its triggers, steps, completion criteria, references, and writing. |
 | [dead-code-audit](dead-code-audit/SKILL.md) | Audit MixJam Techno reachability and remove proven dead items. |
 | [deslop](deslop/SKILL.md) | Remove evidence-backed slop from code, prose, data, configuration, and tests. |
+| [explore-test](explore-test/SKILL.md) | Test a feature of the built MixJam Techno application by use, and report its bugs and usability issues. |
 | [full-code-review](full-code-review/SKILL.md) | Review a MixJam Techno change set against current code and product contracts. |
 | [grill-me](grill-me/SKILL.md) | Challenge a MixJam Techno plan or design before implementation. |
 | [improve-codebase-architecture](improve-codebase-architecture/SKILL.md) | Improve MixJam Techno architecture and ownership boundaries. |

@@ -6,7 +6,7 @@ The silent probe ran on Windows 11 Pro build 26300 with an Intel i7-11700 and
 the default USB audio interface at 48 kHz. Each target ran for three seconds.
 
 | Target | Accepted request | Initial writable frames | Mean callback interval | Maximum interval |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Automatic | System default | 1,056 | 10.101 ms | 39.709 ms |
 | 20 ms | 960 frames | 1,056 | 10.100 ms | 40.259 ms |
 | 40 ms | 1,920 frames | 1,920 | 10.102 ms | 39.431 ms |
@@ -53,7 +53,7 @@ Two passes covered these cases:
 At 48 kHz, with the master quality at 4x:
 
 | Sustained workload | CPU mean, Drive 4x to Off, pass 1 | Pass 2 |
-|---|---|---|
+| --- | --- | --- |
 | 22 active Drives | 10.88 to 2.27 ms | 10.80 to 2.24 ms |
 | 64-track stress | 31.76 to 6.72 ms | 31.59 to 6.74 ms |
 
@@ -80,7 +80,7 @@ both rates. It played from the start of the song for 338 seconds, then
 measured seconds 338 to 348. The last lane starts at 336 seconds.
 
 | Rate | Drive | CPU mean | Wall mean / p99 / maximum | Missed / callbacks |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 48 kHz | 4x | 11.27 ms | 11.28 / 15.93 / 19.44 ms | 720 / 1,000 |
 | 48 kHz | Off | 4.09 ms | 4.09 / 5.04 / 5.63 ms | 0 / 1,000 |
 | 44.1 kHz | 4x | 11.23 ms | 11.24 / 14.86 / 18.41 ms | 722 / 1,000 |

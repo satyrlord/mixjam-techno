@@ -28,7 +28,8 @@ explicit approval.
    the affected source or tests. If they exist, also read `AGENTS.md`,
    `local-data/research/PRODUCT.md`, and `local-data/research/COMPATIBILITY.md`.
    Completion criterion: You know the current contracts and the documented checks.
-2. Read `tools/runtime/cargo.ps1` and each verifier that applies before you run it.
+2. Read `tools/runtime/cargo.ps1` and each verifier that applies before you run
+   it.
    Completion criterion: You know the toolchain, the inputs, and the side effects.
 3. Read the Applicability section of [REFERENCE.md](REFERENCE.md).
    Completion criterion: You know the phase rule for the scope.
@@ -49,7 +50,8 @@ invent a pass.
 1. Run each command in the [Checks](../../../docs/DEVELOPMENT.md#checks) section
    of `docs/DEVELOPMENT.md`. Run the release build only when the built
    executable matters.
-   Completion criterion: Each command has a current result, or a reason that it does not apply.
+   Completion criterion: Each command has a current result, or a reason that it
+   does not apply.
 2. For native font assets, run the font check in
    [safe-frontend-iteration.md](../../../docs/architecture/safe-frontend-iteration.md).
    Completion criterion: The font check has a current result.
@@ -58,7 +60,8 @@ invent a pass.
    Completion criterion: No tracked or non-ignored file contains an SVG asset.
 4. For visual assets, run the `--check` command that the `README.md` of each
    affected `assets/` folder names.
-   Completion criterion: Each prepared asset matches, or the report names the missing private input.
+   Completion criterion: Each prepared asset matches, or the report names the
+   missing private input.
 5. For UI changes, run the capture procedure in the
    [UI verification](../../../docs/DEVELOPMENT.md#ui-verification) section of
    `docs/DEVELOPMENT.md` against the release build.

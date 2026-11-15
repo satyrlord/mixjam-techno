@@ -10,7 +10,8 @@ Put each frontend change in the module that owns it:
 - Tool window bodies: `src/ui/stretch.rs`, `src/ui/effects.rs`, and
   `src/ui/sample_editor.rs`.
 - Board bodies: `src/ui/mixer.rs`, `src/ui/master.rs`, `src/ui/fx.rs`, and
-  `src/ui/step_synth.rs`.
+  `src/ui/step_synth/`. The Step synth pattern edits are in
+  `src/synth/edit.rs`, apart from the board.
 - Tool action adapters: `src/ui/tools.rs`.
 - Board action adapters: `src/ui/view/boards.rs`.
 - File-dialog adapters: `src/ui/paths.rs`.

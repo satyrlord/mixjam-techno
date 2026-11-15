@@ -137,7 +137,7 @@ only when it differs from its default (250 Hz, 0 dB, and 1).
 The bands run in this order:
 
 | Band | Keys | Range |
-|---|---|---|
+| --- | --- | --- |
 | Low cut, a 12 dB/octave high-pass | `lowCut` | 20 to 2000 Hz (20 is off) |
 | Low shelf | `lowHz` | 40 to 500 Hz |
 | First peak | `midHz`, `midQ` | 150 to 10,000 Hz, 0.3 to 8 |

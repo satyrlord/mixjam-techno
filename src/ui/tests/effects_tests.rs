@@ -151,7 +151,15 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
             let number = output.shapes[first..]
                 .iter()
                 .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.parse::<f64>().is_ok() => {
+                    egui::Shape::Text(text)
+                        if text
+                            .galley
+                            .job
+                            .text
+                            .trim_end_matches(" Hz")
+                            .parse::<f64>()
+                            .is_ok() =>
+                    {
                         let bounds = text.galley.mesh_bounds.translate(text.pos.to_vec2());
                         slot.contains(bounds.center()).then_some(bounds)
                     }

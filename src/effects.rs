@@ -22,10 +22,31 @@ impl Default for Filter {
     }
 }
 
+/// The shortest echo delay: a sixteenth of a beat. A shorter delay sounds
+/// as a comb filter, not as an echo.
+pub const MIN_ECHO_BEATS: f32 = 0.0625;
+
+/// The shortest delay that files from before `MIN_ECHO_BEATS` can hold.
+/// Such a delay opens at `MIN_ECHO_BEATS`.
+const OLD_MIN_ECHO_BEATS: f32 = 0.001;
+
+/// Read an echo delay. A delay from an older file that is shorter than
+/// `MIN_ECHO_BEATS` becomes `MIN_ECHO_BEATS`; other values stay as they are,
+/// for `EffectsState::validate`.
+fn echo_delay<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
+    let value = f32::deserialize(deserializer)?;
+    Ok(if (OLD_MIN_ECHO_BEATS..MIN_ECHO_BEATS).contains(&value) {
+        MIN_ECHO_BEATS
+    } else {
+        value
+    })
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Echo {
     /// Four beats are one bar. The original manual permits up to half a bar.
+    #[serde(deserialize_with = "echo_delay")]
     pub delay_beats: f32,
     pub feedback: f32,
     pub wet: f32,
@@ -101,7 +122,7 @@ impl EffectsState {
         }
         if let Some(e) = &self.echo
             && (!e.delay_beats.is_finite()
-                || !(0.001..=2.0).contains(&e.delay_beats)
+                || !(MIN_ECHO_BEATS..=2.0).contains(&e.delay_beats)
                 || !e.feedback.is_finite()
                 || !(0.0..=0.95).contains(&e.feedback)
                 || !unit(e.wet))
@@ -123,18 +144,51 @@ impl EffectsState {
 /// sample boundary. No effect state is shared between calls or channels.
 pub fn process(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
     input.validate()?;
-    process_validated(input, state, bpm)
+    let output = process_validated(input, state, bpm, 1.0, false)?;
+    output.validate()?;
+    Ok(output)
 }
 
 /// A normalized source with the synth's maximum 12 dB accent stays below
-/// four times full scale. Keep that headroom through effects and output gain;
-/// the shared output stage clamps the result before it leaves processing.
-pub(crate) fn process_synth(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
+/// four times full scale. Keep that headroom through the effects and the
+/// output gain. When the result peaks above full scale, turn all of it down
+/// to full scale, so accents and resonance keep their shape and never
+/// hard-clip. Returns the result and the gain that it got, at most 1.
+///
+/// A pattern plays as a loop, so the filter and echo tails at its end wrap
+/// into its start: the result is the loop as it sounds on every repeat.
+pub(crate) fn process_synth(
+    input: &Pcm,
+    state: &EffectsState,
+    bpm: f64,
+) -> Result<(Pcm, f32), String> {
     input.validate_with_peak_limit(4.0)?;
-    process_validated(input, state, bpm)
+    let mut output = process_validated(input, state, bpm, f32::MAX, true)?;
+    let peak = output
+        .samples
+        .iter()
+        .fold(0.0_f32, |peak, x| peak.max(x.abs()));
+    let gain = if peak > 1.0 { 1.0 / peak } else { 1.0 };
+    if gain < 1.0 {
+        for sample in &mut output.samples {
+            *sample = (*sample * gain).clamp(-1.0, 1.0);
+        }
+    }
+    output.validate()?;
+    Ok((output, gain))
 }
 
-fn process_validated(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm, String> {
+/// The effects, with the output held within `ceiling`. With `looped`, the
+/// input is one period of a loop: the filter and the echo start in the state
+/// that the end of the loop leaves them in, so their tails wrap into the
+/// start. The caller validates the result.
+fn process_validated(
+    input: &Pcm,
+    state: &EffectsState,
+    bpm: f64,
+    ceiling: f32,
+    looped: bool,
+) -> Result<Pcm, String> {
     state.validate()?;
     if !bpm.is_finite() || !(7.5..=1200.0).contains(&bpm) {
         return Err("Source tempo must be from 7.5 to 1200 BPM.".into());
@@ -176,20 +230,31 @@ fn process_validated(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm,
             let a2 = (1.0 - alpha) / a0;
             let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
             let drive = 1.0 + 20.0 * filter.drive as f64;
-            for frame in 0..frames {
-                let index = frame * channels + channel;
-                let dry = output.samples[index] as f64;
-                let x = if filter.drive > 0.0 {
-                    (dry * drive).tanh() / drive.tanh()
-                } else {
-                    dry
-                };
-                let y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2).clamp(-8.0, 8.0);
-                x2 = x1;
-                x1 = x;
-                y2 = y1;
-                y1 = y;
-                output.samples[index] = (dry + (y - dry) * filter.wet as f64) as f32;
+            // Low cutoffs with high resonance can ring across several
+            // repeats. Let that initial state decay before writing the loop.
+            let warm = filter_warm_passes(looped, frames, a2);
+            for pass in 0..=warm {
+                for frame in 0..frames {
+                    let index = frame * channels + channel;
+                    let dry = output.samples[index] as f64;
+                    let x = if filter.drive > 0.0 {
+                        (dry * drive).tanh() / drive.tanh()
+                    } else {
+                        dry
+                    };
+                    let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+                    // The synth turns down the whole render later. Keep
+                    // resonant peaks intact until that stage. Effect Studio
+                    // retains its existing bounded filter state.
+                    let y = if looped { y } else { y.clamp(-8.0, 8.0) };
+                    x2 = x1;
+                    x1 = x;
+                    y2 = y1;
+                    y1 = y;
+                    if pass == warm {
+                        output.samples[index] = (dry + (y - dry) * filter.wet as f64) as f32;
+                    }
+                }
             }
         }
         if let Some(echo) = &state.echo
@@ -199,11 +264,22 @@ fn process_validated(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm,
                 .round()
                 .max(1.0) as usize;
             let mut delay = vec![0.0; delay_frames];
+            let mut at = 0;
+            // A loop first fills the delay line as the loop's earlier repeats
+            // leave it, until their echoes are below -100 dB.
+            for _ in 0..echo_warm_passes(looped, echo.feedback, frames, delay_frames) {
+                for frame in 0..frames {
+                    let dry = output.samples[frame * channels + channel];
+                    delay[at] = dry + delay[at] * echo.feedback;
+                    at = (at + 1) % delay_frames;
+                }
+            }
             for frame in 0..frames {
                 let index = frame * channels + channel;
                 let dry = output.samples[index];
-                let delayed = delay[frame % delay_frames];
-                delay[frame % delay_frames] = dry + delayed * echo.feedback;
+                let delayed = delay[at];
+                delay[at] = dry + delayed * echo.feedback;
+                at = (at + 1) % delay_frames;
                 output.samples[index] = dry + (delayed - dry) * echo.wet;
             }
         }
@@ -221,16 +297,203 @@ fn process_validated(input: &Pcm, state: &EffectsState, bpm: f64) -> Result<Pcm,
                 let drive = 1.0 + 40.0 * state.dirty;
                 value = (value * drive).tanh() / drive.tanh();
             }
-            output.samples[index] = (value * state.volume).clamp(-1.0, 1.0);
+            output.samples[index] = (value * state.volume).clamp(-ceiling, ceiling);
         }
     }
-    output.validate()?;
     Ok(output)
+}
+
+/// The low-pass poles have radius `sqrt(a2)` for the supported Q >= 0.5.
+/// Run whole repeats until their initial state has decayed below -140 dB.
+/// A synth render is at least a bar, so even the lowest cutoff and highest
+/// resonance need only a few passes. Bound tiny internal test buffers too.
+fn filter_warm_passes(looped: bool, frames: usize, a2: f64) -> usize {
+    if !looped || frames == 0 {
+        return 0;
+    }
+    let decay = 0.5 * a2.max(f64::MIN_POSITIVE).ln() * frames as f64;
+    ((1e-7_f64.ln() / decay).ceil() as usize).clamp(1, 256)
+}
+
+/// How many times a loop of `frames` runs through the echo before the
+/// result, so that the echoes of its earlier repeats are in the delay line.
+/// Each repeat passes the delay `frames / delay_frames` times, and each pass
+/// scales the echo by `feedback`. A pattern is at least four beats and the
+/// delay at most two, so a repeat passes the delay at least twice.
+fn echo_warm_passes(looped: bool, feedback: f32, frames: usize, delay_frames: usize) -> usize {
+    if !looped || frames == 0 {
+        return 0;
+    }
+    if feedback <= 0.0 {
+        return 1;
+    }
+    let trips = (frames as f64 / delay_frames as f64).max(1.0);
+    let per_pass = f64::from(feedback).ln() * trips;
+    // -100 dB. The feedback is at most 0.95, so this is at most 225 passes.
+    ((1e-5_f64.ln() / per_pass).ceil() as usize).clamp(1, 256)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_looped_resonant_filter_settles_before_the_render() {
+        for amplitude in [0.125, 4.0] {
+            check_looped_resonant_filter(amplitude);
+        }
+    }
+
+    #[test]
+    fn synth_filter_headroom_preserves_the_normalized_waveform() {
+        let input = Pcm {
+            sample_rate: 8000,
+            channels: 1,
+            samples: (0..16000)
+                .map(|frame| {
+                    (0.125 * (2.0 * std::f64::consts::PI * 600.0 * f64::from(frame) / 8000.0).sin())
+                        as f32
+                })
+                .collect(),
+        };
+        let state = EffectsState {
+            filter: Some(Filter {
+                cutoff_hz: 600.0,
+                resonance: 1.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let (quiet, quiet_gain) = process_synth(&input, &state, 120.0).unwrap();
+        let loud = Pcm {
+            samples: input.samples.iter().map(|sample| sample * 32.0).collect(),
+            ..input
+        };
+        let (loud, loud_gain) = process_synth(&loud, &state, 120.0).unwrap();
+        assert!(quiet_gain < 1.0 && loud_gain < quiet_gain);
+        let error = quiet
+            .samples
+            .iter()
+            .zip(loud.samples)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            error < 1e-5,
+            "Filter headroom changes the normalized waveform: {error}"
+        );
+    }
+
+    fn check_looped_resonant_filter(amplitude: f64) {
+        let sample_rate = 8000;
+        let frames = (f64::from(sample_rate) * 60.0 / 180.0 * 4.0).round() as usize;
+        let mut samples = vec![0.0; frames];
+        // Excite the slowest supported filter near the end of a short loop.
+        // One earlier repeat does not let this resonance settle.
+        for (index, sample) in samples[frames - 667..].iter_mut().enumerate() {
+            *sample = (amplitude
+                * (2.0 * std::f64::consts::PI * 20.0 * index as f64 / f64::from(sample_rate)).sin())
+                as f32;
+        }
+        let input = Pcm {
+            sample_rate,
+            channels: 1,
+            samples,
+        };
+        let state = EffectsState {
+            filter: Some(Filter {
+                cutoff_hz: 20.0,
+                resonance: 1.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let (once, _) = process_synth(&input, &state, 180.0).unwrap();
+        let repeated = Pcm {
+            samples: input.samples.repeat(8),
+            ..input
+        };
+        let (settled, _) = process_synth(&repeated, &state, 180.0).unwrap();
+        let error = once
+            .samples
+            .iter()
+            .zip(&settled.samples[7 * frames..])
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            error < 1e-5,
+            "The loop retains a filter transient at amplitude {amplitude}: {error}"
+        );
+    }
+
+    #[test]
+    fn a_looped_echo_wraps_its_tail_into_the_start() {
+        // 120 BPM at 1000 Hz: a beat is 500 frames. A two-beat loop with one
+        // click near its end, and an echo of half a beat.
+        let mut samples = vec![0.0; 1000];
+        samples[900] = 1.0;
+        let input = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples,
+        };
+        let state = EffectsState {
+            echo: Some(Echo {
+                delay_beats: 0.5,
+                feedback: 0.5,
+                wet: 0.5,
+            }),
+            ..Default::default()
+        };
+        let cut = process(&input, &state, 120.0).unwrap();
+        assert!(
+            cut.samples[..900].iter().all(|x| *x == 0.0),
+            "An Effect Studio sample cuts its tail."
+        );
+        let (looped, _) = process_synth(&input, &state, 120.0).unwrap();
+        // The echo of the click, 250 frames on, wraps to frame 150.
+        assert!(
+            // It holds the echoes of every earlier repeat: 0.5 / (1 - 0.5^4).
+            (looped.samples[150] - 0.5 / (1.0 - 0.5_f32.powi(4))).abs() < 1e-3,
+            "{}",
+            looped.samples[150]
+        );
+        // The second echo, of the earlier repeats too, adds at frame 400.
+        assert!(looped.samples[400] > 0.2, "{}", looped.samples[400]);
+        // Each repeat ends as the one before: the loop is seamless.
+        let (twice, _) = process_synth(
+            &Pcm {
+                samples: [input.samples.clone(), input.samples.clone()].concat(),
+                ..input.clone()
+            },
+            &state,
+            120.0,
+        )
+        .unwrap();
+        for (a, b) in looped.samples.iter().zip(&twice.samples[1000..]) {
+            assert!((a - b).abs() < 1e-4, "{a} {b}");
+        }
+    }
+
+    #[test]
+    fn an_older_echo_delay_opens_at_the_minimum() {
+        let echo: Echo =
+            serde_json::from_str(r#"{"delay_beats":0.01,"feedback":0.4,"wet":0.35}"#).unwrap();
+        assert_eq!(echo.delay_beats, MIN_ECHO_BEATS);
+        let echo: Echo =
+            serde_json::from_str(r#"{"delay_beats":0.25,"feedback":0.4,"wet":0.35}"#).unwrap();
+        assert_eq!(echo.delay_beats, 0.25);
+        let state = EffectsState {
+            echo: Some(Echo {
+                delay_beats: 0.03,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            state.validate().is_err(),
+            "A new delay under the minimum is refused."
+        );
+    }
 
     #[test]
     fn synth_headroom_is_bounded_and_does_not_relax_public_pcm() {
@@ -245,10 +508,19 @@ mod tests {
         };
         assert!(source.validate().is_err());
         assert!(process(&source, &state, 120.0).is_err());
+        let (output, gain) = process_synth(&source, &state, 120.0).unwrap();
+        assert_eq!((output.samples, gain), (vec![0.8], 1.0));
+        let loud = EffectsState {
+            volume: 0.5,
+            ..Default::default()
+        };
+        let (output, gain) = process_synth(&source, &loud, 120.0).unwrap();
         assert_eq!(
-            process_synth(&source, &state, 120.0).unwrap().samples,
-            vec![0.8]
+            output.samples,
+            vec![1.0],
+            "A loud result is turned down, not clipped."
         );
+        assert_eq!(gain, 0.5);
         for invalid in [4.01, f32::INFINITY, f32::NAN] {
             source.samples[0] = invalid;
             assert!(process_synth(&source, &state, 120.0).is_err());

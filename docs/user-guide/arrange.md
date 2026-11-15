@@ -80,7 +80,7 @@ arrangement. The lane then shows on all tracks. The menu has 14 lanes in three
 groups:
 
 | Group | Lanes |
-|---|---|
+| --- | --- |
 | On every track | Volume (dB over the fader), Pan, Filter, Pitch, Repeat, Repeat gate |
 | Send amount, on every track | FX 1 send to FX 4 send. Each has the name of the effect on its bus. |
 | Return level, one line across the song | FX 1 return to FX 4 return |

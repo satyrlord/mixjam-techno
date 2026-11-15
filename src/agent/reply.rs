@@ -224,6 +224,9 @@ pub struct PathPromptView {
     pub kind: &'static str,
     pub extensions: Vec<&'static str>,
     pub suggested_name: Option<String>,
+    /// The inline error under the Path field, such as "That file does not
+    /// exist.", until the next Confirm path.
+    pub error: Option<String>,
 }
 
 /// Where the lanes are in the window. A position maps to a tick through
@@ -255,11 +258,53 @@ pub struct StateView {
     pub status: Status,
     pub modal: Option<&'static str>,
     pub path_prompt: Option<PathPromptView>,
+    /// The control that has the keyboard focus, or `None` when no control
+    /// has it. A Tab or Shift+Tab key moves it.
+    pub focus: Option<UiNode>,
     pub windows: Vec<String>,
     pub selection: Selection,
     pub tools: Tools,
     pub busy: Busy,
     pub arrangement: Option<ArrangementView>,
+    /// The Step synth board's pattern, also for the notes out of view.
+    pub step_synth: StepSynthView,
+}
+
+/// The Step synth pattern and the board's view of it. Steps and bars count
+/// from 1.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct StepSynthView {
+    /// The board shows in the lower panel.
+    pub shown: bool,
+    /// The effects pane is in place of the note grid.
+    pub effects_shown: bool,
+    pub view_bar: usize,
+    /// The octave in view, from -3 to 3. The 25 pitch rows go from
+    /// `12 * octave - 12` to `12 * octave + 12` semitones.
+    pub octave: i8,
+    /// The first and last selected step.
+    pub selection: Option<[usize; 2]>,
+    /// The value lanes (Accent, Slide, Velocity) in which the selected notes
+    /// differ. The board draws a dot at the left of each such lane.
+    pub mixed_lanes: Vec<&'static str>,
+    /// The scale's root as a note name; the pattern stores it in semitones.
+    pub root_name: &'static str,
+    /// Each note: where it starts, its pitch, and how many steps it holds.
+    pub notes: Vec<StepNoteView>,
+    /// The whole pattern, as a pattern file holds it.
+    pub pattern: crate::synth::StepSynthState,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct StepNoteView {
+    pub step: usize,
+    pub pitch: i8,
+    /// The pitch as a note name, from A (the source pitch) up to G#.
+    pub note: &'static str,
+    pub steps: usize,
+    pub velocity: u8,
+    pub accent: bool,
+    pub slide: bool,
 }
 
 /// What every action reports once the window has settled.
@@ -292,6 +337,8 @@ pub enum Body {
     },
     Ui {
         modal: Option<&'static str>,
+        /// The control that has the keyboard focus.
+        focus: Option<UiNode>,
         nodes: Vec<UiNode>,
     },
     Screenshot {

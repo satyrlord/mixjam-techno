@@ -34,7 +34,7 @@ Options use their own schema, separate from the song format.
 ## Implementation owners
 
 | Area | Behavior and owner |
-|---|---|
+| --- | --- |
 | Track Drive | Four-times oversampling in `src/drive.rs`. The shared `Oversampler` in `src/master/dsp.rs` has a 69-frame delay. `TrackChain` in `src/audio/track.rs` compensates that delay and bounds reads at playback loop ends. |
 | Master saturation | Soft clip, Tube, Maximizer, and Tape use `Oversampler` through `src/master/pedals.rs`. The other master processors have their own algorithms and timing. |
 | Master timing | `MasterProcessor` in `src/master/processor.rs` keeps a fixed live delay across pedal changes. Export compensates the active delays. |

@@ -39,6 +39,14 @@ input of that frame:
 - For a named control, it sends an accessibility action.
 - For a position, it sends pointer and keyboard events.
 
+An accessibility `Click` does not move the keyboard focus, and a pointer click
+does. Thus the driver runs `Step::Defocus` before it: it takes the focus from
+the focused control, unless that control is the target. Without it, the keys
+that follow a `click` go to the control that was focused earlier. For example,
+the routing of Ctrl+Z between the Step synth board and the song follows the
+focus. `state.focus` and `ui.focus` name the focused control, so that an agent
+can check the focus without a screenshot.
+
 A request replies after the frames that show its result. Arrangement requests
 call the same `Session` operations as the lane gestures, because the lanes are
 one painted surface without separate controls. The driver holds no project

@@ -33,11 +33,15 @@ impl MixJamApp {
             } => {
                 let node = self.agent_target(ctx, &target, window, role, index)?;
                 let steps = if double || right || pointer || !held.is_empty() {
-                    let [x, y, width, height] = node.rect;
-                    let pos = visible(ctx, Pos2::new(x + width / 2.0, y + height / 2.0))?;
+                    let pos = visible(ctx, pointer_target(ctx, &node)?)?;
                     click_steps(pos, right, double, modifiers(&held))
                 } else if node.clickable {
-                    vec![action(&node, accesskit::Action::Click, None)]
+                    // A click of a person takes focus from the control that
+                    // had it. The action does not, so the driver does it.
+                    vec![
+                        Step::Defocus(node.id.clone()),
+                        action(&node, accesskit::Action::Click, None),
+                    ]
                 } else {
                     return Err(format!(
                         "\"{}\" does not take a click. Add pointer=true to click at its position.",
@@ -203,6 +207,39 @@ impl MixJamApp {
                 ));
             }
         })
+    }
+}
+
+/// Where a pointer click on `node` lands: the middle of the part that takes
+/// the pointer. A scroll area clips its controls, but their accessibility
+/// bounds are not clipped, so the middle of the bounds can be on another
+/// control.
+fn pointer_target(ctx: &egui::Context, node: &UiNode) -> Result<Pos2, String> {
+    let [x, y, width, height] = node.rect;
+    let middle = Pos2::new(x + width / 2.0, y + height / 2.0);
+    let Some(value) = node
+        .id
+        .strip_prefix('#')
+        .and_then(|id| id.parse::<u64>().ok())
+    else {
+        return Ok(middle);
+    };
+    let interact = ctx.viewport(|viewport| {
+        viewport
+            .prev_pass
+            .widgets
+            .layers()
+            .flat_map(|(_, widgets)| widgets.iter())
+            .find(|widget| widget.id.value() == value)
+            .map(|widget| widget.interact_rect)
+    });
+    match interact {
+        Some(rect) if !rect.is_positive() => Err(format!(
+            "\"{}\" is out of view. Scroll it into view first.",
+            node.label
+        )),
+        Some(rect) => Ok(rect.center()),
+        None => Ok(middle),
     }
 }
 

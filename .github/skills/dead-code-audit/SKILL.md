@@ -60,7 +60,8 @@ commands must prove that they exist.
    Completion criterion: Every inventoried candidate is in the report.
 2. In cleanup mode, remove the smallest proven dead slice.
    Completion criterion: No live contract or reference depends on the removed slice.
-3. In cleanup mode, run the narrowest affected compile, Clippy, test, and build checks again.
+3. In cleanup mode, run the narrowest affected compile, Clippy, test, and build
+   checks again.
    Completion criterion: All checks that apply pass, or you report a blocker.
 
 Do not delete approved research because production code does not reach it.

@@ -290,8 +290,7 @@ impl MixJamApp {
                 _ => None,
             };
             if let Some(message) = step_message {
-                self.step_synth.feedback.message = Some(message.into());
-                self.step_synth.feedback.error = false;
+                self.step_synth_say(message, false);
             }
             return;
         };
@@ -352,7 +351,11 @@ impl MixJamApp {
                         self.stretch.feedback.message = Some(format!("Saved {file} to {group}."));
                         self.stretch.feedback.error = false;
                     } else {
-                        self.selection.sample = Some(id);
+                        // The Step synth keeps its palette source: the saved
+                        // sound joins the palette without replacing it.
+                        if group != "Step synth" {
+                            self.selection.sample = Some(id);
+                        }
                         if group == "Effect" {
                             self.effects.feedback.source = Some(id);
                             self.effects.feedback.message = Some(format!(
@@ -362,13 +365,14 @@ impl MixJamApp {
                             self.effects.feedback.error = false;
                         }
                         if group == "Step synth" {
-                            self.step_synth.feedback.source =
-                                self.step_synth.file.is_none().then_some(id);
-                            self.step_synth.feedback.message = Some(format!(
-                                "Saved {} to Step synth.",
-                                path.file_name().unwrap_or_default().to_string_lossy()
-                            ));
-                            self.step_synth.feedback.error = false;
+                            let note = self.step_synth.save_note.take().unwrap_or_default();
+                            self.step_synth_say(
+                                format!(
+                                    "Saved {} to Step synth.{note}",
+                                    path.file_name().unwrap_or_default().to_string_lossy()
+                                ),
+                                false,
+                            );
                             self.clip_paint.step_patterns.clear();
                         }
                     }
@@ -386,11 +390,11 @@ impl MixJamApp {
                         self.effects.feedback.error = true;
                     }
                     if group == "Step synth" && stretch.is_none() {
-                        self.step_synth.feedback.message =
-                            Some(format!("Cannot save the sound: {error}"));
-                        self.step_synth.feedback.error = true;
+                        self.step_synth.save_note = None;
+                        self.step_synth_say(format!("Cannot save the sound: {error}"), true);
+                    } else {
+                        self.error(error);
                     }
-                    self.error(error);
                 }
             },
             FileRequest::SaveTake => match self.session.save_recorded_take(&path) {
@@ -409,12 +413,9 @@ impl MixJamApp {
             FileRequest::LibraryFolder => self.add_library_folder(&path),
             FileRequest::ProviderFolder(product) => self.add_library(product, &path),
             FileRequest::SynthSource => {
-                self.step_synth.file = Some(path);
-                self.step_synth.feedback = StepSynthFeedback {
-                    source: None,
-                    message: Some("Selected a source file. Listen before saving.".into()),
-                    error: false,
-                };
+                self.step_synth.grid.edit("the source change");
+                self.step_synth.state.source = Some(path);
+                self.step_synth_say("Selected a source file. Listen before saving.", false);
             }
             FileRequest::SavePattern => {
                 match self.session.save_pattern(&path, &self.step_synth.state) {
@@ -424,10 +425,31 @@ impl MixJamApp {
                 self.step_synth_notice();
             }
             FileRequest::LoadPattern => {
-                match self.session.load_pattern(&path) {
-                    Ok(state) => {
+                match self.session.load_pattern_snapped(&path) {
+                    Ok((mut state, stored_bpm)) => {
+                        let lost = state.source.take_if(|source| !source.exists());
+                        self.step_synth.grid.edit("the pattern load");
+                        self.step_synth.grid.recentre();
+                        // The loaded Start and Loop source belong to the
+                        // pattern's source: keep them.
+                        self.step_synth.adopted = None;
+                        let bpm = state.bpm;
                         self.step_synth.state = state;
-                        self.message("Loaded Step synth pattern.");
+                        let mut text = String::from("Loaded Step synth pattern.");
+                        if (stored_bpm - bpm).abs() > 1e-9 {
+                            text += &format!(
+                                " Its {stored_bpm:.0} BPM is not a supported tempo, so it \
+                                 plays at {bpm:.0} BPM."
+                            );
+                        }
+                        if let Some(lost) = lost {
+                            text += &format!(
+                                " Its source file, {}, is missing; the pattern plays the \
+                                 palette sound.",
+                                lost.display()
+                            );
+                        }
+                        self.message(text);
                     }
                     Err(error) => self.error(error),
                 }

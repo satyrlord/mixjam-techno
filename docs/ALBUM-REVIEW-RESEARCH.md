@@ -6,14 +6,17 @@ If two albums have the same similarity, the more popular album is first.
 Each album is in the list once.
 When a review of an album is saved, remove the album from this list.
 
-Each item gives the artist, the album title, the release year, the genre, and the source codes.
-A dash (—) in place of the year or the source codes shows that the file records no value.
+Each item gives the artist, the album title, the release year, the genre, and
+the source codes.
+A dash (—) in place of the year or the source codes shows that the file records
+no value.
 
 ## Source Codes
 
 A source code shows that the album is on the list of that source.
 A number after `#` is the rank of the album on that list (1 is the highest rank).
-A code without a number shows that the list has no ranks, or that the rank is not known.
+A code without a number shows that the list has no ranks, or that the rank is
+not known.
 
 | Code | Source | Date | URL |
 | --- | --- | --- | --- |
@@ -34,28 +37,39 @@ A code without a number shows that the list has no ranks, or that the rank is no
 
 ## Album List
 
-- **Brian Eno** — *Ambient 1: Music for Airports* (1978) — Ambient P#1, S#6, H, F#1, A#3, R#1, Re, Ac
+- **Brian Eno** — *Ambient 1: Music for Airports* (1978) — Ambient P#1, S#6, H,
+  F#1, A#3, R#1, Re, Ac
 - **Brian Eno** — *Discreet Music* (1975) — Ambient O, H, R#25, Re, Ac
 - **Brian Eno** — *Thursday Afternoon* (1985) — Ambient H, A, R#70, Re
 - **Brian Eno** — *Foreverandevernomore* (2022) — Ambient R#55
 - **Brian Eno** — *Lux* (2012) — Ambient Re
 - **Brian Eno** — *The Ship* (—) — Ambient Ac
-- **Global Communication** — *Pentamerous Metamorphosis* (1998) — Ambient Techno R#17
-- **Brian Eno** — *Another Green World* (1975) — Electronic / Art Rock A#8, R#33, Re
+- **Global Communication** — *Pentamerous Metamorphosis* (1998) — Ambient Techno
+  R#17
+- **Brian Eno** — *Another Green World* (1975) — Electronic / Art Rock A#8,
+  R#33, Re
 - **Brian Eno** — *Another Day on Earth* (2005) — Electronic / Art Pop —
 - **Ashra** — *New Age of Earth* (1976) — Berlin School / Ambient P#31, S#22, Re
-- **Manuel Göttsching** — *Inventions for Electric Guitar* (1975) — Kosmische / Ambient O
-- **Popol Vuh** — *In den Gärten Pharaos* (1971) — Krautrock / Ambient R#64, Ac#13, Re
+- **Manuel Göttsching** — *Inventions for Electric Guitar* (1975) — Kosmische /
+  Ambient O
+- **Popol Vuh** — *In den Gärten Pharaos* (1971) — Krautrock / Ambient R#64,
+  Ac#13, Re
 - **Cluster** — *Cluster II* (1972) — Krautrock / Ambient F#7
-- **Eduard Artemyev** — *Solaris / The Mirror / Stalker* (—) — Ambient / Soundtrack A#25
+- **Eduard Artemyev** — *Solaris / The Mirror / Stalker* (—) — Ambient /
+  Soundtrack A#25
 - **Cluster** — *Sowiesoso* (1976) — Krautrock / Ambient O
 - **John Foxx** — *Cathedral Oceans* (1997) — Ambient / Synthesiser O
-- **Steve Roach** — *Structures from Silence* (1984) — New Age / Ambient P#33, S#21, H, A#20, R#24, Re, Ac
-- **Stars of the Lid** — *The Tired Sounds of Stars of the Lid* (2001) — Ambient / Drone P#6, S#7, O, F#28, R#57, Re, Ac
-- **Tim Hecker** — *Harmony in Ultraviolet* (2006) — Ambient / Drone P#9, S#29, R#96, Re, Ac
+- **Steve Roach** — *Structures from Silence* (1984) — New Age / Ambient P#33,
+  S#21, H, A#20, R#24, Re, Ac
+- **Stars of the Lid** — *The Tired Sounds of Stars of the Lid* (2001) — Ambient
+  / Drone P#6, S#7, O, F#28, R#57, Re, Ac
+- **Tim Hecker** — *Harmony in Ultraviolet* (2006) — Ambient / Drone P#9, S#29,
+  R#96, Re, Ac
 - **Tim Hecker** — *Ravedeath, 1972* (2011) — Ambient / Drone T#3, R#36, Re, Ac
-- **Eluvium** — *Talk Amongst the Trees* (2005) — Ambient / Drone P#43, S#11, R#48, Re
-- **Laraaji** — *Ambient 3: Day of Radiance* (1980) — Ambient / New Age P#35, S#20, R#85
+- **Eluvium** — *Talk Amongst the Trees* (2005) — Ambient / Drone P#43, S#11,
+  R#48, Re
+- **Laraaji** — *Ambient 3: Day of Radiance* (1980) — Ambient / New Age P#35,
+  S#20, R#85
 - **Eluvium** — *Copia* (2007) — Ambient / Drone R#43, Re, Ac
 - **Windy & Carl** — *Depths* (1998) — Ambient / Drone P#36, S#19
 - **The Dead Texan** — *The Dead Texan* (2004) — Ambient / Drone D, Re
@@ -66,43 +80,55 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Joanna Brouk** — *Healing Music* (1981) — Ambient / New Age B
 - **Alessandro Cortini** — *Forse 3* (2015) — Ambient / Modular Synth B
 - **How to Disappear Completely** — *Seraphim* (2019) — Ambient / Drone R#68
-- **How to Disappear Completely** — *Mer de Revs I–III* (2017) — Ambient / Drone Re
+- **How to Disappear Completely** — *Mer de Revs I–III* (2017) — Ambient / Drone
+  Re
 - **Stars of the Lid** — *Avec Laudanum* (2003) — Ambient / Drone Re
 - **Celer** — *Xièxie* (—) — Ambient / Drone Re
 - **Rafael Anton Irisarri** — *A Fragile Geography* (—) — Ambient / Drone Re
-- **Kyle Bobby Dunn** — *Kyle Bobby Dunn and the Infinite Sadness* (—) — Ambient / Drone Re
-- **36 & zakè** — *Stasis Sounds for Long-Distance Space Travel I & II* (—) — Ambient / Drone Re
+- **Kyle Bobby Dunn** — *Kyle Bobby Dunn and the Infinite Sadness* (—) — Ambient
+  / Drone Re
+- **36 & zakè** — *Stasis Sounds for Long-Distance Space Travel I & II* (—) —
+  Ambient / Drone Re
 - **Elaine Radigue** — *Trilogie de la Mort* (1998) — Ambient / Drone Re
 - **Natural Snow Buildings** — *The Winter Ray* (2006) — Ambient / Drone Re
 - **Kali Malone** — *The Sacrificial Code* (2019) — Ambient / Drone Re
-- **Sarah Davachi** — *Let Night Come On Bells End the Day* (2018) — Ambient / Drone Re
+- **Sarah Davachi** — *Let Night Come On Bells End the Day* (2018) — Ambient /
+  Drone Re
 - **Celer & Forest Management** — *Landmarks* (—) — Ambient / Drone Re
 - **Constance Demby** — *Novus Magnificat* (—) — New Age / Ambient Ac
 - **Tim Hecker** — *Haunt Me, Haunt Me Do It Again* (2001) — Ambient / Drone R#89
 - **Brock Van Wey** — *White Clouds Drift On and On* (2009) — Ambient / Drone O
 - **White Rainbow** — *New Clouds* (2010) — Ambient / Drone O
-- **Motion Sickness of Time Travel** — *Motion Sickness of Time Travel* (2012) — Ambient / Drone O
+- **Motion Sickness of Time Travel** — *Motion Sickness of Time Travel* (2012) —
+  Ambient / Drone O
 - **Liquid Mind** — *Ambience Minimus* (1994) — Ambient / New Age F#16
 - **Raphael** — *Angels of the Deep* (1995) — Ambient / New Age F#9
-- **Stars of the Lid** — *And Their Refinement of the Decline* (2007) — Ambient / Post-Classical P#18, S#26, R#49, Re, Ac
-- **William Basinski** — *The Disintegration Loops I–IV* (2002) — Ambient / Tape Loop P#3, R#19, Re, Ac
-- **Boards of Canada** — *Music Has the Right to Children* (1998) — IDM / Ambient H, T#15, Re
+- **Stars of the Lid** — *And Their Refinement of the Decline* (2007) — Ambient
+  / Post-Classical P#18, S#26, R#49, Re, Ac
+- **William Basinski** — *The Disintegration Loops I–IV* (2002) — Ambient / Tape
+  Loop P#3, R#19, Re, Ac
+- **Boards of Canada** — *Music Has the Right to Children* (1998) — IDM /
+  Ambient H, T#15, Re
 - **Max Richter** — *Sleep* (2015) — Ambient / Post-Classical P#40, S#16, Re
 - **Slowdive** — *Pygmalion* (1995) — Space Rock / Ambient S#14, O, R#20
-- **A Winged Victory for the Sullen** — *A Winged Victory for the Sullen* (2011) — Ambient / Post-Classical Re, Ac
+- **A Winged Victory for the Sullen** — *A Winged Victory for the Sullen* (2011)
+  — Ambient / Post-Classical Re, Ac
 - **Autechre** — *Amber* (1994) — IDM / Ambient H, T#21
 - **William Basinski** — *Melancholia* (2005) — Ambient / Tape Loop R#77, Re
 - **Jon Hassell** — *Dream Theory in Malaya* (1981) — Fourth World / Ambient F#3
 - **Oneohtrix Point Never** — *Rifts* (2009) — Synth / Ambient P#27
 - **Jon Hassell** — *Vernal Equinox* (1977) — Fourth World / Ambient P#47
 - **Autechre** — *Tri Repetae* (1996) — IDM / Ambient F#4
-- **Jóhann Jóhannsson** — *Virðulegu Forsetar* (2004) — Post-Classical / Ambient F#12
+- **Jóhann Jóhannsson** — *Virðulegu Forsetar* (2004) — Post-Classical / Ambient
+  F#12
 - **Autechre** — *Garbage (EP)* (1995) — IDM / Ambient D
-- **Kyle Dixon / Michael Stein** — *Stranger Things: Volume One* (2016) — Synth / Ambient A#19
+- **Kyle Dixon / Michael Stein** — *Stranger Things: Volume One* (2016) — Synth
+  / Ambient A#19
 - **William Basinski** — *Lamentations* (2020) — Ambient / Tape Loop D
 - **William Basinski** — *Watermusic* (2001) — Ambient / Tape Loop R#69
 - **William Basinski** — *A Shadow in Time* (2017) — Ambient / Tape Loop Re
-- **:zoviet\*france:** — *Shouting at the Ground* (1988) — Ambient / Industrial R#87
+- **:zoviet\*france:** — *Shouting at the Ground* (1988) — Ambient / Industrial
+  R#87
 - **Echospace** — *The Coldest Season* (2007) — Dub Techno / Ambient T#12
 - **Nils Frahm** — *Music for Animals* (2022) — Ambient / Post-Classical Re
 - **The Sabres of Paradise** — *Haunted Dancehall* (1994) — IDM / Ambient Ac#14
@@ -112,35 +138,52 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **µ-Ziq** — *In Pine Effect* (1995) — IDM / Ambient F#24
 - **Boards of Canada** — *Geogaddi* (2002) — IDM / Ambient —
 - **Boards of Canada** — *The Campfire Headphase* (2005) — IDM / Ambient —
-- **Biosphere** — *Substrata* (1997) — Ambient / Electronic P#38, S#17, H, F#37, R#66, T#1, Re
-- **Steve Roach** — *Dreamtime Return* (1988) — Ambient / Electronic O, H, F#2, A#7, R#63, T#14, Ac
-- **Aphex Twin** — *Selected Ambient Works 85–92* (1992) — Ambient / Electronic O, H, R#11, T#13, Re
-- **The Caretaker** — *An Empty Bliss Beyond This World* (2011) — Ambient / Hauntology P#14, A#14, R#100, Re, Ac
-- **Grouper** — *A I A: Alien Observer* (2011) — Ambient / Dream Pop P#21, S#1, D, Re, Ac
+- **Biosphere** — *Substrata* (1997) — Ambient / Electronic P#38, S#17, H, F#37,
+  R#66, T#1, Re
+- **Steve Roach** — *Dreamtime Return* (1988) — Ambient / Electronic O, H, F#2,
+  A#7, R#63, T#14, Ac
+- **Aphex Twin** — *Selected Ambient Works 85–92* (1992) — Ambient / Electronic
+  O, H, R#11, T#13, Re
+- **The Caretaker** — *An Empty Bliss Beyond This World* (2011) — Ambient /
+  Hauntology P#14, A#14, R#100, Re, Ac
+- **Grouper** — *A I A: Alien Observer* (2011) — Ambient / Dream Pop P#21, S#1,
+  D, Re, Ac
 - **Oval** — *94diskont* (1995) — Glitch / Ambient P#7, S#30, A#18, R#26, Re
 - **Susumu Yokota** — *Sakura* (2000) — Ambient / Electronic O, H, F#30, R#22, Re
-- **Future Sound of London** — *Lifeforms* (1994) — Ambient / Electronic H, F#20, R#53, T#7, Re
-- **Oneohtrix Point Never** — *Replica* (2011) — Electronic / Ambient P#20, A#24, Re, Ac
-- **Tetsu Inoue** — *Ambiant Otaku* (1995) — Ambient / Electronic H, R#35, T#6, Re
-- **Keith Fullerton Whitman** — *Playthroughs* (2002) — Ambient / Electronic P#23, S#25, R#97, Re
+- **Future Sound of London** — *Lifeforms* (1994) — Ambient / Electronic H,
+  F#20, R#53, T#7, Re
+- **Oneohtrix Point Never** — *Replica* (2011) — Electronic / Ambient P#20,
+  A#24, Re, Ac
+- **Tetsu Inoue** — *Ambiant Otaku* (1995) — Ambient / Electronic H, R#35, T#6,
+  Re
+- **Keith Fullerton Whitman** — *Playthroughs* (2002) — Ambient / Electronic
+  P#23, S#25, R#97, Re
 - **Fennesz** — *Endless Summer* (2001) — Glitch / Ambient P#22, O, A#17, F
 - **Tim Hecker** — *Virgins* (2013) — Ambient / Electronic P#37, R#47, Re, Ac
 - **Woob** — *1194* (1995) — Ambient / Electronic H, F#57, R#32, Re
-- **Grouper** — *Dragging a Dead Deer Up a Hill* (2008) — Ambient / Dream Pop A#15, Re, Ac
-- **Bing & Ruth** — *Tomorrow Was the Golden Age* (2014) — Ambient / Minimalism P#49, S#9, R#61
-- **Harold Budd** — *The Pavilion of Dreams* (1978) — Ambient / Piano F#6, R#72, Re
+- **Grouper** — *Dragging a Dead Deer Up a Hill* (2008) — Ambient / Dream Pop
+  A#15, Re, Ac
+- **Bing & Ruth** — *Tomorrow Was the Golden Age* (2014) — Ambient / Minimalism
+  P#49, S#9, R#61
+- **Harold Budd** — *The Pavilion of Dreams* (1978) — Ambient / Piano F#6, R#72,
+  Re
 - **Tim Hecker** — *Radio Amor* (2003) — Ambient / Electronic T#3, R#62, Re
 - **Steve Roach** — *The Magnificent Void* (1996) — Ambient / Electronic H, T, Re
 - **Fennesz** — *Venice* (2004) — Glitch / Ambient D, Re, Ac
-- **Vidna Obmana** — *The Spiritual Bonding* (1994) — Ambient / Electronic F#11, R#29
-- **Alio Die** — *Password for Entheogenic Experience* (1997) — Ambient / Electronic F#10, R#13
+- **Vidna Obmana** — *The Spiritual Bonding* (1994) — Ambient / Electronic F#11,
+  R#29
+- **Alio Die** — *Password for Entheogenic Experience* (1997) — Ambient /
+  Electronic F#10, R#13
 - **Alio Die** — *Aura Seminalis* (2008) — Ambient / Electronic R#4, Re
 - **Tetsu Inoue** — *World Receiver* (1996) — Ambient / Electronic H, Re
 - **Hiroshi Yoshimura** — *GREEN* (1986) — Ambient / Electronic D, Re
-- **Hiroshi Yoshimura** — *Music for Nine Post Cards* (1982) — Ambient / Electronic R#88, Re
-- **Hiroshi Yoshimura** — *Surround (Soundscape 1)* (1986) — Ambient / Electronic R#76, Re
+- **Hiroshi Yoshimura** — *Music for Nine Post Cards* (1982) — Ambient /
+  Electronic R#88, Re
+- **Hiroshi Yoshimura** — *Surround (Soundscape 1)* (1986) — Ambient /
+  Electronic R#76, Re
 - **Hiroshi Yoshimura** — *Wet Land* (1993) — Ambient / Electronic R#67, Re
-- **The Caretaker** — *Everywhere at the End of Time* (2016–19) — Ambient / Hauntology Re, Ac
+- **The Caretaker** — *Everywhere at the End of Time* (2016–19) — Ambient /
+  Hauntology Re, Ac
 - **Tim Hecker** — *An Imaginary Country* (2009) — Ambient / Electronic R#46, Ac
 - **Ryuichi Sakamoto** — *async* (2017) — Ambient / Electronic R#71, Re
 - **Oneohtrix Point Never** — *Returnal* (2010) — Electronic / Ambient O, Ac
@@ -157,11 +200,15 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Labradford** — *Fixed::Context* (2000) — Post-Rock / Ambient D
 - **Labradford** — *A Stable Reference* (—) — Post-Rock / Ambient Ac
 - **Labradford** — *Prazision LP* (—) — Post-Rock / Ambient Ac
-- **Michael Stearns** — *Encounter: A Journey in the Key of Space* (1988) — Ambient / Electronic R#38
-- **Pauline Oliveros** — *Four Meditations and Sound Geometries* (—) — Ambient / Minimalism B
-- **Pauline Oliveros, Stuart Dempster & Panaiotis** — *Deep Listening* (1989) — Ambient / Minimalism R#91
+- **Michael Stearns** — *Encounter: A Journey in the Key of Space* (1988) —
+  Ambient / Electronic R#38
+- **Pauline Oliveros** — *Four Meditations and Sound Geometries* (—) — Ambient /
+  Minimalism B
+- **Pauline Oliveros, Stuart Dempster & Panaiotis** — *Deep Listening* (1989) —
+  Ambient / Minimalism R#91
 - **Pulusha** — *Isolation* (1997) — Ambient / Electronic R#18
-- **Various Artists** — *Complete Symphonies of the Planets: NASA Voyager Recordings* (2009) — Ambient / Field Recording R#15
+- **Various Artists** — *Complete Symphonies of the Planets: NASA Voyager
+  Recordings* (2009) — Ambient / Field Recording R#15
 - **Penjaga Insaf** — *Sama Sadja* (2010) — Ambient / Electronic R#28
 - **Pendant** — *Make Me Know You Sweet* (2018) — Ambient / Electronic R#31
 - **Harold Budd** — *Luxa* (1996) — Ambient / Piano R#37
@@ -170,7 +217,8 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Moby** — *Hotel: Ambient* (2014) — Ambient / Electronic R#41
 - **Coil** — *Time Machines* (1998) — Dark Ambient / Drone Re
 - **Art of Noise** — *The Ambient Collection* (1990) — Ambient / Electronic R#51
-- **Aeolian String Ensemble** — *Lassithi/Elysium* (1998) — Ambient / Classical R#54
+- **Aeolian String Ensemble** — *Lassithi/Elysium* (1998) — Ambient / Classical
+  R#54
 - **Air** — *You* (1993) — Ambient / Electronic R#60
 - **Recyclebull** — *HQ* (2010) — Ambient / Electronic R#73
 - **James Ferraro** — *Pixarni* (2009) — Ambient / Electronic R#82
@@ -178,23 +226,29 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Jan Jelinek** — *Loop-Finding-Jazz-Records* (2001) — Ambient / Microhouse R#90
 - **Jüppala Kääpiö** — *Sporing Promenade* (2010) — Ambient / Electronic R#92
 - **Oval** — *Systemisch* (1994) — Glitch / Ambient R#95
-- **佐藤理 (Osamu Sato)** — *Collected Ambient Grooves 1993–2001* (2020) — Ambient / Electronic R#99
+- **佐藤理 (Osamu Sato)** — *Collected Ambient Grooves 1993–2001* (2020) — Ambient
+  / Electronic R#99
 - **The Caretaker** — *A Stairway to the Stars* (2002) — Ambient / Hauntology R#78
 - **Dreamfish** — *Dreamfish* (1993) — Ambient / Electronic R#101
 - **Aglaia** — *Three Organic Experiences* (2003) — Ambient / Electronic T#4
 - **Helios** — *Eingya* (2006) — Ambient / Electronic T#11
 - **Mute** — *The Sea Horse Limbo* (2006) — Ambient / Electronic T#22
-- **Steve Roach, Kevin Braheny & Michael Stearns** — *Desert Solitaire* (1989) — Ambient / Electronic T#23
-- **Vir Unis & Saul Stokes** — *Thermal Transfer* (2002) — Ambient / Electronic T#24
-- **Jon Hopkins** — *Music for Psychedelic Therapy* (2021) — Ambient / Electronic Re
+- **Steve Roach, Kevin Braheny & Michael Stearns** — *Desert Solitaire* (1989) —
+  Ambient / Electronic T#23
+- **Vir Unis & Saul Stokes** — *Thermal Transfer* (2002) — Ambient / Electronic
+  T#24
+- **Jon Hopkins** — *Music for Psychedelic Therapy* (2021) — Ambient /
+  Electronic Re
 - **C418** — *Minecraft Volume Alpha & Beta* (—) — Ambient / Electronic Re
 - **Taylor Deupree** — *Stil.* (2002) — Ambient / Electronic Re
-- **Carbon Based Lifeforms** — *World of Sleepers* (2006) — Ambient / Electronic Re
+- **Carbon Based Lifeforms** — *World of Sleepers* (2006) — Ambient / Electronic
+  Re
 - **shuttle358** — *Frame* (2002) — Ambient / Glitch Re
 - **36** — *The Infinity Room* (2014) — Ambient / Electronic Re
 - **Alva Noto & Ryuichi Sakamoto** — *Insen* (2005) — Ambient / Glitch Re
 - **Keith Fullerton Whitman** — *Lisbon* (—) — Ambient / Electronic Re
-- **Leyland Kirby** — *We, so tired of all the darkness in our lives* (2017) — Ambient / Hauntology Re
+- **Leyland Kirby** — *We, so tired of all the darkness in our lives* (2017) —
+  Ambient / Hauntology Re
 - **Bibio** — *Phantom Brickworks* (2017) — Ambient / Electronic Re
 - **Masayoshi Fujita & Jan Jelinek** — *Schaum* (2013) — Ambient / Electronic Re
 - **Robert Rich & Alio Die** — *Fissures* (2010) — Ambient / Electronic Re
@@ -206,12 +260,16 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Tetsu Inoue** — *Organic Cloud* (1996) — Ambient / Electronic H
 - **Robert Rich** — *Numena* (1987) — Ambient / Electronic H
 - **Steve Roach** — *Quiet Music* (1986) — Ambient / Electronic H
-- **James Johnson / Robert Scott Thompson** — *Forgotten Places* (1999) — Ambient / Electronic H
+- **James Johnson / Robert Scott Thompson** — *Forgotten Places* (1999) —
+  Ambient / Electronic H
 - **O Yuki Conjugate** — *Equator* (1993) — Ambient / Electronic H
-- **Pete Namlook / Tetsu Inoue** — *2350 Broadway* (1993) — Ambient / Electronic H
-- **Pete Namlook / Tetsu Inoue** — *2350 Broadway II* (1994) — Ambient / Electronic H
+- **Pete Namlook / Tetsu Inoue** — *2350 Broadway* (1993) — Ambient / Electronic
+  H
+- **Pete Namlook / Tetsu Inoue** — *2350 Broadway II* (1994) — Ambient /
+  Electronic H
 - **Jeff Pearce** — *To the Shores of Heaven* (1998) — Ambient / Electronic H
-- **Virginia Astley** — *From Gardens Where We Feel Secure* (1983) — Ambient / Piano O
+- **Virginia Astley** — *From Gardens Where We Feel Secure* (1983) — Ambient /
+  Piano O
 - **Seefeel** — *Starethrough* (1994) — Ambient / Electronic O
 - **Seefeel** — *Quique* (—) — Ambient / Electronic F#55
 - **Alva Noto** — *Xerrox Vol. 2* (2009) — Ambient / Electronic O
@@ -227,15 +285,21 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Woob** — *Woob² 4495* (1995) — Ambient / Electronic R#32
 - **Manuel Göttsching** — *E2-E4* (1984) — Electronic / Ambient —
 - **Robert Rich** — *Rainforest* (1989) — Ambient / Electronic —
-- **Ulrich Schnauss** — *A Strangely Isolated Place* (2003) — Ambient / Electronic —
+- **Ulrich Schnauss** — *A Strangely Isolated Place* (2003) — Ambient /
+  Electronic —
 - **Pantha du Prince** — *This Bliss* (2007) — Minimal Techno / Ambient —
 - **Kelly Lee Owens** — *Inner Song* (2020) — Electronic / Ambient —
-- **Aphex Twin** — *Selected Ambient Works Volume II* (1994) — Ambient / Experimental P#2, S#13, H, F#21, D, R#6, Re, Ac
-- **Julianna Barwick** — *The Magic Place* (2011) — Ambient / Vocal P#30, S#18, D, R#39, Ac
+- **Aphex Twin** — *Selected Ambient Works Volume II* (1994) — Ambient /
+  Experimental P#2, S#13, H, F#21, D, R#6, Re, Ac
+- **Julianna Barwick** — *The Magic Place* (2011) — Ambient / Vocal P#30, S#18,
+  D, R#39, Ac
 - **Ekkehard Ehlers** — *Plays* (2002) — Ambient / Experimental P#42, S#15
-- **David Sylvian / Holger Czukay** — *Plight & Premonition* (1988) — Ambient / Experimental H, Re
-- **Shackleton** — *Music for the Quiet Hour / The Drawbar Organ EPs* (2012) — Ambient / Experimental R#80, Ac
-- **Sarah Louise** — *Nighttime Birds and Morning Stars* (2019) — Ambient / Folk D
+- **David Sylvian / Holger Czukay** — *Plight & Premonition* (1988) — Ambient /
+  Experimental H, Re
+- **Shackleton** — *Music for the Quiet Hour / The Drawbar Organ EPs* (2012) —
+  Ambient / Experimental R#80, Ac
+- **Sarah Louise** — *Nighttime Birds and Morning Stars* (2019) — Ambient / Folk
+  D
 - **Sun Araw** — *Beach Head* (2008) — Psychedelic / Ambient B
 - **Nala Sinephro** — *Space 1.8* (2021) — Ambient / Jazz R#34
 - **André 3000** — *New Blue Sun* (2023) — Ambient / Experimental R#56
@@ -247,8 +311,10 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Julianna Barwick** — *Nepenthe* (—) — Ambient / Vocal Ac
 - **Asmus Tietchens** — *Nachtstücke* (1980) — Ambient / Experimental F#23
 - **Wagon Christ** — *Throbbing Pouch* (1995) — Ambient / Trip-Hop F#25
-- **Transglobal Underground** — *Dream of 100 Nations* (1993) — Ambient / World F#29
-- **Floating Points, Pharoah Sanders & The London Symphony Orchestra** — *Promises* (2021) — Ambient / Spiritual Jazz —
+- **Transglobal Underground** — *Dream of 100 Nations* (1993) — Ambient / World
+  F#29
+- **Floating Points, Pharoah Sanders & The London Symphony Orchestra** —
+  *Promises* (2021) — Ambient / Spiritual Jazz —
 - **Andy Stott** — *Luxury Problems* (2012) — Techno / Ambient —
 - **2814** — *新しい日の誕生 (Birth of a New Day)* (2015) — Vaporwave / Ambient O, Re
 - **1991** — *No More Dreams* (2016) — Ambient / Lo-fi R#74
@@ -260,24 +326,30 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Kraftwerk** — *Trans-Europe Express* (1977) — Electronic / Krautrock —
 - **Kraftwerk** — *Autobahn* (1974) — Electronic / Krautrock —
 - **Popol Vuh** — *Hosianna Mantra* (1972) — Krautrock / Sacred —
-- **Suzanne Ciani** — *Buchla Concerts 1975* (1975) — Electronic / Modular Synth P#39, S#4
+- **Suzanne Ciani** — *Buchla Concerts 1975* (1975) — Electronic / Modular Synth
+  P#39, S#4
 - **Deathprod** — *Morals and Dogma* (2004) — Dark Ambient P#50, S#10
-- **Lustmord** — *The Place Where the Black Stars Hang* (1994) — Dark Ambient H, Re
+- **Lustmord** — *The Place Where the Black Stars Hang* (1994) — Dark Ambient H,
+  Re
 - **Robert Rich / Lustmord** — *Stalker* (1995) — Dark Ambient H
 - **Thomas Köner** — *Kaamos* (1998) — Dark Ambient H
 - **Thomas Köner** — *Permafrost* (—) — Dark Ambient F#54
 - **Suzanne Ciani** — *Seven Waves* (1982) — Electronic / Modular Synth B
 - **Rainforest Spiritual Enslavement** — *Green Graves* (2016) — Dark Ambient R#40
-- **Rainforest Spiritual Enslavement** — *Ambient Black Magic* (2017) — Dark Ambient R#42
+- **Rainforest Spiritual Enslavement** — *Ambient Black Magic* (2017) — Dark
+  Ambient R#42
 - **Coil** — *Musick to Play in the Dark* (1999) — Dark Ambient R#50
 - **The Haxan Cloak** — *Excavation* (—) — Dark Ambient Ac
 - **Raime** — *Quarter Turns Over a Living Line* (—) — Dark Ambient Ac
 - **Black to Comm** — *Alphabet 1968* (2009) — Dark Ambient O
 - **Kitarō** — *Silk Road* (1980) — New Age / Electronic —
-- **GAS** — *Pop* (2000) — Ambient Techno P#11, S#8, H, A#12, D, R#3, T#26, Re, Ac
-- **Huerco S.** — *For Those of You Who Have Never (And Also Those Who Have)* (2016) — Ambient Techno P#45, R#27, Re, Ac
+- **GAS** — *Pop* (2000) — Ambient Techno P#11, S#8, H, A#12, D, R#3, T#26, Re,
+  Ac
+- **Huerco S.** — *For Those of You Who Have Never (And Also Those Who Have)*
+  (2016) — Ambient Techno P#45, R#27, Re, Ac
 - **Pete Namlook** — *Air* (1993) — Ambient Techno O, H, Re
-- **Laurie Spiegel** — *The Expanding Universe* (1980) — Electronic / Computer Music P#12, S#5
+- **Laurie Spiegel** — *The Expanding Universe* (1980) — Electronic / Computer
+  Music P#12, S#5
 - **GAS** — *Zauberberg* (1997) — Ambient Techno R#14, Re
 - **Sun Electric** — *30.7.94 Live* (1994) — Ambient Techno H, R#30
 - **Loscil** — *Plume* (2006) — Ambient Techno R#98, Re
@@ -303,10 +375,13 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Aphex Twin** — *Drukqs* (2001) — IDM / Electronic —
 - **Nils Frahm** — *All Melody* (2018) — Post-Classical / Electronic —
 - **Aphex Twin** — *Syro* (2014) — IDM / Electronic —
-- **The KLF** — *Chill Out* (1990) — Ambient House P#5, H, F#49, A#23, R#45, Re, Ac
-- **The Orb** — *Adventures Beyond the Ultraworld* (1991) — Ambient House O, H, T#10, Re, Ac
+- **The KLF** — *Chill Out* (1990) — Ambient House P#5, H, F#49, A#23, R#45, Re,
+  Ac
+- **The Orb** — *Adventures Beyond the Ultraworld* (1991) — Ambient House O, H,
+  T#10, Re, Ac
 - **The Orb** — *U.F.Orb* (1992) — Ambient House H, F#8, Re, Ac
-- **David Behrman** — *On the Other Ocean* (1977) — Electronic / Minimalism P#29, S#23
+- **David Behrman** — *On the Other Ocean* (1977) — Electronic / Minimalism
+  P#29, S#23
 - **The Orb** — *Orbus Terrarum* (1995) — Ambient House P#19
 - **The Irresistible Force** — *Flying High* (1992) — Ambient House R#59
 - **One Dove** — *Morning Dove White* (—) — Ambient House Ac
@@ -317,11 +392,14 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Telefon Tel Aviv** — *Fahrenheit Fair Enough* (2001) — IDM / Glitch Pop —
 - **Kraftwerk** — *Computer World* (1981) — Electronic / Synth-Pop —
 - **Depeche Mode** — *Music for the Masses* (1987) — Synth-Pop / Electronic —
-- **Art of Noise** — *Who's Afraid of the Art of Noise?* (1984) — Electronic / Art Pop —
+- **Art of Noise** — *Who's Afraid of the Art of Noise?* (1984) — Electronic /
+  Art Pop —
 - **Massive Attack** — *Mezzanine* (1998) — Trip-Hop / Electronic —
-- **The Chemical Brothers** — *Dig Your Own Hole* (1997) — Big Beat / Electronic —
+- **The Chemical Brothers** — *Dig Your Own Hole* (1997) — Big Beat / Electronic
+  —
 - **Four Tet** — *Rounds* (2003) — Folktronica / Electronic —
-- **M83** — *Dead Cities, Red Seas & Lost Ghosts* (2003) — Shoegaze / Electronic —
+- **M83** — *Dead Cities, Red Seas & Lost Ghosts* (2003) — Shoegaze / Electronic
+  —
 - **Jon Hopkins** — *Immunity* (2013) — Electronic / Techno —
 - **Nicolas Jaar** — *Space Is Only Noise* (2011) — Experimental / Electronic —
 - **Ben Frost** — *A U R O R A* (2014) — Experimental / Electronic —
@@ -335,4 +413,5 @@ A code without a number shows that the list has no ranks, or that the rank is no
 - **Caribou** — *Andorra* (2007) — Psychedelic Pop / Electronic —
 - **James Blake** — *James Blake* (2011) — Post-Dubstep / Electronic —
 - **The Knife** — *Silent Shout* (2006) — Electropop / Experimental —
-- **Art of Noise** — *The Seduction of Claude Debussy* (1999) — Electronica / Drum and Bass —
+- **Art of Noise** — *The Seduction of Claude Debussy* (1999) — Electronica /
+  Drum and Bass —

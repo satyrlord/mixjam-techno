@@ -3,148 +3,198 @@
 //! letters, and the controls that the Mixer and the effects windows share.
 use super::*;
 
+/// The pattern effects. The four groups flow side by side and wrap to the
+/// next row where the pane is too narrow, so a wide pane shows every control
+/// without a scroll. Each group keeps the width of its dials in one row.
 pub(in super::super) fn effects_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
     egui::Frame::new().fill(roles().face).show(ui, |ui| {
         ui.visuals_mut().override_text_color = Some(roles().legend);
-        ui.vertical(|ui| {
-            let mut enabled = state.filter.is_some();
-            if embedded_effect_group(ui, "Filter", &mut enabled) {
-                state.filter = enabled.then(Default::default);
-            }
-            let mut filter = state.filter.clone().unwrap_or_default();
-            ui.add_enabled_ui(state.filter.is_some(), |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    embedded_effect_dial(
-                        ui,
-                        &mut filter.cutoff_hz,
-                        "Cutoff",
-                        [20.0, 20000.0, 2000.0, 1.0],
-                        0,
-                        true,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut filter.resonance,
-                        "Resonance",
-                        [0.0, 1.0, 0.0, 0.001],
-                        3,
-                        false,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut filter.drive,
-                        "Overdrive",
-                        [0.0, 1.0, 0.0, 0.001],
-                        3,
-                        false,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut filter.wet,
-                        "Filter volume",
-                        [0.0, 1.0, 1.0, 0.001],
-                        3,
-                        false,
-                    );
-                });
-            });
-            if state.filter.is_some() {
-                state.filter = Some(filter);
-            }
-            let mut enabled = state.echo.is_some();
-            if embedded_effect_group(ui, "Echo", &mut enabled) {
-                state.echo = enabled.then(Default::default);
-            }
-            let mut echo = state.echo.clone().unwrap_or_default();
-            ui.add_enabled_ui(state.echo.is_some(), |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    embedded_effect_dial(
-                        ui,
-                        &mut echo.delay_beats,
-                        "Delay (beats)",
-                        [0.001, 2.0, 0.5, 0.01],
-                        3,
-                        false,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut echo.feedback,
-                        "Feedback",
-                        [0.0, 0.95, 0.4, 0.01],
-                        2,
-                        false,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut echo.wet,
-                        "Echo volume",
-                        [0.0, 1.0, 0.35, 0.01],
-                        2,
-                        false,
-                    );
-                });
-            });
-            if state.echo.is_some() {
-                state.echo = Some(echo);
-            }
-            let mut enabled = state.robotize.is_some();
-            if embedded_effect_group(ui, "Robotize", &mut enabled) {
-                state.robotize = enabled.then(Default::default);
-            }
-            let mut robot = state.robotize.clone().unwrap_or_default();
-            ui.add_enabled_ui(state.robotize.is_some(), |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    embedded_effect_dial(
-                        ui,
-                        &mut robot.frequency_hz,
-                        "Color",
-                        [1.0, 2000.0, 80.0, 1.0],
-                        0,
-                        true,
-                    );
-                    embedded_effect_dial(
-                        ui,
-                        &mut robot.wet,
-                        "Robotize volume",
-                        [0.0, 1.0, 0.5, 0.01],
-                        2,
-                        false,
-                    );
-                });
-            });
-            if state.robotize.is_some() {
-                state.robotize = Some(robot);
-            }
-            let (band, _) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
-            controls::section(ui, band, "Distortion / output");
-            ui.horizontal_wrapped(|ui| {
-                embedded_effect_dial(
-                    ui,
-                    &mut state.dirty,
-                    "Dirty distortion",
-                    [0.0, 1.0, 0.0, 0.001],
-                    3,
-                    false,
-                );
-                embedded_effect_dial(
-                    ui,
-                    &mut state.noise,
-                    "Noise distortion",
-                    [0.0, 1.0, 0.0, 0.001],
-                    3,
-                    false,
-                );
-                embedded_effect_dial(
-                    ui,
-                    &mut state.volume,
-                    "Output volume",
-                    [0.0, 2.0, 1.0, 0.01],
-                    2,
-                    false,
-                );
-            });
+        let groups: [(EffectGroup, usize); 4] = [
+            (filter_controls, 4),
+            (echo_controls, 3),
+            (robotize_controls, 2),
+            (output_controls, 3),
+        ];
+        let spacing = ui.spacing().item_spacing.x;
+        let width = ui.available_width();
+        ui.with_layout(
+            egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = spacing.max(16.0);
+                for (group, dials) in groups {
+                    let group_width =
+                        (dials as f32 * DIAL_CELL.x + (dials - 1) as f32 * spacing).min(width);
+                    ui.allocate_ui(Vec2::new(group_width, 0.0), |ui| {
+                        ui.spacing_mut().item_spacing.x = spacing;
+                        ui.set_width(group_width);
+                        ui.vertical(|ui| group(ui, state));
+                    });
+                }
+            },
+        );
+    });
+}
+
+/// Draws one effect group.
+type EffectGroup = fn(&mut egui::Ui, &mut EffectsState);
+
+/// The size of one effect dial with its name and value.
+const DIAL_CELL: Vec2 = Vec2::new(126.0, 112.0);
+
+/// The Filter group.
+fn filter_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
+    let mut enabled = state.filter.is_some();
+    if embedded_effect_group(ui, "Filter", &mut enabled) {
+        state.filter = enabled.then(Default::default);
+    }
+    let mut filter = state.filter.clone().unwrap_or_default();
+    ui.add_enabled_ui(state.filter.is_some(), |ui| {
+        ui.horizontal_wrapped(|ui| {
+            embedded_effect_dial(
+                ui,
+                &mut filter.cutoff_hz,
+                "Cutoff",
+                [20.0, 20000.0, 2000.0, 1.0],
+                0,
+                true,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut filter.resonance,
+                "Resonance",
+                [0.0, 1.0, 0.0, 0.001],
+                3,
+                false,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut filter.drive,
+                "Overdrive",
+                [0.0, 1.0, 0.0, 0.001],
+                3,
+                false,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut filter.wet,
+                "Filter volume",
+                [0.0, 1.0, 1.0, 0.001],
+                3,
+                false,
+            );
         });
+    });
+    if state.filter.is_some() {
+        state.filter = Some(filter);
+    }
+}
+
+/// The Echo group.
+fn echo_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
+    let mut enabled = state.echo.is_some();
+    if embedded_effect_group(ui, "Echo", &mut enabled) {
+        state.echo = enabled.then(Default::default);
+    }
+    let mut echo = state.echo.clone().unwrap_or_default();
+    ui.add_enabled_ui(state.echo.is_some(), |ui| {
+        ui.horizontal_wrapped(|ui| {
+            embedded_effect_dial(
+                ui,
+                &mut echo.delay_beats,
+                "Delay (beats)",
+                [
+                    f64::from(mixjam_techno::application::MIN_ECHO_BEATS),
+                    2.0,
+                    0.5,
+                    0.01,
+                ],
+                3,
+                false,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut echo.feedback,
+                "Feedback",
+                [0.0, 0.95, 0.4, 0.01],
+                2,
+                false,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut echo.wet,
+                "Echo volume",
+                [0.0, 1.0, 0.35, 0.01],
+                2,
+                false,
+            );
+        });
+    });
+    if state.echo.is_some() {
+        state.echo = Some(echo);
+    }
+}
+
+/// The Robotize group.
+fn robotize_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
+    let mut enabled = state.robotize.is_some();
+    if embedded_effect_group(ui, "Robotize", &mut enabled) {
+        state.robotize = enabled.then(Default::default);
+    }
+    let mut robot = state.robotize.clone().unwrap_or_default();
+    ui.add_enabled_ui(state.robotize.is_some(), |ui| {
+        ui.horizontal_wrapped(|ui| {
+            embedded_effect_dial(
+                ui,
+                &mut robot.frequency_hz,
+                "Color",
+                [1.0, 20000.0, 80.0, 1.0],
+                0,
+                true,
+            );
+            embedded_effect_dial(
+                ui,
+                &mut robot.wet,
+                "Robotize volume",
+                [0.0, 1.0, 0.5, 0.01],
+                2,
+                false,
+            );
+        });
+    });
+    if state.robotize.is_some() {
+        state.robotize = Some(robot);
+    }
+}
+
+/// Distortion and the output volume.
+fn output_controls(ui: &mut egui::Ui, state: &mut EffectsState) {
+    let (band, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
+    controls::section(ui, band, "Distortion / output");
+    ui.horizontal_wrapped(|ui| {
+        embedded_effect_dial(
+            ui,
+            &mut state.dirty,
+            "Dirty distortion",
+            [0.0, 1.0, 0.0, 0.001],
+            3,
+            false,
+        );
+        embedded_effect_dial(
+            ui,
+            &mut state.noise,
+            "Noise distortion",
+            [0.0, 1.0, 0.0, 0.001],
+            3,
+            false,
+        );
+        embedded_effect_dial(
+            ui,
+            &mut state.volume,
+            "Output volume",
+            [0.0, 2.0, 1.0, 0.01],
+            2,
+            false,
+        );
     });
 }
 
@@ -165,7 +215,7 @@ fn embedded_effect_dial(
     logarithmic: bool,
 ) {
     let [low, high, reset, step] = settings;
-    let (bounds, _) = ui.allocate_exact_size(Vec2::new(126.0, 112.0), Sense::hover());
+    let (bounds, _) = ui.allocate_exact_size(DIAL_CELL, Sense::hover());
     // Absolute value fields must only advance their own column. Adding them
     // to the horizontal parent shifts the next dial down to the field baseline.
     let mut column = ui.new_child(
@@ -208,8 +258,11 @@ fn embedded_effect_dial(
                 well.shrink2(Vec2::new(2.0, 0.0)),
                 egui::DragValue::new(value)
                     .range(low..=high)
+                    .clamp_existing_to_range(false)
                     .speed(step)
-                    .fixed_decimals(decimals),
+                    .fixed_decimals(decimals)
+                    // The logarithmic dials are the frequency dials.
+                    .suffix(if logarithmic { " Hz" } else { "" }),
             ),
             &format!("{name} value"),
         );

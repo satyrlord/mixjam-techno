@@ -17,7 +17,8 @@ If a term in this skill needs a definition, read [GLOSSARY.md](GLOSSARY.md).
 1. Read the repository instructions and the complete current skill.
    Completion criterion: You know all rules that apply and all existing user changes.
 2. Collect a concrete request example for each valid branch.
-   Completion criterion: Each branch has a trigger, an output, a boundary, and a failure case.
+   Completion criterion: Each branch has a trigger, an output, a boundary, and a
+   failure case.
 3. Keep the skill model-invoked, unless the user asks for a user-invoked skill only.
    Completion criterion: The invocation policy agrees with the user's request.
 
@@ -34,7 +35,8 @@ If a term in this skill needs a definition, read [GLOSSARY.md](GLOSSARY.md).
    Completion criterion: Each context pointer states exactly when to read its target.
 5. Give each meaning one owner (single source of truth). If a repository
    document owns a fact, point to that external reference.
-   Completion criterion: No instruction, definition, command list, or policy has a second owner.
+   Completion criterion: No instruction, definition, command list, or policy has
+   a second owner.
 6. If one skill has two unrelated triggers or processes, split it (granularity).
    Completion criterion: Each skill has one action and one process.
 
@@ -45,7 +47,8 @@ cause it, split the sequence.
 ## 3. Write the skill
 
 1. Start the description with the action.
-   Completion criterion: The description states each distinct trigger once, without synonyms.
+   Completion criterion: The description states each distinct trigger once,
+   without synonyms.
 2. Write each procedure as numbered imperative steps.
    Completion criterion: Each numbered step has one action.
 3. Apply the writing policy in
@@ -54,7 +57,8 @@ cause it, split the sequence.
 4. Keep code, identifiers, paths, and command syntax unchanged.
    Completion criterion: Prose edits did not change a technical token.
 5. Remove sediment, duplication, sprawl, and no-op instructions.
-   Completion criterion: Each remaining sentence changes behavior or supplies necessary reference.
+   Completion criterion: Each remaining sentence changes behavior or supplies
+   necessary reference.
 
 ## 4. Validate the package
 
@@ -72,9 +76,11 @@ cause it, split the sequence.
    instruction change, a written walkthrough is sufficient.
    Completion criterion: Each branch follows its process without hidden context.
 4. After validation, re-read the complete package.
-   Completion criterion: No defect in a criterion, trigger, reference, or STE rule remains.
+   Completion criterion: No defect in a criterion, trigger, reference, or STE
+   rule remains.
 
-For a forward test of a complex skill or a skill with many changes, use a clean context.
+For a forward test of a complex skill or a skill with many changes, use a clean
+context.
 Give the test agent the request and the raw artifacts. Do not give it the
 expected answer or the earlier audit findings.
 

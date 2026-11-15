@@ -52,6 +52,9 @@ enum Step {
         known: BTreeSet<String>,
     },
     ClosePopups,
+    /// Take the keyboard focus from the focused control, unless it is the
+    /// control with this id, as a pointer click on another control does.
+    Defocus(String),
     Shoot(PathBuf),
     Shot {
         path: PathBuf,
@@ -337,6 +340,16 @@ impl MixJamApp {
                 }
                 Step::ClosePopups => {
                     egui::Popup::close_all(ctx);
+                    continue;
+                }
+                Step::Defocus(keep) => {
+                    ctx.memory_mut(|memory| {
+                        if let Some(focused) = memory.focused()
+                            && format!("#{}", focused.value()) != keep
+                        {
+                            memory.surrender_focus(focused);
+                        }
+                    });
                     continue;
                 }
                 Step::Shoot(path) => {

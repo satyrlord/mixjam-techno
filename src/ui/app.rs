@@ -539,6 +539,18 @@ impl MixJamApp {
             self.sample_edit.end = 0;
         }
         let noticed = self.sync_notice();
+        // Playback that ends on its own leaves no stale "playing" status.
+        if !noticed
+            && !self.status_error
+            && !self.session.playing_mix()
+            && !self.session.is_previewing()
+        {
+            if self.status == "Playing mix." {
+                self.status = "Playback ended.".into();
+            } else if self.status.starts_with("Listening") {
+                self.status = "Preview ended.".into();
+            }
+        }
         if let Some(path) = self.session.take_opened_after_scan() {
             self.clear_selection();
             if !self.status_error {

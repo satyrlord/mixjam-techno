@@ -23,10 +23,11 @@ not published.
 
 The vector source and the original render containing vector metadata
 are retained unchanged under `tmp/retired-assets/` following the owner's
-2026-10-11 cleanup. No vector artwork remains in application assets. The application uses canonical
-transparent PNGs from `assets/rail/` and `assets/app/`. The relocation receipt is
-`tmp/evidence/review-20261011-resumed/retired-assets.json`; archived manifests retain
-their original historical paths and hashes.
+2026-10-11 cleanup. No vector artwork remains in application assets. The
+application uses canonical transparent PNGs from `assets/rail/` and
+`assets/app/`. The relocation receipt is
+`tmp/evidence/review-20261011-resumed/retired-assets.json`; archived manifests
+retain their original historical paths and hashes.
 
 The font package supplies three variable WOFF2 subsets: Latin, extended Latin
 and Vietnamese. Its CSS declares weights from 300 to 700. The preserved WOFF2

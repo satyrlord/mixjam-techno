@@ -6,7 +6,12 @@ use crate::{
     effects::{self, EffectsState},
 };
 use serde::{Deserialize, Serialize};
-use std::ops::RangeInclusive;
+use std::{ops::RangeInclusive, path::PathBuf};
+
+pub mod edit;
+#[cfg(test)]
+mod edit_tests;
+pub mod history;
 
 /// The steps a pattern stores: four bars of sixteenths.
 pub const STEPS: usize = 64;
@@ -28,6 +33,8 @@ pub const VELOCITY_RANGE: RangeInclusive<u8> = 1..=100;
 pub const ACCENT_DB_RANGE: RangeInclusive<f64> = 0.0..=12.0;
 /// How long a slide takes to reach the next note's pitch.
 pub const SLIDE_MS_RANGE: RangeInclusive<f64> = 1.0..=1000.0;
+/// Where each note starts to read the source, in ms from its beginning.
+pub const START_MS_RANGE: RangeInclusive<f64> = 0.0..=2000.0;
 /// The fade at the end of every note that does not slide, so a cut never
 /// clicks.
 const END_FADE_SECONDS: f64 = 0.003;
@@ -115,6 +122,17 @@ pub struct StepSynthState {
     /// and generator sample envelopes have not been recovered.
     pub loop_source: bool,
     pub effects: EffectsState,
+    /// The scale that shades the pitch rows and that Randomise writes in.
+    pub scale: edit::Scale,
+    /// The scale's root in semitones above the source pitch, 0 to 11.
+    pub root: u8,
+    /// Where each note starts to read the source, in ms. A sound with
+    /// silence before its first hit plays on the beat with the silence cut.
+    pub start_ms: f64,
+    /// The source file the pattern plays, or `None` for the sound selected
+    /// in the palette.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PathBuf>,
 }
 impl Default for StepSynthState {
     fn default() -> Self {
@@ -130,6 +148,10 @@ impl Default for StepSynthState {
             slide_ms: 60.0,
             loop_source: false,
             effects: EffectsState::default(),
+            scale: edit::Scale::default(),
+            root: 0,
+            start_ms: 0.0,
+            source: None,
         }
     }
 }
@@ -147,6 +169,15 @@ struct Stored {
     slide_ms: f64,
     loop_source: bool,
     effects: EffectsState,
+    // Patterns saved before these fields keep the defaults.
+    #[serde(default)]
+    scale: edit::Scale,
+    #[serde(default)]
+    root: u8,
+    #[serde(default)]
+    start_ms: f64,
+    #[serde(default)]
+    source: Option<PathBuf>,
 }
 
 /// Patterns saved before ties: one optional note per step, Active bar
@@ -183,6 +214,10 @@ impl TryFrom<serde_json::Value> for StepSynthState {
             slide_ms: stored.slide_ms,
             loop_source: stored.loop_source,
             effects: stored.effects,
+            scale: stored.scale,
+            root: stored.root,
+            start_ms: stored.start_ms,
+            source: stored.source,
         })
     }
 }
@@ -269,6 +304,12 @@ impl StepSynthState {
         if !self.slide_ms.is_finite() || !SLIDE_MS_RANGE.contains(&self.slide_ms) {
             return Err("The slide time must be from 1 to 1000 ms.".into());
         }
+        if self.root > 11 {
+            return Err("The scale root must be from 0 to 11 semitones.".into());
+        }
+        if !self.start_ms.is_finite() || !START_MS_RANGE.contains(&self.start_ms) {
+            return Err("The source start must be from 0 to 2000 ms.".into());
+        }
         self.effects.validate()
     }
 
@@ -353,6 +394,14 @@ pub fn pattern_beside(wav: &std::path::Path) -> std::path::PathBuf {
 }
 
 pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
+    render_measured(source, state).map(|(pcm, _)| pcm)
+}
+
+/// Render the pattern, and say by how many dB the render was turned down to
+/// stay within full scale: 0 when it fits. Accents, velocity, and the effects
+/// can raise a normalized source above full scale; the whole render is then
+/// turned down, so no note hard-clips and the accents keep their contrast.
+pub fn render_measured(source: &Pcm, state: &StepSynthState) -> Result<(Pcm, f64), String> {
     source.validate()?;
     state.validate()?;
     if source.frames() == 0 {
@@ -373,6 +422,16 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
             .sum::<f32>()
             / channel_count as f32
     };
+    // Each note reads the source from the start; a looped source repeats
+    // from there too.
+    let start_frame = (state.start_ms / 1000.0 * sample_rate).round();
+    if start_frame >= source_frames as f64 {
+        return Err(format!(
+            "The source start, {:.0} ms, is past the end of the source.",
+            state.start_ms
+        ));
+    }
+    let loop_frames = source_frames as f64 - start_frame;
     let fade_frames = (END_FADE_SECONDS * sample_rate).round().max(1.0);
     let slide_frames = (state.slide_ms / 1000.0 * sample_rate).max(1.0);
     let notes = state.notes();
@@ -389,7 +448,7 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
         let start = frame(phrase[0].start);
         let end = frame(phrase[phrase.len() - 1].end).min(total_frames);
         let mut written_end = start.min(end);
-        let mut position = 0.0;
+        let mut position = start_frame;
         let mut current = 0;
         let mut slide_from = (f64::from(phrase[0].note), phrase[0].gain);
         let interpolate = |from: (f64, f64), to: Note, t: f64| {
@@ -420,15 +479,17 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
             } else {
                 (f64::from(note.note), note.gain)
             };
-            if state.loop_source {
-                position %= source_frames as f64;
+            if state.loop_source && position >= source_frames as f64 {
+                position = start_frame + (position - start_frame) % loop_frames;
             }
             if position >= source_frames as f64 {
                 break;
             }
             let first = position.floor() as usize;
-            let next = if state.loop_source {
-                (first + 1) % source_frames
+            let next = if state.loop_source && first + 1 >= source_frames {
+                start_frame as usize
+            } else if state.loop_source {
+                first + 1
             } else {
                 (first + 1).min(source_frames - 1)
             };
@@ -448,7 +509,7 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
             *output *= ((written_end - index) as f64 / fade_frames) as f32;
         }
     }
-    effects::process_synth(
+    let (pcm, gain) = effects::process_synth(
         &Pcm {
             sample_rate: source.sample_rate,
             channels: 1,
@@ -456,7 +517,28 @@ pub fn render(source: &Pcm, state: &StepSynthState) -> Result<Pcm, String> {
         },
         &state.effects,
         state.bpm,
-    )
+    )?;
+    Ok((pcm, -20.0 * f64::from(gain).log10()))
+}
+
+/// Where the source's first hit starts, in whole ms for the Start setting:
+/// the first frame above a twentieth of the peak, less 1 ms so the attack
+/// stays whole. A silent source gives 0.
+pub fn first_hit(source: &Pcm) -> f64 {
+    let channels = usize::from(source.channels.max(1));
+    let peak = source
+        .samples
+        .iter()
+        .fold(0.0_f32, |peak, x| peak.max(x.abs()));
+    if peak <= 0.0 || source.sample_rate == 0 {
+        return 0.0;
+    }
+    let Some(index) = source.samples.iter().position(|x| x.abs() > peak / 20.0) else {
+        return 0.0;
+    };
+    let ms = (index / channels) as f64 * 1000.0 / f64::from(source.sample_rate) - 1.0;
+    ms.floor()
+        .clamp(*START_MS_RANGE.start(), *START_MS_RANGE.end())
 }
 
 #[cfg(test)]
@@ -625,6 +707,40 @@ mod tests {
     }
 
     #[test]
+    fn a_loud_render_is_turned_down_whole_instead_of_clipping() {
+        // A full-scale source with a 6 dB accent peaks at twice full scale.
+        let mut source = flat_source();
+        source.samples.fill(1.0);
+        let mut state = rest_pattern();
+        state.steps[0] = Step::note(0);
+        state.steps[1] = Step {
+            accent: true,
+            ..Step::note(0)
+        };
+        state.accent_db = 6.0;
+        let (output, turned_down) = render_measured(&source, &state).unwrap();
+        let accent = 10f64.powf(0.3);
+        assert!(
+            (turned_down - 20.0 * accent.log10()).abs() < 1e-4,
+            "{turned_down}"
+        );
+        // The accented note reaches full scale; the plain one keeps the
+        // accent's contrast below it.
+        assert!((output.samples[135] - 1.0).abs() < 1e-6);
+        assert!((output.samples[10] - (1.0 / accent) as f32).abs() < 1e-5);
+        let full_scale = output.samples.iter().filter(|x| x.abs() >= 1.0).count();
+        assert!(
+            full_scale < 125,
+            "Only the accented step reaches full scale."
+        );
+
+        state.steps[1].accent = false;
+        let (output, turned_down) = render_measured(&source, &state).unwrap();
+        assert_eq!(turned_down, 0.0);
+        assert_eq!(output.samples[10], 1.0);
+    }
+
+    #[test]
     fn full_accent_keeps_headroom_until_the_effects_output_gain() {
         let mut source = flat_source();
         source.samples.fill(0.8);
@@ -644,6 +760,8 @@ mod tests {
         let output = render(&source, &state).unwrap();
         assert_eq!(output.samples[10], 1.0);
         output.validate().unwrap();
+        source.samples[0] = 1.0;
+        assert!(render(&source, &state).is_ok());
         source.samples[0] = 1.01;
         assert!(render(&source, &state).is_err());
     }
@@ -769,6 +887,9 @@ mod tests {
             |s| s.swing = 76,
             |s| s.accent_db = 13.0,
             |s| s.slide_ms = 0.5,
+            |s| s.root = 12,
+            |s| s.start_ms = -1.0,
+            |s| s.start_ms = 2001.0,
             |s| {
                 s.steps.pop();
             },
@@ -780,5 +901,75 @@ mod tests {
         let mut unknown = serde_json::to_value(&state).unwrap();
         unknown["extra"] = 1.into();
         assert!(serde_json::from_value::<StepSynthState>(unknown).is_err());
+
+        // The scale, root, start, and source save with the pattern; a
+        // pattern saved before them loads with the defaults.
+        state.scale = edit::Scale::Dorian;
+        state.root = 5;
+        state.start_ms = 12.0;
+        state.source = Some(PathBuf::from("kick.wav"));
+        let saved = serde_json::to_value(&state).unwrap();
+        assert_eq!(saved["scale"], "dorian");
+        assert_eq!(
+            serde_json::from_value::<StepSynthState>(saved.clone()).unwrap(),
+            state
+        );
+        let mut old = saved;
+        for field in ["scale", "root", "start_ms", "source"] {
+            old.as_object_mut().unwrap().remove(field);
+        }
+        let old = serde_json::from_value::<StepSynthState>(old).unwrap();
+        assert_eq!(
+            (old.scale, old.root, old.start_ms, old.source),
+            (edit::Scale::Minor, 0, 0.0, None)
+        );
+        let text = serde_json::to_string(&StepSynthState::default()).unwrap();
+        assert!(!text.contains("\"source\""), "{text}");
+    }
+
+    #[test]
+    fn the_start_skips_the_source_head_and_loops_from_it() {
+        let source = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: (0..100).map(|i| i as f32 / 100.0).collect(),
+        };
+        let mut state = rest_pattern();
+        state.steps[0] = Step::note(0);
+        state.gate = 100;
+        state.start_ms = 40.0;
+        let output = render(&source, &state).unwrap();
+        assert_eq!(output.samples[0], 0.4);
+        // Without a loop the 60 frames after the start run out.
+        assert_eq!(output.samples[60], 0.0);
+        state.loop_source = true;
+        let output = render(&source, &state).unwrap();
+        assert_eq!(output.samples[59], 0.99);
+        assert_eq!(output.samples[60], 0.4);
+        state.start_ms = 100.0;
+        assert!(
+            render(&source, &state)
+                .unwrap_err()
+                .contains("past the end")
+        );
+    }
+
+    #[test]
+    fn the_first_hit_is_found_after_leading_silence() {
+        let mut samples = vec![0.0; 2 * 1000];
+        samples[2 * 30] = 0.01;
+        samples[2 * 50 + 1] = -0.8;
+        let source = Pcm {
+            sample_rate: 1000,
+            channels: 2,
+            samples,
+        };
+        assert_eq!(first_hit(&source), 49.0);
+        let silent = Pcm {
+            sample_rate: 1000,
+            channels: 1,
+            samples: vec![0.0; 10],
+        };
+        assert_eq!(first_hit(&silent), 0.0);
     }
 }

@@ -22,6 +22,10 @@ The build needs these items:
 - The Visual Studio C++ build tools.
 - The Windows SDK.
 
+The checks also need Python and Node.js with npm. The application does not use
+Node.js. Run `npm ci` once to install the pinned Markdown linter in the
+gitignored `node_modules/` folder.
+
 For a shallow clone, run `git fetch --unshallow` before the build.
 `tools/runtime/install-rust.ps1` installs Rust in `local-data/toolchain/`, and
 does not change the user PATH. `tools/runtime/cargo.ps1` runs that toolchain.
@@ -61,7 +65,13 @@ the same version in that form to `Cargo.toml` and `Cargo.lock` before each run:
 .\tools\runtime\cargo.ps1 -CargoArguments @('fmt','--all','--','--check')
 python tools/check-rust-format.py
 python -m unittest discover -s tools/tests -v
+npm run lint:md
 ~~~
+
+`npm run lint:md` runs markdownlint-cli2 on each Markdown file that Git tracks
+or does not ignore. `.markdownlint-cli2.jsonc` holds the rules. Prose lines
+have a maximum of 80 columns. Tables, code blocks, and headings have no limit.
+`npm run lint:md:fix` corrects the issues that have an automatic fix.
 
 The format check passes some code that rustfmt does not format:
 

@@ -16,7 +16,7 @@ Score each part from 1 to 10 to one decimal, then give the weighted total to
 one decimal.
 
 | Part | Weight | What it covers |
-|---|---|---|
+| --- | --- | --- |
 | Composition and harmony | 25% | the motif and its presence from early on, harmonic movement, key coherence, development, identity against the reference album |
 | Arrangement and form | 25% | section roles and contrast, turnover, transitions, intro and outro, story fit |
 | Sound palette | 20% | sound choice and quality, tuning between layers, coherence with the reference tone, no glitches, clicks, or abrupt stops |

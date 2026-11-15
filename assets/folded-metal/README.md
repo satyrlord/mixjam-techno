@@ -51,8 +51,8 @@ verifies mean, variance, Gaussian fourth moment, and matching channel offsets.
 Shared 36 by 36 rotary caps and 48 by 24 primary-button grain tiles are original
 procedural control artwork. Knobs are rendered at eight times each target size,
 then reduced once with premultiplied-alpha Lanczos filtering. This antialiases
-the silhouette and grip details without runtime scaling. Interaction, text, focus, position indicators and
-inset panel borders remain native controls.
+the silhouette and grip details without runtime scaling. Interaction, text,
+focus, position indicators and inset panel borders remain native controls.
 
 Prepare assets with `python tools/assets/render-folded-metal.py`. Verify the
 prepared images and source provenance without changes with

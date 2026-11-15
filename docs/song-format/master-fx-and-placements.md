@@ -14,7 +14,7 @@
 pedal keys are:
 
 | Key | Settings |
-|---|---|
+| --- | --- |
 | `boosterEq` | ten `bands` from 0 to 100 (50 is flat) |
 | `boosterCompressor` | `drive`, `speed`, and `gain`, each from 0 to 1000, and `key` |
 | `boosterWide` | `spread` from 0 to 1000 |
@@ -76,7 +76,7 @@ A `module` is one of these:
 `emberform-drive` holds these settings:
 
 | Key | Value |
-|---|---|
+| --- | --- |
 | `shape` | `tube`, `tape`, `overdrive`, `fuzz`, `hard-clip`, `foldback`, `rectifier`, or `bitcrush` |
 | `driveDb` | 0 to 48 |
 | `asymmetryPercent` | 0 to 100 |

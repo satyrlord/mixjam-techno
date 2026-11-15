@@ -576,15 +576,60 @@ impl MixJamApp {
         }
     }
 
-    pub(super) fn step_synth_pcm(&self) -> Result<Pcm, String> {
-        self.session.step_synth_pcm(
-            self.source_id(),
-            self.step_synth.file.as_deref(),
-            &self.step_synth.state,
-        )
+    /// The rendered pattern, and a note when it was turned down to stay
+    /// within full scale.
+    pub(super) fn step_synth_pcm(&self) -> Result<(Pcm, Option<String>), String> {
+        let (pcm, turned_down) = self
+            .session
+            .step_synth_pcm(self.source_id(), &self.step_synth.state)?;
+        let note = (turned_down >= 0.05).then(|| {
+            format!(
+                " It peaked {turned_down:.1} dB over full scale, so all of it plays \
+                 {turned_down:.1} dB lower to keep from clipping."
+            )
+        });
+        Ok((pcm, note))
     }
 
+    /// Set the Step synth start to the source's first hit.
+    pub(super) fn step_synth_find_start(&mut self) {
+        let feedback = match self
+            .session
+            .step_synth_source(self.source_id(), &self.step_synth.state)
+        {
+            Ok(source) => {
+                let start = mixjam_techno::application::pattern::first_hit(&source);
+                self.step_synth.grid.edit("the start change");
+                self.step_synth.state.start_ms = start;
+                (format!("Start set to the first hit, {start:.0} ms."), false)
+            }
+            Err(error) => (format!("Cannot find the first hit: {error}"), true),
+        };
+        self.step_synth_say(feedback.0, feedback.1);
+    }
+
+    /// Show a Step synth message on the board's status line and on the main
+    /// one, so the two lines never disagree.
+    pub(super) fn step_synth_say(&mut self, text: impl Into<String>, error: bool) {
+        let text = text.into();
+        if error {
+            self.error(text);
+        } else {
+            self.message(text);
+        }
+        self.step_synth_notice();
+    }
+
+    /// Copy the main status to the board's status line. The message keeps
+    /// the current source, so it stays when the board next draws.
     pub(super) fn step_synth_notice(&mut self) {
+        self.step_synth.feedback.source = self
+            .step_synth
+            .state
+            .source
+            .is_none()
+            .then(|| self.source_id())
+            .flatten();
         self.step_synth.feedback.message = Some(self.status.clone());
         self.step_synth.feedback.error = self.status_error;
     }

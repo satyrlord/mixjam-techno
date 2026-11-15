@@ -24,7 +24,7 @@ the finding format, the round log, and the generic targets.
 1. Find the row of the request in this table.
 
    | Request | Branch | Steps to do |
-   |---|---|---|
+   | --- | --- | --- |
    | You are launched as one of the roles | Role | The role rules below, then your role file only |
    | Feedback or a rating only | Evaluation | 2, 3, the evaluation rules below, 10 |
    | A mastering recommendation only | Recommendation | 2, 3, 8.1, 10 |
@@ -80,7 +80,8 @@ blocker.
 ## 2. Prepare the review
 
 1. Read `AGENTS.md`, `.env.example`, and `tools/song/README.md`.
-   Completion criterion: You know the tools and the `.env.local` keys that they need.
+   Completion criterion: You know the tools and the `.env.local` keys that they
+   need.
 2. Read the artist profile at the path that `ARTIST_PROFILE` sets. An
    environment variable overrides `.env.local`.
    Completion criterion: You know the style, the rules, the targets, the
@@ -200,7 +201,8 @@ follow this skill in the named role.
    or in the rejected table.
 3. Reject a finding that breaks a rule of the artist profile, undoes an
    accepted fix, or repeats a rejected finding without new evidence.
-   Completion criterion: Each of these rejections names the rule or the earlier round.
+   Completion criterion: Each of these rejections names the rule or the earlier
+   round.
 4. Build the next pass with the accepted fixes.
    Completion criterion: The accepted table states each change as built, with
    bars and tracks.
@@ -238,7 +240,8 @@ or the next round started. The defaults for a song without a profile are in the
 2. Accept or reject the board and each mix problem in the round log.
    Completion criterion: Each decision has a reason.
 3. Fit the accepted board:
-   `python -I tools/song/master.py PREMASTER BOARD.json OUT_DIR --song SONG --fit DB`.
+   `python -I tools/song/master.py PREMASTER BOARD.json OUT_DIR --song SONG
+   --fit DB`.
    Completion criterion: The fitted `OUT_DIR/board.json` exists. The loud
    blocks of the premaster test meet the target, or your report states the
    difference.
@@ -249,7 +252,8 @@ or the next round started. The defaults for a song without a profile are in the
    `.\target\release\mixjam-techno.exe render --mix SONG --output FINAL_DIR/master.wav`.
    Completion criterion: The final WAV comes from the fitted song.
 6. Measure that render:
-   `python -I tools/song/master.py PREMASTER OUT_DIR/board.json FINAL_DIR --song SONG --no-render`.
+   `python -I tools/song/master.py PREMASTER OUT_DIR/board.json FINAL_DIR --song
+   SONG --no-render`.
    Completion criterion: The round log has the result and each difference
    from the premaster test. Your report states the limits in
    [Measurement limits](REFERENCE.md#measurement-limits) that apply.
