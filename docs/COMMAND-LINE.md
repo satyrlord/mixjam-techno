@@ -1,6 +1,6 @@
 # Command line
 
-The executable has headless commands for inspection, conversion, and rendering.
+The executable has headless commands for inspection, conversion, and render.
 They open no window and play no sound.
 
 ~~~powershell
@@ -10,27 +10,40 @@ They open no window and play no sound.
 .\target\release\mixjam-techno.exe render --samples '.\samples' --mix 'song.mixjam' --stems '.\song tracks'
 ~~~
 
-`--samples PATH` selects a WAV folder. Give `--samples` up to 9 times to use
-several library folders; the application merges them into one set of sounds, as
-the Libraries window does. A folder that cannot be read is left out with a
-warning on standard error; the command fails when no folder can be read.
-`--source-bpm BPM` supplies the fallback tempo for unrecognized WAVs in folders
-whose loop lengths do not agree on one.
-`inspect` reports how many identities the audio verified and lists WAVs whose
-audio differs from the sample they are named after. It also lists the sample
-catalogs loaded from `assets/catalog` and each catalog file that did not load,
-with the reason. Every command reports such a file on standard error.
-`convert` saves a `.mixjam` song;
-`render` writes stereo WAV. With `--stems FOLDER` instead of `--output`, `render`
-writes what Export tracks writes: each track that plays and each fed FX
-return to its own WAV in that folder, which it creates if needed, without the
-master pedalboard. A track or return that exceeds the 16-bit range stops the
-export before destination files change. Lower its level or the master gain
-and retry. The files sum to the bypassed mix when that mix does not clip.
+## Sample folders
+
+`--samples PATH` selects a WAV folder. To use more than one library folder,
+give `--samples` up to 9 times. The application merges the folders into one set
+of sounds, as the Sample libraries page in Options does. A folder that cannot be
+read is left out, with a warning on standard error. The command fails when no
+folder can be read.
+
+`--source-bpm BPM` gives the fallback tempo for unrecognized WAVs in folders
+whose loop lengths do not agree on one tempo. The default is 140.
 
 ~~~powershell
 .\target\release\mixjam-techno.exe render --samples '.\drums' --samples '.\loops' --mix 'song.mixjam' --output 'song.wav'
 ~~~
+
+## Commands
+
+`inspect` reports how many identities the audio verified. It lists the WAVs
+whose audio is different from the sample that gives them their name. It also
+lists the sample catalogs that loaded from `assets/catalog`, and each catalog
+file that did not load, with the reason. Each command reports such a file on
+standard error.
+
+`convert` saves a `.mixjam` song. `render` writes a stereo WAV.
+
+With `--stems FOLDER` in place of `--output`, `render` writes the same files as
+Export tracks. It writes each track that plays and each FX return that gets
+signal to its own WAV in that folder, without the master pedalboard. If the
+folder does not exist, `render` makes it. If a track or return goes above the
+16-bit range, the export stops before the destination files change. Then
+decrease its level or the master gain, and try again. When the bypassed mix
+does not clip, the sum of the files is equal to that mix.
+
+## Launcher
 
 To start the window with a WAV folder and a song, use the launcher. `-Samples`
 takes a list of up to 9 folders:
@@ -40,5 +53,5 @@ takes a list of up to 9 folders:
 .\run.ps1 -Samples '.\drums','.\loops' -Mix '.\song.mixjam'
 ~~~
 
-`mixjam-techno --help` lists every option. [AGENT-CONTROL.md](AGENT-CONTROL.md)
+`mixjam-techno --help` lists all options. [AGENT-CONTROL.md](AGENT-CONTROL.md)
 describes the `agent` command.

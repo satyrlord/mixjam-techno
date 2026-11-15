@@ -1,141 +1,179 @@
 # Components: Mixer, tool windows, and FX returns
 
-## Mixer and tool windows
+## Mixer
 
-Mixer uses compact ivory strips against a graphite material surround. Track
-identity and gain lead the hierarchy. L/R routing uses small named toggle
-buttons with live enabled indicators. Mute and Solo sit in their own row
-above polarity and L/R, after a 26 by 24-point EQ button above polarity that
-fills amber while the EQ, drive, compressor, or ducker is on, or the width differs
-from 100%. The status line under pan names why a track is
-silent: Muted, then No output (both L and R off), then Solo elsewhere.
-Gain runs from
-negative infinity (silence) to +12 dB with 0 dB at unity. Negative dB attenuates
-the signal. Values round to one decimal place at rest; the active entry field
-shows full precision. Focus without an edit must not change saved amplitude
-or audio. Relative increases must leave silence and raise very quiet positive
-gains. A saved gain below -96 dB must not become silent when increased.
-Master uses the same dB presentation and remains outside the scroller. In
-place of pan and routing it shows Main output and L + R, and under them an
-80 by 24-point Bypass button that fills amber while the master pedalboard is
-bypassed. A bypassed Mastering board draws at 45% opacity and stays usable.
+Mixer uses compact ivory strips in a graphite material surround. Track
+identity and gain are first in the hierarchy. Strips show only for occupied
+tracks. Track and Master strips are 108 points wide. Master stays outside the
+horizontal track scroller, and the scroller keeps its scroll bar visible.
+Track numbers, sound summaries, dB gain values, pan descriptions, and output
+state stay grouped in each strip. A track with several different sounds shows
+their count, and lists their names on hover. Narrow strips keep the visible
+tracks without larger controls.
+
+L/R routing uses small named toggle buttons with live enabled indicators. Two
+rows of buttons are at the foot of a track strip:
+
+- The upper row: a 26 by 24-point EQ button, Mute, and Solo. The EQ button
+  fills amber while the EQ, drive, compressor, or ducker is on, or while the
+  width is not 100%.
+- The lower row: polarity, L, and R.
+
+The status line under pan tells why a track is silent: Muted, then No output
+(both L and R off), then Solo elsewhere.
+
+Gain runs from negative infinity (silence) to +12 dB, with 0 dB at unity.
+Negative dB attenuates the signal. Values round to one decimal place at rest.
+The active entry field shows full precision. Focus without an edit must not
+change the saved amplitude or the audio. Relative increases must leave
+silence and raise very quiet positive gains. A saved gain below -96 dB must
+not become silent when it increases.
+
+Master uses the same dB presentation and stays outside the scroller. In place
+of pan and routing, it shows Main output and L + R. Under them, an 80 by
+24-point Bypass button fills amber while the master pedalboard is bypassed. A
+bypassed Mastering board draws at 45% opacity and stays usable.
+
+### Channel EQ window
 
 The channel EQ window uses the neutral Utility palette. A power switch and
-Reset share its top row; the response curve, from 20 Hz to 20 kHz and ±24 dB
-on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB steps,
-follows; six columns below name the bands, Low cut, Low shelf, Mid peak, Peak
-2, High shelf, and High cut, with their Mastering dials stacked. The curve uses the
-palette's print color while the EQ is on and faint cream while it is off;
-the dials are disabled while it is off. Below the EQ, the drive's power switch
-starts a row of five dials in the band columns: Amount, Character, Mix, Focus,
-and Output. These dials are disabled while the drive is off. Below the drive,
-the compressor's power switch starts a row of five dials in the band columns,
-Thresh, Ratio, Attack,
-Release, and Makeup, disabled while the compressor is off; the sixth column,
-headed Stereo, holds the Width dial, which has no switch. Below them, the
-ducker's power switch starts a row of five dials in the same columns, Key (a
-track number), Thresh, Depth, Attack, and Release, disabled while the ducker
-is off. Each section starts under a divider. The Key dial steps over the
-window's own track. The window's content is 520 points wide. Its default outer
-width reserves the vertical scrollbar, so a short viewport scrolls the content
-vertically without adding horizontal overflow. The strip's EQ button lights
-while the EQ, drive, compressor, or ducker is on, or while the width is not 100%.
+Reset share its top row. The response curve follows: from 20 Hz to 20 kHz and
+±24 dB, on a dark inset with grid lines at 100 Hz, 1 kHz, 10 kHz, and 12 dB
+steps. Below the curve, six columns name the bands: Low cut, Low shelf, Mid
+peak, Peak 2, High shelf, and High cut. Each column stacks the Mastering dials
+of its band. The curve uses the print color of the palette while the EQ is on,
+and faint cream while it is off. The dials are disabled while the EQ is off.
 
-Four send knobs sit below each track's gain rail. After the tracks, four return
-strips hold the FX bus return levels, input switches, limiter switches, and
-Edit buttons. Edit opens the selected bus on the FX returns board.
+Each of the next sections starts under a divider, with its power switch first
+in a row of five dials in the band columns:
+
+| Section | Dials | Notes |
+| --- | --- | --- |
+| Drive | Amount, Character, Mix, Focus, Output | Disabled while the drive is off. |
+| Compressor | Thresh, Ratio, Attack, Release, Makeup | Disabled while the compressor is off. The sixth column, headed Stereo, holds the Width dial, which has no switch. |
+| Ducker | Key (a track number), Thresh, Depth, Attack, Release | Disabled while the ducker is off. The Key dial steps over the track of the window. |
+
+The content of the window is 520 points wide. Its default outer width keeps
+space for the vertical scroll bar. Thus a short viewport scrolls the content
+vertically and adds no horizontal overflow.
+
+### Sends and returns
+
+Four send knobs sit below the gain rail of each track. After the tracks, four
+return strips hold the FX bus return levels, input switches, limiter switches,
+and Edit buttons. Edit opens the selected bus on the FX returns board.
+
+### Gain taper
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots
-are silence at 0, -60 dB at 0.08, -36 dB at 0.16, -24 dB at 0.28, -12 dB at
-0.46, unity at 0.70, and +12 dB at 1. The bottom segment maps linear amplitude
-to exact zero; the remaining segments interpolate in dB. Thus 72% of travel
-serves -24 through +12 dB. The scale marks useful values without spreading
-very quiet settings over most of the rail. Its labels are +12, 0, -12, -24,
--48, and negative infinity; 0 sits left of the rail beside the Unity button. These knots record the current
+are:
+
+| Position | Level |
+| --- | --- |
+| 0 | silence |
+| 0.08 | -60 dB |
+| 0.16 | -36 dB |
+| 0.28 | -24 dB |
+| 0.46 | -12 dB |
+| 0.70 | 0 dB (unity) |
+| 1 | +12 dB |
+
+The bottom segment maps linear amplitude to exact zero. The other segments
+interpolate in dB. Thus 72% of the travel serves -24 through +12 dB. The scale
+marks useful values and does not spread very quiet settings over most of the
+rail. Its labels are +12, 0, -12, -24, -48, and negative infinity. The 0 label
+sits left of the rail, beside the Unity button. These knots record the current
 implementation, not a universal DAW taper.
 
-The small Unity button sits at the 0 dB gain mark. The small Center button
-resets pan at its rail midpoint. A separate slashed-circle button reverses
-both channels' polarity. Amber means inverted and its checked state is named.
-Polarity stays independent of gain and pan, even at silence; Unity leaves it
-unchanged. Pan retains a readable left/center/right value. Every control has
-a track-specific accessible name; Master has its own gain labels. The header
-is the lower panel's top row. Control-specific tooltips and the Help
-window explain silence, unity, attenuation, and independent polarity.
+### Strip controls
 
-`src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a separate
-24 by 32-point fader cap. Three PNGs hold the one prepared size of each. The
-tiny cap is first reduced to a 48 by 64-pixel canonical grid before preparing
-its final size, preserving broad ridges and its ivory indicator stripe. All
-text, values, rails, ticks, reset buttons, polarity, routing, focus, and hover
-remain native. Paint one texel per physical pixel with aligned bounds; tile
-materials without runtime texture resizing.
-See `assets/mixer/README.md` for exact prompts, source hashes, and reproduction.
-Native mixer buttons use Mixer Face at rest and shared Raised on hover;
-keyboard focus changes their one-point border to Mixer Amber and adds a
-two-point Mixer Ink ring, because amber alone is illegible on ivory. The gain
-rail, pan rail, and value field show the same ink ring or a cream edge. Each 28 by
-24-point M/S/L/R button pairs its letter with a 12 by 2-point indicator bar.
-Arrangement and mixer M/S/L/R labels use Accent when on and Muted when off.
-Both expose the same checked state and a track-specific on/off tooltip. Lane
-controls show keyboard focus. A lane edit requests a repaint so the already
-drawn mixer refreshes even if the pointer stops. Pan remains independent of L/R.
-The sample-conflict modal confirms only through Keep choices, because
-confirmation is an undoable project change; Esc hides it without an edit and
-the status bar reopens it.
-The idle status is a usage hint in Muted: "Space plays the song. Drag a sound
-from the Sounds panel onto the score. Ctrl+K lists every command." It
-truncates with the full text as a hover hint. Errors and application notices
-replace it and remain visible.
-The empty mixer has one instruction for adding a sound to the arrangement.
-All tool windows and utility dialogs use the same Folded Metal shell. The
-frontend submits edits to the application layer; visual changes preserve those
-commands.
+The small Unity button sits at the 0 dB gain mark. The small Center button
+resets pan at the midpoint of its rail. A separate slashed-circle button
+reverses the polarity of both channels. Amber means inverted, and its checked
+state is named. Polarity stays independent of gain and pan, even at silence.
+Unity does not change it. Pan keeps a readable left, center, or right value.
+Every control has an accessible name for its track. Master has its own gain
+labels. The header is the top row of the lower panel. Control tooltips and the
+Help window explain silence, unity, attenuation, and independent polarity.
+
+`src/ui/mixer/artwork.rs` paints prepared ivory and graphite tiles and a
+separate 24 by 32-point fader cap. Three PNGs hold the one prepared size of
+each. The small cap is first reduced to a 48 by 64-pixel canonical grid, then
+prepared at its final size, to keep the broad ridges and the ivory indicator
+stripe. All text, values, rails, ticks, reset buttons, polarity, routing,
+focus, and hover stay native. Paint one texel per physical pixel with aligned
+bounds. Tile the materials without resizing textures at runtime. See
+`assets/mixer/README.md` for the exact prompts, source hashes, and
+reproduction steps.
+
+Native mixer buttons use Mixer Face at rest and the shared Raised on hover.
+Keyboard focus changes their one-point border to Mixer Amber and adds a
+two-point Mixer Ink ring, because amber alone is not legible on ivory. The
+gain rail, pan rail, and value field show the same ink ring or a cream edge.
+Each 28 by 24-point M/S/L/R button pairs its letter with a 12 by 2-point
+indicator bar. Arrangement and mixer M/S/L/R labels use Accent when on and
+Muted when off. Both expose the same checked state and an on/off tooltip for
+the track. Lane controls show keyboard focus. A lane edit requests a repaint,
+so that the mixer refreshes even if the pointer stops. Pan stays independent
+of L/R.
+
+The empty Mixer shows one instruction that tells how to add a sound to the
+arrangement. The frontend sends edits to the application layer. Visual
+changes keep those commands.
 
 ## FX returns board
 
-The FX returns board shows four bus units side by side on a Marine board. The
-row scrolls in both directions when necessary. Each raised unit identifies its
-bus and effect, and provides the effect and preset selectors, settings, return
-level, input and limiter switches, and Clear tail. Empty units ask the user to
-choose an effect. Echoform Delay uses blue enamel, Aetherform Reverb uses
-violet enamel, and Emberform Drive uses ember enamel. An inactive or empty unit dims its enclosure and lamp.
+The FX returns board shows four bus units side by side on a Marine board. If
+necessary, the row scrolls in both directions. Each raised unit identifies its
+bus and effect. It holds the effect and preset selectors, the settings, the
+return level, the input and limiter switches, and Clear tail. An empty unit
+asks the user to choose an effect. The enamel of each effect is:
+
+- Echoform Delay: blue.
+- Aetherform Reverb: violet.
+- Emberform Drive: ember.
+
+An inactive or empty unit dims its enclosure and lamp.
 
 ## Shared shell and controls
 
-`src/ui/dialog.rs` owns shell layout, position, resizing, and open/collapsed state.
-`src/ui/controls.rs` owns the shared header controls, action buttons, rotary dials,
-sliders, switches, and value entry. Tool bodies own values, validation, and actions.
-A tool must not introduce another button renderer or a complete per-tool skin.
-The same rules apply to Help, task confirmations, and musical editors.
+All tool windows and utility dialogs use the same Folded Metal shell.
+`src/ui/dialog.rs` owns the layout, position, resize, and open or collapsed
+state of the shell. `src/ui/controls.rs` and `src/ui/controls/` own the shared
+header controls, action buttons, rotary dials, sliders, switches, and value
+entry. Tool bodies own values, validation, and actions. A tool must not add
+another button renderer or a complete skin of its own. The same rules apply to
+Help, task confirmations, and musical editors.
 
-Secondary buttons use dark faces and cream text; primary buttons use pale metal
-and dark ink. Destructive actions have explicit names and the rust-red Danger face.
-Tertiary buttons, for rare reversible actions such as Restore options defaults,
-show underlined cream text and gain the dark face only on hover or press. All roles use
-the same padding, label alignment, focus, hover, pressed, and disabled behavior.
-Help lines under a control use the 12-point text face in the theme's help
-colour, quieter than the 13-point label, with 4 points to their control
-and more space before the next group.
-Enabled button labels retain at least 4.5:1 contrast in their resting, hovered,
-and pressed states, including the material's highlights and shading.
-Disabled controls explain why they are unavailable. Preserve accessible names,
-numeric values, ranges, selected states, and keyboard actions.
+Secondary buttons use dark faces and cream text. Primary buttons use pale
+metal and dark ink. Destructive actions have explicit names and the rust-red
+Danger face. Tertiary buttons are for rare reversible actions, such as Restore
+options defaults. They show underlined cream text, and get the dark face only
+on hover or press. All roles use the same padding, label alignment, focus,
+hover, pressed, and disabled behavior.
 
-Rotaries share 150 logical points of full-range drag travel. Accumulate unrounded
-movement, apply Shift fine adjustment only to new movement, and stop changing a
-value when the pointer stops. Consume wheel events once. Preserve reset, exact
-entry, arrow keys, Home/End, and accessible numeric actions. Parameter definitions
-retain logarithmic mapping and discrete choices. Display rounding never changes a
-draft.
+A help line under a control uses the 12-point text face in the help color of
+the theme, quieter than the 13-point label. It sits 2 points below its control,
+with more space before the next group. Enabled button labels keep at least
+4.5:1 contrast in their resting, hovered, and pressed states, including the
+highlights and shading of the material. Disabled controls tell why they are
+not available. Keep accessible names, numeric values, ranges, selected states,
+and keyboard actions.
 
-Tempo choices use the stepped tempo slider, after the original products' speed slider: one
-notch per supported tempo at even spacing, a silver cap, and snapping to the
-nearest notch on press, drag, wheel, arrow keys, Home/End, and accessible numeric
-actions. Arrow keys keep focus. The compact form, in the top bar and Step synth,
-reads the value at its right end; Time Stretcher's form labels every notch.
+Rotaries share 150 logical points of drag travel for the full range.
+Accumulate the unrounded movement. Apply the Shift fine adjustment only to new
+movement. Stop the change of a value when the pointer stops. Use each wheel
+event once. Keep reset, exact entry, arrow keys, Home/End, and accessible
+numeric actions. Parameter definitions keep logarithmic mapping and discrete
+choices. Display rounding never changes a draft.
 
-Keep status inside the shared shell, with error text and recovery actions where
-needed. Long feedback wraps or scrolls. Preserve the full tooltip and accessible
-status. Existing Help actions remain available after collapse. The main workspace
-and Mixer do not adopt this floating-window redesign.
+Tempo choices use the stepped tempo slider: one notch per supported tempo at
+even spacing, and a silver cap. The slider snaps to the nearest notch on
+press, drag, wheel, arrow keys, Home/End, and accessible numeric actions.
+Arrow keys keep focus. The compact form, in the top bar and Step synth, reads
+the value at its right end. The form in Time Stretcher labels every notch.
+
+Keep status inside the shared shell, with error text and recovery actions
+where necessary. Long feedback wraps or scrolls. Keep the full tooltip and
+accessible status. Help actions stay available after collapse. The main
+workspace and Mixer do not use the floating-window shell.

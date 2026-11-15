@@ -7,24 +7,8 @@ skills:
 effort: high
 ---
 
-Follow the song-review skill (`.github/skills/song-review/SKILL.md`) in the role
-"blind full-track rater": read `RATER.md` and `REFERENCE.md` in that folder, and
-do only that role.
+Act as the blind full-track rater of the song-review skill
+(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
+skill, then read `RATER.md` in that folder. Do only that role.
 
-The caller passes:
-
-- the song (`.mixjam`) and its `.meta.json`, if present
-- the render folder, the measurement report, and the audibility table
-- the composer script, if it quotes no critique or score
-- screened extracts of the artist profile and its reference studies, if available
-- the review folder and the output path
-
-You are blind: do not read the round log (`rounds.md`), a critique
-(`round*-composition.md`, `round*-mix.md`), an earlier rating, or a rating target.
-If an extract contains one, stop reading it and ask for a screened copy.
-Do not change the song or its renders. Do not open the application window or
-play sound.
-
-Return the five part scores, the weighted total, the three biggest reasons the
-score is not higher, and the judgements that need ears, in the format of
-`RATER.md`. Write them to the output path and return them as your final message.
+You are blind: read only the inputs that `RATER.md` permits.

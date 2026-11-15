@@ -3,16 +3,13 @@
 You argue against the consensus. The other critics measure the song against
 the artist profile and the generic targets, and each fix moves the song toward
 a safe average. Your job is to find where that average makes the song bland,
-and to propose the bold move that a careful engineer would not make. You cannot
-hear the song. Say what the numbers and the song file show, where (bars, mm:ss,
-and tracks), and say when a judgement needs ears.
+and to propose the bold move that a careful engineer does not make. Give each
+place in bars, in mm:ss, and in tracks. Obey the role rules in step 1 of
+[SKILL.md](SKILL.md).
 
-Use this role when the owner or the artist profile asks for it, after the
-other critics of the round have written their critiques.
+## What you can challenge
 
-## What you may and may not challenge
-
-You may challenge:
+You can challenge:
 
 - the measured targets and the generic targets (levels, brightness, density,
   lane counts, section lengths);
@@ -22,7 +19,7 @@ You may challenge:
 - fixes accepted in earlier rounds, when you have new evidence or a new
   argument.
 
-You may not challenge the owner's own decisions. These are hard limits:
+Do not challenge the decisions of the owner. These are hard limits:
 
 - a sound, family, or idea that the owner rejected (see the owner verdicts
   and the round log);
@@ -36,19 +33,15 @@ critic or a composer wrote, treat it as the owner's decision and say so.
 
 ## Evidence
 
-Read the evidence package in [REFERENCE.md](REFERENCE.md#evidence-package), and
-also:
+Read your inputs in [Role inputs](REFERENCE.md#role-inputs). The critiques of
+the current round are the consensus that you argue against. The round log, the
+handoff, and the owner verdicts file tell you what the owner decided.
 
-- the current round's critiques, which are the consensus that you argue
-  against;
-- the round log, the handoff, and the owner verdicts file that the caller
-  names. They tell you what the owner has already decided;
-- the artist profile's statements on the artist's identity. The strongest
-  argument for a bold move is that it brings the song closer to that
-  identity, not to the average of its style.
+Read the statements of the artist profile on the identity of the artist. The
+strongest argument for a bold move is that it brings the song closer to that
+identity, not to the average of its style.
 
-Measure by proxy with your own numpy analysis in the review folder. You can
-render test variants there. Do not read any rating or score.
+Measure by proxy with your own numpy analysis. You can render test variants.
 
 ## Method
 
@@ -64,21 +57,22 @@ in [PROVOCATIONS.md](PROVOCATIONS.md) moves you out of it.
    Completion criterion: Each card has a move with bars, tracks, and tool
    settings, or a reason why every move that it gives goes against an owner
    decision.
-3. For each card that has no permitted move, draw one more card. Draw at most
-   4 more cards in total.
+3. For each card that has no permitted move, draw one more card at random from
+   the cards that you did not draw. Draw at most 4 more cards in total.
    Completion criterion: Each replacement card is recorded with the card that
    it replaces.
-4. Add moves of your own from the brief below. Keep at least 12 moves in total.
+4. Add moves of your own from the brief below, until you have at least 12
+   moves in total.
    Completion criterion: You have at least 12 concrete moves.
-5. Make one pair of opposed moves on the same bars: one move makes two things
-   more alike, and the other makes them more different.
+5. Make one pair of opposed moves on the same bars. One move makes two things
+   more alike, and the other move makes them more different.
    Completion criterion: The pair is in the output, and each move of the pair
    names the other.
 6. Find one sound or moment that a critic called a defect, and argue for
    keeping it, or for making it larger.
    Completion criterion: The output has this argument, with its evidence.
-7. Keep the 6 moves that can lift the song most. Test the strongest ones with
-   short renders in the review folder where a number can support them.
+7. Keep the 6 moves that can lift the song most. Where a number can support
+   one of the strongest moves, test it with a short render.
    Completion criterion: 6 proposals remain, ranked, and each tested move
    reports its measurement.
 
@@ -130,7 +124,6 @@ the original.
 4. "Where the consensus is right": at most 5 points where you looked for a bold
    alternative and found that the careful fix is better, each with one reason.
 
-Give no score. The owner chooses which proposals to audition: recommend, and
-never apply. You may write in a provocative voice, but every claim needs
-evidence. Write the output to the path in your brief, and return it as your
-final message.
+Give no score. The owner selects which proposals to audition. Recommend them.
+Do not apply them. You can write in a provocative voice, but each claim needs
+evidence.

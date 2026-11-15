@@ -2,13 +2,16 @@
 
 ## Master pedalboard
 
-`master` holds `trim`, the gain before the first pedal, from -24 to 24 dB;
-`order`, the signal path from the mixer to the output; one record per pedal
-with `on` and its settings; and, when it is true, `bypass`, which skips the
-whole board, the trim included, for playback and export.
+`master` holds these keys:
 
-`order` names each pedal once and ends with `limiter`. The pedal keys of
-versions 16 to 24 are:
+- `trim`, the gain before the first pedal, from -24 to 24 dB.
+- `order`, the signal path from the mixer to the output.
+- One record for each pedal, with `on` and its settings.
+- `bypass`, saved only when it is true. It skips the whole board, the trim
+  included, for playback and export.
+
+`order` names each pedal once and ends with `limiter`. From version 16, the
+pedal keys are:
 
 | Key | Settings |
 |---|---|
@@ -27,66 +30,101 @@ versions 16 to 24 are:
 | `limiter` | `gain` from 0 to 12 dB, `ceiling` from -3 to 0 dBTP, and `key` |
 
 `key`, from version 17, is the track from 1 to 64 that the dynamics pedal
-listens to, or 0 for its own input. A pedal whose key is 0 omits it.
+listens to. The value 0 is the own input of the pedal. A pedal whose key is 0
+omits it.
 
 Versions 11 to 15 name the three Booster pedals with earlier keys, in the
-record and in `order`; `BOOSTER_KEYS` in `src/mixjam/song.rs` lists both key
-sets. Those versions open with the same settings, and they reject the
-version-16 keys. Version 16 rejects the earlier keys. Out-of-range or
-non-finite values, unknown pedals or keys, and an order that misses or repeats
-a pedal reject.
+record and in `order`. `BOOSTER_KEYS` in `src/mixjam/song/migration.rs` lists
+both key sets. Those versions open with the same settings, and they reject
+the version-16 keys. Version 16 rejects the earlier keys.
+
+The reader rejects these defects:
+
+- A value that is out of range or not finite.
+- An unknown pedal or key.
+- An `order` that misses a pedal or repeats a pedal.
 
 ## FX buses
 
-`fxBuses` holds exactly four buses in order, each with `module`, `powered`,
-`returnLevel` from 0 to 1, and `limiter`. From version 23 a bus may also hold
-`returnAutomation`, its return lane: a list of `{"tick", "value"}` points in
-strictly increasing tick order within the timeline, each value from 0 to 2,
-where 1 is the full return and 2 about +6 dB. A bus whose lane has no points
-omits the key. While the lane has points it replaces `returnLevel` for
-playback, export, and stems; like the volume lane it holds its first value
-before its first point and its last after its last point, and between two
-points it moves in a straight line at every frame. The bus's safety limiter
-follows it. Versions 22 and earlier reject the key, even as an empty list.
-A `module` is `{"type": "empty"}`, or
-`echoform-delay` or `aetherform-reverb` with every setting under the
-version-7 names (`mode`, `divisionL`, `timeMsL`, `feedback`, ...;
-`spaceModel`, `preDelayMs`, `decaySeconds`, ...). From version 25 it may
-also be `emberform-drive` with `shape` (`tube`, `tape`, `overdrive`, `fuzz`,
-`hard-clip`, `foldback`, `rectifier`, or `bitcrush`), `driveDb` from 0 to 48,
-`asymmetryPercent` from 0 to 100, `lowCutHz` from 20 to 2000, `highCutHz`
-from 1000 to 20000, `bits` from 1 to 16, `crushRateHz` from 500 to 44100,
-`widthPercent` from 0 to 200, `duckAmountPercent` from 0 to 100,
-`duckReleaseMs` from 50 to 2500, `outputDb` from -24 to 12, and `bypass`;
-versions 24 and earlier reject it. From version 17 any
-effect may hold `duckKey`, the track from 1 to 64 whose sound ducks the
-effect instead of its input; an effect whose ducker follows its input omits
-it. The duckers that are on, the pedals that are on, and the effects use at
-most 8 key tracks together.
+`fxBuses` holds exactly four buses in order. Each bus holds `module`,
+`powered`, `returnLevel` from 0 to 1, and `limiter`.
+
+From version 23, a bus can also hold `returnAutomation`, its return lane. It
+is a list of `{"tick", "value"}` points in strictly increasing tick order
+within the timeline. Each value is from 0 to 2. The value 1 is the full
+return, and 2 is about +6 dB.
+
+- A bus whose lane has no points omits the key.
+- While the lane has points, it replaces `returnLevel` for playback, export,
+  and stems.
+- Like the volume lane, it holds its first value before its first point and
+  its last value after its last point.
+- Between two points, it moves in a straight line at every frame.
+- The safety limiter of the bus follows it.
+
+Versions 22 and earlier reject the key, even as an empty list.
+
+A `module` is one of these:
+
+- `{"type": "empty"}`.
+- `echoform-delay`, with every setting under the version-7 names (`mode`,
+  `divisionL`, `timeMsL`, `feedback`, and so on).
+- `aetherform-reverb`, with every setting under the version-7 names
+  (`spaceModel`, `preDelayMs`, `decaySeconds`, and so on).
+- From version 25, `emberform-drive`. Versions 24 and earlier reject it.
+
+`emberform-drive` holds these settings:
+
+| Key | Value |
+|---|---|
+| `shape` | `tube`, `tape`, `overdrive`, `fuzz`, `hard-clip`, `foldback`, `rectifier`, or `bitcrush` |
+| `driveDb` | 0 to 48 |
+| `asymmetryPercent` | 0 to 100 |
+| `lowCutHz` | 20 to 2000 |
+| `highCutHz` | 1000 to 20000 |
+| `bits` | 1 to 16 |
+| `crushRateHz` | 500 to 44100 |
+| `widthPercent` | 0 to 200 |
+| `duckAmountPercent` | 0 to 100 |
+| `duckReleaseMs` | 50 to 2500 |
+| `outputDb` | -24 to 12 |
+| `bypass` | `true` or `false` |
+
+From version 17, any effect can hold `duckKey`. This is the track from 1 to 64
+whose sound ducks the effect, instead of the input of the effect. An effect
+whose ducker follows its input omits `duckKey`. The duckers that are on, the
+pedals that are on, and the effects use at most 8 key tracks together.
 
 ## Placements and samples
 
 A placement holds `id`, `sampleId`, `startTick`, `durationTicks`,
-`offsetFrames`, and `gain` (0 to 2). It may also hold `fades`, with `in` and
-`out`, each `{"ticks", "curve"}` where the curve is `linear`, `equal-power`, or
-`exponential` and the two lengths together are no longer than the placement,
-and `pitchCents` from -2400 to 2400. From version 23 it may hold `reverse`,
-a boolean: `true` plays the placement backwards, the slice that starts at
-`offsetFrames` and lasts `durationTicks`, reversed within the placement, so
-the placement's last frame plays the slice's first. A source shorter than the
-slice leaves silence at the placement's start. Fades, pitch, and gain apply
-in the placement's own time: the fade in from its start and the fade out to
-its end. A placement that plays forward omits the key; versions 22 and
-earlier reject it. Placements load in `id` order.
+`offsetFrames`, and `gain` (0 to 2). It can also hold these keys:
+
+- `fades`, with `in` and `out`. Each is `{"ticks", "curve"}`. The curve is
+  `linear`, `equal-power`, or `exponential`. The two lengths together are no
+  longer than the placement.
+- `pitchCents`, from -2400 to 2400.
+- `reverse`, from version 23. It is a boolean.
+
+`reverse` set to `true` plays the slice of the placement backwards. The slice
+starts at `offsetFrames` and lasts `durationTicks`. It is reversed within the
+placement, so the last frame of the placement plays the first frame of the
+slice. If the source is shorter than the slice, silence fills the start of the
+placement. A placement that plays forward omits `reverse`. Versions 22 and
+earlier reject it.
+
+Fades, pitch, and gain apply in the own time of the placement. The fade in
+starts at the start of the placement, and the fade out ends at its end.
+Placements load in `id` order.
 
 A placement names audio by ID. Product catalog IDs resolve through
-`libraries`, other IDs through `samples`. `samples` links each used WAV by path
-with its name, group, source tempo, sample rate, and origin product.
-`missingSamples`, `sampleConflicts`, `importNotices`, and `sourceNotices` keep
-unresolved sources, conflict choices, and import provenance, so an imported
-song reopens without its original file.
+`libraries`. Other IDs resolve through `samples`. `samples` links each used
+WAV file by path, with its name, group, source tempo, sample rate, and origin
+product. `missingSamples`, `sampleConflicts`, `importNotices`, and
+`sourceNotices` keep unresolved sources, conflict choices, and import
+provenance. An imported song can then reopen without its original file.
 
-`libraries` records at most one provider folder for each product. A song
-that uses both packed original audio and supplemental WAVs for one product
-cannot retain both providers in this format. Save rejects that combination
-before replacing the destination.
+`libraries` records at most one provider folder for each product. This format
+cannot keep two providers for one product. This is the case for a song that
+uses packed original audio and supplemental WAV files for one product. Save
+rejects that combination before it replaces the destination.

@@ -2,77 +2,92 @@
 
 ## Sample-processing forms and the Sample Editor
 
-Sample-processing forms hold drafts until the user requests playback or saving.
-The application validates and processes those drafts. It also owns synth-pattern
-file parsing, generated audio registration, import resolution, and settings files.
-`src/ui/sample_editor.rs` owns the Sample Editor body and native action responses.
-It uses the shared shell and controls for frame fields, pitch slider, buttons,
-header, and feedback. Numeric formatting does not change the draft.
+Sample-processing forms hold drafts until the user requests playback or a
+save. The application validates and processes those drafts. It also owns the
+parse of synth-pattern files, the registration of generated audio, the import
+resolution, and the settings files.
 
-Frame drafts retain unsigned 64-bit values, with an inclusive start and exclusive end. Pitch keeps the
-existing -24 to +24-semitone UI range. Numeric display rounding does not alter
-the draft. Background selections do not reset trim while the editor is collapsed.
-On expansion, a changed active source ID or catalog revision applies the existing
-trim reset. Expanded source-change behavior remains unchanged, so a replaced
-source cannot retain stale bounds.
-`src/ui/tools.rs` adapts Listen edit, Save edited sound, and Import details. Existing
-Session trim and resampling remain synchronous. Preview uses existing PCM
-playback; save uses the existing WAV workflow, registers the result in Wave
-at the source BPM, and selects it. Neither the panel nor the artwork performs
-file or audio operations. Missing sources and invalid ranges disable processing
-with explicit tooltip reasons; the footer shows range and duration or recovery
+`src/ui/sample_editor.rs` owns the body of the Sample Editor and its native
+action responses. It uses the shared shell and controls for the frame fields,
+the pitch slider, the buttons, the header, and the feedback. Numeric format
+does not change the draft. Frame drafts keep unsigned 64-bit values, with an
+inclusive start and an exclusive end. The pitch range of the UI is -24 to +24
+semitones. Display rounding does not change the draft.
+
+While the editor is collapsed, selections in the background do not reset the
+trim. When the editor expands, a changed active source ID or catalog revision
+resets the trim. While the editor is expanded, a source change also resets the
+trim. Thus a replaced source cannot keep stale bounds.
+
+`src/ui/tools.rs` adapts Listen edit, Save edited sound, and Import details.
+The Session trim and resampling are synchronous. Preview uses PCM playback.
+Save uses the WAV workflow, registers the result in Wave at the source BPM, and
+selects it. The panel and the artwork do no file or audio operations. Missing
+sources and invalid ranges disable the processing, with tooltips that give the
+reasons. The footer shows the range and the duration, or the recovery
 guidance.
 
 ## Time Stretcher
 
-`src/ui/stretch.rs` owns Time Stretcher's content and action responses inside the
-shared shell. Source, tempo, processing, preview, and save feedback use shared
-controls. Its Help action stays available in both open and collapsed states.
+`src/ui/stretch.rs` owns the content and action responses of Time Stretcher
+inside the shared shell. The source, tempo, processing, preview, and save
+feedback use shared controls. Its Help action is available in the open and the
+collapsed states.
 
-`src/ui/tools.rs` adapts its source selections, Listen, Save, and Import details
-requests to existing application operations; the panel does not render audio or
-write files. Opening it from the tool rail initializes the original BPM draft
-from the selected sample's source tempo.
-The application owns Time Stretcher's background source read and processing job.
-Each request captures its source catalog and tempo values, rejects duplicate
-work, and retains one consumable result. Library or song replacement invalidates
-that result. The frontend retains the requested action and rejects results after
-the tool closes or its source, tempos, or catalog change. It opens the existing
-save workflow or requests PCM preview only for a current result. Preview state
-and a revision identify whether that tool's audition is still playing; a later
-preview, transport change, or stop cannot inherit its active indicator.
-Save completion updates the local feedback and the selected output's source
-tempo; cancelling a file choice does not report success.
+`src/ui/tools.rs` adapts its source selections and its Listen, Save, and Import
+details requests to application operations. The panel does not render audio or
+write files. When the tool rail opens Time Stretcher, the original BPM draft
+starts from the source tempo of the selected sample.
+
+The application owns the background source read and the processing job of
+Time Stretcher:
+
+- Each request records its source catalog and tempo values.
+- The application rejects duplicate work.
+- It keeps one result, which the frontend can take one time.
+- A library or song replacement makes that result invalid.
+
+The frontend keeps the requested action. It rejects a result that comes after
+the tool closes, or after its source, tempos, or catalog change. It opens the
+save workflow or requests a PCM preview only for a current result. A preview
+state and a revision tell whether the audition of that tool still plays. Thus a
+later preview, a transport change, or a stop cannot take its active indicator.
+When a save completes, it updates the local feedback and the source tempo of
+the selected output. A cancelled file choice does not report success.
 
 ## Effect Studio
 
-`src/ui/effects.rs` owns Effect Studio's sections and action responses. It uses
-shared rotaries, value entry, switches, action buttons, header, and status styling.
-Keep labels, values, and dial marks separate. Verify rendered bounds at 100%
-display scaling; source coordinates alone do not establish visual acceptance.
+`src/ui/effects.rs` owns the sections and action responses of Effect Studio.
+It uses shared rotaries, value entry, switches, action buttons, header, and
+status style. Keep labels, values, and dial marks separate. Verify rendered
+bounds at 100% display scaling. Source coordinates alone do not give visual
+acceptance.
 
-`src/ui/tools.rs` adapts Listen, Save sound, Reset, Help, and Import details. Listen
-and Save sound call `Session::processed_pcm` synchronously; Listen then uses the
-existing PCM preview. Save uses the existing file request and
-`Session::save_pcm`, registers the WAV in Effect at the source BPM, and selects
-the saved sound. Source changes clear local feedback; save choice, cancellation,
-failure, and success update it. Reset restores `EffectsState::default`.
-Turning an optional section off discards its settings; enabling it uses that
-section's defaults. This presentation does not change the algorithms or the
-shared `effects_controls` form used by Step synth. It does not add a background
-processing job.
+`src/ui/tools.rs` adapts Listen, Save sound, Reset, Help, and Import details.
+Listen and Save sound call `Session::processed_pcm` synchronously. Listen then
+uses the PCM preview. Save uses the file request and `Session::save_pcm`,
+registers the WAV in Effect at the source BPM, and selects the saved sound. A
+source change clears the local feedback. The save choice, the cancellation, a
+failure, and a success update it. Reset restores `EffectsState::default`.
+
+When the user turns an optional section off, its settings are discarded. When
+the user turns it on, it uses the defaults of that section. This presentation
+does not change the algorithms or the shared `effects_controls` form that Step
+synth uses. It adds no background processing job.
 
 ## Missing audio and sample conflicts
 
-Missing audio is explicit project state. The renderer leaves those placements
-silent. The frontend reads the retained source metadata and sends a chosen WAV
-path to `Session::resolve_missing_sample`. That operation resolves every matching
-source identity in one history change, preserves musical trims, and retains the
-chosen audio. The picker and context menu remain frontend responsibilities.
+Missing audio is explicit project state. The renderer keeps those placements
+silent. The frontend reads the source metadata that the project keeps, and
+sends a chosen WAV path to `Session::resolve_missing_sample`. That operation
+resolves each matching source identity in one history change, keeps the musical
+trims, and keeps the chosen audio. The picker and the context menu are frontend
+responsibilities.
 
-Duplicate file matches are stored in `Project.sample_conflicts`, with a stable
-default, candidate paths, and source IDs. Readers select the first candidate.
-`Session::resolve_sample_conflict` changes all affected placements atomically,
-and updates history and rendering. The native modal exposes choices and playback;
-confirmation and selected paths persist in the project. Transactions remove
-conflicts that no longer affect any clip.
+Duplicate file matches are in `Project.sample_conflicts`, with a stable
+default, the candidate paths, and the source IDs. Readers select the first
+candidate. `Session::resolve_sample_conflict` changes all affected placements
+in one atomic step, and updates the history and the rendering. The native
+modal shows the choices and plays them. The confirmation and the selected
+paths are saved in the project. Transactions remove conflicts that no longer
+have an effect on a clip.

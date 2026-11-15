@@ -3,7 +3,7 @@
 This file is a shortlist of albums for new album analyses.
 The list order is by similarity to the albums in `assets/album-review/`.
 If two albums have the same similarity, the more popular album is first.
-Each album is in the list one time.
+Each album is in the list once.
 When a review of an album is saved, remove the album from this list.
 
 Each item gives the artist, the album title, the release year, the genre, and the source codes.

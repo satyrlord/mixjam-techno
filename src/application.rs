@@ -28,6 +28,9 @@ pub mod options {
         AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget,
         SampleQuality, SongFolderMode, StartingModule, Theme, WorkspaceLayout,
     };
+    /// The message when the active options changed after a draft was taken.
+    pub const STALE_DRAFT: &str =
+        "Options changed outside this window. Select Reload active options before Apply.";
 }
 /// The drive of each track and its controls.
 pub mod drive {

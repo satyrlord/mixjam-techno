@@ -1,7 +1,7 @@
 """Write format-25 .mixjam songs from Python.
 
 Bars and beats count from 1, as in the app. One bar is 256 ticks, one beat 64.
-A sound is a WAV path; the writer links it as an imported sample by path.
+A sound is a WAV path. The writer links it as an imported sample by path.
 
 Placement rules:
 - By default, `loop` tiles a sound at its own length. A 1-bar loop over 8 bars
@@ -9,15 +9,19 @@ Placement rules:
 - By default, `loop` and `phrase` add a one-tick fade when a melodic run is
   cut short or the sound is still loud at its end. You can set another fade.
 
-Automation rules: a lane rests at its neutral value until its first point. A send
-or pan lane's neutral value is its knob, which the lane replaces while it has points.
-The repeat lane's neutral value is 0 (off). It steps: the engine holds each of its
-points until the next one and keeps it off before the first. Saving rejects a lane that ends away from neutral when a later clip starts on
-that track. The engine holds a lane's last value to the end of the song. The repeat gate lane
-steps too and is at 100% before its first point; it acts only while repeat is on, so it may
-end at any value. The pitch lane rests at 0 cents before its first point too, so it needs no
-resting points, and moves in straight lines. An FX bus's return lane (`automate_return`) replaces
-the bus's return level while it has points and moves in straight lines.
+Automation rules:
+- A lane rests at its neutral value until its first point.
+- The neutral value of a send or pan lane is its knob. The lane replaces the knob while it has points.
+- The neutral value of the repeat lane is 0 (off). The lane steps. The engine holds each point
+  until the next one and keeps the lane off before the first point.
+- The engine holds the last value of a lane to the end of the song. Saving rejects a lane that
+  ends away from neutral when a later clip starts on that track.
+- The repeat gate lane steps and is at 100% before its first point. It acts only while repeat
+  is on, so it can end at any value.
+- The pitch lane rests at 0 cents before its first point, so it needs no resting points.
+  It moves in straight lines.
+- An FX bus return lane (`automate_return`) replaces the return level of the bus while it has
+  points. It moves in straight lines.
 
 `Song.save` also writes `.meta.json` beside the song: lane names and roles, the
 sections and the key. render.py, measure.py, audible.py and master.py read it.

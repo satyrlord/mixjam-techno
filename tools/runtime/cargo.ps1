@@ -6,13 +6,13 @@ $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $toolchainRoot = Join-Path (& (Join-Path $PSScriptRoot 'local-data-root.ps1')) 'toolchain'
 
-# Cargo prints the package version, which must be semantic. Keep it equal to the
+# The package version must be semantic, and Cargo prints it. Keep it equal to the
 # application version of this checkout: `1.005` is package version `1.5.0`.
-# The major comes from Cargo.toml; the minor is the Git commit count, as in build.rs.
+# The major comes from Cargo.toml. The minor is the Git commit count, as in build.rs.
 $count = & git -C $workspace rev-list --count HEAD 2>$null
 if ($LASTEXITCODE -eq 0) {
     $encoding = [Text.UTF8Encoding]::new($false)
-    # Replace each file whole, so that a concurrent Cargo call never reads a half-written manifest.
+    # Replace each file whole. A concurrent Cargo call then never reads a half-written manifest.
     function Write-Whole([string]$path, [string]$content) {
         $staged = '{0}.{1}.tmp' -f $path, $PID
         [IO.File]::WriteAllText($staged, $content, $encoding)

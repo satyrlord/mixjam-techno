@@ -2,45 +2,46 @@
 name: deslop
 description: >
   Remove evidence-backed slop from code, prose, data, configuration, and tests.
-  Use for full-scope cleanup or clear, plain, controlled technical writing.
+  Use for a cleanup pass on a file scope, or to make technical prose conform to ASD-STE100.
 ---
 
 # Remove slop
 
-**Slop** conflicts with file evidence, sibling patterns, or repository contracts.
-Judge the artifact. Do not infer who wrote it.
+**Slop** is content that conflicts with file evidence, sibling patterns, or
+repository contracts. Judge the artifact. Do not guess who wrote it.
 
-## 1. Select the reference branch
+## 1. Inventory the scope
 
-Read each reference that matches a scoped file:
-
-- [CODE.md](CODE.md) for source code
-- [PROSE.md](PROSE.md) for documentation and technical prose
-- [DATA.md](DATA.md) for data and configuration
-- [TEST.md](TEST.md) for tests
-
-If a file mixes concerns, read more than one reference. A listed smell requires
-investigation. It does not authorize an edit.
-
-## 2. Inventory the scope
-
-1. List every tracked and untracked non-generated file in the requested scope.
+1. List every tracked and untracked file in the scope that is not generated.
    Completion criterion: Each file has a family and a representative sibling.
 2. List generated, vendored, binary, and excluded paths separately.
    Completion criterion: Every excluded path has a reason.
 3. Read each scoped file and its sibling completely.
-   Completion criterion: You know the local style, behavior, and ownership.
+   Completion criterion: You know the local style, behavior, and owner.
 
 If the user does not set a smaller scope, use first-party source,
 documentation, data, configuration, and tests. Include untracked files. Keep
 preserved originals and generated assets separate.
 
+## 2. Read the reference for each family
+
+1. For each family in the scope, read its reference:
+   - [CODE.md](CODE.md) for source code
+   - [PROSE.md](PROSE.md) for documentation, skills, agent definitions, and other prose
+   - [DATA.md](DATA.md) for data and configuration
+   - [TEST.md](TEST.md) for tests
+
+   Completion criterion: You read each reference that a scoped family needs.
+
+If a file has more than one family, read each matching reference. A listed
+smell starts an investigation. It does not permit an edit.
+
 ## 3. Prove each candidate
 
 1. Compare the candidate with its contract, siblings, and consumers.
-   Completion criterion: The difference has or lacks a valid reason.
-2. For a test, establish the unchanged baseline required by [TEST.md](TEST.md).
-   Completion criterion: You record the runner and pre-edit result.
+   Completion criterion: The difference has or does not have a valid reason.
+2. For a test candidate, follow the cleanup process in [TEST.md](TEST.md).
+   Completion criterion: The test has the pre-edit result that TEST.md requires.
 3. Classify the candidate as valid, slop, or unresolved.
    Completion criterion: Evidence excludes the other classifications.
 
@@ -49,13 +50,11 @@ Do not use syntax, file size, test count, coverage, or tone alone as proof.
 ## 4. Remove proven slop
 
 1. Edit only enough to remove the proven problem.
-   Completion criterion: True behavior, information, constraints, and intentional voice remain.
-2. After each coherent edit group, run the narrowest applicable repository check.
-   Completion criterion: The check passes or you record the exact pre-existing failure.
-3. For tests, run every changed test and its owning test project.
-   Completion criterion: No changed test remains unverified.
+   Completion criterion: True behavior, information, constraints, and required voice remain.
+2. After each related group of edits, run the narrowest repository check that applies.
+   Completion criterion: The check passes, or you record the exact pre-existing failure.
 
-If reachability is the question, use `dead-code-audit`. Do not remove generated
+If the question is reachability, use `dead-code-audit`. Do not remove generated
 output, preserved originals, Git bundles, vendored code, lockfiles, or binary
 assets without an explicit request.
 
@@ -64,12 +63,12 @@ assets without an explicit request.
 1. After all edits, re-read every scoped file.
    Completion criterion: A second complete pass finds no evidence-backed slop.
 2. Account for every scoped file as edited or unchanged.
-   Completion criterion: The report includes both counts and all exclusions.
-3. Report each unresolved candidate and its required proof.
+   Completion criterion: The report gives both counts and all exclusions.
+3. Report each unresolved candidate and the proof that it needs.
    Completion criterion: Every uncertainty has a concrete verification step.
 
 ## Completion criterion
 
-The pass is complete after you account for every scoped file. Every edit must
-have a repository or sibling justification. All affected checks must pass, or
-you report a pre-existing blocker.
+The pass is complete when you account for every scoped file. Every edit has a
+repository or sibling reason. All affected checks pass, or you report a
+pre-existing blocker.

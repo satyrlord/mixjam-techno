@@ -1,77 +1,165 @@
 # Interface
 
-The interface has three themes: **Studio**, the default, is plain, flat, and
-dark; **Aero** is colorful cobalt and aqua plastic; **Vintage** is worn painted
-metal with ivory mixer strips. Choose one on the Options **Workspace** page. Every
-theme has the same layout, controls, and keyboard order; only colors,
-materials, control shapes, and typefaces change. Titles are uppercase in every
-theme. One top bar holds the brand, the song name, the transport, the
-recording track beside Record, the position readout (minutes and seconds), the
-tempo, and Undo, Redo, and Help. Hover the readout for the bar and beat; a wide
-window also shows them beside it. The song name is marked with an asterisk when
-it has unsaved changes, and a short name shows the song's length in bars and
-minutes beneath it. The whole name always shows: a long name wraps onto two
-lines or uses smaller text, and in a narrow window the transport buttons get
-narrower to make room. Above the lanes, the score toolbar holds Arrange and
-Mix, the Automation menu, Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool
-rail, the Sounds panel, the Inspector, and the lower panel so the score fills the window;
-press **F** again, or use the Tools, Boards, Sounds, or Inspector switch, to
-restore them. Mixer,
-Mastering, FX returns, and Step synth share the lower panel; choose one with
-its button in the tool rail, and its name heads the panel's top row. Sample categories, search, and
-library filters stay together in the Sounds panel. Sort sounds in library order, by name, length, BPM, or
-category. The arrow beside the sort list reverses the order: for example, longest
-or fastest first.
-The title branding, window, taskbar, and Windows executable use the tribal mask.
-See [the icon assets](../../assets/app/README.md) for source and regeneration details.
+## Themes
+
+The application has three themes:
+
+- **Studio**, the default: plain, flat, and dark.
+- **Aero**: colorful cobalt and aqua plastic.
+- **Vintage**: worn painted metal with ivory mixer strips.
+
+To change the theme, use **Theme** on the **Workspace** page of
+[Options](libraries-and-options.md#options). All themes have the same layout,
+controls, and keyboard order. Only the colors, materials, control shapes, and
+typefaces change. Titles are uppercase in all themes.
 [DESIGN.md](../DESIGN.md) is the visual contract.
 
-The tool rail at the left groups File, Clips, Mix (the lower panel's
-boards), Sound (the windows that make a new sample), and Library, with
-each tool's name under its icon. In a shorter window the rail tightens its
-tools and divides the groups with lines instead of headings. Hover a tool for its window and shortcut. The **Tools** switch
-at the right of the status bar, or the double chevron at the top of the rail,
-shrinks the rail to icons. The **Boards** switch folds the lower panel away;
-use it again, or select Mixer, Mastering, FX returns, or Step synth in the
-rail, to open it. Selecting the board that already shows folds the panel. In a short window, scroll the rail with the mouse wheel.
+The title, the window, the taskbar, and the Windows executable use the tribal
+mask icon. [The icon assets](../../assets/app/README.md) give its source and
+the steps to make it again.
 
-The magnifier at the left end of the status bar, beside the Options gear, or
-**Ctrl+K**, opens a
-list of everything the app can do: the rail's tools, Options and Help,
-playback, Undo, Redo and the other edits, Maximise, the status bar's panel
-switches, and every automation lane. The whole list shows in its groups before
-you type; type words to narrow it. Up and Down move through it, Enter or a click
-runs the command, and Esc closes the list. Each command says in one line what
-it does, its shortcut shows at the right, and a dot marks a tool, panel or
-lane that is on.
+## Top bar and score toolbar
 
-The **Sounds** switch, or the strip named SOUNDS beside the rail, opens the
-Sounds panel: the library as a list, with each sound's name, category, length
-in bars, and waveform, above its search, filters, category chips, and sort.
-Click a sound to place it with the next click on a lane, press Enter to place
-it at the playhead on the recording track, double-click to hear it, or drag it
-to a lane. The chevron at the panel's top folds it. These choices are kept for
-the next session. When Starting module is Sounds, the app opens with the panel
-open and the lower panel folded.
+The top bar holds these items:
 
-The Inspector at the right of the score shows what is selected. With nothing
-selected it shows the song: its tempo and length, a clip count per category,
-and its sections; click a section to scroll the score there. Click a track's
-name in the lane header for that track's level, pan, outputs, sends, EQ curve,
-and processing switches; **EQ** there opens the channel EQ window. Select one
-clip for its start, gain, trim, length, fades, pitch, and Reverse, or several
-for a summary. Every change can be undone. The chevron at its top, or the
-**Inspector** switch in the status bar, folds it to a strip. In a small window
-the Sounds panel, the Inspector, and the lower board give way to each other:
-the one you opened last shows, and the others fold until there is room.
+- The brand.
+- The song name. An asterisk shows that the song has unsaved changes. Below a
+  short name, the song length shows in bars and minutes.
+- The transport, with the recording track beside Record.
+- The position readout, in minutes and seconds. To see the bar and the beat,
+  put the pointer on the readout. A wide window also shows them beside it.
+- The tempo.
+- Undo, Redo, and Help.
 
-The song overview above the score shows the whole song: its sections (with
-Sections on), a thin line for each clip in its category color, the loop, the
-playhead, and a frame around the part the score shows. Click or drag in it to
-move the score there; with it focused, Left and Right move by a screen, and Home
-and End go to the start and the end. It never changes the song. The button at
-its lower right, or the **Overview** switch in the status bar, folds it to a
-bar named SONG OVERVIEW; click the bar to open it again. When the window is too
-short for it and the lanes, the bar shows instead until there is room. If the
-bar also cannot fit, the overview hides until space returns. Its saved choice
-stays; fold the lower board or maximise the score to make more room.
+The full song name always shows. A long name wraps onto two lines or uses
+smaller text. In a narrow window, the transport buttons become narrower to
+make room.
+
+The score toolbar above the lanes holds Arrange and Mix, the Automation menu,
+Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool rail,
+the Sounds panel, the Inspector, and the lower panel. The score then fills the
+window. To show the panels again, press **F** again, or select the **Tools**,
+**Boards**, **Sounds**, or **Inspector** switch in the status bar.
+
+## Tool rail and lower panel
+
+The tool rail at the left has five groups. Each tool shows its name under its
+icon.
+
+| Group | Tools |
+|---|---|
+| File | New, Open, Save, Save as, Import, Export |
+| Clips | Erase, Delete |
+| Mix | Mixer, Mastering, FX returns, Step synth: the boards of the lower panel |
+| Sound | Edit, Stretch, Effects: the windows that make a new sample |
+| Library | Review (Album Review) |
+
+To see the window and the shortcut of a tool, put the pointer on it. In a
+shorter window, the rail makes its tools smaller and uses lines, not headings,
+between the groups. If the rail does not fit the window, turn the mouse wheel
+over it to scroll it.
+
+To shrink the rail to icons, select the **Tools** switch at the right of the
+status bar, or the double chevron at the top of the rail. Do the same step
+again to show the names.
+
+Mixer, Mastering, FX returns, and Step synth share the lower panel. The name
+of the board that shows is at the start of the top row of the panel. To show a
+board, select its button in the tool rail. If that board already shows, the
+button folds the panel.
+
+The **Boards** switch in the status bar also folds the lower panel. To open the
+panel again, select **Boards** again, or select a board in the rail.
+
+## Command list
+
+To open the command list, select the magnifier beside the Options gear at the
+left end of the status bar, or press **Ctrl+K**. The list holds all that the
+application can do:
+
+- The tools of the rail.
+- Options and Help.
+- Playback, Undo, Redo, and the other edits.
+- Maximise and the Mix view.
+- The panel switches of the status bar.
+- Each automation lane.
+
+All commands show in their groups before you type. Each command shows a
+one-line description, and its shortcut shows at the right. A dot marks a tool,
+a panel, or a lane that is on.
+
+To use the list:
+
+1. Type words to make the list shorter.
+2. Press Up or Down to move through the list.
+3. Press Enter, or click a command, to run it.
+4. To close the list, press Esc.
+
+## Sounds panel
+
+The Sounds panel shows the sample library as a list. At the top of the panel
+are the search, the library and category filters, the category chips, and the
+sort. Each row of the list shows the name, the category, the length in bars,
+and the waveform of a sound.
+
+To open the Sounds panel, select the **Sounds** switch in the status bar, or
+the strip named SOUNDS beside the rail. To fold the panel, select the chevron
+at its top.
+
+To use a sound:
+
+- To place it, click the sound, then click a lane.
+- To place it at the playhead on the recording track, select it and press
+  Enter.
+- To hear it, double-click it.
+- To place it at a position, drag it to a lane.
+
+The **Sort** list sorts the sounds in library order, by name, by length, by
+BPM, or by category. The arrow beside the list reverses the order: for
+example, longest first or fastest first.
+
+The application keeps these choices for the next session. If **Starting
+module** is Sounds, the application starts with the Sounds panel open and the
+lower panel folded.
+
+## Inspector
+
+The Inspector at the right of the score shows the selected item:
+
+- **Nothing selected**: the song, with its tempo and length, a clip count for
+  each category, and its sections. Click a section to scroll the score to it.
+- **A track**: click the name of a track in its lane header. The Inspector
+  shows the level, pan, outputs, sends, EQ curve, and processing switches of
+  the track. **EQ** opens the channel EQ window.
+- **One clip**: its start, gain, trim, length, fades, pitch, and Reverse.
+- **Several clips**: a summary.
+
+You can undo all changes that you make in the Inspector. To fold the Inspector
+to a strip, select the chevron at its top, or the **Inspector** switch in the
+status bar.
+
+In a small window, the Sounds panel, the Inspector, and the lower panel share
+the space. The panel that you opened last shows, and the others fold until
+there is space for them.
+
+## Song overview
+
+The song overview above the score shows the full song:
+
+- Its sections, when Sections is on.
+- A thin line for each clip, in the color of its category.
+- The loop and the playhead.
+- A frame around the part of the song that the score shows.
+
+To move the score, click or drag in the overview. When the overview has the
+focus, Left and Right move by one screen, and Home and End go to the start and
+the end. The overview does not change the song.
+
+To fold the overview, select the button at its lower right, or the
+**Overview** switch in the status bar. The overview then shows as a bar named
+SONG OVERVIEW. To open it again, click the bar.
+
+If the window is too short for the overview and the lanes, the bar shows
+until there is space. If the bar also does not fit, the overview hides until
+there is space. Your saved choice does not change. To get more space, fold the
+lower panel or maximise the score.

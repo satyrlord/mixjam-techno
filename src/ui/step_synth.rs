@@ -123,7 +123,7 @@ const GUTTER: f32 = 50.0;
 const LANES_HEIGHT: f32 = 94.0;
 
 /// Show the Step synth board in the space left in `ui`. The board is a tab
-/// panel named Step synth, so agents scope to it as they did to its window.
+/// panel named Step synth, so agents can scope to it by that name.
 /// `playing` is the pattern step Listen sequence is playing.
 pub(super) fn show(
     ui: &mut egui::Ui,

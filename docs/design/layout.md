@@ -1,148 +1,170 @@
 # Layout
 
-The native client starts at 1440 by 1000 logical points, with a minimum of 960 by
-720. Panels are placed in this order, so each earlier one spans the space the
-later ones share:
+The native client starts at 1440 by 1000 logical points. Its minimum size is
+960 by 720. The panels are placed in this order, so each earlier panel spans
+the space that the later panels share:
 
-1. The 64-point top bar across the window (see Top bar).
+1. The 64-point top bar across the window (see
+   [Top bar](components-score.md#top-bar)).
 2. The 30-point status bar across the bottom.
 3. The tool rail at the left, below the top bar: 84 points wide with tool
-   names, 64 points with icons only (see Tool rail).
-4. The lower panel, from the rail's edge to the window's right edge, when it
-   is open.
-5. The Sounds panel after the rail, above the lower panel: 250 points open, or
-   a 28-point strip that names it when folded (see Sounds panel).
-6. The Inspector at the right, above the lower panel: 280 points open, or a
-   28-point strip (see Inspector).
-7. The score in the rest, inside 18-point side and 14-point top and bottom margins: the
-   60-point song overview or its 20-point bar, the score toolbar, a 12-point
-   gap, the 26-point ruler, and the lanes; the Mix view adds its 70-point
-   Master and returns block under the lanes after an 8-point gap.
+   names, 64 points with icons only (see
+   [Tool rail](components-shell.md#tool-rail)).
+4. The lower panel, from the edge of the rail to the right edge of the window,
+   when it is open.
+5. The Sounds panel after the rail, above the lower panel: 250 points when
+   open, or a 28-point strip that names it when folded (see
+   [Sounds panel](components-shell.md#sounds-panel)).
+6. The Inspector at the right, above the lower panel: 280 points when open,
+   or a 28-point strip (see [Inspector](components-score.md#inspector)).
+7. The score in the remaining space, inside 18-point side margins and 14-point
+   top and bottom margins. From the top, the score holds:
+   - the 60-point song overview or its 20-point bar,
+   - the score toolbar,
+   - a 12-point gap,
+   - the 26-point ruler,
+   - the lanes.
+
+   The Mix view adds its 70-point block of Master and return rows under the
+   lanes, after an 8-point gap.
+
+## Lower panel
 
 The lower panel (Mixer, Mastering, FX returns, or Step synth) starts at 28% of
 the content height, clamped to 220-290 points. Drag its top divider to resize
 it. A centered grip marks the divider. The panel keeps its height for the
-current session. Each board has a minimum panel height: Mixer 400 points,
-Mastering 432, FX returns 462, and Step synth 580, so each shows its whole
-board under the top row. Opening a board raises a shorter panel to its minimum;
-switching boards otherwise keeps the resized height. In a short window a board
-yields down to 370 points so the lane viewport keeps 150 points, and the board
-then scrolls (Mastering scrolls its chip strip below the pedals). When space
-permits, the maximum panel height leaves 290 points for the score toolbar, the
-ruler, and the lanes; the largest board minimum wins over that reserve at the
-minimum client height. While the Sounds panel shows, the divider stops where
-the Sounds panel keeps its 330 points, unless the board's minimum is larger. A 400-point Mixer panel gives the physical gain rail 96
-points; the short panel can reduce it to 68 points. The draggable area extends
-16 points past each end of the rail to include the fader cap.
+current session.
 
-The status bar's application version, prefixed with `v`, stays at the right
-inner margin, with space reserved before status text is truncated. It uses the
-12-point text face and the theme's hyperlink color. Hover and keyboard focus
-show the link underline. The version opens the GitHub repository in the system
-browser.
+Each board has a minimum panel height, so that it shows its whole board under
+the top row:
 
-The lower panel has 18-point side margins, 10 points above the header row, and 6
-below its content. Mixer, Mastering, FX returns, and Step synth boards start 8
-points under the top row, so a board never touches its controls; the margins give up
-that space, so the boards keep their height.
+| Board | Minimum height |
+| --- | --- |
+| Mixer | 400 points |
+| Mastering | 432 points |
+| FX returns | 462 points |
+| Step synth | 580 points |
 
-The lower panel's 28-point top row starts with the shown board's name as a
-16-point heading, 6 points in from the margin. A separator follows, then the
-board's own controls. The tool rail's Mixer, Mastering, FX returns, and Step
-synth buttons choose the board. With Mastering,
-the row holds the 150-point preset selector, the 112-point Bypass all switch,
-the board's state in 12-point text that truncates, and the Mastering help
-button at the right margin. With Mixer, it holds the Export tracks… button.
-With Step synth, it holds the status line, Import details when the palette
-sound's audio is missing, and the Step synth help button. The
-preset list puts a rule after Subtle, Revive, and Loud, before the genres; the
-selector reads Choose a preset while every pedal is off at its defaults, and
-Custom when changed pedals match no preset. The trim, which belongs to the
-mix, affects neither. The board bodies start below the top row. Each of the
-rail's four board buttons shows its board, and folds the lower panel when that
-board already shows. The score toolbar's Arrange and Mix switch, or the Mix
-view command, switches the score's view. The Mix view and the Mixer board
-never show together: the Mix view moves a lower panel on Mixer to Mastering,
-and the rail's Mixer returns the score to Arrange. A launch whose Starting
-module is Mixer opens the Mix view over Mastering; one whose Starting module
-is Mastering or FX returns opens the lower panel on that board. The Mix view
-is session state, not part of `layout.json`.
+When a board opens, a shorter panel grows to that minimum. A change to a
+different board otherwise keeps the resized height. In a short window, a board
+gives up height down to 370 points, so that the lane viewport keeps
+150 points. The board then scrolls. Mastering scrolls its chip strip below
+the pedals.
 
-The arrangement shows occupied tracks and one drop target for a new track, while
-the model retains 64 slots. A soloed track counts as occupied even without
-clips, in the arrangement and the Mixer, so its Solo can be turned off.
-Original track numbers remain stable. Rows are
-20, 30, or 40 points high, as the Lane height option sets, at every window and
-panel size, so more room shows more rows, and they scroll vertically. The new
-track's drop hint stays visible at each height. Compact reversed clips leave
-space between their name and the `rev` mark. The lane header is 250 points wide
-and holds, from left, the track number, the lane's name, M, S, L, R, and a
-short horizontal level fader. The song stores no lane names: a lane is named
-after the sound family of its first clip (the sound's name without its trailing
-number), or "Track N" while it has no clips. The name is elided to its span and
-uses 11-point text in 20-point lanes, 12-point otherwise. The fader edits the
-same track gain as the Mixer, with the same taper, keys, and double-click to
-unity; a Canvas slot, a fill to the cap, a unity tick, and a Cap-colored cap.
-A lane that Mute or another track's Solo silences is dimmed, and its track
-number and name use Muted. The
-fixed ruler is 26 points high. Bars use 62 points multiplied by zoom. The
-timeline scrolls horizontally without moving track labels.
+When there is space, the maximum panel height leaves 290 points for the score
+toolbar, the ruler, and the lanes. At the minimum client height, the largest
+board minimum wins over that reserve. While the Sounds panel shows, the
+divider stops where the Sounds panel keeps its 330 points, unless the minimum
+of the board is larger. A 400-point Mixer panel gives the physical gain rail
+96 points. A short panel can reduce the rail to 68 points. The drag area
+extends 16 points past each end of the rail, to include the fader cap.
 
-Follow is enabled by default in the score toolbar. Options can change its startup
-default without changing the current session's toggle. It moves the horizontal viewport
-when the playhead approaches an edge, including seeks and backward loop jumps.
-It leaves vertical scrolling unchanged. While paused, manual horizontal scroll
-stays where the user leaves it until the position or viewport geometry changes.
-Switch Follow off to keep horizontal scrolling under manual control during
-playback. The toggle is view state for the current session, not a project edit.
+The lower panel has 18-point side margins, 10 points above the top row, and
+6 points below its content. Each board starts 8 points under the top row, so
+that a board never touches its controls. The margins give up that space, so
+the boards keep their height.
 
-The Sounds panel's sort menu orders the filtered sounds by library order, name, length, BPM, or
-category. The arrow beside it reverses the sort direction and exposes the
-current direction as an accessible value. Equal sort keys retain library order
-in either direction. Sort order and direction are view state for the current
-session.
+The 28-point top row of the lower panel starts with the name of the shown
+board as a 16-point heading, 6 points in from the margin. A separator follows,
+then the controls of that board:
 
-Mixer strips appear only for occupied tracks. Track and Master strips are
-108 points wide at the supported prepared scales. Master stays outside the
-horizontal track scroller, whose scrollbar remains visible. Track numbers,
-sound summaries, dB gain values, pan descriptions, and output state stay
-grouped within each strip. A track with
-several distinct sounds shows their count and lists their names on hover.
-Narrow strips preserve visible tracks without enlarging every control.
+- Mastering: the 150-point preset selector, the 112-point Bypass all switch,
+  the state of the board in 12-point text that truncates, and the Mastering
+  help button at the right margin.
+- Mixer: the Export tracks… button.
+- Step synth: the status line, Import details when the audio of the palette
+  sound is missing, and the Step synth help button.
 
-The Sample libraries page in Options scrolls vertically inside the shared
-window. A large expanded Folder tempos list must leave the provider
-controls reachable.
+The preset list puts a rule after Subtle, Revive, and Loud, before the genre
+presets. The selector reads Choose a preset while every pedal is off at its
+defaults. It reads Custom when the changed pedals match no preset. The trim
+belongs to the mix and changes neither reading. The board bodies start below
+the top row.
 
-All in-app tools, utility windows, and blocking dialogs use one resizable shell.
-Initial dimensions follow the content; they are not fixed raster dimensions.
-Drag any edge or corner to resize. Reflow or scroll the body without scaling its
-controls. A body that overflows shows a solid scroll bar with a cream handle, so
-hidden content is visible as such. Source names, action labels, and long feedback must remain reachable at
-the minimum supported viewport. Keep a common title bar, margins, gaps, and action
+The Mixer, Mastering, FX returns, and Step synth buttons of the tool rail
+choose the board. Each of these buttons shows its board, and folds the lower
+panel when that board already shows.
+
+The Arrange and Mix switch of the score toolbar, or the Mix view command,
+changes the view of the score. The Mix view and the Mixer board never show
+together. The Mix view moves a lower panel on Mixer to Mastering, and the
+Mixer button of the rail returns the score to Arrange. If the Starting module
+is Mixer, the application starts with the Mix view over Mastering. If the
+Starting module is Mastering or FX returns, the application starts with the
+lower panel on that board. The Mix view is session state, not part of
+`layout.json`.
+
+## Status bar
+
+The application version, with the prefix `v`, stays at the right inner margin
+of the status bar. Space is kept for it before the status text truncates. It
+uses the 12-point text face and the accent, which is the hyperlink color of
+each theme. Hover and keyboard focus show the link underline. The version
+opens the GitHub repository in the system browser.
+
+## Arrangement
+
+The arrangement shows the occupied tracks and one drop target for a new
+track. The model keeps 64 slots. A soloed track counts as occupied even
+without clips, in the arrangement and the Mixer, so that its Solo can be
+turned off. The original track numbers stay stable.
+
+Rows are 20, 30, or 40 points high, as the Lane height option sets, at every
+window and panel size. More room shows more rows, and the rows scroll
+vertically. The drop hint for the new track stays visible at each height.
+Compact reversed clips keep space between their name and the `rev` mark.
+
+The lane header is 250 points wide. From the left, it holds the track number,
+the name of the lane, M, S, L, R, and a short horizontal level fader. The song
+stores no lane names. A lane takes the sound family of its first clip as its
+name: the name of the sound without its trailing number. A lane without clips
+is named "Track N". The name is elided to its span. It uses 11-point text in
+20-point lanes, and 12-point text in other lanes.
+
+The lane fader edits the same track gain as the Mixer, with the same taper,
+keys, and double-click to unity. It has a Canvas slot, a fill to the cap, a
+unity tick, and a Cap-colored cap. If Mute or the Solo of another track
+silences a lane, the lane is dimmed, and its track number and name use Muted.
+
+The fixed ruler is 26 points high. A bar is 62 points multiplied by the zoom.
+The timeline scrolls horizontally without moving the track labels.
+
+## Windows
+
+All in-app tools, utility windows, and blocking dialogs use one resizable
+shell. The initial dimensions follow the content. They are not fixed raster
+dimensions. Drag any edge or corner to resize a window. Reflow or scroll the
+body without scaling its controls. A body that overflows shows a solid scroll
+bar with a cream handle, so that hidden content is visible as such. Source
+names, action labels, and long feedback must stay reachable at the minimum
+supported viewport. Keep a common title bar, margins, gaps, and action
 hierarchy. Specialized bodies such as the note grid keep their domain layout.
 
-The only window states are open and collapsed. Collapse leaves a complete header
-at the same position, with the same title and applicable controls. Expansion
-restores the previous dimensions and draft. Keep Help available while collapsed
-where a Help action exists. A collapsed blocking dialog releases workspace input
-and pauses its pending action; expanding restores its decision workflow. Do not
-replace a paused request when another file action is requested.
+The only window states are open and collapsed. A collapsed window keeps a
+complete header at the same position, with the same title and applicable
+controls. Expansion restores the previous dimensions and draft. Where a Help
+action exists, keep it available while the window is collapsed. A collapsed
+blocking dialog releases workspace input and pauses its pending action.
+Expansion restores its decision workflow. Do not replace a paused request when
+the user requests another file action.
 
-Fixed raster detail fades from opaque texture to transparency over the matching
-solid chassis color. Resizing grows the solid regions instead of stretching bitmap
-edges or repeating a visible texture seam. Prepare no PNG sizes beyond the
-existing 100 set; paint one texel per physical screen pixel. Keep labels,
-control values, indicators, and interaction states live.
+## Material and grain
 
-Painted backgrounds use restrained, static monochromatic Gaussian grain. Its
-mean is zero and its standard deviation is about 1.5 RGB levels. Apply the same
-offset to all channels to retain each module's color. Align the prepared grain
-to physical pixels and fade it before the perimeter. Do not animate the noise or
-add grain over labels and control values.
+Fixed raster detail fades from opaque texture to transparency over the
+matching solid chassis color. A resize grows the solid regions. It does not
+stretch bitmap edges or repeat a visible texture seam. Keep labels, control
+values, indicators, and interaction states live. For the prepared PNG sizes,
+see [Top bar](components-score.md#top-bar).
 
-This is a resizable Windows desktop surface at 100% display scaling. Display
-scaling of 150% and 200% is out of scope, and no PNG sets are prepared for
-it. No browser, mobile, or touch acceptance is implied by these
-logical dimensions. Native capture cases
-are defined by `tools/verify-ui.ps1`; execution results belong in evidence reports.
+Painted backgrounds use restrained, static, monochromatic Gaussian grain. Its
+mean is zero and its standard deviation is about 1.5 RGB levels. Apply the
+same offset to all channels, so that each module keeps its color. Align the
+prepared grain to physical pixels and fade it before the perimeter. Do not
+animate the noise or add grain over labels and control values.
+
+## Scope
+
+This is a resizable Windows desktop surface at 100% display scaling, the only
+scaling in scope. These logical dimensions imply no browser, mobile, or touch
+acceptance. `tools/verify-ui.ps1` defines the native capture cases. Execution
+results belong in evidence reports.

@@ -29,7 +29,7 @@ These rules apply to every prose field: `overview`, `role`, the event `descripti
 - **No promotional words.** You can use "iconic" and "legendary" when the history supports them.
   Do not use "amazing", "incredible", or "stunning".
   Use precise nouns and verbs, not adjectives.
-- **Direct statements.** Do not write "it seems like", "possibly", or "might be". State the analysis directly.
+- **Direct statements.** Do not write "it seems like", "possibly", or "might be". State the analysis.
 - **Technical words.** Use technical terms, for example `arpeggiated`, `polyrhythmic`, `resonant low-pass filter`,
   `four-on-the-floor`, and `tritone`. Do not explain basic terms.
 - **No loose ends.** Each claim must be complete in itself.
@@ -47,9 +47,9 @@ These rules apply to every prose field: `overview`, `role`, the event `descripti
 
 ## Overview Field
 
-The overview is an analytical statement of 3–8 sentences. It is not a promotional text.
-Use one paragraph, or two separated by a literal `\n\n` in the JSON string.
-Two paragraphs can separate the recording context from the commercial reception.
+The overview is an analytical statement of 3–11 sentences. Most overviews have 6–9 sentences. It is not a promotional text.
+Use one to three paragraphs. Separate them with a literal `\n\n` in the JSON string.
+The paragraphs separate the recording context from the reception. An optional last paragraph says how the timestamps were found and how accurate they are, for example "Section timestamps are measured on a rip of the CD and are approximate to ±5 seconds." It can also name the edition that the review follows.
 
 **Required content:**
 
@@ -100,8 +100,8 @@ Add historical or musical context only if the track is important enough to need 
 ## Track `tags` Field
 
 Give 2–5 short descriptors in Title Case.
-Do not add an energy tag. The album page shows `Energy: <level>` from the `energy` field as the first tag, for example `Energy: Peak`.
-An energy tag in `tags` shows the same data two times.
+Do not add an energy tag. The Album Review window shows `Energy: <level>` from the `energy` field before the tags, for example `Energy: peak`.
+An energy tag in `tags` shows the same data twice.
 
 - Write tags as noun phrases, not as sentences.
 - Use these types of tags:
@@ -128,7 +128,7 @@ Give exactly one of these values: `low`, `mid`, `high`, or `peak`.
 | `peak` | Major climax, maximum intensity, summit track, final assault |
 
 A track has one energy value. Use the highest level in the track, not the average level.
-Use `peak` rarely. Give it only to a true summit. In the current data, about 1 track in 27 is `peak`.
+Give `peak` only to a true summit, and give it to few tracks. In the current data, about 1 track in 27 is `peak`.
 
 ---
 

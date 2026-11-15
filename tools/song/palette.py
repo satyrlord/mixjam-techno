@@ -11,12 +11,12 @@ python -I tools/song/palette.py show PALETTE.json
 python -I tools/song/palette.py check SONG.mixjam PALETTE.json
 
 The owner's rule uses about 25 to 40 sound families for a song. Each family
-brings its numbered variations, so a palette holds roughly 100 to 200 files.
+brings its numbered variations, so a palette holds about 100 to 200 files.
 A family is the files of one folder that differ only in a number, chord name,
 tempo and key tag, or left/right mark. See `verdicts.py`.
 
-- `census` counts the families and files that songs place: by default the owner's converted songs
-  in local-data/songs/review/album-mix and the latest Reality pass. Sounds imported from the original
+- `census` counts the families and files that songs place. By default it reads the owner's
+  converted songs in local-data/songs/review/album-mix. Sounds imported from the original
   products count by their file name.
 - `families` lists one song's families with the files placed from each.
 - `suggest` lists families from the verdicts (`verdicts.py build`), the owner's approved ones first,
@@ -30,9 +30,9 @@ tempo and key tag, or left/right mark. See `verdicts.py`.
   product and sample ID. `add` and `remove` change the families.
   `show` lists it with its families' verdicts and tuning corrections.
 - `check` lists every placed file outside the palette and the palette's unused
-  families. It exits with 1 when a file is outside. A composer script can also hold itself to a palette with
-  `song.use_palette(PATH)` (mixjam.py): a sound outside it stops the script. A file the owner rejected,
-  or judged out of tune or cheesy, is outside every palette.
+  families. It exits with 1 when a file is outside. A composer script can hold itself to a palette with
+  `song.use_palette(PATH)` (mixjam.py). A sound outside the palette then stops the script.
+  A file that the owner rejected, or judged out of tune or cheesy, is outside every palette.
 """
 import argparse
 import datetime

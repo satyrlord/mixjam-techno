@@ -1,26 +1,26 @@
 ---
 name: grill-me
 description: >
-  Before implementation, challenge a MixJam Techno plan or design. Use to resolve open
+  Challenge a MixJam Techno plan or design before implementation. Use to resolve open
   product, architecture, persistence, audio, UI, verification, or delivery decisions.
 ---
 
 # Challenge a MixJam Techno decision
 
-If the user does not authorize workspace edits, remain read-only.
+If the user does not permit workspace edits, stay read-only.
 
 ## 1. Prepare the decision tree
 
-1. Read `docs/ARCHITECTURE.md` and the applicable design or feature document.
+1. Read `docs/ARCHITECTURE.md` and the design or feature document that applies.
    If they exist, also read `AGENTS.md`, `local-data/research/PRODUCT.md`,
    and `local-data/research/COMPATIBILITY.md`.
-   Completion criterion: You know the approved contract and open questions.
-2. Inspect implementation that the plan claims already exists.
+   Completion criterion: You know the approved contract and the open questions.
+2. Inspect the implementation that the plan claims already exists.
    Completion criterion: Each implementation claim has direct evidence.
-3. Resolve facts that current repository files or primary sources can answer.
-   Completion criterion: Only genuine product choices remain.
+3. Answer the factual questions that current repository files or primary sources can answer.
+   Completion criterion: Only real product choices remain.
 4. List the decision branches from parent to child.
-   Completion criterion: The highest-risk and least-reversible branch is first.
+   Completion criterion: The branch with the highest risk and the least reversibility is first.
 
 Do not ask a question that available evidence can answer.
 
@@ -28,32 +28,32 @@ Do not ask a question that available evidence can answer.
 
 1. State the current branch and its material trade-offs.
    Completion criterion: The user can compare the valid choices.
-2. Recommend one evidence-based choice.
-   Completion criterion: The recommendation has a clear reason and verifier.
+2. Recommend one choice that evidence supports.
+   Completion criterion: The recommendation has a clear reason and a verifier.
 3. Ask one question.
    Completion criterion: The user gives an answer or explicitly defers the branch.
-4. Record the answer and its downstream effects.
+4. Record the answer and its effects on child branches.
    Completion criterion: No child branch depends on an unstated parent choice.
-5. If the answer exposes a material dependency, add a branch.
+5. If the answer shows a material dependency, add a branch.
    Completion criterion: The tree contains no speculative branch.
 
-Probe relevant product and delivery risks. Include ownership, persistence,
-audio, accessibility, native layout, original-product parity, and verification
-when they affect the decision. Do not treat donor plans as feature authority.
+Examine the product and delivery risks that affect the decision: ownership,
+persistence, audio, accessibility, native layout, original-product parity, and
+verification. Donor plans are not a feature authority.
 
-If a concrete question sequence is useful, read [EXAMPLES.md](EXAMPLES.md).
+If you need a concrete question sequence, read [EXAMPLES.md](EXAMPLES.md).
 
-## 3. Record authorized decisions
+## 3. Record permitted decisions
 
-1. Identify the owning specification or domain document for each decision.
+1. Identify the specification or domain document that owns each decision.
    Completion criterion: Every durable fact has one owner.
-2. If the user authorizes edits, update only the owning document.
+2. If the user permits edits, update only the owning document.
    Completion criterion: No parallel decision document exists.
-3. If the user does not authorize edits, report the exact future document change.
-   Completion criterion: Another agent can apply it without reopening the decision.
+3. If the user does not permit edits, report the exact document change for later.
+   Completion criterion: Another agent can apply it without a new discussion of the decision.
 
 ## Completion criterion
 
-The session is complete after you resolve or defer every inventoried branch.
-Each deferral must name an owner, reason, and verification step. Route authorized
-implementation to the relevant repo workflow after the decision is recorded.
+The session is complete when you resolve or defer every branch in the tree.
+Each deferral names an owner, a reason, and a verification step. After you
+record the decisions, send permitted implementation work to the skill that owns it.

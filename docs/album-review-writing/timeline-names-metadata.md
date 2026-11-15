@@ -2,11 +2,11 @@
 
 ## Timeline Event Fields
 
-Use a number of events that agrees with the length of the track:
+Use a number of events that fits the length of the track:
 
 | Track length | Events |
 | --- | --- |
-| Interlude or short track (less than approximately 3 min) | 2–4 |
+| Interlude or short track (less than about 3 min) | 2–4 |
 | Standard track (3–10 min) | 4–8 |
 | Extended track (more than 10 min) | 8–12 |
 
@@ -38,7 +38,7 @@ Choose one rule for each album and use it for all of the album.
 
 ### `description`
 
-Write one sentence or clause. It tells *what occurs in the structure or the music* at this timestamp.
+Write one sentence or clause. It says *what happens in the structure or the music* at this timestamp.
 You can add a second short fragment for emphasis.
 
 - Use the present tense. Use the active voice or a noun phrase.
@@ -98,4 +98,4 @@ Give the names of specific instruments and models when you know them. This is a 
   Use `M:SS` or `MM:SS` below one hour, for example `42:17`. Use `H:MM:SS` from one hour, for example `1:05:33`.
   Do not write a runtime of one hour or more in minutes only, for example `65:33`.
   The runtime must be within 30 seconds of the sum of the track durations. Saving a review enforces this rule.
-  If the runtime and the track sum are more different, a track duration or the runtime is wrong. Check both against MusicBrainz.
+  If the runtime and the track sum differ by more, a track duration or the runtime is wrong. Check both against MusicBrainz.

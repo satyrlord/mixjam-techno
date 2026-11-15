@@ -6,7 +6,7 @@ param(
     [string[]]$Themes = @('studio', 'aero', 'vintage'),
     [ValidateSet('1440x1000', '1024x768', '960x720')]
     [string[]]$Sizes = @('1440x1000', '1024x768', '960x720'),
-    # Captures run in parallel; each case has its own process, data folder, and file.
+    # Captures run in parallel. Each case has its own process, data folder, and file.
     [ValidateRange(1, 32)]
     [int]$Jobs = [Math]::Max(1, [Math]::Min(8, [Environment]::ProcessorCount / 2)),
     [ValidateSet('arrangement', 'sections', 'sample-details', 'transport-focus', 'mixer', 'mixer-dense', 'mixer-empty', 'mixer-states', 'mixer-eq', 'options-libraries', 'options-library-tempos', 'options-library-expanded', 'options-library-providers', 'follow', 'step-synth', 'step-synth-effects', 'effects', 'effects-expanded', 'master', 'master-active', 'master-reordered', 'master-end', 'master-metering', 'master-bypass', 'fx-board', 'clip-fades', 'automation', 'automation-menu', 'edit', 'stretch', 'help', 'unsaved', 'import', 'recorded-take', 'import-details', 'first-run', 'sparse', 'track64', 'missing', 'missing-details', 'missing-effects', 'missing-edit', 'missing-stretch', 'missing-step-synth', 'sample-conflicts', 'album-review', 'album-review-filtered', 'album-review-page', 'album-review-missing', 'options-audio', 'options-workspace', 'options-files', 'options-unapplied', 'options-discard', 'rail-icons', 'boards-folded', 'maximised', 'sounds-panel', 'overview-folded', 'mix-view', 'mix-view-dense', 'mix-view-empty', 'mix-view-states', 'mix-view-eq', 'inspector-song', 'inspector-track', 'inspector-clip', 'inspector-clips', 'command-list')]
@@ -48,7 +48,7 @@ sizes = sys.argv[3].split(',')
 views = sys.argv[4].split(',')
 themes = sys.argv[5].split(',')
 jobs = int(sys.argv[6])
-# The window must fit on the screen; the capture is of the whole window.
+# The window must fit on the screen, because the capture is of the whole window.
 import ctypes
 screen = (ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1))
 too_big = [size for size in sizes
@@ -95,7 +95,7 @@ for index, (group, name, frequency, bars) in enumerate(definitions):
                         path=str(path), source_bpm=140, origin=None))
 
 # A Step synth sequence saved with its pattern beside it, as Save sequence
-# keeps it; the score draws its clips as notes.
+# keeps it. The score draws its clips as notes.
 step_notes = {0: 0, 3: 3, 6: 7, 8: 12, 10: 10, 12: 7, 14: 5}
 step_folder = sounds / 'Step synth'
 step_folder.mkdir(parents=True, exist_ok=True)
@@ -212,7 +212,7 @@ mixer_project['tracks'][3]['left_enabled'] = False
 mixer_project['tracks'][4]['muted'] = True
 mixer_project['tracks'][5]['solo'] = True
 mixer_project['master_gain'] = 0.7777778
-# A track can contain more than one sound; its strip must not invent one identity.
+# A track can contain more than one sound. Its strip must not invent one identity.
 mixer_project['clips'][0]['sample_id'] = samples[4]['id']
 # Track 1 and track 3 feed the FX buses; FX 1 holds a reverb and FX 2 a delay.
 echoform = dict(type='echoform-delay', mode='sync', divisionL='1/4', divisionR='1/8.',
@@ -288,8 +288,8 @@ report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).he
                     'No clean Windows VM check'])
 
 def options_with(theme):
-    # Every other field keeps its default; Studio runs without a file, which
-    # is the fresh-start default.
+    # Every other field keeps its default. Studio runs without a file, which
+    # is the default at the first start.
     return dict(schemaVersion=1, drivePlaybackOversampling='4x', masterPlaybackOversampling='4x',
                 samplePlaybackQuality='high', previewLevelDb=0.0, previewMuted=False,
                 playbackBufferTarget='40ms', meterDisplayRate='normal', followOnStartup=True,

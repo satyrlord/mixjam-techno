@@ -1,6 +1,6 @@
 # Version history
 
-Migration preserves the earlier settings within the limits below. Saving an
+Migration keeps the earlier settings within the limits below. A save of an
 earlier song writes version 25, which earlier builds cannot open.
 
 | Version | Change | Earlier songs open with |
@@ -10,13 +10,13 @@ earlier song writes version 25, which earlier builds cannot open.
 | 10 | Adds lane `muted` and `solo`. | Mute and Solo off, L/R outputs as saved. |
 | 11 | Adds `master` with the three Booster pedals. | Every pedal off. |
 | 12 | Adds the trim and the mastering pedals to `master`. | Version 11 Booster pedals first in their saved order, the mastering pedals off. |
-| 13 | Adds `fxBuses` and each lane's `sends`. | Every bus empty and every send at 0. |
+| 13 | Adds `fxBuses` and the `sends` of each lane. | Every bus empty and every send at 0. |
 | 14 | Adds clip `fades` and `pitchCents`, and lane `automation`. | No fades, no pitch change, no automation. |
 | 15 | Adds the lane `eq` and the master `bypass`. | Every channel EQ off and the board in use. |
-| 16 | Renames the Booster pedals' keys in `master` and its `order`. | The same Booster settings under the new keys. |
-| 17 | Adds the lane `ducker`, the pedals' `key`, and the effects' `duckKey`. | Every ducker off; every pedal and effect on its own input. |
-| 18 | Adds the EQ's second peak (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. A lane ducker's `threshold` is measured before the master gain; version 17 measured it after. | The second peak flat, every compressor off, every lane at 100% width. Each saved lane `ducker`, on or off, opens with its `threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0, so it ducks as it did wherever that range allows; a `masterGain` of 0 leaves it, as the key is silent either way. |
-| 19 | Adds the song's `sections`. | No sections. |
+| 16 | Renames the keys of the Booster pedals in `master` and its `order`. | The same Booster settings under the new keys. |
+| 17 | Adds the lane `ducker`, the `key` of the pedals, and the `duckKey` of the effects. | Every ducker off. Every pedal and effect on its own input. |
+| 18 | Adds the second peak of the EQ (`peak2Hz`, `peak2Db`, `peak2Q`), the lane `compressor`, and the lane `width`. The `threshold` of a lane ducker is measured before the master gain. Version 17 measured it after the master gain. | The second peak flat, every compressor off, every lane at 100% width. See the note after this table for the ducker `threshold`. |
+| 19 | Adds the `sections` of the song. | No sections. |
 | 20 | Adds the lane automation `pan`. | No pan automation. |
 | 21 | Adds the lane automation `repeat`. | No repeat automation. |
 | 22 | Adds the lane `drive`. | Every drive off. |
@@ -24,9 +24,15 @@ earlier song writes version 25, which earlier builds cannot open.
 | 24 | Adds the lane automation `pitch`. | No pitch automation. |
 | 25 | Adds the FX bus module `emberform-drive`. | No drive returns. |
 
-The readers reject later-version settings in earlier songs. Some optional fields
-encoded as `null` are accepted by earlier readers. Versions 12 to 14 also accept
-an explicit `"bypass": false` in `master`.
+Each saved lane `ducker` of an earlier song, on or off, opens with its
+`threshold` moved by `-20 * log10(masterGain)` dB and held to -60..0. The lane
+then ducks as it did, wherever that range allows. A `masterGain` of 0 leaves
+the `threshold` as it is, because the key is silent either way.
+
+The readers reject settings of a later version in earlier songs. Earlier
+readers accept some optional fields that are encoded as `null`. Versions 12 to
+14 also accept an explicit `"bypass": false` in `master`.
 
 Earlier plain JSON projects have a separate compatibility reader. It accepts
-both generations of Booster names without weakening these versioned song rules.
+both generations of Booster names. It does not weaken the versioned song rules
+in this document.

@@ -1,18 +1,19 @@
 # Album analysis: reference
 
 This file is the reference for the `album-analysis` skill: the storage, the
-id format, the fields, the rules, the commands, and the cover art. The rules
-for prose, tags, energy levels, and timeline events are in
-`docs/ALBUM-REVIEW-WRITING.md`.
+id format, the fields, the rules, the requests, the cover art, and the lookup
+tool. The rules for the prose, the tags, the energy levels, and the timeline
+events are in `docs/ALBUM-REVIEW-WRITING.md`.
 
 ## Storage
 
 - Each review is one file, `assets/album-review/<id>.json`, in the
-  repository. The application reads the folder at run time; the reviews are
+  repository. The application reads the folder at run time. The reviews are
   not compiled into the executable.
 - The application looks for `assets/album-review` beside its own folder: the
-  repository root for a build in `target/`, or the installation folder. When
-  the folder is missing, the window shows **No reviews folder**.
+  repository root for a build in `target/`, or the installation folder. It
+  does not use the data folder. When the folder is missing, the window shows
+  **No reviews folder**.
 - The files are pretty JSON with two-space indents, the keys in the order of
   the tables below, and a final newline. The application writes this form.
 - A file that breaks a rule does not load. The window and the `reviews` reply
@@ -69,22 +70,16 @@ Track fields, in file order:
 Event fields: `timestamp` (`M:SS` or `MM:SS`), `section`, and `description`
 are required and non-empty. `detail` is optional and non-empty when present.
 
-The streaming fields of the earlier collection (`spotifyUrl`,
-`audioStreamUrl`, `videoStreamUrl`) are not part of the format. A file with an
-unknown field does not load.
+A file with an unknown field does not load.
 
 The application also rejects placeholder text: the overview lead `Initial
 scaffold generated from MusicBrainz metadata.`, the role `Initial scaffold
 only. Narrative role pending detailed listen.`, the tags `Scaffold` and `Tags
 Pending`, and the event description `Detailed timestamp notes pending.`
 
-The rules do not check the content of the tags or the prose. Check them
-yourself against the writing guide.
+The rules do not check the content of the tags or the prose.
 
-Local paths are private to one computer. Use them only for own-work reviews,
-and do not commit a review with a private path unless the owner asks.
-
-## Commands
+## Requests
 
 Send each request with `mixjam-techno agent COMMAND ...` to a session that
 started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
@@ -97,10 +92,10 @@ started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
 | `add_review review={...}` or `add_review file=PATH` | Saves a new review. Fails when the id exists. |
 | `update_review review={...}` or `update_review file=PATH` | Replaces the review with that id. Fails when the id does not exist. |
 
-- Both lists return up to 50 results by default. Set `limit=` to change the
-  page size and `offset=` to read another page. Compare the results with `total`.
-- `search=` looks in the title, the artist, and the genre tags, without
-  regard to case or accents.
+- `reviews` and `review_tracks` return up to 50 results by default. Set
+  `limit=` to change the page size, and `offset=` to read a different page.
+- `search=` looks in the title, the artist, and the genre tags. Case and
+  accents do not count.
 - `artist=` matches part of the artist's name.
 - `tag=` matches a track tag or a genre tag of the album. Case, accents,
   spaces, and hyphens do not count: `four on the floor` matches
@@ -108,15 +103,15 @@ started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
 - `energy=` and `tag=` keep a review that has at least one such track.
 - `sort=` is `year` (the default), `year_desc`, `artist`, `title`, or
   `tracks`. Each order breaks ties by year, then artist, then title.
-- A long review does not fit a command line. Write it to a file and use
+- A long review does not fit on a command line. Write it to a file and use
   `file=`, or send a JSON line on standard input with `agent -`.
 
 ## Cover art
 
 - `coverUrl` is a remote address. The repository holds no cover image.
 - The window downloads a cover only when a person selects **Display cover
-  art**, on a background thread, with the user agent
-  `MixJamTechno/<version>`. It accepts http and https only, at most 20 MB, in
+  art**. The download runs on a background thread, with the user agent
+  `MixJamTechno/<version>`. It accepts only http and https, at most 20 MB, in
   20 seconds, and only a JPEG, PNG, or WebP image.
 - Downloaded covers go to `album-review/covers/<id>.<ext>` in the data folder
   (`%LOCALAPPDATA%\MixJam Techno`, or `MIXJAM_TECHNO_DATA_DIR`). The cache keeps
@@ -127,7 +122,8 @@ started with `--agent` or `--agent-port PORT`. `agent help` gives the full list.
 ## Lookup tool
 
 `tools/album-review/lookup.py` reads MusicBrainz and Wikipedia with a
-descriptive user agent. It needs only the Python standard library.
+descriptive user agent. It needs only the Python standard library. Run it
+with `python -I`.
 
 | Command | Output |
 | --- | --- |
@@ -135,6 +131,7 @@ descriptive user agent. It needs only the Python standard library.
 | `tracks MBID` | The track list with `M:SS` durations, the runtime, and the release date. |
 | `cover "ARTIST" "TITLE" [--page "ARTICLE"]` | `coverUrl` and `coverSource` from the album's Wikipedia article. |
 
-MusicBrainz allows one request each second; the tool waits between requests.
-If a track duration is unavailable, both that duration and the album runtime
-read `?:??`. Verify the missing duration before using the metadata in a review.
+MusicBrainz permits one request each second. The tool waits between requests.
+If a track duration is not available, that duration and the album runtime show
+`?:??`. Find the missing duration in a different source before you use the
+metadata in a review.

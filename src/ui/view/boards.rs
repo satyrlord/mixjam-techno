@@ -20,7 +20,7 @@ const BOTTOM_PANEL_MARGIN: egui::Margin = egui::Margin {
 const TOOLBAR_HEIGHT: f32 = 28.0;
 
 /// The space between the module toolbar and a board (Mixer, Mastering, or
-/// Effects). The margins give it up, so a board keeps its height.
+/// FX returns). The margins give it up, so a board keeps its height.
 const BOARD_GAP: f32 = 8.0;
 
 /// The lower panel: its shown board, its meters, and what its boards bring into

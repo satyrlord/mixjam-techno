@@ -2,10 +2,10 @@
 
 python -I tools/song/barnotes.py [--song-bpm 140] PATH BPM CENTS [PATH BPM CENTS ...]
 
-BPM is the sound's own tempo and CENTS the clip pitch. Each bar as played in the song gets its
-strongest pitch classes from spectral peaks, after the total shift (varispeed to the song tempo,
-default 140, plus the clip's cents), and its lowest strong note (the root candidate, 40-400 Hz).
-Use it for a WAV without a MIDI file.
+BPM is the sound's own tempo and CENTS is the clip pitch. The tool measures each bar as the song
+plays it. The total shift is the varispeed to the song tempo (default 140) plus the clip's cents.
+Each bar gets its strongest pitch classes from spectral peaks. It also gets its lowest strong
+note, which is the root candidate (40-400 Hz). Use the tool for a WAV without a MIDI file.
 """
 import math
 import sys

@@ -345,8 +345,7 @@ impl MixJamApp {
 }
 
 /// A category chip: a small square in the category's colour before its
-/// name. It carries the same name and hint as the lower panel's category
-/// buttons.
+/// name.
 fn category_chip(ui: &mut egui::Ui, label: &str, color: Option<Color32>, active: bool) -> Response {
     let action = format!("Show {label} sounds");
     let text_color = if active { roles().text } else { roles().muted };

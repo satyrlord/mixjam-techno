@@ -1,10 +1,10 @@
 # Song format
 
 A `.mixjam` song is JSON. Its `formatVersion` selects the reader. Version 25 is
-the current song format, and it is the only version that the application
-writes. Versions 8 to 24 open and migrate. Version 7 is the earlier MixJam
-project format, which is import-only: **Save** never replaces a version-7 file.
-`src/mixjam/song.rs` owns the format; its tests cover each version.
+the current song format. The application writes only this version. Versions 8
+to 24 open and migrate. Version 7 is the earlier MixJam project format. It is
+import-only: **Save** never replaces a version-7 file. `src/mixjam/song.rs`
+owns the format, and its tests cover each version.
 
 ## Contents
 
@@ -18,16 +18,25 @@ project format, which is import-only: **Save** never replaces a version-7 file.
 ## Envelope
 
 Every version from 8 uses strict camelCase JSON and rejects unknown keys. A
-document holds `formatVersion`, `appVersion`, `createdAt`, `modifiedAt`, `song`,
-`lanes`, `samples`, `missingSamples`, `sampleConflicts`, `importNotices`,
-`sourceNotices`, and `libraries`. From version 11 it also holds `master`, and
-from version 13 `fxBuses`. `sourceSettings` holds, as text, the settings that
-the original product saved with an imported song; a song without such settings
-omits it. Every other key is required. Saving to an existing file of version 8
-to 25 keeps its `createdAt`.
-Master settings reject duplicate fields, including nested fields and escaped
-spellings of the same key. Versions 11 to 15 perform this check before renaming
-the earlier Booster keys during migration.
+document holds these keys:
 
-Ticks are 256 per bar. A song links each WAV file by path; it is not a
+- `formatVersion`, `appVersion`, `createdAt`, and `modifiedAt`
+- `song`, `lanes`, and `samples`
+- `missingSamples`, `sampleConflicts`, `importNotices`, and `sourceNotices`
+- `libraries`
+
+From version 11, a document also holds `master`. From version 13, it also holds
+`fxBuses`. Each key is required from the version that adds it.
+
+`sourceSettings` holds, as text, the settings that the original product saved
+with an imported song. A song without such settings omits the key.
+
+A save to an existing file of version 8 to 25 keeps the `createdAt` of that
+file. The reader rejects a file larger than 1 GiB.
+
+Master settings reject duplicate fields. This includes nested fields and
+escaped spellings of the same key. Versions 11 to 15 make this check before
+they rename the earlier Booster keys during migration.
+
+Ticks are 256 per bar. A song links each WAV file by path. It is not a
 portable audio bundle.

@@ -1,24 +1,44 @@
 # Prose slop
 
-Preserve true meaning and intentional voice. Remove prose that hides the point
-or conflicts with its owner.
+Keep the true meaning and any required distinct voice. Remove prose that hides
+the point or that conflicts with its owner.
 
-## Simplified Technical English
+## Writing policy: ASD-STE100
 
-Apply the current agent writing instructions to technical prose. Use strict
-ASD-STE100 for procedures, runbooks, instructions, skills, safety text, and errors.
-Use STE-flavored mode for general technical prose.
+This section owns the writing policy for all documentation, skills, and agent
+tools in this repository. Other files point here.
 
-If the user asks for clear, plain, controlled, or human technical writing,
-apply STE. Do not apply it to code, identifiers, command syntax, marketing copy,
-essays, or a required distinct voice.
+- Use strict ASD-STE100 Simplified Technical English (STE) for procedures,
+  instructions, skills, agent definitions, safety text, and error messages.
+- Apply the STE rules to descriptive technical documentation too.
+- Do not apply STE to code, identifiers, command syntax, quoted owner words, or
+  a required distinct voice. If a branch needs a distinct voice, the skill must
+  name that branch and its boundary.
 
-After the evidence pass, review sentences for direct steps, clear subjects,
-and defined technical terms. Form alone does not prove a claim is true.
+The official standard has copyright protection. Do not copy it into the
+repository. If a source is necessary, link to the
+[official ASD-STE100 site](https://asd-ste100.org).
 
-The official standard has copyright protection. If a source is necessary, link
-to the [official ASD-STE100 site](https://asd-ste100.org).
-Do not copy the complete standard into the repository.
+## STE checks
+
+Use these checks after the evidence pass. Form alone does not prove that a
+claim is true.
+
+- Use one word for one meaning. Use the term that the code uses.
+- Use simple, common words. Technical names and technical verbs are permitted.
+- Do not use phrasal verbs, contractions, idioms, or Latin abbreviations.
+- For an instruction or a rule, use the imperative, "must", or "do not". Do not
+  use "should", "may", or "might". Use "can" only for ability or possibility.
+- Use simple tenses and the active voice. Avoid "-ing" verb forms.
+- Write one topic in each sentence and one action in each procedural step.
+- Keep procedural sentences to 20 words or fewer. Keep descriptive sentences
+  to 25 words or fewer. A code span counts as one word.
+- Put a condition before its instruction. Do not join clauses with a semicolon.
+- Use noun clusters of three words or fewer.
+- Use a vertical list for a sequence or for three or more parallel items.
+
+Do not delete a needed fact to make a text shorter. STE changes the form, not
+the content.
 
 ## Empty framing
 
@@ -40,9 +60,6 @@ Inspect these candidates:
 - repeated sentence patterns that imply false equivalence
 - modifiers or passive clauses that hide the actor or claim
 
-Outside the STE contract, do not ban a word class or voice. If a rewrite is
-more precise and agrees with sibling documents, use it.
-
 ## Stale information
 
 Inspect these candidates:
@@ -53,4 +70,4 @@ Inspect these candidates:
 - summaries that omit evidence needed for action
 
 If history explains a current constraint or prevents a rejected decision, keep
-it. If necessary, move that fact to the durable owner.
+it. If necessary, move that fact to its durable owner.

@@ -1,24 +1,25 @@
 # Review remedies
 
 Read this reference only after you confirm a defect. Use the owning contract to
-choose a remedy. These examples do not add product requirements.
+select a remedy. These examples do not add product requirements.
 
 - Move project edits, history, file operations, and audio control behind the
   `Session` API. Keep presentation and input gestures in the native UI.
-- Route project edits through typed operations. Preserve undo behavior and
-  group continuous gestures when the current contract requires one history step.
-- Validate projects and imports before adoption. Preserve the active project on
-  failure and keep save replacement atomic.
-- Keep unversioned and schema 1 to 3 project migrations compatible with the
-  current schema.
-- Check native sample identity with audio digests when available. Reject an
-  available digest mismatch. Treat name and duration matching as inference
-  only when a digest comparison is unavailable.
+- Send project edits through typed operations. Keep undo behavior. If the
+  current contract requires one history step for a continuous gesture, group it.
+- Validate projects and imports before adoption. On a failure, keep the active
+  project. Keep save replacement atomic.
+- Keep the migrations of unversioned JSON projects and of JSON schemas 1 to 3
+  compatible with `PROJECT_SCHEMA_VERSION`.
+- Keep the `.mixjam` reader compatible with format 8 to `FORMAT_VERSION`.
+- Check native sample identity with audio digests when they are available.
+  Reject a digest mismatch. A name and duration match is only an inference,
+  for use when no digest comparison is available.
 - Cancel or discard stale background results before they change the active
   library, render, transport, or recording state.
-- Test affected render timing, channel routing, and audio format with
+- Test the affected render timing, channel routing, and audio format with
   deterministic files. Keep listening and device results separate.
-- Check native focus, accessible names, and compact layouts in the built
-  application when a UI change affects them.
+- If a UI change affects native focus, accessible names, or compact layouts,
+  check them in the built application.
 - Keep original binaries, catalogs, media, snapshots, manifests, and Git
   bundles intact. Use them as evidence for parity, not as donor feature plans.

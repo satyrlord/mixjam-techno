@@ -137,7 +137,7 @@ impl Session {
         restore_invalid: bool,
     ) -> Result<bool, String> {
         if expected_revision != self.options_revision {
-            return Err("Options changed outside this window. Select Reload before Apply.".into());
+            return Err(super::options::STALE_DRAFT.into());
         }
         draft.validate()?;
         if self.options_future && (draft != self.options || restore_invalid) {

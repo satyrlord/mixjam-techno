@@ -2,27 +2,20 @@
 
 ## Applicability
 
-`docs/DEVELOPMENT.md` and `docs/architecture/safe-frontend-iteration.md` document the current Cargo checks. Use the
-repository toolchain wrapper and keep exact command results. For a required
-check without a documented procedure, report the gap. Do not invent a pass.
-
-Use these phase rules:
+Use the phase rule for the scope:
 
 - For documentation work, inspect links, claims, and `git diff --check`.
 - For project or compatibility work, test serialization, migrations, sample
-  identity, and import/export cases under the supported feature sets.
-- For frontend work, run applicable Rust tests, a release build, native captures,
-  and visual inspection at 1440x1000, 1024x768, and 960x720.
-- For final release evidence, run the documented full Rust checks, built-artifact
-  scenarios, and relevant manual native, audio, and compatibility procedures.
-- For asset work, run the owning reproducibility checker when available.
+  identity, and import and export cases under the supported feature sets.
+- For frontend work, run the Rust tests that apply and a release build. Then
+  run the native captures and inspect each capture size.
+- For final release evidence, run every check in step 3 of `SKILL.md`. Run the
+  asset checks for every folder in `assets/`. Also run the manual native, audio,
+  and compatibility procedures that apply.
+- For asset work, run the check of each affected asset folder.
 
 ## Stop conditions
 
-If the next action needs a product decision, stop repair work. Also stop if the
-action changes quality policy, expands scope materially, or lacks a verifier.
-
-Report the exact blocker. Do not invent a coverage percentage or reinterpret a
-configured threshold. Native captures do not prove listening, microphone,
-file-picker, or screen-reader behavior. Display scaling of 150% and 200% is
-out of scope; do not report it as unverified.
+Stop the repair work if the next action needs a product decision. Also stop if
+the action changes the quality policy, makes the scope much larger, or has no
+verifier. Report the exact blocker.

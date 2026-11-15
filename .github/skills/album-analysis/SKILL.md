@@ -1,166 +1,167 @@
 ---
 name: album-analysis
 description: >
-  Write or finish an Album Review: a deep-listening analysis of an album, or
-  of the owner's own album or song, saved through the agent channel. Use when
-  the user asks to add or correct a review, or to review their own work.
+  Add or correct an Album Review: a deep-listening analysis of a released
+  album, or of the owner's own album or song, saved through the agent channel.
+  Use when the user asks to add a review, to correct a review, or to review
+  their own work.
 ---
 
 # Album analysis
 
 Each run makes one **review**: one `assets/album-review/<id>.json` file that
 the application accepted through `add_review` or `update_review`. The
-application checks the format and its validation rules before it writes the
-file. Check the factual claims and the writing guide yourself.
+application checks the format and the validation rules before it writes the
+file. It does not check the facts or the prose. You must check them.
 
-If the request has more than one album, prepare one draft per album. When
-sub-agents are available, give each this skill and one album. Ask for a draft
-and its evidence only. A sub-agent must not send `add_review` or
-`update_review`. Compare and correct the drafts, then save and check each
-review yourself. If sub-agents are unavailable, prepare the drafts in sequence.
+Read [REFERENCE.md](REFERENCE.md) when you write or check a field, an id, a
+request, or a cover link. Before you write the metadata or the analysis, read
+`docs/ALBUM-REVIEW-WRITING.md` and its second part,
+`docs/album-review-writing/timeline-names-metadata.md`.
 
-Read [REFERENCE.md](REFERENCE.md) for the fields, the id format, the rules,
-and the commands. Read `docs/ALBUM-REVIEW-WRITING.md` for the prose, the
-tags, the energy levels, and the timeline events.
+A saved review is a repository file. Commit it only when the user asks.
+
+## Branches
+
+| Request | Branch | Differences |
+|---|---|---|
+| Review a released album | Reference | All steps |
+| Correct an existing review | Correction | Step 1 finds the review; steps 2 to 5 apply only to the fields that change; step 7 uses `update_review` |
+| Review the owner's own album or song | Own work | Steps 2 and 3 use local files; `kind` is `own` |
+| Review more than one album | Several albums | Step 1 once; steps 2 to 6 make one draft for each album; steps 7 to 9 for each draft |
+
+For several albums, if sub-agents are available, give each sub-agent this
+skill and one album. Ask it for a draft and its evidence only. A sub-agent must
+not send `add_review` or `update_review`. Compare and correct the drafts, then
+save and check each review yourself. If sub-agents are not available, prepare
+the drafts one after the other.
 
 ## Step 1: Start the session
 
-Use the `operate-app` skill to start an isolated session with
-`MIXJAM_TECHNO_DATA_DIR` in `tmp/`. The reviews folder is
-`assets/album-review/` of the checkout that the executable runs from, not the
-data folder. A saved review is a repository file, so commit it only when the
-user asks.
-
-1. Send `reviews search="TITLE"` and `reviews artist="ARTIST"`.
-   Check `total` and read all result pages. Check `problems` for unreadable files.
-   Completion criterion: You know whether the review exists, or report an
-   unreadable folder or file as a blocker. If the review exists, use
-   `review id=ID` and plan an update, not an add.
+1. Use the `operate-app` skill to start an isolated session, with
+   `MIXJAM_TECHNO_DATA_DIR` in `tmp/`.
+   Completion criterion: `wait idle=true` replies with `"ok":true`.
+2. Send `reviews search="TITLE"` and `reviews artist="ARTIST"`. Read all result
+   pages, and compare the results with `total`.
+   Completion criterion: You know if the review exists. If `problems` lists an
+   unreadable folder or file, report it as a blocker.
+3. If the review exists, send `review id=ID`.
+   Completion criterion: You have the current review, and you plan an update,
+   not an add.
 
 ## Step 2: Gather the metadata
 
 1. For a released album, run
    `python -I tools/album-review/lookup.py release "ARTIST" "TITLE" --year YEAR`.
-   Omit `--year YEAR` when the year is unknown.
-   Completion criterion: You select the official release that matches the album.
+   If you do not know the year, omit `--year YEAR`.
+   Completion criterion: You selected the official release that agrees with the album.
 2. For that release, run `python -I tools/album-review/lookup.py tracks MBID`.
-   Completion criterion: You have the track list, durations, and runtime, or
-   have identified the values that need another source.
-3. Read sources for the year, label, producers, genre, and production context.
-   Use the album's Wikipedia article when it exists, and other reliable sources
-   when it does not supply the facts.
+   Completion criterion: You have the track list, the durations, and the
+   runtime, or you know which values need a different source.
+3. Read sources for the year, the label, the producers, the genre, and the
+   production context. Use the Wikipedia article of the album when it exists.
+   Use other reliable sources for the facts that it does not give.
    Completion criterion: Each factual value has a named source.
-4. Write the metadata fields in the formats of the "Metadata Fields" section
+4. For own work, use the local masters, the song files, and the facts that the
+   owner gives. Measure the durations from the masters. If no release exists,
+   do not do substeps 1 and 2.
+   Completion criterion: Each value comes from a local file or from the owner.
+5. Write the metadata fields in the formats of the "Metadata Fields" section
    of the writing guide.
-   Completion criterion: Each required field follows the format and has a
-   supported value, or uses `"Unknown"` where the format permits it.
+   Completion criterion: Each required field has a supported value in its
+   format. `label` and `producer` are `"Unknown"` only when no source gives
+   the value. A runtime of one hour or more uses `H:MM:SS`, not minutes only.
 
-**Completion criterion:** every metadata field has a value from a source that
-you can name. `label` and `producer` are `"Unknown"` only when no source
-gives the value.
-
-For unpublished own work, use the local masters, song files, and owner-provided
-facts. Measure the durations from the masters. Skip the release lookup when no
-release exists. Do not invent missing facts.
+Do not invent a missing fact.
 
 ## Step 3: Find the listening links
 
-Listening links are optional. Add only links to official releases:
+1. Find the official release pages for `youtubeUrl` and `bandcampUrl`. Use
+   only the hosts that the fields table of REFERENCE.md permits. For own work,
+   the `bandcampUrl` of an earlier own review (`reviews kind=own`) gives the
+   owner's Bandcamp page.
+   Completion criterion: Each link is an official release page. Your report
+   names each link field that stays empty.
+2. Read the text of these pages for the titles, the track lists, and the
+   durations.
+   Completion criterion: The track list agrees with the pages, or you report
+   the difference.
+3. For own work, add `localAudio` (a WAV master) and `songFile` (a `.mixjam` or
+   `.mix` song) for the album or song and for each track. Analyse the local
+   masters when the tools can read them.
+   Completion criterion: Each local path exists on this computer.
 
-- `youtubeUrl`: an https link on `www.youtube.com`, `music.youtube.com`, or
-  `youtu.be`.
-- `bandcampUrl`: an https link on `bandcamp.com` or an artist subdomain. The
-  owner's albums are on `https://eklipse-music.bandcamp.com/`.
-- Own work only: `localAudio` (a WAV master) and `songFile` (a `.mixjam` or
-  `.mix` song), for the album or song and for each track.
-
-Read the text of these pages for titles, track lists, and durations. If audio
-is not available to you, do not claim that you listened to it. For own work,
-analyse the local masters when the tools can read them.
-
-**Completion criterion:** your report names each link field that stays empty.
+If the audio is not available to you, do not say that you listened to it.
+Local paths are private to this computer. Do not commit a review with a local
+path unless the owner asks.
 
 ## Step 4: Find the cover link
 
 1. Run `python -I tools/album-review/lookup.py cover "ARTIST" "TITLE"`.
-   If the search picks the wrong article, add `--page "ARTICLE TITLE"`.
-   Completion criterion: You have a candidate cover and source, or the lookup
-   found no candidate.
-2. If the lookup found a candidate, open the image address and the article.
-   Completion criterion: The source identifies the album and its cover, or
-   you reject the candidate.
-3. For a verified candidate, put the image address in `coverUrl` and the article
-   in `coverSource`.
-   Completion criterion: Both fields identify the verified source, or neither
-   field is added.
+   If the search finds the wrong article, add `--page "ARTICLE TITLE"`.
+   Completion criterion: You have a candidate cover and its source, or the
+   lookup found no candidate.
+2. Read the article of the candidate.
+   Completion criterion: The article is about this album and shows this
+   cover. If not, reject the candidate. The lookup can give the cover of a
+   different album.
+3. Send an HTTP HEAD request to the image address.
+   Completion criterion: The status is 200, and the content type is
+   `image/jpeg`, `image/png`, or `image/webp`. If not, reject the candidate.
+4. For a verified candidate, put the image address in `coverUrl` and the
+   article address in `coverSource`.
+   Completion criterion: Both fields identify the verified source, or the
+   review has neither field.
 
-The tool finds the link but does not download the image. The application
-downloads a cover only when a person selects **Display cover art**. Do not
-copy a cover image into the repository. If no source gives a reliable cover,
-leave `coverUrl` out: the window shows its placeholder.
-
-**Completion criterion:** `coverUrl` is the image of this album, or the review
-has no `coverUrl`.
+Do not copy a cover image into the repository. If no source gives a reliable
+cover, leave out `coverUrl`. The window then shows its placeholder.
 
 ## Step 5: Write the analysis
 
-Write the `overview` and, for each track, the `energy`, `tags`, `role`, and
-`events`. Obey every rule in `docs/ALBUM-REVIEW-WRITING.md`.
-Use source or measurement evidence for each musical claim. If the available
-evidence cannot support the requested detail, stop and report the missing evidence.
-Do not invent instruments, events, or timestamps.
+1. Write the `overview`, and the `energy`, `tags`, `role`, and `events` of each
+   track. Obey each rule in `docs/ALBUM-REVIEW-WRITING.md`.
+   Completion criterion: Each musical claim has a source or a measurement.
+   Do not invent instruments, events, or timestamps.
+2. If the evidence cannot support the requested detail, stop and report the
+   missing evidence.
+   Completion criterion: The review has only supported claims.
+3. Check the analysis against these rules.
+   Completion criterion: All of these are true:
+   - No placeholder text stays in the review.
+   - Each track has a `role` that starts with `Album role: `.
+   - Each track has 2–5 `tags`, and no tag names the energy level.
+   - Each track has a number of `events` that agrees with the event table of
+     the writing guide. The events are in time order and before the end of the
+     track.
+   - Each `timestamp` uses `M:SS` or `MM:SS`.
 
-**Completion criterion:** all of these are true:
+## Step 6: Write the file
 
-- No placeholder text stays in the review.
-- Every track has a `role` that starts with `Album role: `.
-- Every track has 2–5 `tags`, and no tag shows the energy level.
-- Every track has a number of `events` that agrees with the event table of
-  the writing guide, in time order and before the end of the track.
-- Every `timestamp` uses `M:SS` or `MM:SS`.
+1. Write the full review to a JSON file in `tmp/`.
+   Completion criterion: The file has all fields of the review.
 
-## Step 6: Save
+## Step 7: Save
 
-1. Write the review to a JSON file in `tmp/`.
-   Completion criterion: The file contains the full review.
-2. Send `add_review file=PATH` for a new review, or `update_review file=PATH`
-   for an existing one.
+1. Send `add_review file=PATH` for a new review, or `update_review file=PATH`
+   for an existing review.
    Completion criterion: You have a reply for the intended review.
-3. If the reply is an error, correct the reported problem when it is in scope.
-   Completion criterion: The problem is corrected, or you report the blocker.
-4. After a correction, send the review again.
-   Completion criterion: The application accepts the review, or you report the
-   error that blocks it.
+2. If the reply is an error and the problem is in scope, correct the problem
+   and send the review again.
+   Completion criterion: The reply has `"ok":true` and the `path` of the saved
+   file, or you report the error that blocks the save.
 
-**Completion criterion:** the reply has `"ok":true` and the `path` of the
-saved file.
-
-## Step 7: Check the window
+## Step 8: Check the window
 
 1. Click **Album Review** in the tool rail, or send
    `click target="Album Review"`.
-   Completion criterion: The review window opens.
-2. Open the review's card and read the page.
-   Completion criterion: The card opens the intended review.
+   Completion criterion: The Album Review window opens.
+2. Open the card of the review and read the page.
+   Completion criterion: The grid shows the card of the album. Its page shows
+   the metadata, the overview, the listening links, and each track with its
+   timeline.
 
-**Completion criterion:** the grid shows the album's card, and its page shows
-the metadata, the overview, the listening links, and every track with its
-timeline.
+## Step 9: Update the research shortlist
 
-## Step 8: Update the research shortlist
-
-Remove the album from `docs/ALBUM-REVIEW-RESEARCH.md`. Find the list item with
-the same artist and album title.
-
-**Completion criterion:** the shortlist has no item for the reviewed album.
-
-## Read reviews for song building
-
-A song-building agent can read the reviews without the window:
-
-- `reviews tag=Acid energy=peak` lists the albums with such a track.
-- `review_tracks tag=Breakbeat` gives each matching track with its role and
-  its timestamped events: a section plan that you can measure against.
-- `review id=ID` gives one review in full.
-- `reviews kind=own` lists the owner's own work, to compare with the
-  reference albums.
+1. In `docs/ALBUM-REVIEW-RESEARCH.md`, find the list item with the same artist
+   and album title, and remove it.
+   Completion criterion: The shortlist has no item for the reviewed album.

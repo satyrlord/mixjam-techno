@@ -34,8 +34,8 @@ with direct absolute imported WAV paths and no library, missing-source, or
 conflict dependencies use the cache. The cache keeps the most recently used
 4 GB in its own versioned subfolder. --no-cache renders every lane.
 A lane file and its cache entry are hard links to one file, so an unchanged
-lane takes no more disk space in a new OUT_DIR. The tools replace a lane file;
-they do not write into it. Copy a lane file before you edit it in another program.
+lane takes no more disk space in a new OUT_DIR. The tools replace a lane file.
+They do not write into it. Copy a lane file before you edit it in another program.
 
 The renderer is the release build in target/release. It runs headless and plays
 no sound. Each render keeps its scan cache in a `.data` folder under OUT_DIR.

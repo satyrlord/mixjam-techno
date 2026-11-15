@@ -3,170 +3,211 @@
 ## FX buses
 
 `src/fx.rs` owns the buses:
-`FxBuses` is the saved settings, `DelayParam`, `ReverbParam`, and
-`DistortionParam` name each
-continuous control with its range, and `ReturnsProcessor` (`src/fx/processor.rs`) runs the buses on
-the feeds and adds their returns to the dry sum, before the master pedalboard.
-Its delay lines are sized and allocated when the processor is built, so the
-audio thread never allocates, including when a limiter resets. A bus's return
-lane (`Project::return_automation`, resolved by the mix into `ReturnLanes`)
-replaces its return level frame by frame: the mix passes the lanes and the
-block's song frame to `ReturnsProcessor::process_at` and `split`, and the bus
-multiplies its effect's output by the lane's straight-line value just before
-its safety stage, read as many frames ahead as the bus's return is late
-(`LOOKAHEAD` for a delay or a reverb, none for a drive) so that each returned
-frame carries the lane's value at its own time. The song frame keeps counting
-through the tail, in export and playback alike, so a lane that moves after
-the song's end shapes the tail the same way. The lane only scales the return;
-the effect's state runs on whatever the lane does, as it does behind a zero
-Return knob. A bus with no
-input and no remaining internal tail sleeps; delay sleep allows enough time
-for a pending long echo. Bypass does not hide internal tail activity from this
-check. The safety limiter's fixed 220-frame lookahead comes off the delay's
-output tap, while feedback keeps the full selected time, so every repeat stays
-on the beat. Reverb compensates its pre-delay where possible. The Emberform
-Drive (`src/fx/distortion.rs`) has no delay to shorten, and its return sums
-with the dry sound it came from, so its bus adds no latency: an instant
-ceiling (`ceiling` in `src/fx/parts.rs`) replaces the limiter and its
-lookahead. Export runs the stage on silence after the song
-while any bus rings, for at most `TAIL_LIMIT`, in 1024-frame blocks
-(`Mix::TAIL_BLOCK`). Playback also asks whether a bus still rings once a tail
-block, however short its own blocks are, so export and playback give the same
-samples.
+
+- `FxBuses` is the saved settings.
+- `DelayParam`, `ReverbParam`, and `DistortionParam` name each continuous
+  control with its range.
+- `ReturnsProcessor` (`src/fx/processor.rs`) runs the buses on the feeds and
+  adds their returns to the dry sum, before the master pedalboard.
+
+The processor sizes and allocates its delay lines when it is built. Thus the
+audio thread never allocates, also when a limiter resets.
+
+The return lane of a bus (`Project::return_automation`, which the mix resolves
+into `ReturnLanes`) replaces its return level frame by frame. The mix gives the
+lanes and the song frame of the block to `ReturnsProcessor::process_at` and
+`split`. The bus multiplies the output of its effect by the straight-line value
+of the lane just before its safety stage. It reads the lane as many frames
+ahead as the return of the bus is late: `LOOKAHEAD` for a delay or a reverb,
+and none for a drive. Thus each returned frame carries the value of the lane at
+its own time. The song frame continues to count through the tail, in export
+and in playback. Thus a lane that moves after the end of the song shapes the
+tail in the same way. The lane only scales the return. The state of the effect
+runs independently of the lane, as it does behind a Return knob at zero.
+
+A bus with no input and no remaining internal tail sleeps. The delay sleep
+gives sufficient time for a pending long echo. Bypass does not hide internal
+tail activity from this check. The safety limiter has a fixed 220-frame
+lookahead. The delay takes that lookahead off its output tap, but its feedback
+keeps the full selected time, so each repeat stays on the beat. The reverb
+compensates its pre-delay where possible.
+
+The Emberform Drive (`src/fx/distortion.rs`) has no delay to make shorter, and
+its return adds to the dry sound that it came from. Thus its bus adds no
+latency: an instant ceiling (`ceiling` in `src/fx/parts.rs`) replaces the
+limiter and its lookahead.
+
+After the song, export runs the stage on silence while a bus rings, for a
+maximum of `TAIL_LIMIT`, in 1024-frame blocks (`Mix::TAIL_BLOCK`). Playback also
+asks once for each tail block whether a bus still rings, independently of the
+size of its own blocks. Thus export and playback give the same samples.
+
 If an FX type change completes inside a processing block, its sidechain key
-changes on that same frame. Processing the same inputs in different block
-sizes must not delay the new key until the next block.
-Reverb delay changes crossfade from a snapshot of all current delay positions.
-Each read head bounds its own modulation during the transition. Once the old
-positions finish fading, modulation returns to the requested depth within the
-new space's bounds.
+changes on that same frame. When the same inputs go through in different block
+sizes, the new key must not wait until the next block. A reverb delay change
+crossfades from a snapshot of all current delay positions. Each read head
+limits its own modulation during the transition. When the old positions stop
+their fade, the modulation goes back to the requested depth, within the bounds
+of the new space.
 
 ## Master pedalboard
 
 `src/master.rs`, with its `src/master/` modules, owns the master pedalboard:
-`MasterChain` (`chain.rs`) is the saved settings, `Knob` (`knobs.rs`) names
-each continuous setting with its range, and `MasterProcessor` (`processor.rs`)
-runs the board over the summed stereo mix in blocks, with state that carries
-from block to block. Its submodules also hold the Booster pedals' DSP
-(`booster`), this application's mastering pedals (`pedals`), their shared
-filters, oversampling, and true-peak interpolation (`dsp`), and the playback
-meters (`meters`). `MasterChain` is `Copy` and its `order` a fixed array that
-names each pedal once, so a settings copy never allocates on the audio thread,
-and the whole board state is fixed-size. Pedals that are off pass the signal on
-unchanged. Each pedal keeps its own state when the order changes. Master
-processors prepare shared oversampling and true-peak filter tables before
-playback reaches the audio thread. First playback and later pedal switches
-must not initialize or wait for those tables in the callback. The mastering
-playback quality option changes only Soft clip, Tube, Maximizer, and Tape.
-Off runs their saturation at the base rate with the same integer stage delay.
-It does not change limiter lookahead, true-peak interpolation, metering,
-other processors, or the fixed live delay. The mastering
-pedals glide to new settings over about 20 ms. During playback, switching or
-moving a pedal copies the board and crossfades from the old copy to the new one
-over 30 ms. Live playback pads both paths to a fixed 593-frame delay and fills
-the new path before the fade starts, so switching pedals preserves their
-timeline alignment and the song's ending. `MasterProcessor` applies the trim,
-then holds the mix to full scale, then runs the pedals, so a lower trim keeps
-a hot mix from clipping; the mix and the FX returns reach it unclamped, and a
-playback without a board, or `Frames::read`, holds them instead.
-`MasterChain::bypass` skips the trim
-and every pedal: `MasterChain::runs` is false for every pedal, the trim glides
-to unity, and the board's latency is zero, so export carries no pedal delay.
-During playback the bypassed board still pads to the fixed delay and meters,
-and switching the bypass crossfades as a pedal switch does. Leaving bypass
-starts the pedals that are on from a clear state.
-`MasterChain::latency` is the delay of the pedals that run:
-`Mix::to_pcm` and `Mix::write_wav` run the pedals past the end by that much and
-cut it from the start. Playback drops its fixed delay before the first sample
-and drains the same number of frames at the end, so both stay on the timeline.
-Export and `Mix::to_pcm` take the project's chain
-explicitly. `Mix::to_pcm` holds the whole result and has no length limit: it
-reserves the room first and reports a plain error if the memory is not there.
-`Mix::write_wav` and `Mix::write_stems` render in blocks and refuse only a
-song that is too long for a WAV file (`Mix::MAX_WAV_FRAMES`, about 6.7 hours). Mix playback reads a `MasterControl` that the
-`Session` keeps equal to the project; the audio thread takes new settings at
-its next block through the lock-free `audio::Latest` cell, so it never waits.
-An edit or history step that
-changes only the pedalboard or the FX buses keeps the prepared mix and playback
-when the set of required key tracks stays the same. A changed set of keys
-prepares the mix again. The same `MasterControl` carries the FX buses'
-settings and Clear Tail requests, which the `ReturnsProcessor` polls the same way. Tool previews play without the pedalboard. Each
-playback and export starts the pedalboard in the same settled state. A live
-processor also measures: every 1024 frames it publishes a `MeterReading` through
-atomics in the `MasterControl`, which `Session::master_meters` reads without
-waiting. Each playback numbers its readings, and only the start of a playback
-changes that number. A stopped playback that is still finishing its last block
-can show its levels for one block, but it cannot keep the next playback's readings
-from reaching the window. The cumulative OVER count carries its playback number
-in the same atomic value. A stale count cannot become the new playback's lamp
-baseline. Readings change more than 30 times a second, and each covers the
-same frames whatever playback's block size, so the block size changes neither
-the true peak shown nor the OVER count. At the end, playback publishes the
-frames since the last reading and finishes the peak detector without adding
-audio frames or loudness time. Output metering excludes the initial 593 frames
-that playback removes, so loudness windows follow the audible program.
-Export measures nothing. Stereo PCM16 export reserves 36 bytes of the RIFF
-size field for its header before it opens a destination file.
-The Multiband's moving minimum retains exactly the active lookahead window,
-including when gain requirements rise for longer than its fixed queue. It
-expires old entries before adding a new one, so a full queue cannot overwrite
-its live minimum.
+
+- `MasterChain` (`chain.rs`) is the saved settings.
+- `Knob` (`knobs.rs`) names each continuous setting with its range.
+- `MasterProcessor` (`processor.rs`) runs the board over the summed stereo mix
+  in blocks, with state that continues from block to block.
+- The other submodules hold the DSP of the Booster pedals (`booster`), the
+  mastering pedals of this application (`pedals`), their shared filters,
+  oversampling, and true-peak interpolation (`dsp`), and the playback meters
+  (`meters`).
+
+`MasterChain` is `Copy`, and its `order` is a fixed array that names each
+pedal one time. Thus a settings copy never allocates on the audio thread, and
+the state of the whole board has a fixed size. A pedal that is off passes the
+signal on unchanged. Each pedal keeps its own state when the order changes.
+
+Master processors prepare the shared oversampling and true-peak filter tables
+before playback gets to the audio thread. The callback must not initialize or
+wait for those tables, at first playback or at later pedal switches. The
+mastering playback quality option changes only Soft clip, Tube, Maximizer, and
+Tape. When it is Off, their saturation runs at the base rate, with the same
+integer stage delay. It does not change the limiter lookahead, the true-peak
+interpolation, the metering, the other processors, or the fixed live delay.
+
+The mastering pedals glide to new settings over about 20 ms. During playback,
+when a pedal is switched or moved, the board is copied, and playback
+crossfades from the old copy to the new copy over 30 ms. Live playback pads
+the two paths to a fixed 593-frame delay. It fills the new path before the
+fade starts. Thus a pedal switch keeps the timeline alignment of the pedals and
+the end of the song.
+
+`MasterProcessor` applies the trim, then holds the mix to full scale, and then
+runs the pedals. Thus a lower trim prevents clipping of a hot mix. The mix and
+the FX returns get to it without a clamp. A playback without a board, or
+`Frames::read`, holds them instead.
+
+`MasterChain::bypass` skips the trim and each pedal. `MasterChain::runs` is
+false for each pedal, the trim glides to unity, and the board latency is zero.
+Thus export has no pedal delay. During playback, the bypassed board still pads
+to the fixed delay and meters, and a bypass switch crossfades as a pedal switch
+does. When the board leaves bypass, the pedals that are on start from a clear
+state.
+
+`MasterChain::latency` is the delay of the pedals that run. `Mix::to_pcm` and
+`Mix::write_wav` run the pedals past the end by that delay and cut it from the
+start. Playback drops its fixed delay before the first sample and drains the
+same number of frames at the end. Thus the two stay on the timeline. Export
+and `Mix::to_pcm` take the chain of the project explicitly. `Mix::to_pcm` holds
+the whole result and has no length limit. It reserves the memory first, and
+reports a plain error if the memory is not available. `Mix::write_wav` and
+`Mix::write_stems` render in blocks. They refuse only a song that is too long
+for a WAV file (`Mix::MAX_WAV_FRAMES`, about 6.7 hours).
+
+Mix playback reads a `MasterControl` that `Session` keeps equal to the
+project. The audio thread takes new settings at its next block through the
+lock-free `audio::Latest` cell, so it never waits. An edit or history step that
+changes only the pedalboard or the FX buses keeps the prepared mix and the
+playback, when the set of necessary key tracks stays the same. A changed set of
+keys prepares the mix again. The same `MasterControl` carries the settings of
+the FX buses and the Clear Tail requests, which the `ReturnsProcessor` polls in
+the same way. Tool previews play without the pedalboard. Each playback and
+export starts the pedalboard in the same settled state.
+
+### Meters
+
+A live processor also measures. Each 1024 frames, it publishes a
+`MeterReading` through atomics in the `MasterControl`, and
+`Session::master_meters` reads it without a wait. Each playback gives a number
+to its readings, and only the start of a playback changes that number. A
+stopped playback that is still in its last block can show its levels for one
+block. But it cannot stop the readings of the next playback from getting to
+the window. The cumulative OVER count carries its playback number in the same
+atomic value. Thus a stale count cannot become the lamp baseline of the new
+playback.
+
+Readings change more than 30 times a second. Each reading covers the same
+frames for each playback block size. Thus the block size does not change the
+true peak shown or the OVER count. At the end, playback publishes the frames
+since the last reading and finishes the peak detector, without more audio
+frames or loudness time. Output metering does not include the initial 593
+frames that playback removes, so the loudness windows follow the audible
+program. Export does not measure.
+
+Stereo PCM16 export reserves 36 bytes of the RIFF size field for its header
+before it opens a destination file. The moving minimum of the Multiband keeps
+exactly the active lookahead window, also when the gain requirements increase
+for longer than its fixed queue. It removes old entries before it adds a new
+entry, so a full queue cannot overwrite its live minimum.
 
 ## Stems, render worker, and export
 
-`Mix::write_stems` exports the premaster in parts, one pass over the song:
-each sounding track mixes alone through its own `RenderState`, its sends
-summed into the buses' feeds, and `ReturnsProcessor::split` gives each bus's
-return apart, without clamping. Parts follow `render`'s blocks and tail rule,
-so every file is as long as the mix export, and they skip the master
-pedalboard. PCM16 stem export rejects a non-finite or out-of-range part before
-publishing files, instead of clipping each part separately. The parts sum to
-the bypassed mix when that mix does not clip. `atomic_file::write_many` stages
-every file before it replaces any. The render worker prepares
-the mix, keeps the decoded sources of the last one, and discards them when the
-library is replaced. With audio output, the `Session` asks it for each new
-revision as soon as a song opens or a render edit lands, so Play finds the mix
-ready; a revision whose preparation fails waits for Play, which asks again and
-reports the error. `Session::start_export` renders and writes on its own
-thread and reports through `poll`; `Session::export` stays synchronous for
-headless callers. `Session::start_track_export` and `Session::export_tracks`
-do the same for the parts. One export of either kind runs at a time.
+`Mix::write_stems` exports the premaster in parts, in one pass over the song.
+Each sounding track mixes alone through its own `RenderState`, and its sends
+add into the feeds of the buses. `ReturnsProcessor::split` gives the return of
+each bus separately, without a clamp. The parts follow the blocks and the tail
+rule of `render`. Thus each file has the same length as the mix export, and the
+parts skip the master pedalboard. PCM16 stem export rejects a non-finite or
+out-of-range part before it publishes files, instead of clipping each part
+separately. The parts add up to the bypassed mix when that mix does not clip.
+`atomic_file::write_many` stages each file before it replaces a file.
+
+The render worker prepares the mix. It keeps the decoded sources of the last
+mix, and discards them when the library is replaced. With audio output,
+`Session` asks the worker for each new revision when a song opens or a render
+edit is accepted. Thus the mix is ready when the user selects Play. If the
+preparation of a revision fails, the revision waits for Play, which asks again
+and reports the error.
+
+`Session::start_export` renders and writes on its own thread and reports
+through `poll`. `Session::export` stays synchronous for headless callers.
+`Session::start_track_export` and `Session::export_tracks` do the same for the
+parts. Only one export of either type runs at a time.
 
 ## Library replacement and song opening
 
-`Session::catalog_revision` advances when the library is
-replaced; the frontend keeps its filtered palette until then. Folder adoption
-takes providers that are already loaded from the current library and reads a
-provider from disk only when its folder is gone.
-When a saved provider replaces a partial product during song opening, it
-keeps already loaded sample identities that the saved provider does not have.
-When an original provider is already loaded, opening also checks the song's
-saved WAV folder for used native IDs that provider lacks. It supplements only
-those IDs and keeps the current provider's identities and the saved binding.
-If the used native WAVs of one product cannot fit under one saved folder,
-`project_io::save_with_library` retains their exact file bytes together under
-`native-providers/<product>/<content hash>` in the data folder. It verifies
-the native IDs, decoded audio and timing before saving that binding. Repeated
-saves reuse verified content. A retention failure leaves the existing song
-unchanged. This keeps native identities without changing the song format.
-WAV path resolution includes verified duplicate copies that the palette omits.
-MixJam v7 suffix relocation and native WAV lookup share this complete path
-inventory, so a reference to a duplicate still resolves after its folder moves.
-Format 18 records one provider per product. A song using both a packed original
-provider and supplemental WAVs for that product cannot be represented by that
-binding. Save rejects the combination before replacing the song.
+`Session::catalog_revision` advances when the library is replaced. Until then,
+the frontend keeps its filtered palette. Folder adoption takes the providers
+that are already loaded from the current library. It reads a provider from disk
+only when the folder of that provider is not there.
 
-A song queued behind a folder scan records both the render revision and the
-editor generation. Any intervening project edit cancels that deferred open,
-including a master-only edit followed by Save. Master-only edits still retain
-the prepared dry mix. Opening a project adopts freshly measured WAV metadata,
-including changes to length and channel count at the same path. History changes
-can still reuse existing metadata without reading each source again.
-The agent's Choose path request for Open also records this edit identity. If
-the user edits the song while that dialog is collapsed, or creates a recorded
-take, confirming the old request keeps the current song and path draft. The
-user must cancel and start Open again. Changes approved before the request do
-not prevent it from opening the selected song.
-Adding or removing an optional sample provider is unavailable while recording
-or scanning sample folders. Rejection preserves the current libraries, scan,
-recorded take, project, and settings.
+When a saved provider replaces a partial product during song opening, it keeps
+the loaded sample identities that the saved provider does not have. When an
+original provider is already loaded, the opening also examines the saved WAV
+folder of the song for used native IDs that the provider does not have. It
+adds only those IDs, and it keeps the identities of the current provider and
+the saved binding.
+
+If the used native WAVs of one product cannot all be under one saved folder,
+`project_io::save_with_library` keeps their exact file bytes together under
+`native-providers/<product>/<content hash>` in the data folder. Before it saves
+that binding, it verifies the native IDs, the decoded audio, and the timing.
+Repeated saves use the verified content again. If this step fails, the current
+song does not change. This keeps the native identities without a change to the
+song format.
+
+WAV path resolution includes verified duplicate copies that the palette does
+not show. MixJam v7 suffix relocation and native WAV lookup use this complete
+path inventory. Thus a reference to a duplicate still resolves after its folder
+moves. Format 18 records one provider for each product. That binding cannot
+hold a song that uses a packed original provider and supplemental WAVs for the
+same product. Save rejects this combination before it replaces the song.
+
+A song that waits for a folder scan records the render revision and the editor
+generation. A project edit in that time cancels the deferred open, a
+master-only edit followed by Save included. Master-only edits still keep the
+prepared dry mix. When a project opens, it adopts freshly measured WAV
+metadata, changes to length and channel count at the same path included.
+History changes can still use the current metadata again, without a new read
+of each source.
+
+The agent Choose path request for Open also records this edit identity. If the
+user edits the song, or makes a recorded take, while that dialog is collapsed,
+a confirmation of the old request keeps the current song and the path draft.
+The user must cancel and start Open again. Changes that the user accepted
+before the request do not prevent the request from opening the selected song.
+
+While recording, or while a sample folder scan runs, the user cannot add or
+remove an optional sample provider. The rejection keeps the current libraries,
+the scan, the recorded take, the project, and the settings.

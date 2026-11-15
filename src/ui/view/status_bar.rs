@@ -188,7 +188,7 @@ impl MixJamApp {
                     (
                         commands::Command::Boards,
                         "Boards",
-                        "Lower panel: its board, or only its toolbar row",
+                        "Lower panel: open with its board, or folded away",
                     ),
                     (
                         commands::Command::Sounds,

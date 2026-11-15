@@ -1,7 +1,7 @@
 //! Room for the panels around the score. The Sounds panel and the Inspector
 //! share the score's width; the Sounds panel and the lower panel's board share
 //! its height. When a pair does not fit, the panel opened last shows and the
-//! other folds to its strip or toolbar row. The saved layout keeps every
+//! other folds: the Sounds panel to its strip, the lower panel away. The saved layout keeps every
 //! choice, so a larger window shows them all again.
 use super::inspector::INSPECTOR_WIDTH;
 use super::sounds::SOUNDS_PANEL_WIDTH;

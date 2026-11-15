@@ -1,8 +1,7 @@
 //! The Options draft belongs to this window. Session validates, prepares, and
 //! persists it; closing this surface cannot change an active preference.
 use super::*;
-const STALE_DRAFT: &str = "Options changed outside this draft. \
-    Reload active options before Apply.";
+use mixjam_techno::application::options::STALE_DRAFT;
 const RELOAD_ACTION: &str = "Reload active options";
 pub(super) const DISCARD: &str = "Discard changes?";
 use mixjam_techno::application::options::{

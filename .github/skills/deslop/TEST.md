@@ -1,7 +1,7 @@
 # Test slop
 
 Test slop gives no unique defect signal, gives false confidence, or checks the
-wrong contract. It can also be unstable or cost more than its evidence warrants.
+wrong contract. It can also be unstable, or it can cost more than its evidence is worth.
 
 A smell starts an inspection. It does not prove that a test is slop.
 
@@ -73,12 +73,12 @@ If context proves one of these values, keep the test:
    Completion criterion: You record the pre-edit result and pre-existing failures.
 3. State the unique behavior and defect for each candidate.
    Completion criterion: Each proposed edit has evidence beyond a smell name.
-4. If static evidence cannot prove signal, use a controlled fault in an isolated
-   copy when practical.
+4. If static evidence cannot prove signal, put a controlled fault in an isolated
+   copy when possible.
    Completion criterion: The test responds as predicted and the copy is discarded.
 5. Select the smallest safe disposition.
    Completion criterion: The choice follows the rules below.
-6. Run every changed test and its owning test project.
+6. Run every changed test and the test suite that owns it.
    Completion criterion: The full affected suite passes, or you report a pre-existing blocker.
 7. Report each disposition and skipped proof.
    Completion criterion: You account for every candidate and runtime area.
@@ -91,6 +91,8 @@ If context proves one of these values, keep the test:
 - **Delete:** The test is empty, irrecoverable, or proven duplicate.
 - **Replace:** A meaningful contract test must preserve the only intended protection.
 
-For native UI checks, build the release executable and use the configured
-`tools/verify-ui.ps1` capture procedure. Inspect the images. It does not
-verify physical audio, file pickers, or screen readers.
+For a native UI check, build the release executable and run the capture
+procedure in the
+[UI verification](../../../docs/DEVELOPMENT.md#ui-verification) section of
+`docs/DEVELOPMENT.md`. Inspect the images. The captures do not verify physical
+audio, file pickers, or screen readers.

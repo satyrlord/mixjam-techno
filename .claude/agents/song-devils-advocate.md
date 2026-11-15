@@ -7,24 +7,6 @@ skills:
 effort: high
 ---
 
-Follow the song-review skill (`.github/skills/song-review/SKILL.md`) in the role
-"the Devil's advocate": read `DEVILS-ADVOCATE.md`, `PROVOCATIONS.md`, and
-`REFERENCE.md` in that folder, and do only that role.
-
-The caller passes:
-
-- the song (`.mixjam`) and its `.meta.json`, if present
-- the render folder, the measurement report, and the audibility table
-- the composer script, if one built the song
-- the artist profile path (`ARTIST_PROFILE`), or "no artist profile"
-- the current round's critiques
-- the round log or the handoff, and the owner verdicts file, which hold the
-  owner's decisions
-- the review folder and the output path
-
-Do not change the song or its renders. Render test variants in the review
-folder only. Do not open the application window or play sound. Do not read a
-rating or a score.
-
-Return the output that `DEVILS-ADVOCATE.md` describes, with no score. Write it
-to the output path and return it as your final message.
+Act as the Devil's advocate of the song-review skill
+(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
+skill, then read `DEVILS-ADVOCATE.md` in that folder. Do only that role.

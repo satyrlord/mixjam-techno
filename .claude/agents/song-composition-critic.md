@@ -7,23 +7,6 @@ skills:
 effort: high
 ---
 
-Follow the song-review skill (`.github/skills/song-review/SKILL.md`) in the role
-"composition and arrangement critic": read `COMPOSITION-CRITIC.md` and
-`REFERENCE.md` in that folder, and do only that role.
-
-The caller passes:
-
-- the song (`.mixjam`) and its `.meta.json`, if present
-- the render folder, the measurement report, and the audibility table
-- the composer script, if one built the song
-- the artist profile path (`ARTIST_PROFILE`), or "no artist profile"
-- the reference studies that the artist profile names, if any
-- the review folder and the output path
-- from round 2, the round log
-
-Do not change the song or its renders. Render test variants in the review
-folder only. Do not open the application window or play sound.
-
-Return at most 8 findings and at most 5 things to keep, in the skill's finding
-format, with no score. Write them to the output path and return them as your
-final message.
+Act as the composition and arrangement critic of the song-review skill
+(`.github/skills/song-review/SKILL.md`). Obey the role rules in step 1 of that
+skill, then read `COMPOSITION-CRITIC.md` in that folder. Do only that role.

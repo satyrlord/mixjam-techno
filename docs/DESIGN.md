@@ -25,7 +25,7 @@ colors:
   other-sample: "#bbb39f"
   drag-label: "#f5dc92"
   mixer-ink: "#1c1d1a"
-  mixer-cream: "#f5e8cd"
+  mixer-cream: "#f9f2dc"
   mixer-metal: "#c9c2af"
   mixer-edge: "#6c6a61"
   mixer-face: "#1d2122"
@@ -59,7 +59,7 @@ typography:
   display:
     fontFamily: "Syncopate"
     textTransform: "uppercase"
-    fontSize: "27px"
+    fontSize: "20px"
     fontWeight: 700
   headline:
     fontFamily: "IBM Plex Sans"
@@ -97,9 +97,10 @@ typography:
     fontSize: "10px"
     fontWeight: 500
   bottom-module:
-    fontFamily: "Inter"
-    fontSize: "14px"
-    fontWeight: 500
+    fontFamily: "IBM Plex Sans"
+    textTransform: "uppercase"
+    fontSize: "16px"
+    fontWeight: 600
   folded-title:
     fontFamily: "IBM Plex Sans"
     textTransform: "uppercase"
@@ -118,7 +119,6 @@ spacing:
   item-vertical: "6px"
   button-horizontal: "10px"
   panel-horizontal: "18px"
-  header-horizontal: "22px"
 components:
   action-primary:
     backgroundColor: "{colors.accent}"
@@ -232,78 +232,86 @@ The arrangement is the main work area. Graphite surfaces separate clip names,
 track numbers, and playback controls. Lime marks primary actions. Category
 colors identify the same sounds in the Sounds panel and the arrangement.
 
-The application has three complete themes that the owner selected: Studio,
-the default; Aero / Y2K; and Vintage. Each theme covers every surface, from
-the arrangement, Sounds panel, and Mixer to the boards, tools, menus, tooltips,
-confirmations, and feedback. See [Themes](design/themes.md#themes). The rest of this document
-describes the shared layout and behavior, which no theme changes. Where it
-names Folded Metal, ivory strips, or enamel finishes, it describes Vintage,
-which keeps the original artwork; Studio and Aero paint the same surfaces in
-code with their own materials.
+The application has three complete themes that the owner selected: Studio
+(the default), Aero, and Vintage. Each theme covers every surface: the
+arrangement, Sounds panel, Mixer, boards, tools, menus, tooltips,
+confirmations, and feedback. See [Themes](design/themes.md#themes). The rest
+of this document describes the shared layout and behavior, which no theme
+changes. Where it names Folded Metal, ivory strips, or enamel finishes, it
+describes Vintage, which keeps the prepared artwork. Studio and Aero paint the
+same surfaces in code with their own materials.
 
-The original design for the classic loop sequencer, whose artwork Vintage
-keeps, used imported Syncopate branding and titles, Inter Medium interface
-text, flat controls, and consistent spacing.
-In Vintage, every in-app window and modal uses concept 1, Folded Metal: subtly
-aged folded painted metal, dark inset control bays, cream text, polished silver
+In Vintage, every in-app window and modal uses Folded Metal: subtly aged
+folded painted metal, dark inset control bays, cream text, polished silver
 knobs, and pale metal primary buttons. Fine grain, minor scratches, and
-restrained edge wear suggest a well-maintained early-2000s synth. Studio paints
-the same shells as flat software panels and Aero as molded plastic. Every theme
-keeps the original tool palette identities, in its own shades:
-marine cyan for Time Stretcher, granite gray for Sample Editor, synth
-red for Effect Studio, olive for Step synth, and indigo for the
-Mastering board and its help. Utility dialogs use the theme's neutral body:
-graphite in Studio, cobalt in Aero, and neutral metal in Vintage, with an
-optional orange-yellow accent. The common orange-yellow mock color
-does not replace these identities.
-One shell and control family covers musical tools and utility tasks. Vintage
-keeps the warm graphite workspace and Mixer's graphite and ivory strips; Studio
-and Aero paint the workspace and strips in their own materials.
-Native operating-system windows and file pickers retain their OS presentation.
+restrained edge wear suggest a well-kept synth from the early 2000s. Studio
+paints the same shells as flat software panels, and Aero paints them as molded
+plastic.
 
-RaveFold supplies artistic references only. It does not govern product
-behavior; if `local-data/research/PRODUCT.md` and
-`local-data/research/COMPATIBILITY.md` exist, they do.
+Every theme keeps the tool palette identities, in its own shades:
+
+- Marine cyan for Time Stretcher and the FX returns board.
+- Granite gray for Sample Editor.
+- Synth red for Effect Studio.
+- Olive for Step synth.
+- Indigo for the Mastering board and its help.
+
+Utility dialogs use the neutral body of the theme: graphite in Studio, cobalt
+in Aero, and neutral metal in Vintage, with an optional orange-yellow accent.
+The orange-yellow accent does not replace the tool identities. One shell and
+control family covers musical tools and utility tasks. Vintage keeps the warm
+graphite workspace and the graphite and ivory Mixer strips. Studio and Aero
+paint the workspace and strips in their own materials. Native operating-system
+windows and file pickers keep their OS presentation.
+
+RaveFold supplies artistic references only. It does not control product
+behavior. If `local-data/research/PRODUCT.md` and
+`local-data/research/COMPATIBILITY.md` exist, they control it.
 
 **Key Characteristics:**
 
-- Dark surfaces with off-white text and restrained borders, in each theme's
-  material.
-- Syncopate for the product name; uppercase titles in the theme's heading
-  face; the theme's text face for all other text.
+- Dark surfaces with off-white text and restrained borders, in the material
+  of each theme.
+- Syncopate for the product name, uppercase titles in the heading face of the
+  theme, and the text face of the theme for all other text.
 - A wide arrangement with the transport above, the tool rail and Sounds
   panel at the left, the Inspector at the right, and the boards below.
 - Lime primary actions, category-colored clips, and coral recording signals.
 
-The implementation is native Windows Rust with eframe/egui. Workspace painting
-lives in the modules of `src/ui/view/` (header, rail, timeline, clips, and the
-lower-panel boards), with theme roles in `src/ui/theme.rs`; Mixer stays in
-`src/ui/mixer/`. The side panels, overview, Mix view, and command list have
-their own modules
-(`sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view.rs`, `commands.rs`),
-and `room.rs` decides which panels fit.
-`src/ui/dialog.rs` owns every floating shell and its lifecycle.
-`src/ui/controls/` owns reusable control rendering and interaction. Tool bodies
-remain in `src/ui/stretch.rs`, `src/ui/effects.rs`, `src/ui/step_synth.rs`, and
-`src/ui/sample_editor.rs`; task adapters remain in `src/ui/tools.rs`. Application state
-and behavior live in `src/application.rs`. Sizes here use portable `px` labels for
-egui logical points. The front matter records native component metadata; it does not
-define browser components or application behavior.
+The implementation is native Windows Rust with eframe/egui:
+
+- The modules of `src/ui/view/` paint the workspace: the top bar, rail,
+  status bar, score, clips, and the boards of the lower panel.
+- `src/ui/theme.rs` holds the theme roles.
+- `src/ui/mixer/` paints the Mixer.
+- `sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view.rs`, and
+  `commands.rs` hold the side panels, the song overview, the Mix view, and the
+  command list. `room.rs` decides which panels fit.
+- `src/ui/dialog.rs` owns every floating shell and its lifecycle.
+- `src/ui/controls/` owns the rendering and interaction of reusable controls.
+- `src/ui/stretch.rs`, `src/ui/effects.rs`, and `src/ui/sample_editor.rs`
+  hold the tool window bodies. `src/ui/step_synth.rs` holds the Step synth
+  board. `src/ui/tools.rs` holds the task adapters.
+- `src/application.rs` holds the application state and behavior.
+
+Sizes in this document use portable `px` labels for egui logical points. The
+front matter records native component metadata. It does not define browser
+components or application behavior.
 
 ## Foundations
 
 - [Themes](design/themes.md): Studio, Aero, and Vintage, and what each changes.
-- [Colors](design/colors.md): primary, secondary, and neutral roles.
+- [Colors](design/colors.md): primary, secondary, and neutral roles, Folded Metal palettes, the Mastering board, and Mixer tokens.
 - [Typography](design/typography.md): faces, sizes, and text roles.
 - [Layout](design/layout.md): window regions, sizes, and spacing.
 - [Elevation, depth, and shapes](design/elevation-and-shapes.md): layering and corner rules.
 
 ## Components
 
-- [Actions, rail, and Sounds panel](design/components-shell.md): transport, library loading, tool rail, command list, status bar switches, Sounds panel.
+- [Actions, rail, and Sounds panel](design/components-shell.md): transport, library loading, tool rail, command list, status bar, Sounds panel.
 - [Inspector, overview, and score toolbar](design/components-score.md): Inspector, panel room, song overview, top bar, score toolbar and Maximise.
 - [Sounds, clips, and Mix view](design/components-clips.md): clip drawing and the Mix view.
-- [Mixer, tool windows, and FX returns](design/components-boards.md): the lower-panel boards and the shared window shell and controls.
+- [Mixer, tool windows, and FX returns](design/components-boards.md): the boards of the lower panel, and the shared window shell and controls.
 - [Sound tools and Album Review](design/components-tools.md): Time Stretcher, Effect Studio, Step synth, Sample Editor, Album Review.
 - [Options, dialogs, and feedback](design/components-dialogs.md): Options, utility windows, blocking dialogs, empty states.
 
@@ -311,36 +319,35 @@ define browser components or application behavior.
 
 ### Use
 
-- Give every surface the current theme's roles and material. Keep Syncopate
-  for the product name in every theme.
+- Give every surface the roles and material of the current theme. Keep
+  Syncopate for the product name in every theme.
 - Use the same category and sample names across views.
 - Keep track numbers stable and give actions accessible names.
-- Check native layouts at the supported minimum size after changes.
+- After a change, check the native layouts at the supported minimum size.
 
 ### Accepted exceptions
 
-The owner confirmed these on 2026-10-12 after an audit. Do not report them as
-defects.
+The owner confirmed these after an audit. Do not report them as defects.
 
 - Mixer Unity, Center, pan rail, and gain value stay below 24 points high. The
-  compact strip is intended.
-- Step synth note cells stay 14 points high on a 16-point row pitch, so that most
-  of the 25 pitch rows show beside the lanes. Arrow keys reach every cell.
-- The tool rail shows each tool's name by default, and the Tools switch in the
-  status bar shrinks it to icons. Tooltips name each action, its window, and its
-  shortcut. (Changed by the 2026 UI concept migration.)
+  compact strip is intentional.
+- Step synth note cells stay 14 points high on a 16-point row pitch, so that
+  most of the 25 pitch rows show beside the lanes. Arrow keys reach every cell.
+- The tool rail shows the name of each tool by default, and the Tools switch
+  in the status bar shrinks it to icons. Tooltips name each action, its
+  window, and its shortcut.
 - The Sounds panel keeps both the category menu and the category row. The menu
-  lists the library's own categories, including Uncategorized.
+  lists the categories of the library, including Uncategorized.
 - The product notes leave Platform unclassified. No value of the design skill
   describes a Windows desktop application.
 
 ### Avoid
 
-- Do not keep one theme's material inside another theme: no metal chassis or
-  ivory strips in Studio or Aero, and no plastic gloss in Studio. Do not add
-  repeated waveform traces.
+- Do not keep the material of one theme inside another theme: no metal
+  chassis or ivory strips in Studio or Aero, and no plastic gloss in Studio.
+  Do not add repeated waveform traces.
 - Do not branch on a theme in tool bodies or interaction code. Add a role or
-  extend a shared painter instead.
+  extend a shared painter.
 - Do not move or resize a control for one theme.
 - Do not use color as the only way to identify a sound or action.
 - Do not put application rules in the visual layer.

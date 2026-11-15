@@ -308,7 +308,7 @@ pub(crate) fn save(root: &Path, values: &AppOptions) -> Result<(), String> {
 pub struct WorkspaceLayout {
     /// The tool rail prints each tool's name under its icon; off, it shows icons only.
     pub tool_names: bool,
-    /// The lower panel shows its board; off, only its toolbar row stays.
+    /// The lower panel shows its board; off, the whole lower panel folds away.
     pub boards: bool,
     /// The score fills the window: the tool rail, the Sounds panel, the
     /// Inspector, and the lower panel hide, and their own settings above are
