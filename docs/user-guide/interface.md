@@ -114,6 +114,18 @@ To use a sound:
 - To hear it, double-click it.
 - To place it at a position, drag it to a lane.
 
+The list also works from the keyboard. To give it the focus, click a sound, or
+press Tab until an outline shows on the list. Then use these keys:
+
+| Key | Result |
+| --- | --- |
+| Up, Down | Selects the previous or the next sound. |
+| Page Up, Page Down | Moves one page of the list. |
+| Home, End | Selects the first or the last sound. |
+| Enter | Places the selected sound at the playhead on the recording track. |
+| Space | Plays or pauses the song. |
+| Delete | Deletes the selected clips. |
+
 The **Sort** list sorts the sounds in library order, by name, by length, by
 BPM, or by category. The arrow beside the list reverses the order: for
 example, longest first or fastest first.

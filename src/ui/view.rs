@@ -212,6 +212,33 @@ pub(super) fn name_scroll_area(ui: &egui::Ui, id_salt: impl std::hash::Hash, nam
     }
 }
 
+/// Name the surface of each menu that shows. egui makes the surface of a
+/// menu, a context menu, and a drop-down list a Tab stop, and gives it no
+/// name. Call it after the last menu of the frame.
+fn name_open_menus(ctx: &egui::Context) {
+    let layers: Vec<_> = ctx.memory(|memory| {
+        memory
+            .layer_ids()
+            .filter(|layer| layer.order == egui::Order::Foreground)
+            .collect()
+    });
+    for layer in layers {
+        // egui's own id for the surface of an area.
+        let surface = layer.id.with("move");
+        let shown = ctx.graphics(|graphics| graphics.get(layer).is_some_and(|list| !list.is_empty()));
+        if shown
+            && ctx
+                .read_response(surface)
+                .is_some_and(|response| response.sense.is_focusable())
+        {
+            ctx.accesskit_node_builder(surface, |node| {
+                node.set_role(egui::accesskit::Role::Menu);
+                node.set_label("Menu");
+            });
+        }
+    }
+}
+
 /// Name a pointer surface that is not a Tab stop. egui describes only
 /// focusable widgets by itself; the widget information adds the bounds.
 pub(super) fn name_region(response: Response, name: &str) -> Response {
@@ -283,6 +310,7 @@ impl MixJamApp {
         self.command_list(ctx);
         self.sample_conflicts_dialog(ctx);
         self.path_prompt_dialog(ctx);
+        name_open_menus(ctx);
         self.capture(ctx);
     }
 }

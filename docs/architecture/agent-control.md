@@ -81,3 +81,7 @@ screen together:
 
 If a control is painted on a shared surface, add it to the arrangement requests
 instead.
+
+egui makes the surface of an open menu, context menu, or drop-down list a Tab
+stop, and gives it no name. `name_open_menus` names that surface `Menu` at the
+end of each frame. A menu that opens from another menu gets the name `Menu 2`.
