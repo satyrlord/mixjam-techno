@@ -68,7 +68,7 @@ fn lower_panel_divider_resizes_retains_height_and_preserves_arrangement() {
     // The largest minimum any window size gives a module.
     let shared_minimum = BottomModule::ALL
         .into_iter()
-        .map(|module| module.minimum_height(f32::INFINITY))
+        .map(|module| module.minimum_height(f32::INFINITY, 0.0))
         .fold(0.0_f32, f32::max);
     assert!(
         panel().height() <= shared_minimum,

@@ -29,20 +29,18 @@ impl BottomModule {
     /// high. Mixer prefers 400 points, and Mastering and Effects the height of
     /// their whole boards. A short window reduces each, down to 370, so the
     /// arrangement keeps its toolbar and ruler and a 150-point lane viewport;
-    /// Mixer's gain rail shortens and the boards scroll.
-    pub(super) fn minimum_height(self, available: f32) -> f32 {
-        match self {
-            Self::Mixer => (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, 400.0),
-            Self::Mastering => {
-                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, master::MODULE_HEIGHT)
-            }
-            Self::FxReturns => {
-                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, fx::MODULE_HEIGHT)
-            }
-            Self::StepSynth => {
-                (available - Self::ARRANGEMENT_RESERVE).clamp(370.0, step_synth::MODULE_HEIGHT)
-            }
-        }
+    /// Mixer's gain rail shortens and the boards scroll. When the score also
+    /// keeps `extra` points below its lanes (the Mix view's Master and returns
+    /// rows), the floor drops by the same amount, so the lanes keep their
+    /// viewport.
+    pub(super) fn minimum_height(self, available: f32, extra: f32) -> f32 {
+        let preferred = match self {
+            Self::Mixer => 400.0,
+            Self::Mastering => master::MODULE_HEIGHT,
+            Self::FxReturns => fx::MODULE_HEIGHT,
+            Self::StepSynth => step_synth::MODULE_HEIGHT,
+        };
+        (available - Self::ARRANGEMENT_RESERVE - extra).clamp(370.0 - extra, preferred)
     }
 
     pub(super) fn label(self) -> &'static str {

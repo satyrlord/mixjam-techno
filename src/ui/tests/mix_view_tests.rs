@@ -194,12 +194,28 @@ fn mix_view_edits_levels_pan_outputs_and_polarity_with_one_undo_each() {
     assert!(app.session.project().master_gain < 1.0);
 }
 
+/// Whether the pan slider `name` has the automation ring: a thin outline
+/// just outside it.
+fn pan_ringed(output: &egui::FullOutput, name: &str) -> bool {
+    let slider = effects_control_rect(output, name);
+    output.shapes.iter().any(|shape| {
+        matches!(&shape.shape, egui::Shape::Rect(ring)
+            if ring.stroke.width == 1.0
+                && ring.rect.contains_rect(slider)
+                && ring.rect.width() <= slider.width() + 6.0
+                && ring.rect.height() <= slider.height() + 6.0)
+    })
+}
+
 #[test]
 fn mix_view_marks_automation_and_opens_the_eq_and_the_returns() {
     let (context, mut app, port) = agent_fixture();
     context.enable_accesskit();
     app.set_mix_view(true);
     let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);
+    frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(!pan_ringed(&output, "Track 1 pan"));
     for words in [
         &["automate", "track=1", "lane=pan", "points=[[1,-1],[2,1]]"][..],
         &[
@@ -229,6 +245,8 @@ fn mix_view_marks_automation_and_opens_the_eq_and_the_returns() {
     };
     assert!(ringed(knob));
     assert!(!ringed(effects_control_rect(&output, "Track 1 send FX 2")));
+    // U8: so is an automated pan slider, by the same shared painter.
+    assert!(pan_ringed(&output, "Track 1 pan"));
     // M8: EQ is lit while the compressor is on, and opens the EQ window.
     assert_eq!(
         accessible_node(&output, "Track 1 EQ").1.toggled(),
@@ -373,6 +391,31 @@ fn mix_view_keeps_master_and_returns_in_view_while_the_tracks_scroll() {
     assert_eq!(effects_control_rect(&output, "FX 4 return level"), returns);
     let last = effects_control_rect(&output, "Track 24 gain");
     assert!(last.bottom() <= master.top(), "{last:?} {master:?}");
+}
+
+#[test]
+fn mix_view_keeps_five_track_rows_above_master_and_returns_in_a_short_window() {
+    for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0)] {
+        let (ctx, mut app, _) = mix_view_fixture(size);
+        for track in 2..12 {
+            app.session.place(1, track, 0).unwrap();
+        }
+        for _ in 0..4 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        assert!(app.board_shown(BottomModule::Mastering), "{size:?}");
+        let master = effects_control_rect(&output, "Master gain");
+        let window = Rect::from_min_size(Pos2::ZERO, size);
+        assert!(window.contains_rect(effects_control_rect(&output, "FX 1 return level")));
+        for track in 1..=5 {
+            let row = effects_control_rect(&output, &format!("Track {track} gain"));
+            assert!(
+                row.bottom() <= master.top(),
+                "Track {track} shows above Master at {size:?}: {row:?} {master:?}"
+            );
+        }
+    }
 }
 
 #[test]

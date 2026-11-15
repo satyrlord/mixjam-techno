@@ -452,6 +452,15 @@ pub(in super::super) fn configure_style(ctx: &egui::Context) {
     style.spacing.button_padding = Vec2::new(10.0, 6.0);
     style.spacing.interact_size = Vec2::new(32.0, 28.0);
     style.spacing.slider_width = 84.0;
+    // A scroll bar shows whenever its area overflows, also at rest, so a short
+    // window tells where more content is. The bars float over the content and
+    // take no layout width, so the score's viewport keeps its measurements.
+    style.spacing.scroll = egui::style::ScrollStyle {
+        floating_width: 4.0,
+        dormant_background_opacity: 1.0,
+        dormant_handle_opacity: 1.0,
+        ..egui::style::ScrollStyle::floating()
+    };
     style
         .text_styles
         .insert(egui::TextStyle::Body, FontId::proportional(13.0));

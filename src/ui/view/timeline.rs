@@ -123,6 +123,7 @@ impl MixJamApp {
             painted_offset_x = viewport.left();
             self.score_body(ui, &frame, &mut headers);
         });
+        name_scroll_area(ui, "arrangement_scroll", "Score");
         self.score.view = Some(overview::ScoreView {
             offset: scroll.state.offset.x,
             visible: frame.visible_width,

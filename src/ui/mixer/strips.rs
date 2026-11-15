@@ -128,6 +128,7 @@ pub(crate) fn show(
                             });
                         }
                     });
+                super::super::view::name_scroll_area(ui, "mixer_scroll", "Mixer");
             },
         );
         ui.scope_builder(egui::UiBuilder::new().id_salt("mixer_master"), |ui| {

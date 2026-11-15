@@ -451,6 +451,7 @@ pub(super) fn show(ui: &mut egui::Ui, buses: &FxBuses, reveal: Option<usize>) ->
             });
         }
     });
+    view::name_scroll_area(&content, "effects-scroll", "Effects");
     if let Some(index) = clear {
         Action::ClearTail(index)
     } else if draft != *buses {

@@ -201,6 +201,7 @@ fn names(context: &egui::Context, app: &mut MixJamApp, found: &mut BTreeSet<Stri
         let label = node.label.trim();
         if !label.is_empty() && !ALBUM_DATA.iter().any(|prefix| label.starts_with(prefix)) {
             let label = label.replace(mixjam_techno::application::APP_VERSION, "{version}");
+            let label = count_free(&label);
             found.insert(format!(
                 "{}\t{}",
                 node.role,
@@ -208,6 +209,27 @@ fn names(context: &egui::Context, app: &mut MixJamApp, found: &mut BTreeSet<Stri
             ));
         }
     }
+}
+
+/// A name that counts the bundled reviews, with each count as `{albums}`: a
+/// new review must not change the names.
+fn count_free(label: &str) -> String {
+    let count = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    if label
+        .strip_prefix('+')
+        .and_then(|rest| rest.strip_suffix(" more"))
+        .is_some_and(count)
+    {
+        return "+{albums} more".into();
+    }
+    if label
+        .strip_suffix(" albums")
+        .and_then(|counts| counts.split_once(" / "))
+        .is_some_and(|(shown, total)| count(shown) && count(total))
+    {
+        return "{albums} / {albums} albums".into();
+    }
+    label.to_owned()
 }
 
 fn key(key: egui::Key) -> Vec<egui::Event> {

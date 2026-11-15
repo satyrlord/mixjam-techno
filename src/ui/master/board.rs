@@ -185,6 +185,7 @@ pub(crate) fn show(
             panel.ctx().request_repaint();
         }
     });
+    super::super::view::name_scroll_area(&content, "mastering-scroll", "Mastering");
     if draft != *chain {
         Action::Change(draft)
     } else {
@@ -359,6 +360,7 @@ fn pedal_row(
             }
         }
     });
+    super::super::view::name_scroll_area(&row, "pedal-row-scroll", "Pedal row");
     let width = shown.inner_rect.width();
     let offset = shown.state.offset.x;
     let most = (row_width - width).max(0.0);

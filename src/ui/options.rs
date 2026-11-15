@@ -516,6 +516,11 @@ impl MixJamApp {
                                         Page::Libraries => self.sample_libraries_page(ui),
                                     }
                                 });
+                            view::name_scroll_area(
+                                ui,
+                                ("options-page", draft.page),
+                                "Options page",
+                            );
                             draft.content_heights[draft.page.index()] =
                                 Some(scrolled.content_size.y);
                         },

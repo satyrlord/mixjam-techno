@@ -344,6 +344,7 @@ fn show_shell<R>(
                         ui.spacing_mut().scroll = inherited;
                         contents(ui)
                     });
+                view::name_scroll_area(&content, "hardware-scroll", spec.title);
                 let resized_id = id.with("hardware-resized");
                 if spec.fit && !ctx.data(|d| d.get_temp::<bool>(resized_id).unwrap_or(false)) {
                     // A short dialog has no empty bay below its last control.

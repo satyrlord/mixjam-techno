@@ -106,11 +106,13 @@ impl MixJamApp {
     /// the saved layout stays as it is.
     pub(super) fn song_overview(&mut self, ui: &mut egui::Ui) -> Option<OverviewSlot> {
         self.overview.rect = None;
-        if ui.available_height() < overview_bar_reserve(ui.spacing().item_spacing.y) + SCORE_ROOM {
+        // The Mix view's Master and returns rows also stay below the lanes.
+        let height = ui.available_height() - self.score_block_height();
+        if height < overview_bar_reserve(ui.spacing().item_spacing.y) + SCORE_ROOM {
             return None;
         }
         let wanted = self.session.layout().overview;
-        if !wanted || !overview_fits(ui.available_height(), ui.spacing().item_spacing.y) {
+        if !wanted || !overview_fits(height, ui.spacing().item_spacing.y) {
             let (rect, _) = ui.allocate_exact_size(
                 Vec2::new(ui.available_width(), OVERVIEW_BAR_HEIGHT),
                 Sense::hover(),

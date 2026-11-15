@@ -252,6 +252,18 @@ pub(super) fn note_grid(
         .accesskit_node_builder(scroll.id.with(1_usize), |node| {
             node.set_label("Pitch grid scroll bar")
         });
+    // Its drag surface is a Tab stop too, while the rows overflow.
+    let surface = scroll.id.with("area");
+    if ui
+        .ctx()
+        .read_response(surface)
+        .is_some_and(|response| response.sense.is_focusable())
+    {
+        ui.ctx().accesskit_node_builder(surface, |node| {
+            node.set_role(egui::accesskit::Role::ScrollView);
+            node.set_label("Pitch grid drag to scroll");
+        });
+    }
     if keys.octave_change != 0 {
         editor.octave =
             (editor.octave + keys.octave_change).clamp(*OCTAVES.start(), *OCTAVES.end());

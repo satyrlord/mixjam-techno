@@ -128,6 +128,283 @@ fn tab_walks_the_rail_top_to_bottom_and_reaches_the_panel_switches_last() {
     );
 }
 
+/// The fixture's library with 40 more sounds after its own, so the sound
+/// list has rows to move among and to scroll.
+fn with_more_sounds(app: &mut MixJamApp) {
+    let library = &app.session.library().samples;
+    let base = library[0].clone();
+    let mut samples = library.to_vec();
+    samples.extend((0..40).map(|index| {
+        let mut sample = base.clone();
+        sample.id = 1000 + index;
+        sample.name = format!("Extra sound {index}");
+        sample
+    }));
+    app.session = Session::headless(
+        Arc::new(Library::fixture(samples)),
+        app.session.project().clone(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn every_tab_stop_has_a_name_and_the_sound_list_is_one_stop() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    with_more_sounds(&mut app);
+    app.open_sounds_panel();
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let rows = app.session.library().samples.len();
+    assert!(rows > 1, "The fixture lists more than one sound.");
+    let first = TRANSPORT_BUTTONS[0];
+    focus_control(&ctx, &mut app, &output, first);
+    let focus = |output: &egui::FullOutput| {
+        output
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .map(|update| update.focus)
+    };
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let start = focus(&output);
+    let mut stops = Vec::new();
+    for _ in 0..400 {
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        if focus(&output) == start {
+            break;
+        }
+        stops.push(focused_label(&output));
+    }
+    let unnamed: Vec<String> = stops
+        .iter()
+        .enumerate()
+        .filter(|(_, name)| name.is_none())
+        .map(|(at, _)| {
+            let before = stops[..at].iter().rev().flatten().next();
+            format!("after {before:?}")
+        })
+        .collect();
+    assert!(unnamed.is_empty(), "Unnamed Tab stops: {unnamed:?}");
+    let names: Vec<&str> = stops.iter().flatten().map(String::as_str).collect();
+    assert_eq!(
+        names.iter().filter(|name| **name == "Sound list").count(),
+        1,
+        "The sound list is one Tab stop: {names:?}"
+    );
+    // The lanes stay a short Tab walk from the list, whatever its length.
+    let list = names.iter().position(|name| *name == "Sound list");
+    let lanes = names.iter().position(|name| *name == "Arrangement lanes");
+    assert!(
+        list.zip(lanes)
+            .is_some_and(|(list, lanes)| lanes > list && lanes - list <= 12),
+        "The lanes follow the sound list closely: {names:?}"
+    );
+    let library = app.session.library();
+    assert!(
+        !library
+            .samples
+            .iter()
+            .any(|sample| names.contains(&sample.name.as_str())),
+        "No sound row is a Tab stop of its own: {names:?}"
+    );
+}
+
+/// Each Tab stop after the first transport button, in order, until the walk
+/// returns to that button: its accessible name, or its role when it has none.
+fn tab_stops(ctx: &egui::Context, app: &mut MixJamApp, size: Vec2) -> Vec<Result<String, String>> {
+    let quiet = |app: &mut MixJamApp| frame_at_size(ctx, app, vec![], egui::Modifiers::NONE, size);
+    for _ in 0..4 {
+        quiet(app);
+    }
+    let output = quiet(app);
+    let (target, _) = accessible_node(&output, TRANSPORT_BUTTONS[0]);
+    frame_at_size(
+        ctx,
+        app,
+        vec![egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Focus,
+                target,
+                data: None,
+            },
+        )],
+        egui::Modifiers::NONE,
+        size,
+    );
+    let focused = |output: &egui::FullOutput| {
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        let node = update.nodes.iter().find(|(id, _)| *id == update.focus);
+        (
+            update.focus,
+            node.map(|(_, node)| {
+                node.label()
+                    .map(str::to_owned)
+                    .ok_or_else(|| format!("{:?}", node.role()))
+            }),
+        )
+    };
+    let (start, _) = focused(&quiet(app));
+    let mut stops = Vec::new();
+    for _ in 0..600 {
+        frame_at_size(
+            ctx,
+            app,
+            vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        let (at, stop) = focused(&quiet(app));
+        if at == start {
+            return stops;
+        }
+        stops.push(stop.unwrap_or_else(|| Err("no node".into())));
+    }
+    panic!("The Tab walk does not return to its start: {stops:?}");
+}
+
+#[test]
+fn every_tab_stop_of_every_board_has_a_name() {
+    // The short window makes the boards scroll, so their scroll areas show.
+    for size in [Vec2::new(1440.0, 1000.0), Vec2::new(1024.0, 768.0)] {
+        for module in BottomModule::ALL {
+            for mix in [false, true] {
+                let (ctx, mut app) = fixture();
+                ctx.enable_accesskit();
+                app.boards.module = module;
+                app.set_mix_view(mix);
+                let stops = tab_stops(&ctx, &mut app, size);
+                let unnamed: Vec<String> = stops
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(at, stop)| {
+                        let role = stop.as_ref().err()?;
+                        let before = stops[..at].iter().rev().flatten().next();
+                        Some(format!("{role} after {before:?}"))
+                    })
+                    .collect();
+                assert!(
+                    unnamed.is_empty(),
+                    "Unnamed Tab stops on {} at {size:?}, Mix view {mix}: {unnamed:?}",
+                    module.label()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn focused_sound_list_shows_its_focus_without_a_current_sound() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    with_more_sounds(&mut app);
+    app.open_sounds_panel();
+    app.selection.sample = None;
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let marked = |output: &egui::FullOutput| {
+        let list = effects_control_rect(output, "Sound list");
+        output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Rect(mark)
+                if mark.stroke.color == roles().accent
+                    && mark.stroke.width == 2.0
+                    && list.expand(1.0).contains_rect(mark.rect))
+        })
+    };
+    assert!(!marked(&output), "An unfocused list has no focus mark.");
+    focus_control(&ctx, &mut app, &output, "Sound list");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(focused_label(&output).as_deref(), Some("Sound list"));
+    assert!(
+        marked(&output),
+        "The focused list shows where the focus is before a sound is chosen."
+    );
+}
+
+#[test]
+fn sound_list_keys_choose_sounds_and_enter_places_the_current_one() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    with_more_sounds(&mut app);
+    app.open_sounds_panel();
+    app.selection.sample = None;
+    app.recording.track = 3;
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Sound list");
+    // The repaint that the list asks for when it gains focus.
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let press = |app: &mut MixJamApp, key: egui::Key| {
+        frame(
+            &ctx,
+            app,
+            vec![key_event(key, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, app, vec![], egui::Modifiers::NONE);
+    };
+    let (order, _) = app.palette_view();
+    let id_at = |app: &MixJamApp, row: usize| app.session.library().samples[order[row]].id;
+    press(&mut app, egui::Key::ArrowDown);
+    assert_eq!(
+        app.selection.sample,
+        Some(id_at(&app, 0)),
+        "Down starts at the first sound."
+    );
+    press(&mut app, egui::Key::ArrowDown);
+    assert_eq!(app.selection.sample, Some(id_at(&app, 1)));
+    press(&mut app, egui::Key::End);
+    assert_eq!(app.selection.sample, Some(id_at(&app, order.len() - 1)));
+    press(&mut app, egui::Key::Home);
+    assert_eq!(app.selection.sample, Some(id_at(&app, 0)));
+    let clips = app.session.project().clips.len();
+    press(&mut app, egui::Key::Enter);
+    assert_eq!(
+        app.session.project().clips.len(),
+        clips + 1,
+        "Enter places the current sound."
+    );
+}
+
+#[test]
+fn delete_removes_the_selected_clips_while_the_sound_list_has_focus() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    with_more_sounds(&mut app);
+    app.open_sounds_panel();
+    let clip = app.session.project().clips[0].id;
+    app.selection.clip = Some(clip);
+    app.selection.clips = [clip].into_iter().collect();
+    let count = app.session.project().clips.len();
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Sound list");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(focused_label(&output).as_deref(), Some("Sound list"));
+    let sound = app.selection.sample;
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Delete, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    assert_eq!(
+        app.session.project().clips.len(),
+        count - 1,
+        "Delete removes the selected clip while the list has focus."
+    );
+    assert!(app.selection.clips.is_empty());
+    assert_eq!(app.selection.sample, sound, "The current sound stays.");
+    assert_eq!(
+        focused_label(&output).as_deref(),
+        Some("Sound list"),
+        "The list keeps the focus."
+    );
+}
+
 #[test]
 fn tab_scrolls_rail_controls_into_view_in_short_windows() {
     each_theme(|_| {

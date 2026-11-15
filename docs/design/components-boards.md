@@ -63,6 +63,9 @@ Four send knobs sit below the gain rail of each track. After the tracks, four
 return strips hold the FX bus return levels, input switches, limiter switches,
 and Edit buttons. Edit opens the selected bus on the FX returns board.
 
+While an automation lane sets a send or a pan, a thin ring marks its knob or
+slider. The Mix view and the Inspector use the same mark.
+
 ### Gain taper
 
 The rail uses a piecewise dB taper. From bottom to top, its normalized knots

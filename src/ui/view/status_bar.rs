@@ -214,14 +214,19 @@ impl MixJamApp {
                     }
                 }
                 ui.add_space(STATUS_VERSION_GAP);
-                ui.add(
+                let link = ui.add(
                     egui::Hyperlink::from_label_and_url(
                         version,
                         "https://github.com/satyrlord/mixjam-techno",
                     )
                     .open_in_new_tab(true),
-                )
-                .hover_hint("Open MixJam Techno on GitHub");
+                );
+                // A stable name; the version itself is the value.
+                ui.ctx().accesskit_node_builder(link.id, |node| {
+                    node.set_value(format!("v{}", mixjam_techno::application::APP_VERSION));
+                });
+                name_control(link, "MixJam Techno on GitHub")
+                    .hover_hint("Open MixJam Techno on GitHub");
             },
         );
     }

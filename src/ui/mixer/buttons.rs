@@ -264,6 +264,15 @@ pub(crate) fn pan_slider(
         }
         let response = pan_control(ui, name, pan, automated);
         changed = response.changed();
+        // The send knob's ring, so an automated pan reads the same way.
+        if automated {
+            ui.painter().rect_stroke(
+                rect.expand(2.0 * scale),
+                3.0,
+                Stroke::new(1.0 * scale, roles().legend),
+                egui::StrokeKind::Outside,
+            );
+        }
         focus_ring(ui, &response, rect, scale);
     });
     changed

@@ -114,6 +114,22 @@ impl MixJamApp {
         }
     }
 
+    /// The height the score keeps below its lanes: the Mix view's Master and
+    /// returns rows, which stay in view while the tracks scroll.
+    pub(in super::super) fn score_block_height(&self) -> f32 {
+        if self.mix.shown {
+            mix_view::BLOCK_HEIGHT
+        } else {
+            0.0
+        }
+    }
+
+    /// The lower panel's least height for the open board in a content area
+    /// `available` points high, with the room the score keeps below its lanes.
+    pub(in super::super) fn board_minimum(&self, module: BottomModule, available: f32) -> f32 {
+        module.minimum_height(available, self.score_block_height())
+    }
+
     /// True when `module`'s board shows in an open lower panel.
     pub(in super::super) fn board_shown(&self, module: BottomModule) -> bool {
         self.boards.module == module && self.panels.room.boards
@@ -172,13 +188,13 @@ impl MixJamApp {
         let height = (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0);
         // Reserve the score toolbar, its ruler and a usable lane viewport.
         let available = ctx.available_rect().height();
-        let min_height = self.boards.module.minimum_height(available);
+        let min_height = self.board_minimum(self.boards.module, available);
         // Keep the resized section stable when switching to a shorter module.
         let shared_minimum = BottomModule::ALL
             .into_iter()
-            .map(|module| module.minimum_height(available))
+            .map(|module| self.board_minimum(module, available))
             .fold(0.0_f32, f32::max);
-        let mut max_height = (available - 290.0).max(shared_minimum);
+        let mut max_height = (available - 290.0 - self.score_block_height()).max(shared_minimum);
         if self.panels.room.sounds {
             // An open Sounds panel keeps its least height above the board, so
             // a drag never folds one of them.
@@ -207,6 +223,14 @@ impl MixJamApp {
                     BottomModule::StepSynth => self.step_synth_board(ui),
                 }
             });
+        // egui makes the panel's drag edge a Tab stop and leaves it unnamed.
+        let edge = egui::Id::new("sounds").with("__resize");
+        if ctx.read_response(edge).is_some() {
+            ctx.accesskit_node_builder(edge, |node| {
+                node.set_role(egui::accesskit::Role::Splitter);
+                node.set_label("Lower panel height");
+            });
+        }
         let grip = Rect::from_center_size(
             Pos2::new(
                 sounds.response.rect.center().x,

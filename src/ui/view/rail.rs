@@ -44,6 +44,7 @@ impl MixJamApp {
                     .show(ui, |ui| {
                         ui.vertical_centered(|ui| self.rail_tools(ui, ctx, &icons, form));
                     });
+                name_scroll_area(ui, "tool-rail", "Tool rail");
                 rail_scroll_edges(ui, &output);
             });
     }

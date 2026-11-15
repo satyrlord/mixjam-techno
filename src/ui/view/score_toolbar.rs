@@ -97,15 +97,23 @@ impl MixJamApp {
             ui.add_space(if compact { 4.0 } else { 10.0 });
             self.automation_selector(ui, !narrow);
             ui.add_space(if compact { 4.0 } else { 10.0 });
-            if ui
-                .toggle_value(&mut self.score.follow_playhead, "Follow")
+            let follow = toggled(
+                ui.toggle_value(&mut self.score.follow_playhead, "Follow"),
+                "Follow",
+                self.score.follow_playhead,
+            );
+            if follow
                 .hover_hint("Keep the playhead in view during playback and seeking.")
                 .changed()
             {
                 self.score.last_follow_position = None;
             }
-            if ui
-                .toggle_value(&mut self.sections.bookmarks, "Sections")
+            let sections = toggled(
+                ui.toggle_value(&mut self.sections.bookmarks, "Sections"),
+                "Sections",
+                self.sections.bookmarks,
+            );
+            if sections
                 .hover_hint(
                     "Show the song's section bookmarks on the bar ruler, the lanes and the song \
                      overview. With sections shown, double-click the bar ruler to add a section, \
@@ -329,6 +337,15 @@ pub(in super::super) const TRACK_LANES: [automation::Lane; 6] = [
     automation::Lane::Repeat,
     automation::Lane::RepeatGate,
 ];
+
+/// A toolbar switch's accessible state: on or off, as the status bar's
+/// panel switches report it.
+fn toggled(response: Response, label: &str, on: bool) -> Response {
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, label)
+    });
+    response
+}
 
 /// "1 track", "2 tracks".
 fn plural(count: usize, noun: &str) -> String {

@@ -3,7 +3,7 @@
 //! and the sound actions.
 use super::view::{
     GROUPS, TILE_DETAIL_ALPHA, action_button, elided, focus_outline, group_color, heading,
-    name_control, sample_details, tile_tint,
+    name_control, name_scroll_area, sample_details, tile_tint,
 };
 use super::*;
 use mixjam_techno::application::PeakState;
@@ -33,6 +33,10 @@ pub(super) struct SoundsPanel {
     pub(super) descending: bool,
     pub(super) search: String,
     pub(super) cache: Option<PaletteCache>,
+    /// The list's scroll offset and viewport height in the last frame.
+    list_view: Option<(f32, f32)>,
+    /// The sound whose row the list scrolls into view in the next frame.
+    reveal: Option<u32>,
 }
 
 impl MixJamApp {
@@ -147,6 +151,7 @@ impl MixJamApp {
                 egui::ScrollArea::horizontal()
                     .id_salt("sounds-panel-categories")
                     .show(ui, |ui| ui.horizontal(|ui| chips(self, ui)));
+                name_scroll_area(ui, "sounds-panel-categories", "Categories");
             }
         });
         ui.horizontal(|ui| {
@@ -161,51 +166,140 @@ impl MixJamApp {
         }
         let row_width = ui.available_width();
         ui.spacing_mut().item_spacing = Vec2::new(0.0, ROW_GAP);
-        egui::ScrollArea::vertical()
-            .id_salt("sounds-panel-list")
-            .auto_shrink(false)
-            .show_rows(ui, ROW_HEIGHT, samples.len(), |ui, rows| {
-                for row in rows {
-                    let sample_index = samples[row];
-                    let (id, response) = {
-                        let sample = &self.session.library().samples[sample_index];
-                        let product = self.sample_product(sample.id);
-                        let peaks = self.session.sample_peaks(sample.id);
-                        let response = ui
-                            .push_id(("sound-row", sample.id), |ui| {
-                                sound_row(
-                                    ui,
-                                    sample,
-                                    product,
-                                    &peaks,
-                                    self.selection.sample == Some(sample.id),
-                                    row_width,
-                                )
-                            })
-                            .inner;
-                        if self.capture_view_is("sample-details")
-                            && self.selection.sample == Some(sample.id)
-                        {
-                            response.show_tooltip_text(sample_details(sample, product));
-                        }
-                        (sample.id, response)
-                    };
-                    self.sound_actions(ui, id, &response);
-                }
+        // The list is one Tab stop. It holds keyboard focus and moves the
+        // selection among its rows, which stay pointer and assistive targets.
+        let list_id = ui.id().with("sound-list");
+        let focused = ui.memory(|memory| memory.has_focus(list_id));
+        let row_of = |app: &Self, id: Option<u32>| {
+            let library = &app.session.library().samples;
+            id.and_then(|id| samples.iter().position(|&index| library[index].id == id))
+        };
+        if focused {
+            controls::keep_transport_key(ui.ctx(), list_id);
+            let page = self.sounds.list_view.map_or(1, |(_, height)| {
+                ((height / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1)
             });
+            let current = row_of(self, self.selection.sample);
+            if let Some(row) = list_keys(ui, list_id, current, samples.len(), page) {
+                let id = self.session.library().samples[samples[row]].id;
+                self.selection.sample = Some(id);
+                self.sounds.reveal = Some(id);
+            }
+            if let Some(id) = self.selection.sample
+                && current.is_some()
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
+            {
+                self.place(id, self.recording.track, self.session.cursor_tick());
+            }
+            // The list has no use for Delete, and a click on a sound gives
+            // it the focus: the selected clips keep their key.
+            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)) {
+                self.delete_selection();
+            }
+        }
+        // Rows drag sounds to the tracks, so a drag never scrolls the list;
+        // that also keeps its drag surface out of the Tab order.
+        let mut scroll = egui::ScrollArea::vertical()
+            .id_salt("sounds-panel-list")
+            .scroll_source(egui::scroll_area::ScrollSource {
+                drag: false,
+                ..egui::scroll_area::ScrollSource::ALL
+            })
+            .auto_shrink(false);
+        let reveal = self.sounds.reveal.take();
+        if let Some(row) = row_of(self, reveal)
+            && let Some((offset, height)) = self.sounds.list_view
+        {
+            let top = row as f32 * (ROW_HEIGHT + ROW_GAP);
+            let bottom = top + ROW_HEIGHT;
+            if top < offset {
+                scroll = scroll.vertical_scroll_offset(top);
+            } else if bottom > offset + height {
+                scroll = scroll.vertical_scroll_offset((bottom - height).max(0.0));
+            }
+        }
+        let output = scroll.show_rows(ui, ROW_HEIGHT, samples.len(), |ui, rows| {
+            for row in rows {
+                let sample_index = samples[row];
+                let (id, response) = {
+                    let sample = &self.session.library().samples[sample_index];
+                    let product = self.sample_product(sample.id);
+                    let peaks = self.session.sample_peaks(sample.id);
+                    let selected = self.selection.sample == Some(sample.id);
+                    let response = ui
+                        .push_id(("sound-row", sample.id), |ui| {
+                            sound_row(ui, sample, product, &peaks, selected, row_width)
+                        })
+                        .inner;
+                    if focused && selected {
+                        ui.painter().rect_stroke(
+                            response.rect.shrink(1.0),
+                            roles().corner(5.0),
+                            Stroke::new(2.0_f32, roles().accent),
+                            egui::StrokeKind::Inside,
+                        );
+                    }
+                    if self.capture_view_is("sample-details") && selected {
+                        response.show_tooltip_text(sample_details(sample, product));
+                    }
+                    (sample.id, response)
+                };
+                // Assistive technology focuses a row: the list takes focus
+                // with that sound as its current row.
+                let requested = ui.input(|input| {
+                    input.has_accesskit_action_request(response.id, egui::accesskit::Action::Focus)
+                });
+                if requested || response.clicked() {
+                    self.selection.sample = Some(id);
+                    self.sounds.reveal = Some(id);
+                    ui.memory_mut(|memory| memory.request_focus(list_id));
+                }
+                self.sound_actions(id, &response);
+            }
+        });
+        name_scroll_area(ui, "sounds-panel-list", "Sound list");
+        self.sounds.list_view = Some((output.state.offset.y, output.inner_rect.height()));
+        let list = ui.interact(output.inner_rect, list_id, Sense::FOCUSABLE);
+        // Without a current sound in the list, no row carries the focus
+        // mark, so the list itself does.
+        if list.has_focus() && row_of(self, self.selection.sample).is_none() {
+            ui.painter().rect_stroke(
+                output.inner_rect,
+                roles().corner(5.0),
+                Stroke::new(2.0_f32, roles().accent),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let current = self
+            .selection
+            .sample
+            .and_then(|id| self.session.library().sample_by_id(id))
+            .map(|sample| sample.name.clone());
+        list.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Sound list"));
+        ui.ctx().accesskit_node_builder(list_id, |node| {
+            node.set_description(
+                "Up and Down choose a sound, Page Up, Page Down, Home, and End move further, \
+                 and Enter places it at the playhead on the recording track.",
+            );
+            if let Some(name) = current {
+                node.set_value(name);
+            }
+        });
+        if list.gained_focus() {
+            // egui keeps the arrow keys on the list from its next frame on,
+            // so that frame comes at once, before the first key.
+            self.sounds.reveal = self.selection.sample;
+            ui.ctx().request_repaint();
+        }
     }
 
-    /// What a sound row does: a click selects it for placement,
-    /// Enter places it at the playhead on the armed track, a double-click
-    /// previews it, and a drag carries it to a track.
-    pub(super) fn sound_actions(&mut self, ui: &egui::Ui, id: u32, response: &Response) {
-        let place = response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+    /// What a sound row does: a click selects it for placement, a
+    /// double-click previews it, and a drag carries it to a track. Enter on
+    /// the focused list places the current sound.
+    pub(super) fn sound_actions(&mut self, id: u32, response: &Response) {
         if response.clicked() {
             self.selection.sample = Some(id);
             self.selection.place_on_click = true;
-        }
-        if place {
-            self.place(id, self.recording.track, self.session.cursor_tick());
         }
         if response.double_clicked() {
             self.preview(id);
@@ -344,6 +438,57 @@ impl MixJamApp {
     }
 }
 
+/// The focused sound list's keys: Up and Down move one row, Page Up and Page
+/// Down move `page` rows, and Home and End go to the ends. Without a current
+/// row, any of them starts at the first row. Returns the row to choose.
+fn list_keys(
+    ui: &egui::Ui,
+    id: egui::Id,
+    current: Option<usize>,
+    count: usize,
+    page: usize,
+) -> Option<usize> {
+    ui.memory_mut(|memory| {
+        memory.set_focus_lock_filter(
+            id,
+            egui::EventFilter {
+                vertical_arrows: true,
+                ..Default::default()
+            },
+        )
+    });
+    let last = count.checked_sub(1)?;
+    let moves = [
+        (
+            egui::Key::ArrowUp,
+            current.map_or(0, |at| at.saturating_sub(1)),
+        ),
+        (
+            egui::Key::ArrowDown,
+            current.map_or(0, |at| (at + 1).min(last)),
+        ),
+        (
+            egui::Key::PageUp,
+            current.map_or(0, |at| at.saturating_sub(page)),
+        ),
+        (
+            egui::Key::PageDown,
+            current.map_or(0, |at| (at + page).min(last)),
+        ),
+        (egui::Key::Home, 0),
+        (egui::Key::End, last),
+    ];
+    ui.input_mut(|input| {
+        let mut chosen = None;
+        for (key, row) in moves {
+            if input.consume_key(egui::Modifiers::NONE, key) {
+                chosen = Some(row);
+            }
+        }
+        chosen
+    })
+}
+
 /// A category chip: a small square in the category's colour before its
 /// name.
 fn category_chip(ui: &mut egui::Ui, label: &str, color: Option<Color32>, active: bool) -> Response {
@@ -401,11 +546,12 @@ pub(super) fn sound_row(
     selected: bool,
     width: f32,
 ) -> Response {
+    // Not a Tab stop: the sound list is the one stop for every row.
     let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::click_and_drag());
-    if response.gained_focus() {
-        response.scroll_to_me(None);
-    }
+        ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::CLICK | Sense::DRAG);
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.add_action(egui::accesskit::Action::Focus);
+    });
     let color = group_color(&sample.group_name);
     let painter = ui.painter_at(rect);
     let radius = roles().corner(5.0);
@@ -420,7 +566,7 @@ pub(super) fn sound_row(
         },
     );
     painter.rect_filled(rect, radius, tile_tint(color));
-    if selected || response.has_focus() {
+    if selected {
         painter.rect_stroke(
             rect.shrink(0.5),
             radius,

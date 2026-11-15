@@ -172,6 +172,11 @@ pub(super) fn show(
                                         }
                                     }
                                 });
+                            view::name_scroll_area(
+                                ui,
+                                ("filtered-sources", &query),
+                                "Source sounds",
+                            );
                         }
                     })
                     .response;

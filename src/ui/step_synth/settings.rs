@@ -42,6 +42,7 @@ pub(super) fn settings(
             tempo_section(ui, at, state, editor);
             voice_section(ui, at, state, editor);
         });
+    super::super::view::name_scroll_area(&column, "step-synth-scroll", "Step synth settings");
     action
 }
 
@@ -476,6 +477,7 @@ pub(super) fn effects_pane(
             effects_controls(ui, &mut state.effects);
             named_change(editor, before, state.effects.clone(), "the effect change");
         });
+    super::super::view::name_scroll_area(&form, "step-synth-effects", "Step synth effects");
     action
 }
 

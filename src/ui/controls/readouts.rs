@@ -73,6 +73,7 @@ pub(crate) fn status_text(
         });
         label.hover_hint(hover);
     });
+    super::super::view::name_scroll_area(&child, id_salt, "Readout");
 }
 
 /// Keep status text above the fill so contrast does not change with progress.

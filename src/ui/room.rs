@@ -123,7 +123,7 @@ impl MixJamApp {
                 || (ctx.content_rect().height() * 0.28).clamp(220.0, 290.0),
                 |state| state.rect.height(),
             )
-            .max(self.boards.module.minimum_height(available.height()));
+            .max(self.board_minimum(self.boards.module, available.height()));
         let space = Space {
             width: available.width() - rail,
             height: available.height(),

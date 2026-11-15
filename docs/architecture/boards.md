@@ -103,6 +103,9 @@ switch keeps the resized height. When a board opens, it raises a shorter panel
 to its minimum: 400 points for Mixer, or the whole board for Mastering, FX
 returns, and Step synth. In a window that is too short to keep a 150-point lane
 viewport, each minimum goes down to 370 points, and the board then scrolls.
+While the Mix view shows, the score also keeps its 70-point Master and returns
+rows below the lanes. The reserve then grows by 70 points, and the floor goes
+down to 300 points.
 
 If the Starting module is Sounds, the launch opens the Sounds panel and folds
 the lower panel. `from_session` stores that layout, and the lower panel keeps

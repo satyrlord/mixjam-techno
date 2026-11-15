@@ -201,9 +201,13 @@ line in the category color at 45% opacity. If the waveform is not read yet, or
 the file cannot be read, the row shows only the centre line. The list draws
 only the rows on screen, and only those rows request waveforms.
 
-A click selects a sound for placement. Enter places it on the recording track
-at the playhead. A double-click previews it. A drag carries the sound to a
-lane.
+The list is one Tab stop. While it has focus, an Accent outline marks the
+current sound. If the list shows no current sound, the outline marks the list
+itself. Up and Down choose a sound, and Page Up, Page Down, Home, and
+End move further. Enter places the current sound on the recording track at
+the playhead. Delete removes the selected clips, as it does when no control
+has focus. A click selects a sound for placement. A double-click previews it.
+A drag carries the sound to a lane.
 
 The panel is the only sound list of the library. If the Starting module is
 Sounds, the application starts with the panel open and the lower panel folded.

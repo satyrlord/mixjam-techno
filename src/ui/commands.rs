@@ -197,7 +197,7 @@ impl Command {
             Self::Edit => "Trim, fade and level a sound",
             Self::Stretch => "Fit a sound to the tempo",
             Self::AlbumReview => "Listening notes on an album",
-            Self::Options => "Audio device, theme, workspace and folders",
+            Self::Options => "Audio, theme, workspace and folders",
             Self::Help => "Manual and shortcuts",
             Self::PlayPause => "Play or pause the song",
             Self::StepSynthListen => "Play the Step synth pattern, or stop it",
@@ -525,6 +525,7 @@ impl MixJamApp {
                         }
                         ui.add_space(6.0);
                     });
+                view::name_scroll_area(ui, "command-list-results", "Command list");
             });
         if run.is_none() && modal.should_close() {
             return;

@@ -45,8 +45,8 @@ text.
 
 A palette sound that is armed for click placement shows a tinted outline
 where it will land. The selection of a clip, or Esc, ends click placement. A
-click on an empty lane then only clears the selection. Enter on a focused
-sound row places the sound on the recording track at the playhead.
+click on an empty lane then only clears the selection. Enter on the focused
+Sounds list places its current sound on the recording track at the playhead.
 
 ### Lane keys
 
@@ -60,7 +60,8 @@ are one Tab stop with an Accent outline:
 - Delete removes.
 - Shift+F10 opens the menu of the selected clip under the clip.
 
-Delete and Shift+F10 also work when no control has focus. Ctrl+A selects every
+Delete and Shift+F10 also work when no control has focus. Delete also removes
+the selected clips while the Sound list has focus. Ctrl+A selects every
 clip, and Ctrl+D copies the selection to the bars that follow. A right-click
 on a clip shows Preview, Duplicate, Delete, and, for a missing sound, Resolve
 manually.

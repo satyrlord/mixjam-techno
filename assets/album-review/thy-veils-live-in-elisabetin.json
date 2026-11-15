@@ -1,0 +1,394 @@
+{
+  "id": "thy-veils-live-in-elisabetin",
+  "kind": "reference",
+  "artist": "Thy Veils",
+  "title": "Live in Elisabetin",
+  "year": 2014,
+  "label": "Self-released",
+  "producer": "Daniel Dorobantu",
+  "genre": "Electronic / Ambient / Fusion",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Avant-Pop",
+    "Fusion",
+    "World Music",
+    "Live Album"
+  ],
+  "runtime": "54:24",
+  "coverUrl": "https://f4.bcbits.com/img/a3912078416_10.jpg",
+  "coverSource": "https://thyveils.bandcamp.com/album/live-in-elisabetin",
+  "youtubeUrl": "https://www.youtube.com/watch?v=ruWAKAyyUp4",
+  "bandcampUrl": "https://thyveils.bandcamp.com/album/live-in-elisabetin",
+  "overview": "Live in Elisabetin (self-released on Bandcamp, 30 October 2014) is a concert recording by Thy Veils, the Timișoara project that producer and composer Daniel Dorobantu started as a studio project in 1995. The ensemble recorded it on 28 September 2014 in the Elisabetin Roman Catholic Church on Piața Bălcescu in Timișoara, in a staged performance with video projections and stage lights; a review by Mimo Obradov in the newspaper Timișoara (20 February 2015) says that Dorobantu's childhood memories of the church led him to put on the concert in its large, cold interior. Dorobantu plays the electronics and made the visual design; Manuela Marchis sings, Ana Telea plays acoustic and electric guitar, and Radu Pieloiu plays drums, percussion, and shakuhachi. Attila Lukinich — credited on Bandcamp as Luki Atti — mixed the concert live and then mixed and mastered the recording, with Bogdan Racz on sound reinforcement and Florin Fâra on video projection. No source names the synthesizers or the software.\n\nThe set draws on two studio albums: \"Mountain and Cloud\" and \"Clocks\" come from Mountain and Cloud (2010), where they run 12:10 and 13:03, and \"All Calling\", \"Noctilucent\", and \"Many Waters\" come from Lumine (2013). \"Luna\" and \"Adancime\" had no studio release at the time: \"Luna\" later appeared on Next Forever (2024) and \"Adâncime\" on Singularities (2024). The album had no label and no chart run; the band's YouTube channel published a 56-minute video of the full concert on 10 February 2015, and Obradov's review hears music that \"does not strike but penetrates\" and says that Thy Veils \"build out of silence\". The tracks follow the order of the concert video and pass from one to the next through quiet fades and held tones, so the set plays as one arc: a pulsed opener, a free-time middle in \"Clocks\", the two new pieces with the strongest drum passages of the night, and \"Many Waters\" as the closer.\n\nSection timestamps are measured on the Bandcamp streams from changes in level, low end, percussive content, and pulse, not from a listen to the audio, and are approximate to ±5 seconds. Descriptions name only what those measurements show; the instrument credits come from the Bandcamp page and the YouTube description.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "Mountain and Cloud",
+      "duration": "9:06",
+      "energy": "mid",
+      "tags": [
+        "Concert Opener",
+        "Mountain and Cloud (2010)",
+        "Pulsed Electronics",
+        "Alternating Sections"
+      ],
+      "role": "Album role: The concert opener — the title piece of Mountain and Cloud (2010), cut from twelve minutes to nine, which sets the steady pulse of the set before it runs straight into \"All Calling\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A steady, mid-tempo pulse rises out of silence from a tonal layer, with almost no percussion.",
+          "detail": "The Bandcamp page of the 2010 studio album heads it with a saying of Tozan about the blue mountain and the white cloud, which depend on each other without being dependent on each other."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Harmonic Turn",
+          "description": "The harmony moves away from its home centre while the level keeps climbing."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Beat Entry",
+          "description": "The bass and the low drums enter, and the track reaches full level on its home centre."
+        },
+        {
+          "timestamp": "1:25",
+          "section": "Bass Out",
+          "description": "The bass drops back and the lighter harmonic colour returns; from here the track alternates between full, bass-heavy passages and lighter ones about every half-minute."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Full Groove",
+          "description": "The low end returns at the strongest level so far."
+        },
+        {
+          "timestamp": "4:40",
+          "section": "Drums Forward",
+          "description": "The drum layer comes forward and stays there for the rest of the groove."
+        },
+        {
+          "timestamp": "7:15",
+          "section": "Peak",
+          "description": "The busiest drum passage of the track, over the lighter harmonic colour."
+        },
+        {
+          "timestamp": "8:40",
+          "section": "Outro",
+          "description": "The low end thins, the harmony shifts, and the level falls to a last held tone that fades almost to silence before \"All Calling\"."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "All Calling",
+      "duration": "5:15",
+      "energy": "mid",
+      "tags": [
+        "Lumine (2013)",
+        "Cross-Rhythm Groove",
+        "Two Percussion Peaks",
+        "Segue"
+      ],
+      "role": "Album role: The first song from Lumine (2013), entered straight from the opener — a five-minute groove whose two percussion peaks lift the set before the free-time \"Clocks\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, held midrange tone opens the track with no bass."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Bass Entry",
+          "description": "The bass and the sub-bass enter, and the song settles at a steady level."
+        },
+        {
+          "timestamp": "1:10",
+          "section": "Groove",
+          "description": "The high frequencies open and a regular pulse takes hold, with the low accents set against it in a cross-rhythm."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Percussion Peak",
+          "description": "The drums take over the mix and the level climbs to the first peak of the song."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Break",
+          "description": "The sub-bass cuts out for a moment, and a brighter, midrange-forward passage follows."
+        },
+        {
+          "timestamp": "3:40",
+          "section": "Breakdown",
+          "description": "The bass drops out for about half a minute while the upper parts hold."
+        },
+        {
+          "timestamp": "4:10",
+          "section": "Return",
+          "description": "The bass returns and the groove builds again."
+        },
+        {
+          "timestamp": "4:45",
+          "section": "Final Peak",
+          "description": "The drums come forward again for the loudest passage of the song, which fades quickly at 5:11 into a quiet tail that runs into \"Clocks\"."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Clocks",
+      "duration": "6:58",
+      "energy": "low",
+      "tags": [
+        "Mountain and Cloud (2010)",
+        "Free Time",
+        "Struck Accents",
+        "Drone"
+      ],
+      "role": "Album role: The free-time centre of the set — a piece from Mountain and Cloud (2010), cut from thirteen minutes to seven, with no steady pulse between the grooves of \"All Calling\" and \"Luna\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "Isolated struck sounds over a low drone, with no steady pulse."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Drone",
+          "description": "A close, clustered drone settles, and irregular strikes sound over it."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Harmonic Shift",
+          "description": "The harmony moves to a new centre for about twenty seconds, then returns to the drone."
+        },
+        {
+          "timestamp": "2:15",
+          "section": "Swell",
+          "description": "The midrange comes forward and the level rises for the loudest sustained passage of the piece."
+        },
+        {
+          "timestamp": "2:45",
+          "section": "Struck Accents",
+          "description": "Heavy low strikes start to fall about every twenty to thirty seconds, still out of tempo."
+        },
+        {
+          "timestamp": "5:30",
+          "section": "Harmonic Shift",
+          "description": "The harmony moves to a new centre, which holds to the end."
+        },
+        {
+          "timestamp": "6:20",
+          "section": "Outro",
+          "description": "The low end thins and the drone fades to a single quiet tone, almost to silence, before \"Luna\"."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Luna",
+      "duration": "9:22",
+      "energy": "high",
+      "tags": [
+        "First Release",
+        "Slow Build",
+        "Mid-Track Breakdown",
+        "Drum Finale"
+      ],
+      "role": "Album role: The first of the two pieces new to record and the first full build of the set — a slow, drumless opening that grows into a long drum finale; Thy Veils reworked it in the studio for Next Forever (2024).",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A sustained low layer rises out of the drone of \"Clocks\", with no percussion.",
+          "detail": "The studio version on Next Forever (2024) runs 9:33; a shorter live version from the Maria Radna Monastery is on The Vibrant Decennary (2021)."
+        },
+        {
+          "timestamp": "1:15",
+          "section": "Lower Mids Forward",
+          "description": "The lower mids come forward and the harmony moves briefly."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "First Accents",
+          "description": "The first drum accents fall, sparse and out of tempo."
+        },
+        {
+          "timestamp": "3:15",
+          "section": "Beat Entry",
+          "description": "A regular mid-tempo pulse enters and the drums build into a full groove."
+        },
+        {
+          "timestamp": "4:55",
+          "section": "Breakdown",
+          "description": "The groove breaks up into loose percussion, and the harmony narrows to a single held centre."
+        },
+        {
+          "timestamp": "6:10",
+          "section": "Return",
+          "description": "The steady pulse and the full arrangement return."
+        },
+        {
+          "timestamp": "6:55",
+          "section": "Final Build",
+          "description": "The drums come forward and build without a break for almost two minutes, to the most percussive passage of the piece from 8:15."
+        },
+        {
+          "timestamp": "8:55",
+          "section": "Outro",
+          "description": "The drums stop, and a few quiet held tones fade into \"Noctilucent\"."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Noctilucent",
+      "duration": "5:16",
+      "energy": "low",
+      "tags": [
+        "Lumine (2013)",
+        "Quiet Interlude",
+        "Light Pulse",
+        "Moving Harmony"
+      ],
+      "role": "Album role: The quiet song between the two long builds of \"Luna\" and \"Adancime\" — a piece from Lumine (2013) with only a light high pulse and no low drums.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet opening with a regular high tick and no bass."
+        },
+        {
+          "timestamp": "0:20",
+          "section": "Held Tone",
+          "description": "The texture narrows to one held tone for a few seconds."
+        },
+        {
+          "timestamp": "0:45",
+          "section": "Song",
+          "description": "A light pulse settles, and the harmony moves through a new chord about every five to ten seconds, with no low drums."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Dip",
+          "description": "The level falls for a moment, then the song resumes."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Low Point",
+          "description": "The quietest passage of the song, before a last rise at 4:50."
+        },
+        {
+          "timestamp": "5:05",
+          "section": "Outro",
+          "description": "The level falls to a last held tone that runs into \"Adancime\"."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Adancime",
+      "duration": "9:54",
+      "energy": "high",
+      "tags": [
+        "First Release",
+        "Set Climax",
+        "Cross-Rhythm Groove",
+        "Long Coda"
+      ],
+      "role": "Album role: The climax of the set and the second piece new to record — a long build to the most percussive passage of the concert; the title is the Romanian word for depth.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening with a regular high tick over a low drone.",
+          "detail": "Later versions appear on Live at Garana Jazz Festival (2017), in two performances on The Vibrant Decennary (2021), and as \"Adâncime\" on Singularities (2024)."
+        },
+        {
+          "timestamp": "1:20",
+          "section": "Pulse",
+          "description": "A fast, regular high pulse enters and the level rises steeply, still with no bass."
+        },
+        {
+          "timestamp": "1:55",
+          "section": "Beat Entry",
+          "description": "The drums and the sub-bass enter, and the groove settles."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Breakdown",
+          "description": "The bass and most of the percussion drop out, and a held drone carries the music for about forty seconds."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Peak",
+          "description": "The low drums return in a cross-rhythm against the high pulse, and the drums take over the mix for the loudest, most percussive passage of the concert."
+        },
+        {
+          "timestamp": "7:55",
+          "section": "Drums Out",
+          "description": "The drums fall away and the bass drops out, leaving a held drone."
+        },
+        {
+          "timestamp": "9:05",
+          "section": "Coda",
+          "description": "The bass swells once, the harmony moves for the last time, and the regular high tick of the opening returns as the piece fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Many Waters",
+      "duration": "8:30",
+      "energy": "mid",
+      "tags": [
+        "Lumine (2013)",
+        "Concert Closer",
+        "Slow Pulse",
+        "Alternating Sections"
+      ],
+      "role": "Album role: The closer and the longest of the three Lumine (2013) songs — a slow, steady pulse that alternates bass-heavy and bass-free passages and ends the concert with a short fade.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A slow, steady pulse plays alone over a quiet drone for half a minute."
+        },
+        {
+          "timestamp": "0:30",
+          "section": "Ensemble Entry",
+          "description": "The full ensemble enters with a low accent, and the level rises sharply."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Alternating Sections",
+          "description": "Passages with low accents and passages without bass alternate every few seconds to half a minute."
+        },
+        {
+          "timestamp": "2:00",
+          "section": "Bass Out",
+          "description": "The bass drops out for twenty seconds, and the slow pulse is at its clearest."
+        },
+        {
+          "timestamp": "3:35",
+          "section": "Double Time",
+          "description": "The drums move to double time against the slow pulse."
+        },
+        {
+          "timestamp": "5:10",
+          "section": "Bass-Free Peak",
+          "description": "A bass-free passage holds the highest sustained level of the song so far."
+        },
+        {
+          "timestamp": "5:45",
+          "section": "Drums Forward",
+          "description": "The drums come forward in double time over a new harmonic centre."
+        },
+        {
+          "timestamp": "7:30",
+          "section": "Final Build",
+          "description": "The double-time drums return with the full arrangement for the loudest passage of the song, and a last accent at 8:20 is followed by a short fade to silence by 8:23."
+        }
+      ]
+    }
+  ]
+}

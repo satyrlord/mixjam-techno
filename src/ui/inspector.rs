@@ -122,6 +122,7 @@ impl MixJamApp {
                                 Page::Clips(count) => self.clips_page(ui, count),
                             }
                         });
+                    view::name_scroll_area(ui, "inspector-page", "Inspector");
                 });
             });
     }

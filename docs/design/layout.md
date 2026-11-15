@@ -28,6 +28,12 @@ the space that the later panels share:
    The Mix view adds its 70-point block of Master and return rows under the
    lanes, after an 8-point gap.
 
+A scroll area that has more content than space shows its scroll bar at all
+times, also when the pointer is not on it. Thus a short window shows where
+there is more content. The shared bars float over the content, 4 points wide,
+and take no layout width. The Mixer strips, the Step synth, and the
+[windows](#windows) keep their own solid bars.
+
 ## Lower panel
 
 The lower panel (Mixer, Mastering, FX returns, or Step synth) starts at 28% of
@@ -49,7 +55,9 @@ When a board opens, a shorter panel grows to that minimum. A change to a
 different board otherwise keeps the resized height. In a short window, a board
 gives up height down to 370 points, so that the lane viewport keeps
 150 points. The board then scrolls. Mastering scrolls its chip strip below
-the pedals.
+the pedals. In the Mix view, the 70-point Master and returns rows stay below
+the lanes. The board then gives up 70 more points, down to 300 points, so that
+the lane viewport keeps its 150 points above those rows.
 
 When there is space, the maximum panel height leaves 290 points for the score
 toolbar, the ruler, and the lanes. At the minimum client height, the largest

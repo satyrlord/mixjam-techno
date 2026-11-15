@@ -372,6 +372,7 @@ impl MixJamApp {
                         });
                     }
                 });
+            view::name_scroll_area(ui, "sample_conflict_choices", "Conflict choices");
             ui.add_space(10.0);
             if recording {
                 ui.colored_label(

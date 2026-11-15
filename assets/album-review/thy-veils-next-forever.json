@@ -1,0 +1,526 @@
+{
+  "id": "thy-veils-next-forever",
+  "kind": "reference",
+  "artist": "Thy Veils",
+  "title": "Next Forever",
+  "year": 2024,
+  "label": "Self-released",
+  "producer": "Daniel Dorobantu",
+  "genre": "Electronic / Art Pop / Ambient",
+  "genreTags": [
+    "Electronic",
+    "Ambient",
+    "Art Pop",
+    "Avant-Pop",
+    "Electronica",
+    "World Music",
+    "Vocal"
+  ],
+  "runtime": "1:01:51",
+  "coverUrl": "https://f4.bcbits.com/img/a0832104047_10.jpg",
+  "coverSource": "https://thyveils.bandcamp.com/album/next-forever",
+  "bandcampUrl": "https://thyveils.bandcamp.com/album/next-forever",
+  "overview": "Next Forever (self-released on Bandcamp, 22 April 2024) is an album by Thy Veils, the Timișoara project of producer and composer Daniel Dorobantu — started as a studio project in 1995, a performing ensemble since 2008, and called a pioneering name of the Romanian ambient scene in a 2022 Musosoup interview. York Calling reports that the record took seven years to complete. \"Influx\" grew from arpeggiated synth and rhythm parts that Dorobantu began about four years before its 2022 single release, and \"Luna\" reworks a piece first issued on Live in Elisabetin, recorded on 28 September 2014 in the Elisabetin Roman Catholic Church of Timișoara. Dorobantu plays the electronics and produces; a rotating ensemble adds the voices of Alira Mun, Maria Hojda, and Manuela Marchis — the last also credited with keys and idioglossia, a vocal in an invented language — with Petre Ionutescu on trumpet, Ana Pieloiu on guitar, Mircea Ardeleanu Jr. on bass, vocals, and percussion, Anuka Kontridze on tabla, and Radu Pieloiu on drums and percussion. Attila Lukinich mixed and mastered the album. No source names the synthesizers or the software.\n\nThe album had no label and no chart run; it was released only on Bandcamp, and its press is small-outlet reviews. York Calling hears dreamy, driving electronica, \"gritty and ethereal\" and \"soft yet danceable\", and reads the concept as the mysteries of the human mind joined with the unknowns of the universe in a utopian far future. Dancing About Architecture hears beats that move between the ambient and the energetic, Vangelis-like grooves in \"Sunvault\", and a blend of East and West, past and future. The Bandcamp page heads the album with a line of the Chan master Hongzhi Zhengjue. Ten separate tracks, each with its own ending, hold the vocal songs between two long frames: the 8:35 opener \"A High Age\" and the 9:33 \"Luna\", the longest track and the only one without published lyrics, placed before the trumpet closer \"Mountain Fire\". Official videos exist for \"Fluttering Light\", \"Luna\", and \"Mountain Fire\".\n\nSection timestamps are measured on the Bandcamp MP3 files from changes in level, low end, and high-frequency content, and are approximate to ±5 seconds. The events name only credited players; where the credits do not say which part enters, an event describes the change in the arrangement.",
+  "tracks": [
+    {
+      "num": 1,
+      "title": "A High Age",
+      "duration": "8:35",
+      "energy": "mid",
+      "tags": [
+        "Long-Form Opener",
+        "Glitch Beats",
+        "Strings",
+        "Slow Build"
+      ],
+      "role": "Album role: The long-form opener — a slow build of strings, synths, and glitch beats that sets out the far-future frame of the album before the shorter vocal songs.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, thin texture opens the track with no low end."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Low End Enters",
+          "description": "A bass layer arrives under the intro while the high percussion stays out."
+        },
+        {
+          "timestamp": "0:48",
+          "section": "Beat Entry",
+          "description": "The beat and the upper percussion enter, and the arrangement thickens into the main groove.",
+          "detail": "York Calling hears mystical strings, ethereal vocals, glitchy beats, and space-age synths in the opener."
+        },
+        {
+          "timestamp": "2:50",
+          "section": "Build",
+          "description": "The arrangement reaches full density, with the lower mids at their strongest so far."
+        },
+        {
+          "timestamp": "4:11",
+          "section": "Break",
+          "description": "A two-second drop-out stops the groove."
+        },
+        {
+          "timestamp": "4:22",
+          "section": "Full Return",
+          "description": "The full arrangement returns and holds the highest level of the track to the end of the beat section."
+        },
+        {
+          "timestamp": "5:38",
+          "section": "Short Dip",
+          "description": "The arrangement thins for a few seconds, then returns at full strength."
+        },
+        {
+          "timestamp": "8:00",
+          "section": "Outro",
+          "description": "The beat stops; a low sustained layer stays and fades to silence by 8:30."
+        }
+      ]
+    },
+    {
+      "num": 2,
+      "title": "Sunvault",
+      "duration": "5:29",
+      "energy": "high",
+      "tags": [
+        "Vocal Song",
+        "Late-Night Groove",
+        "Continuous Groove"
+      ],
+      "role": "Album role: The first short vocal song after the long opener — a continuous groove that York Calling calls lively and Dancing About Architecture compares to Vangelis.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A centred rhythmic figure plays alone, with no bass."
+        },
+        {
+          "timestamp": "0:19",
+          "section": "Bass Entry",
+          "description": "The low end and the upper percussion enter together."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Full Groove",
+          "description": "The arrangement reaches full level and stays dense for most of the track."
+        },
+        {
+          "timestamp": "1:03",
+          "section": "Upper Layer Out",
+          "description": "The high-frequency layer drops back for about ten seconds while the groove continues."
+        },
+        {
+          "timestamp": "2:51",
+          "section": "Peak",
+          "description": "The loudest passage of the track, with the high layer at full strength."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Rhythm Focus",
+          "description": "The low pulse becomes more regular and comes forward in the mix."
+        },
+        {
+          "timestamp": "3:56",
+          "section": "Final Section",
+          "description": "The upper frequencies return to full strength for the last part of the song."
+        },
+        {
+          "timestamp": "5:18",
+          "section": "Outro",
+          "description": "The groove stops and a short fade ends the track."
+        }
+      ]
+    },
+    {
+      "num": 3,
+      "title": "Influx",
+      "duration": "4:34",
+      "energy": "high",
+      "tags": [
+        "2022 Single",
+        "Arpeggiated Synths",
+        "Vocal Song",
+        "East-West Blend"
+      ],
+      "role": "Album role: The earliest released piece of the album — a 2022 single, and in the reading of Dancing About Architecture the clearest statement of its East–West, past–future blend.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, centred figure opens the track with no bass and no high percussion."
+        },
+        {
+          "timestamp": "0:07",
+          "section": "Arrangement Entry",
+          "description": "The arrangement enters at full level, and the upper frequencies fill in from 0:15.",
+          "detail": "Dorobantu built the track from arpeggiated synths and a rhythm part about four years before its release; Maria Hojda wrote and recorded the vocal line, and Mircea Ardeleanu Jr. the bass (Musosoup interview, November 2022)."
+        },
+        {
+          "timestamp": "0:37",
+          "section": "Bass Entry",
+          "description": "The low end enters in full under the arrangement."
+        },
+        {
+          "timestamp": "0:53",
+          "section": "Break",
+          "description": "The low end drops out for about 15 seconds while the upper parts continue."
+        },
+        {
+          "timestamp": "1:09",
+          "section": "Return",
+          "description": "The low end returns, and the track holds its full arrangement."
+        },
+        {
+          "timestamp": "2:09",
+          "section": "Low-End Push",
+          "description": "The strongest low pulse of the track drives a 20-second passage."
+        },
+        {
+          "timestamp": "2:57",
+          "section": "Peak",
+          "description": "The loudest, widest passage of the track."
+        },
+        {
+          "timestamp": "4:25",
+          "section": "Hard Ending",
+          "description": "The high frequencies fall away and the track stops at 4:30 with no long fade."
+        }
+      ]
+    },
+    {
+      "num": 4,
+      "title": "Upstream",
+      "duration": "4:49",
+      "energy": "mid",
+      "tags": [
+        "Vocal Song",
+        "Chilled Groove",
+        "Long Intro"
+      ],
+      "role": "Album role: The first cooler song after the lively pair \"Sunvault\" and \"Influx\" — York Calling calls it chilled — opened by a 35-second quiet intro.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet passage with no bass and light upper detail runs for over half a minute."
+        },
+        {
+          "timestamp": "0:35",
+          "section": "Full Entry",
+          "description": "The full arrangement and the low end enter at once."
+        },
+        {
+          "timestamp": "1:50",
+          "section": "Groove",
+          "description": "The beat pulse becomes stronger and more regular."
+        },
+        {
+          "timestamp": "3:38",
+          "section": "Thinning",
+          "description": "The lower mids clear while the beat continues."
+        },
+        {
+          "timestamp": "4:14",
+          "section": "Beat Out",
+          "description": "The beat drops out; the low end and the upper parts hold."
+        },
+        {
+          "timestamp": "4:36",
+          "section": "Outro",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 5,
+      "title": "Next Forever",
+      "duration": "5:12",
+      "energy": "mid",
+      "tags": [
+        "Title Track",
+        "Vocal Song",
+        "Chilled Groove"
+      ],
+      "role": "Album role: The title track at the centre of the album — a chilled vocal song (York Calling) that Dancing About Architecture calls angelic and ethereal.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "The low end is present from the first bar, with little high-frequency content."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Level Rise",
+          "description": "The arrangement rises to full level, still dark at the top."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Full Arrangement",
+          "description": "The upper frequencies open and the arrangement reaches full density."
+        },
+        {
+          "timestamp": "1:48",
+          "section": "Groove Eases",
+          "description": "The beat pulse softens while the level holds."
+        },
+        {
+          "timestamp": "4:30",
+          "section": "Outro",
+          "description": "The high frequencies drop back and the arrangement thins."
+        },
+        {
+          "timestamp": "5:00",
+          "section": "Fade",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 6,
+      "title": "Fluttering Light",
+      "duration": "6:58",
+      "energy": "mid",
+      "tags": [
+        "Official Video",
+        "Vocal Song",
+        "Mid-Track Breakdown"
+      ],
+      "role": "Album role: The spiritual turn of the second half — York Calling hears \"simmering spirituality\", and Dancing About Architecture the first light over the River Ganges.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A quiet, wide texture opens the track."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Entry",
+          "description": "The low end and the upper percussion enter, and the arrangement fills out."
+        },
+        {
+          "timestamp": "1:30",
+          "section": "Beat Focus",
+          "description": "The strongest, most regular beat pulse of the track."
+        },
+        {
+          "timestamp": "2:42",
+          "section": "Breakdown",
+          "description": "The low end drops out and the level falls for about half a minute."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Return",
+          "description": "The full arrangement returns with the low end."
+        },
+        {
+          "timestamp": "5:44",
+          "section": "Final Section",
+          "description": "The lower mids come forward for the last minute of the song."
+        },
+        {
+          "timestamp": "6:46",
+          "section": "Outro",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 7,
+      "title": "Heart in Wonder",
+      "duration": "7:13",
+      "energy": "mid",
+      "tags": [
+        "Vocal Song",
+        "Lovers Theme",
+        "Beat Drop-Out"
+      ],
+      "role": "Album role: The longest song with published lyrics after \"A High Age\" — a seven-minute groove addressed to lovers, which leads into the shorter \"Morph\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A very quiet opening with no low end."
+        },
+        {
+          "timestamp": "0:12",
+          "section": "Low End Enters",
+          "description": "A bass layer enters at medium level while the high frequencies stay low."
+        },
+        {
+          "timestamp": "0:50",
+          "section": "Full Arrangement",
+          "description": "The beat and the upper frequencies enter, and the song reaches full density."
+        },
+        {
+          "timestamp": "2:54",
+          "section": "Centred Passage",
+          "description": "The stereo image narrows to the centre for about 20 seconds."
+        },
+        {
+          "timestamp": "3:12",
+          "section": "Beat Focus",
+          "description": "The strongest beat pulse of the track."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Beat Out",
+          "description": "The beat drops out for about 20 seconds while the level holds."
+        },
+        {
+          "timestamp": "3:50",
+          "section": "Return",
+          "description": "The beat returns, and the song runs at full density to the end."
+        },
+        {
+          "timestamp": "7:00",
+          "section": "Outro",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 8,
+      "title": "Morph",
+      "duration": "4:37",
+      "energy": "mid",
+      "tags": [
+        "Vocal Song",
+        "Sultry Groove",
+        "Short Form"
+      ],
+      "role": "Album role: The short groove between \"Heart in Wonder\" and the long \"Luna\" — the \"sultry groove\" of York Calling's review.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A centred, bass-heavy opening with no high frequencies."
+        },
+        {
+          "timestamp": "0:14",
+          "section": "Full Entry",
+          "description": "The upper percussion enters, and the arrangement reaches full level."
+        },
+        {
+          "timestamp": "2:32",
+          "section": "Lower Mids Forward",
+          "description": "The lower mids thicken for the second half of the song."
+        },
+        {
+          "timestamp": "3:26",
+          "section": "Beat Focus",
+          "description": "The beat pulse comes forward for the last minute."
+        },
+        {
+          "timestamp": "4:24",
+          "section": "Outro",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 9,
+      "title": "Luna",
+      "duration": "9:33",
+      "energy": "high",
+      "tags": [
+        "Album Centrepiece",
+        "Live-Ensemble Rework",
+        "Idioglossia Vocals",
+        "Live Drums",
+        "Official Video"
+      ],
+      "role": "Album role: The longest track and the live-ensemble centrepiece — a studio reworking of a piece first released on Live in Elisabetin (2014), with drums, guitar, and bass, and voices with no published lyrics.",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A short, quiet opening at medium low end."
+        },
+        {
+          "timestamp": "0:10",
+          "section": "Low End Enters",
+          "description": "The bass comes forward and the level rises."
+        },
+        {
+          "timestamp": "0:42",
+          "section": "Full Ensemble",
+          "description": "The full arrangement enters, and the high frequencies open.",
+          "detail": "The credits name Manuela Marchis (vocal, idioglossia), Maria Hojda (vocal), Ana Pieloiu (guitar), Radu Pieloiu (drums, percussion), and Mircea Ardeleanu Jr. (bass)."
+        },
+        {
+          "timestamp": "3:30",
+          "section": "Drum Focus",
+          "description": "The rhythm section comes forward with the strongest beat pulse of the track, in a narrow, centred image."
+        },
+        {
+          "timestamp": "5:06",
+          "section": "Breakdown",
+          "description": "The upper frequencies drop back and the image widens while the beat continues."
+        },
+        {
+          "timestamp": "6:02",
+          "section": "Final Build",
+          "description": "The full arrangement returns and holds for nearly three minutes."
+        },
+        {
+          "timestamp": "8:48",
+          "section": "Outro",
+          "description": "The beat stops; a quieter, wide layer remains."
+        },
+        {
+          "timestamp": "9:20",
+          "section": "Fade",
+          "description": "The track fades to silence."
+        }
+      ]
+    },
+    {
+      "num": 10,
+      "title": "Mountain Fire",
+      "duration": "4:48",
+      "energy": "mid",
+      "tags": [
+        "Album Closer",
+        "Trumpet",
+        "Programmed Drums",
+        "Jazz Inflection",
+        "Official Video"
+      ],
+      "role": "Album role: The closer — a short vocal song with trumpet after the long \"Luna\", ending the album in what York Calling calls \"lingering jazz\".",
+      "events": [
+        {
+          "timestamp": "0:00",
+          "section": "Intro",
+          "description": "A centred rhythmic figure plays with no bass."
+        },
+        {
+          "timestamp": "0:16",
+          "section": "Bass Entry",
+          "description": "The low end enters at full level."
+        },
+        {
+          "timestamp": "0:34",
+          "section": "Full Arrangement",
+          "description": "The upper frequencies open and the song reaches full density.",
+          "detail": "The credits name Alira Mun (vocal), Petre Ionutescu (trumpet), and Mircea Ardeleanu Jr. (bass), with drums and percussion programmed by Dorobantu."
+        },
+        {
+          "timestamp": "2:24",
+          "section": "Beat Focus",
+          "description": "The beat pulse becomes stronger and more regular for the second half."
+        },
+        {
+          "timestamp": "4:18",
+          "section": "Outro",
+          "description": "The low end drops out while the upper parts continue."
+        },
+        {
+          "timestamp": "4:36",
+          "section": "Fade",
+          "description": "The album ends on a short fade to silence."
+        }
+      ]
+    }
+  ]
+}

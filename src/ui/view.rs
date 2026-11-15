@@ -176,6 +176,42 @@ pub(super) fn name_control(response: Response, name: &str) -> Response {
     response
 }
 
+/// Name the parts of a scroll area that egui makes Tab stops: its bars and
+/// its drag surface, each only while it is shown. Call it after the area,
+/// in the same `ui`, with the area's `id_salt`.
+pub(super) fn name_scroll_area(ui: &egui::Ui, id_salt: impl std::hash::Hash, name: &str) {
+    use egui::accesskit::Role;
+    let ctx = ui.ctx();
+    let id = ui.make_persistent_id(egui::Id::new(id_salt));
+    for (part, role, label) in [
+        (
+            id.with(0_usize),
+            Role::ScrollBar,
+            format!("{name} horizontal scroll bar"),
+        ),
+        (
+            id.with(1_usize),
+            Role::ScrollBar,
+            format!("{name} vertical scroll bar"),
+        ),
+        (
+            id.with("area"),
+            Role::ScrollView,
+            format!("{name} drag to scroll"),
+        ),
+    ] {
+        if ctx
+            .read_response(part)
+            .is_some_and(|response| response.sense.is_focusable())
+        {
+            ctx.accesskit_node_builder(part, |node| {
+                node.set_role(role);
+                node.set_label(label);
+            });
+        }
+    }
+}
+
 /// Name a pointer surface that is not a Tab stop. egui describes only
 /// focusable widgets by itself; the widget information adds the bounds.
 pub(super) fn name_region(response: Response, name: &str) -> Response {

@@ -1,4 +1,4 @@
-button	+96 more
+button	+{albums} more
 button	Add library folder
 button	Add track 1
 button	Add track 5
@@ -693,7 +693,6 @@ label	0 tracks  /  0 clips
 label	0.0 dB
 label	00 : 00
 label	1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.
-label	131 / 131 albums
 label	4 sounds
 label	4 tracks  /  8 clips
 label	4x keeps Soft clip, Tube, Maximizer, and Tape clean. Off can sound harsher.
@@ -857,6 +856,7 @@ label	parity drum
 label	parity loop
 label	parity voice
 label	parity.wav
+label	{albums} / {albums} albums
 number	Booster EQ 1100 Hz value
 number	Booster EQ 12000 Hz value
 number	Booster EQ 160 Hz value
