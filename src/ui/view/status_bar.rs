@@ -174,8 +174,6 @@ impl MixJamApp {
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
             |ui| {
                 ui.label(panels);
-                // In a maximised score all read off; each switch restores the
-                // score with the previous panel choices.
                 // In a maximised score all read off but Overview; each switch
                 // restores the score with the previous panel choices.
                 for (command, label, hint) in [
