@@ -483,15 +483,7 @@ fn resized_musical_content_keeps_nested_grid_effects_and_status_inside_the_chass
                 if let egui::Shape::Text(text) = &shape.shape {
                     let label = text.galley.job.text.as_str();
                     if shape.clip_rect.is_positive()
-                        && [
-                            "Cutoff",
-                            "Filter",
-                            "Sequence effects",
-                            "Pitch",
-                            "Original BPM",
-                            status,
-                        ]
-                        .contains(&label)
+                        && ["Cutoff", "Filter", "Pitch", "Original BPM", status].contains(&label)
                     {
                         found += 1;
                         assert!(

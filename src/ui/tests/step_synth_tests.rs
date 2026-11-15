@@ -280,9 +280,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             "Loop source",
             "Step synth BPM",
             "Clear bar",
-            "Listen sequence",
-            "Save sequence",
-            "Sequence effects",
+            "Listen",
+            "Save sound",
             "Save pattern",
             "Load pattern",
         ] {
@@ -296,15 +295,13 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 "{label} must not overlap the status footer."
             );
         }
-        for label in [
-            "Choose source file",
-            "Use palette sound",
-            "Clear bar",
-            "Listen sequence",
-            "Save sequence",
-            "Sequence effects",
-            "Save pattern",
-            "Load pattern",
+        for (label, text) in [
+            ("Choose source file", "File…"),
+            ("Use palette sound", "Palette"),
+            ("Clear bar", "Clear bar"),
+            ("Save sound", "Save sound"),
+            ("Save pattern", "Save"),
+            ("Load pattern", "Load"),
         ] {
             // A short lower panel scrolls the settings column: the wheel
             // over the control's column brings it in.
@@ -332,7 +329,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 );
                 output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             }
-            let glyphs = step_synth_text_mesh_bounds(&output, label);
+            let glyphs = step_synth_text_mesh_bounds(&output, text);
             let button = step_synth_control_rect(&output, label);
             assert!(
                 step_synth_board_rect(&output).contains_rect(button),
@@ -343,6 +340,13 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 "{label} must have clear space inside its button."
             );
         }
+        // A narrow grid shows Listen as its icon alone, before the bars.
+        let listen = step_synth_control_rect(&output, "Listen");
+        assert!(
+            listen.width() <= 40.0
+                && listen.right() < step_synth_control_rect(&output, "View bar 1").left(),
+            "Listen {listen:?} must fold to its icon and lead the bar strip."
+        );
         let caption = step_synth_text_mesh_bounds(&output, "Length");
         assert!(
             step_synth_control_rect(&output, "Length").left() - caption.right() >= 4.0,
@@ -383,10 +387,18 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             "Keyboard focus must scroll the lowest pitch into view."
         );
         assert!(!cell.intersects(step_synth_control_rect(&output, "Load pattern")));
-        let output = activate_control(&ctx, &mut app, &output, "Sequence effects");
+        let output = activate_control(&ctx, &mut app, &output, "Pattern effects");
         assert!(app.step_synth.effects_expanded);
-        accessible_node(&output, "Note grid");
-        text_rect(&output, "Sequence effects");
+        assert_eq!(
+            accessible_node(&output, "Pattern effects").1.toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
+        assert_eq!(
+            accessible_node(&output, "Note grid").1.toggled(),
+            Some(egui::accesskit::Toggled::False)
+        );
+        // Listen keeps its place over the effects.
+        step_synth_control_rect(&output, "Listen");
         text_rect(&output, "Echo");
         let echo = step_synth_control_rect(&output, "Echo");
         assert!(
@@ -395,7 +407,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 egui::Shape::Circle(circle) if echo.contains(circle.center)
                     && circle.fill == controls::Palette::Olive.accent()
             )),
-            "Enabled sequence effects must retain the board's olive accent."
+            "Enabled pattern effects must retain the board's olive accent."
         );
         let row_y = step_synth_control_rect(&output, "Cutoff").center().y;
         for name in ["Cutoff", "Resonance", "Overdrive", "Filter volume"] {
@@ -531,7 +543,7 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
                                         message: None,
                                         error: false,
                                     },
-                                    effects,
+                                    &mut effects,
                                 )
                             })
                             .inner;
@@ -540,8 +552,9 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
                             source(),
                             &mut state,
                             &mut view_bar,
-                            &mut effects,
+                            effects,
                             &mut Default::default(),
+                            None,
                             None,
                         );
                         if matches!(bar, step_synth::Action::Details) {
@@ -557,7 +570,7 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
         }
         let (mut output, _) = render(vec![]);
         let ready = available && (!missing || explicit_file);
-        for label in ["Listen sequence", "Save sequence"] {
+        for label in ["Listen", "Save sound"] {
             assert_eq!(
                 !accessible_node(&output, label).1.is_disabled(),
                 ready,
@@ -591,8 +604,8 @@ fn step_synth_source_readiness_disables_audio_actions_but_keeps_draft_and_recove
             actions.push(("Import details", step_synth::Action::Details));
         }
         if ready {
-            actions.push(("Listen sequence", step_synth::Action::Listen));
-            actions.push(("Save sequence", step_synth::Action::SaveSequence));
+            actions.push(("Listen", step_synth::Action::Listen));
+            actions.push(("Save sound", step_synth::Action::SaveSound));
         }
         for (label, expected) in actions {
             let target = accessible_node(&output, label).0;
@@ -649,7 +662,7 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
         assert_eq!(value, check, "{name}");
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    for label in ["Listen sequence", "Save sequence"] {
+    for label in ["Listen", "Save sound"] {
         assert!(!accessible_node(&output, label).1.is_disabled());
     }
     assert_eq!(
@@ -663,5 +676,206 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
             .take_notice()
             .is_some_and(|(message, _)| message.contains("Audio output is unavailable")),
         "Step synth options must not start the transport."
+    );
+}
+
+#[test]
+fn step_synth_board_undo_takes_back_bar_actions_and_listen_has_its_own_key() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.selection.sample = Some(1);
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.steps[0] = Step::note(5);
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    // Copy names the bar it writes to.
+    text_rect(&output, "Copy to 2");
+    let before = app.step_synth.state.clone();
+    let output = activate_control(&ctx, &mut app, &output, "Copy bar");
+    assert_eq!(app.step_synth.state.steps[16], Step::note(5));
+    let output = activate_control(&ctx, &mut app, &output, "Clear bar");
+    assert_eq!(app.step_synth.state.steps[0], Step::default());
+    assert!(
+        accessible_node(&output, "Clear bar").1.is_disabled(),
+        "An empty bar has nothing to clear."
+    );
+    // Ctrl+Z over the board takes back Clear, then Copy; Ctrl+Y redoes.
+    let board = step_synth_board_rect(&output).center();
+    let press = |app: &mut MixJamApp, key: egui::Key, modifiers: egui::Modifiers| {
+        frame(
+            &ctx,
+            app,
+            vec![egui::Event::PointerMoved(board), key_event(key, modifiers)],
+            modifiers,
+        );
+        frame(&ctx, app, vec![], egui::Modifiers::NONE);
+    };
+    press(&mut app, egui::Key::Z, egui::Modifiers::COMMAND);
+    press(&mut app, egui::Key::Z, egui::Modifiers::COMMAND);
+    assert_eq!(app.step_synth.state, before, "Undo restores the notes.");
+    press(&mut app, egui::Key::Y, egui::Modifiers::COMMAND);
+    assert_eq!(app.step_synth.state.steps[16], Step::note(5));
+    assert_eq!(app.step_synth.state.steps[0], Step::note(5));
+    press(&mut app, egui::Key::Z, egui::Modifiers::COMMAND);
+    press(&mut app, egui::Key::Z, egui::Modifiers::COMMAND);
+    assert_eq!(
+        app.step_synth.feedback.message.as_deref(),
+        Some("No Step synth edit to undo.")
+    );
+    // L runs Listen from the keyboard while the board shows.
+    app.step_synth.feedback.message = None;
+    press(&mut app, egui::Key::L, egui::Modifiers::NONE);
+    assert!(
+        app.step_synth.feedback.message.is_some(),
+        "L must run Listen."
+    );
+    assert_eq!(
+        commands::Command::StepSynthListen.shortcut(),
+        Some("L"),
+        "The command list shows Listen's key."
+    );
+}
+
+#[test]
+fn step_synth_undo_restores_an_edit_on_the_very_next_frame() {
+    for pointer_edit in [false, true] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.boards.module = BottomModule::StepSynth;
+        app.step_synth.state.steps.fill(Step::default());
+        let mut output = egui::FullOutput::default();
+        for _ in 0..3 {
+            output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let label = "Step 1, +12 semitones";
+        let at = step_synth_control_rect(&output, label).center();
+        if pointer_edit {
+            click(&ctx, &mut app, at, egui::Modifiers::NONE);
+        } else {
+            focus_control(&ctx, &mut app, &output, label);
+            frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+        }
+        assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+        // No idle frame may be required between an edit and its undo.
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(at),
+                key_event(egui::Key::Z, egui::Modifiers::COMMAND),
+            ],
+            egui::Modifiers::COMMAND,
+        );
+        assert_eq!(
+            app.step_synth.state.steps[0],
+            Step::default(),
+            "The newest edit must already be available to undo: pointer={pointer_edit}."
+        );
+    }
+}
+
+#[test]
+fn step_synth_scrolled_grid_focus_keeps_undo_when_the_pointer_leaves_the_board() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.steps.fill(Step::default());
+    let size = Vec2::new(960.0, 720.0);
+    let mut output = egui::FullOutput::default();
+    for _ in 0..3 {
+        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let target = accessible_node(&output, "Step 1, +12 semitones").0;
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Focus,
+                target,
+                data: None,
+            },
+        )],
+        egui::Modifiers::NONE,
+        size,
+    );
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+        size,
+    );
+    assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+    // Let the edit reach history so that this checks focus routing alone.
+    frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![
+            egui::Event::PointerMoved(Pos2::new(900.0, 100.0)),
+            key_event(egui::Key::Z, egui::Modifiers::COMMAND),
+        ],
+        egui::Modifiers::COMMAND,
+        size,
+    );
+    assert_eq!(
+        app.step_synth.state.steps[0],
+        Step::default(),
+        "The scrolled grid keeps focus, so Ctrl+Z must undo its note edit."
+    );
+}
+
+#[test]
+fn step_synth_multiframe_tie_drag_is_one_undo_step() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    app.step_synth.state.steps.fill(Step::default());
+    app.step_synth.state.steps[0] = Step::note(12);
+    let before = app.step_synth.state.clone();
+    let mut output = egui::FullOutput::default();
+    for _ in 0..3 {
+        output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let from = step_synth_control_rect(&output, "Step 1, +12 semitones").center();
+    let to = step_synth_control_rect(&output, "Step 6, +12 semitones").center();
+    // The driver moves through four frames with the pointer held.
+    drag(&ctx, &mut app, from, to, egui::Modifiers::NONE);
+    assert_eq!(app.step_synth.state.steps[0], Step::note(12));
+    assert!(
+        app.step_synth.state.steps[1..6]
+            .iter()
+            .all(|step| step.trig == Trig::Tie),
+        "The pointer drag must extend the note through step 6."
+    );
+    let extended = app.step_synth.state.clone();
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)],
+        egui::Modifiers::COMMAND,
+    );
+    assert_eq!(app.step_synth.state, before);
+    assert!(
+        !app.step_synth.grid.can_undo(false),
+        "A multi-frame pointer gesture must create exactly one undo step."
+    );
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Y, egui::Modifiers::COMMAND)],
+        egui::Modifiers::COMMAND,
+    );
+    assert_eq!(
+        app.step_synth.state, extended,
+        "Redo must restore the whole tie gesture."
     );
 }

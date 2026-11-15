@@ -92,7 +92,7 @@ that board:
 
 - Mastering: its preset, Bypass all, status, and help.
 - Mixer: Export tracks….
-- Step synth: its status line, Import details, and help.
+- Step synth: Notes and Effects, its status line, Import details, and help.
 
 Each board renders only its body below that row. When the lower panel is
 folded, it leaves no strip. The Mix view of the score has its own Arrange and
@@ -183,7 +183,7 @@ as the stand-alone packed files of the library do: the predictor starts from
 the header word, and the audio ends at the last complete opcode, also when the
 header declares a longer duration.
 
-When the user selects Listen sequence or Save sequence,
+When the user selects Listen or Save sound,
 `Session::step_synth_pcm` reads the source and renders synchronously. The
 frontend then requests the PCM preview or the WAV save workflow. Save registers
 the result in Step synth at the draft BPM and selects it.
@@ -195,7 +195,14 @@ palette audio, the board offers Import details.
 
 Pattern save and load use `Session::save_pattern` and `Session::load_pattern`.
 A load replaces only the four-bar draft. The source path and the viewed bar do
-not change. Clear bar clears only the sixteen steps of the viewed bar. The 25
+not change. Clear bar clears only the sixteen steps of the viewed bar.
+`step_synth::Editor` keeps the board's undo history: each pointer gesture,
+bar action, or Randomise that changes the notes or the length is one step.
+`src/ui/input.rs` sends Ctrl+Z and Ctrl+Y to it while the pointer or the
+focus is in the board or its toolbar, and to the song history elsewhere.
+Input ownership uses the visible interaction area and the layer, so a floating
+window over the board keeps its own input. The L key runs
+`Command::StepSynthListen` while the board shows. The 25
 visible pitch rows do not limit the serialized note range of -48 through +48.
 
 `synth::render` plays `StepSynthState::notes`. Each note continues through its

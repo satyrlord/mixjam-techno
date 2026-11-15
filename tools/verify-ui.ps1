@@ -94,7 +94,7 @@ for index, (group, name, frequency, bars) in enumerate(definitions):
     samples.append(dict(id=1000000 + index, name=name, group_name=group,
                         path=str(path), source_bpm=140, origin=None))
 
-# A Step synth sequence saved with its pattern beside it, as Save sequence
+# A Step synth sound saved with its pattern beside it, as Save sound
 # keeps it. The score draws its clips as notes.
 step_notes = {0: 0, 3: 3, 6: 7, 8: 12, 10: 10, 12: 7, 14: 5}
 step_folder = sounds / 'Step synth'

@@ -49,6 +49,8 @@ pub(in super::super) struct StepSynthBoard {
     /// The grid's view: octave, scale, and the selected steps.
     pub(in super::super) grid: step_synth::Editor,
     pub(in super::super) listening: Option<StepSynthAudition>,
+    /// The toolbar's rectangle and layer, for the board's keyboard shortcuts.
+    pub(in super::super) toolbar: Option<(Rect, egui::LayerId)>,
 }
 
 /// Timing and identity of the rendered preview, independent of later draft edits.
@@ -228,7 +230,7 @@ impl MixJamApp {
                     message: self.step_synth.feedback.message.as_deref(),
                     error: self.step_synth.feedback.error,
                 },
-                self.step_synth.effects_expanded,
+                &mut self.step_synth.effects_expanded,
             );
             if matches!(action, step_synth::Action::Details) {
                 self.sample_import.details_open = true;
@@ -248,6 +250,7 @@ impl MixJamApp {
                 }
             });
             let area = ui.min_rect();
+            self.step_synth.toolbar = Some((area, ui.layer_id()));
             ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
                 node.set_role(egui::accesskit::Role::Toolbar);
                 node.set_label("Step synth");
@@ -292,19 +295,10 @@ impl MixJamApp {
     /// The Step synth board of the lower panel, and what its controls ask for.
     fn step_synth_board(&mut self, ui: &mut egui::Ui) {
         let (name, available, missing, explicit_file) = self.step_synth_source();
-        // The step Listen sequence is playing, while its preview lasts.
-        if self.step_synth.listening.as_ref().is_some_and(|heard| {
-            !heard.is_current(
-                self.session.is_previewing(),
-                self.session.preview_revision(),
-            )
-        }) {
-            self.step_synth.listening = None;
-        }
-        let playing = self.step_synth.listening.as_ref().map(|heard| {
-            ui.ctx().request_repaint();
-            heard.step(heard.start.elapsed())
-        });
+        let playing = self
+            .step_synth_playing()
+            .inspect(|_| ui.ctx().request_repaint());
+        let icons = self.icons(ui.ctx());
         let action = step_synth::show(
             ui,
             step_synth::Source {
@@ -315,9 +309,10 @@ impl MixJamApp {
             },
             &mut self.step_synth.state,
             &mut self.step_synth.bar,
-            &mut self.step_synth.effects_expanded,
+            self.step_synth.effects_expanded,
             &mut self.step_synth.grid,
             playing,
+            icons.as_deref(),
         );
         match action {
             step_synth::Action::ChooseSource => self.ask_path(FileRequest::SynthSource),
@@ -325,34 +320,15 @@ impl MixJamApp {
                 self.step_synth.file = None;
                 self.step_synth.feedback = StepSynthFeedback::default();
             }
-            step_synth::Action::Listen => {
-                match self.step_synth_pcm() {
-                    Ok(pcm) => {
-                        let previous = self.session.preview_revision();
-                        self.play_pcm(pcm, "Listening to Step synth sequence.");
-                        let state = &self.step_synth.state;
-                        self.step_synth.listening = (self.session.is_previewing()
-                            && self.session.preview_revision() != previous)
-                            .then(|| StepSynthAudition {
-                                start: std::time::Instant::now(),
-                                bpm: state.bpm,
-                                length: state.length,
-                                swing: state.swing,
-                                preview_revision: self.session.preview_revision(),
-                            });
-                    }
-                    Err(error) => self.error(error),
-                }
-                self.step_synth_notice();
-            }
-            step_synth::Action::SaveSequence => match self.step_synth_pcm() {
+            step_synth::Action::Listen | step_synth::Action::Stop => self.step_synth_listen(),
+            step_synth::Action::SaveSound => match self.step_synth_pcm() {
                 Ok(pcm) => {
                     self.step_synth.feedback.message =
-                        Some("Choose a WAV path to save the sequence.".into());
+                        Some("Choose a WAV path to save the sound.".into());
                     self.step_synth.feedback.error = false;
                     self.save_pcm(
                         pcm,
-                        "Step synth sequence",
+                        "Step synth sound",
                         "Step synth",
                         self.step_synth.state.bpm,
                     );
@@ -367,6 +343,73 @@ impl MixJamApp {
             step_synth::Action::Details => self.sample_import.details_open = true,
             step_synth::Action::None => {}
         }
+    }
+
+    /// The pattern step Listen is playing, while its preview lasts.
+    fn step_synth_playing(&mut self) -> Option<usize> {
+        if self.step_synth.listening.as_ref().is_some_and(|heard| {
+            !heard.is_current(
+                self.session.is_previewing(),
+                self.session.preview_revision(),
+            )
+        }) {
+            self.step_synth.listening = None;
+        }
+        self.step_synth
+            .listening
+            .as_ref()
+            .map(|heard| heard.step(heard.start.elapsed()))
+    }
+
+    /// Take back the Step synth board's last note edit, or with `redo` put
+    /// it back. The board's undo is apart from the song's.
+    pub(in super::super) fn step_synth_undo(&mut self, redo: bool) {
+        let feedback = &mut self.step_synth.feedback;
+        feedback.error = false;
+        if self.step_synth.grid.can_undo(redo) {
+            self.step_synth.grid.undo(&mut self.step_synth.state, redo);
+            feedback.message = None;
+        } else {
+            feedback.message = Some(
+                if redo {
+                    "No Step synth edit to redo."
+                } else {
+                    "No Step synth edit to undo."
+                }
+                .into(),
+            );
+        }
+    }
+
+    /// Listen to the Step synth pattern, or stop it while it plays. The
+    /// board's Listen key and the L key both run it.
+    pub(in super::super) fn step_synth_listen(&mut self) {
+        if self.step_synth_playing().is_some() {
+            // Pause keeps the song's position, as stopping a preview should.
+            self.pause();
+            self.step_synth.listening = None;
+            self.step_synth.feedback.message = Some("Preview stopped.".into());
+            self.step_synth.feedback.error = false;
+            return;
+        }
+        match self.step_synth_pcm() {
+            Ok(pcm) => {
+                let previous = self.session.preview_revision();
+                self.play_pcm(pcm, "Listening to the Step synth pattern.");
+                let state = &self.step_synth.state;
+                self.step_synth.listening = (self.session.is_previewing()
+                    && self.session.preview_revision() != previous)
+                    .then(|| StepSynthAudition {
+                        start: std::time::Instant::now(),
+                        bpm: state.bpm,
+                        length: state.length,
+                        swing: state.swing,
+                        preview_revision: self.session.preview_revision(),
+                    });
+            }
+            Err(error) => self.error(error),
+        }
+        self.step_synth_notice();
     }
 
     /// The Mixer's toolbar: Export tracks, which writes each track and FX

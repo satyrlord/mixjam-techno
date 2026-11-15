@@ -286,7 +286,7 @@ impl MixJamApp {
                     group: "Step synth",
                     stretch: None,
                     ..
-                } => Some("Sequence save cancelled."),
+                } => Some("Sound save cancelled."),
                 _ => None,
             };
             if let Some(message) = step_message {
@@ -387,7 +387,7 @@ impl MixJamApp {
                     }
                     if group == "Step synth" && stretch.is_none() {
                         self.step_synth.feedback.message =
-                            Some(format!("Cannot save the sequence: {error}"));
+                            Some(format!("Cannot save the sound: {error}"));
                         self.step_synth.feedback.error = true;
                     }
                     self.error(error);

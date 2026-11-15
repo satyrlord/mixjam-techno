@@ -42,10 +42,11 @@ const RENAMED: &[(&str, &str)] = &[
     ),
     // Phase 6c: the Sounds panel's count replaces the Sounds module's.
     ("label\t4 sounds", "label\t4 of 4"),
-    // Phase 10: the Step synth pane switch no longer shares the rail's name.
+    // Phase 10: the Step synth pane switch no longer shares the rail's name;
+    // Notes and Effects in the top row replace it.
     (
         "label\tEffects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
-        "label\tSequence effects replaces the note grid with the effects form. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
+        "label\tNotes and Effects, at the left of the top row, switch between the note grid and the pattern effects. Load and Save, under Pattern, keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.",
     ),
     // The step model: Length replaces the Active bar switches and Gate the
     // 1/16 cut (owner decision 1, 2026-11-15).
@@ -56,11 +57,11 @@ const RENAMED: &[(&str, &str)] = &[
     ("checkbox\tActive 4", "slider\tLength"),
     (
         "label\tChoose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.",
-        "label\tChoose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the pattern. Save sequence writes a WAV to Step synth at the sequence tempo.",
+        "label\tFile… chooses a WAV or PXD source file, and Palette uses the selected palette sound or clip. Listen plays the pattern and Stop ends it; L does the same while the board shows. Save sound writes a WAV to Step synth at the pattern's tempo.",
     ),
     (
         "label\tView bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.",
-        "label\tThe grid shows four, two, or one bar, as many as the board's width allows; the bar buttons bring a bar into view. Click a cell to place a note and click a note to clear it. Drag a note's last step sideways to hold it longer. Shift-click a note to accent it and Alt-click it to slide into the next note, or use the Accent and Slide lanes. Drag on the Velocity lane to set levels. Drag along the step ruler to select steps; lane edits then apply to all of them. Length sets how many steps the pattern repeats over; drag its end marker on the ruler. The steps after it keep their notes. Copy bar and Clear bar act on the viewed bar, the one picked last.",
+        "label\tThe grid shows four, two, or one bar, as many as the board's width allows; the bar buttons bring a bar into view. Click a cell to place a note and click a note to clear it. Drag a note's last step sideways to hold it longer. Shift-click a note to accent it and Alt-click it to slide into the next note, or use the Accent and Slide lanes. Drag on the Velocity lane to set levels. Drag along the step ruler to select steps; lane edits then apply to all of them. Length sets how many steps the pattern repeats over; drag its end marker on the ruler. The steps after it keep their notes. ×2 and ÷2 double and halve it. Copy to copies the viewed bar, the one picked last, onto the next bar, and Clear bar empties it. With the pointer over the board, Ctrl+Z takes back the last note edit, copy, clear, or Randomise, and Ctrl+Y puts it back; elsewhere they act on the song.",
     ),
     (
         "label\t1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
@@ -68,12 +69,17 @@ const RENAMED: &[(&str, &str)] = &[
     ),
     (
         "label\tEach of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.",
-        "label\tThe pattern has four bars of sixteen steps. The grid shows 25 pitch rows, +12 to -12 semitones around the octave in view, and A 0 keeps the source pitch. The - and + buttons beside the step ruler, or Page Up and Page Down, shift the rows by up to three octaves; a coral edge marks a note above or below them. Scale and its root shade the rows outside the scale but never block a pitch. Randomise, under Scale, writes a new line in the scale over the pattern's length.",
+        "label\tThe pattern has four bars of sixteen steps. The grid shows 25 pitch rows, +12 to -12 semitones around the octave in view, and A 0 keeps the source pitch. The − and + keys beside the step ruler, with the octave between them, or Page Up and Page Down, shift the rows by up to three octaves; a coral edge marks a note above or below them. Scale and its root shade the rows outside the scale but never block a pitch. Randomise, under Scale, writes a new line in the scale over the pattern's length.",
     ),
     (
         "label\tClick a note to set it. Click it again to clear it.",
         "label\tClick places or clears a note. Drag a note's end to hold it.",
     ),
+    // One noun each: the pattern is the notes, the sound the WAV. Listen
+    // plays and stops the pattern from the grid's top row (owner,
+    // 2026-11-15).
+    ("button\tListen sequence", "button\tListen"),
+    ("button\tSave sequence", "button\tSave sound"),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {

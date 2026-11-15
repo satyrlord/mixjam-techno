@@ -98,6 +98,13 @@ impl MixJamApp {
     }
 
     pub(super) fn keyboard(&mut self, ctx: &egui::Context) {
+        // The Step synth board, if it showed last frame.
+        let synth_board = self
+            .step_synth
+            .grid
+            .take_board()
+            .zip(self.step_synth.toolbar.take())
+            .map(|(body, (toolbar, layer))| (body.union(toolbar), layer));
         // The command list owns the keys while it is open.
         if self.commands.is_some() {
             return;
@@ -162,12 +169,47 @@ impl MixJamApp {
         if free && ctx.input(|i| i.modifiers.shift) && pressed_once(egui::Key::F10) {
             self.clip_menu.by_key = true;
         }
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z)) {
-            let redo = ctx.input(|i| i.modifiers.shift);
-            self.history_step(redo);
+        // The Step synth board keeps its own undo: Ctrl+Z over it, or with
+        // focus in it, acts on its notes, and elsewhere on the song.
+        let focus_in_synth = synth_board.is_some_and(|(board, layer)| {
+            focused
+                .and_then(|id| ctx.read_response(id))
+                .is_some_and(|response| {
+                    response.layer_id == layer && board.intersects(response.interact_rect)
+                })
+        });
+        let in_synth = focus_in_synth
+            || synth_board.is_some_and(|(board, layer)| {
+                ctx.pointer_hover_pos()
+                    .is_some_and(|at| board.contains(at) && ctx.layer_id_at(at) == Some(layer))
+            });
+        // L plays or stops the pattern while the board shows. The board's
+        // grid, ruler, and lanes keep focus after a click and use no letters.
+        if synth_board.is_some()
+            && (free || focus_in_synth)
+            && ctx.input(|i| i.modifiers.is_none())
+            && !egui::Popup::is_any_open(ctx)
+            && pressed_once(egui::Key::L)
+        {
+            self.run_command(commands::Command::StepSynthListen, ctx);
         }
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Y)) {
-            self.run_command(commands::Command::Redo, ctx);
+        let undo = ctx.input(|i| {
+            if !i.modifiers.command {
+                None
+            } else if i.key_pressed(egui::Key::Z) {
+                Some(i.modifiers.shift)
+            } else if i.key_pressed(egui::Key::Y) {
+                Some(true)
+            } else {
+                None
+            }
+        });
+        if let Some(redo) = undo {
+            if in_synth {
+                self.step_synth_undo(redo);
+            } else {
+                self.history_step(redo);
+            }
         }
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::S) {
             self.run_command(

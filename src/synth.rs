@@ -345,7 +345,7 @@ fn gcd(a: usize, b: usize) -> usize {
     if b == 0 { a } else { gcd(b, a % b) }
 }
 
-/// Where Save sequence keeps a sequence's pattern: beside its WAV, as
+/// Where Save sound keeps a sound's pattern: beside its WAV, as
 /// `Name.pattern.json` for `Name.wav`, in the format Load pattern reads. The
 /// arrangement draws a clip of that sound as notes.
 pub fn pattern_beside(wav: &std::path::Path) -> std::path::PathBuf {

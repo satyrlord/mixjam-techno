@@ -69,7 +69,7 @@ clip.
 Each clip shows the waveform of the part of its sound that it plays, reversed
 and faded as you hear it. A clip of a Step synth sequence shows its notes
 instead. Each note is a short bar, and a higher note is higher in the clip. A
-note bar continues through the ties and the gate of the note. Save sequence
+note bar continues through the ties and the gate of the note. Save sound
 keeps the pattern beside the WAV for this. A Step synth sound without a
 pattern file shows its waveform.
 

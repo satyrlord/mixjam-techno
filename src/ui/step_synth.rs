@@ -19,14 +19,18 @@ pub(super) enum Action {
     ChooseSource,
     PaletteSource,
     Listen,
-    SaveSequence,
+    Stop,
+    SaveSound,
     SavePattern,
     LoadPattern,
     Details,
 }
 
-/// The board's editing view: what the grid shows and the selected steps.
-/// None of it is saved with the pattern.
+/// The pattern's notes and length: what the board's undo restores.
+type Notes = (Vec<Step>, u8);
+
+/// The board's editing view: what the grid shows, the selected steps, and
+/// the board's own undo. None of it is saved with the pattern.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Editor {
     /// Octaves the 25 pitch rows are shifted by, from -3 to 3.
@@ -39,6 +43,72 @@ pub(super) struct Editor {
     /// The step shared by the pitch cursor, ruler, and value lanes.
     step: usize,
     seed: u64,
+    /// The last observed notes, and those before the edit in
+    /// progress. A gesture ends when the pointer is released.
+    seen: Option<Notes>,
+    gesture: Option<Notes>,
+    /// Notes to undo to and to redo to, oldest first.
+    history: Vec<Notes>,
+    future: Vec<Notes>,
+    /// The board's rectangle last frame, where Ctrl+Z undoes its edits.
+    board: Option<Rect>,
+}
+
+impl Editor {
+    /// Record an edit made since the last observation. Every change while a
+    /// pointer is held is one undo step, as is each change without one.
+    fn track(&mut self, state: &StepSynthState, held: bool) {
+        let changed = self
+            .seen
+            .as_ref()
+            .is_some_and(|(steps, length)| *steps != state.steps || *length != state.length);
+        if changed && self.gesture.is_none() {
+            self.gesture = self.seen.take();
+        }
+        if changed || self.seen.is_none() {
+            self.seen = Some((state.steps.clone(), state.length));
+        }
+        if !held && let Some(before) = self.gesture.take() {
+            self.history.push(before);
+            self.future.clear();
+        }
+    }
+
+    /// The board's rectangle if it showed since the last call. The keyboard
+    /// takes it each frame before the board draws.
+    pub(super) fn take_board(&mut self) -> Option<Rect> {
+        self.board.take()
+    }
+
+    /// True when Ctrl+Z (or, with `redo`, Ctrl+Y) has an edit to restore.
+    pub(super) fn can_undo(&self, redo: bool) -> bool {
+        if redo {
+            !self.future.is_empty()
+        } else {
+            !self.history.is_empty() || self.gesture.is_some()
+        }
+    }
+
+    /// Take back the board's last edit, or with `redo` put it back.
+    pub(super) fn undo(&mut self, state: &mut StepSynthState, redo: bool) {
+        // An edit not yet recorded is the newest one.
+        if let Some(before) = self.gesture.take() {
+            self.history.push(before);
+            self.future.clear();
+        }
+        let (from, to) = if redo {
+            (&mut self.future, &mut self.history)
+        } else {
+            (&mut self.history, &mut self.future)
+        };
+        let Some((steps, length)) = from.pop() else {
+            return;
+        };
+        to.push((std::mem::replace(&mut state.steps, steps), state.length));
+        state.length = length;
+        self.seen = Some((state.steps.clone(), state.length));
+        self.selection = None;
+    }
 }
 
 /// The scale that shades the pitch rows. Notes outside it stay playable.
@@ -106,7 +176,7 @@ const BOARD_INSET: f32 = 2.0;
 pub(super) const MODULE_HEIGHT: f32 = 512.0 + 2.0 * BOARD_INSET + 64.0;
 /// The settings column's width, and the height of its content.
 const SETTINGS_WIDTH: f32 = 232.0;
-const SETTINGS_HEIGHT: f32 = 726.0;
+const SETTINGS_HEIGHT: f32 = 616.0;
 /// Steps a pattern stores, and the steps in a bar.
 const STEPS: usize = 64;
 const BAR: usize = 16;
@@ -121,22 +191,34 @@ const ROWS: i8 = 12;
 const GUTTER: f32 = 50.0;
 /// The Accent, Slide, and Velocity lanes together.
 const LANES_HEIGHT: f32 = 94.0;
+/// Listen's width with its text, and the grid width below which it shows
+/// its icon alone.
+const LISTEN_WIDTH: f32 = 86.0;
+const LISTEN_TEXT_WIDTH: f32 = 620.0;
 
 /// Show the Step synth board in the space left in `ui`. The board is a tab
 /// panel named Step synth, so agents can scope to it by that name.
-/// `playing` is the pattern step Listen sequence is playing.
+/// `playing` is the pattern step Listen is playing. `icons` draws the
+/// pattern file keys' icons; without them the keys show text only.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     source: Source<'_>,
     state: &mut StepSynthState,
     view_bar: &mut usize,
-    show_effects: &mut bool,
+    show_effects: bool,
     editor: &mut Editor,
     playing: Option<usize>,
+    icons: Option<&RailIcons>,
 ) -> Action {
     let ctx = ui.ctx().clone();
     let area = ui.available_rect_before_wrap();
     ui.advance_cursor_after_rect(area);
+    editor.board = Some(area);
+    // Adopt external changes before drawing, but close a pointer gesture only
+    // after this frame's controls have made their final edits.
+    editor.track(state, true);
+    let available = source.available && !(source.missing && !source.explicit_file);
     let mut board = ui.new_child(
         egui::UiBuilder::new()
             .id_salt("step-synth-board")
@@ -168,11 +250,11 @@ pub(super) fn show(
         settings_rect.shrink(6.0),
         source,
         state,
-        show_effects,
         editor,
+        icons,
     );
-    if *show_effects {
-        effects_pane(&mut board, grid_rect.shrink(8.0), state);
+    let listen = if show_effects {
+        effects_pane(&mut board, grid_rect.shrink(8.0), state, available, playing)
     } else {
         grid_column(
             &mut board,
@@ -181,9 +263,193 @@ pub(super) fn show(
             view_bar,
             editor,
             playing,
+            available,
+        )
+    };
+    editor.track(state, ctx.input(|input| input.pointer.any_down()));
+    if matches!(action, Action::None) {
+        listen
+    } else {
+        action
+    }
+}
+
+/// What a board key shows before its text.
+#[derive(Clone, Copy)]
+enum Glyph<'a> {
+    None,
+    Rail(&'a RailIcons, RailIcon),
+    Play,
+    Stop,
+}
+
+/// A board key. `name` is what assistive technology and agents read; a
+/// choice key has `selected`, which lights it with the board's accent.
+/// `id` keeps a key's focus when its name changes.
+struct Key<'a> {
+    id: &'a str,
+    name: &'a str,
+    text: &'a str,
+    glyph: Glyph<'a>,
+    enabled: bool,
+    primary: bool,
+    selected: Option<bool>,
+}
+
+impl<'a> Key<'a> {
+    fn new(name: &'a str, text: &'a str) -> Self {
+        Self {
+            id: name,
+            name,
+            text,
+            glyph: Glyph::None,
+            enabled: true,
+            primary: false,
+            selected: None,
+        }
+    }
+}
+
+fn key(ui: &mut egui::Ui, rect: Rect, spec: Key<'_>) -> Response {
+    let role = if spec.primary {
+        controls::ButtonRole::Primary
+    } else {
+        controls::ButtonRole::Secondary
+    };
+    let response = controls::button_at(ui, rect, spec.id, "", role, spec.enabled);
+    let down = response.is_pointer_button_down_on();
+    // The face sits where the shared key paints it.
+    let face = rect
+        .shrink(2.0)
+        .translate(Vec2::new(0.0, if down { 1.0 } else { -1.0 }));
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    let accent = controls::Palette::Olive.accent();
+    if spec.selected == Some(true) {
+        painter.rect_filled(face, 3.0, accent.gamma_multiply(0.22));
+        painter.rect_stroke(
+            face,
+            3.0,
+            Stroke::new(1.5_f32, accent),
+            egui::StrokeKind::Inside,
         );
     }
-    action
+    let color = if !response.enabled() {
+        roles().disabled_text
+    } else if spec.primary {
+        roles().ink
+    } else {
+        roles().legend
+    };
+    let galley = (!spec.text.is_empty())
+        .then(|| painter.layout_no_wrap(spec.text.to_owned(), FontId::proportional(13.0), color));
+    let glyph_width = match spec.glyph {
+        Glyph::None => 0.0,
+        Glyph::Rail(icons, _) => icons.icon_rect(ui.ctx(), Pos2::ZERO).width(),
+        Glyph::Play | Glyph::Stop => 10.0,
+    };
+    let text_width = galley.as_ref().map_or(0.0, |galley| galley.size().x);
+    let gap = if glyph_width > 0.0 && text_width > 0.0 {
+        6.0
+    } else {
+        0.0
+    };
+    let ppp = ui.ctx().pixels_per_point();
+    let snap = |point: Pos2| egui::emath::GuiRounding::round_to_pixels(point, ppp);
+    let left = face.center().x - (glyph_width + gap + text_width) / 2.0;
+    let middle = face.center().y;
+    let glyph_center = snap(Pos2::new(left + glyph_width / 2.0, middle));
+    match spec.glyph {
+        Glyph::None => {}
+        Glyph::Rail(icons, icon) => {
+            painter.image(
+                icons.texture_id(icon),
+                icons.icon_rect(ui.ctx(), glyph_center),
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                color,
+            );
+        }
+        Glyph::Play => {
+            painter.add(egui::Shape::convex_polygon(
+                [
+                    Vec2::new(-4.0, -5.0),
+                    Vec2::new(-4.0, 5.0),
+                    Vec2::new(5.0, 0.0),
+                ]
+                .map(|offset| snap(glyph_center + offset))
+                .to_vec(),
+                color,
+                Stroke::NONE,
+            ));
+        }
+        Glyph::Stop => {
+            painter.rect_filled(
+                Rect::from_center_size(glyph_center, Vec2::splat(9.0)),
+                1.0,
+                color,
+            );
+        }
+    }
+    if let Some(galley) = galley {
+        let at = snap(Pos2::new(
+            left + glyph_width + gap,
+            middle - galley.size().y / 2.0,
+        ));
+        painter.galley(at, galley, color);
+    }
+    let (name, enabled) = (spec.name, response.enabled());
+    response.widget_info(|| match spec.selected {
+        Some(selected) => {
+            egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, enabled, selected, name)
+        }
+        None => egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name),
+    });
+    response
+}
+
+/// Listen, which plays the pattern, or Stop while it plays. It leads the
+/// grid's top row in both views. Narrow boards show its icon alone.
+fn listen_key(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    available: bool,
+    listening: bool,
+    with_text: bool,
+) -> Action {
+    let (name, text, glyph, hint) = if listening {
+        (
+            "Stop listening",
+            "Stop",
+            Glyph::Stop,
+            "Stop listening. L plays or stops the pattern.",
+        )
+    } else {
+        (
+            "Listen",
+            "Listen",
+            Glyph::Play,
+            "Listen to the pattern. L plays or stops it.",
+        )
+    };
+    let response = key(
+        ui,
+        rect,
+        Key {
+            id: "listen",
+            glyph,
+            enabled: available || listening,
+            ..Key::new(name, if with_text { text } else { "" })
+        },
+    );
+    let response = if response.enabled() {
+        response.hover_hint(hint)
+    } else {
+        response.disabled_hint("Choose an available source file or palette sound.")
+    };
+    match (response.clicked(), listening) {
+        (true, false) => Action::Listen,
+        (true, true) => Action::Stop,
+        _ => Action::None,
+    }
 }
 
 /// The settings column: source, tempo, voice, scale, and the actions. It
@@ -193,8 +459,8 @@ fn settings(
     rect: Rect,
     source: Source<'_>,
     state: &mut StepSynthState,
-    show_effects: &mut bool,
     editor: &mut Editor,
+    icons: Option<&RailIcons>,
 ) -> Action {
     let mut action = Action::None;
     let mut column = ui.new_child(
@@ -238,30 +504,96 @@ fn settings(
                 node.set_value(source.name);
             });
             label.hover_hint(source.name);
-            left_text(
-                ui,
-                point(2.0, 64.0),
-                if source.explicit_file {
-                    "File source"
-                } else {
-                    "Palette sound"
-                },
-                11.0,
-                roles().legend.gamma_multiply(0.8),
-            );
-            for (y, text, next) in [
-                (74.0, "Choose source file", Action::ChooseSource),
-                (108.0, "Use palette sound", Action::PaletteSource),
+            // Where the source comes from: the palette's selected sound, or
+            // a file. File… opens the chooser each time.
+            for (x, text, name, selected, next, hint) in [
+                (
+                    0.0,
+                    "Palette",
+                    "Use palette sound",
+                    !source.explicit_file,
+                    Action::PaletteSource,
+                    "Play the sound selected in the palette.",
+                ),
+                (
+                    half + 6.0,
+                    "File…",
+                    "Choose source file",
+                    source.explicit_file,
+                    Action::ChooseSource,
+                    "Choose a WAV file to play instead of the palette sound.",
+                ),
             ] {
-                if button(ui, rect(0.0, y, width, 28.0), text, true, false).clicked() {
+                if key(
+                    ui,
+                    rect(x, 60.0, half, 28.0),
+                    Key {
+                        selected: Some(selected),
+                        ..Key::new(name, text)
+                    },
+                )
+                .hover_hint(hint)
+                .clicked()
+                {
                     action = next;
                 }
             }
 
-            controls::section(ui, rect(0.0, 316.0, width, 20.0), "Tempo");
-            left_text(ui, point(2.0, 354.0), "BPM", 13.0, roles().legend);
+            controls::section(ui, rect(0.0, 102.0, width, 20.0), "Pattern");
+            for (x, text, name, icon, next, hint) in [
+                (
+                    0.0,
+                    "Load",
+                    "Load pattern",
+                    RailIcon::Open,
+                    Action::LoadPattern,
+                    "Load an editable pattern from a JSON file.",
+                ),
+                (
+                    half + 6.0,
+                    "Save",
+                    "Save pattern",
+                    RailIcon::Save,
+                    Action::SavePattern,
+                    "Save the editable pattern as a JSON file.",
+                ),
+            ] {
+                if key(
+                    ui,
+                    rect(x, 128.0, half, 28.0),
+                    Key {
+                        glyph: icons.map_or(Glyph::None, |icons| Glyph::Rail(icons, icon)),
+                        ..Key::new(name, text)
+                    },
+                )
+                .hover_hint(hint)
+                .clicked()
+                {
+                    action = next;
+                }
+            }
+            let response = key(
+                ui,
+                rect(0.0, 162.0, width, 28.0),
+                Key {
+                    enabled: available,
+                    primary: true,
+                    ..Key::new("Save sound", "Save sound")
+                },
+            );
+            let response = if available {
+                response.hover_hint("Render the pattern to a WAV file and add it to Step synth.")
+            } else {
+                response.disabled_hint("Choose an available source file or palette sound.")
+            };
+            if response.clicked() {
+                action = Action::SaveSound;
+            }
+
+            controls::section(ui, rect(0.0, 206.0, width, 20.0), "Tempo");
+            left_text(ui, point(2.0, 244.0), "BPM", 13.0, roles().legend);
             ui.scope_builder(
-                egui::UiBuilder::new().max_rect(rect(44.0, 342.0, width - 44.0, 24.0)),
+                egui::UiBuilder::new().max_rect(rect(44.0, 232.0, width - 44.0, 24.0)),
                 |ui| {
                     form_style(ui);
                     name_control(
@@ -275,7 +607,7 @@ fn settings(
             let mut swing = f64::from(state.swing);
             dial(
                 ui,
-                [point(left, 382.0), point(left, 416.0), point(left, 450.0)],
+                [point(left, 272.0), point(left, 306.0), point(left, 340.0)],
                 &mut swing,
                 Dial {
                     name: "Swing",
@@ -294,9 +626,9 @@ fn settings(
             dial(
                 ui,
                 [
-                    point(right, 382.0),
-                    point(right, 416.0),
-                    point(right, 450.0),
+                    point(right, 272.0),
+                    point(right, 306.0),
+                    point(right, 340.0),
                 ],
                 &mut gate,
                 Dial {
@@ -313,10 +645,10 @@ fn settings(
             );
             state.gate = gate.round() as u8;
 
-            controls::section(ui, rect(0.0, 474.0, width, 20.0), "Voice");
+            controls::section(ui, rect(0.0, 364.0, width, 20.0), "Voice");
             dial(
                 ui,
-                [point(left, 504.0), point(left, 538.0), point(left, 572.0)],
+                [point(left, 394.0), point(left, 428.0), point(left, 462.0)],
                 &mut state.accent_db,
                 Dial {
                     name: "Accent",
@@ -332,9 +664,9 @@ fn settings(
             dial(
                 ui,
                 [
-                    point(right, 504.0),
-                    point(right, 538.0),
-                    point(right, 572.0),
+                    point(right, 394.0),
+                    point(right, 428.0),
+                    point(right, 462.0),
                 ],
                 &mut state.slide_ms,
                 Dial {
@@ -350,15 +682,15 @@ fn settings(
             );
             toggle(
                 ui,
-                point(14.0, 606.0),
-                point(38.0, 606.0),
+                point(14.0, 496.0),
+                point(38.0, 496.0),
                 "Loop source",
                 &mut state.loop_source,
             );
 
-            controls::section(ui, rect(0.0, 630.0, width, 20.0), "Scale");
+            controls::section(ui, rect(0.0, 520.0, width, 20.0), "Scale");
             ui.scope_builder(
-                egui::UiBuilder::new().max_rect(rect(0.0, 656.0, width, 26.0)),
+                egui::UiBuilder::new().max_rect(rect(0.0, 546.0, width, 26.0)),
                 |ui| {
                     form_style(ui);
                     ui.horizontal(|ui| {
@@ -388,100 +720,36 @@ fn settings(
                     });
                 },
             );
-            if button(ui, rect(0.0, 690.0, width, 28.0), "Randomise", true, false)
-                .hover_hint("Write a new line in the scale over the pattern's length.")
+            if button(ui, rect(0.0, 580.0, width, 28.0), "Randomise", true, false)
+                .hover_hint(
+                    "Write a new line in the scale over the pattern's length. \
+                     Ctrl+Z over the board takes it back.",
+                )
                 .clicked()
             {
                 randomise(state, editor);
-            }
-
-            controls::section(ui, rect(0.0, 146.0, width, 20.0), "Pattern");
-            for (x, y, w, text, next, enabled, primary) in [
-                (
-                    0.0,
-                    172.0,
-                    width,
-                    "Listen sequence",
-                    Action::Listen,
-                    available,
-                    false,
-                ),
-                (
-                    0.0,
-                    206.0,
-                    width,
-                    "Save sequence",
-                    Action::SaveSequence,
-                    available,
-                    true,
-                ),
-                (
-                    0.0,
-                    240.0,
-                    half,
-                    "Save pattern",
-                    Action::SavePattern,
-                    true,
-                    false,
-                ),
-                (
-                    half + 6.0,
-                    240.0,
-                    half,
-                    "Load pattern",
-                    Action::LoadPattern,
-                    true,
-                    false,
-                ),
-            ] {
-                let response = button(ui, rect(x, y, w, 28.0), text, enabled, primary);
-                let hint = match text {
-                    "Listen sequence" | "Save sequence" if !available => {
-                        "Choose an available source file or palette sound."
-                    }
-                    "Save sequence" => "Save a WAV and add it to Step synth.",
-                    "Save pattern" => "Save the editable pattern as JSON.",
-                    "Load pattern" => "Load an editable JSON pattern.",
-                    _ => "Listen to the pattern.",
-                };
-                let response = if enabled {
-                    response.hover_hint(hint)
-                } else {
-                    response.disabled_hint(hint)
-                };
-                if response.clicked() {
-                    action = next;
-                }
-            }
-            if keyed_button(
-                ui,
-                rect(0.0, 274.0, width, 28.0),
-                "pane",
-                if *show_effects {
-                    "Note grid"
-                } else {
-                    "Sequence effects"
-                },
-                true,
-                false,
-            )
-            .clicked()
-            {
-                *show_effects = !*show_effects;
             }
         });
     action
 }
 
-fn effects_pane(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState) {
-    left_text(
+/// The pattern effects in place of the note grid. Listen keeps its place at
+/// the top, so the effects can be heard as they change.
+fn effects_pane(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    state: &mut StepSynthState,
+    available: bool,
+    playing: Option<usize>,
+) -> Action {
+    let action = listen_key(
         ui,
-        Pos2::new(rect.left() + 4.0, rect.top() + 10.0),
-        "Sequence effects",
-        13.0,
-        roles().legend,
+        Rect::from_min_size(rect.min, Vec2::new(LISTEN_WIDTH, 28.0)),
+        available,
+        playing.is_some(),
+        true,
     );
-    let effects_rect = Rect::from_min_max(rect.min + Vec2::new(0.0, 28.0), rect.max);
+    let effects_rect = Rect::from_min_max(rect.min + Vec2::new(0.0, 36.0), rect.max);
     let mut form = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(effects_rect)
@@ -496,6 +764,7 @@ fn effects_pane(ui: &mut egui::Ui, rect: Rect, state: &mut StepSynthState) {
         .auto_shrink([false, false])
         .max_height(effects_rect.height())
         .show(&mut form, |ui| effects_controls(ui, &mut state.effects));
+    action
 }
 
 /// Where the grid column's steps sit: the first step in view, how many show,
@@ -569,7 +838,8 @@ fn grid_column(
     view_bar: &mut usize,
     editor: &mut Editor,
     playing: Option<usize>,
-) {
+    available: bool,
+) -> Action {
     let grid_width = rect.width() - GUTTER - 10.0;
     let bars = [4, 2, 1]
         .into_iter()
@@ -583,7 +853,7 @@ fn grid_column(
         left: rect.left() + GUTTER,
         width: grid_width / (bars * BAR) as f32,
     };
-    bar_strip(
+    let action = bar_strip(
         ui,
         Rect::from_min_size(rect.min, Vec2::new(rect.width(), 28.0)),
         state,
@@ -591,6 +861,7 @@ fn grid_column(
         bars,
         editor,
         playing,
+        available,
     );
     let ruler = Rect::from_min_max(
         Pos2::new(rect.left(), rect.top() + 36.0),
@@ -625,19 +896,20 @@ fn grid_column(
             controls::Palette::Olive.accent(),
         );
     }
+    // The octave in view between its keys, in the gutter over the rows.
     let octave_y = ruler.center().y;
-    for (x, text, name, change) in [(0.0, "-", "Octave down", -1), (24.0, "+", "Octave up", 1)] {
+    for (x, text, name, change) in [(0.0, "−", "Octave down", -1), (32.0, "+", "Octave up", 1)] {
         let enabled = (-3..=3).contains(&(editor.octave + change));
-        if keyed_button(
+        if key(
             ui,
             Rect::from_min_size(
                 Pos2::new(rect.left() + x, octave_y - 11.0),
-                Vec2::new(22.0, 22.0),
+                Vec2::new(18.0, 22.0),
             ),
-            name,
-            text,
-            enabled,
-            false,
+            Key {
+                enabled,
+                ..Key::new(name, text)
+            },
         )
         .hover_hint(name)
         .clicked()
@@ -645,12 +917,25 @@ fn grid_column(
             editor.octave += change;
         }
     }
+    lettering(
+        ui,
+        Pos2::new(rect.left() + 25.0, octave_y),
+        &if editor.octave == 0 {
+            "0".to_owned()
+        } else {
+            format!("{:+}", editor.octave)
+        },
+        11.0,
+        roles().legend,
+    );
     note_grid(ui, grid, state, view_bar, columns, editor);
     value_lanes(ui, lanes, state, columns, editor);
+    action
 }
 
-/// The bar strip: a button per bar that brings it into view and marks it in
-/// the loop or playing, then Length and the bar actions.
+/// The bar strip: Listen, a key per bar that brings it into view and marks
+/// it in the loop or playing, then Length and the bar actions.
+#[allow(clippy::too_many_arguments)]
 fn bar_strip(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -659,7 +944,18 @@ fn bar_strip(
     bars: usize,
     editor: &mut Editor,
     playing: Option<usize>,
-) {
+    available: bool,
+) -> Action {
+    let with_text = rect.width() >= LISTEN_TEXT_WIDTH;
+    let listen_width = if with_text { LISTEN_WIDTH } else { 36.0 };
+    let action = listen_key(
+        ui,
+        Rect::from_min_size(rect.min, Vec2::new(listen_width, 28.0)),
+        available,
+        playing.is_some(),
+        with_text,
+    );
+    let rect = Rect::from_min_max(rect.min + Vec2::new(listen_width + 12.0, 0.0), rect.max);
     let length = usize::from(state.length);
     for bar in 0..4 {
         let cell = Rect::from_min_size(
@@ -667,19 +963,25 @@ fn bar_strip(
             Vec2::new(36.0, 28.0),
         );
         let in_view = bar / bars == *view_bar / bars;
-        let response = select_button(
+        let name = format!("View bar {}", bar + 1);
+        let response = key(
             ui,
             cell,
-            &format!("{}", bar + 1),
-            &format!("View bar {}", bar + 1),
-            bar == *view_bar,
-        );
+            Key {
+                selected: Some(bar == *view_bar),
+                ..Key::new(&name, &format!("{}", bar + 1))
+            },
+        )
+        .hover_hint(&name);
         if in_view && bar != *view_bar {
-            // The other bars in view keep an outline.
+            // The other bars in view keep a faint outline.
             ui.painter().rect_stroke(
-                cell.shrink(1.0),
+                cell.shrink(2.0).translate(Vec2::new(0.0, -1.0)),
                 3.0,
-                Stroke::new(1.5_f32, controls::Palette::Olive.accent()),
+                Stroke::new(
+                    1.0_f32,
+                    controls::Palette::Olive.accent().gamma_multiply(0.55),
+                ),
                 egui::StrokeKind::Inside,
             );
         }
@@ -717,19 +1019,19 @@ fn bar_strip(
     for (offset, text, name, next) in [
         (
             98.0,
-            "x2",
+            "×2",
             "Double length",
             state.length.saturating_mul(2).min(64),
         ),
-        (136.0, "/2", "Halve length", (state.length / 2).max(1)),
+        (136.0, "÷2", "Halve length", (state.length / 2).max(1)),
     ] {
-        if keyed_button(
+        if key(
             ui,
             Rect::from_min_size(Pos2::new(x + offset, rect.top()), Vec2::new(34.0, 28.0)),
-            name,
-            text,
-            true,
-            false,
+            Key {
+                enabled: next != state.length,
+                ..Key::new(name, text)
+            },
         )
         .hover_hint(name)
         .clicked()
@@ -739,32 +1041,52 @@ fn bar_strip(
     }
     let right = rect.right();
     let first = *view_bar * BAR;
-    if button(
+    let target = *view_bar + 2;
+    let copy = if *view_bar < 3 {
+        format!("Copy to {target}")
+    } else {
+        "Copy bar".to_owned()
+    };
+    let response = key(
         ui,
         Rect::from_min_size(Pos2::new(right - 168.0, rect.top()), Vec2::new(80.0, 28.0)),
-        "Copy bar",
-        *view_bar < 3,
-        false,
-    )
-    .hover_hint("Copy the viewed bar onto the next bar, replacing it.")
-    .clicked()
-    {
+        Key {
+            enabled: *view_bar < 3,
+            ..Key::new("Copy bar", &copy)
+        },
+    );
+    let response = if *view_bar < 3 {
+        response.hover_hint(format!(
+            "Copy this bar onto bar {target}, replacing it. Ctrl+Z over the board takes it back."
+        ))
+    } else {
+        response.disabled_hint("Bar 4 is the last bar, so there is no bar to copy it to.")
+    };
+    if response.clicked() {
         let source = state.steps[first..first + BAR].to_vec();
         state.steps[first + BAR..first + 2 * BAR].copy_from_slice(&source);
     }
-    if button(
+    let empty = state.steps[first..first + BAR]
+        .iter()
+        .all(|step| *step == Step::default());
+    let response = key(
         ui,
         Rect::from_min_size(Pos2::new(right - 82.0, rect.top()), Vec2::new(82.0, 28.0)),
-        "Clear bar",
-        true,
-        false,
-    )
-    .hover_hint("Clear the steps of the viewed bar.")
-    .clicked()
-    {
+        Key {
+            enabled: !empty,
+            ..Key::new("Clear bar", "Clear bar")
+        },
+    );
+    let response = if empty {
+        response.disabled_hint("This bar is already empty.")
+    } else {
+        response.hover_hint("Clear this bar's steps. Ctrl+Z over the board takes it back.")
+    };
+    if response.clicked() {
         state.steps[first..first + BAR].fill(Step::default());
         editor.selection = None;
     }
+    action
 }
 
 /// The pattern length as a value well: drag sideways or scroll to change it,
@@ -1747,28 +2069,60 @@ fn randomise(state: &mut StepSynthState, editor: &mut Editor) {
     editor.selection = None;
 }
 
-/// The board's status line and, for missing audio, Import details. They sit
-/// in the panel's top row, as the Mastering status does, `width` points wide.
+/// The board's Notes and Effects switch, its status line and, for missing
+/// audio, Import details. They sit in the panel's top row, as the Mastering
+/// status does, `width` points wide.
 pub(super) fn toolbar(
     ui: &mut egui::Ui,
     width: f32,
     source: Source<'_>,
     feedback: Feedback<'_>,
-    show_effects: bool,
+    show_effects: &mut bool,
 ) -> Action {
     let missing = source.missing && !source.explicit_file;
     let status = feedback.message.unwrap_or(if missing {
         "Missing audio. Choose a source file or open Import details."
     } else if !source.available {
         "Choose a source file or select a sound in the palette."
-    } else if show_effects {
-        "Adjust sequence effects. Note grid returns to the notes."
+    } else if *show_effects {
+        "Adjust the pattern effects. Notes returns to the grid."
     } else {
         "Click places or clears a note. Drag a note's end to hold it."
     });
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width.max(0.0), 28.0), Sense::hover());
     let mut strip = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     dialog::hardware_style(&mut strip, controls::Palette::Olive);
+    for (x, text, name, effects, hint) in [
+        (
+            0.0,
+            "Notes",
+            "Note grid",
+            false,
+            "Edit the notes in the grid.",
+        ),
+        (
+            74.0,
+            "Effects",
+            "Pattern effects",
+            true,
+            "Shape the pattern's sound with its effects.",
+        ),
+    ] {
+        if key(
+            &mut strip,
+            Rect::from_min_size(rect.min + Vec2::new(x, 0.0), Vec2::new(72.0, 28.0)),
+            Key {
+                selected: Some(*show_effects == effects),
+                ..Key::new(name, text)
+            },
+        )
+        .hover_hint(hint)
+        .clicked()
+        {
+            *show_effects = effects;
+        }
+    }
+    let rect = Rect::from_min_max(rect.min + Vec2::new(154.0, 0.0), rect.max);
     status_footer(&mut strip, rect, status, feedback.error, missing);
     let details = Rect::from_min_size(
         Pos2::new(rect.right() - 130.0, rect.top() + 1.0),
@@ -1873,7 +2227,7 @@ fn toggle(ui: &mut egui::Ui, center: Pos2, label_at: Pos2, name: &str, value: &m
              Off: Plays the source once per note. If it ends before the next note, the remaining interval has no source audio.\n\n\
              Every new note restarts the source, unless the note before it slides into it. \
              Repetition lasts through the note's ties and its gate. \
-             Loop source does not repeat the pattern or extend the sequence."
+             Loop source does not repeat the pattern or lengthen the sound."
         ),
         _ => status,
     };
@@ -1902,35 +2256,6 @@ fn keyed_button(
         },
         enabled,
     )
-}
-fn select_button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    text: &str,
-    name: &str,
-    selected: bool,
-) -> Response {
-    let response = controls::button_at(
-        ui,
-        rect,
-        name,
-        text,
-        if selected {
-            controls::ButtonRole::Primary
-        } else {
-            controls::ButtonRole::Secondary
-        },
-        true,
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(
-            egui::WidgetType::SelectableLabel,
-            response.enabled(),
-            selected,
-            name,
-        )
-    });
-    response.hover_hint(name)
 }
 fn lettering(ui: &egui::Ui, center: Pos2, text: &str, size: f32, color: Color32) {
     let font = FontId::proportional(size);

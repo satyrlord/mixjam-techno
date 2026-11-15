@@ -75,9 +75,10 @@ of the panel.
 
 A settings column 232 points wide holds the sections Source, Pattern, Tempo,
 Voice, and Scale. The column scrolls on its own when the lower panel is short.
-Pattern holds the actions: Listen sequence, Save sequence, Save pattern, and
-Load pattern. The actions are high in the column, so they show without a
-scroll at the usual panel height.
+Pattern holds Load and Save, with the Open and Save rail icons, and the
+primary Save sound. The actions are high in the column, so they show without a
+scroll at the usual panel height. Use one noun for each thing: the pattern is
+the editable notes, and the sound is the rendered WAV.
 
 The grid column fills the remaining width and keeps the height of the panel.
 From the top, it holds the bar strip, the step ruler, the pitch grid, and the
@@ -85,11 +86,17 @@ Accent, Slide, and Velocity lanes. It shows four bars when each step gets at
 least 28 points, or else two bars, or else one. The focused grid cell scrolls
 into view.
 
-Source names truncate, with full tooltips and accessible values. Choose
-source file selects a WAV or PXD path. Use palette sound goes back to the
-selected sound or clip. An explicit file has priority over missing palette
-audio. The file is read only when Listen sequence or Save sequence starts
-processing.
+Listen is the board's play key, first in the bar strip. It shows a play
+triangle and the word Listen, and becomes a stop square with Stop while the
+pattern plays. Its accessible name is Listen or Stop listening. When the strip
+is narrower than 620 points, the key shows only its icon. The L key does the
+same while the board shows. In the effects pane, Listen sits above the form.
+
+Source names truncate, with full tooltips and accessible values. The choice
+keys Palette and File… (Use palette sound and Choose source file) pick the
+source. File… selects a WAV or PXD path. Palette goes back to the selected
+sound or clip. An explicit file has priority over missing palette audio. The
+file is read only when Listen or Save sound starts processing.
 
 ### Bars and length
 
@@ -97,13 +104,20 @@ The bar buttons choose the viewed bar and bring its page of bars into view:
 
 - The other bars in view keep an olive outline.
 - A bar in the loop has an olive mark under its button.
-- A coral dot marks the bar that Listen sequence plays.
+- A coral dot marks the bar that Listen plays.
 
-Copy bar copies the viewed bar onto the next bar. Clear bar clears only the
-viewed bar. Length sets the number of steps that the pattern repeats over,
-from 1 to 64. To change it, drag or scroll its well, use x2 and /2, or drag
-the coral end marker on the step ruler. The steps after the end keep their
-contents and show dimmed.
+Copy to N copies the viewed bar onto bar N, the next bar; on the last bar it
+reads Copy bar and is disabled. Clear bar clears only the viewed bar, and is
+disabled when the bar is already empty. Length sets the number of steps that
+the pattern repeats over, from 1 to 64. To change it, drag or scroll its well,
+use ×2 and ÷2, or drag the coral end marker on the step ruler. ×2 and ÷2 are
+disabled when they would not change the length. The steps after the end keep
+their contents and show dimmed.
+
+The board keeps its own undo. With the pointer over the board, or the focus in
+it or its toolbar, Ctrl+Z takes back the last note edit, copy, clear, or
+Randomise. Ctrl+Y or Ctrl+Shift+Z puts it back. When there is nothing to take back, the
+board says so and does not undo the song.
 
 ### Notes and lanes
 
@@ -140,8 +154,9 @@ These lane edits also apply to the selected notes.
 ### Pitch grid and scale
 
 The grid shows 25 rows: +12 through -12 semitones around the octave in view.
-The row A 0 is the source pitch. The octave buttons, and Page Up and Page
-Down, move the view by a maximum of three octaves. A note outside the rows
+The row A 0 is the source pitch. The − and + keys beside the step ruler, with
+the octave between them, and Page Up and Page Down, move the view by a maximum
+of three octaves. A note outside the rows
 marks the top or bottom edge of the grid in coral. Every note stays valid in
 the -48 through +48 range.
 
@@ -171,14 +186,14 @@ its last step a note sounds. A note that slides into the next note ignores the
 gate. Loop source repeats the audio while a note sounds. Keep the tooltips
 that explain retriggers, duration, repetition of the whole file, and slides.
 
-Sequence effects replaces the grid with the common effects form, and Note
-grid restores the grid. The pane switch keeps keyboard focus when its label
-changes.
+The choice keys Notes and Effects (Note grid and Pattern effects), at the
+left of the top row, switch between the grid and the common effects form. The
+selected key has an accent tint and edge, and reports its toggled state.
 
 ### Actions and feedback
 
-Listen sequence and Save sequence need a source. Disabled actions tell why.
-Pattern saving keeps its validation. Processing is synchronous. Save sequence
+Listen and Save sound need a source. Disabled actions tell why. Pattern
+saving keeps its validation. Processing is synchronous. Save sound
 writes a WAV in Step synth at the BPM of the draft, and selects it. It keeps
 the pattern next to the WAV as `Name.pattern.json`. Pattern JSON does not
 replace the source file or the viewed bar.

@@ -28,6 +28,7 @@ pub(super) enum Command {
     Options,
     Help,
     PlayPause,
+    StepSynthListen,
     Undo,
     Redo,
     Duplicate,
@@ -96,6 +97,7 @@ impl Command {
             Self::Options,
             Self::Help,
             Self::PlayPause,
+            Self::StepSynthListen,
             Self::Undo,
             Self::Redo,
             Self::Duplicate,
@@ -145,7 +147,7 @@ impl Command {
         }
         match self {
             Self::Options | Self::Help => "Application",
-            Self::PlayPause => "Transport",
+            Self::PlayPause | Self::StepSynthListen => "Transport",
             Self::Undo | Self::Redo | Self::Duplicate | Self::SelectAll => "Edit",
             Self::Lane(..) => "Automation",
             _ => "Panels",
@@ -159,6 +161,7 @@ impl Command {
         }
         match self {
             Self::PlayPause => "Play or pause".into(),
+            Self::StepSynthListen => "Listen to the Step synth pattern".into(),
             Self::Duplicate => "Duplicate selection".into(),
             Self::SelectAll => "Select every clip".into(),
             Self::Maximise => "Maximise the score".into(),
@@ -190,13 +193,14 @@ impl Command {
             Self::Mastering => "The pedalboard on the master bus",
             Self::FxReturns => "Four send and return effect buses",
             Self::Effects => "Process a sound into a new one",
-            Self::StepSynth => "Write a note sequence and save it as a sound",
+            Self::StepSynth => "Write a note pattern and save it as a sound",
             Self::Edit => "Trim, fade and level a sound",
             Self::Stretch => "Fit a sound to the tempo",
             Self::AlbumReview => "Listening notes on an album",
             Self::Options => "Audio device, theme, workspace and folders",
             Self::Help => "Manual and shortcuts",
             Self::PlayPause => "Play or pause the song",
+            Self::StepSynthListen => "Play the Step synth pattern, or stop it",
             Self::Undo => "Take back the last edit",
             Self::Redo => "Put back the edit you undid",
             Self::Duplicate => "Copy the selected clips to the bars after them",
@@ -231,6 +235,7 @@ impl Command {
             Self::Options => "Ctrl+,",
             Self::Help => "F1",
             Self::PlayPause => "Space",
+            Self::StepSynthListen => "L",
             Self::Undo => "Ctrl+Z",
             Self::Redo => "Ctrl+Y",
             Self::Duplicate => "Ctrl+D",
@@ -318,6 +323,7 @@ impl MixJamApp {
                     self.start_playback();
                 }
             }
+            Command::StepSynthListen => self.step_synth_listen(),
             Command::Undo => self.history_step(false),
             Command::Redo => self.history_step(true),
             Command::Duplicate => self.duplicate_selection(),

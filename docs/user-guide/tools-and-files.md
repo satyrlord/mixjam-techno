@@ -19,26 +19,27 @@ Step synth is a board of the lower panel. It plays a source sound as a
 sequence of notes on sixteenth steps. A pattern has from 1 to 64 steps: a
 maximum of four bars. A wide panel shows all four bars at the same time.
 
-To make a sequence:
+To make a sound:
 
-1. Choose the source: select **Choose source file**, or select a sound in the
-   Sounds panel and then **Use palette sound**.
-2. Set **Length**, or drag the end marker on the step ruler. **x2** doubles
-   the length and **/2** halves it. Steps after the length keep their notes.
+1. Choose the source: select **File…**, or select a sound in the Sounds panel
+   and then **Palette**.
+2. Set **Length**, or drag the end marker on the step ruler. **×2** doubles
+   the length and **÷2** halves it. Steps after the length keep their notes.
 3. To add or remove a note, click a step on the note grid.
 4. To hold a note over more steps, drag its last step.
 5. To accent a note or slide it into the next note, click its dot in the
    **Accent** or **Slide** lane under the grid.
 6. To set the level of each note, drag in the **Velocity** lane.
-7. To hear the pattern, select **Listen sequence**.
-8. Select **Save sequence**, then choose a WAV path.
+7. To hear the pattern, select **Listen** at the left of the bar buttons, or
+   press L. Select **Stop**, or press L again, to stop it.
+8. Select **Save sound**, then choose a WAV path.
 
-**Save sequence** writes the WAV file and adds it to the Step synth category.
-Beside the WAV file, it writes the pattern as `Name.pattern.json`. **Load
-pattern** opens this file. The arrangement uses it to show the clips of the
-sound as notes. **Save pattern** saves only the editable pattern as JSON. If
-the application cannot save the pattern, it shows the error and does not
-change the existing files.
+**Save sound** writes the WAV file and adds it to the Step synth category.
+Beside the WAV file, it writes the pattern as `Name.pattern.json`. **Load**,
+under Pattern, opens this file. The arrangement uses it to show the clips of
+the sound as notes. **Save**, under Pattern, saves only the editable pattern
+as JSON. If the application cannot save the pattern, it shows the error and
+does not change the existing files.
 
 Other Step synth controls:
 
@@ -47,10 +48,13 @@ Other Step synth controls:
 - **Scale** and its root shade the pitch rows. All notes stay playable.
   **Randomise** writes a new line in the scale for the length of the pattern.
 - To apply a lane edit to many steps, drag on the step ruler to select them.
-- **Copy bar** copies the bar in view onto the next bar. **Clear bar** clears
-  the bar in view.
-- **Sequence effects** shows the effects of the sequence. **Note grid** shows
-  the notes again.
+- **Copy to 2** (or 3, or 4) copies the bar in view onto the next bar.
+  **Clear bar** clears the bar in view.
+- With the pointer over the board, Ctrl+Z takes back the last note edit,
+  copy, clear, or Randomise, and Ctrl+Y puts it back. Elsewhere they act on
+  the song.
+- **Effects** shows the effects of the pattern. **Notes** shows the note grid
+  again.
 
 ### Recording
 

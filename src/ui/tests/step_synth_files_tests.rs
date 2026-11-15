@@ -14,7 +14,7 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
-        step_synth_accessible_node(&output, "Listen sequence")
+        step_synth_accessible_node(&output, "Listen")
             .1
             .is_disabled()
     );
@@ -30,12 +30,12 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.step_synth.file.as_ref(), Some(&absent_source));
     assert!(
-        !step_synth_accessible_node(&output, "Listen sequence")
+        !step_synth_accessible_node(&output, "Listen")
             .1
             .is_disabled(),
         "An explicit file must bypass the missing palette source."
     );
-    let output = activate_control(&ctx, &mut app, &output, "Listen sequence");
+    let output = activate_control(&ctx, &mut app, &output, "Listen");
     assert!(app.status_error && app.step_synth.feedback.error);
     assert_eq!(
         app.step_synth.feedback.message.as_deref(),
@@ -47,7 +47,7 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
     assert!(app.step_synth.feedback.message.is_none());
     assert!(!app.step_synth.feedback.error);
     assert!(
-        step_synth_accessible_node(&output, "Listen sequence")
+        step_synth_accessible_node(&output, "Listen")
             .1
             .is_disabled()
     );
@@ -236,7 +236,7 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
             .unwrap()
             .steps,
         app.step_synth.state.steps,
-        "Save sequence keeps the pattern beside the WAV."
+        "Save sound keeps the pattern beside the WAV."
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -270,7 +270,7 @@ fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
     assert!(app.status_error && app.step_synth.feedback.error);
     assert_eq!(
         app.step_synth.feedback.message,
-        Some(format!("Cannot save the sequence: {}", app.status))
+        Some(format!("Cannot save the sound: {}", app.status))
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -286,17 +286,20 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    let output = activate_control(&ctx, &mut app, &output, "Sequence effects");
-    assert!(app.step_synth.effects_expanded);
-    assert_eq!(
+    let focus = |output: &egui::FullOutput| {
         output
             .platform_output
             .accesskit_update
             .as_ref()
             .unwrap()
-            .focus,
-        step_synth_accessible_node(&output, "Note grid").0,
-        "Switching panes from the keyboard must keep focus on the pane button."
+            .focus
+    };
+    let output = activate_control(&ctx, &mut app, &output, "Pattern effects");
+    assert!(app.step_synth.effects_expanded);
+    assert_eq!(
+        focus(&output),
+        step_synth_accessible_node(&output, "Pattern effects").0,
+        "Switching panes from the keyboard must keep focus on the switch."
     );
     frame(
         &ctx,
@@ -306,21 +309,21 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
     );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
+        app.step_synth.effects_expanded,
+        "Pressing the chosen side again keeps its pane."
+    );
+    let output = activate_control(&ctx, &mut app, &output, "Note grid");
+    assert!(
         !app.step_synth.effects_expanded,
-        "A second Enter must return to the note grid."
+        "Notes must return to the note grid."
     );
     assert_eq!(
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .focus,
-        step_synth_accessible_node(&output, "Sequence effects").0
+        focus(&output),
+        step_synth_accessible_node(&output, "Note grid").0
     );
     app.selection.sample = None;
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    let listen = step_synth_control_rect(&output, "Listen sequence");
+    let listen = step_synth_control_rect(&output, "Listen");
     // The footer shows the same sentence, so count the tooltip as an added copy.
     let copies = |output: &egui::FullOutput| {
         output
@@ -356,4 +359,120 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
         hovered > before,
         "A disabled audio action must show why it is unavailable on hover."
     );
+}
+
+#[test]
+fn step_synth_listen_key_works_with_focus_on_the_pane_toolbar() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.selection.sample = Some(1);
+    app.boards.module = BottomModule::StepSynth;
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for pane in ["Pattern effects", "Note grid"] {
+        activate_control(&ctx, &mut app, &output, pane);
+        app.step_synth.feedback.message = None;
+        frame(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::L, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        // A second Listen press must follow a release; egui marks another
+        // press of a held key as a repeat, which this toggle ignores.
+        output = frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::Key {
+                key: egui::Key::L,
+                physical_key: None,
+                pressed: false,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            egui::Modifiers::NONE,
+        );
+        assert!(
+            app.step_synth.feedback.message.is_some(),
+            "L must run Listen while {pane} has focus."
+        );
+    }
+}
+
+#[test]
+fn step_synth_shortcuts_do_not_claim_an_overlapping_window() {
+    for focused in [false, true] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        app.selection.sample = Some(1);
+        app.boards.module = BottomModule::StepSynth;
+        app.step_synth.state.steps[0] = Step::note(5);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        }
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = activate_control(&ctx, &mut app, &output, "Copy bar");
+        let bounds = step_synth_board_node(&output).1.bounds().unwrap();
+        let at = Pos2::new(
+            (bounds.x0 + bounds.x1) as f32 / 2.0,
+            (bounds.y0 + bounds.y1) as f32 / 2.0,
+        );
+        if let Some(id) = ctx.memory(|memory| memory.focused()) {
+            ctx.memory_mut(|memory| memory.surrender_focus(id));
+        }
+        let overlay_frame = |app: &mut MixJamApp, events, modifiers| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+                    events,
+                    modifiers,
+                    focused: true,
+                    ..Default::default()
+                },
+                |ctx| {
+                    app.draw(ctx);
+                    egui::Area::new(egui::Id::new("overlapping-tool"))
+                        .order(egui::Order::Middle)
+                        .fixed_pos(at - Vec2::new(20.0, 10.0))
+                        .show(ctx, |ui| {
+                            let response = ui.button("Other tool");
+                            if focused {
+                                response.request_focus();
+                            }
+                        });
+                },
+            )
+        };
+        for _ in 0..3 {
+            overlay_frame(
+                &mut app,
+                vec![egui::Event::PointerMoved(at)],
+                egui::Modifiers::NONE,
+            );
+        }
+        app.step_synth.feedback.message = None;
+        if focused {
+            overlay_frame(
+                &mut app,
+                vec![key_event(egui::Key::L, egui::Modifiers::NONE)],
+                egui::Modifiers::NONE,
+            );
+            assert!(
+                app.step_synth.feedback.message.is_none(),
+                "A focused floating tool must keep L from the board below it."
+            );
+        }
+        overlay_frame(
+            &mut app,
+            vec![key_event(egui::Key::Z, egui::Modifiers::COMMAND)],
+            egui::Modifiers::COMMAND,
+        );
+        assert_eq!(
+            app.step_synth.state.steps[16],
+            Step::note(5),
+            "An overlapping tool must not route Ctrl+Z to the board: focus={focused}."
+        );
+    }
 }
