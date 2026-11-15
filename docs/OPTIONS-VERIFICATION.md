@@ -109,8 +109,8 @@ capacity or release-readiness claim follows from these checks.
 
 The Lane height preference adds 20, 30, and 40 px choices, with 30 px as the
 default. Existing schema 1 files without `laneHeight` load that default.
-Options remain at schema 1; the current song format is 24. The earlier results
-above describe the 2026-11-02 implementation.
+Options remain at schema 1; the song format was 24 on that date. The earlier
+results above describe the 2026-11-02 implementation.
 
 The review corrected overlapping clip names and reverse marks in compact
 rows, and a new-track drop hint that disappeared at 20 px. Both new rendering

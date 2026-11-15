@@ -283,7 +283,6 @@ report = dict(executable=str(exe), executable_sha256=sha256(exe.read_bytes()).he
               gaps=['Visual content requires image review', 'No microphone or physical listening check',
                     'Recorded-take capture checks presentation only; it does not simulate microphone input',
                     'No native file-picker or screen-reader interaction',
-                    'Captures run at a display scale of 100% only',
                     'No clean Windows VM check'])
 
 def options_with(theme):

@@ -4,10 +4,10 @@ python -I tools/song/render.py SONG.mixjam OUT_DIR [--fit-gain DBFS] [--jobs N] 
     [--cache DIR | --no-cache]
 
 The tool renders each lane with its twin and its FX returns, without the board.
-It writes each lane to OUT_DIR/lane-NN.wav. The default is half the number of
-processors, with a maximum of 4 concurrent renders. From these files, it makes
-OUT_DIR/premaster.wav, one OUT_DIR/stem-ROLE.wav per named role, and
-OUT_DIR/audible.txt (see audible.py). It also renders OUT_DIR/master.wav with
+It writes each lane to OUT_DIR/lane-NN.wav, --jobs N lanes at a time. The default is
+half the number of processors, with a maximum of 4 concurrent renders. From these
+files, it makes OUT_DIR/premaster.wav, one OUT_DIR/stem-ROLE.wav per named role,
+and OUT_DIR/audible.txt (see audible.py). It also renders OUT_DIR/master.wav with
 the board. --no-master skips the master render.
 
 --fit-gain sets the song's master gain so that the premaster peaks at DBFS (for example -0.5) and
@@ -351,11 +351,7 @@ def source_fingerprints(document):
             return None
         try:
             if path not in paths:
-                digest = hashlib.sha256()
-                with path.open('rb') as source:
-                    for block in iter(lambda: source.read(1024 * 1024), b''):
-                        digest.update(block)
-                paths[path] = digest.hexdigest()
+                paths[path] = file_digest(path)
         except OSError:
             return None
         fingerprints[sample_id] = paths[path]

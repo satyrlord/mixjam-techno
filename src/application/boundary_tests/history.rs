@@ -583,12 +583,18 @@ fn bypass_is_one_undo_step_that_keeps_the_mix_prepared() {
     let mut chain = session.project().master;
     chain.limiter.on = true;
     session.edit(EditCommand::SetMaster(chain)).unwrap();
+    let revision = session.revision;
+    session.render_dirty = false;
     chain.bypass = true;
     session.edit(EditCommand::SetMaster(chain)).unwrap();
     assert!(session.project().master.bypass && session.project().master.limiter.on);
     assert!(session.master.get().bypass);
     assert!(session.history_step(false).unwrap());
     assert!(!session.project().master.bypass && session.project().master.limiter.on);
+    assert!(!session.master.get().bypass);
+    // The prepared mix does not include the pedalboard, so it stays valid.
+    assert_eq!(session.revision, revision);
+    assert!(!session.render_dirty);
     // A preset keeps the bypass as it keeps the trim.
     let preset = crate::master::presets::PRESETS[0].applied_to(&chain);
     assert!(preset.bypass);

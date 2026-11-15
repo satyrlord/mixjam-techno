@@ -18,67 +18,45 @@ fn playback_meters_include_the_final_output_frame() {
     assert_eq!(reading.integrated, f32::NEG_INFINITY);
 }
 
+/// A live switch of a neutral pedal crossfades two aligned paths, so the
+/// output matches the input exactly: impulses show the timeline and the
+/// final frame, and a dense sine shows the crossfade itself.
 #[test]
 fn live_pedal_switches_keep_the_timeline_and_final_frame() {
-    for initially_on in [false, true] {
-        let mut samples = vec![0.0; 10_000 * 2];
-        for frame in [0, 7_000, 9_999] {
-            samples[frame * 2] = 0.25;
-            samples[frame * 2 + 1] = -0.25;
-        }
-        let audio: Arc<dyn Frames> = Arc::new(Pcm {
-            sample_rate: 44_100,
-            channels: 2,
-            samples: samples.clone(),
-        });
-        let mut chain = MasterChain::default();
-        chain.limiter.on = initially_on;
-        chain.limiter.gain = 0.0;
-        let control = MasterControl::new(&chain);
-        let mut source = PlaybackSource::new(audio, 0, None, Some(control.clone()));
-        let mut played: Vec<_> = source.by_ref().take(2_048 * 2).collect();
-        chain.limiter.on = !initially_on;
-        control.set(&chain);
-        played.extend(source);
-        assert_eq!(played.len(), samples.len());
-        for (index, (played, expected)) in played.iter().zip(&samples).enumerate() {
-            assert_eq!(
-                played, expected,
-                "Sample {index}; limiter initially on: {initially_on}"
-            );
-        }
+    let mut impulses = vec![0.0; 10_000 * 2];
+    for frame in [0, 7_000, 9_999] {
+        impulses[frame * 2] = 0.25;
+        impulses[frame * 2 + 1] = -0.25;
     }
-}
-
-#[test]
-fn neutral_live_switches_crossfade_aligned_audio() {
-    let samples: Vec<_> = (0..10_000)
+    let sine: Vec<_> = (0..10_000)
         .flat_map(|frame| {
             let sample = (frame as f32 * 0.13).sin() * 0.25;
             [sample, -sample]
         })
         .collect();
-    for initially_on in [false, true] {
-        let audio: Arc<dyn Frames> = Arc::new(Pcm {
-            sample_rate: 44_100,
-            channels: 2,
-            samples: samples.clone(),
-        });
-        let mut chain = MasterChain::default();
-        chain.limiter.on = initially_on;
-        chain.limiter.gain = 0.0;
-        let control = MasterControl::new(&chain);
-        let mut source = PlaybackSource::new(audio, 0, None, Some(control.clone()));
-        let mut played: Vec<_> = source.by_ref().take(2_048 * 2).collect();
-        chain.limiter.on = !initially_on;
-        control.set(&chain);
-        played.extend(source);
-        assert_eq!(played.len(), samples.len());
-        for (index, (played, expected)) in played.iter().zip(&samples).enumerate() {
-            assert_eq!(
-                played, expected,
-                "Sample {index}; limiter initially on: {initially_on}"
-            );
+    for (signal, samples) in [("impulses", impulses), ("sine", sine)] {
+        for initially_on in [false, true] {
+            let audio: Arc<dyn Frames> = Arc::new(Pcm {
+                sample_rate: 44_100,
+                channels: 2,
+                samples: samples.clone(),
+            });
+            let mut chain = MasterChain::default();
+            chain.limiter.on = initially_on;
+            chain.limiter.gain = 0.0;
+            let control = MasterControl::new(&chain);
+            let mut source = PlaybackSource::new(audio, 0, None, Some(control.clone()));
+            let mut played: Vec<_> = source.by_ref().take(2_048 * 2).collect();
+            chain.limiter.on = !initially_on;
+            control.set(&chain);
+            played.extend(source);
+            assert_eq!(played.len(), samples.len());
+            for (index, (played, expected)) in played.iter().zip(&samples).enumerate() {
+                assert_eq!(
+                    played, expected,
+                    "{signal}, sample {index}; limiter initially on: {initially_on}"
+                );
+            }
         }
     }
 }

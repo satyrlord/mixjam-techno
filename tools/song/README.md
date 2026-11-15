@@ -194,6 +194,6 @@ references. Without a profile, the tools measure and print no targets.
 
 ## Tests
 
-`python -m unittest discover -s tools/tests -v` runs the tests of `env.py`,
-`harmony.py`, and the pure functions of `mixjam.py`, `fit.py`, `master.py`,
-`render.py`, and `audible.py`.
+`python -m unittest discover -s tools/tests -v` runs the tests of the tools in
+this folder, the runtime song helper, the Rust format check, the font checkout,
+and the album lookup.

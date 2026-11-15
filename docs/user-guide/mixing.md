@@ -100,7 +100,7 @@ view.
 
 ## Mastering
 
-Use Mastering, the third module of the lower panel, for the master
+Use Mastering, the second module of the lower panel, for the master
 pedalboard. The mix enters the Input unit, where Trim sets its level against
 the VU meter; after the Trim the mix is held to full scale, so lower the Trim
 when the VU meter shows a mix over full scale. It then passes each pedal that

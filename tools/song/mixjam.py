@@ -208,7 +208,7 @@ class Song:
         path = str(Path(path))
         source_bpm = self.tempos.get(path, source_bpm or self.bpm)
         if self.palette is not None:
-            import palette as palettes  # tools/song/palette.py; only songs that keep a palette need it
+            import palette as palettes  # tools/song/palette.py
             if not palettes.allowed(self.palette, path, self.palette_roots):
                 raise ValueError(f'{path} is outside the palette {self.palette_path}.')
         if path not in self.sounds:

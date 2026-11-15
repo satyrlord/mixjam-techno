@@ -6,12 +6,7 @@ use super::*;
 /// Vintage paints the prepared Folded Metal artwork at one texel per
 /// physical pixel. Studio and Aero paint their chassis in code and load
 /// none of it.
-pub(super) fn assert_folded_assets(
-    ctx: &egui::Context,
-    output: &egui::FullOutput,
-    density: f32,
-    palette: &str,
-) {
+pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutput, palette: &str) {
     let body = match palette {
         "Marine" => controls::Palette::Marine,
         "Granite" => controls::Palette::Granite,
@@ -115,13 +110,12 @@ pub(super) fn assert_folded_assets(
     fn check(
         shape: &egui::Shape,
         textures: &[(egui::TextureId, [usize; 2], String)],
-        density: f32,
         parts: &mut [bool; 8],
     ) {
         match shape {
             egui::Shape::Vec(shapes) => {
                 for shape in shapes {
-                    check(shape, textures, density, parts);
+                    check(shape, textures, parts);
                 }
             }
             egui::Shape::Mesh(mesh) => {
@@ -141,7 +135,7 @@ pub(super) fn assert_folded_assets(
                 for vertex in &mesh.vertices {
                     for edge in [vertex.pos.x, vertex.pos.y] {
                         assert!(
-                            (edge * density - (edge * density).round()).abs() < 0.001,
+                            (edge - edge.round()).abs() < 0.001,
                             "Folded Metal raster vertices align to physical pixels."
                         );
                     }
@@ -150,7 +144,7 @@ pub(super) fn assert_folded_assets(
                     for edge in 0..3 {
                         let a = mesh.vertices[triangle[edge] as usize];
                         let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                        let dest = (b.pos - a.pos).abs() * density;
+                        let dest = (b.pos - a.pos).abs();
                         let source =
                             (b.uv - a.uv).abs() * Vec2::new(size[0] as f32, size[1] as f32);
                         assert!(
@@ -169,7 +163,7 @@ pub(super) fn assert_folded_assets(
     }
     let mut parts = [false; 8];
     for shape in &output.shapes {
-        check(&shape.shape, &textures, density, &mut parts);
+        check(&shape.shape, &textures, &mut parts);
     }
     assert!(
         parts.into_iter().all(|painted| painted),
@@ -255,13 +249,11 @@ pub(super) fn mastering_fixture(
 }
 
 pub(super) fn stretch_layout_output(
-    density: f32,
     missing: bool,
     feedback: stretch::Feedback<'_>,
 ) -> egui::FullOutput {
     let ctx = egui::Context::default();
     configure_style(&ctx);
-    ctx.set_pixels_per_point(density);
     ctx.style_mut(|style| style.animation_time = 0.0);
     ctx.enable_accesskit();
     let mut original = 160.0;

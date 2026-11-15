@@ -39,11 +39,11 @@ pub(in super::super) fn clip_gain_from_db(db: f32) -> f32 {
 }
 
 impl MixJamApp {
-    /// Exact values for one clip, in its context menu. Drags on the clip's
-    /// edges, fade handles, and gain line change the same values.
-    /// A clip's gain, trim, length, fades, pitch, and reverse, as a grid of
-    /// fields named "{prefix} gain" and so on: "Clip" in the clip menu,
-    /// "Inspector clip" in the Inspector, which also shows its start.
+    /// Exact values for one clip. Drags on the clip's edges, fade handles, and
+    /// gain line change the same values. A clip's gain, trim, length, fades,
+    /// pitch, and reverse, as a grid of fields named "{prefix} gain" and so on:
+    /// "Clip" in the clip menu, "Inspector clip" in the Inspector, which also
+    /// shows its start.
     pub(in super::super) fn clip_properties(&mut self, ui: &mut egui::Ui, id: u64, prefix: &str) {
         let Some(clip) = self
             .session

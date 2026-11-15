@@ -33,7 +33,7 @@ The launcher builds `target\release\mixjam-techno.exe` when it is absent. Use
 ~~~
 
 On first launch, select **Options → Sample libraries → Add library folder**.
-The gear in the utility rail or **Ctrl+,** opens Options. Settings, the scan
+The gear at the left end of the status bar or **Ctrl+,** opens Options. Settings, the scan
 cache, and generated audio use `%LOCALAPPDATA%\MixJam Techno`; set
 `MIXJAM_TECHNO_DATA_DIR` to use another writable folder.
 

@@ -1,4 +1,4 @@
-//! Observed D2/D3/4 drum import projection. Original pattern and pad bytes remain available.
+//! Observed D2/D3/D4 drum import projection. Original pattern and pad bytes remain available.
 //! The dry renderer follows the documented sixteen-step, one-bar drum matrix.
 //! It applies the D2 Groove Generator volume and no other saved effect.
 use crate::{

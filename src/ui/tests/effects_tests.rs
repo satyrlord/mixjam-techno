@@ -41,9 +41,8 @@ fn effects_disabled_actions_explain_themselves_on_hover() {
 
 #[test]
 fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_settings() {
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
-        ctx.set_pixels_per_point(density);
         ctx.enable_accesskit();
         ctx.style_mut(|style| style.animation_time = 0.0);
         app.selection.sample = Some(1);
@@ -63,14 +62,13 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
             output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         }
         let window = effects_control_rect(&output, "EFFECT STUDIO");
-        let panel = window;
         assert!(
             viewport.contains_rect(window),
             "The complete module must fit."
         );
         let footer = effects_control_rect(&output, "Effect Studio status");
         assert!(window.contains_rect(footer));
-        assert_folded_assets(&ctx, &output, density, "Red");
+        assert_folded_assets(&ctx, &output, "Red");
         assert_eq!(
             accessible_node(&output, "Source sound").1.value(),
             Some("good grasp 2")
@@ -95,7 +93,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         ] {
             let bounds = effects_control_rect(&output, name);
             assert!(
-                panel.contains_rect(bounds),
+                window.contains_rect(bounds),
                 "{name} must fit the compact skin."
             );
             assert!(
@@ -121,7 +119,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
             "Reset",
         ] {
             assert!(
-                panel.contains_rect(text_rect(&output, text)),
+                window.contains_rect(text_rect(&output, text)),
                 "{text} must remain readable."
             );
         }

@@ -10,7 +10,7 @@ add heavy damage, oversized bevels, or ornamental hardware. Mixer retains its ex
 
 Mastering's pedals stand off the Indigo board on a soft drop shadow cast down
 and right, with a 6-point bevel and 4-point side walls, all lit from the upper
-left (see Colors). The Effects units use the same raised enclosures on their
+left (see Colors). The FX units use the same raised enclosures on their
 Marine board. Floating windows share one window shadow.
 
 Shared control rendering supplies hover, keyboard focus, pressed, selected, and

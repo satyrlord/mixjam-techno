@@ -71,12 +71,14 @@ fn a_clip_request_changes_only_the_fields_it_gives() {
     ] {
         assert!(clip_edit(&clip, invalid.clone()).is_err(), "{invalid:?}");
     }
-    // A shorter clip shortens a fade that the request leaves out.
-    assert!(clip_edit(&clip, change(None, Some(32), None)).is_ok());
+    // A shorter clip keeps a fade that the request leaves out; the edit then
+    // shortens it, as a resize in the window does.
+    let shorter = clip_edit(&clip, change(None, Some(32), None)).unwrap();
+    assert!(matches!(
+        shorter,
+        EditCommand::SetClip { length_ticks: 32, fades, .. } if fades == clip.fades
+    ));
     // Reverse switches only when the request gives it.
-    let Request::Clip { .. } = change(None, None, None) else {
-        unreachable!()
-    };
     let mut flip = change(None, None, None);
     if let Request::Clip { reverse, .. } = &mut flip {
         *reverse = Some(true);

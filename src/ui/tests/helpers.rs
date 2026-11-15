@@ -62,12 +62,12 @@ pub(super) fn each_theme(mut body: impl FnMut(theme::Theme)) {
     theme::paint_as(theme::Theme::Studio);
 }
 
-/// The 100% display density once per theme. Taking one sets its theme
-/// on this test's thread, and the loop body's fixture then adopts it.
+/// Each theme in turn. Taking one sets its theme on this test's
+/// thread, and the loop body's fixture then adopts it.
 /// Each new item, and the end of the loop, first checks that the previous
 /// body's frames kept its theme, as `each_theme` does. The end returns the
 /// thread to Studio.
-pub(super) fn themed_densities() -> impl Iterator<Item = f32> {
+pub(super) fn themes_in_turn() -> impl Iterator<Item = theme::Theme> {
     let previous = std::rc::Rc::new(std::cell::Cell::new(None));
     let check = {
         let previous = previous.clone();
@@ -84,12 +84,10 @@ pub(super) fn themed_densities() -> impl Iterator<Item = f32> {
     let end = check.clone();
     theme::Theme::ALL
         .into_iter()
-        .map(|theme| (theme, 1.0))
-        .map(move |(theme, density)| {
+        .inspect(move |&theme| {
             check();
             previous.set(Some(theme));
             theme::paint_as(theme);
-            density
         })
         .chain(std::iter::from_fn(move || {
             end();

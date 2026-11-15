@@ -401,9 +401,8 @@ fn mixer_summaries_and_control_identity_follow_sparse_project_tracks() {
 
 #[test]
 fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
-        ctx.set_pixels_per_point(density);
         ctx.enable_accesskit();
         let mut project = app.session.project().clone();
         project.tracks[0].gain = 10.0_f32.powf(12.0 / 20.0);
@@ -456,30 +455,25 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 .iter()
                 .find_map(|shape| {
                     let bounds = match &shape.shape {
-                        // Aero's gradient mesh ends half a point inside its
-                        // rim and carries a half-pixel feather.
-                        egui::Shape::Mesh(mesh) if roles().material == theme::Material::Plastic => {
-                            mesh.calc_bounds().expand(0.5 - 0.5 / density)
-                        }
                         egui::Shape::Mesh(mesh) => mesh.calc_bounds(),
                         egui::Shape::Rect(rect) if rect.fill == roles().cap => rect.rect,
                         _ => return None,
                     };
-                    ((bounds.width() - 24.0).abs() <= 1.0 / density
-                        && (bounds.height() - height).abs() <= 1.0 / density
-                        && (bounds.center().x - gain.center().x).abs() <= 1.0 / density
-                        && gain.expand(1.0 / density).contains(bounds.center()))
+                    ((bounds.width() - 24.0).abs() <= 1.0
+                        && (bounds.height() - height).abs() <= 1.0
+                        && (bounds.center().x - gain.center().x).abs() <= 1.0
+                        && gain.expand(1.0).contains(bounds.center()))
                     .then_some(bounds)
                 })
                 .unwrap_or_else(|| {
                     panic!("Missing {track} fader cap in {}.", theme::current().label())
                 });
             assert!(
-                cap.top() - value.bottom() >= 4.0 - 1.0 / density,
+                cap.top() - value.bottom() >= 3.0,
                 "The fader cap must clear the dB readout even at +12 dB."
             );
             assert!(
-                gain.expand(1.0 / density).contains_rect(cap),
+                gain.expand(1.0).contains_rect(cap),
                 "The whole fader cap must remain draggable at either endpoint."
             );
             caps.push((track, cap));
@@ -508,10 +502,10 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 );
             }
             assert!(
-                (eq.top() - mute.top()).abs() <= 1.0 / density
+                (eq.top() - mute.top()).abs() <= 1.0
                     && eq.right() <= mute.left()
                     && eq.bottom() <= polarity.top()
-                    && (eq.center().x - polarity.center().x).abs() <= 1.0 / density,
+                    && (eq.center().x - polarity.center().x).abs() <= 1.0,
                 "EQ starts the row of Mute and Solo, above polarity."
             );
             for rect in [mute, solo] {
@@ -538,15 +532,15 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                 );
             }
             assert!(
-                pan.top() - cap.bottom() >= 4.0 - 1.0 / density,
+                pan.top() - cap.bottom() >= 3.0,
                 "The fader cap must clear pan even at silence."
             );
             assert!(
-                center.top() >= pan.bottom() - 1.0 / density && center.top() <= pan.bottom() + 4.0,
+                center.top() >= pan.bottom() - 1.0 && center.top() <= pan.bottom() + 4.0,
                 "Center must attach just below its pan rail without covering the slider."
             );
             assert!(
-                (pan.center().x - center.center().x).abs() <= 1.0 / density,
+                (pan.center().x - center.center().x).abs() <= 1.0,
                 "Center must mark the center of the pan rail."
             );
             assert!(center.width() <= 44.0 && center.height() <= 18.0);

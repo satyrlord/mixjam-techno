@@ -201,21 +201,19 @@ fn stretch_opens_with_source_tempo_and_accepts_accessible_adjustments() {
 
 #[test]
 fn stretch_artwork_uses_one_texel_per_physical_pixel() {
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
-        ctx.set_pixels_per_point(density);
         app.stretch.open = true;
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         }
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-        assert_folded_assets(&ctx, &output, density, "Marine");
+        assert_folded_assets(&ctx, &output, "Marine");
     }
 }
 
 #[test]
 fn stretch_header_controls_use_corner_positions_and_a_complete_collapsed_skin() {
-    let density = 1.0;
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     app.stretch.open = true;
@@ -231,8 +229,7 @@ fn stretch_header_controls_use_corner_positions_and_a_complete_collapsed_skin() 
         ("Close Time Stretcher", expanded.width() - 24.0),
     ] {
         assert!(
-            (effects_control_rect(&output, name).center().x - expanded.left() - x).abs()
-                <= 1.0 / density
+            (effects_control_rect(&output, name).center().x - expanded.left() - x).abs() <= 1.0
         );
     }
     assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
@@ -867,7 +864,6 @@ fn stretch_shift_changes_only_new_drag_motion() {
 
 #[test]
 fn stretch_action_labels_remain_centered_in_every_playback_state() {
-    let density = 1.0;
     for (processing, listening, saved, listen_text) in [
         (false, false, false, "Listen"),
         (false, true, false, "Stop listening"),
@@ -875,7 +871,6 @@ fn stretch_action_labels_remain_centered_in_every_playback_state() {
         (false, false, true, "Listen"),
     ] {
         let output = stretch_layout_output(
-            density,
             false,
             stretch::Feedback {
                 processing,

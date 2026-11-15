@@ -8,7 +8,6 @@
 
 use super::*;
 use mixjam_techno::library::Library;
-use std::collections::BTreeSet;
 
 const BASELINE: &str = include_str!("ui-names.txt");
 const BASELINE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/ui/ui-names.txt");

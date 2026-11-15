@@ -513,9 +513,10 @@ impl MixJamApp {
     pub(in super::super) fn mastering(&mut self, ui: &mut egui::Ui) {
         // A capture of the meters shows a fixed, representative reading.
         let sample = self.capture_view_is("master-metering");
+        let reduced = self.session.options().meter_display_rate
+            == mixjam_techno::application::options::MeterDisplayRate::Reduced;
         let metering = master::Metering {
-            reduced: self.session.options().meter_display_rate
-                == mixjam_techno::application::options::MeterDisplayRate::Reduced,
+            reduced,
             reading: if sample {
                 MeterReading {
                     run: 1,
@@ -534,8 +535,7 @@ impl MixJamApp {
             } else {
                 self.boards.meter_display.sample(
                     self.session.master_meters(),
-                    self.session.options().meter_display_rate
-                        == mixjam_techno::application::options::MeterDisplayRate::Reduced,
+                    reduced,
                     ui.input(|input| input.time),
                 )
             },

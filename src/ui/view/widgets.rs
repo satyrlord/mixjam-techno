@@ -223,11 +223,10 @@ fn embedded_effect_dial(
     );
 }
 
-/// A track's pan knob. While its pan lane has points, the knob is
-/// `automated`: the lane sets the pan while the song plays. The knob leaves
-/// the wheel to the view behind it, so a scroll over the strips never moves
-/// a pan.
-/// A pan slider named "{name} pan".
+/// A track's pan slider, named "{name} pan". While its pan lane has points,
+/// the slider is `automated`: the lane sets the pan while the song plays. The
+/// slider leaves the wheel to the view behind it, so a scroll over the strips
+/// never moves a pan.
 pub(in super::super) fn pan_control(
     ui: &mut egui::Ui,
     name: &str,

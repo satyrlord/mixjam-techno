@@ -162,8 +162,6 @@ impl Mix {
         }
     }
 
-    /// Write stereo PCM16 through the FX buses and the master pedalboard,
-    /// mixing one block at a time.
     /// Every exported file: stereo PCM16 at the mix rate.
     const EXPORT_SPEC: hound::WavSpec = hound::WavSpec {
         channels: 2,
@@ -182,6 +180,8 @@ impl Mix {
         Ok(())
     }
 
+    /// Write stereo PCM16 through the FX buses and the master pedalboard,
+    /// mixing one block at a time.
     pub fn write_wav(&self, path: &Path, master: &MasterChain, fx: &FxBuses) -> Result<(), String> {
         self.check_export_quality()?;
         self.check_wav_length(if self.sends && fx.is_active() {
@@ -228,9 +228,8 @@ impl Mix {
 
     /// Write the premaster in parts to stereo PCM16 files in `folder`: each
     /// sounding track alone, after its EQ, compressor, width, automation,
-    /// fader, pan, ducker, and
-    /// outputs but without its sends, and the return of each bus in
-    /// `returning_buses`. Every file runs from the song's start until the
+    /// fader, pan, ducker, and outputs but without its sends, and the return
+    /// of each bus in `returning_buses`. Every file runs from the song's start until the
     /// buses' tails die, as the mix export does. If the summed mix does not
     /// clip, the files sum to the mix with the master pedalboard bypassed.
     /// An out-of-range part rejects before any file is replaced. Each file

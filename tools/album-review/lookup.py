@@ -199,7 +199,7 @@ def cover(artist, title, page=None):
     """The cover image of the album's Wikipedia article, and the article URL.
 
     With `page`, read that article. Otherwise search, and accept only an article whose summary
-    names the artist and calls the work an album, a soundtrack, or a score.
+    names the artist and calls the work an album, soundtrack, score, record, or suite.
     """
     empty = {"coverUrl": "", "coverSource": "", "page": ""}
     if page:

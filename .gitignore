@@ -1,5 +1,7 @@
 # Tooling
 .impeccable/
+/.codex/hooks.json
+/.github/hooks/
 
 # Build artifacts
 /target/
@@ -12,7 +14,6 @@
 /tmp/
 
 # Original-format tooling and local agent instructions
-/CLAUDE.md
 /AGENTS.md
 /.claude/settings.local.json
 /.claude/worktrees/

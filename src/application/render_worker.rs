@@ -1,9 +1,6 @@
 //! The worker thread that prepares the mix of a project revision off the calling thread.
 use super::Project;
-use crate::{
-    audio::{self},
-    library::Library,
-};
+use crate::{audio, library::Library};
 use std::sync::{Arc, mpsc};
 
 pub(super) struct RenderRequest {

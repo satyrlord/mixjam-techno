@@ -341,21 +341,21 @@ fn bottom_module_selector_stays_fixed_and_preserves_sound_state_across_input_met
 
 #[test]
 fn rail_groups_remain_ordered_separated_and_reachable_in_both_states() {
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         for names in [true, false] {
             for size in [
                 Vec2::new(960.0, 720.0),
                 Vec2::new(1024.0, 768.0),
                 Vec2::new(1440.0, 1000.0),
             ] {
-                check_rail_state(density, names, size);
+                check_rail_state(names, size);
             }
         }
     }
 }
 
 /// The rail's order, targets, artwork, groups and reach in one layout.
-fn check_rail_state(density: f32, names: bool, size: Vec2) {
+fn check_rail_state(names: bool, size: Vec2) {
     let actions = [
         RailIcon::New,
         RailIcon::Open,
@@ -375,7 +375,6 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
         RailIcon::AlbumReview,
     ];
     let (ctx, mut app) = fixture();
-    ctx.set_pixels_per_point(density);
     ctx.enable_accesskit();
     app.set_layout(|layout| layout.tool_names = names);
     let viewport = Rect::from_min_size(Pos2::ZERO, size);
@@ -438,8 +437,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                 );
             }
             assert!(
-                (image.width() * density - 20.0 * density).abs() < 0.01
-                    && (image.height() * density - 20.0 * density).abs() < 0.01,
+                (image.width() - 20.0).abs() < 0.01 && (image.height() - 20.0).abs() < 0.01,
                 "{} artwork must use the prepared size without stretching.",
                 icon.label()
             );
@@ -572,7 +570,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                 for vertex in &mesh.vertices {
                     for coordinate in [vertex.pos.x, vertex.pos.y] {
                         assert!(
-                            (coordinate * density - (coordinate * density).round()).abs() < 0.001,
+                            (coordinate - coordinate.round()).abs() < 0.001,
                             "Rail material must align to physical pixels."
                         );
                     }
@@ -581,7 +579,7 @@ fn check_rail_state(density: f32, names: bool, size: Vec2) {
                     for edge in 0..3 {
                         let a = mesh.vertices[triangle[edge] as usize];
                         let b = mesh.vertices[triangle[(edge + 1) % 3] as usize];
-                        let destination = (b.pos - a.pos).abs() * density;
+                        let destination = (b.pos - a.pos).abs();
                         let source =
                             (b.uv - a.uv).abs() * Vec2::new(pixels[0] as f32, pixels[1] as f32);
                         assert!(
@@ -1109,7 +1107,6 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
 
 #[test]
 fn no_two_controls_share_a_name_with_any_board_or_view() {
-    use std::collections::BTreeSet;
     let size = Vec2::new(1600.0, 1300.0);
     let (ctx, mut app, _) = mix_view_fixture(size);
     // The names that more than one control carries on screen.

@@ -75,7 +75,6 @@ folders again before it opens the song, without a restart.
 
 The optional `source-tempos.json` in the same folder adds tempo identities for
 two original hip-hop products, whose shipped help states that all their samples
-were recorded at 90 BPM. It is generated from the original media by the
-owner-local `examples/export_source_tempos.rs` (the `examples/` folder is not
-published), with `MIXJAM_TECHNO_MEDIA_ROOT` set. This metadata adds tempo
-evidence; it does not add song-format support for those products.
+were recorded at 90 BPM. It is generated offline from the original media by a
+tool that is not published. This metadata adds tempo evidence; it does not add
+song-format support for those products.

@@ -7,9 +7,9 @@
 //! by the same factor, to attenuate content above the new Nyquist frequency
 //! before it can fold back. The finite transition band can leave audible
 //! images of near-Nyquist content when a source slows or has a low sample
-//! rate. The kernel is symmetric and centred on the
-//! read, so it adds no delay: a frame reads the same position as the
-//! straight-line read did, and a clip starting at frame N still sounds at N.
+//! rate. The kernel is symmetric and centred on the read, so it adds no
+//! delay: a frame reads the same position as the straight-line read did, and
+//! a clip starting at frame N still sounds at N.
 //!
 //! The kernel lives in one table, `DENSITY` points per source frame from
 //! its centre to its edge, with the slope to the next point beside each, so

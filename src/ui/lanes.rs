@@ -1,6 +1,6 @@
 //! The lane header's own parts in the Arrange view: the derived lane name
-//! and the short level fader. The song stores no lane names (decision A), so
-//! a lane is named after the sound family of its first clip.
+//! and the short level fader. The song stores no lane names, so a lane is
+//! named after the sound family of its first clip.
 use super::mixer::{fraction_gain, gain_fraction, gain_keys, gain_semantics};
 use super::*;
 use mixjam_techno::application::LibraryView;

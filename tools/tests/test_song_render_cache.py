@@ -14,9 +14,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'song'))
 import mixjam  # noqa: E402
-import master  # noqa: E402
 import render  # noqa: E402
-import samples  # noqa: E402
 from audible import lane_bars  # noqa: E402
 
 

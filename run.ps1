@@ -5,7 +5,7 @@ param(
     [string[]]$Samples = @(),
     [double]$SourceBpm = 140,
     [switch]$Build,
-    # Let a local agent operate the window. See "Agent control" in README.md.
+    # Let a local agent operate the window. See docs/AGENT-CONTROL.md.
     [switch]$Agent,
     [int]$AgentPort = 0
 )

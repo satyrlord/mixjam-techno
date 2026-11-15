@@ -37,14 +37,12 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
         "Booster compressor gain",
         "Booster width",
     ];
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
-        ctx.set_pixels_per_point(density);
         ctx.enable_accesskit();
         ctx.style_mut(|style| style.animation_time = 0.0);
         let size = Vec2::new(960.0, 720.0);
-        // The first frame after a density change still reports the old
-        // screen; open the tool once the minimum window is in place.
+        // Open the tool once the minimum window is in place.
         frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         app.boards.module = BottomModule::Mastering;
         let mut output = egui::FullOutput::default();
@@ -56,7 +54,7 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
             Rect::from_min_size(Pos2::ZERO, size).contains_rect(window),
             "The board must fit the minimum window."
         );
-        assert_folded_assets(&ctx, &output, density, "Indigo");
+        assert_folded_assets(&ctx, &output, "Indigo");
         // The input and output units and the pedals stay in view however
         // far the row scrolls. The minimum window scrolls the strip below.
         for name in ["Trim", "Trim value", "Clear OVER"] {

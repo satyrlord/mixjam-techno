@@ -108,7 +108,7 @@ fn benchmark_rejects_empty_or_out_of_song_workloads() {
     assert_eq!(workload.replaces, 4);
 }
 
-/// The cycles that the calling thread has run, and their rate per second.
+/// The cycles that the calling thread has run.
 #[cfg(windows)]
 fn thread_cycles() -> u64 {
     let mut cycles = 0;

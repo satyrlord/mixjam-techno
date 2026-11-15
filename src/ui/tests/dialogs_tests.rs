@@ -329,11 +329,10 @@ fn hardware_blocking_dialogs_keep_named_identity_and_safe_explicit_cancel() {
 fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_in_every_theme() {
     let size = Vec2::new(960.0, 720.0);
     let viewport = Rect::from_min_size(Pos2::ZERO, size);
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         for tall in [false, true] {
             let ctx = egui::Context::default();
             configure_style(&ctx);
-            ctx.set_pixels_per_point(density);
             ctx.enable_accesskit();
             let mut open = true;
             let mut draw = |events: Vec<egui::Event>| {
@@ -369,7 +368,7 @@ fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_in_eve
             for _ in 0..4 {
                 output = draw(vec![]);
             }
-            assert_folded_assets(&ctx, &output, density, "Utility");
+            assert_folded_assets(&ctx, &output, "Utility");
             assert!(
                 viewport.contains_rect(text_rect(&output, "UTILITY FIXTURE")),
                 "The title must fit."

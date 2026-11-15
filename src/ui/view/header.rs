@@ -24,9 +24,9 @@ const POSITION_SIZE: Vec2 = Vec2::new(112.0, 42.0);
 
 const POSITION_SIZE_COMPACT: Vec2 = Vec2::new(76.0, 40.0);
 
-/// The top bar: the transport row inside its vertical margins.
 const TOP_BAR_MARGIN: i8 = 8;
 
+/// The top bar: the transport row inside its vertical margins.
 pub(in super::super) const TOP_BAR_HEIGHT: f32 = TRANSPORT_ROW_HEIGHT + 2.0 * TOP_BAR_MARGIN as f32;
 
 /// Below this width the top bar packs tighter: a stacked brand, narrower
@@ -54,11 +54,9 @@ impl MixJamApp {
                         icons.brand_image(ui);
                     }
                     stacked_brand(ui, compact);
+                    ui.add_space(6.0);
                     // A narrow bar gives the separator's room to the name.
-                    if compact {
-                        ui.add_space(6.0);
-                    } else {
-                        ui.add_space(6.0);
+                    if !compact {
                         ui.separator();
                         ui.add_space(2.0);
                     }

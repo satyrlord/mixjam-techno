@@ -102,9 +102,8 @@ fn step_synth_edits_one_note_per_step_and_clears_only_the_viewed_bar() {
 
 #[test]
 fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable() {
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
-        ctx.set_pixels_per_point(density);
         ctx.enable_accesskit();
         ctx.style_mut(|style| {
             style.animation_time = 0.0;
@@ -131,7 +130,7 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         }
         let window = step_synth_board_rect(&output);
-        assert_folded_assets(&ctx, &output, density, "Olive");
+        assert_folded_assets(&ctx, &output, "Olive");
         assert!(viewport.contains_rect(window));
         // The status line sits in the tab row, above the board.
         let footer = step_synth_control_rect(&output, "Step synth status");
@@ -486,6 +485,7 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    app.session.take_notice();
     let output = activate_control(&ctx, &mut app, &output, "Active 2");
     assert_eq!(app.step_synth.state.active_bars, [true, true, false, false]);
     let output = activate_control(&ctx, &mut app, &output, "Active 1");
@@ -523,4 +523,11 @@ fn step_synth_options_apply_to_the_draft_without_starting_transport() {
         "Active bars and viewed bars must stay independent."
     );
     assert!(app.step_synth.state.validate().is_ok());
+    // Without an audio device, a Play request leaves this notice.
+    assert!(
+        !app.session
+            .take_notice()
+            .is_some_and(|(message, _)| message.contains("Audio output is unavailable")),
+        "Step synth options must not start the transport."
+    );
 }

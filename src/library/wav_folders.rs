@@ -263,11 +263,8 @@ impl Library {
         aliases: impl Fn(u32) -> &'m [crate::catalog::WaveMetadata] + Copy,
     ) -> Result<(), String> {
         for root in roots {
-            if self.source_root(product).is_some() {
-                self.identify_wav_product(product, root, metadata, true, aliases)?;
-            } else {
-                self.identify_wav_product(product, root, metadata, false, aliases)?;
-            }
+            let supplement = self.source_root(product).is_some();
+            self.identify_wav_product(product, root, metadata, supplement, aliases)?;
         }
         Ok(())
     }

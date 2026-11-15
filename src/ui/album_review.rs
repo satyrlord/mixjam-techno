@@ -5,7 +5,7 @@ use super::*;
 use mixjam_techno::application::album_review::{
     Energy, Kind, Review, Shelf, Track, clock_seconds,
     collection::{self, Filter, Sort, TOP_GENRES},
-    covers::{CoverCache, CoverLoader, CoverOutcome},
+    covers::{CACHE_LIMIT_BYTES, CoverCache, CoverLoader, CoverOutcome},
 };
 use std::collections::BTreeMap;
 
@@ -568,9 +568,10 @@ fn footer(ui: &mut egui::Ui, state: &mut AlbumReviewState) {
     let (count, bytes) = state.cache_usage();
     ui.horizontal_wrapped(|ui| {
         ui.label(format!(
-            "Cover cache: {count} cover{}, {:.1} MB of 256 MB.",
+            "Cover cache: {count} cover{}, {:.1} MB of {} MB.",
             if count == 1 { "" } else { "s" },
-            bytes as f64 / 1024.0 / 1024.0
+            bytes as f64 / 1024.0 / 1024.0,
+            CACHE_LIMIT_BYTES / 1024 / 1024
         ));
         let busy = state.covers().busy();
         if ui

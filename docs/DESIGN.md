@@ -287,7 +287,7 @@ and `room.rs` decides which panels fit.
 remain in `src/ui/stretch.rs`, `src/ui/effects.rs`, `src/ui/step_synth.rs`, and
 `src/ui/sample_editor.rs`; task adapters remain in `src/ui/tools.rs`. Application state
 and behavior live in `src/application.rs`. Sizes here use portable `px` labels for
-egui logical points. The sidecar records native component metadata; it does not
+egui logical points. The front matter records native component metadata; it does not
 define browser components or application behavior.
 
 ## Foundations

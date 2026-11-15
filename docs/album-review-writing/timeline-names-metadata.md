@@ -45,7 +45,7 @@ You can add a second short fragment for emphasis.
 - Be technical and specific. Name the instrument. Describe the change in rhythm or harmony.
 - You can start with a lowercase letter if the description continues the section label.
   For example, `section: "Intro"` → `description: "sub-tonal drone and distant chord cluster…"`.
-  More than a quarter of the events in the data use this continuation style.
+  About 1 event in 8 in the data uses this continuation style.
   Both capitalization styles are correct. Do not mix them without a reason in one track.
 
 **Good:** `Eminent 310 string pad enters — the warm, sustained chord establishing the album's harmonic language.`

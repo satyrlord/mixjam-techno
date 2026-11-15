@@ -128,7 +128,7 @@ Give exactly one of these values: `low`, `mid`, `high`, or `peak`.
 | `peak` | Major climax, maximum intensity, summit track, final assault |
 
 A track has one energy value. Use the highest level in the track, not the average level.
-Use `peak` rarely. Give it only to a true summit. In the current data, about 1 track in 17 is `peak`.
+Use `peak` rarely. Give it only to a true summit. In the current data, about 1 track in 27 is `peak`.
 
 ---
 

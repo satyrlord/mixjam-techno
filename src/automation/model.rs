@@ -320,8 +320,7 @@ pub fn return_label(value: f32) -> String {
     format!("{:.0}%", value * 100.0)
 }
 
-/// The return lanes of the four FX buses. A lane with points replaces its
-/// bus's return level.
+/// Whether none of the four FX buses has a return lane with points.
 pub fn no_returns(lanes: &[Vec<Point>; crate::fx::BUSES]) -> bool {
     lanes.iter().all(Vec::is_empty)
 }

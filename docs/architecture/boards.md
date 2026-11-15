@@ -20,8 +20,8 @@ Export tracks, which asks for a folder through `ask_path`.
 
 ## Mix view
 
-`src/ui/mix_view.rs` owns the score's Mix view. The frontend's `mix_view`
-flag turns each used lane's header into a row of fixed columns; the clips keep
+`src/ui/mix_view.rs` owns the score's Mix view. The frontend's
+`MixViewState::shown` flag turns each used lane's header into a row of fixed columns; the clips keep
 the rest of the lane. The row reuses the control helpers of `src/ui/mixer/`
 (`switch_button`, `polarity_button`, `gain_value`, `unity_button`,
 `pan_slider`, `center_button`, `send_knob`, `eq_button`, `track_state`, and
@@ -34,7 +34,7 @@ only its own track and returns it when it changed. One changed track is sent
 as `EditCommand::SetTrack`; the master level or more than one track in a frame
 as one `SetMixer`; the buses and the board as `SetEffects` and `SetMaster`. When the lanes' header column is
 narrower than the rows' 876 points, the columns past the track number and arm
-scroll sideways by `mix_scroll`, through the caption bar, Shift and the wheel,
+scroll sideways by `MixViewState::scroll`, through the caption bar, Shift and the wheel,
 or a control that takes keyboard focus outside the visible part. Header rows
 take horizontal wheel input after their controls and before the score scrolls.
 Track rows and the pinned Master and returns block include the frontend

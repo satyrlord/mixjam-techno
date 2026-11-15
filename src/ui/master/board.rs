@@ -211,7 +211,7 @@ fn pedal_row(
             .id_salt("pedal-row")
             .max_rect(viewport),
     );
-    // Its scrolls to a control land at once, as the controls ask: a move
+    // Scrolls to a control land at once, as the controls ask: a move
     // button that jumps a wide pedal stays in view on the next frame.
     let mut area = egui::ScrollArea::horizontal()
         .id_salt("pedal-row-scroll")

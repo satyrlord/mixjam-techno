@@ -456,10 +456,7 @@ pub(super) fn probe_all(
         })
         .collect();
     let pending: Vec<usize> = (0..paths.len()).filter(|i| probes[*i].is_none()).collect();
-    let workers = std::thread::available_parallelism()
-        .map_or(1, usize::from)
-        .clamp(1, 8)
-        .min(pending.len().max(1));
+    let workers = threads.min(pending.len().max(1));
     let next = AtomicUsize::new(0);
     // Each worker streams validated samples and retains only its reader buffer.
     let results = std::sync::Mutex::new(Vec::with_capacity(pending.len()));

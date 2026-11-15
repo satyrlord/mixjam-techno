@@ -560,7 +560,7 @@ fn missing_wave_labels_with_multibyte_text_remain_placeholders() {
 fn missing_time_stretcher_copies_are_rebuilt_from_the_original_sound() {
     let folder = Folder::new("t2-stretch");
     let root = folder.0.as_path();
-    // Two bars at 180 BPM, as a Rave loop.
+    // Two bars at 180 BPM, as a T1 loop.
     let samples = (0..117_600)
         .map(|i| ((i % 100) * 200 - 10_000) as i16)
         .collect();

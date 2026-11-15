@@ -1,5 +1,6 @@
 //! Album Review window through its accessible controls, as a person or an
 //! agent uses it.
+
 use super::*;
 use crate::library::Library;
 use mixjam_techno::application::album_review::{

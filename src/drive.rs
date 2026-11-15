@@ -8,12 +8,11 @@
 //! track, so the clean sound stays and the new harmonics come in under it.
 //!
 //! - At full quality the curve runs at four times the mix rate
-//!   (`master::dsp::Oversampler`),
-//!   and each of its samples is the curve's mean between two input samples
-//!   (antiderivative anti-aliasing), so the harmonics of high notes and hits
-//!   do not fold back as aliases. The clean track that the copy is compared
-//!   with takes the same path through a straight line, so the two differ only
-//!   by what the curve adds.
+//!   (`master::dsp::Oversampler`), and each of its samples is the curve's
+//!   mean between two input samples (antiderivative anti-aliasing), so the
+//!   harmonics of high notes and hits do not fold back as aliases. The clean
+//!   track that the copy is compared with takes the same path through a
+//!   straight line, so the two differ only by what the curve adds.
 //!   Reduced playback runs both interval means at the base rate and keeps
 //!   the integer stage delay with plain delays. It retains anti-aliasing by
 //!   the antiderivative method, but has more aliases and a different response.
@@ -42,8 +41,8 @@
 //! fractional delay: an eighth of a frame at 4x, half a frame at the base
 //! rate. Their phases agree with each other, but are not equivalent between
 //! modes. The clean track itself passes through a plain delay, so a `mix`
-//! of 0% at 0 dB output gives the track back bit for bit. A track whose drive is off mixes
-//! exactly as it did before the drive existed.
+//! of 0% at 0 dB output gives the track back bit for bit. A track whose
+//! drive is off mixes exactly as it did before the drive existed.
 use crate::master::{
     KnobRange,
     dsp::{Biquad, Coefficients, DcBlocker, Delay, Oversampler, db_to_gain, flush, pole},

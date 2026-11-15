@@ -246,41 +246,31 @@ impl MixJamApp {
                 ui.label(egui::RichText::new("Sample Editor").strong());
                 sample_editor_help(ui);
             });
-        dialog::window("Time Stretcher help")
-            .default_height(420.0)
-            .open(&mut self.help.stretch)
-            .default_width(450.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, stretch_help);
-        dialog::window("Effect Studio help")
-            .default_height(420.0)
-            .open(&mut self.help.effects)
-            .default_width(450.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, effects_help);
-        dialog::window("Mastering help")
-            .default_height(420.0)
-            .open(&mut self.help.master)
-            .default_width(450.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, master_help);
-        dialog::window("Step synth help")
-            .default_height(420.0)
-            .open(&mut self.help.step_synth)
-            .default_width(450.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, step_synth_help);
-        dialog::window("Sample editor help")
-            .default_height(420.0)
-            .open(&mut self.help.sample_edit)
-            .default_width(450.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, sample_editor_help);
+        help_window(
+            ctx,
+            "Time Stretcher help",
+            &mut self.help.stretch,
+            stretch_help,
+        );
+        help_window(
+            ctx,
+            "Effect Studio help",
+            &mut self.help.effects,
+            effects_help,
+        );
+        help_window(ctx, "Mastering help", &mut self.help.master, master_help);
+        help_window(
+            ctx,
+            "Step synth help",
+            &mut self.help.step_synth,
+            step_synth_help,
+        );
+        help_window(
+            ctx,
+            "Sample editor help",
+            &mut self.help.sample_edit,
+            sample_editor_help,
+        );
     }
 
     pub(super) fn sample_conflicts_open(&self) -> bool {
@@ -447,6 +437,22 @@ impl MixJamApp {
             );
         }
     }
+}
+
+/// A tool's Help window, sized like the application's.
+fn help_window(
+    ctx: &egui::Context,
+    title: &str,
+    open: &mut bool,
+    contents: impl FnOnce(&mut egui::Ui),
+) {
+    dialog::window(title)
+        .default_height(420.0)
+        .open(open)
+        .default_width(450.0)
+        .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
+        .constrain_to(ctx.viewport_rect().shrink(12.0))
+        .show(ctx, contents);
 }
 
 fn stretch_help(ui: &mut egui::Ui) {

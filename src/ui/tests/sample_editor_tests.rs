@@ -250,10 +250,9 @@ fn sample_editor_native_fields_slider_and_steppers_edit_only_the_draft() {
 fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edits() {
     let size = Vec2::new(960.0, 720.0);
     let viewport = Rect::from_min_size(Pos2::ZERO, size);
-    for density in themed_densities() {
+    for _ in themes_in_turn() {
         let (ctx, mut app) = fixture();
         ctx.enable_accesskit();
-        ctx.set_pixels_per_point(density);
         ctx.style_mut(|style| style.animation_time = 0.0);
         app.selection.sample = Some(1);
         app.sample_edit.open = true;
@@ -271,8 +270,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
             output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         }
         let window = effects_control_rect(&output, "SAMPLE EDITOR");
-        let panel = window;
-        assert_folded_assets(&ctx, &output, density, "Granite");
+        assert_folded_assets(&ctx, &output, "Granite");
         assert!(viewport.contains_rect(window));
         let footer = effects_control_rect(&output, "Sample editor status");
         assert!(window.contains_rect(footer));
@@ -288,7 +286,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
         ];
         let bounds = controls.map(|label| effects_control_rect(&output, label));
         for (label, bounds) in controls.iter().zip(bounds) {
-            assert!(panel.contains_rect(bounds), "{label} must fit the skin.");
+            assert!(window.contains_rect(bounds), "{label} must fit the skin.");
             assert!(!bounds.intersects(footer), "{label} must not touch status.");
         }
         let start_value = effects_control_rect(&output, "Start frame");
@@ -317,7 +315,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
                     _ => None,
                 })
                 .expect("Numeric field must paint its value inside its own container.");
-            let offset = (glyph.center() - container.center()).abs() * density;
+            let offset = (glyph.center() - container.center()).abs();
             assert!(
                 offset.x <= 1.0 && offset.y <= 1.0,
                 "{name} glyph offset {offset:?}"
@@ -347,7 +345,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
             "Save edited sound",
         ] {
             assert!(
-                panel.contains_rect(text_rect(&output, label)),
+                window.contains_rect(text_rect(&output, label)),
                 "{label} must remain readable inside the panel."
             );
         }

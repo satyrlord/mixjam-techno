@@ -87,7 +87,7 @@ Enter uses the current search, including text received in the same frame.
 Enter or a click runs the command and closes
 the list; Esc or a click outside closes it. When nothing matches, the list says
 "Nothing matches. Clear the field to see the whole list again." Concept
-entries for themes, sections, tracks and sounds stay out (decision M).
+entries for themes, sections, tracks and sounds stay out.
 The search has the accessible name "Find a command". The modal blocks workspace
 controls, arrangement requests, and song drops. A file or confirmation modal
 dismisses the command list before it can consume more input.

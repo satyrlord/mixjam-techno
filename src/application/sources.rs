@@ -1,6 +1,6 @@
 //! Audio sources: registering and saving sounds and patterns, processing them, and the Time Stretcher.
 use super::{EffectsState, Pcm, Session, StepSynthState, pattern_beside};
-use crate::audio::{self};
+use crate::audio;
 use std::{path::Path, sync::mpsc};
 
 /// The source and tempo values captured for one Time Stretcher operation.

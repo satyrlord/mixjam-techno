@@ -156,7 +156,6 @@ fn stretch_panel_exposes_busy_preview_saved_and_error_states() {
 fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin() {
     let long_preview = "Listening: 160 to 120 BPM. Settings changed; listen again. ".repeat(20);
     let long_save = format!("Saved {}result.wav.", "long folder name/".repeat(60));
-    let density = 1.0;
     for (processing, listening, saved, message, error, missing) in [
         (false, false, false, None, false, false),
         (
@@ -187,7 +186,6 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
         (false, false, false, None, false, true),
     ] {
         let output = stretch_layout_output(
-            density,
             missing,
             stretch::Feedback {
                 processing,
@@ -252,7 +250,7 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
                 "Long message must be clipped to its scroll region"
             );
         } else {
-            let offset = (text_bounds.center() - painted.0.clip_rect.center()) * density;
+            let offset = text_bounds.center() - painted.0.clip_rect.center();
             assert!(
                 offset.x.abs() <= 1.0 && offset.y.abs() <= 1.0,
                 "Footer message is not visibly centered: {offset:?}"
@@ -272,7 +270,7 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
                 footer.contains_rect(details),
                 "Recovery control leaves its footer"
             );
-            assert!((details.center().y - footer.center().y).abs() * density <= 1.0);
+            assert!((details.center().y - footer.center().y).abs() <= 1.0);
             let text = output
                 .shapes
                 .iter()

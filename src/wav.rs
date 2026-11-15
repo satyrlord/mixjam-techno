@@ -108,7 +108,7 @@ fn read_format(file: &mut impl Read, size: u64) -> Result<(hound::WavSpec, u16),
     let block = u16_at(12);
     let bits = u16_at(14);
     let extensible = tag == EXTENSIBLE;
-    if tag == EXTENSIBLE {
+    if extensible {
         if fields.len() < 40 {
             return Err("The WAV extensible format chunk is too short.".into());
         }
@@ -123,7 +123,7 @@ fn read_format(file: &mut impl Read, size: u64) -> Result<(hound::WavSpec, u16),
         }
         tag = u16_at(24);
         let valid_bits = u16_at(18);
-        // Zero retains the container width, as in the earlier reader.
+        // A zero valid width keeps the container width.
         if valid_bits > bits || (tag == IEEE_FLOAT && valid_bits != 0 && valid_bits != bits) {
             return Err("The WAV valid sample width is invalid.".into());
         }
