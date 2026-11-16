@@ -41,12 +41,13 @@ pub(super) struct EffectsFeedback {
     pub(super) error: bool,
 }
 
+/// The Step synth's last message on the status line, so that a new palette
+/// source can take it back to the idle hint.
 #[derive(Default)]
 pub(super) struct StepSynthFeedback {
     /// The palette source that the message describes. An explicit file has none.
     pub(super) source: Option<u32>,
     pub(super) message: Option<String>,
-    pub(super) error: bool,
 }
 
 /// The Effect Studio window: whether it is open, its effects, and its result.
@@ -608,8 +609,7 @@ impl MixJamApp {
         self.step_synth_say(feedback.0, feedback.1);
     }
 
-    /// Show a Step synth message on the board's status line and on the main
-    /// one, so the two lines never disagree.
+    /// Show a Step synth message on the status line.
     pub(super) fn step_synth_say(&mut self, text: impl Into<String>, error: bool) {
         let text = text.into();
         if error {
@@ -620,8 +620,8 @@ impl MixJamApp {
         self.step_synth_notice();
     }
 
-    /// Copy the main status to the board's status line. The message keeps
-    /// the current source, so it stays when the board next draws.
+    /// Mark the status line's message as the Step synth's, for the current
+    /// source. A later palette source takes it back to the idle hint.
     pub(super) fn step_synth_notice(&mut self) {
         self.step_synth.feedback.source = self
             .step_synth
@@ -631,7 +631,6 @@ impl MixJamApp {
             .then(|| self.source_id())
             .flatten();
         self.step_synth.feedback.message = Some(self.status.clone());
-        self.step_synth.feedback.error = self.status_error;
     }
 
     pub(super) fn edited_pcm(&self) -> Result<Pcm, String> {

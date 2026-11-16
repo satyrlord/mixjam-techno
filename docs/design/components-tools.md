@@ -68,8 +68,9 @@ presentation makes no claim of DSP equivalence.
 
 Step synth is an Olive board in the lower panel. Its tool rail button chooses
 it, and folds the lower panel when the board already shows.
-`src/ui/step_synth.rs` supplies the board and the status line in the top row
-of the panel.
+`src/ui/step_synth.rs` supplies the board and the top row of the panel. The
+board has no status line of its own: its messages and its idle hint show in
+the status bar.
 
 ### Board layout
 
@@ -230,14 +231,18 @@ A pattern that peaks over full scale, for example from Accent and filter
 drive, plays and saves turned down as a whole to full scale. Listen and Save
 sound then say by how many dB. The render does not clip.
 
-Local feedback tells about source guidance, preview, file choice,
-cancellation, errors, and save confirmation. The board's status line and the
-main status line show the same message. A change of the palette source
-resets the feedback. An explicit file keeps its own feedback. Missing palette
-audio offers Import details. The full feedback stays in a tooltip and a polite
-accessible live region, and errors include an Error label. Help explains the
-source, grid, bars, tempo, effects, and file workflow. If the lower panel
-folds, or another board shows, the draft and the source selection stay.
+The status bar tells about source guidance, preview, file choice,
+cancellation, errors, and save confirmation. At rest, while the board shows,
+it gives the board's hint: how to place notes, how to leave the Effects pane,
+or how to choose a source when none is available or its audio is missing. A
+change of the palette source takes the old source's message off the status
+bar, even when the board is hidden. Unrelated application notices stay
+visible. An explicit file keeps its own message. The full feedback stays in
+a tooltip and a polite accessible live region. Errors include an Error
+label. Missing palette audio offers Import details in the board's top row.
+Help explains the source, grid, bars, tempo, effects, and file workflow. If
+the lower panel folds, or another board shows, the draft and the source
+selection stay.
 
 ## Sample Editor
 

@@ -1,5 +1,5 @@
-//! The board's smaller parts: dials, the Length well, the toggle, the status
-//! well, the styles of its forms and scroll bars, and its lettering.
+//! The board's smaller parts: dials, the Length well, the toggle, the styles
+//! of its forms and scroll bars, and its lettering.
 use super::*;
 
 /// A dial in a cell: the knob at the left, its name over its value well.
@@ -173,17 +173,6 @@ pub(super) fn toggle(
         _ => status,
     };
     response.hover_hint(tooltip);
-}
-
-pub(super) fn status_footer(ui: &mut egui::Ui, rect: Rect, text: &str, error: bool, missing: bool) {
-    controls::well(ui, rect);
-    let response = ui.interact(rect, ui.id().with("status"), Sense::hover());
-    named(&response, egui::WidgetType::Panel, "Step synth status");
-    let text_rect = Rect::from_min_max(
-        rect.min + Vec2::new(9.0, 5.0),
-        rect.max - Vec2::new(if missing { 144.0 } else { 9.0 }, 5.0),
-    );
-    controls::status_text(ui, text_rect, "step-synth-status", text, 12.5, error, text);
 }
 
 pub(super) fn scroll_style(ui: &mut egui::Ui) {

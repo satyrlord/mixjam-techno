@@ -113,11 +113,15 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         let window = step_synth_board_rect(&output);
         assert_folded_assets(&ctx, &output, "Olive");
         assert!(viewport.contains_rect(window));
-        // The status line sits in the top row, above the board.
-        let footer = step_synth_control_rect(&output, "Step synth status");
+        // The pane switch sits in the top row, above the board.
+        let notes = step_synth_control_rect(&output, "Notes pane");
         assert!(
-            viewport.contains_rect(footer) && footer.bottom() <= window.top(),
-            "Status {footer:?} must sit in the top row above {window:?}"
+            viewport.contains_rect(notes) && notes.bottom() <= window.top(),
+            "Notes pane {notes:?} must sit in the top row above {window:?}"
+        );
+        assert!(
+            !has_control(&output, "Step synth status"),
+            "The board has no status line of its own; the status bar has it."
         );
         assert_eq!(
             accessible_node(&output, "Step synth source sound")
@@ -146,8 +150,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
                 "{label} must start on the board."
             );
             assert!(
-                !bounds.intersects(footer),
-                "{label} must not overlap the status footer."
+                !bounds.intersects(notes),
+                "{label} must not overlap the board's top row."
             );
         }
         // A short lower panel scrolls the settings column: the wheel over
@@ -258,13 +262,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
             !app.session.layout().boards,
             "A second rail press folds the board."
         );
-        // Folded, the lower panel goes with its top row and status line.
-        for hidden in [
-            "Step synth status",
-            "Step synth source sound",
-            "Notes pane",
-            "Load pattern",
-        ] {
+        // Folded, the lower panel goes with its top row.
+        for hidden in ["Step synth source sound", "Notes pane", "Load pattern"] {
             assert!(
                 !has_control(&output, hidden),
                 "{hidden} must hide when folded."

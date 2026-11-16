@@ -289,10 +289,13 @@ fn every_name() -> BTreeSet<String> {
         app.boards.module = module;
         names(&context, &mut app, &mut found);
     }
-    // Step synth with a source, as its former window was visited.
+    // Step synth with a source, as its former window was visited. At rest
+    // the status bar gives the board's hint.
     app.selection.sample = Some(1);
     app.boards.module = BottomModule::StepSynth;
+    let status = std::mem::replace(&mut app.status, DEFAULT_STATUS.into());
     names(&context, &mut app, &mut found);
+    app.status = status;
     app.selection.sample = None;
     app.boards.module = BottomModule::Mixer;
     app.eq_track = Some(0);

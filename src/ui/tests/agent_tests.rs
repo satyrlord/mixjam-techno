@@ -17,7 +17,7 @@ fn agent_scopes_step_synth_toolbar_controls_with_its_board() {
     );
     let nodes = reply["nodes"].as_array().unwrap();
     for name in [
-        "Step synth status",
+        "Notes pane",
         "Step synth help",
         "Import details",
         "Step synth BPM",

@@ -16,6 +16,7 @@ impl MixJamApp {
     }
 
     pub(in super::super) fn status_bar(&mut self, ctx: &egui::Context, rect: Rect) {
+        self.reconcile_step_synth_feedback();
         let inner = rect - egui::Margin::symmetric(18, 3);
         let mut ui = egui::Ui::new(
             ctx.clone(),
@@ -154,20 +155,33 @@ impl MixJamApp {
                     )
                     .hover_hint(reduced);
                 }
-                // The idle text would contradict a missing-sound notice.
-                let status = if self.status == DEFAULT_STATUS
-                    && !self.session.missing_samples().is_empty()
-                {
+                // At rest, the Step synth board in view gives its own hint.
+                // The general idle text would contradict a missing-sound notice.
+                let board_hint = self.step_synth.hint.take();
+                let status = if self.status != DEFAULT_STATUS {
+                    display_paths(&self.status)
+                } else if let Some(hint) = board_hint {
+                    hint.to_owned()
+                } else if !self.session.missing_samples().is_empty() {
                     String::new()
                 } else {
                     display_paths(&self.status)
                 };
                 if !status.is_empty() {
-                    ui.add(
+                    let response = ui.add(
                         egui::Label::new(egui::RichText::new(&status).size(12.0).color(color))
                             .truncate(),
-                    )
-                    .hover_hint(&status);
+                    );
+                    let spoken = if self.status_error {
+                        format!("Error: {status}")
+                    } else {
+                        status.clone()
+                    };
+                    ui.ctx().accesskit_node_builder(response.id, |node| {
+                        node.set_value(spoken);
+                        node.set_live(egui::accesskit::Live::Polite);
+                    });
+                    response.hover_hint(&status);
                 }
             },
         );

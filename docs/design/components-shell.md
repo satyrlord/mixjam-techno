@@ -135,8 +135,10 @@ painter (no icon asset), on the 24-unit grid of the rail icons with their
 
 The idle status is a usage hint in Muted: "Space plays the song. Drag a sound
 from the Sounds panel onto the score. Ctrl+K lists every command." It
-truncates, and its hover hint gives the full text. Errors and application
-notices replace it and stay visible.
+truncates, and its hover hint gives the full text. While the Step synth board
+shows, its own hint takes the place of the idle text. Errors and application
+notices replace it and stay visible. The Step synth board has no status line
+of its own.
 
 The right end of the status bar holds a PANELS heading in the style of the
 rail group headings (10-point muted uppercase, 0.6-point tracking), five panel

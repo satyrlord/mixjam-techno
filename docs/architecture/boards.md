@@ -92,7 +92,8 @@ that board:
 
 - Mastering: its preset, Bypass all, status, and help.
 - Mixer: Export tracks….
-- Step synth: Notes and Effects, its status line, Import details, and help.
+- Step synth: Notes and Effects, its undo and redo keys, Import details, and
+  help. Its messages show in the status bar.
 
 Each board renders only its body below that row. When the lower panel is
 folded, it leaves no strip. The Mix view of the score has its own Arrange and
@@ -164,11 +165,12 @@ octave in view, and the octave moves from -3 to +3. Below the grid are the
 Accent, Slide, and Velocity lanes.
 
 The board is an accessible tab panel named Step synth, and agents scope to it.
-Its status line and Import details are in a named Step synth toolbar in the top
-row of the panel. The agent scopes this toolbar with the board. The board is
-512 points high, and the panel gives it its whole height when the window has
-the space. Text, grid cells, switches, and input stay live. The pitch grid,
-the settings column, and the replacement effects form have bounded scrolling.
+Its pane switch, undo keys, and Import details are in a named Step synth
+toolbar in the top row of the panel. The agent scopes this toolbar with the
+board. The board is 512 points high, and the panel gives it its whole height
+when the window has the space. Text, grid cells, switches, and input stay
+live. The pitch grid, the settings column, and the replacement effects form
+have bounded scrolling.
 The source, the step labels, the actions, and the feedback stay available. The
 shared `effects_controls` form keeps its algorithms and ranges, and uses the
 common controls.
@@ -187,7 +189,7 @@ history do not use the GUI. They are in `src/synth/edit.rs` and
 `src/synth/edit_tests.rs` tests the edits without a window. The board files
 are these:
 
-- `step_synth.rs`: the source, feedback, actions, and the board's frame.
+- `step_synth.rs`: the source, actions, and the board's frame.
 - `editor.rs`: the grid view, and its link to the undo history.
 - `layout.rs`: the board's measures, and the steps that are in view.
 - `keys.rs` and `parts.rs`: the keys, dials, wells, and lettering.
@@ -213,9 +215,11 @@ the result in Step synth at the draft BPM and keeps the source selection.
 `Session::save_sequence` stages the WAV and the draft at
 `synth::pattern_beside` as one batch, with rollback if a replacement fails.
 Registration comes after a successful publication. The save choice, the
-cancellation, a failure, and a success update the local feedback.
-`MixJamApp::step_synth_say` puts each board message on the local feedback
-and on the main status line together. For missing palette audio, the board
+cancellation, a failure, and a success update the main status line.
+`MixJamApp::step_synth_say` also stores the message and its palette source in
+`StepSynthFeedback`. A change of palette source clears that message, even
+when the board is hidden. An unrelated application notice stays visible, and
+an explicit file keeps its own feedback. For missing palette audio, the board
 offers Import details.
 
 `synth::render_measured` gives the render and the dB that it was turned

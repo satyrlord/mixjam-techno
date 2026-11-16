@@ -60,18 +60,13 @@ impl Standalone {
             },
             |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    // The status line and Import details sit in the top row
-                    // above the board.
+                    // Import details sits in the top row above the board.
                     let bar = ui
                         .horizontal(|ui| {
                             step_synth::toolbar(
                                 ui,
                                 800.0,
                                 source(),
-                                step_synth::Feedback {
-                                    message: None,
-                                    error: false,
-                                },
                                 effects,
                                 step_synth::History {
                                     undo: false,

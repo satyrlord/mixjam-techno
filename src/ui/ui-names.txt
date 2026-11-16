@@ -989,7 +989,6 @@ other	SAMPLE EDITOR HELP
 other	STEP SYNTH
 other	STEP SYNTH HELP
 other	Save your changes?
-other	Step synth status
 other	TIME STRETCHER
 other	TIME STRETCHER HELP
 other	TRACK 1 EQ

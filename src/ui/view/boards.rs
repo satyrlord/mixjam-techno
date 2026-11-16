@@ -45,6 +45,8 @@ pub(in super::super) struct StepSynthBoard {
     pub(in super::super) bar: usize,
     pub(in super::super) effects_expanded: bool,
     pub(in super::super) feedback: StepSynthFeedback,
+    /// The idle hint for the status bar, set while the board's toolbar draws.
+    pub(in super::super) hint: Option<&'static str>,
     /// The grid's view: octave, scale, and the selected steps.
     pub(in super::super) grid: step_synth::Editor,
     pub(in super::super) listening: Option<StepSynthAudition>,
@@ -264,26 +266,26 @@ impl MixJamApp {
         });
     }
 
-    /// The Step synth board's status line, Import details for missing audio, and
-    /// its help at the row's end.
+    /// The Step synth board's pane switch, undo keys, Import details for
+    /// missing audio, and its help at the row's end. The board's idle hint
+    /// goes to the status bar.
     fn step_synth_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.scope(|ui| {
             let (name, available, missing, explicit_file) = self.step_synth_source();
             let icons = self.icons(ui.ctx());
+            let source = step_synth::Source {
+                name: &name,
+                available,
+                missing,
+                explicit_file,
+                length_ms: self.step_synth.adopted.as_ref().and_then(|(_, ms)| *ms),
+            };
+            self.step_synth.hint =
+                Some(step_synth::hint(&source, self.step_synth.effects_expanded));
             let action = step_synth::toolbar(
                 ui,
                 ui.available_width() - 40.0,
-                step_synth::Source {
-                    name: &name,
-                    available,
-                    missing,
-                    explicit_file,
-                    length_ms: self.step_synth.adopted.as_ref().and_then(|(_, ms)| *ms),
-                },
-                step_synth::Feedback {
-                    message: self.step_synth.feedback.message.as_deref(),
-                    error: self.step_synth.feedback.error,
-                },
+                source,
                 &mut self.step_synth.effects_expanded,
                 step_synth::History {
                     undo: self.step_synth.grid.can_undo(false),
@@ -326,18 +328,28 @@ impl MixJamApp {
         });
     }
 
-    /// The Step synth source: its name, and whether it is available, missing,
-    /// or an explicit file. A new palette source clears the old feedback.
-    fn step_synth_source(&mut self) -> (String, bool, bool, bool) {
-        let explicit_file = self.step_synth.state.source.is_some();
-        let source_id = self.source_id();
-        let palette_source = source_id.filter(|_| !explicit_file);
+    /// A new palette source clears its old feedback, even when the board is
+    /// hidden. An unrelated status message and an explicit file stay intact.
+    pub(in super::super) fn reconcile_step_synth_feedback(&mut self) {
+        let palette_source = self
+            .source_id()
+            .filter(|_| self.step_synth.state.source.is_none());
         if self.step_synth.feedback.source != palette_source {
+            if self.step_synth.feedback.message.as_ref() == Some(&self.status) {
+                self.message(DEFAULT_STATUS);
+            }
             self.step_synth.feedback = StepSynthFeedback {
                 source: palette_source,
                 ..Default::default()
             };
         }
+    }
+
+    /// The Step synth source: its name, and whether it is available, missing,
+    /// or an explicit file.
+    fn step_synth_source(&self) -> (String, bool, bool, bool) {
+        let explicit_file = self.step_synth.state.source.is_some();
+        let source_id = self.source_id();
         let name = self.step_synth.state.source.as_ref().map_or_else(
             || self.source_name(),
             |path| {
@@ -451,8 +463,8 @@ impl MixJamApp {
             step_synth::Action::PaletteSource => {
                 self.step_synth.grid.edit("the source change");
                 self.step_synth.state.source = None;
-                // The board then shows its guidance for the palette source,
-                // such as missing audio; the main line goes back to idle.
+                // The status line goes back to the board's idle hint for the
+                // palette source, such as missing audio.
                 self.step_synth.feedback = Default::default();
                 self.message(DEFAULT_STATUS);
             }
@@ -490,14 +502,9 @@ impl MixJamApp {
         }) {
             self.step_synth.listening = None;
             // The preview ended on its own: its Listening text is stale.
-            let feedback = &mut self.step_synth.feedback;
-            if !feedback.error
-                && feedback
-                    .message
-                    .as_deref()
-                    .is_some_and(|message| message.starts_with("Listening"))
-            {
-                feedback.message = Some("Preview ended.".into());
+            if !self.status_error && self.status.starts_with("Listening to the Step synth") {
+                self.message("Preview ended.");
+                self.step_synth_notice();
             }
         }
         self.step_synth

@@ -1,36 +1,38 @@
 //! The board's top row in the lower panel: the Notes and Effects switch, the
-//! board's undo and redo keys, the status line and, for missing audio,
-//! Import details.
+//! board's undo and redo keys and, for missing audio, Import details. The
+//! board's messages and its idle hint show in the status bar.
 use super::*;
 
-/// The toolbar, `width` points wide, as the Mastering status sits.
+/// The board's idle hint for the status bar: what to do next with `source`,
+/// on the pane that `show_effects` picks.
+pub(in super::super) fn hint(source: &Source<'_>, show_effects: bool) -> &'static str {
+    if source.missing_audio() {
+        "Missing audio. Choose a source file or open Import details."
+    } else if !source.available {
+        "Choose a source file or select a sound in the palette."
+    } else if show_effects {
+        "Adjust the pattern effects. Notes returns to the grid."
+    } else {
+        "Click places or clears a note. Drag a note's end to hold it."
+    }
+}
+
+/// The toolbar, `width` points wide.
 pub(in super::super) fn toolbar(
     ui: &mut egui::Ui,
     width: f32,
     source: Source<'_>,
-    feedback: Feedback<'_>,
     show_effects: &mut bool,
     history: History<'_>,
 ) -> Action {
     let missing = source.missing_audio();
-    let status = feedback.message.unwrap_or(if missing {
-        "Missing audio. Choose a source file or open Import details."
-    } else if !source.available {
-        "Choose a source file or select a sound in the palette."
-    } else if *show_effects {
-        "Adjust the pattern effects. Notes returns to the grid."
-    } else {
-        "Click places or clears a note. Drag a note's end to hold it."
-    });
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width.max(0.0), 28.0), Sense::hover());
     let mut strip = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     dialog::hardware_style(&mut strip, controls::Palette::Olive);
     pane_switch(&mut strip, rect.min, show_effects);
     let (action, x) = history_keys(&mut strip, rect.min + Vec2::new(154.0, 0.0), &history);
-    let rect = Rect::from_min_max(Pos2::new(x + 12.0, rect.top()), rect.max);
-    status_footer(&mut strip, rect, status, feedback.error, missing);
     let details = Rect::from_min_size(
-        Pos2::new(rect.right() - 130.0, rect.top() + 1.0),
+        Pos2::new(x + 12.0, rect.top() + 1.0),
         Vec2::new(128.0, 26.0),
     );
     if missing && button(&mut strip, details, "Import details", true, false).clicked() {

@@ -36,7 +36,7 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
         "An explicit file must bypass the missing palette source."
     );
     let output = activate_control(&ctx, &mut app, &output, "Listen");
-    assert!(app.status_error && app.step_synth.feedback.error);
+    assert!(app.status_error);
     assert_eq!(
         app.step_synth.feedback.message.as_deref(),
         Some(app.status.as_str())
@@ -52,7 +52,8 @@ fn step_synth_file_source_can_recover_a_missing_palette_source_and_reports_read_
     let output = activate_control(&ctx, &mut app, &output, "Palette sound");
     assert!(app.step_synth.state.source.is_none());
     assert!(app.step_synth.feedback.message.is_none());
-    assert!(!app.step_synth.feedback.error);
+    assert_eq!(app.status, DEFAULT_STATUS);
+    assert!(!app.status_error);
     assert!(
         step_synth_accessible_node(&output, "Listen")
             .1
@@ -104,7 +105,7 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
         app.step_synth.feedback.message.as_deref(),
         Some("Source selection cancelled.")
     );
-    assert!(!app.step_synth.feedback.error);
+    assert!(!app.status_error);
     assert_eq!(app.step_synth.state, saved);
     assert!(app.step_synth.state.source.is_none());
     let pattern = dir.join("sequence.json");
@@ -130,7 +131,6 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
     std::fs::write(&broken, b"{ not a pattern }").unwrap();
     app.finish_path(FileRequest::LoadPattern, Some(broken));
     assert!(app.status_error);
-    assert!(app.step_synth.feedback.error);
     assert_eq!(
         app.step_synth.feedback.message.as_deref(),
         Some(app.status.as_str())
@@ -144,7 +144,6 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
         Some(dir.join("absent-parent/sequence.json")),
     );
     assert!(app.status_error);
-    assert!(app.step_synth.feedback.error);
     assert_eq!(
         app.step_synth.feedback.message.as_deref(),
         Some(app.status.as_str())
@@ -155,6 +154,109 @@ fn step_synth_pattern_paths_keep_the_draft_on_cancel_or_error_and_restore_comple
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert_eq!(app.step_synth.state, saved);
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn step_synth_status_bar_announces_full_messages_and_labels_errors() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::StepSynth;
+    app.selection.sample = Some(1);
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for error in [false, true] {
+        let message = "The Step synth result must remain available in full. ".repeat(12);
+        app.step_synth_say(&message, error);
+        let output = frame_at_size(
+            &ctx,
+            &mut app,
+            vec![],
+            egui::Modifiers::NONE,
+            Vec2::new(960.0, 720.0),
+        );
+        let spoken = if error {
+            format!("Error: {message}")
+        } else {
+            message
+        };
+        assert!(
+            output
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(
+                    |(_, node)| [node.label(), node.value()].contains(&Some(spoken.as_str()))
+                        && node.live() == Some(egui::accesskit::Live::Polite)
+                ),
+            "The full message must be a polite live status, with errors labelled: {spoken}"
+        );
+    }
+}
+
+fn hide_step_synth(app: &mut MixJamApp, mode: &str) {
+    match mode {
+        "folded" => app.set_layout(|layout| layout.boards = false),
+        "other board" => app.boards.module = BottomModule::Mixer,
+        "maximised" => app.set_layout(|layout| layout.maximised = true),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn step_synth_hidden_board_drops_the_old_palette_sources_status() {
+    for mode in ["folded", "other board", "maximised"] {
+        for error in [false, true] {
+            let (ctx, mut app) = missing_fixture();
+            app.boards.module = BottomModule::StepSynth;
+            app.selection.sample = Some(1);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            app.step_synth_say("A result for the old source.", error);
+            hide_step_synth(&mut app, mode);
+            app.select_clip(1, false);
+            assert_ne!(app.step_synth.feedback.source, app.selection.sample);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.status, DEFAULT_STATUS, "Board state: {mode}");
+            assert!(!app.status_error, "Board state: {mode}");
+            assert!(app.step_synth.feedback.message.is_none());
+        }
+    }
+}
+
+#[test]
+fn step_synth_hidden_source_changes_keep_unrelated_and_file_notices() {
+    for mode in ["folded", "other board", "maximised"] {
+        for error in [false, true] {
+            let (ctx, mut app) = missing_fixture();
+            app.boards.module = BottomModule::StepSynth;
+            app.selection.sample = Some(1);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            app.step_synth_say("A result for the old source.", false);
+            let notice = "An unrelated application notice.";
+            if error {
+                app.error(notice);
+            } else {
+                app.message(notice);
+            }
+            hide_step_synth(&mut app, mode);
+            app.select_clip(1, false);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.status, notice, "Board state: {mode}");
+            assert_eq!(app.status_error, error, "Board state: {mode}");
+            assert!(app.step_synth.feedback.message.is_none());
+
+            app.finish_path(
+                FileRequest::SynthSource,
+                Some(std::env::temp_dir().join("step-synth-explicit-source.wav")),
+            );
+            let file_notice = app.status.clone();
+            app.selection.sample = Some(1);
+            frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(app.status, file_notice, "Board state: {mode}");
+            assert_eq!(app.step_synth.feedback.message, Some(file_notice));
+        }
+    }
 }
 
 #[test]
@@ -184,6 +286,10 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
         app.step_synth.feedback.message.is_none(),
         "A new palette source must drop the previous source's feedback."
     );
+    assert_eq!(
+        app.status, DEFAULT_STATUS,
+        "A new palette source must take the old message off the status line."
+    );
     assert!(
         output
             .platform_output
@@ -195,7 +301,7 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
             .any(|(_, node)| [node.label(), node.value()].contains(&Some(
                 "Missing audio. Choose a source file or open Import details."
             ))),
-        "The footer must return to the missing-audio guidance."
+        "The status bar must return to the missing-audio guidance."
     );
     app.finish_path(FileRequest::SynthSource, Some(dir.join("source.wav")));
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -284,8 +390,7 @@ fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
     assert!(!wav.exists(), "A pattern failure must not publish the WAV.");
     assert!(app.selection.sample.is_none());
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert!(app.status_error && app.step_synth.feedback.error);
-    // The board and the main status line show the same message.
+    assert!(app.status_error);
     assert!(app.status.starts_with("Cannot save the sound: "));
     assert_eq!(app.step_synth.feedback.message, Some(app.status.clone()));
     std::fs::remove_dir_all(dir).unwrap();
@@ -340,7 +445,7 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
     app.selection.sample = None;
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let listen = step_synth_control_rect(&output, "Listen");
-    // The footer shows the same sentence, so count the tooltip as an added copy.
+    // Count the tooltip as an added copy of the sentence.
     let copies = |output: &egui::FullOutput| {
         output
             .shapes

@@ -44,7 +44,7 @@ use layout::*;
 use notes::*;
 use parts::*;
 use settings::*;
-pub(super) use toolbar::toolbar;
+pub(super) use toolbar::{hint, toolbar};
 
 pub(super) struct Source<'a> {
     pub name: &'a str,
@@ -65,11 +65,6 @@ impl Source<'_> {
     fn playable(&self) -> bool {
         self.available && !self.missing_audio()
     }
-}
-
-pub(super) struct Feedback<'a> {
-    pub message: Option<&'a str>,
-    pub error: bool,
 }
 
 pub(super) enum Action {

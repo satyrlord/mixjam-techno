@@ -80,8 +80,8 @@ then the controls of that board:
   the state of the board in 12-point text that truncates, and the Mastering
   help button at the right margin.
 - Mixer: the Export tracks… button.
-- Step synth: the status line, Import details when the audio of the palette
-  sound is missing, and the Step synth help button.
+- Step synth: Notes and Effects, the undo and redo keys, Import details when
+  the audio of the palette sound is missing, and the Step synth help button.
 
 The preset list puts a rule after Subtle, Revive, and Loud, before the genre
 presets. The list shows 560 points of its rows and scrolls to the others. The
