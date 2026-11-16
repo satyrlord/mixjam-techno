@@ -35,6 +35,12 @@ The full song name always shows. A long name wraps onto two lines or uses
 smaller text. In a narrow window, the transport buttons become narrower to
 make room.
 
+Help, or **F1**, opens the manual. The first page lists the shortcuts. To
+read about a part of the application, select it in the list at the left. In
+the list, the up and down arrow keys change the page. Page Up, Page Down,
+Home, and End scroll the page. Press **F1** again to close Help. The Help
+button of a tool or a board opens only its own page, beside the tool.
+
 The score toolbar above the lanes holds Arrange and Mix, the Automation menu,
 Follow, Sections, Zoom, and Maximise. Maximise, or **F**, hides the tool rail,
 the Sounds panel, the Inspector, and the lower panel. The score then fills the

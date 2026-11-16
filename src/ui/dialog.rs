@@ -22,6 +22,73 @@ pub(super) fn user_resized(ctx: &egui::Context, identity: &str) -> bool {
     ctx.data(|d| d.get_temp::<bool>(egui::Id::new(identity).with("hardware-resized")))
         .unwrap_or(false)
 }
+/// Where the window `identity` shows, or last showed.
+pub(super) fn window_rect(ctx: &egui::Context, identity: &str) -> Option<Rect> {
+    let geometry =
+        ctx.data(|d| d.get_temp::<Geometry>(egui::Id::new(identity).with("hardware-geometry")))?;
+    let height = if is_collapsed(ctx, identity) {
+        HEADER
+    } else {
+        geometry.size.y
+    };
+    Some(Rect::from_min_size(
+        geometry.position,
+        Vec2::new(geometry.size.x, height),
+    ))
+}
+/// Drop the place and the size of the window `identity`, so that it opens
+/// at its default place again.
+pub(super) fn forget_geometry(ctx: &egui::Context, identity: &str) {
+    let id = egui::Id::new(identity);
+    ctx.data_mut(|d| {
+        d.remove::<Geometry>(id.with("hardware-geometry"));
+        d.remove::<bool>(id.with("hardware-resized"));
+    });
+}
+/// A window of `size` beside `anchor`: at its right or left when there is
+/// room, else above or below it, made shorter to fit when needed.
+fn beside(anchor: Rect, size: Vec2, viewport: Rect, min_height: f32) -> Geometry {
+    const GAP: f32 = 8.0;
+    let top = anchor.top().clamp(
+        viewport.top(),
+        (viewport.bottom() - size.y).max(viewport.top()),
+    );
+    if viewport.right() - anchor.right() - GAP >= size.x {
+        return Geometry {
+            position: Pos2::new(anchor.right() + GAP, top),
+            size,
+        };
+    }
+    if anchor.left() - viewport.left() - GAP >= size.x {
+        return Geometry {
+            position: Pos2::new(anchor.left() - GAP - size.x, top),
+            size,
+        };
+    }
+    let left = (anchor.right() - size.x).clamp(
+        viewport.left(),
+        (viewport.right() - size.x).max(viewport.left()),
+    );
+    let above = anchor.top() - viewport.top() - GAP;
+    let below = viewport.bottom() - anchor.bottom() - GAP;
+    if above >= below && above >= min_height {
+        let height = size.y.min(above);
+        return Geometry {
+            position: Pos2::new(left, anchor.top() - GAP - height),
+            size: Vec2::new(size.x, height),
+        };
+    }
+    if below >= min_height {
+        return Geometry {
+            position: Pos2::new(left, anchor.bottom() + GAP),
+            size: Vec2::new(size.x, size.y.min(below)),
+        };
+    }
+    Geometry {
+        position: viewport.center() - size / 2.0,
+        size,
+    }
+}
 pub(super) fn top_window(ctx: &egui::Context, identity: &str) -> bool {
     let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::new(identity));
     ctx.memory(|memory| {
@@ -98,6 +165,8 @@ struct Shell<'a> {
     fit: bool,
     scroll: bool,
     focus_controls: Option<fn(&Response)>,
+    /// The window opens beside this rectangle, not at the centre.
+    anchor: Option<Rect>,
 }
 struct ShellResponse {
     help: bool,
@@ -130,6 +199,11 @@ fn show_shell<R>(
     // floor is the height that its content last needed.
     let fitted_id = id.with("hardware-fitted");
     let mut min = MIN_SIZE;
+    if spec.anchor.is_some() {
+        // Help can use a short scrolling page above a tool in a compact
+        // viewport. Keep the header, body margins, and 44 points of text.
+        min.y = HEADER + 80.0;
+    }
     if spec.fit
         && let Some(fitted) = ctx.data(|d| d.get_temp::<f32>(fitted_id))
     {
@@ -139,9 +213,12 @@ fn show_shell<R>(
         .data(|d| d.get_temp::<Geometry>(gid))
         .unwrap_or_else(|| {
             let size = spec.size.max(min).min(spec.viewport.size());
-            Geometry {
-                position: spec.viewport.center() - size / 2.0,
-                size,
+            match spec.anchor {
+                Some(anchor) => beside(anchor, size, spec.viewport, min.y),
+                None => Geometry {
+                    position: spec.viewport.center() - size / 2.0,
+                    size,
+                },
             }
         });
     geometry = constrain(geometry, spec.viewport, collapsed, min);
@@ -485,6 +562,8 @@ pub(super) struct Window<'a> {
     scroll: bool,
     fit: bool,
     focus_controls: Option<fn(&Response)>,
+    palette: controls::Palette,
+    anchor: Option<Rect>,
 }
 pub(super) fn window(title: &str) -> Window<'_> {
     Window {
@@ -496,9 +575,21 @@ pub(super) fn window(title: &str) -> Window<'_> {
         scroll: true,
         fit: false,
         focus_controls: None,
+        palette: controls::Palette::Utility,
+        anchor: None,
     }
 }
 impl<'a> Window<'a> {
+    /// The chassis palette: a tool's own, for its Help.
+    pub(super) fn palette(mut self, palette: controls::Palette) -> Self {
+        self.palette = palette;
+        self
+    }
+    /// Open beside `rect` instead of at the centre, until moved.
+    pub(super) fn anchor(mut self, rect: Option<Rect>) -> Self {
+        self.anchor = rect;
+        self
+    }
     pub(super) fn focus_controls(mut self, register: fn(&Response)) -> Self {
         self.focus_controls = Some(register);
         self
@@ -549,18 +640,12 @@ impl<'a> Window<'a> {
                 help: false,
                 close: self.open.is_some(),
                 blocking: false,
-                palette: match self.title {
-                    "Time Stretcher help" => controls::Palette::Marine,
-                    "Effect Studio help" => controls::Palette::Red,
-                    "Step synth help" => controls::Palette::Olive,
-                    "Sample editor help" => controls::Palette::Granite,
-                    "Mastering help" => controls::Palette::Indigo,
-                    _ => controls::Palette::Utility,
-                },
+                palette: self.palette,
                 inset_body: true,
                 fit: self.fit || self.title == "Recorded take",
                 scroll: self.scroll,
                 focus_controls: self.focus_controls,
+                anchor: self.anchor,
             },
             contents,
         );
@@ -601,6 +686,7 @@ pub(super) fn tool<R>(
             fit: false,
             scroll: true,
             focus_controls: None,
+            anchor: None,
         },
         contents,
     );
@@ -644,6 +730,7 @@ pub(super) fn modal<R>(
             fit: true,
             scroll: true,
             focus_controls: None,
+            anchor: None,
         },
         contents,
     );

@@ -215,7 +215,8 @@ conflicts. The Album Review cases are the grid, a filtered grid, an album page,
 and a missing reviews folder. The set covers the three tool windows and the
 Step synth board, with expanded effects, provider settings, and the processing
 states of a missing source. It has no case for the Help windows of the tools or
-for Choose path. Recorded-take captures check the window layout with a
+for Choose path. UI tests check that a tool's Help opens beside the
+tool. Recorded-take captures check the window layout with a
 synthetic presentation state. They do not record audio.
 
 Through the agent channel of the built application, verify keyboard page

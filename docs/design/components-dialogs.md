@@ -141,8 +141,26 @@ Keep task guidance in Help and control tooltips. Do not repeat drag, preview,
 tempo, or save instructions across the workspace and tool windows. Keep short
 warnings for missing audio, recordings that are not saved, polarity inversion,
 and approximate pitch preservation. Import details keeps all saved source and
-placement metadata as text that the user can select. Help groups gestures by
-action and scrolls in the viewport.
+placement metadata as text that the user can select.
+
+Help has one page for each topic. A page list is at the left of the page, or
+above it when the window is narrow. Shortcuts is the first page. It shows one
+action on each line, with its keys as key caps in a column. The other pages
+use short headed sections, numbered steps, and a list of terms. Mastering
+explains dBFS, dBTP, LUFS, and VU. Each page has a heading for assistive
+technology. In the list, the up and down arrow keys change the page. Page
+Up, Page Down, Home, and End scroll the page. F1 opens and closes Help.
+The selected topic scrolls into view during keyboard navigation. In a short,
+narrow window, the topic list scrolls separately and leaves room for the page.
+Page scroll keys also work when a Help header control has focus. Topic controls
+have names of the form `Help page: Mixer` to keep command names unique.
+
+The Help of a tool or a board shows only its own page, in the palette of that
+tool. It opens beside the tool window, or above the lower panel for a board,
+so that it does not cover the controls that it explains. A test makes sure
+that each tool of the rail has a page. At compact sizes, a short scrolling
+page fits above the tool. If no adjacent area can fit a page, Help opens at
+the centre; move or resize either window to make room.
 
 Show full file system paths without the Windows extended-length prefix. Show
 network paths as `\\server\share`. Apply this rule to folder labels, tooltips,

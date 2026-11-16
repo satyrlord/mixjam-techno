@@ -692,17 +692,14 @@ image	Recording destination
 label	0 tracks  /  0 clips
 label	0.0 dB
 label	00 : 00
-label	1/16 cut ends a trigger after one sixteenth. Without it, the source continues until the next trigger or sequence end. Loop source repeats audio during that interval. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.
 label	4 sounds
 label	4 tracks  /  8 clips
 label	4x keeps Soft clip, Tube, Maximizer, and Tape clean. Off can sound harsher.
 label	4x keeps track drive saturation clean. Off can sound harsher.
 label	75600 source frames selected · 1.714 s after pitch
 label	A larger buffer absorbs processing bursts but adds delay between a control and its sound.
-label	A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.
 label	ARRANGEMENT
 label	Add a folder of WAV files to fill the Sounds panel.
-label	An outline shows where a sound lands. Esc or a click on a clip ends click placement.
 label	Applies to the next Add library folder or Scan again.
 label	Artists
 label	At the next launch. Opening a song keeps the module.
@@ -710,143 +707,81 @@ label	Audio capture
 label	Automation
 label	BPM
 label	Bus compressor gain reduction 0.0 dB
-label	Bypass all, beside Preset, skips the whole board, Trim included, for playback and export, so you can export the mix and master it elsewhere. The pedals keep their settings and switches, and the board dims. Switching it during playback crossfades over 30 ms. Presets leave it as it is. The Mixer's Master strip has the same switch.
-label	Bypass on the Master strip skips the master pedalboard for playback and export, as Mastering's Bypass all does.
 label	Cancel placing
 label	Changes here take effect right away.
-label	Choose a WAV or PXD source file, or use the selected palette sound or clip. Listen sequence previews the active bars. Save sequence writes a WAV to Step synth at the sequence tempo.
-label	Click Original BPM for exact entry. Drag the Original knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes. For Target BPM, click or drag to a notch, use the mouse wheel, or focus the slider and press an arrow key.
-label	Click a bar number to seek. Drag the ruler to loop.
-label	Click a gain value for exact dB entry, then Enter. Enter -inf for silence. Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. Master stays visible while tracks scroll.
 label	Click a note to set it. Click it again to clear it.
-label	Click a value for exact entry, then press Enter. The + and - buttons change one frame, or 100 with Shift.
 label	Clip menu
-label	Clips by key
 label	Cover cache: 2 covers, 0.4 MB of 256 MB.
 label	Ctrl+A
-label	Ctrl+D copies the selected clips to the bars that follow.
 label	Ctrl+N
-label	Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, MIXJAM, or JSON; save MIXJAM.
-label	Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y
 label	Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.
 label	Delete
-label	Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are the application's own algorithms.
-label	Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.
-label	Double-click a sound or clip.
-label	Drag a clip. Alt-drag copies.
-label	Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.
-label	Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.
-label	Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.
-label	Drag to a track, or select a sound and click a track. Up to 64 tracks.
 label	Drive playback oversampling
 label	Duplicate
-label	EQ opens a track's channel EQ: a low cut and a high cut at 12 dB per octave, a low shelf, two peaks with their Q, and a high shelf, drawn as a curve. It acts on the track's clips before its automation and fader. An EQ that is off keeps its settings and leaves the track as it was; Reset flattens every band. To tame harsh hi-hats, lower the high gain. The same window holds the track's compressor, stereo width, and ducker. The button lights when EQ, compression, or ducking is on, or width differs from 100%.
-label	Each of four bars has sixteen steps. Click a cell to set its pitch, replace that step's note, or click the same note again to clear it. Scroll the pitch grid to reach all notes from +12 to -12 semitones. A 0 keeps the source pitch.
-label	Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the board's state beside Preset shows the total, and exports remove it.
-label	Effect Studio
-label	Effects replaces the note grid with sequence effects. Note grid returns to editing. Save pattern and Load pattern keep the editable four-bar draft in JSON; they do not replace the source file or viewed bar.
 label	Enter the full path of the file to open.
 label	Every pedal is off and the trim is at 0 dB: the mix plays unprocessed.
-label	Export
-label	Export tracks… in the Mixer's toolbar writes each track that plays, and the return of each FX bus that it feeds, to its own WAV file in a folder. A track's file holds the track alone after its EQ, automation, fader, pan, and outputs, without its sends; the FX returns hold the sends. The master pedalboard is left out, every file is as long as the mix export, and the files sum to the mix with the board bypassed when that sum does not clip.
 label	F1
-label	F12 saves the last 30 seconds that playback sent to the audio device, with the song's state, to the diagnostics folder in the data folder. Press it while something sounds wrong.
 label	Fade in (beats)
 label	Fade out (beats)
-label	Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings. Turning it on restores that section's defaults.
 label	Fine snap
 label	From the next launch. The Follow button sets this session.
 label	Gain (dB)
-label	Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB reduces level; it does not invert polarity.
 label	Genres
 label	Help
 label	High reduces unwanted tones at changed tempo or rate. Low uses less CPU.
-label	Hold Ctrl for sixteenth-note positions.
 label	Hover hints only. Names, focus, and errors stay available.
 label	Input level: no mix playing
-label	Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.
 label	Lane height
 label	Length (bars)
 label	Limiter gain reduction 0.0 dB
 label	Listen before saving. Save sound adds a new WAV to Effect.
 label	Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.
 label	Lower settings use less CPU during playback. Exports always use full quality.
-label	M mutes a track. S solos it: while any track is soloed, only soloed tracks play, and a muted track stays silent. The strip says why a silent track is silent: Muted, No output, or Solo elsewhere.
 label	MIXJAM
 label	MONITORING
 label	Master playback oversampling
-label	Mastering processes the whole mix after the tracks are summed. Choose it in the lower panel's module selector, or with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.
 label	Meter display rate
-label	Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.
 label	Move / copy
 label	Name parity
 label	New song
-label	Open / save
 label	Original BPM describes the recording. Target BPM sets the result to 120, 125, 130, 135, 140, 160, or 180 BPM.
 label	Output loudness: momentary - LUFS, short-term - LUFS, integrated - LUFS, true peak - dBTP
-label	Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.
 label	PLAYBACK QUALITY
 label	Pitch
-label	Pitch runs from -24 to +24 semitones and changes speed and length together: +12 is an octave up and half as long, -12 an octave down and twice as long. Its buttons change 0.1 semitone, or one with Shift.
-label	Place by key
 label	Place sound
 label	Play / pause
 label	Playback buffer target
-label	Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.
 label	Preview
 label	Preview level
 label	Reduced draws meters at most 15 times a second. Measurement and peaks stay exact.
 label	Resampling, source looping, and effects are the application's own algorithms.
 label	Reverse
-label	Right-click a clip or press Shift+F10 for exact gain, trim, length, fades, pitch, Preview, Duplicate, Delete, and Resolve manually for a missing sound.
 label	SAMPLE LIBRARIES
 label	SONG FOLDERS
 label	Same tempo. Duration is unchanged.
-label	Sample Editor
 label	Sample playback quality
-label	Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.
-label	Seek / loop
 label	Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.
-label	Select a palette sound or a clip, then open Sample Editor. Listen edit previews the result. Save edited sound writes a new WAV, adds it to Wave, and leaves the source unchanged.
 label	Select all
-label	Select clips, then press Delete.
 label	Select group
-label	Shift-click clips or drag an empty area.
-label	Shortcuts with Ctrl work from any control except a value that is being typed. Space plays when no control has focus, or when a dial, a fader, or the lanes have it.
 label	Song dialog folder
-label	Songs open with every pedal off unless their file switched one on. Importing a legacy D3, D4, or T3 .mix song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.
 label	Source BPM
 label	Space
 label	Start frame is the first frame that is kept, counted from zero. End frame is the first frame that is left out; set it to the frame count to keep the last frame. A frame is one sample of audio.
 label	Starting module
-label	Step synth
-label	Stereo WAV of the mix. Export tracks… in the Mixer writes each track and FX return to its own WAV.
 label	Stereo output
 label	Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted metal. Layout and controls stay the same. Apply changes it at once, even while a song plays.
 label	Subfolders are included, up to 9 folders.
 label	TECHNO
-label	Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.
-label	Tab to a sound and press Enter. It lands on the recording track at the playhead.
-label	Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews.
 label	Tempo for files without one
-label	The Booster pedals reproduce the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. Each playback starts with settled compressor controls. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.
 label	The height of each arrangement row. Apply changes it at once, even while a song plays.
-label	The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband holds the peaks of the lows, mids, and highs apart and lifts the sound under them; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.
 label	The same setting as the Sections button.
-label	The slashed-circle button reverses both channels' polarity without changing gain or pan. Its amber state means inverted. Polarity stays set at silence.
 label	The song has unsaved changes.
 label	The status line shows the selected frames and the length after pitch, or why editing is unavailable. A missing sound plays silence; resolve it in Import details.
-label	The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End sets +12 dB.
-label	The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.
 label	The upper-left triangle collapses the tool and keeps the edit. Esc closes the tool after a value being typed or a window above it has handled the key.
-label	The upper-left triangle collapses the tool without changing its draft. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first and last step, and Space or Enter sets or clears the note; the focused cell scrolls into view. Esc first cancels an active value or list, or goes to a window above the tool.
 label	Theme
-label	Time Stretcher
 label	Trim start (frames)
 label	UNTITLED
 label	UNTITLED *
-label	Undo / redo
-label	View bar changes the bar you edit. Active switches choose which bars render, in ascending order. Clear bar clears only the viewed bar. At least one bar must be active to render or save a pattern.
 label	WAV audio: .wav
 label	WORKSPACE
 label	Where Open and Save as start. Existing songs stay in place.

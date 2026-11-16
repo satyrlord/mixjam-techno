@@ -390,7 +390,7 @@ impl MixJamApp {
                     self.effects.feedback.error = false;
                 }
                 effects::Action::Details => self.sample_import.details_open = true,
-                effects::Action::Help => self.help.effects = true,
+                effects::Action::Help => self.help.open_tool(help::Topic::Effects),
                 effects::Action::None => {}
             }
             self.effects.open = open;
@@ -438,7 +438,7 @@ impl MixJamApp {
                     Err(error) => self.error(error),
                 },
                 sample_editor::Action::Details => self.sample_import.details_open = true,
-                sample_editor::Action::Help => self.help.sample_edit = true,
+                sample_editor::Action::Help => self.help.open_tool(help::Topic::SampleEditor),
                 sample_editor::Action::None => {}
             }
             self.sample_edit.open = open;
@@ -514,7 +514,7 @@ impl MixJamApp {
                     self.stretch.feedback.message = Some("Preview stopped.".into());
                     self.stretch.feedback.error = false;
                 }
-                stretch::Action::Help => self.help.stretch = true,
+                stretch::Action::Help => self.help.open_tool(help::Topic::Stretch),
                 stretch::Action::Details => self.sample_import.details_open = true,
                 stretch::Action::None => {}
             }

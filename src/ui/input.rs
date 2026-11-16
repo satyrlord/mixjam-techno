@@ -230,8 +230,13 @@ impl MixJamApp {
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::D) {
             self.run_command(commands::Command::Duplicate, ctx);
         }
+        // F1 opens and closes Help, as the header's Help button does.
         if pressed_once(egui::Key::F1) {
-            self.run_command(commands::Command::Help, ctx);
+            if self.help.main {
+                self.help.main = false;
+            } else {
+                self.run_command(commands::Command::Help, ctx);
+            }
         }
         // F maximises the score or restores it; typing already returned.
         if ctx.input(|i| i.modifiers.is_none())

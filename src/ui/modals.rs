@@ -12,6 +12,26 @@ pub(super) struct HelpWindows {
     pub(super) step_synth: bool,
     pub(super) sample_edit: bool,
     pub(super) master: bool,
+    /// The page that the main Help window shows.
+    pub(super) topic: help::Topic,
+    /// Tool pages opened since the last frame, to place beside their tool.
+    pub(super) placing: Vec<help::Topic>,
+}
+
+impl HelpWindows {
+    /// Open a tool's or a board's Help beside it.
+    pub(super) fn open_tool(&mut self, topic: help::Topic) {
+        let open = match topic {
+            help::Topic::Stretch => &mut self.stretch,
+            help::Topic::Effects => &mut self.effects,
+            help::Topic::Mastering => &mut self.master,
+            help::Topic::StepSynth => &mut self.step_synth,
+            help::Topic::SampleEditor => &mut self.sample_edit,
+            _ => return,
+        };
+        *open = true;
+        self.placing.push(topic);
+    }
 }
 
 /// The sample conflict resolver: open, dismissed, and its last error.
@@ -91,198 +111,42 @@ impl MixJamApp {
                 self.files.resume_save_changes = false;
             }
         }
+        for topic in std::mem::take(&mut self.help.placing) {
+            if let Some(window) = topic.window() {
+                dialog::forget_geometry(ctx, window);
+            }
+        }
+        let viewport = ctx.viewport_rect().shrink(12.0);
+        let topic = &mut self.help.topic;
         dialog::window("Help")
             .open(&mut self.help.main)
-            .default_width(450.0)
-            .default_height(420.0)
-            .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
-            .show(ctx, |ui| {
-                egui::Grid::new("help_gestures")
-                    .num_columns(2)
-                    .spacing(Vec2::new(18.0, 8.0))
-                    .show(ui, |ui| {
-                        for (action, gesture) in [
-                            (
-                                "Place sound",
-                                "Drag to a track, or select a sound and click a track. Up to 64 \
-                                 tracks.",
-                            ),
-                            (
-                                "Place by key",
-                                "Tab to a sound and press Enter. It lands on the recording track \
-                                 at the playhead.",
-                            ),
-                            (
-                                "Cancel placing",
-                                "An outline shows where a sound lands. Esc or a click on a clip \
-                                 ends click placement.",
-                            ),
-                            ("Preview", "Double-click a sound or clip."),
-                            ("Move / copy", "Drag a clip. Alt-drag copies."),
-                            ("Select group", "Shift-click clips or drag an empty area."),
-                            ("Fine snap", "Hold Ctrl for sixteenth-note positions."),
-                            ("Delete", "Select clips, then press Delete."),
-                            ("Select all", "Ctrl+A"),
-                            (
-                                "Duplicate",
-                                "Ctrl+D copies the selected clips to the bars that follow.",
-                            ),
-                            (
-                                "Clip menu",
-                                "Right-click a clip or press Shift+F10 for exact gain, trim, \
-                                 length, fades, pitch, Preview, Duplicate, Delete, and Resolve \
-                                 manually for a missing sound.",
-                            ),
-                            (
-                                "Clips by key",
-                                "Tab to the lanes. Arrows choose a clip, Alt+arrows move it by a \
-                                 bar or a track, Ctrl+Alt+arrows by a sixteenth. Enter previews.",
-                            ),
-                            (
-                                "Seek / loop",
-                                "Click a bar number to seek. Drag the ruler to loop.",
-                            ),
-                            ("Play / pause", "Space"),
-                            ("Undo / redo", "Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y"),
-                            (
-                                "Open / save",
-                                "Ctrl+O / Ctrl+S. Ctrl+Shift+S saves as a new file. Open MIX, \
-                                 MIXJAM, or JSON; save MIXJAM.",
-                            ),
-                            ("New song", "Ctrl+N"),
-                            (
-                                "Export",
-                                "Stereo WAV of the mix. Export tracks… in the Mixer writes each \
-                                 track and FX return to its own WAV.",
-                            ),
-                            (
-                                "Audio capture",
-                                "F12 saves the last 30 seconds that playback sent to the audio \
-                                 device, with the song's state, to the diagnostics folder in the \
-                                 data folder. Press it while something sounds wrong.",
-                            ),
-                            (
-                                "Boards",
-                                "Mixer, Mastering, FX returns, and Step synth in the tool rail \
-                                 show their board in the lower panel; choose it again to fold \
-                                 the panel.",
-                            ),
-                            (
-                                "Mix view",
-                                "Mix in the score toolbar turns the lane headers into mixer \
-                                 rows. The rail's Mixer returns the score to Arrange.",
-                            ),
-                            (
-                                "Maximise",
-                                "F hides the tool rail, the Sounds panel, the Inspector and \
-                                 the lower panel; F again restores them.",
-                            ),
-                            ("Commands", "Ctrl+K lists everything the app can do."),
-                            ("Help", "F1"),
-                        ] {
-                            ui.add(egui::Label::new(action).wrap_mode(egui::TextWrapMode::Extend));
-                            ui.add(egui::Label::new(gesture).wrap());
-                            ui.end_row();
-                        }
-                    });
-                ui.separator();
-                ui.label(
-                    "Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off \
-                     leaves a track with no output.",
-                );
-                ui.label(
-                    "M mutes a track. S solos it: while any track is soloed, only soloed tracks \
-                     play, and a muted track stays silent. The strip says why a silent track is \
-                     silent: Muted, No output, or Solo elsewhere.",
-                );
-                ui.label(
-                    "Gain runs from -inf dB (silence) to +12 dB. 0 dB is unity. Negative dB \
-                     reduces level; it does not invert polarity.",
-                );
-                ui.label(
-                    "Click a gain value for exact dB entry, then Enter. Enter -inf for silence. \
-                     Unity sits at 0 dB on the gain rail; Center resets pan on the pan rail. \
-                     Master stays visible while tracks scroll.",
-                );
-                ui.label(
-                    "The slashed-circle button reverses both channels' polarity without changing \
-                     gain or pan. Its amber state means inverted. Polarity stays set at silence.",
-                );
-                ui.label(
-                    "The tapered fader gives 72% of its travel to -24 through +12 dB. Arrow keys \
-                     change 0.5 dB; hold Shift for 0.1 dB or fine dragging. Home silences and End \
-                     sets +12 dB.",
-                );
-                ui.label(
-                    "EQ opens a track's channel EQ: a low cut and a high cut at 12 dB per \
-                     octave, a low shelf, two peaks with their Q, and a high \
-                     shelf, drawn as a curve. It acts on the track's clips before its automation \
-                     and fader. An EQ that is off keeps its settings and leaves the track as it \
-                     was; Reset flattens every band. To tame harsh hi-hats, lower the high gain. \
-                     The same window holds the track's compressor, stereo width, and ducker. \
-                     The button lights when EQ, compression, or ducking is on, or width differs \
-                     from 100%.",
-                );
-                ui.label(
-                    "Bypass on the Master strip skips the master pedalboard for playback and \
-                     export, as Mastering's Bypass all does.",
-                );
-                ui.label(
-                    "Export tracks… in the Mixer's toolbar writes each track that plays, and the \
-                     return of each FX bus that it feeds, to its own WAV file in a folder. A \
-                     track's file holds the track alone after its EQ, automation, fader, pan, \
-                     and outputs, without its sends; the FX returns hold the sends. The master \
-                     pedalboard is left out, every file is as long as the mix export, and the \
-                     files sum to the mix with the board bypassed when that sum does not clip.",
-                );
-                ui.label(
-                    "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and \
-                     R.",
-                );
-                ui.label(
-                    "Shortcuts with Ctrl work from any control except a value that is being \
-                     typed. Space plays when no control has focus, or when a dial, a fader, or \
-                     the lanes have it.",
-                );
-                ui.separator();
-                ui.label(egui::RichText::new("Time Stretcher").strong());
-                stretch_help(ui);
-                ui.separator();
-                ui.label(egui::RichText::new("Effect Studio").strong());
-                effects_help(ui);
-                ui.separator();
-                ui.label(egui::RichText::new("Step synth").strong());
-                step_synth_help(ui);
-                ui.separator();
-                ui.label(egui::RichText::new("Sample Editor").strong());
-                sample_editor_help(ui);
-            });
-        help_window(
-            ctx,
-            "Time Stretcher help",
-            &mut self.help.stretch,
-            stretch_help,
-        );
-        help_window(
-            ctx,
-            "Effect Studio help",
-            &mut self.help.effects,
-            effects_help,
-        );
-        help_window(ctx, "Mastering help", &mut self.help.master, master_help);
-        help_window(
-            ctx,
-            "Step synth help",
-            &mut self.help.step_synth,
-            step_synth_help,
-        );
-        help_window(
-            ctx,
-            "Sample editor help",
-            &mut self.help.sample_edit,
-            sample_editor_help,
-        );
+            .default_width(720.0)
+            .default_height((viewport.height() - 160.0).clamp(420.0, 760.0))
+            .max_height((viewport.height() - 40.0).max(240.0))
+            .constrain_to(viewport)
+            .scroll(false)
+            .show(ctx, |ui| help::manual(ui, topic));
+        for (topic, open) in [
+            (help::Topic::Stretch, &mut self.help.stretch),
+            (help::Topic::Effects, &mut self.help.effects),
+            (help::Topic::Mastering, &mut self.help.master),
+            (help::Topic::StepSynth, &mut self.help.step_synth),
+            (help::Topic::SampleEditor, &mut self.help.sample_edit),
+        ] {
+            let (Some(title), Some(palette)) = (topic.window(), topic.palette()) else {
+                continue;
+            };
+            dialog::window(title)
+                .open(open)
+                .palette(palette)
+                .anchor(help::anchor(ctx, topic))
+                .default_width(480.0)
+                .default_height((viewport.height() - 200.0).clamp(360.0, 600.0))
+                .max_height((viewport.height() - 40.0).max(240.0))
+                .constrain_to(viewport)
+                .scroll(false)
+                .show(ctx, |ui| help::tool_page(ui, topic));
+        }
     }
 
     pub(super) fn sample_conflicts_open(&self) -> bool {
@@ -449,92 +313,5 @@ impl MixJamApp {
                 "Sample choices are not confirmed. Reopen from Sample conflicts in the status bar.",
             );
         }
-    }
-}
-
-/// A tool's Help window, sized like the application's.
-fn help_window(
-    ctx: &egui::Context,
-    title: &str,
-    open: &mut bool,
-    contents: impl FnOnce(&mut egui::Ui),
-) {
-    dialog::window(title)
-        .default_height(420.0)
-        .open(open)
-        .default_width(450.0)
-        .max_height((ctx.viewport_rect().height() - 80.0).max(240.0))
-        .constrain_to(ctx.viewport_rect().shrink(12.0))
-        .show(ctx, contents);
-}
-
-fn stretch_help(ui: &mut egui::Ui) {
-    for text in [
-        "Original BPM describes the recording. Target BPM sets the result to 120, 125, 130, 135, 140, 160, or 180 BPM.",
-        "A lower target makes the sound longer; a higher target makes it shorter. Pitch preservation is approximate and can change transients or add audible artifacts. Listen before saving.",
-        "Click Original BPM for exact entry. Drag the Original knob, use the mouse wheel, or focus it and press an arrow key. Hold Shift while dragging for finer changes. For Target BPM, click or drag to a notch, use the mouse wheel, or focus the slider and press an arrow key.",
-        "Double-click Original to restore the selected source tempo. Double-click Target to reset to 140 BPM.",
-        "Listen changes to Stop listening during preview. The status line reports processing, playback, errors, and a saved sound.",
-        "Saving keeps the source and both tempos, so another version is one adjustment away. Esc closes the tool; it first closes an open list or cancels a value being typed.",
-    ] {
-        ui.add(egui::Label::new(text).wrap());
-    }
-}
-
-fn master_help(ui: &mut egui::Ui) {
-    for text in [
-        "Mastering processes the whole mix after the tracks are summed. Choose it with its button in the tool rail. The signal flows from left to right: the mixer's output enters the Input unit, passes each pedal that is on, and leaves through the Output unit. Playback and export both use it, so what you hear is what you export.",
-        "Preset loads a factory board. Subtle, Revive, and Loud suit any finished mix, from a light polish to a loud master; the genre presets follow them. A preset sets every pedal and the order, turns the Booster pedals off, and ends at the Limiter with its ceiling at -1 dBTP. It keeps your Trim: if you turned the mix down because it was too loud, it stays down. One Undo restores the board before it. The selector reads Custom once you change a pedal. Songs save the board, not the preset's name.",
-        "Input: Trim sets the level into the board. The VU meter reads the trimmed mix; 0 VU is -18 dBFS, where the mastering pedals work best. The peak lamps light at -1 dBFS.",
-        "Output: momentary and short-term loudness follow the last 400 ms and 3 s; integrated loudness and true peak cover the playback so far. The green band marks -14 LUFS and the red line -1 dBTP. The OVER lamp lights when the true peak passes -1 dBTP and stays lit until you click it. The meters measure during playback.",
-        "The Booster pedals reproduce the master effects of the original D3, D4, and T3 products: a ten-band EQ, a compressor, and stereo wide. Each playback starts with settled compressor controls. Their EQ bands show decibels; Drive, Speed, Gain, and Width use the original's 0 to 1000 scale.",
-        "The mastering pedals are new designs: Soft clip rounds peaks off; Tube adds warm, mostly even harmonics; Trim EQ cleans up rumble, mud, and harshness; Bus compressor glues the mix; Maximizer adds loudness under a fixed ceiling; Lift EQ adds weight and air; Tape adds saturation with a low-end bump; Stereo imaging sets the width and keeps the lows mono; Multiband holds the peaks of the lows, mids, and highs apart and lifts the sound under them; Limiter keeps the true peak under its ceiling. The Bus compressor and Limiter show their gain reduction on lamps.",
-        "Drag a pedal by its name to move it along the board; near either end the row scrolls. The arrow buttons move a pedal one place. The Limiter cannot move: it always runs last, just before the Output unit, so no pedal can raise the peaks it holds. The strip below the board shows every pedal in order; click one to bring it into view. In a short window, scroll the board to reach the strip. Each move is one Undo step.",
-        "Bypass all, beside Preset, skips the whole board, Trim included, for playback and export, so you can export the mix and master it elsewhere. The pedals keep their settings and switches, and the board dims. Switching it during playback crossfades over 30 ms. Presets leave it as it is. The Mixer's Master strip has the same switch.",
-        "Each pedal has an on/off switch at its foot and a lamp beside its name. A pedal that is off keeps its settings and passes the signal on. When every pedal is off and Trim is at 0 dB, the mix plays exactly as the tracks sum. Some pedals delay the sound by a few milliseconds; the board's state beside Preset shows the total, and exports remove it.",
-        "Songs open with every pedal off unless their file switched one on. Importing a legacy D3, D4, or T3 .mix song applies its saved Booster settings; importing a MixJam v7 project applies its master bus.",
-        "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default. Changes apply while the song plays, and Undo restores them.",
-    ] {
-        ui.add(egui::Label::new(text).wrap());
-    }
-}
-
-fn effects_help(ui: &mut egui::Ui) {
-    for text in [
-        "Select a palette sound or a clip, then open Effect Studio. Listen previews the processed sound. Save sound writes a new WAV, adds it to Effect, and selects it.",
-        "Filter, Echo, and Robotize each have an on/off switch beside their name. Turning a section off discards its settings. Turning it on restores that section's defaults.",
-        "Drag a knob, turn the mouse wheel, or focus it and press an arrow key. Hold Shift for fine adjustments. Click a value for exact entry. Double-click a knob to restore its default.",
-        "Cutoff and Color use logarithmic ranges. Echo delay is measured in beats at the source tempo. Echo tails stop at the sample boundary.",
-        "Dirty distortion, Noise distortion, and Output volume are always available. Reset restores all defaults. The effects are the application's own algorithms.",
-        "The upper-left triangle collapses the panel without changing its settings. Esc closes the tool after a focused value, list, or window above it has handled the key.",
-    ] {
-        ui.add(egui::Label::new(text).wrap());
-    }
-}
-
-fn step_synth_help(ui: &mut egui::Ui) {
-    for text in [
-        "Source file… chooses a WAV or PXD source file, and Palette sound uses the selected palette sound or clip. Listen plays the pattern and Stop ends it; L does the same while the board shows. Save sound writes a WAV to Step synth at the pattern's tempo. Start is where each note starts to read the source, in ms; Find start sets it to the source's first hit, so the notes play on the beat. A new source sets Start to its first hit and turns Loop source off; a loaded pattern keeps its own. A pattern that would clip plays and saves turned down as a whole, and the status line says by how much.",
-        "The pattern has four bars of sixteen steps. The grid shows 25 pitch rows, +12 to -12 semitones around the octave in view, and the olive 0 row keeps the source pitch. The grid opens on the octave nearest the notes. The − and + keys beside the step ruler, with the octave between them, or Page Up and Page Down, shift the rows by up to three octaves; a coral edge marks a note above or below them. Scale and its root, A to G# with A as the source pitch, in the grid's top row, shade the rows outside the scale but never block a pitch. Randomise, beside them, writes a new line in the scale over the pattern's length.",
-        "The grid shows four, two, or one bar, as many as the board's width allows; the bar buttons bring a bar into view. Click a cell to place a note and click a note to clear it. Drag a note's last step sideways to hold it longer. Shift-click a note to accent it and Alt-click it to slide into the next note, or use the Accent and Slide lanes. Drag on the Velocity lane to set levels. Drag along the step ruler to select steps; lane edits then apply to all of them. Length, under Pattern, sets how many steps the pattern repeats over; drag its end marker on the ruler. The steps after it keep their notes. ×2 and ÷2 double and halve it; ×2 repeats the loop into the new steps when they are empty. Copy to copies the viewed bar, the one picked last, onto the next bar, Fill copies it onto every bar, and Clear bar empties it; Clear, under Pattern, empties every bar. With the pointer over the board, or the keyboard focus in it, Ctrl+Z takes back the board's last edit, of a note, setting, effect, source, or load, and Ctrl+Y or Ctrl+Shift+Z puts it back; elsewhere they act on the song.",
-        "Swing delays every second sixteenth, from 50% (straight) to 75%. Gate sets how much of its last step a note sounds for; a note that slides into the next ignores it. With swing, the step is the swung one, so a note on the beat sounds longer than one off the beat. Accent sets how much louder an accented note plays, up to 12 dB, and Slide time how long a slide takes to reach the next pitch, from 1 to 1000 ms. Every note ends with a short fade, so a cut does not click. Loop source, in the Source section, repeats audio while a note sounds. The tempo choices are 120, 125, 130, 135, 140, 160, and 180 BPM.",
-        "Notes and Effects, at the left of the top row, switch between the note grid and the pattern effects; while Listen plays, the strip beside it lights the playing step. The pattern plays as a loop, so the echo and filter tails at its end come back at its start. The undo and redo keys after them take back and put back the board's last edit, and the status line names it. Load and Save, under Pattern, keep the editable four-bar draft in JSON with its source file; Load switches to that source, or to the palette sound when the file is missing, and keeps the viewed bar. A loaded tempo that is not one of the choices moves to the nearest one, and the status line says so.",
-        "The Step synth button in the tool rail folds the lower panel without changing the draft; choose it again to open the board. Tab reaches each control and the note grid. In the grid, arrow keys move between cells, Home and End jump to the first step in view and the last step in view that plays, Ctrl with Left or Right turns the bar page when another page is there, Page Up and Page Down shift the octave, and Space or Enter places or clears the note; the focused cell scrolls into view. On the ruler and value lanes, Left and Right move the shared step cursor, and Home and End jump to the same steps as in the grid. On the ruler, Shift with Left or Right selects a range; Space or Enter selects the current step. On Accent and Slide, Space or Enter toggles the flag, and Up or Down sets or clears it. On Velocity, Up or Down changes the level by one. Lane edits also apply to the selected notes. Esc first cancels an active value or list, or goes to a window above the board.",
-        "Resampling, source looping, and effects are the application's own algorithms.",
-    ] {
-        ui.add(egui::Label::new(text).wrap());
-    }
-}
-
-fn sample_editor_help(ui: &mut egui::Ui) {
-    for text in [
-        "Select a palette sound or a clip, then open Sample Editor. Listen edit previews the result. Save edited sound writes a new WAV, adds it to Wave, and leaves the source unchanged.",
-        "Start frame is the first frame that is kept, counted from zero. End frame is the first frame that is left out; set it to the frame count to keep the last frame. A frame is one sample of audio.",
-        "Click a value for exact entry, then press Enter. The + and - buttons change one frame, or 100 with Shift.",
-        "Pitch runs from -24 to +24 semitones and changes speed and length together: +12 is an octave up and half as long, -12 an octave down and twice as long. Its buttons change 0.1 semitone, or one with Shift.",
-        "The status line shows the selected frames and the length after pitch, or why editing is unavailable. A missing sound plays silence; resolve it in Import details.",
-        "The upper-left triangle collapses the tool and keeps the edit. Esc closes the tool after a value being typed or a window above it has handled the key.",
-    ] {
-        ui.add(egui::Label::new(text).wrap());
     }
 }

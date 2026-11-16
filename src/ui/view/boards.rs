@@ -225,6 +225,7 @@ impl MixJamApp {
                     BottomModule::StepSynth => self.step_synth_board(ui),
                 }
             });
+        help::note_board_rect(ctx, sounds.response.rect);
         // egui makes the panel's drag edge a Tab stop and leaves it unnamed.
         let edge = egui::Id::new("sounds").with("__resize");
         if ctx.read_response(edge).is_some() {
@@ -310,7 +311,7 @@ impl MixJamApp {
                 )
                 .clicked()
                 {
-                    self.help.step_synth = true;
+                    self.help.open_tool(help::Topic::StepSynth);
                 }
             });
             let area = ui.min_rect();
@@ -709,7 +710,7 @@ impl MixJamApp {
             )
             .clicked()
             {
-                self.help.master = true;
+                self.help.open_tool(help::Topic::Mastering);
             }
         });
     }

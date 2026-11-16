@@ -274,115 +274,476 @@ fn title_text_transliterates_accents_ligatures_and_combining_marks() {
     assert_eq!(title_text("Mix 01 / A-B + 2.5 *"), "MIX 01 / A-B + 2.5 *");
 }
 
-#[test]
-fn help_instructions_wrap_readably_and_bottom_guidance_remains_reachable() {
-    const PLACE: &str = "Drag to a track, or select a sound and click a track. Up to 64 tracks.";
-    let visible = |output: &egui::FullOutput, label: &str, viewport: Rect| {
-        output.shapes.iter().any(|shape| match &shape.shape {
+/// The bounds of `label` drawn inside the window `identity`.
+fn window_text(
+    output: &egui::FullOutput,
+    context: &egui::Context,
+    identity: &str,
+    label: &str,
+) -> Option<Rect> {
+    let window = dialog::window_rect(context, identity)?;
+    output.shapes.iter().find_map(|shape| match &shape.shape {
+        egui::Shape::Text(text) if text.galley.job.text == label => {
+            let bounds = Rect::from_min_size(text.pos, text.galley.size());
+            (window.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds))
+                .then_some(bounds)
+        }
+        _ => None,
+    })
+}
+
+/// The number of lines `label` takes where it is drawn.
+fn text_rows(output: &egui::FullOutput, label: &str) -> usize {
+    output
+        .shapes
+        .iter()
+        .find_map(|shape| match &shape.shape {
             egui::Shape::Text(text) if text.galley.job.text == label => {
-                let bounds = Rect::from_min_size(text.pos, text.galley.size());
-                viewport.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds)
+                Some(text.galley.rows.len())
             }
-            _ => false,
+            _ => None,
         })
-    };
+        .unwrap_or(0)
+}
+
+fn release(context: &egui::Context, app: &mut MixJamApp, pos: Pos2, size: Vec2) {
+    for pressed in [true, false] {
+        frame_at_size(
+            context,
+            app,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            egui::Modifiers::NONE,
+            size,
+        );
+    }
+}
+
+#[test]
+fn help_lists_its_pages_and_each_page_reads_and_scrolls() {
+    const LAST: &str = "Every file is as long as the mix export. The files sum to the mix with the board bypassed when that sum does not clip.";
     for size in [
         Vec2::new(960.0, 720.0),
         Vec2::new(1024.0, 768.0),
         Vec2::new(1440.0, 1000.0),
     ] {
         let (context, mut app) = fixture();
+        context.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
         app.help.main = true;
         for _ in 0..3 {
             frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
         }
-        let mut output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
-        let viewport = Rect::from_min_size(Pos2::ZERO, size);
-        let instruction = text_rect(&output, PLACE);
-        const ACTIONS: [&str; 11] = [
-            "Place sound",
-            "Preview",
-            "Move / copy",
-            "Select group",
-            "Fine snap",
-            "Delete",
-            "Seek / loop",
-            "Play / pause",
-            "Undo / redo",
-            "Open / save",
-            "Export",
-        ];
-        let mut seen_actions = BTreeSet::new();
-        let inspect_actions = |output: &egui::FullOutput, seen: &mut BTreeSet<String>| {
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape
-                    && ACTIONS.contains(&text.galley.job.text.as_str())
-                {
-                    let action = &text.galley.job.text;
-                    assert_eq!(
-                        text.galley.rows.len(),
-                        1,
-                        "Help action {action:?} must stay on one line at {size:?}."
-                    );
-                    assert!(
-                        (action.chars().count() as f32 * 3.0..=160.0)
-                            .contains(&text.galley.size().x),
-                        "Help action {action:?} needs a readable column at {size:?}: {:?}.",
-                        text.galley.size()
-                    );
-                    seen.insert(action.clone());
-                }
-            }
-        };
-        inspect_actions(&output, &mut seen_actions);
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let window = dialog::window_rect(&context, "Help").unwrap();
         assert!(
-            instruction.width() > 200.0,
-            "Instruction column is too narrow at {size:?}: {instruction:?}"
+            window.height() >= 420.0 && window.width() >= 700.0,
+            "Help must open roomy at {size:?}: {window:?}"
         );
-        assert!(
-            instruction.height() < 80.0,
-            "Instruction wraps excessively at {size:?}: {instruction:?}"
-        );
-        assert!(visible(&output, PLACE, viewport));
-        for label in [
-            "Mixer: gain, pan, L/R outputs, Mute, Solo, and master gain. Both outputs off leaves a track with no output.",
-            "Tab focuses controls. Arrow keys adjust sliders. Space toggles M, S, L, and R.",
+        for topic in help::Topic::ALL {
+            assert!(
+                window_text(&output, &context, "Help", topic.name()).is_some(),
+                "The page list must show {:?} at {size:?}.",
+                topic.name()
+            );
+        }
+        // The shortcut sheet: one action to a line, its keys beside it.
+        for (action, key) in [
+            ("Play / pause", "Space"),
+            ("Undo", "Ctrl+Z"),
+            ("All commands", "Ctrl+K"),
         ] {
-            // Later sections follow this guidance, so scroll toward it in
-            // steps and stop when it appears.
-            let mut steps = 0;
-            while !visible(&output, label, viewport) && steps < 60 {
-                steps += 1;
-                frame_at_size(
-                    &context,
-                    &mut app,
-                    vec![
-                        egui::Event::PointerMoved(instruction.center()),
-                        egui::Event::MouseWheel {
-                            unit: egui::MouseWheelUnit::Point,
-                            delta: Vec2::new(0.0, -40.0),
-                            modifiers: egui::Modifiers::NONE,
-                        },
-                    ],
-                    egui::Modifiers::NONE,
-                    size,
-                );
-                for _ in 0..12 {
-                    output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
-                }
-                inspect_actions(&output, &mut seen_actions);
+            let action_rect = window_text(&output, &context, "Help", action)
+                .unwrap_or_else(|| panic!("Missing action {action} at {size:?}"));
+            let key_rect = window_text(&output, &context, "Help", key)
+                .unwrap_or_else(|| panic!("Missing key {key} at {size:?}"));
+            assert_eq!(text_rows(&output, action), 1, "{action} wraps at {size:?}");
+            assert!(
+                key_rect.left() > action_rect.right()
+                    && (key_rect.center().y - action_rect.center().y).abs() < 2.5,
+                "{key} must sit beside {action} at {size:?}: {key_rect:?} / {action_rect:?}"
+            );
+        }
+        // Choose a page from the list.
+        let mixer = window_text(&output, &context, "Help", "Mixer").unwrap();
+        release(&context, &mut app, mixer.center(), size);
+        assert_eq!(app.help.topic, help::Topic::Mixer);
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let title =
+            window_text(&output, &context, "Help", "MIXER").expect("The page opens at its title.");
+        let level = window_text(&output, &context, "Help", "LEVEL AND PAN").unwrap();
+        assert!(level.top() > title.bottom());
+        // End reaches the last line of the page; Home returns to its title.
+        let page = Pos2::new(level.center().x, level.bottom() + 40.0);
+        let key = |context: &egui::Context, app: &mut MixJamApp, key| {
+            frame_at_size(
+                context,
+                app,
+                vec![
+                    egui::Event::PointerMoved(page),
+                    key_event(key, egui::Modifiers::NONE),
+                ],
+                egui::Modifiers::NONE,
+                size,
+            );
+            frame_at_size(context, app, vec![], egui::Modifiers::NONE, size)
+        };
+        let output = key(&context, &mut app, egui::Key::End);
+        assert!(
+            window_text(&output, &context, "Help", LAST).is_some(),
+            "End must reach the end of the Mixer page at {size:?}."
+        );
+        let output = key(&context, &mut app, egui::Key::Home);
+        assert!(window_text(&output, &context, "Help", "MIXER").is_some());
+        // Page Down moves by a page, not to the end.
+        let output = key(&context, &mut app, egui::Key::PageDown);
+        assert!(window_text(&output, &context, "Help", "MIXER").is_none());
+        // Another page opens at its top.
+        app.help.topic = help::Topic::Recording;
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        assert!(window_text(&output, &context, "Help", "RECORDING").is_some());
+    }
+}
+
+#[test]
+fn help_page_list_answers_the_arrow_keys_and_wraps_in_a_narrow_window() {
+    let (context, mut app) = fixture();
+    app.help.main = true;
+    let size = Vec2::new(1440.0, 1000.0);
+    for _ in 0..3 {
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    let shortcuts = window_text(&output, &context, "Help", "Shortcuts").unwrap();
+    release(&context, &mut app, shortcuts.center(), size);
+    assert!(
+        context.memory(|memory| memory.focused()).is_some(),
+        "A click on a page entry gives it the focus."
+    );
+    // The entry keeps the arrows from the frame after it gains the focus.
+    frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    for (key, topic) in [
+        (egui::Key::ArrowDown, help::Topic::Arrange),
+        (egui::Key::ArrowDown, help::Topic::Automation),
+        (egui::Key::ArrowUp, help::Topic::Arrange),
+    ] {
+        frame_at_size(
+            &context,
+            &mut app,
+            vec![key_event(key, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        assert_eq!(app.help.topic, topic);
+    }
+    // A narrow Help puts its list above the page.
+    dialog::forget_geometry(&context, "Help");
+    let narrow = Vec2::new(520.0, 760.0);
+    for _ in 0..3 {
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, narrow);
+    }
+    let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, narrow);
+    let shortcuts = window_text(&output, &context, "Help", "Shortcuts").unwrap();
+    let title = window_text(&output, &context, "Help", "ARRANGE").unwrap();
+    assert!(
+        title.top() > shortcuts.bottom(),
+        "{title:?} / {shortcuts:?}"
+    );
+}
+
+#[test]
+fn every_help_page_has_text_and_every_tool_has_its_page() {
+    for topic in help::Topic::ALL {
+        let text = topic.text();
+        assert!(text.len() >= 3, "{:?} needs a page", topic.name());
+        for line in text {
+            assert!(
+                line.chars().count() <= 300,
+                "{:?} has a line too long to scan: {line}",
+                topic.name()
+            );
+            assert!(
+                !line.contains("D3") && !line.contains("T3"),
+                "{:?} names a product: {line}",
+                topic.name()
+            );
+        }
+    }
+    // Every tool of the rail with a board or a window has a page.
+    for tool in [
+        "Mixer",
+        "Mastering",
+        "FX returns",
+        "Step synth",
+        "Time Stretcher",
+        "Effect Studio",
+        "Sample editor",
+        "Album Review",
+    ] {
+        assert!(
+            help::Topic::ALL.iter().any(|topic| topic.name() == tool),
+            "{tool} needs a Help page"
+        );
+    }
+    // A tool's own Help window takes the tool's palette.
+    for topic in help::Topic::ALL {
+        if topic.window().is_some() {
+            assert!(topic.palette().is_some(), "{:?}", topic.name());
+        }
+    }
+    let mastering = help::Topic::Mastering.text();
+    for term in ["dBFS", "dBTP", "LUFS", "VU"] {
+        assert!(mastering.contains(&term), "Mastering must explain {term}");
+    }
+}
+
+/// Paint the real Help shell at a user-selected size without the workspace.
+fn short_help_frame(
+    context: &egui::Context,
+    topic: &mut help::Topic,
+    size: Vec2,
+    events: Vec<egui::Event>,
+) -> egui::FullOutput {
+    context.run(
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0))),
+            events,
+            focused: true,
+            ..Default::default()
+        },
+        |ctx| {
+            dialog::window("Help")
+                .default_width(size.x)
+                .max_height(size.y)
+                .scroll(false)
+                .show(ctx, |ui| help::manual(ui, topic));
+        },
+    )
+}
+
+#[test]
+fn help_keyboard_selection_stays_visible_in_a_short_list() {
+    for size in [Vec2::new(720.0, 300.0), Vec2::new(300.0, 300.0)] {
+        let (context, _) = fixture();
+        context.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
+        let mut topic = help::Topic::Shortcuts;
+        for _ in 0..3 {
+            short_help_frame(&context, &mut topic, size, vec![]);
+        }
+        context.memory_mut(|memory| {
+            memory.request_focus(egui::Id::new(("help-page-entry", "Shortcuts")));
+        });
+        short_help_frame(&context, &mut topic, size, vec![]);
+        for expected in help::Topic::ALL.into_iter().skip(1) {
+            short_help_frame(
+                &context,
+                &mut topic,
+                size,
+                vec![key_event(egui::Key::ArrowDown, egui::Modifiers::NONE)],
+            );
+            let mut release = key_event(egui::Key::ArrowDown, egui::Modifiers::NONE);
+            if let egui::Event::Key { pressed, .. } = &mut release {
+                *pressed = false;
             }
+            short_help_frame(&context, &mut topic, size, vec![release]);
+            let output = short_help_frame(&context, &mut topic, size, vec![]);
+            assert_eq!(topic, expected);
             assert!(
-                visible(&output, label, viewport),
-                "Help guidance is unreachable at {size:?}: {label}"
+                window_text(&output, &context, "Help", expected.name()).is_some(),
+                "The selected topic {expected:?} must stay visible at {size:?}."
             );
         }
-        for action in ACTIONS {
-            assert!(
-                seen_actions.contains(action),
-                "Help action {action:?} must remain reachable at {size:?}."
-            );
+    }
+}
+
+#[test]
+fn help_page_remains_visible_at_minimum_window_size() {
+    let (context, _) = fixture();
+    let mut topic = help::Topic::Shortcuts;
+    let size = Vec2::new(300.0, 160.0);
+    for _ in 0..3 {
+        short_help_frame(&context, &mut topic, size, vec![]);
+    }
+    let output = short_help_frame(&context, &mut topic, size, vec![]);
+    assert!(
+        window_text(&output, &context, "Help", "SHORTCUTS").is_some(),
+        "The compact topic list must leave room for the page."
+    );
+}
+
+#[test]
+fn help_topic_controls_do_not_conflict_with_workspace_controls() {
+    let (context, mut app) = fixture();
+    context.enable_accesskit();
+    app.help.main = true;
+    frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    let nodes = agent::nodes(output.platform_output.accesskit_update.as_ref().unwrap());
+    let controls = |name: &str| {
+        nodes
+            .iter()
+            .filter(|node| {
+                node.label == name && node.enabled && node.role != "label" && node.role != "window"
+            })
+            .count()
+    };
+    assert_eq!(
+        controls("Mixer"),
+        1,
+        "The Mixer command name must stay unique."
+    );
+    for topic in help::Topic::ALL {
+        assert_eq!(controls(&format!("Help page: {}", topic.name())), 1);
+    }
+}
+
+#[test]
+fn tool_help_scroll_keys_work_with_focus_in_its_header() {
+    let (context, mut app) = fixture();
+    context.enable_accesskit();
+    context.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
+    app.help.master = true;
+    for _ in 0..3 {
+        frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&context, &mut app, &output, "Close Mastering help");
+    frame(
+        &context,
+        &mut app,
+        vec![key_event(egui::Key::End, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
+    assert!(
+        window_text(
+            &output,
+            &context,
+            "Mastering help",
+            "Changes apply while the song plays, and Undo restores them."
+        )
+        .is_some(),
+        "End must reach the page end when a Help header control has focus."
+    );
+}
+
+#[test]
+fn f1_opens_and_closes_help() {
+    let (context, mut app) = fixture();
+    // A press, then its release, so the next press is not a repeat.
+    let f1 = |context: &egui::Context, app: &mut MixJamApp| {
+        frame(
+            context,
+            app,
+            vec![key_event(egui::Key::F1, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        let mut release = key_event(egui::Key::F1, egui::Modifiers::NONE);
+        if let egui::Event::Key { pressed, .. } = &mut release {
+            *pressed = false;
         }
+        frame(context, app, vec![release], egui::Modifiers::NONE);
+    };
+    f1(&context, &mut app);
+    assert!(app.help.main);
+    f1(&context, &mut app);
+    assert!(!app.help.main);
+}
+
+#[test]
+fn tool_help_opens_beside_its_tool() {
+    let (context, mut app) = fixture();
+    let size = Vec2::new(1440.0, 1000.0);
+    app.selection.sample = Some(app.session.library().samples[0].id);
+    app.stretch.open = true;
+    for _ in 0..3 {
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    app.help.open_tool(help::Topic::Stretch);
+    for _ in 0..3 {
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let tool = dialog::window_rect(&context, "Time Stretcher").unwrap();
+    let page = dialog::window_rect(&context, "Time Stretcher help").unwrap();
+    assert!(
+        !tool.shrink(1.0).intersects(page),
+        "Time Stretcher help must not cover the tool: {tool:?} / {page:?}"
+    );
+    // A board's Help opens above the lower panel.
+    app.help.open_tool(help::Topic::Mastering);
+    for _ in 0..3 {
+        frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let board = context
+        .data(|data| data.get_temp::<Rect>(egui::Id::new("help-board-rect")))
+        .unwrap();
+    let page = dialog::window_rect(&context, "Mastering help").unwrap();
+    assert!(page.bottom() <= board.top() + 1.0, "{page:?} / {board:?}");
+}
+
+#[test]
+fn tool_help_stays_clear_of_its_tool_at_compact_sizes() {
+    for size in [Vec2::new(960.0, 720.0), Vec2::new(1024.0, 768.0)] {
+        let (context, mut app) = fixture();
+        context.enable_accesskit();
+        context.style_mut(|style| style.scroll_animation = egui::style::ScrollAnimation::none());
+        app.selection.sample = Some(app.session.library().samples[0].id);
+        app.stretch.open = true;
+        for _ in 0..3 {
+            frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        app.help.open_tool(help::Topic::Stretch);
+        for _ in 0..3 {
+            frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let tool = dialog::window_rect(&context, "Time Stretcher").unwrap();
+        let page = dialog::window_rect(&context, "Time Stretcher help").unwrap();
+        assert!(
+            !tool.intersects(page),
+            "Help must use the free space above the tool at {size:?}: {tool:?} / {page:?}"
+        );
+        assert!(Rect::from_min_size(Pos2::ZERO, size).contains_rect(page));
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        let (target, _) = accessible_node(&output, "Close Time Stretcher help");
+        frame_at_size(
+            &context,
+            &mut app,
+            vec![egui::Event::AccessKitActionRequest(
+                egui::accesskit::ActionRequest {
+                    action: egui::accesskit::Action::Focus,
+                    target,
+                    data: None,
+                },
+            )],
+            egui::Modifiers::NONE,
+            size,
+        );
+        frame_at_size(
+            &context,
+            &mut app,
+            vec![key_event(egui::Key::End, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+        assert!(
+            window_text(
+                &output,
+                &context,
+                "Time Stretcher help",
+                "Esc closes the tool. It first closes an open list or cancels a value being typed."
+            )
+            .is_some(),
+            "The short Help page must scroll to its last paragraph at {size:?}."
+        );
     }
 }
 

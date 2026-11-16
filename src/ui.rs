@@ -30,6 +30,8 @@ mod effects;
 mod eq;
 #[path = "ui/fx.rs"]
 mod fx;
+#[path = "ui/help.rs"]
+mod help;
 #[path = "ui/input.rs"]
 mod input;
 #[path = "ui/inspector.rs"]
