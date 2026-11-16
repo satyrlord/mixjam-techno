@@ -535,13 +535,16 @@ fn paint_lane_grid(
     let last_bar = ((visible.right() - rect.left()) / bar_width)
         .ceil()
         .min(frame.bars as f32) as u32;
-    for bar in first_bar..=last_bar {
+    // Narrow bars, as in the Mix view, draw every second, fourth, or later
+    // line, so the lanes never fill with lines.
+    let step = super::timeline::bar_step(bar_width, super::timeline::BAR_LINE_SPACING);
+    for bar in (first_bar..=last_bar).filter(|bar| bar % step == 0) {
         let x = rect.left() + bar as f32 * bar_width;
         painter.line_segment(
             [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
             Stroke::new(
                 1.0_f32,
-                if bar % 4 == 0 {
+                if bar % (4 * step) == 0 {
                     roles().line
                 } else {
                     roles().bar_line

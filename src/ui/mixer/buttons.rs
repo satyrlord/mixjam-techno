@@ -13,6 +13,31 @@ pub(crate) fn send_knob(
     value: &mut f32,
     automated: bool,
 ) -> bool {
+    send_knob_in(ui, rect, scale, name, value, automated, false)
+}
+
+/// The Mix view's send knob: at 0, not automated, and not hovered or
+/// focused, it rests as a thin ring with its pointer, so only the sends that
+/// are in use show a head. Name, keys, and hint match `send_knob`.
+pub(crate) fn quiet_send_knob(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    value: &mut f32,
+    automated: bool,
+) -> bool {
+    send_knob_in(ui, rect, 1.0, name, value, automated, true)
+}
+
+fn send_knob_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    value: &mut f32,
+    automated: bool,
+    quiet: bool,
+) -> bool {
     let response = ui.interact(rect, ui.id().with(name), Sense::click_and_drag());
     let before = *value;
     let fine = ui.input(|input| input.modifiers.shift);
@@ -76,43 +101,26 @@ pub(crate) fn send_knob(
     *value = (*value).clamp(0.0, 1.0);
     let center = rect.center();
     let radius = rect.width() / 2.0;
-    ui.painter()
-        .circle_filled(center, radius, roles().strip_face);
-    ui.painter().circle_stroke(
-        center,
-        radius,
-        Stroke::new(
-            1.0 * scale,
-            if response.has_focus() {
-                roles().strip_lit
-            } else {
-                roles().strip_slot
-            },
-        ),
-    );
-    if *value > 0.0 {
-        let arc: Vec<Pos2> = (0..=24)
-            .map(|step| {
-                let angle = (-225.0 + 270.0 * *value * step as f32 / 24.0).to_radians();
-                center + Vec2::angled(angle) * (radius - 2.0 * scale)
-            })
-            .collect();
-        ui.painter().add(egui::Shape::line(
-            arc,
-            Stroke::new(2.0 * scale, roles().strip_lit),
-        ));
-    }
-    let pointer = Vec2::angled((-225.0 + 270.0 * *value).to_radians());
-    ui.painter().line_segment(
-        [center, center + pointer * (radius - 3.0 * scale)],
-        Stroke::new(1.5 * scale, roles().legend),
-    );
-    if automated {
-        ui.painter().circle_stroke(
-            center,
-            radius + 2.0 * scale,
-            Stroke::new(1.0 * scale, roles().legend),
+    let idle = quiet
+        && *value == 0.0
+        && !automated
+        && !response.hovered()
+        && !response.has_focus()
+        && !response.dragged();
+    if idle {
+        let ink = roles().strip_text.gamma_multiply(0.45);
+        ui.painter()
+            .circle_stroke(center, radius - 1.0, Stroke::new(1.0 * scale, ink));
+        let pointer = Vec2::angled((-225.0_f32).to_radians());
+        ui.painter().line_segment(
+            [
+                center + pointer * (radius * 0.35),
+                center + pointer * (radius - 3.0 * scale),
+            ],
+            Stroke::new(1.0 * scale, ink),
         );
+    } else {
+        send_knob_face(ui, &response, center, radius, scale, *value, automated);
     }
     focus_ring(ui, &response, rect, scale);
     response.widget_info(|| egui::WidgetInfo::slider(response.enabled(), f64::from(*value), name));
@@ -138,6 +146,57 @@ pub(crate) fn send_knob(
     before != *value
 }
 
+/// A send knob's head: face, ring, amount arc, pointer, and the automation
+/// ring.
+fn send_knob_face(
+    ui: &egui::Ui,
+    response: &Response,
+    center: Pos2,
+    radius: f32,
+    scale: f32,
+    value: f32,
+    automated: bool,
+) {
+    ui.painter()
+        .circle_filled(center, radius, roles().strip_face);
+    ui.painter().circle_stroke(
+        center,
+        radius,
+        Stroke::new(
+            1.0 * scale,
+            if response.has_focus() {
+                roles().strip_lit
+            } else {
+                roles().strip_slot
+            },
+        ),
+    );
+    if value > 0.0 {
+        let arc: Vec<Pos2> = (0..=24)
+            .map(|step| {
+                let angle = (-225.0 + 270.0 * value * step as f32 / 24.0).to_radians();
+                center + Vec2::angled(angle) * (radius - 2.0 * scale)
+            })
+            .collect();
+        ui.painter().add(egui::Shape::line(
+            arc,
+            Stroke::new(2.0 * scale, roles().strip_lit),
+        ));
+    }
+    let pointer = Vec2::angled((-225.0 + 270.0 * value).to_radians());
+    ui.painter().line_segment(
+        [center, center + pointer * (radius - 3.0 * scale)],
+        Stroke::new(1.5 * scale, roles().legend),
+    );
+    if automated {
+        ui.painter().circle_stroke(
+            center,
+            radius + 2.0 * scale,
+            Stroke::new(1.0 * scale, roles().legend),
+        );
+    }
+}
+
 /// A bus's Input and Limiter switches, named "{name} power" and
 /// "{name} limiter".
 pub(crate) fn bus_switches(
@@ -146,6 +205,24 @@ pub(crate) fn bus_switches(
     scale: f32,
     name: &str,
     bus: &mut FxBus,
+) {
+    bus_switches_in(ui, rects, scale, name, bus, false);
+}
+
+/// The Mix view's Input and Limiter: on, their usual state, is a quiet
+/// label with a small lamp; off, the exception, is a warm label. Names,
+/// states, and hints match `bus_switches`.
+pub(crate) fn quiet_bus_switches(ui: &mut egui::Ui, rects: [Rect; 2], name: &str, bus: &mut FxBus) {
+    bus_switches_in(ui, rects, 1.0, name, bus, true);
+}
+
+fn bus_switches_in(
+    ui: &mut egui::Ui,
+    rects: [Rect; 2],
+    scale: f32,
+    name: &str,
+    bus: &mut FxBus,
+    quiet: bool,
 ) {
     for (rect, label, key, on, hint) in [
         (
@@ -163,7 +240,33 @@ pub(crate) fn bus_switches(
             "Holds the return under -1 dBFS.",
         ),
     ] {
-        let response = button(ui, rect, label, &key, scale, *on);
+        let response = if quiet {
+            let response = face(ui, rect, &key, scale, None);
+            let lamp = Pos2::new(rect.left() + 6.0 * scale, rect.center().y);
+            ui.painter().circle_filled(
+                lamp,
+                2.0 * scale,
+                if *on {
+                    roles().lamp_on
+                } else {
+                    roles().lamp_off
+                },
+            );
+            text(
+                ui,
+                rect.center() + Vec2::new(4.0, 0.0) * scale,
+                label,
+                10.0 * scale,
+                if *on {
+                    roles().muted
+                } else {
+                    roles().lamp_warn
+                },
+            );
+            response
+        } else {
+            button(ui, rect, label, &key, scale, *on)
+        };
         response.widget_info(|| {
             egui::WidgetInfo::selected(egui::WidgetType::Checkbox, response.enabled(), *on, &key)
         });
@@ -237,6 +340,77 @@ pub(crate) fn center_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &st
     )
     .hover_hint("Reset pan to center. Output routing stays unchanged.")
     .clicked()
+}
+
+/// The Mix view's Unity: a reset that shows only on hover or focus. The
+/// name and hint are `unity_button`'s.
+pub(crate) fn quiet_unity_button(ui: &mut egui::Ui, rect: Rect, name: &str) -> bool {
+    reset_button(ui, rect, "Unity", &format!("Reset {name} gain to unity"))
+        .hover_hint("Set gain to 0.0 dB (unity). Polarity stays unchanged.")
+        .clicked()
+}
+
+/// The Mix view's Center, quiet like `quiet_unity_button`.
+pub(crate) fn quiet_center_button(ui: &mut egui::Ui, rect: Rect, name: &str) -> bool {
+    reset_button(ui, rect, "Center", &format!("Center {name} pan"))
+        .hover_hint("Reset pan to center. Output routing stays unchanged.")
+        .clicked()
+}
+
+/// A reset with no face and no label at rest. The dB value and the pan state
+/// already say when a value is away from its default, so the label and a
+/// face show only on hover or focus. The reset keeps its Tab stop and name.
+fn reset_button(ui: &mut egui::Ui, rect: Rect, label: &str, name: &str) -> Response {
+    let response = ui.interact(rect, ui.id().with(name), Sense::click());
+    let active = response.hovered() || response.has_focus();
+    if active {
+        ui.painter().rect_filled(rect, 2.0, roles().strip_face);
+    }
+    if active {
+        text(ui, rect.center(), label, 10.0, roles().legend);
+    }
+    focus_ring(ui, &response, rect, 1.0);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
+    });
+    response
+}
+
+/// The Mix view's M, S, L, and R. Each rests as a quiet letter; Mute and
+/// Solo fill their faces when on, and an output that is off turns its letter
+/// warm, so a row shows only what differs from a plain track. Names, states,
+/// and hints match `switch_button`.
+pub(crate) fn quiet_switch(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    switch: TrackSwitch,
+    enabled: &mut bool,
+) -> bool {
+    let label = format!("{name} {}", switch.name());
+    let (fill, letter) = match switch {
+        TrackSwitch::Mute if *enabled => (Some(roles().coral), roles().ink),
+        TrackSwitch::Solo if *enabled => (Some(roles().accent), roles().ink),
+        TrackSwitch::Left | TrackSwitch::Right if !*enabled => (None, roles().lamp_warn),
+        _ => (None, roles().muted),
+    };
+    let response = face(ui, rect, &label, 1.0, fill);
+    text(ui, rect.center(), switch.letter(), 11.0, letter);
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Checkbox,
+            response.enabled(),
+            *enabled,
+            &label,
+        )
+    });
+    let clicked = response
+        .hover_hint(switch_hint(&label, switch, *enabled))
+        .clicked();
+    if clicked {
+        *enabled = !*enabled;
+    }
+    clicked
 }
 
 /// A track's pan in `rect`, styled for the strips: "{name} pan". Returns
@@ -314,24 +488,58 @@ pub(crate) fn polarity_button(
         scale,
         *inverted,
     );
-    let center = rect.center();
     let color = if *inverted {
         roles().ink
     } else {
         roles().legend
     };
-    // The strip's 6-point circle, smaller in a short row.
+    polarity_glyph(ui, rect, scale, 1.5, color);
+    polarity_response(ui, response, name, inverted)
+}
+
+/// The Mix view's polarity: a Muted glyph on a dark face, like the quiet
+/// M, S, L, and R, and a lit face only while inverted. Name, state, and hint
+/// match `polarity_button`.
+pub(crate) fn quiet_polarity_button(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    inverted: &mut bool,
+) -> bool {
+    let response = face(
+        ui,
+        rect,
+        &format!("{name} polarity invert"),
+        1.0,
+        inverted.then(|| roles().strip_lit),
+    );
+    let color = if *inverted {
+        roles().ink
+    } else {
+        roles().muted
+    };
+    polarity_glyph(ui, rect, 1.0, 1.0, color);
+    polarity_response(ui, response, name, inverted)
+}
+
+/// The strip's 6-point slashed circle, smaller in a short row.
+fn polarity_glyph(ui: &egui::Ui, rect: Rect, scale: f32, width: f32, color: Color32) {
+    let center = rect.center();
     let radius = (rect.height() / 2.0 - 2.0).min(6.0 * scale);
     let unit = radius / 6.0;
-    ui.painter()
-        .circle_stroke(center, radius, Stroke::new(1.5 * scale, color));
+    let stroke = Stroke::new(width * scale, color);
+    ui.painter().circle_stroke(center, radius, stroke);
     ui.painter().line_segment(
         [
             center + Vec2::new(-5.0, 7.0) * unit,
             center + Vec2::new(5.0, -7.0) * unit,
         ],
-        Stroke::new(1.5 * scale, color),
+        stroke,
     );
+}
+
+/// The polarity switch's name, state, hint, and toggle.
+fn polarity_response(ui: &egui::Ui, response: Response, name: &str, inverted: &mut bool) -> bool {
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::Checkbox,
@@ -371,14 +579,33 @@ fn button(
     scale: f32,
     selected: bool,
 ) -> Response {
+    let response = face(ui, rect, name, scale, selected.then(|| roles().strip_lit));
+    text(
+        ui,
+        rect.center(),
+        label,
+        10.0 * scale,
+        if selected {
+            roles().ink
+        } else {
+            roles().legend
+        },
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
+    });
+    response
+}
+
+/// A strip button's face, named `name`: `lit` fills it, else it rests dark
+/// and lifts on hover.
+fn face(ui: &mut egui::Ui, rect: Rect, name: &str, scale: f32, lit: Option<Color32>) -> Response {
     let response = ui.interact(rect, ui.id().with(name), Sense::click());
-    let fill = if selected {
-        roles().strip_lit
-    } else if response.hovered() {
+    let fill = lit.unwrap_or(if response.hovered() {
         roles().raised
     } else {
         roles().strip_face
-    };
+    });
     ui.painter().rect_filled(rect, 2.0, fill);
     ui.painter().rect_stroke(
         rect,
@@ -394,20 +621,6 @@ fn button(
         egui::StrokeKind::Inside,
     );
     focus_ring(ui, &response, rect, scale);
-    text(
-        ui,
-        rect.center(),
-        label,
-        10.0 * scale,
-        if selected {
-            roles().ink
-        } else {
-            roles().legend
-        },
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
-    });
     response
 }
 

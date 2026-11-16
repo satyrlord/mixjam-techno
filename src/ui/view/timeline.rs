@@ -121,6 +121,12 @@ impl MixJamApp {
         let scroll_area = self.score_scroll_area(ui, &frame);
         let scroll = scroll_area.show_viewport(ui, |ui, viewport| {
             painted_offset_x = viewport.left();
+            if frame.mix {
+                // Egui expands its paint clip past the viewport. The Mix
+                // view keeps whole rows, including their paint and hit areas.
+                let visible = viewport.translate(ui.max_rect().min.to_vec2());
+                ui.set_clip_rect(ui.clip_rect().intersect(visible));
+            }
             self.score_body(ui, &frame, &mut headers);
         });
         name_scroll_area(ui, "arrangement_scroll", "Score");
@@ -176,9 +182,6 @@ impl MixJamApp {
         // The Lane height option sets it; it stays the same at any window or
         // panel size, so more room shows more rows.
         let row_height = self.session.options().lane_height.points();
-        let bar_width = 62.0 * self.score.zoom;
-        self.score.row_height = row_height;
-        self.score.bar_width = bar_width;
         let track_height = row_height * row_count as f32;
         let cursor_tick = self.session.cursor_tick();
         let project = self.session.project();
@@ -186,9 +189,7 @@ impl MixJamApp {
             .sections
             .last()
             .map_or(0, |section| section.start_tick);
-        let bars =
-            (project.end_tick().max(cursor_tick).max(last_section) / TICKS_PER_BAR + 16).max(64);
-        let width = bars as f32 * bar_width;
+        let song_end = project.end_tick().max(cursor_tick).max(last_section);
         // The Mix view widens the lane headers into mixer rows and keeps the
         // Master and the returns below the lanes.
         let mix = self.mix.shown;
@@ -202,13 +203,59 @@ impl MixJamApp {
             .scroll
             .clamp(0.0, mix_view::max_offset(label_width));
         let lane_inset = label_width + ui.spacing().item_spacing.x;
-        let viewport_height =
+        let mut viewport_height =
             (ui.available_height() - 26.0 - 8.0 - if mix { mix_view::BLOCK_HEIGHT } else { 0.0 })
                 .max(80.0);
+        if mix && track_height > viewport_height {
+            // Whole rows, so the last row in view is never cut in half.
+            viewport_height = (viewport_height / row_height).floor().max(1.0) * row_height;
+        }
+        if mix {
+            // The Master and returns follow the last row, so a short song
+            // keeps them beside the tracks they sum. The empty note needs
+            // 90 points above them.
+            let rows = if occupied_count == 0 {
+                track_height.max(90.0)
+            } else {
+                track_height
+            };
+            viewport_height = viewport_height.min(rows);
+        }
         let (ruler_strip, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 26.0), Sense::hover());
         let visible_width =
             (ui.available_width() - lane_inset - ui.spacing().scroll.allocated_width()).max(1.0);
+        // The Mix view's lanes show where each track plays across the whole
+        // song, so the song fits their width and Zoom rests. The Arrange view
+        // keeps room after the song to place more.
+        let (bars, bar_width) = if mix {
+            let mut bars = song_end.div_ceil(TICKS_PER_BAR).max(MIX_MIN_BARS);
+            if self.sections.bookmarks
+                && let Some(section) = project.sections.last()
+            {
+                // A bookmark's name extends to the right of its start. Keep
+                // room for it even when a bar is narrower than one pixel.
+                let name = ui.painter().layout_no_wrap(
+                    section.name.clone(),
+                    FontId::proportional(11.0),
+                    roles().on_light,
+                );
+                let reserve = (name.size().x + 10.0).min(visible_width * 0.5);
+                let section_bars = section.start_tick as f64 / f64::from(TICKS_PER_BAR);
+                let fitted =
+                    section_bars * f64::from(visible_width) / f64::from(visible_width - reserve);
+                bars = bars.max(fitted.ceil() as u32);
+            }
+            (bars, visible_width / bars as f32)
+        } else {
+            (
+                (song_end / TICKS_PER_BAR + 16).max(64),
+                62.0 * self.score.zoom,
+            )
+        };
+        self.score.row_height = row_height;
+        self.score.bar_width = bar_width;
+        let width = bars as f32 * bar_width;
         ScoreFrame {
             tracks,
             add_track,
@@ -269,6 +316,10 @@ impl MixJamApp {
         if self.capture.last_track {
             scroll_area = scroll_area.vertical_scroll_offset(frame.track_height);
             self.capture.last_track = false;
+        }
+        if frame.mix {
+            // The whole song fits the lanes, so nothing scrolls sideways.
+            scroll_area = scroll_area.hscroll(false).horizontal_scroll_offset(0.0);
         }
         scroll_area
     }
@@ -376,13 +427,30 @@ impl MixJamApp {
         let last_bar = ((ruler_clip.right() - ruler.left()) / bar_width)
             .ceil()
             .min(frame.bars as f32) as u32;
-        for bar in first_bar..last_bar {
+        // Narrow bars number every second, fourth, or later bar, so the
+        // numbers never touch. The last number can have narrow digits, so
+        // reserve the widest repeated digit for this many places.
+        let digits = frame.bars.to_string().len();
+        let number_width = (0..=9)
+            .map(|digit| {
+                ui.painter()
+                    .layout_no_wrap(
+                        digit.to_string().repeat(digits),
+                        FontId::proportional(13.0),
+                        roles().text,
+                    )
+                    .size()
+                    .x
+            })
+            .fold(0.0_f32, f32::max);
+        let step = bar_step(bar_width, RULER_NUMBER_SPACING.max(number_width + 8.0));
+        for bar in (first_bar..last_bar).filter(|bar| bar % step == 0) {
             let x = ruler.left() + bar as f32 * bar_width;
             let number_x = x + bar_width * 0.5;
-            if tags
-                .iter()
-                .any(|(_, tag)| (tag.left() - 8.0..=tag.right() + 8.0).contains(&number_x))
-            {
+            if tags.iter().any(|(_, tag)| {
+                (tag.left() - number_width / 2.0 - 8.0..=tag.right() + number_width / 2.0 + 8.0)
+                    .contains(&number_x)
+            }) {
                 continue;
             }
             ruler_painter.text(
@@ -447,6 +515,24 @@ impl MixJamApp {
             ui.ctx().request_repaint();
         }
     }
+}
+
+/// The Mix view's lanes show at least this many bars, so a short song does
+/// not stretch one bar across the score.
+const MIX_MIN_BARS: u32 = 16;
+/// The least room for one bar number on the ruler.
+const RULER_NUMBER_SPACING: f32 = 28.0;
+/// The least room between two bar lines on the lanes.
+pub(super) const BAR_LINE_SPACING: f32 = 6.0;
+
+/// Every how many bars a mark goes, so marks at least `spacing` apart:
+/// 1, 2, 4, 8, and so on.
+pub(super) fn bar_step(bar_width: f32, spacing: f32) -> u32 {
+    let mut step = 1;
+    while (step as f32) * bar_width < spacing && step < 1 << 16 {
+        step *= 2;
+    }
+    step
 }
 
 /// Keep the viewport still while the playhead is comfortably visible.

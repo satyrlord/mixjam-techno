@@ -108,11 +108,25 @@ impl StepSynthAudition {
 impl MixJamApp {
     /// Show the score's Mix view or its Arrange view. The Mix view and the
     /// Mixer board never show at once, so the lower panel leaves Mixer for
-    /// Mastering.
+    /// Mastering. The Mix view is its own mode: it folds the lower panel so
+    /// its rows take the whole score, and leaving it opens the panel again
+    /// unless the panel was opened or folded in between.
     pub(in super::super) fn set_mix_view(&mut self, on: bool) {
-        self.mix.shown = on;
         if on && self.boards.module == BottomModule::Mixer {
             self.boards.module = BottomModule::Mastering;
+        }
+        if on == self.mix.shown {
+            return;
+        }
+        self.mix.shown = on;
+        if on {
+            let open = self.session.layout().boards;
+            if open {
+                self.set_layout(|layout| layout.boards = false);
+            }
+            self.mix.restore_boards = open;
+        } else if std::mem::take(&mut self.mix.restore_boards) && !self.session.layout().boards {
+            self.set_layout(|layout| layout.boards = true);
         }
     }
 
@@ -157,6 +171,11 @@ impl MixJamApp {
         let before = self.session.layout();
         let mut layout = before;
         change(&mut layout);
+        if layout.boards != before.boards {
+            // The lower panel was opened or folded by hand, so leaving the
+            // Mix view keeps it as it is.
+            self.mix.restore_boards = false;
+        }
         if let Err(error) = self.session.set_layout(layout) {
             self.error(error);
         }

@@ -26,7 +26,8 @@ the space that the later panels share:
    - the lanes.
 
    The Mix view adds its 70-point block of Master and return rows under the
-   lanes, after an 8-point gap.
+   lanes, after an 8-point gap. Its lanes end at the last row, so the block
+   follows a short song's rows.
 
 A scroll area that has more content than space shows its scroll bar at all
 times, also when the pointer is not on it. Thus a short window shows where
@@ -96,8 +97,11 @@ panel when that board already shows.
 The Arrange and Mix switch of the score toolbar, or the Mix view command,
 changes the view of the score. The Mix view and the Mixer board never show
 together. The Mix view moves a lower panel on Mixer to Mastering, and the
-Mixer button of the rail returns the score to Arrange. If the Starting module
-is Mixer, the application starts with the Mix view over Mastering. If the
+Mixer button of the rail returns the score to Arrange. The Mix view is its
+own mode: choosing it folds the lower panel, and leaving it opens the panel
+again unless the panel was opened or folded in between. If the Starting
+module is Mixer, the application starts with the Mix view, the lower panel
+folded on Mastering. If the
 Starting module is Mastering or FX returns, the application starts with the
 lower panel on that board. The Mix view is session state, not part of
 `layout.json`.

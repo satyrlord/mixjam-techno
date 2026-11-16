@@ -339,9 +339,16 @@ pub(in super::super) fn draw_clip(
         );
     }
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)));
+    // A clip narrower than a short name shows only its fill and waveform:
+    // a few letters and an ellipsis say nothing that the category colour does
+    // not. A missing clip always names itself.
     let label = missing
         .map(|missing| format!("Missing: {}", missing.name))
-        .or_else(|| sample.map(|sample| sample.name.clone()));
+        .or_else(|| {
+            sample
+                .filter(|_| rect.width() >= CLIP_NAME_MIN_WIDTH)
+                .map(|sample| sample.name.clone())
+        });
     let text_color = if missing.is_some() {
         roles().text
     } else {
@@ -412,6 +419,9 @@ pub(in super::super) fn draw_clip(
         label_painter.galley(at, text, text_color);
     }
 }
+
+/// The narrowest clip that shows its sound's name.
+const CLIP_NAME_MIN_WIDTH: f32 = 48.0;
 
 /// The corner radius of a clip in the current theme. Aero's bubble stays
 /// small enough that a clip's label clears its curve.

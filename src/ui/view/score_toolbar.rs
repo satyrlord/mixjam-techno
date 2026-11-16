@@ -76,7 +76,8 @@ impl MixJamApp {
                     "Mix view",
                     "Mix view: each lane header widens into a mixer row with its level, exact \
                      dB, pan, sends, EQ, outputs, and polarity; the Master and the FX returns \
-                     stay below the lanes. Mix view in the command list (Ctrl+K) switches too.",
+                     stay below the lanes. The lanes fit the whole song, and the lower panel \
+                     folds until you leave. Mix view in the command list (Ctrl+K) switches too.",
                 ),
             ] {
                 let selected = self.mix.shown == mix;
@@ -131,18 +132,27 @@ impl MixJamApp {
             ui.add_space(if compact { 4.0 } else { 10.0 });
             ui.label(egui::RichText::new("Zoom").size(12.0).color(roles().muted));
             ui.spacing_mut().slider_width = if compact { 48.0 } else { 72.0 };
+            // The Mix view fits the whole song in its lanes, so Zoom rests
+            // there and keeps the Arrange view's zoom.
+            let zoomable = !self.mix.shown;
             let zoom = name_control(
-                ui.add(
+                ui.add_enabled(
+                    zoomable,
                     egui::Slider::new(&mut self.score.zoom, ZOOM_RANGE)
                         .show_value(false)
                         .clamping(egui::SliderClamping::Always),
                 ),
                 "Zoom",
             )
-            .hover_hint("Zoom: the width of a bar. The wheel over it zooms too.");
+            .hover_hint("Zoom: the width of a bar. The wheel over it zooms too.")
+            .disabled_hint("Zoom rests in the Mix view, which fits the whole song in the lanes.");
             // An egui slider ignores the wheel; each notch scales the zoom by
             // a tenth, as the other wheel-driven controls take one step.
-            let turn = controls::wheel(ui, &zoom);
+            let turn = if zoomable {
+                controls::wheel(ui, &zoom)
+            } else {
+                0.0
+            };
             if turn != 0.0 {
                 self.score.zoom = (self.score.zoom * ZOOM_WHEEL_STEP.powf(turn))
                     .clamp(*ZOOM_RANGE.start(), *ZOOM_RANGE.end());
@@ -176,6 +186,9 @@ impl MixJamApp {
         ) {
             (_, Some(bus)) => return_lane_label(bus),
             (Some(lane), None) => lane.label(),
+            // Without its label beside it, a bare "Off" would not say what
+            // is off.
+            (None, None) if !show_label => "No lane".into(),
             (None, None) => "Off".into(),
         };
         let shown = (

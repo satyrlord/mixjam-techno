@@ -367,7 +367,7 @@ fn mixer_summaries_and_control_identity_follow_sparse_project_tracks() {
     app.boards.module = BottomModule::Mixer;
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    text_rect(&output, "2 sounds");
+    text_rect(&output, "good grasp 2 +1");
     text_rect(&output, "good grasp 2");
     let track64 = accessible_node(&output, "Track 64 gain").0;
     let track1_ids = app

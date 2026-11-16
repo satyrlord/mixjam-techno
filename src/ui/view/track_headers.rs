@@ -37,17 +37,25 @@ impl MixJamApp {
                 .get_mut(index)
                 .map(std::mem::take)
                 .unwrap_or_default();
-            let mut track = self.session.project().tracks[index].clone();
+            let track = &self.session.project().tracks[index];
+            let category = first_sound
+                .and_then(|id| self.session.library().sample_by_id(id))
+                .map(|sample| group_color(&sample.group_name));
+            let facts = mix_view::RowFacts::of(track, frame.any_solo, category);
+            let before = mix_view::RowMix::of(track);
+            let mut mix = before;
             let outcome = mix_view::track_row(
                 ui,
                 rect,
                 frame.mix_offset,
                 index,
                 (&summary, &detail),
-                frame.any_solo,
-                &mut track,
+                &facts,
+                &mut mix,
             );
-            if outcome.changed {
+            // The track is copied only when its row changed it.
+            if outcome.changed && mix != before {
+                let track = mix.applied(&self.session.project().tracks[index]);
                 headers.mix.tracks.push((index, track));
             }
             if outcome.open_eq {

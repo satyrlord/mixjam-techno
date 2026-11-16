@@ -149,7 +149,8 @@ Arrangement heading and its counts. At the right, it holds:
 The pair is two selectable labels, 2 points apart, with the shown view
 selected. If the score is narrower than 840 points, its smaller heading and
 counts share a two-line block. The Automation menu then omits its separate
-printed label and narrows to 96 points. Below 600 points, the heading and
+printed label and narrows to 96 points, and its Off choice reads No lane.
+Below 600 points, the heading and
 counts hide, so that every action stays within the score. If less than
 700 points remain after the heading and counts, the row spacing tightens to
 4 points and the side padding of its buttons to 6 points. The menu keeps its

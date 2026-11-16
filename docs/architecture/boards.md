@@ -25,24 +25,31 @@ through `ask_path`.
 
 `src/ui/mix_view.rs` owns the Mix view of the score. The `MixViewState::shown`
 flag of the frontend turns the header of each used lane into a row of fixed
-columns. The clips keep the remainder of the lane. The row uses the control
-helpers of `src/ui/mixer/` (`switch_button`, `polarity_button`, `gain_value`,
-`unity_button`, `pan_slider`, `center_button`, `send_knob`, `eq_button`,
-`track_state`, and `row_surface`) and the lane fader. Thus the accessible names
-and the operations are the same as those of the strips. Below the lanes, a
-pinned block holds the Master row (Bypass, level, Export tracks) and the
-returns row (`return_state`, `bus_switches`, `edit_button`).
+columns. The clips keep the remainder of the lane, and `score_frame` fits the
+whole song to the lanes. The row uses the control helpers of `src/ui/mixer/`
+(`quiet_switch`, `quiet_polarity_button`, `gain_value`, `quiet_unity_button`,
+`pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button`, `track_state`,
+and `row_surface`) and the lane fader. The quiet helpers paint a row at its
+defaults without lit faces and keep the names, states, and hints of
+`switch_button`, `polarity_button`, `send_knob`, `unity_button`, and
+`center_button`. Thus the accessible names
+and the operations are the same as those of the strips. After the last row, a
+block that stays at the foot of the score holds the Master row (Bypass, level,
+Export tracks) and the returns row (`return_state`, `quiet_bus_switches`,
+`edit_button`).
 
 Each change goes back to `apply_mixer_changes` in `src/ui/view/boards.rs`, the
-same path that the Mixer board uses. A strip or row copies only its own track,
-and gives it back when it changed. The edits go to the session as follows:
+same path that the Mixer board uses. A strip copies only its own track, and
+gives it back when it changed. A Mix view row edits a small `RowMix` copy and
+clones its track only when the row changed it. The edits go to the session as
+follows:
 
 - One changed track goes as `EditCommand::SetTrack`.
 - The master level, or more than one track in a frame, goes as one
   `SetMixer`.
 - The buses go as `SetEffects`, and the board goes as `SetMaster`.
 
-When the header column of the lanes is narrower than the 876 points of the
+When the header column of the lanes is narrower than the 944 points of the
 rows, the columns after the track number and arm scroll sideways by
 `MixViewState::scroll`. The caption bar, Shift with the wheel, or a control
 that gets keyboard focus outside the visible part scrolls them. Header rows
@@ -53,7 +60,10 @@ edit a replacement project.
 
 The Mix view and the Mixer board never show together. `set_mix_view` moves the
 lower panel to Mastering, and the Mixer button of the tool rail turns the Mix
-view off.
+view off. `set_mix_view` also folds the lower panel and keeps
+`MixViewState::restore_boards`, so leaving the view opens the panel again; a
+`set_layout` call that opens or folds the panel in between clears it. A launch
+with the Starting module Mixer folds the panel in the same way.
 
 ## Mixer controls and artwork
 

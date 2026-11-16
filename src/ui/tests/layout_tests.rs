@@ -378,6 +378,10 @@ fn starting_with_the_mixer_opens_the_mix_view() {
     let app = MixJamApp::from_session(session, "UI fixture".into(), false);
     assert!(app.mix.shown);
     assert_eq!(app.boards.module, BottomModule::Mastering);
+    assert!(
+        !app.session.layout().boards,
+        "The Mix view folds the lower panel."
+    );
     std::fs::remove_dir_all(root).unwrap();
 }
 

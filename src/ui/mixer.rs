@@ -20,7 +20,8 @@ use artwork::*;
 use buttons::*;
 pub(super) use buttons::{
     bus_switches, bypass_button, center_button, edit_button, eq_button, pan_slider,
-    polarity_button, send_knob, switch_button, unity_button,
+    polarity_button, quiet_bus_switches, quiet_center_button, quiet_polarity_button,
+    quiet_send_knob, quiet_switch, quiet_unity_button, send_knob, switch_button, unity_button,
 };
 use gain::*;
 pub(super) use gain::{fraction_gain, gain_fraction, gain_keys, gain_semantics, gain_value};

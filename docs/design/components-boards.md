@@ -8,8 +8,8 @@ tracks. Track and Master strips are 108 points wide. Master stays outside the
 horizontal track scroller, and the scroller keeps its scroll bar visible.
 Track numbers, sound summaries, dB gain values, pan descriptions, and output
 state stay grouped in each strip. A track with several different sounds shows
-their count, and lists their names on hover. Narrow strips keep the visible
-tracks without larger controls.
+the first sound to play followed by "+N" for the others, and lists all names
+on hover. Narrow strips keep the visible tracks without larger controls.
 
 L/R routing uses small named toggle buttons with live enabled indicators. Two
 rows of buttons are at the foot of a track strip:

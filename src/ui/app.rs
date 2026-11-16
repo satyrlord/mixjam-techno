@@ -188,7 +188,9 @@ impl MixJamApp {
             // never inherits another's panels.
             let mut layout = session.layout();
             layout.tool_names = capture_view != "rail-icons";
-            layout.boards = capture_view != "boards-folded";
+            // The Mix view folds the lower panel, as it does when chosen.
+            layout.boards =
+                capture_view != "boards-folded" && !capture_view.starts_with("mix-view");
             layout.maximised = capture_view == "maximised";
             layout.sounds = matches!(capture_view.as_str(), "sounds-panel" | "sample-details");
             layout.overview = capture_view != "overview-folded";
@@ -283,9 +285,10 @@ impl MixJamApp {
         };
         let section_bookmarks = session.section_bookmarks_setting();
         let follow_on_startup = session.options().follow_on_startup;
-        // Starting with Mixer opens the score's Mix view; the lower panel
-        // then shows Mastering, since the Mixer board never shows with it.
-        // Starting with Sounds opens the Sounds panel and folds the lower
+        // Starting with Mixer opens the score's Mix view and folds the lower
+        // panel, as choosing the Mix view does; the panel then keeps
+        // Mastering, since the Mixer board never shows with it, and opens
+        // again on leaving the Mix view if it was open. Starting with Sounds opens the Sounds panel and folds the lower
         // panel, which keeps Mixer for when it opens. Starting with Mastering
         // or Effects opens the lower panel on that board.
         use mixjam_techno::application::options::StartingModule;
@@ -295,6 +298,7 @@ impl MixJamApp {
             StartingModule::Mixer | StartingModule::Mastering => BottomModule::Mastering,
             StartingModule::Effects => BottomModule::FxReturns,
         };
+        let mut restore_boards = false;
         let (status, status_error) = if capture_view.is_empty() {
             let mut layout = session.layout();
             match session.options().starting_module {
@@ -303,7 +307,10 @@ impl MixJamApp {
                     layout.sounds = true;
                 }
                 StartingModule::Mastering | StartingModule::Effects => layout.boards = true,
-                StartingModule::Mixer => {}
+                StartingModule::Mixer => {
+                    restore_boards = layout.boards;
+                    layout.boards = false;
+                }
             }
             match session.set_layout(layout) {
                 Ok(()) => (status, status_error),
@@ -396,6 +403,7 @@ impl MixJamApp {
             mix: mix_view::MixViewState {
                 shown: capture_view.starts_with("mix-view")
                     || (capture_view.is_empty() && start_in_mix_view),
+                restore_boards,
                 ..Default::default()
             },
             boards: BoardsState {

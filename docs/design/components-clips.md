@@ -8,8 +8,10 @@ For sound rows and category chips, see
 ### Clip drawing
 
 Arrangement clips use flat category fills and names, with the waveform of the
-clip under the name. The waveform uses the category color darkened to 55% and
-fills the band between the name and the bottom edge of the clip. In a
+clip under the name. A clip narrower than 48 points shows no name, and its
+waveform fills it; a missing clip always shows its name. The waveform uses the
+category color darkened to 55% and fills the band between the name and the
+bottom edge of the clip. In a
 20-point lane that band is too short. The waveform then fills the clip in a
 lighter tone (82%), and the name stays readable over it.
 
@@ -92,39 +94,62 @@ resolution guidance in a tooltip.
 
 ## Mix view
 
-The Mix view is the arrangement with the header of each used lane widened
-into a mixer row. The clips keep the rest of the lane, and empty lanes keep
-their drop target. A row keeps the height of the lane. From the left, a row
-holds:
+The Mix view is its own mode of the arrangement: the header of each used lane
+widens into a mixer row, and choosing the view folds the lower panel so the
+rows take the whole score. Leaving the view opens the panel again, unless it
+was opened or folded in the meantime. The clips keep the rest of the lane as
+an activity strip: the lanes fit the whole song (at least 16 bars), so the
+score does not scroll sideways and Zoom rests. The fitted range keeps room for
+the last section's name, up to half the lane width. The ruler numbers every
+bar, or every second, fourth, or later bar to keep at least 28 points between
+numbers, with more room for wider numbers. The lanes draw bar lines at least
+6 points apart. Empty lanes keep their drop target. A row keeps the height of
+the lane. When the rows overflow,
+the viewport shows whole rows only. From the left, a row holds:
 
 - the track number and record arm,
-- the sound names (12 points, or 11 in 20-point lanes, elided, with the full
-  list in the hint),
+- a 7-point category mark in the colour of the track's first sound,
+- the sounds (12 points, or 11 in 20-point lanes, left-aligned and elided):
+  the first sound to play, then "+N" for the others, with the full list in
+  the hint,
 - M, S, L, and R,
 - polarity,
 - the level fader with its dB value and Unity,
 - pan with Center,
-- the state text in 11 points: Muted, No output, Solo elsewhere, Pan
-  automated, or the pan position,
-- the four send knobs,
+- the state text in 11 points, only for an exception: Muted, No output, Solo
+  elsewhere, Pan automated, or a pan off center,
+- the four send cells: each knob, and its amount in 10 points while it sends
+  (a send at 0 rests as a thin ring until hover or focus),
 - EQ.
 
+A row at its defaults stays quiet. M, S, L, R, and polarity rest as Muted
+marks on dark faces. Mute fills its face Coral, Solo fills its face Accent,
+and an inverted polarity lights its face while on, and an output that is off
+turns its letter to the warning lamp colour. Unity and Center have no face and
+show their label only on hover or focus, since the dB value and the pan state
+already show a moved value; they stay in the Tab order with their names. A row
+that cannot be heard (muted, soloed elsewhere, or with no output) keeps its
+switches clear and dims the rest to 45%.
+
 The header column is the width of the score less 160 points, from 250 to
-876 points. The content of the rows is 876 points wide. The header part of the
-ruler strip shows the column captions (Track, Outputs, Level, Pan, Sends, EQ)
-in 10-point uppercase Muted text. If the column is narrower than its rows,
-everything right of the 34-point number and arm scrolls sideways. A 3-point
-bar with a Muted thumb at the foot of the captions then shows the offset, and
-a drag on it changes the offset.
+944 points. The content of the rows is 944 points wide. The header part of the
+ruler strip shows the column captions (Track, Out over L and R, Level, Pan,
+FX 1 to FX 4 over the send cells, EQ) in 10-point uppercase Muted text. If the
+column is narrower than its rows, everything right of the 34-point number and
+arm scrolls sideways. A 3-point bar with a Muted thumb at the foot of the
+captions then shows the offset, and a drag on it changes the offset.
 
-Under the lanes, a 70-point block stays in view while the lanes scroll. It
-holds two rows:
+A 70-point block follows the last row, and stays at the foot of the score
+while more rows scroll. It holds two rows:
 
-- The Master row: Master over "Stereo output", Bypass, the level, and Export
-  tracks….
-- The returns row: four 210-point groups. Each group holds the bus name and
-  its effect, the return state ("Return 88%" or "Return automated"), the
-  return level knob, Input, Limiter, and Edit.
+- The Master row: Master over "Stereo output", Bypass under the switches, the
+  level, and Export tracks….
+- The returns row: four groups that share the width of the columns, with a
+  Strip slot rule between them. Each
+  group holds the bus name and its effect, the return state ("Return 88%" or
+  "Return automated"), the return level knob, Input, Limiter, and Edit. Input
+  and Limiter rest as Muted labels with a lit lamp; off, the label turns to
+  the warning lamp colour.
 
 While the FX returns board shows, each group keeps its name, state, and Edit,
 and reads "On the board below" in place of the knob and switches. Thus no

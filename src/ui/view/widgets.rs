@@ -318,27 +318,38 @@ pub(in super::super) fn pan_description(pan: f32) -> String {
 }
 
 /// The summary of every track, from one pass over the clips: a view that
-/// shows many tracks would otherwise scan every clip once per track.
+/// shows many tracks would otherwise scan every clip once per track. Each
+/// track's sounds are in the order they first play.
 pub(in super::super) fn mixer_sample_summaries(
     project: &Project,
     library: LibraryView<'_>,
 ) -> Vec<(String, String)> {
-    let mut ids = vec![BTreeSet::new(); project.tracks.len()];
+    let mut first: Vec<BTreeMap<u32, (u32, u64)>> = vec![BTreeMap::new(); project.tracks.len()];
     for clip in &project.clips {
-        if let Some(track) = ids.get_mut(clip.track) {
-            track.insert(clip.sample_id);
+        if let Some(track) = first.get_mut(clip.track) {
+            let at = (clip.start_tick, clip.id);
+            track
+                .entry(clip.sample_id)
+                .and_modify(|first| *first = (*first).min(at))
+                .or_insert(at);
         }
     }
-    ids.iter()
-        .map(|track| sample_summary(project, library, track))
+    first
+        .into_iter()
+        .map(|track| {
+            let mut ids: Vec<(u32, u64, u32)> = track
+                .into_iter()
+                .map(|(id, (tick, clip))| (tick, clip, id))
+                .collect();
+            ids.sort_unstable();
+            let ids: Vec<u32> = ids.into_iter().map(|(_, _, id)| id).collect();
+            sample_summary(project, library, &ids)
+        })
         .collect()
 }
 
-fn sample_summary(
-    project: &Project,
-    library: LibraryView<'_>,
-    ids: &BTreeSet<u32>,
-) -> (String, String) {
+/// A track's sounds: the first to play, and how many others follow it.
+fn sample_summary(project: &Project, library: LibraryView<'_>, ids: &[u32]) -> (String, String) {
     let names: Vec<String> = ids
         .iter()
         .map(|id| {
@@ -358,7 +369,7 @@ fn sample_summary(
     let summary = match names.as_slice() {
         [] => "No sounds".into(),
         [name] => name.clone(),
-        _ => format!("{} sounds", names.len()),
+        [first, rest @ ..] => format!("{first} +{}", rest.len()),
     };
     (summary, names.join("\n"))
 }
