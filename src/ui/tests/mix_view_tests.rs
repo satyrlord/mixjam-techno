@@ -213,6 +213,17 @@ fn mix_view_names_a_track_by_its_first_sound_and_counts_the_rest() {
 }
 
 #[test]
+fn the_first_opening_of_the_mix_view_names_its_shortcuts_once() {
+    let (_ctx, mut app) = fixture();
+    app.set_mix_view(true);
+    assert_eq!(app.status, mix_view::FIRST_OPEN_HINT);
+    app.set_mix_view(false);
+    app.message("Other");
+    app.set_mix_view(true);
+    assert_eq!(app.status, "Other");
+}
+
+#[test]
 fn mix_view_is_its_own_mode_with_the_whole_song_in_the_lanes() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -443,6 +454,31 @@ fn pan_ringed(output: &egui::FullOutput, name: &str) -> bool {
                 && ring.rect.width() <= slider.width() + 6.0
                 && ring.rect.height() <= slider.height() + 6.0)
     })
+}
+
+#[test]
+fn mix_view_eq_uses_the_new_row_when_switching_to_an_earlier_track() {
+    let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+    let output = click_named(&ctx, &mut app, "Track 2 EQ");
+    assert_eq!(app.eq_track, Some(1));
+    let target = accessible_node(&output, "Track 1 EQ").0;
+    let row = effects_control_rect(&output, "Track 1 pan");
+    // Check the selection frame: the shell keeps its first position, so
+    // correcting the anchor in a later frame cannot repair its placement.
+    frame(
+        &ctx,
+        &mut app,
+        vec![egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target,
+                data: None,
+            },
+        )],
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.eq_track, Some(0));
+    assert!((app.mix.eq_row.unwrap().center().y - row.center().y).abs() < 0.5);
 }
 
 #[test]

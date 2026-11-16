@@ -126,6 +126,8 @@ turned off. The original track numbers stay stable.
 Rows are 20, 30, or 40 points high, as the Lane height option sets, at every
 window and panel size. More room shows more rows, and the rows scroll
 vertically. The drop hint for the new track stays visible at each height.
+In narrow lanes it shortens to "Drop a sound for a new track", then "Drop a
+sound here", and it hides where even that would be cut.
 Compact reversed clips keep space between their name and the `rev` mark.
 
 The lane header is 250 points wide. From the left, it holds the track number,

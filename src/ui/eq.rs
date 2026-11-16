@@ -263,6 +263,8 @@ impl MixJamApp {
             .default_height(HEIGHT + 16.0)
             .max_height((ctx.viewport_rect().height() - 40.0).max(240.0))
             .constrain_to(ctx.viewport_rect().shrink(12.0))
+            // From the Mix view, the window first opens beside its row.
+            .anchor(self.mix.shown.then_some(self.mix.eq_row).flatten())
             .show(ctx, |ui| {
                 action = ui
                     .push_id(generation, |ui| show(ui, &title, track, &channel))
@@ -270,6 +272,7 @@ impl MixJamApp {
             });
         if !open {
             self.eq_track = None;
+            self.mix.eq_row = None;
         }
         let (changed, discrete) = match action {
             Action::None => return,

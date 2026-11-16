@@ -118,7 +118,8 @@ the viewport shows whole rows only. From the left, a row holds:
 - pan with Center (the fader and pan rails use the strip's Strip well and
   Strip fill: a dark well with a Muted fill on Studio and Aero, and a cream
   well with a dark fill on Vintage's ivory, so the level reads from the left
-  on every strip),
+  on every strip; the pan handle keeps a 1.5-point ring of strip ink at rest
+  and in use, so it shows on the cream well),
 - the state text in 11 points, only for an exception: Muted, No output, Solo
   elsewhere, Pan automated, or a pan off center,
 - the four send cells: each knob, and its amount in 10 points while it sends
@@ -148,7 +149,14 @@ surface, so a word or control at the edge fades out instead of being cut, and
 a caption that either edge would cut is left out.
 
 The header part of the drop row under the last track shows a Muted "+" under
-the track numbers and "New track" in the sounds' column.
+the track numbers and "New track" in the sounds' column. A song without tracks
+shows its "No tracks" note instead.
+
+The first switch to the Mix view in a session puts its shortcuts in the
+status bar: a double-click resets a fader or knob, and Shift with the wheel scrolls
+the columns. From the Mix view, a track's channel EQ window first opens beside
+its row's number through Pan, or above or below the row when the window does
+not fit beside it, so the row's level and pan stay in view.
 
 A 70-point block follows the last row, and stays at the foot of the score
 while more rows scroll. It holds two rows:

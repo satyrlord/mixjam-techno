@@ -20,7 +20,8 @@ impl MixJamApp {
         );
         if frame.add_track == Some(index) {
             self.add_track_header(ui, rect, index);
-            if frame.mix {
+            // A song without tracks has its "No tracks" note instead.
+            if frame.mix && frame.occupied_count > 0 {
                 mix_view::new_track_cue(ui, rect, frame.mix_offset);
             }
             return;
@@ -64,6 +65,10 @@ impl MixJamApp {
             }
             if outcome.open_eq {
                 headers.mix.eq = Some(index);
+            }
+            // The pending selection wins over the EQ from the last frame.
+            if headers.mix.eq.or(self.eq_track) == Some(index) {
+                self.mix.eq_row = outcome.eq_anchor;
             }
             return;
         }

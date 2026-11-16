@@ -561,12 +561,19 @@ fn paint_lane_grid(
             Vec2::new(width, row_height),
         )
         .intersect(canvas_clip);
-        let hint = painter.layout_no_wrap(
-            "Drop a sound here for a new track".into(),
-            FontId::proportional(13.0),
-            roles().muted,
-        );
-        if target.height() >= hint.size().y + 2.0 {
+        // The longest hint that fits the visible lanes, so a narrow score
+        // never cuts it; none when even the shortest does not fit.
+        let hint = [
+            "Drop a sound here for a new track",
+            "Drop a sound for a new track",
+            "Drop a sound here",
+        ]
+        .into_iter()
+        .map(|text| painter.layout_no_wrap(text.into(), FontId::proportional(13.0), roles().muted))
+        .find(|hint| hint.size().x + 12.0 <= target.width());
+        if let Some(hint) = hint
+            && target.height() >= hint.size().y + 2.0
+        {
             // Clear the bar lines behind the hint.
             let area = Rect::from_center_size(target.center(), hint.size());
             painter.rect_filled(area.expand2(Vec2::new(6.0, 1.0)), 0.0, roles().canvas);

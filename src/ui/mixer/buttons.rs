@@ -423,10 +423,21 @@ pub(crate) fn pan_slider(
     pan: &mut f32,
     automated: bool,
 ) -> bool {
-    pan_slider_in(ui, rect, scale, name, pan, automated, roles().strip_slot)
+    let roles = roles();
+    pan_slider_in(
+        ui,
+        rect,
+        scale,
+        name,
+        pan,
+        automated,
+        (roles.strip_slot, roles.cap, roles.strip_slot),
+    )
 }
 
-/// The Mix view's pan: its slot is the strip's rail well, like its fader.
+/// The Mix view's pan: its slot is the strip's rail well, like its fader,
+/// and its handle keeps a ring of strip ink at rest and in use, so it shows
+/// on Vintage's cream well.
 pub(crate) fn well_pan_slider(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -434,7 +445,16 @@ pub(crate) fn well_pan_slider(
     pan: &mut f32,
     automated: bool,
 ) -> bool {
-    pan_slider_in(ui, rect, 1.0, name, pan, automated, roles().strip_well)
+    let roles = roles();
+    pan_slider_in(
+        ui,
+        rect,
+        1.0,
+        name,
+        pan,
+        automated,
+        (roles.strip_well, roles.strip_text, roles.strip_text),
+    )
 }
 
 fn pan_slider_in(
@@ -444,7 +464,7 @@ fn pan_slider_in(
     name: &str,
     pan: &mut f32,
     automated: bool,
-    slot: Color32,
+    (slot, ring, active_ring): (Color32, Color32, Color32),
 ) -> bool {
     let mut changed = false;
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
@@ -454,10 +474,10 @@ fn pan_slider_in(
         // handle keeps a cap-colored edge on it.
         let widgets = &mut ui.visuals_mut().widgets;
         widgets.inactive.bg_fill = slot;
-        widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, roles().cap);
+        widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, ring);
         for state in [&mut widgets.hovered, &mut widgets.active] {
             state.bg_fill = roles().cap;
-            state.fg_stroke = Stroke::new(1.5 * scale, slot);
+            state.fg_stroke = Stroke::new(1.5 * scale, active_ring);
         }
         let response = pan_control(ui, name, pan, automated);
         changed = response.changed();

@@ -24,7 +24,19 @@ pub(super) struct MixViewState {
     /// The Mix view folded the lower panel when it opened; leaving it opens
     /// the panel again unless the lower panel was opened or folded since.
     pub(super) restore_boards: bool,
+    /// The Mix view's first opening in this session named its shortcuts in
+    /// the status bar.
+    pub(super) hinted: bool,
+    /// The part of the row, from its number through Pan, of the track whose
+    /// channel EQ is open or was just pressed. The EQ window first opens
+    /// beside it, so the row's name, level, and pan stay in view.
+    pub(super) eq_row: Option<Rect>,
 }
+
+/// The status line of the Mix view's first opening in a session: the
+/// shortcuts that its quiet rows do not show.
+pub(super) const FIRST_OPEN_HINT: &str = "Mix view: double-click a fader or knob to reset it. \
+     Shift and the wheel scroll the columns.";
 
 /// The width of a row's columns; a narrower header column scrolls them.
 pub(super) const CONTENT_WIDTH: f32 = EQ.1 + 6.0;
@@ -121,6 +133,9 @@ pub(super) fn max_offset(column: f32) -> f32 {
 pub(super) struct Outcome {
     pub changed: bool,
     pub open_eq: bool,
+    /// The row from its number through Center, where the EQ window opens
+    /// beside it.
+    pub eq_anchor: Option<Rect>,
 }
 
 /// The part of a track that a Mix view row edits. It is small and `Copy`, so
@@ -433,6 +448,11 @@ pub(super) fn track_row(
             );
         }
     }
+    let center = span(rect, offset, CENTER, height);
+    outcome.eq_anchor = Some(Rect::from_x_y_ranges(
+        rect.left()..=center.right().clamp(rect.left() + PINNED, rect.right()),
+        rect.y_range(),
+    ));
     outcome.open_eq = eq_button(
         ui,
         span(rect, offset, EQ, height),

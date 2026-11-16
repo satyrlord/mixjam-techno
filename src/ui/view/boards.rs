@@ -119,6 +119,9 @@ impl MixJamApp {
             return;
         }
         self.mix.shown = on;
+        if on && !std::mem::replace(&mut self.mix.hinted, true) {
+            self.message(mix_view::FIRST_OPEN_HINT);
+        }
         if on {
             let open = self.session.layout().boards;
             if open {
