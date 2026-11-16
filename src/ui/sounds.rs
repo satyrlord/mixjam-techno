@@ -350,7 +350,9 @@ impl MixJamApp {
     pub(super) fn library_filter(&mut self, ui: &mut egui::Ui, width: f32, truncate: bool) {
         let mut libraries = egui::ComboBox::from_id_salt("palette_product")
             .selected_text(self.sounds.product.map_or("All libraries", Product::label))
-            .width(width);
+            .width(width)
+            // The list is short, so it shows all its rows.
+            .height(f32::INFINITY);
         if truncate {
             libraries = libraries.truncate();
         }

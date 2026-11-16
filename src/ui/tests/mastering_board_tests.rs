@@ -364,3 +364,22 @@ fn a_mastering_chip_brings_its_whole_pedal_into_a_short_section() {
         "Enter on a chip must bring the whole pedal into view: {grip:?} in {board:?}."
     );
 }
+
+#[test]
+fn the_preset_list_uses_its_full_height() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.boards.module = BottomModule::Mastering;
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    click_named(&ctx, &mut app, "Mastering preset");
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let menu = effects_control_rect(&output, "Menu");
+    let list = effects_control_rect(&output, "Menu drag to scroll");
+    // The list is longer than its 560 points, and egui cut the menu at 400.
+    assert_eq!(list.height(), 560.0, "{list:?}");
+    assert!(
+        Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0)).contains_rect(menu),
+        "The list stays in the window: {menu:?}."
+    );
+}

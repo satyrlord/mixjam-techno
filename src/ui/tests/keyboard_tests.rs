@@ -549,6 +549,47 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
             }),
         ),
         (
+            "Clip fade curve menu",
+            "Menu 2",
+            Box::new(|ctx, app| {
+                let clip = app.session.project().clips[0].id;
+                open_clip_menu(ctx, app, clip);
+                click_named(ctx, app, "Clip fade in curve");
+            }),
+        ),
+        (
+            "Automation lane menu",
+            "FX 4 return",
+            Box::new(|ctx, app| {
+                click_named(ctx, app, "Automation lane");
+            }),
+        ),
+        (
+            "Recording track list",
+            "Menu vertical scroll bar",
+            Box::new(|ctx, app| {
+                click_named(ctx, app, "Recording track");
+            }),
+        ),
+        (
+            "Mastering preset list",
+            "Menu drag to scroll",
+            Box::new(|ctx, app| {
+                app.boards.module = BottomModule::Mastering;
+                frame(ctx, app, vec![], egui::Modifiers::NONE);
+                click_named(ctx, app, "Mastering preset");
+            }),
+        ),
+        (
+            "Scale root list",
+            "Menu",
+            Box::new(|ctx, app| {
+                app.boards.module = BottomModule::StepSynth;
+                frame(ctx, app, vec![], egui::Modifiers::NONE);
+                click_named(ctx, app, "Scale root");
+            }),
+        ),
+        (
             "Theme list",
             "Menu",
             Box::new(|ctx, app| {
@@ -562,7 +603,10 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
     ];
     let mut faults = Vec::new();
     let mut check = |state: &str, size: Vec2, reached: &str, stops: &[Result<String, String>]| {
-        let unnamed: Vec<_> = stops.iter().filter_map(|stop| stop.as_ref().err()).collect();
+        let unnamed: Vec<_> = stops
+            .iter()
+            .filter_map(|stop| stop.as_ref().err())
+            .collect();
         if !unnamed.is_empty() {
             faults.push(format!(
                 "{state} at {size}: stops without a name: {unnamed:?}"
@@ -587,7 +631,12 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
         ctx.enable_accesskit();
         app.sample_import.details_open = true;
         let stops = tab_cycle(&ctx, &mut app, size);
-        check("Import details, missing sound", size, "Close Import details", &stops);
+        check(
+            "Import details, missing sound",
+            size,
+            "Close Import details",
+            &stops,
+        );
     }
     assert!(faults.is_empty(), "{}", faults.join("\n"));
 }
@@ -617,6 +666,91 @@ fn focused_sound_list_shows_its_focus_without_a_current_sound() {
         marked(&output),
         "The focused list shows where the focus is before a sound is chosen."
     );
+}
+
+#[test]
+fn short_lists_show_whole_and_do_not_scroll() {
+    type Setup = fn(&egui::Context, &mut MixJamApp);
+    let sounds: Setup = |_, app| {
+        with_more_sounds(app);
+        app.open_sounds_panel();
+    };
+    let step_synth: Setup = |_, app| app.boards.module = BottomModule::StepSynth;
+    let providers: Setup = |ctx, app| {
+        app.open_options(ctx);
+        for control in ["Sample libraries", "Optional product providers"] {
+            frame(ctx, app, vec![], egui::Modifiers::NONE);
+            click_named(ctx, app, control);
+        }
+    };
+    for (list, setup) in [
+        ("Library filter", sounds),
+        ("Scale", step_synth),
+        ("Scale root", step_synth),
+        ("Provider product", providers),
+    ] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        setup(&ctx, &mut app);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        click_named(&ctx, &mut app, list);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let menu = effects_control_rect(&output, "Menu");
+        assert!(
+            Rect::from_min_size(Pos2::ZERO, Vec2::new(1440.0, 1000.0)).contains_rect(menu),
+            "The {list} list stays in the window: {menu:?}."
+        );
+        // egui adds the scroll parts only when the rows do not fit.
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        let scrolls = update.nodes.iter().any(|(_, node)| {
+            node.label()
+                .is_some_and(|label| label.starts_with("Menu ") && label.contains("scroll"))
+        });
+        assert!(!scrolls, "The {list} list must show all its rows.");
+    }
+}
+
+#[test]
+fn focused_menu_surface_shows_a_focus_outline() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    focus_control(&ctx, &mut app, &output, "Automation lane");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key_event(egui::Key::Enter, egui::Modifiers::NONE)],
+        egui::Modifiers::NONE,
+    );
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    // The outline goes round the whole surface, inside its edge.
+    let marked = |output: &egui::FullOutput| {
+        let menu = effects_control_rect(output, "Menu");
+        output.shapes.iter().any(|shape| {
+            matches!(&shape.shape, egui::Shape::Rect(mark)
+                if mark.stroke.color == roles().accent
+                    && mark.stroke.width == 2.0
+                    && menu.contains_rect(mark.rect)
+                    && mark.rect.expand(2.0).contains_rect(menu))
+        })
+    };
+    let tab = |app: &mut MixJamApp| {
+        frame(
+            &ctx,
+            app,
+            vec![key_event(egui::Key::Tab, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+        );
+        frame(&ctx, app, vec![], egui::Modifiers::NONE)
+    };
+    assert!(!marked(&output), "An unfocused menu has no focus mark.");
+    let output = tab(&mut app);
+    assert_eq!(focused_label(&output).as_deref(), Some("Menu"));
+    assert!(marked(&output), "The focused menu surface shows the focus.");
+    let output = tab(&mut app);
+    assert_eq!(focused_label(&output).as_deref(), Some("Off"));
+    assert!(!marked(&output), "The mark goes when the focus moves on.");
 }
 
 #[test]

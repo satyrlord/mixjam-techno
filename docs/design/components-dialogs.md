@@ -84,6 +84,7 @@ changes when it is complete. The next Add library folder and Scan again use
 the fallback tempo. Library and provider paths wrap in full. An enabled Remove
 describes its path. The page scrolls vertically inside the shared window. A
 large expanded Folder tempos list must keep the provider controls reachable.
+The provider product list shows all its rows and does not scroll.
 
 Show tooltips controls the hover hints. Accessible names, focus, errors, and
 visible guidance stay available when it is off.

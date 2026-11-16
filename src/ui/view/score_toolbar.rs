@@ -190,13 +190,15 @@ impl MixJamApp {
             egui::Popup::open_id(ui.ctx(), button.with("popup"));
         }
         let project = self.session.project();
-        let response = egui::ComboBox::from_id_salt("automation_lane")
+        let ctx = ui.ctx().clone();
+        let combo = egui::ComboBox::from_id_salt("automation_lane")
             .selected_text(current)
             // "Repeat gate" and "FX 1 return" still fit the narrow width.
             .width(if show_label { 112.0 } else { 96.0 })
             // The whole grouped list shows without a scroll bar.
-            .height(f32::INFINITY)
-            .show_ui(ui, |ui| {
+            .height(f32::INFINITY);
+        let response = tall_menu(&ctx, || {
+            combo.show_ui(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let mut row = |ui: &mut egui::Ui, lane, name: &str, detail, count| {
                     if lane_menu_row(ui, choice == lane, name, detail, count).clicked() {
@@ -243,7 +245,8 @@ impl MixJamApp {
                     );
                 }
             })
-            .response;
+        })
+        .response;
         name_control(response, "Automation lane").hover_hint(
             "Show and edit one automation lane on every track, or the return lane of one FX \
              bus across the arrangement. Click a lane to add a point, drag a point to move it, \

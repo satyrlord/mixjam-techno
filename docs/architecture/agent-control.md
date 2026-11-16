@@ -85,3 +85,8 @@ instead.
 egui makes the surface of an open menu, context menu, or drop-down list a Tab
 stop, and gives it no name. `name_open_menus` names that surface `Menu` at the
 end of each frame. A menu that opens from another menu gets the name `Menu 2`.
+A long drop-down list scrolls, and its scroll parts are Tab stops also. They
+get the names `Menu drag to scroll` and `Menu vertical scroll bar`.
+
+egui limits a new menu to a height of 400 points. Show a combo box with a
+taller list in `tall_menu`, so that only the window limits the menu.

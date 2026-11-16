@@ -150,6 +150,22 @@ fn the_lane_menu_offers_the_repeat_gate_and_each_fx_return() {
 }
 
 #[test]
+fn the_lane_menu_shows_its_last_row_whole_and_does_not_scroll() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    click_named(&ctx, &mut app, "Automation lane");
+    let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let menu = effects_control_rect(&output, "Menu");
+    let first = effects_control_rect(&output, "Off");
+    let last = effects_control_rect(&output, "FX 4 return");
+    assert_eq!(
+        menu.bottom() - last.bottom(),
+        first.top() - menu.top(),
+        "The menu ends below its last row with the margin of its first row."
+    );
+}
+
+#[test]
 fn the_lane_menu_groups_all_fourteen_lanes_and_shows_what_each_holds() {
     use mixjam_techno::application::automation::{Lane, Point};
     let (ctx, mut app) = fixture();
@@ -307,7 +323,7 @@ fn the_keyboard_opens_the_lane_menu_and_chooses_a_lane() {
         egui::Modifiers::NONE,
     );
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    // Tab walks into the menu, past Off, to Volume; Enter chooses it.
+    // Tab walks to the menu surface, past Off, to Volume; Enter chooses it.
     let focused = |output: &egui::FullOutput| {
         let update = output.platform_output.accesskit_update.as_ref().unwrap();
         update
@@ -330,7 +346,7 @@ fn the_keyboard_opens_the_lane_menu_and_chooses_a_lane() {
             break;
         }
     }
-    assert_eq!(walked, ["Off", "Volume"], "{walked:?}");
+    assert_eq!(walked, ["Menu", "Off", "Volume"], "{walked:?}");
     frame(
         &ctx,
         &mut app,

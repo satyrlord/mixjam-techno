@@ -156,6 +156,8 @@ fn scale_group(
                     .selected_text(state.scale.label())
                     .width(scale_width)
                     .truncate()
+                    // The list is short, so it shows all its rows.
+                    .height(f32::INFINITY)
                     .show_ui(ui, |ui| {
                         for scale in pattern::Scale::ALL {
                             // A choice closes the list, also for an agent.
@@ -174,10 +176,14 @@ fn scale_group(
                      Every note stays playable.",
                     state.scale.label()
                 ));
-                let response = egui::ComboBox::from_id_salt("step-synth-root")
+                let ctx = ui.ctx().clone();
+                let roots = egui::ComboBox::from_id_salt("step-synth-root")
                     .selected_text(pattern::ROOTS[usize::from(state.root % 12)])
                     .width(root_width)
-                    .show_ui(ui, |ui| {
+                    .height(f32::INFINITY);
+                // The 12 rows are taller than egui's limit for a new menu.
+                let response = view::tall_menu(&ctx, || {
+                    roots.show_ui(ui, |ui| {
                         for (root, name) in pattern::ROOTS.iter().enumerate() {
                             if ui
                                 .selectable_value(&mut state.root, root as u8, *name)
@@ -188,7 +194,8 @@ fn scale_group(
                             }
                         }
                     })
-                    .response;
+                })
+                .response;
                 name_control(response, "Scale root")
                     .hover_hint("The scale's root. A is the source pitch.");
             });

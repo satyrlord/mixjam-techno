@@ -45,11 +45,13 @@ pub(crate) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<
         "Custom"
     });
     let mut chosen = None;
-    let response = egui::ComboBox::from_id_salt("master_preset")
+    let ctx = ui.ctx().clone();
+    let combo = egui::ComboBox::from_id_salt("master_preset")
         .selected_text(current)
         .width(150.0)
-        .height(560.0)
-        .show_ui(ui, |ui| {
+        .height(560.0);
+    let response = view::tall_menu(&ctx, || {
+        combo.show_ui(ui, |ui| {
             for (index, preset) in presets::PRESETS.iter().enumerate() {
                 // A rule parts the three general presets from the genres.
                 if index == 3 {
@@ -64,7 +66,8 @@ pub(crate) fn preset_selector(ui: &mut egui::Ui, chain: &MasterChain) -> Option<
                 }
             }
         })
-        .response;
+    })
+    .response;
     name_control(response, "Mastering preset").hover_hint(
         "Load a factory board. A preset sets every pedal and the pedal order, and turns \
          the Booster pedals off. Trim stays as you set it for the mix. Undo restores \

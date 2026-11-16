@@ -251,15 +251,11 @@ impl Command {
 pub(super) struct CommandList {
     query: String,
     current: usize,
-    focus: bool,
 }
 
 impl CommandList {
     pub(super) fn new() -> Self {
-        Self {
-            focus: true,
-            ..Self::default()
-        }
+        Self::default()
     }
 }
 
@@ -422,15 +418,17 @@ impl MixJamApp {
         let Some(mut list) = self.commands.take() else {
             return;
         };
-        let (up, down, enter) = ctx.input_mut(|input| {
+        let (up, down, enter, tab) = ctx.input_mut(|input| {
             (
                 input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
                 input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
                 input.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+                input.key_pressed(egui::Key::Tab),
             )
         });
-        if up || down {
+        if up || down || tab {
             // egui queues focus movement before widgets consume their keys.
+            // Tab has no other stop to go to: the search is the only one.
             ctx.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
         }
         let mut run = None;
@@ -467,9 +465,11 @@ impl MixJamApp {
                     })
                     .inner;
                 let field = name_control(field, "Find a command");
-                if list.focus || up || down {
+                // The search keeps the text cursor while the list shows, so
+                // the scroll parts of the list are never Tab stops and a
+                // press on the scroll bar does not stop the typed words.
+                if !field.has_focus() {
                     field.request_focus();
-                    list.focus = false;
                 }
                 if field.changed() {
                     list.current = 0;

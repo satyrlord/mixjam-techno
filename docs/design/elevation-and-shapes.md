@@ -34,7 +34,10 @@ focus only.
 Transport keyboard focus uses a two-point inset outline. On the bright
 Play/Pause button, the outline is the dark on-accent ink of the theme (Canvas
 in Studio). On the secondary controls, it is Accent. Header actions, category
-chips, and empty-state actions use the same outline. Undo and Redo dim and
+chips, and empty-state actions use the same outline. The surface of an open
+menu, context menu, or drop-down list is a Tab stop. While it has keyboard
+focus, it shows the Accent outline with the corner radius of the menu, over
+its rows. Undo and Redo dim and
 disable when no step is available. An engaged Loop keeps a one-point Accent
 outline. Window edges, title bars, and the bar ruler are pointer surfaces and
 get no Tab stop.

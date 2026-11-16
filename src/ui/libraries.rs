@@ -204,6 +204,8 @@ impl MixJamApp {
                 ui.horizontal_wrapped(|ui| {
                     let products = egui::ComboBox::from_id_salt("library_product")
                         .selected_text(self.libraries.product.label())
+                        // The list is short, so it shows all its rows.
+                        .height(f32::INFINITY)
                         .show_ui(ui, |ui| {
                             for product in Product::ALL {
                                 ui.selectable_value(

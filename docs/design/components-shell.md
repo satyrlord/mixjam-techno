@@ -116,7 +116,9 @@ list. Esc or a click outside closes the list. If nothing matches, the list
 reads "Nothing matches. Clear the field to see the whole list again." The
 list holds no concept entries for themes, sections, tracks, or sounds.
 
-The search has the accessible name "Find a command". The modal blocks the
+The search has the accessible name "Find a command". It keeps the text cursor
+while the list shows. Tab and Shift+Tab do not move the cursor, because the
+rows and the scroll parts of the list are not Tab stops. The modal blocks the
 workspace controls, arrangement requests, and song drops. A file or
 confirmation modal closes the command list before the list can take more
 input.
@@ -165,7 +167,8 @@ The Sounds panel lists the library beside the score. From the top, its
 1. The painted Sounds title, a muted count of the shown sounds of the total
    ("N of total"), and the fold chevron.
 2. The search field across the full width.
-3. The library and category menus, side by side.
+3. The library and category menus, side by side. The library menu shows all
+   its rows and does not scroll.
 4. The category chips.
 5. The sort menu with its direction arrow.
 

@@ -184,8 +184,8 @@ the -48 through +48 range.
 
 Scale and Scale root shade the rows outside the scale, and cut a notch in the
 corner of a note outside the scale. They never block a pitch, and the pattern
-does not save them. Randomise writes a new line in the scale over the length
-of the pattern.
+does not save them. Their lists show all their rows and do not scroll.
+Randomise writes a new line in the scale over the length of the pattern.
 
 Tab reaches the named controls, and reaches the grid as one stop. In the
 grid:

@@ -219,6 +219,50 @@ fn tab_never_focuses_a_command_row() {
 }
 
 #[test]
+fn tab_keeps_the_text_cursor_in_the_command_search() {
+    let (ctx, mut app) = fixture();
+    ctx.enable_accesskit();
+    app.commands = Some(commands::CommandList::new());
+    frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    let focused = |output: &egui::FullOutput| {
+        let update = output.platform_output.accesskit_update.as_ref().unwrap();
+        update
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == update.focus)
+            .and_then(|(_, node)| node.label().map(str::to_owned))
+    };
+    for modifiers in [egui::Modifiers::NONE, egui::Modifiers::SHIFT] {
+        for _ in 0..3 {
+            // The frame of the key must not move the focus, not only the next.
+            let output = frame(
+                &ctx,
+                &mut app,
+                vec![key_event(egui::Key::Tab, modifiers)],
+                modifiers,
+            );
+            assert_eq!(focused(&output).as_deref(), Some("Find a command"));
+            let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            assert_eq!(focused(&output).as_deref(), Some("Find a command"));
+        }
+    }
+    // Typed words go to the search after Tab.
+    let overview = app.session.layout().overview;
+    frame(
+        &ctx,
+        &mut app,
+        vec![
+            key_event(egui::Key::Tab, egui::Modifiers::NONE),
+            egui::Event::Text("song overview".into()),
+            key_event(egui::Key::Enter, egui::Modifiers::NONE),
+        ],
+        egui::Modifiers::NONE,
+    );
+    assert_eq!(app.session.layout().overview, !overview);
+    assert!(app.commands.is_none());
+}
+
+#[test]
 fn command_list_search_reveals_the_first_match_after_scrolling() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();

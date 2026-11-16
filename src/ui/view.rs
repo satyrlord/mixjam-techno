@@ -180,9 +180,16 @@ pub(super) fn name_control(response: Response, name: &str) -> Response {
 /// its drag surface, each only while it is shown. Call it after the area,
 /// in the same `ui`, with the area's `id_salt`.
 pub(super) fn name_scroll_area(ui: &egui::Ui, id_salt: impl std::hash::Hash, name: &str) {
+    name_scroll_parts(
+        ui.ctx(),
+        ui.make_persistent_id(egui::Id::new(id_salt)),
+        name,
+    );
+}
+
+/// Name the parts of the scroll area with this egui id that are Tab stops.
+fn name_scroll_parts(ctx: &egui::Context, id: egui::Id, name: &str) {
     use egui::accesskit::Role;
-    let ctx = ui.ctx();
-    let id = ui.make_persistent_id(egui::Id::new(id_salt));
     for (part, role, label) in [
         (
             id.with(0_usize),
@@ -214,7 +221,11 @@ pub(super) fn name_scroll_area(ui: &egui::Ui, id_salt: impl std::hash::Hash, nam
 
 /// Name the surface of each menu that shows. egui makes the surface of a
 /// menu, a context menu, and a drop-down list a Tab stop, and gives it no
-/// name. Call it after the last menu of the frame.
+/// name. A menu that opens from another menu gets a number, because names on
+/// screen together are unique. A surface with keyboard focus gets the Accent
+/// outline of the other controls. The list of a combo box scrolls when it is
+/// long, and its scroll parts get the name of the menu. Call it after the
+/// last menu of the frame.
 fn name_open_menus(ctx: &egui::Context) {
     let layers: Vec<_> = ctx.memory(|memory| {
         memory
@@ -222,21 +233,56 @@ fn name_open_menus(ctx: &egui::Context) {
             .filter(|layer| layer.order == egui::Order::Foreground)
             .collect()
     });
+    let mut menus = 0;
     for layer in layers {
         // egui's own id for the surface of an area.
         let surface = layer.id.with("move");
-        let shown = ctx.graphics(|graphics| graphics.get(layer).is_some_and(|list| !list.is_empty()));
+        let shown =
+            ctx.graphics(|graphics| graphics.get(layer).is_some_and(|list| !list.is_empty()));
         if shown
-            && ctx
-                .read_response(surface)
-                .is_some_and(|response| response.sense.is_focusable())
+            && let Some(response) = ctx.read_response(surface)
+            && response.sense.is_focusable()
         {
+            menus += 1;
+            if response.has_focus() {
+                // Over the rows of the menu, in the layer of the menu.
+                ctx.layer_painter(layer).rect_stroke(
+                    response.rect.shrink(1.0),
+                    ctx.style().visuals.menu_corner_radius,
+                    Stroke::new(2.0_f32, roles().accent),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let name = if menus == 1 {
+                "Menu".to_owned()
+            } else {
+                format!("Menu {menus}")
+            };
             ctx.accesskit_node_builder(surface, |node| {
                 node.set_role(egui::accesskit::Role::Menu);
-                node.set_label("Menu");
+                node.set_label(name.as_str());
             });
+            // egui's own id for the scroll area of a combo box list: in the
+            // frame of the menu, with the default salt of a scroll area.
+            let list = layer
+                .id
+                .with(egui::Id::new("child"))
+                .with(egui::Id::new("scroll_area"));
+            name_scroll_parts(ctx, list, &name);
         }
     }
+}
+
+/// Show a menu that can be taller than egui's default area height. egui gives
+/// a new menu that height at most, and a combo box has no setting for it. A
+/// taller list would cut its last rows and scroll. The window still limits
+/// the menu.
+pub(super) fn tall_menu<R>(ctx: &egui::Context, show: impl FnOnce() -> R) -> R {
+    let height = ctx.style().spacing.default_area_size.y;
+    ctx.style_mut(|style| style.spacing.default_area_size.y = f32::INFINITY);
+    let shown = show();
+    ctx.style_mut(|style| style.spacing.default_area_size.y = height);
+    shown
 }
 
 /// Name a pointer surface that is not a Tab stop. egui describes only

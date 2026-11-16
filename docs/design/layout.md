@@ -84,10 +84,10 @@ then the controls of that board:
   sound is missing, and the Step synth help button.
 
 The preset list puts a rule after Subtle, Revive, and Loud, before the genre
-presets. The selector reads Choose a preset while every pedal is off at its
-defaults. It reads Custom when the changed pedals match no preset. The trim
-belongs to the mix and changes neither reading. The board bodies start below
-the top row.
+presets. The list shows 560 points of its rows and scrolls to the others. The
+selector reads Choose a preset while every pedal is off at its defaults. It
+reads Custom when the changed pedals match no preset. The trim belongs to the
+mix and changes neither reading. The board bodies start below the top row.
 
 The Mixer, Mastering, FX returns, and Step synth buttons of the tool rail
 choose the board. Each of these buttons shows its board, and folds the lower
