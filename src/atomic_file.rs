@@ -13,10 +13,22 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+/// A file error as a sentence for a message: plain words for the common
+/// cases, and never the OS error code.
+pub(crate) fn error_text(error: std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => "The file or its folder does not exist.".into(),
+        std::io::ErrorKind::PermissionDenied => "Access to the file is denied.".into(),
+        _ => {
+            let text = error.to_string();
+            let text = text.split(" (os error").next().unwrap_or(&text);
+            format!("{}.", text.trim_end_matches('.'))
+        }
+    }
+}
+
 pub(crate) fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    write_with(path, |file| {
-        file.write_all(bytes).map_err(|error| error.to_string())
-    })
+    write_with(path, |file| file.write_all(bytes).map_err(error_text))
 }
 
 /// Publish a complete new file without replacing an existing destination.
@@ -26,7 +38,7 @@ pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let result = file.write_all(bytes).and_then(|()| file.sync_all());
     drop(file);
     let result = result
-        .map_err(|error| error.to_string())
+        .map_err(error_text)
         .and_then(|()| publish_new(&stage, path));
     let _ = fs::remove_file(stage);
     result
@@ -37,12 +49,12 @@ fn publish_new(stage: &Path, path: &Path) -> Result<(), String> {
     use windows::{Win32::Storage::FileSystem::MoveFileW, core::HSTRING};
     // MoveFileW fails if the destination exists, including one created after staging.
     unsafe { MoveFileW(&HSTRING::from(stage), &HSTRING::from(path)) }
-        .map_err(|error| error.to_string())
+        .map_err(|error| error_text(std::io::Error::from(error)))
 }
 
 #[cfg(not(windows))]
 fn publish_new(stage: &Path, path: &Path) -> Result<(), String> {
-    fs::hard_link(stage, path).map_err(|error| error.to_string())
+    fs::hard_link(stage, path).map_err(error_text)
 }
 
 /// Stage the file through `fill`, then replace `path` with it.
@@ -80,7 +92,7 @@ pub(crate) fn write_many(
         .and_then(|()| {
             files
                 .iter()
-                .try_for_each(|file| file.sync_all().map_err(|error| error.to_string()))
+                .try_for_each(|file| file.sync_all().map_err(error_text))
         })
         .and_then(|()| {
             drop(files);
@@ -121,7 +133,7 @@ pub(crate) fn sibling(path: &Path, extension: &str) -> Result<(PathBuf, fs::File
         .write(true)
         .create_new(true)
         .open(&sibling)
-        .map_err(|error| error.to_string())?;
+        .map_err(error_text)?;
     Ok((sibling, file))
 }
 
@@ -142,7 +154,7 @@ fn check_destinations(paths: &[PathBuf]) -> Result<(), String> {
         let canonical = match fs::canonicalize(path) {
             Ok(path) => path,
             Err(_) => fs::canonicalize(parent.unwrap_or(Path::new(".")))
-                .map_err(|error| error.to_string())?
+                .map_err(error_text)?
                 .join(name),
         };
         #[cfg(windows)]
@@ -160,7 +172,7 @@ fn check_destinations(paths: &[PathBuf]) -> Result<(), String> {
 /// Commit a completed batch. Backups remain recoverable if rollback fails.
 fn commit_staged(paths: &[PathBuf], staged: &[PathBuf]) -> Result<(), String> {
     if paths.len() == 1 {
-        return fs::rename(&staged[0], &paths[0]).map_err(|error| error.to_string());
+        return fs::rename(&staged[0], &paths[0]).map_err(error_text);
     }
     let mut backups = vec![None; paths.len()];
     let mut committed = 0;
@@ -182,7 +194,7 @@ fn commit_staged(paths: &[PathBuf], staged: &[PathBuf]) -> Result<(), String> {
             }
         }
         for (stage, path) in staged.iter().zip(paths) {
-            fs::rename(stage, path).map_err(|error| error.to_string())?;
+            fs::rename(stage, path).map_err(error_text)?;
             committed += 1;
         }
         Ok(())
@@ -233,6 +245,29 @@ fn restore_originals(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_file_error_reasons_use_plain_sentences_without_os_codes() {
+        use std::io::{Error, ErrorKind};
+
+        assert_eq!(
+            error_text(Error::from(ErrorKind::NotFound)),
+            "The file or its folder does not exist."
+        );
+        assert_eq!(
+            error_text(Error::from(ErrorKind::PermissionDenied)),
+            "Access to the file is denied."
+        );
+        assert_eq!(
+            error_text(Error::other("The device is unavailable. (os error 31)")),
+            "The device is unavailable."
+        );
+        assert_eq!(
+            error_text(Error::other("The device is unavailable")),
+            "The device is unavailable."
+        );
+        assert!(!error_text(Error::from_raw_os_error(32)).contains("(os error"));
+    }
 
     fn folder(name: &str) -> std::path::PathBuf {
         let folder = std::env::temp_dir().join(format!(

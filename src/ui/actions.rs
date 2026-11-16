@@ -74,7 +74,7 @@ impl MixJamApp {
                 self.reconcile_selection();
                 self.sync_notice();
             }
-            Err(error) => self.error(error),
+            Err(error) => self.error(failed("use", path, "for the missing sample", error)),
         }
     }
 

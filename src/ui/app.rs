@@ -58,6 +58,8 @@ pub struct MixJamApp {
     pub(super) session: Session,
     pub(super) status: String,
     pub(super) status_error: bool,
+    /// The status line's recent messages, for its popup and its settling.
+    pub(super) status_log: StatusLog,
     /// The selected sound, clips, and track.
     pub(super) selection: selection::SelectionState,
     /// The folding panels around the score.
@@ -343,6 +345,7 @@ impl MixJamApp {
             session,
             status,
             status_error,
+            status_log: StatusLog::default(),
             selection: selection::SelectionState {
                 sample: selected_sample,
                 clip: capture_clips.iter().next().copied(),
@@ -522,6 +525,7 @@ impl MixJamApp {
         };
         self.status = status;
         self.status_error = error;
+        self.status_log.renew();
         true
     }
 
@@ -605,12 +609,14 @@ impl MixJamApp {
         let _ = self.session.take_notice();
         self.status = text.into();
         self.status_error = false;
+        self.status_log.renew();
     }
 
     pub(super) fn error(&mut self, text: impl Into<String>) {
         let _ = self.session.take_notice();
         self.status = text.into();
         self.status_error = true;
+        self.status_log.renew();
     }
 
     pub(super) fn capture(&mut self, ctx: &egui::Context) {

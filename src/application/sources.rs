@@ -224,16 +224,23 @@ impl Session {
     pub fn load_pattern_snapped(&self, path: &Path) -> Result<(StepSynthState, f64), String> {
         use std::io::Read;
         const MAX_BYTES: u64 = 1024 * 1024;
-        let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
+        let file = std::fs::File::open(path).map_err(crate::atomic_file::error_text)?;
         let mut bytes = Vec::new();
         file.take(MAX_BYTES + 1)
             .read_to_end(&mut bytes)
-            .map_err(|error| error.to_string())?;
+            .map_err(crate::atomic_file::error_text)?;
         if bytes.len() as u64 > MAX_BYTES {
-            return Err("The pattern file is too large.".into());
+            return Err("The file is larger than 1 MB.".into());
         }
-        let mut state: StepSynthState =
-            serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+        // The parser's own words name JSON details, not the problem.
+        let mut state: StepSynthState = serde_json::from_slice(&bytes).map_err(|error| {
+            format!(
+                "It is not a Step synth pattern (line {}, column {}). Choose a pattern that the \
+                 Step synth saved.",
+                error.line(),
+                error.column()
+            )
+        })?;
         state.validate()?;
         let stored = state.bpm;
         state.bpm = crate::engine::nearest_supported_bpm(state.bpm)?;

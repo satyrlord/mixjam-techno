@@ -27,6 +27,7 @@ mod sections;
 pub(super) use sections::*;
 #[path = "view/status_bar.rs"]
 mod status_bar;
+pub(super) use status_bar::StatusLog;
 #[path = "view/timeline.rs"]
 mod timeline;
 pub(super) use timeline::ScoreState;

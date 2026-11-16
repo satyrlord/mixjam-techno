@@ -243,7 +243,11 @@ impl MixJamApp {
         if ctx.input(|i| i.modifiers.command) && pressed_once(egui::Key::O) {
             self.run_command(commands::Command::Open, ctx);
         }
-        if transport && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        // Escape in an open popup closes only the popup.
+        if transport
+            && !egui::Popup::is_any_open(ctx)
+            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        {
             self.gestures.drag = None;
             self.gestures.handle_drag = None;
             self.gestures.automation_drag = None;

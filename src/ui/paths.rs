@@ -83,6 +83,24 @@ pub(super) struct PathPrompt {
     pub(super) focused: bool,
 }
 
+/// The status for a file action that failed: "Cannot <action> <file>
+/// <rest>. <reason>". A reason that already says what failed is kept as is.
+pub(super) fn failed(action: &str, path: &Path, rest: &str, reason: String) -> String {
+    if reason.starts_with("Cannot ") {
+        return reason;
+    }
+    let name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
+    let rest = if rest.is_empty() {
+        String::new()
+    } else {
+        format!(" {rest}")
+    };
+    format!("Cannot {action} {name}{rest}. {reason}")
+}
+
 impl MixJamApp {
     pub(super) fn path_spec(&self, request: &FileRequest) -> PathSpec {
         use PathKind::{Folder, OpenFile, SaveFile};
@@ -391,9 +409,9 @@ impl MixJamApp {
                     }
                     if group == "Step synth" && stretch.is_none() {
                         self.step_synth.save_note = None;
-                        self.step_synth_say(format!("Cannot save the sound: {error}"), true);
+                        self.step_synth_say(failed("save the sound", &path, "", error), true);
                     } else {
-                        self.error(error);
+                        self.error(failed("save the sound", &path, "", error));
                     }
                 }
             },
@@ -408,7 +426,7 @@ impl MixJamApp {
                         self.sync_notice();
                     }
                 }
-                Err(error) => self.error(error),
+                Err(error) => self.error(failed("save the take as", &path, "", error)),
             },
             FileRequest::LibraryFolder => self.add_library_folder(&path),
             FileRequest::ProviderFolder(product) => self.add_library(product, &path),
@@ -420,7 +438,10 @@ impl MixJamApp {
             FileRequest::SavePattern => {
                 match self.session.save_pattern(&path, &self.step_synth.state) {
                     Ok(()) => self.message("Saved Step synth pattern."),
-                    Err(error) => self.error(error),
+                    Err(error) => self.error(format!(
+                        "Cannot save the pattern {}. {error}",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    )),
                 }
                 self.step_synth_notice();
             }
@@ -451,7 +472,10 @@ impl MixJamApp {
                         }
                         self.message(text);
                     }
-                    Err(error) => self.error(error),
+                    Err(error) => self.error(format!(
+                        "Cannot load the pattern {}. {error}",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    )),
                 }
                 self.step_synth_notice();
             }
@@ -546,5 +570,34 @@ impl MixJamApp {
         } else {
             self.files.path_prompt = Some(prompt);
         }
+    }
+}
+
+#[cfg(test)]
+mod failed_tests {
+    use super::failed;
+    use std::path::Path;
+
+    #[test]
+    fn a_failed_file_action_names_the_file_once() {
+        let path = Path::new(r"C:\Songs\kick.wav");
+        assert_eq!(
+            failed(
+                "use",
+                path,
+                "for the missing sample",
+                "Access to the file is denied.".into()
+            ),
+            "Cannot use kick.wav for the missing sample. Access to the file is denied."
+        );
+        assert_eq!(
+            failed(
+                "import",
+                path,
+                "",
+                "Cannot open the imported sample. Gone.".into()
+            ),
+            "Cannot open the imported sample. Gone."
+        );
     }
 }

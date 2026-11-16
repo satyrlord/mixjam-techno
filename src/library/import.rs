@@ -452,8 +452,15 @@ impl Library {
         group: &str,
         source_bpm: f64,
     ) -> Result<crate::engine::ImportedSample, String> {
-        let path =
-            fs::canonicalize(path).map_err(|e| format!("Cannot open the imported sample: {e}"))?;
+        let path = fs::canonicalize(path).map_err(|e| {
+            format!(
+                "Cannot open the imported sample {}. {}",
+                path.file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy(),
+                crate::atomic_file::error_text(e)
+            )
+        })?;
         let (id, existing) = ImportAllocator::new(self).allocate(&path)?;
         let default_name = path.file_stem().unwrap_or_default().to_string_lossy();
         let imported = crate::engine::ImportedSample {

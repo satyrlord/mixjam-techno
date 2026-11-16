@@ -167,8 +167,9 @@ with the active preferences.
   plays slower, tones near its highest frequency can still lose level or make
   unwanted tones.
 - Normal exports, track exports, and song-tool renders always use 4x and
-  High. While one of these three settings is lower, Options and the status line
-  show **Playback quality reduced; exports use full quality**.
+  High. While one of these three settings is lower, Options shows **Playback
+  quality reduced; exports use full quality**. The status bar shows **Reduced
+  quality**; select it to open Options.
 - **Playback buffer target**: **Automatic**, **20 ms**, or **40 ms**. The
   default is 40 ms where the device supports it. A larger buffer can absorb
   bursts of processing, but it increases the delay between an action and its

@@ -76,8 +76,11 @@ const RENAMED: &[(&str, &str)] = &[
     ),
     (
         "label\tClick a note to set it. Click it again to clear it.",
-        "label\tClick places or clears a note. Drag a note's end to hold it.",
+        "button\tStatus",
     ),
+    // The status popup gives changing messages a stable button name. Their
+    // full text remains its accessible value, checked by the status tests.
+    ("label\tName parity", "button\tStatus"),
     // One noun each: the pattern is the notes, the sound the WAV. Listen
     // plays and stops the pattern from the grid's top row (owner,
     // 2026-11-15).

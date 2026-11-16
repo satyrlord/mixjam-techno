@@ -391,7 +391,10 @@ fn step_synth_sequence_keeps_a_pattern_save_error_in_its_feedback() {
     assert!(app.selection.sample.is_none());
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(app.status_error);
-    assert!(app.status.starts_with("Cannot save the sound: "));
+    assert!(
+        app.status
+            .starts_with("Cannot save the sound sequence.wav. ")
+    );
     assert_eq!(app.step_synth.feedback.message, Some(app.status.clone()));
     std::fs::remove_dir_all(dir).unwrap();
 }

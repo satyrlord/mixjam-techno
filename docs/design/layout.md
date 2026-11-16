@@ -106,9 +106,11 @@ lower panel on that board. The Mix view is session state, not part of
 
 The application version, with the prefix `v`, stays at the right inner margin
 of the status bar. Space is kept for it before the status text truncates. It
-uses the 12-point text face and the accent, which is the hyperlink color of
-each theme. Hover and keyboard focus show the link underline. The version
-opens the GitHub repository in the system browser.
+uses the 12-point text face in Muted, so that only the panel switches that are
+on show the accent. A 12-point vertical rule in the Line color separates it
+from the panel switches. Hover and keyboard focus change it to the accent,
+which is the hyperlink color of each theme, and show the link underline. The
+version opens the GitHub repository in the system browser.
 
 ## Arrangement
 

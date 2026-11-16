@@ -319,7 +319,7 @@ impl MixJamApp {
                                 self.sample_import.path = None;
                                 self.message(format!("Imported {}.", path.display()));
                             }
-                            Err(error) => self.error(error),
+                            Err(error) => self.error(failed("import", &path, "", error)),
                         }
                     }
                     if controls::button(ui, "Cancel", controls::ButtonRole::Secondary).clicked() {

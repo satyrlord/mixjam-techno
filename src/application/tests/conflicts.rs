@@ -196,6 +196,14 @@ fn invalid_conflict_choice_is_atomic_and_accepting_defaults_is_undoable() {
     let revision = session.revision;
     assert!(session.resolve_sample_conflict(9, 0).is_err());
     assert!(session.resolve_sample_conflict(0, 9).is_err());
+    let candidate = &original.sample_conflicts[0].candidates[1];
+    let bytes = std::fs::read(candidate).unwrap();
+    std::fs::remove_file(candidate).unwrap();
+    assert_eq!(
+        session.resolve_sample_conflict(0, 1).unwrap_err(),
+        "Cannot open the selected sample second.wav. The file or its folder does not exist."
+    );
+    std::fs::write(candidate, bytes).unwrap();
     std::fs::write(&original.sample_conflicts[0].candidates[1], b"invalid WAV").unwrap();
     assert!(session.resolve_sample_conflict(0, 1).is_err());
     assert_eq!(session.project(), &original);
@@ -330,6 +338,10 @@ fn manual_resolution_is_atomic_updates_all_exact_references_and_supports_history
         .with_settings_root(root.join("settings"));
     let revision = session.revision;
     let bad = root.join("bad.wav");
+    assert_eq!(
+        session.resolve_missing_sample(1_000_000, &bad).unwrap_err(),
+        "Cannot open the selected sample bad.wav. The file or its folder does not exist."
+    );
     std::fs::write(&bad, b"not audio").unwrap();
     assert!(session.resolve_missing_sample(1_000_000, &bad).is_err());
     assert_eq!(session.project(), &project);

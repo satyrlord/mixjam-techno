@@ -99,6 +99,52 @@ fn status_notices_stay_clear_of_panel_switches() {
 }
 
 #[test]
+fn an_error_keeps_its_room_beside_every_notice() {
+    let (context, mut app, root) = sample_conflicts_fixture("status-error-room");
+    let (_, missing) = missing_fixture();
+    let mut project = app.session.project().clone();
+    project.missing_samples = missing.session.project().missing_samples.clone();
+    project
+        .clips
+        .push(missing.session.project().clips[0].clone());
+    project.clips.last_mut().unwrap().id = 99;
+    let mut library = Library::fixture(vec![]);
+    library.apply_imports(&project.imported_samples).unwrap();
+    app.session = Session::headless(Arc::new(library), project)
+        .unwrap()
+        .with_settings_root(root.join("settings"));
+    let mut options = app.session.options().clone();
+    options.sample_playback_quality = mixjam_techno::application::options::SampleQuality::Low;
+    app.session
+        .apply_options(options, app.session.options_revision(), false)
+        .unwrap();
+    app.conflicts.open = false;
+    app.conflicts.dismissed = true;
+    let message = "Cannot load the pattern broken.json. It is not a Step synth pattern                    (line 1, column 3).";
+    app.error(message);
+    let size = Vec2::new(960.0, 720.0);
+    frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
+    let width = output
+        .shapes
+        .iter()
+        .find_map(|shape| match &shape.shape {
+            egui::Shape::Text(text) if text.galley.job.text == message => {
+                let rect = text.galley.rect.translate(text.pos.to_vec2());
+                Some(rect.intersect(shape.clip_rect).width())
+            }
+            _ => None,
+        })
+        .expect("The error must show beside the notices.");
+    // The history mark before it takes its 14 points and a gap.
+    assert!(
+        width >= 165.0,
+        "The notices shorten before the error loses its room: {width}"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn version_link_opens_the_repository_through_the_system_browser() {
     let (context, mut app) = fixture();
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
@@ -114,7 +160,8 @@ fn version_link_opens_the_repository_through_the_system_browser() {
                         .job
                         .sections
                         .iter()
-                        .all(|section| section.format.color == roles().accent)
+                        .all(|section| section.format.color == roles().muted),
+                    "The version link is muted at rest; the accent marks hover and focus."
                 );
                 Some(text.galley.rect.translate(text.pos.to_vec2()))
             }

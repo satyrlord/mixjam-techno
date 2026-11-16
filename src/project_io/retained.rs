@@ -21,13 +21,18 @@ pub(super) fn retain_manual_wave_within(
 ) -> Result<PathBuf, String> {
     use sha2::{Digest, Sha256};
     use std::io::Write;
-    let source = fs::File::open(path).map_err(|error| error.to_string())?;
-    if source.metadata().map_err(|error| error.to_string())?.len() > max_bytes {
+    let source = fs::File::open(path).map_err(crate::atomic_file::error_text)?;
+    if source
+        .metadata()
+        .map_err(crate::atomic_file::error_text)?
+        .len()
+        > max_bytes
+    {
         return Err("The selected WAV is larger than 4 GiB.".into());
     }
     let mut source = source.take(max_bytes.saturating_add(1));
     let folder = root.join("manual-samples");
-    fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&folder).map_err(crate::atomic_file::error_text)?;
     let (temporary, mut target) = crate::atomic_file::sibling(&folder.join("manual"), "tmp")?;
     let result = (|| {
         let mut hash = Sha256::new();
@@ -36,7 +41,7 @@ pub(super) fn retain_manual_wave_within(
         loop {
             let count = source
                 .read(&mut buffer)
-                .map_err(|error| error.to_string())?;
+                .map_err(crate::atomic_file::error_text)?;
             if count == 0 {
                 break;
             }
@@ -46,22 +51,22 @@ pub(super) fn retain_manual_wave_within(
             }
             target
                 .write_all(&buffer[..count])
-                .map_err(|error| error.to_string())?;
+                .map_err(crate::atomic_file::error_text)?;
             hash.update(&buffer[..count]);
         }
-        target.sync_all().map_err(|error| error.to_string())?;
+        target.sync_all().map_err(crate::atomic_file::error_text)?;
         drop(target);
         // Validate the retained bytes, including changes made during the source copy.
         crate::audio::visit_wav_samples(&temporary, |_, _| {})?;
         let digest = hash.finalize();
         let retained = folder.join(format!("{digest:x}.wav"));
         if retained.exists() {
-            let mut existing = fs::File::open(&retained).map_err(|error| error.to_string())?;
+            let mut existing = fs::File::open(&retained).map_err(crate::atomic_file::error_text)?;
             let mut existing_hash = Sha256::new();
             loop {
                 let count = existing
                     .read(&mut buffer)
-                    .map_err(|error| error.to_string())?;
+                    .map_err(crate::atomic_file::error_text)?;
                 if count == 0 {
                     break;
                 }
@@ -75,9 +80,9 @@ pub(super) fn retain_manual_wave_within(
                 );
             }
         } else {
-            fs::rename(&temporary, &retained).map_err(|error| error.to_string())?;
+            fs::rename(&temporary, &retained).map_err(crate::atomic_file::error_text)?;
         }
-        fs::canonicalize(retained).map_err(|error| error.to_string())
+        fs::canonicalize(retained).map_err(crate::atomic_file::error_text)
     })();
     if temporary.exists() {
         let _ = fs::remove_file(temporary);
@@ -107,7 +112,7 @@ pub(super) fn retain_native_provider(
     }
 
     let parent = storage.join("native-providers").join(product.slug());
-    fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&parent).map_err(crate::atomic_file::error_text)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -117,7 +122,7 @@ pub(super) fn retain_native_provider(
         std::process::id(),
         NEXT_STAGE.fetch_add(1, Ordering::Relaxed)
     ));
-    fs::create_dir(&stage).map_err(|error| error.to_string())?;
+    fs::create_dir(&stage).map_err(crate::atomic_file::error_text)?;
     let result = (|| {
         files.sort_by_key(|(id, _)| *id);
         let mut digest = Sha256::new();
@@ -136,7 +141,8 @@ pub(super) fn retain_native_provider(
                 .join(name)
                 .with_extension("wav");
             let destination = stage.join(&relative);
-            fs::create_dir_all(destination.parent().unwrap()).map_err(|error| error.to_string())?;
+            fs::create_dir_all(destination.parent().unwrap())
+                .map_err(crate::atomic_file::error_text)?;
             let bytes = bounded_provider_wave(source)?;
             let hash: [u8; 32] = Sha256::digest(&bytes).into();
             crate::atomic_file::write_new(&destination, &bytes)?;
@@ -204,7 +210,7 @@ pub(super) fn retain_native_provider(
         // A prior save or another writer can already have this content. Do
         // not replace it; verify it before reusing its stable path.
         check(&target)?;
-        fs::canonicalize(target).map_err(|error| error.to_string())
+        fs::canonicalize(target).map_err(crate::atomic_file::error_text)
     })();
     if stage.exists() {
         let _ = fs::remove_dir_all(stage);
@@ -217,10 +223,10 @@ pub(super) fn retain_native_provider(
 fn bounded_provider_wave(path: &Path) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     fs::File::open(path)
-        .map_err(|error| error.to_string())?
+        .map_err(crate::atomic_file::error_text)?
         .take(crate::wav::MAX_WAV_FILE_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+        .map_err(crate::atomic_file::error_text)?;
     if bytes.len() as u64 > crate::wav::MAX_WAV_FILE_BYTES {
         return Err("The provider WAV is larger than 4 GiB.".into());
     }

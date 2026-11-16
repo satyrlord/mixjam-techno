@@ -2,6 +2,32 @@
 use super::*;
 
 #[test]
+fn an_import_error_names_the_selected_file() {
+    let dir = fixture_dir();
+    let mut session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    assert_eq!(
+        session
+            .register_file(&dir.join("absent.wav"), "Wave", 140.0)
+            .unwrap_err(),
+        "Cannot open the imported sample absent.wav. The file or its folder does not exist."
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_malformed_pattern_reports_a_plain_message_with_its_location() {
+    let dir = fixture_dir();
+    let path = dir.join("broken.json");
+    std::fs::write(&path, b"{ not a pattern }").unwrap();
+    let session = Session::headless(Arc::new(Library::empty()), Project::default()).unwrap();
+    assert_eq!(
+        session.load_pattern(&path).unwrap_err(),
+        "It is not a Step synth pattern (line 1, column 3). Choose a pattern that the Step synth saved."
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn save_names_the_song_after_its_file_and_keeps_an_imported_title() {
     let dir = fixture_dir();
     let library = Arc::new(Library::empty());

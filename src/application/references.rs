@@ -29,8 +29,15 @@ impl Session {
             .candidates
             .get(candidate_index)
             .ok_or("The selected sample choice no longer exists.")?;
-        let path = std::fs::canonicalize(path)
-            .map_err(|error| format!("Cannot open the selected sample: {error}"))?;
+        let path = std::fs::canonicalize(path).map_err(|error| {
+            format!(
+                "Cannot open the selected sample {}. {}",
+                path.file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy(),
+                crate::atomic_file::error_text(error)
+            )
+        })?;
         let mut project = self.project().clone();
         let mut next_id = last_imported_id(&project, &self.library);
         for id in &conflict.sample_ids {
@@ -165,8 +172,15 @@ impl Session {
             .missing_sample(id)
             .ok_or("The missing sample no longer exists.")?
             .clone();
-        let path = std::fs::canonicalize(path)
-            .map_err(|error| format!("Cannot open the selected sample: {error}"))?;
+        let path = std::fs::canonicalize(path).map_err(|error| {
+            format!(
+                "Cannot open the selected sample {}. {}",
+                path.file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy(),
+                crate::atomic_file::error_text(error)
+            )
+        })?;
         let path = crate::project_io::retain_manual_wave(&path, &self.settings_root)?;
         let mut project = self.project().clone();
         let matched: Vec<_> = project

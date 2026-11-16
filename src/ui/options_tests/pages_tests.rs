@@ -469,9 +469,9 @@ fn sample_playback_quality_applies_restores_cancels_and_flags_reduced_playback()
         app.session.options().sample_playback_quality,
         SampleQuality::Low
     );
-    // The main window's status flags the reduced playback too.
+    // The main window's status flags the reduced playback too, in short.
     let output = frame(&ctx, &mut app, size, vec![]);
-    assert!(shows(&output, REDUCED));
+    assert!(shows(&output, "Reduced quality"));
     // Restore and Apply return to High, and the flag goes.
     app.open_options(&ctx);
     click(&ctx, &mut app, "Restore options defaults");
@@ -483,7 +483,7 @@ fn sample_playback_quality_applies_restores_cancels_and_flags_reduced_playback()
     assert!(!app.session.options().quality_reduced());
     click(&ctx, &mut app, "Cancel");
     let output = frame(&ctx, &mut app, size, vec![]);
-    assert!(!shows(&output, REDUCED));
+    assert!(!shows(&output, "Reduced quality"));
     assert!(!app.session.has_history_step(false));
     std::fs::remove_dir_all(root).unwrap();
 }

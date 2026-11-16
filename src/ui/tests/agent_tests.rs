@@ -196,11 +196,9 @@ fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
     );
     let reply = send(&mut app, &["ui", "all=true", "contains=ui fixture"]);
     assert!(
-        reply["nodes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|node| node["role"] == "label" && node["label"] == "UI fixture"),
+        reply["nodes"].as_array().unwrap().iter().any(|node| {
+            node["role"] == "button" && node["label"] == "Status" && node["text"] == "UI fixture"
+        }),
         "{reply}"
     );
 
