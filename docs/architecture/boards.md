@@ -28,15 +28,17 @@ flag of the frontend turns the header of each used lane into a row of fixed
 columns. The clips keep the remainder of the lane, and `score_frame` fits the
 whole song to the lanes. The row uses the control helpers of `src/ui/mixer/`
 (`quiet_switch`, `quiet_polarity_button`, `gain_value`, `quiet_unity_button`,
-`pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button`, `track_state`,
-and `row_surface`) and the lane fader. The quiet helpers paint a row at its
+`well_pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button`,
+`track_state`, and `row_surface`) and `strip_fader`, the lane fader on the
+strip's rail roles. The quiet helpers paint a row at its
 defaults without lit faces and keep the names, states, and hints of
 `switch_button`, `polarity_button`, `send_knob`, `unity_button`, and
 `center_button`. Thus the accessible names
 and the operations are the same as those of the strips. After the last row, a
 block that stays at the foot of the score holds the Master row (Bypass, level,
 Export tracks) and the returns row (`return_state`, `quiet_bus_switches`,
-`edit_button`).
+`edit_button`). While columns remain to the right, `edge_fade` paints each
+row's surface again over its last 24 points with rising opacity.
 
 Each change goes back to `apply_mixer_changes` in `src/ui/view/boards.rs`, the
 same path that the Mixer board uses. A strip copies only its own track, and
@@ -49,8 +51,10 @@ follows:
   `SetMixer`.
 - The buses go as `SetEffects`, and the board goes as `SetMaster`.
 
-When the header column of the lanes is narrower than the 944 points of the
-rows, the columns after the track number and arm scroll sideways by
+A wider column gives up to 40 points to the sounds' column, and the
+columns after it shift right. When the header column of the lanes is narrower
+than the 944 points of the rows, the columns after the track number and arm
+scroll sideways by
 `MixViewState::scroll`. The caption bar, Shift with the wheel, or a control
 that gets keyboard focus outside the visible part scrolls them. Header rows
 take horizontal wheel input after their controls and before the score scrolls.

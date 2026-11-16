@@ -423,6 +423,29 @@ pub(crate) fn pan_slider(
     pan: &mut f32,
     automated: bool,
 ) -> bool {
+    pan_slider_in(ui, rect, scale, name, pan, automated, roles().strip_slot)
+}
+
+/// The Mix view's pan: its slot is the strip's rail well, like its fader.
+pub(crate) fn well_pan_slider(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    pan: &mut f32,
+    automated: bool,
+) -> bool {
+    pan_slider_in(ui, rect, 1.0, name, pan, automated, roles().strip_well)
+}
+
+fn pan_slider_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    pan: &mut f32,
+    automated: bool,
+    slot: Color32,
+) -> bool {
     let mut changed = false;
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
         ui.spacing_mut().slider_width = rect.width();
@@ -430,11 +453,11 @@ pub(crate) fn pan_slider(
         // The rail is a dark slot on every theme's strip, and the idle
         // handle keeps a cap-colored edge on it.
         let widgets = &mut ui.visuals_mut().widgets;
-        widgets.inactive.bg_fill = roles().strip_slot;
+        widgets.inactive.bg_fill = slot;
         widgets.inactive.fg_stroke = Stroke::new(1.5 * scale, roles().cap);
         for state in [&mut widgets.hovered, &mut widgets.active] {
             state.bg_fill = roles().cap;
-            state.fg_stroke = Stroke::new(1.5 * scale, roles().strip_slot);
+            state.fg_stroke = Stroke::new(1.5 * scale, slot);
         }
         let response = pan_control(ui, name, pan, automated);
         changed = response.changed();

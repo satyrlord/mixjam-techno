@@ -20,6 +20,9 @@ impl MixJamApp {
         );
         if frame.add_track == Some(index) {
             self.add_track_header(ui, rect, index);
+            if frame.mix {
+                mix_view::new_track_cue(ui, rect, frame.mix_offset);
+            }
             return;
         }
         if frame.mix {
@@ -53,6 +56,7 @@ impl MixJamApp {
                 &facts,
                 &mut mix,
             );
+            mix_view::edge_fade(ui, rect, rect.shrink(1.0), frame.mix_offset, false);
             // The track is copied only when its row changed it.
             if outcome.changed && mix != before {
                 let track = mix.applied(&self.session.project().tracks[index]);

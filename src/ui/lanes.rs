@@ -62,6 +62,38 @@ pub(super) fn lane_name(
 /// accessible name pattern as the Mixer's gain rail, named "{name} gain".
 /// Returns whether the gain changed.
 pub(super) fn lane_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
+    fader_in(
+        ui,
+        rect,
+        name,
+        gain,
+        (roles().canvas, roles().muted, roles().text),
+    )
+}
+
+/// The lane fader on a mixer strip, as in the Mix view: its well and fill
+/// use the strip's rail roles, so it reads the right way round on Vintage's
+/// ivory.
+pub(super) fn strip_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
+    let roles = roles();
+    fader_in(
+        ui,
+        rect,
+        name,
+        gain,
+        (roles.strip_well, roles.strip_fill, roles.strip_text),
+    )
+}
+
+/// `(well, fill, active fill)` are the empty slot, the filled part at rest,
+/// and the filled part while hovered or dragged.
+fn fader_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    gain: &mut f32,
+    (well, fill, active): (Color32, Color32, Color32),
+) -> bool {
     let before = *gain;
     let response = ui.interact(
         rect,
@@ -83,16 +115,16 @@ pub(super) fn lane_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f
     gain_keys(ui, &response, gain);
     let painter = ui.painter();
     let slot = Rect::from_center_size(rail.center(), Vec2::new(rail.width(), 4.0));
-    painter.rect_filled(slot, 2.0, roles().canvas);
+    painter.rect_filled(slot, 2.0, well);
     let fraction = gain_fraction(*gain).clamp(0.0, 1.0);
     let x = egui::lerp(rail.left()..=rail.right(), fraction);
     painter.rect_filled(
         Rect::from_min_max(slot.min, Pos2::new(x, slot.bottom())),
         2.0,
         if response.hovered() || response.dragged() {
-            roles().text
+            active
         } else {
-            roles().muted
+            fill
         },
     );
     // Unity gain is marked on the slot.

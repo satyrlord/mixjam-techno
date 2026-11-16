@@ -837,6 +837,8 @@ impl MixJamApp {
         let on_board = self.board_shown(BottomModule::FxReturns);
         let (fx, open) =
             mix_view::returns_row(ui, returns_rect, offset, &mut buses, automated, on_board);
+        mix_view::edge_fade(ui, master_rect, master_rect, offset, false);
+        mix_view::edge_fade(ui, returns_rect, returns_rect, offset, true);
         changes.fx = fx;
         changes.open = open;
         if empty {

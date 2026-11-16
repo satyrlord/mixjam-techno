@@ -2,6 +2,47 @@
 
 use super::*;
 
+#[test]
+fn mix_view_captions_stay_whole_at_both_scrolled_edges() {
+    each_theme(|_| {
+        let ctx = egui::Context::default();
+        configure_style(&ctx);
+        let strip = Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(250.0, 26.0));
+        for (offset, expected) in [
+            (0.0, Some("TRACK")),
+            (15.0, Some("OUT")),
+            (250.0, None),
+            (mix_view::max_offset(strip.width()), Some("EQ")),
+        ] {
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 100.0))),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        mix_view::captions(ui, strip, offset);
+                    });
+                },
+            );
+            if let Some(expected) = expected {
+                text_rect(&output, expected);
+            }
+            for shape in &output.shapes {
+                if let egui::Shape::Text(text) = &shape.shape {
+                    let bounds = Rect::from_min_size(text.pos, text.galley.size());
+                    assert!(
+                        shape.clip_rect.contains_rect(bounds),
+                        "Caption {} is clipped at offset {offset}: {bounds:?}, {:?}",
+                        text.galley.job.text,
+                        shape.clip_rect,
+                    );
+                }
+            }
+        }
+    });
+}
+
 /// The colour of `label` painted from inside `rows`.
 fn text_color(output: &egui::FullOutput, label: &str, rows: Rect) -> egui::Color32 {
     output

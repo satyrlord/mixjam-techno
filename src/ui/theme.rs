@@ -78,6 +78,9 @@ pub(super) struct Roles {
     /// A selected strip button.
     pub strip_lit: Color32,
     pub strip_slot: Color32,
+    /// The empty part of a Mix view rail on a strip, and its filled part.
+    pub strip_well: Color32,
+    pub strip_fill: Color32,
     /// The keyboard focus ring on a track strip.
     pub strip_focus: Color32,
     // Lamps and meters.
@@ -160,6 +163,8 @@ static STUDIO: Roles = Roles {
     strip_face: rgb(22, 24, 27),
     strip_lit: rgb(236, 152, 58),
     strip_slot: rgb(10, 11, 13),
+    strip_well: rgb(10, 11, 13),
+    strip_fill: rgb(164, 174, 182),
     strip_focus: rgb(190, 232, 96),
     lamp_on: rgb(190, 232, 96),
     lamp_warn: rgb(246, 178, 64),
@@ -224,6 +229,8 @@ static AERO: Roles = Roles {
     strip_face: rgb(9, 32, 74),
     strip_lit: rgb(150, 236, 90),
     strip_slot: rgb(4, 16, 40),
+    strip_well: rgb(4, 16, 40),
+    strip_fill: rgb(188, 212, 240),
     strip_focus: rgb(128, 234, 255),
     lamp_on: rgb(150, 236, 90),
     lamp_warn: rgb(255, 196, 84),
@@ -288,6 +295,8 @@ static VINTAGE: Roles = Roles {
     strip_face: rgb(29, 33, 34),
     strip_lit: rgb(245, 193, 86),
     strip_slot: rgb(11, 14, 14),
+    strip_well: rgb(176, 168, 147),
+    strip_fill: rgb(44, 46, 42),
     strip_focus: rgb(28, 29, 26),
     lamp_on: rgb(242, 170, 62),
     lamp_warn: rgb(246, 178, 64),
@@ -896,6 +905,12 @@ mod tests {
                 ("strip legend on face", r.legend, r.strip_face, 4.5),
                 ("lit strip button", r.ink, r.strip_lit, 4.5),
                 ("strip focus", r.strip_focus, r.strip, 3.0),
+                (
+                    "strip rail fill on its well",
+                    r.strip_fill,
+                    r.strip_well,
+                    3.0,
+                ),
                 ("lamp on against off", r.lamp_on, r.lamp_off, 3.0),
                 ("ink on meter", r.ink, r.meter_face, 7.0),
             ] {

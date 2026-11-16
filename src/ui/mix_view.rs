@@ -3,13 +3,13 @@
 //! rows use the Mixer strips' names and edits, so the two views differ in
 //! layout and in how quietly a row at its defaults reads.
 use super::mixer::{
-    bypass_button, edit_button, eq_button, gain_value, pan_slider, quiet_bus_switches,
-    quiet_center_button, quiet_polarity_button, quiet_send_knob, quiet_switch, quiet_unity_button,
-    return_state, row_surface, send_knob, track_state,
+    bypass_button, edit_button, eq_button, gain_value, quiet_bus_switches, quiet_center_button,
+    quiet_polarity_button, quiet_send_knob, quiet_switch, quiet_unity_button, return_state,
+    row_surface, send_knob, track_state, well_pan_slider,
 };
 use super::*;
 use mixjam_techno::application::Track;
-use mixjam_techno::application::fx::{BUSES, FxBuses};
+use mixjam_techno::application::fx::{BUSES, FxBuses, Module};
 
 /// The Mix view: whether the score shows it, and its column scroll.
 #[derive(Default)]
@@ -32,6 +32,9 @@ pub(super) const CONTENT_WIDTH: f32 = EQ.1 + 6.0;
 pub(super) const PINNED: f32 = 34.0;
 /// The lanes keep at least this width beside the Mix view's column.
 const LANES_MIN: f32 = 160.0;
+/// When the lanes have room, the column grows past its content by up to this
+/// much, and the sounds' column takes it.
+const NAME_ROOM: f32 = 40.0;
 /// The type sizes of the design's clip, small, and metadata roles.
 const CLIP_TEXT: f32 = 12.0;
 const SMALL_TEXT: f32 = 11.0;
@@ -63,8 +66,6 @@ const EQ: (f32, f32) = (
 /// The Master and returns rows below the lanes, and the gap above them.
 pub(super) const BLOCK_ROW: f32 = 32.0;
 pub(super) const BLOCK_HEIGHT: f32 = BLOCK_ROW * 2.0 + 6.0;
-/// One FX return's group in the returns row; the four span the columns.
-const RETURN_GROUP: f32 = (EQ.1 - TRACK.0) / BUSES as f32;
 
 /// The send cell of `bus`, from the row's left edge.
 const fn send_cell(bus: usize) -> (f32, f32) {
@@ -101,7 +102,13 @@ fn caption_list() -> [(String, f32, Align2); 9] {
 
 /// The header column's width in the Mix view for a score this wide.
 pub(super) fn column_width(available: f32) -> f32 {
-    (available - LANES_MIN).clamp(lanes::LANE_HEADER_WIDTH, CONTENT_WIDTH)
+    (available - LANES_MIN).clamp(lanes::LANE_HEADER_WIDTH, CONTENT_WIDTH + NAME_ROOM)
+}
+
+/// The room a `column`-wide header gives the sounds' column past its own
+/// width; the columns after it shift right by as much.
+fn name_room(column: f32) -> f32 {
+    (column - CONTENT_WIDTH).clamp(0.0, NAME_ROOM)
 }
 
 /// The largest horizontal offset of the columns in a header this wide.
@@ -237,6 +244,70 @@ fn left_label(ui: &mut egui::Ui, area: Rect, value: &str, size: f32) -> Response
     .inner
 }
 
+/// How far the right edge of a row fades while more columns scroll beyond it.
+const EDGE_FADE: f32 = 24.0;
+
+/// While columns remain right of a row in a `row`-wide column, fades the
+/// last points of the row into its own surface, so a word or control at the
+/// edge fades out instead of being cut. `surface` is the row's surface rect.
+/// It is painted again in one-point slices of rising opacity, so the fade
+/// matches every theme's material, including Vintage's artwork.
+pub(super) fn edge_fade(ui: &mut egui::Ui, row: Rect, surface: Rect, offset: f32, is_return: bool) {
+    if offset >= max_offset(row.width()) - 0.5 {
+        return;
+    }
+    let steps = EDGE_FADE as usize;
+    for step in 0..steps {
+        let left = surface.right() - EDGE_FADE + step as f32;
+        let slice =
+            Rect::from_x_y_ranges(left..=left + 1.0, surface.y_range()).intersect(ui.clip_rect());
+        if slice.width() <= 0.0 {
+            continue;
+        }
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(slice)
+                .id_salt(("edge_fade", step)),
+        );
+        child.set_clip_rect(slice);
+        child.multiply_opacity((step + 1) as f32 / steps as f32);
+        row_surface(&child, surface, is_return);
+    }
+}
+
+/// The header of the Mix view's drop row: a Muted "+" under the track
+/// numbers and "New track" in the sounds' column, so the row reads as the
+/// place for the next track, as its lane's drop hint says.
+pub(super) fn new_track_cue(ui: &egui::Ui, rect: Rect, offset: f32) {
+    let size = if rect.height() < 30.0 {
+        SMALL_TEXT
+    } else {
+        CLIP_TEXT
+    };
+    ui.painter().text(
+        Pos2::new(rect.left() + lanes::NUMBER_X, rect.center().y - 1.0),
+        Align2::CENTER_CENTER,
+        "+",
+        FontId::proportional(size + 2.0),
+        roles().muted,
+    );
+    let body = Rect::from_min_max(Pos2::new(rect.left() + PINNED, rect.top()), rect.max);
+    let sounds = span(
+        rect,
+        offset,
+        (NAME.0, NAME.1 + name_room(rect.width())),
+        rect.height(),
+    );
+    clipped_text(
+        ui,
+        sounds.intersect(body),
+        sounds.left_center(),
+        "New track",
+        size,
+        roles().muted,
+    );
+}
+
 /// The strip's ink for a value that only reports, such as a send amount.
 fn quiet_ink() -> Color32 {
     roles().strip_text.gamma_multiply(0.7)
@@ -261,6 +332,11 @@ pub(super) fn track_row(
     let name = format!("Track {}", index + 1);
     let height = (rect.height() - 4.0).min(24.0);
     let mut outcome = Outcome::default();
+    let shift = name_room(rect.width());
+    let mark = Pos2::new(rect.left() + MARK_X - offset, rect.center().y);
+    let sounds = span(rect, offset, (NAME.0, NAME.1 + shift), height);
+    // The columns after the sounds move right by the sounds' extra room.
+    let offset = offset - shift;
     for (switch, x) in TrackSwitch::ALL.into_iter().zip(SWITCH_X) {
         let on = match switch {
             TrackSwitch::Mute => &mut mix.muted,
@@ -282,14 +358,13 @@ pub(super) fn track_row(
         ui.multiply_opacity(SILENT_OPACITY);
     }
     if let Some(category) = facts.category {
-        let mark = Pos2::new(rect.left() + MARK_X - offset, rect.center().y);
         ui.painter().circle_filled(mark, 3.5, category);
         ui.painter()
             .circle_stroke(mark, 3.5, Stroke::new(1.0_f32, roles().strip_slot));
     }
     left_label(
         ui,
-        span(rect, offset, NAME, height),
+        sounds,
         summary,
         if rect.height() < 30.0 {
             SMALL_TEXT
@@ -305,10 +380,9 @@ pub(super) fn track_row(
         &mut mix.polarity_inverted,
     );
     outcome.changed |= level(ui, rect, offset, height, &name, &mut mix.gain);
-    outcome.changed |= pan_slider(
+    outcome.changed |= well_pan_slider(
         ui,
         span(rect, offset, PAN, 16.0),
-        1.0,
         &name,
         &mut mix.pan,
         facts.pan_automated,
@@ -378,7 +452,7 @@ fn level(
     name: &str,
     gain: &mut f32,
 ) -> bool {
-    let mut changed = lanes::lane_fader(ui, span(rect, offset, FADER, height), name, gain);
+    let mut changed = lanes::strip_fader(ui, span(rect, offset, FADER, height), name, gain);
     changed |= gain_value(ui, span(rect, offset, VALUE, height), 1.0, name, gain);
     if quiet_unity_button(ui, span(rect, offset, UNITY, height.min(18.0)), name) {
         changed |= *gain != 1.0;
@@ -408,7 +482,9 @@ pub(super) fn master_row(
     let mut ui = row_ui(ui, rect, "mix_master");
     let ui = &mut ui;
     let height = BLOCK_ROW - 8.0;
-    let name = span(rect, offset, TRACK, BLOCK_ROW);
+    let shift = name_room(rect.width());
+    let name = span(rect, offset, (TRACK.0, TRACK.1 + shift), BLOCK_ROW);
+    let offset = offset - shift;
     left_label(
         ui,
         Rect::from_min_max(name.min, Pos2::new(name.right(), name.center().y + 2.0)),
@@ -464,8 +540,10 @@ pub(super) fn returns_row(
     let height = BLOCK_ROW - 10.0;
     let mut changed = false;
     let mut open = None;
+    // The four groups share the width of the columns.
+    let group = (EQ.1 + name_room(rect.width()) - TRACK.0) / BUSES as f32;
     for (index, bus) in buses.buses.iter_mut().enumerate() {
-        let left = TRACK.0 + index as f32 * RETURN_GROUP;
+        let left = TRACK.0 + index as f32 * group;
         let at = |from: f32, to: f32| span(rect, offset, (left + from, left + to), height);
         let name = format!("FX {}", index + 1);
         if index > 0 {
@@ -507,6 +585,12 @@ pub(super) fn returns_row(
                 roles().muted,
             );
         } else {
+            // An Empty bus returns silence: its knob and switches stay named
+            // and reachable but dim, so Edit reads as the one useful action.
+            let opacity = ui.opacity();
+            if matches!(bus.module, Module::Empty) {
+                ui.multiply_opacity(SILENT_OPACITY);
+            }
             send_knob(
                 ui,
                 centred(rect, offset, left + 94.0, Vec2::splat(20.0)),
@@ -516,8 +600,9 @@ pub(super) fn returns_row(
                 automated[index],
             );
             quiet_bus_switches(ui, [at(106.0, 144.0), at(147.0, 191.0)], &name, bus);
+            ui.set_opacity(opacity);
         }
-        if edit_button(ui, at(194.0, RETURN_GROUP - 6.0), 1.0, &name) {
+        if edit_button(ui, at(194.0, group - 6.0), 1.0, &name) {
             open = Some(index);
         }
         changed |= *bus != before;
@@ -533,14 +618,27 @@ pub(super) fn captions(ui: &mut egui::Ui, strip: Rect, offset: f32) -> f32 {
         Rect::from_min_max(Pos2::new(strip.left() + PINNED, strip.top()), strip.max)
             .intersect(ui.clip_rect()),
     );
+    let shift = name_room(strip.width());
     for (caption, x, align) in caption_list() {
-        painter.text(
-            Pos2::new(strip.left() + x - offset, strip.center().y - 2.0),
-            align,
+        let x = if x > TRACK.0 { x + shift } else { x };
+        // A caption the column's edge would cut is left out.
+        let galley = painter.layout_no_wrap(
             caption.to_uppercase(),
             FontId::proportional(META_TEXT),
             roles().muted,
         );
+        let at = align
+            .anchor_size(
+                Pos2::new(strip.left() + x - offset, strip.center().y - 2.0),
+                galley.size(),
+            )
+            .min;
+        if at.x < painter.clip_rect().left()
+            || at.x + galley.size().x > painter.clip_rect().right() - 2.0
+        {
+            continue;
+        }
+        painter.galley(at, galley, roles().muted);
     }
     let max = max_offset(strip.width());
     if max <= 0.0 {

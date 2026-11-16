@@ -115,7 +115,10 @@ the viewport shows whole rows only. From the left, a row holds:
 - M, S, L, and R,
 - polarity,
 - the level fader with its dB value and Unity,
-- pan with Center,
+- pan with Center (the fader and pan rails use the strip's Strip well and
+  Strip fill: a dark well with a Muted fill on Studio and Aero, and a cream
+  well with a dark fill on Vintage's ivory, so the level reads from the left
+  on every strip),
 - the state text in 11 points, only for an exception: Muted, No output, Solo
   elsewhere, Pan automated, or a pan off center,
 - the four send cells: each knob, and its amount in 10 points while it sends
@@ -132,12 +135,20 @@ that cannot be heard (muted, soloed elsewhere, or with no output) keeps its
 switches clear and dims the rest to 45%.
 
 The header column is the width of the score less 160 points, from 250 to
-944 points. The content of the rows is 944 points wide. The header part of the
-ruler strip shows the column captions (Track, Out over L and R, Level, Pan,
+984 points. The content of the rows is 944 points wide; a wider column gives
+its extra width to the sounds, and the columns after them shift right. The
+header part of the ruler strip shows the column captions (Track, Out over L
+and R, Level, Pan,
 FX 1 to FX 4 over the send cells, EQ) in 10-point uppercase Muted text. If the
 column is narrower than its rows, everything right of the 34-point number and
 arm scrolls sideways. A 3-point bar with a Muted thumb at the foot of the
-captions then shows the offset, and a drag on it changes the offset.
+captions then shows the offset, and a drag on it changes the offset. While columns
+remain to the right, the last 24 points of each row fade into the row's own
+surface, so a word or control at the edge fades out instead of being cut, and
+a caption that either edge would cut is left out.
+
+The header part of the drop row under the last track shows a Muted "+" under
+the track numbers and "New track" in the sounds' column.
 
 A 70-point block follows the last row, and stays at the foot of the score
 while more rows scroll. It holds two rows:
@@ -149,7 +160,9 @@ while more rows scroll. It holds two rows:
   group holds the bus name and its effect, the return state ("Return 88%" or
   "Return automated"), the return level knob, Input, Limiter, and Edit. Input
   and Limiter rest as Muted labels with a lit lamp; off, the label turns to
-  the warning lamp colour.
+  the warning lamp colour. A bus with the Empty effect returns silence, so its
+  knob, Input, and Limiter dim to 45%; they keep their names, and Edit stays
+  at full strength.
 
 While the FX returns board shows, each group keeps its name, state, and Edit,
 and reads "On the board below" in place of the knob and switches. Thus no
