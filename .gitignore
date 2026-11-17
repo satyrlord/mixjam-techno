@@ -2,6 +2,7 @@
 .impeccable/
 /.codex/hooks.json
 /.github/hooks/
+/.vscode/settings.json
 
 # Build artifacts
 /target/

@@ -40,6 +40,11 @@ Check the measurements for sub and low-mid build-up, possible harshness,
 out-of-tune layers, abrupt fades, clicks, masked lines, and mono problems.
 Name the evidence and any judgement that needs listening.
 
+A [standing note](REFERENCE.md#standing-notes) is the owner's intent. Do not
+reduce a part score for a point that a note settles, and do not list it as a
+fault. A mechanical fault in a noted area goes under "Conflicts with standing
+notes".
+
 ## Evidence
 
 You can measure the renders with the tools or with your own numpy analysis.
@@ -64,6 +69,17 @@ Evidence read: the files.
 ## Three biggest reasons it is not higher
 1. ...
 
+## Possibly missed by ear
+1. Short title (kind: correctness | taste | identity). Bars, tracks. The
+   measurement, and the fix in the tool's terms.
+
+## Conflicts with standing notes
+- Note N: the mechanical fault and its measurement. Leave out the heading if
+  there is none.
+
 ## Judgements that need ears
 - ...
 ```
+
+List at most 12 items under "Possibly missed by ear", most important first.
+They are the faults that a listener can miss and a measurement shows.

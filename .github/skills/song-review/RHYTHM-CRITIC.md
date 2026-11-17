@@ -62,5 +62,7 @@ loops.
 5. The new tools that can help, if any.
 6. At most 5 things to keep.
 
-Give no score. The owner selects which fixes, auditions, and tools to run.
-Recommend them. Do not apply them.
+Give no score. The main agent handles correctness fixes under step 7 of the
+skill.
+The owner selects taste changes, auditions, and tools. Recommend them. Do not
+apply them.

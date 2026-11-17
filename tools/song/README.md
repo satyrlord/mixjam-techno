@@ -32,7 +32,10 @@ root. If a tool needs a key that is missing, it stops and names the key.
 | --- | --- | --- |
 | `mixjam.py` | `from mixjam import Song, board, delay, reverb, drive` | Library. It writes format-25 songs. A song can hold lanes, sections, clips, loops, phrases, fades, clip pitch and reverse, and automation (including the Repeat gate and Pitch lanes). It can also hold FX buses (delay, reverb, and drive returns) with their return lanes, channel EQ (two peaks), drives, compressors, widths, duckers, pedal and FX keys, and the master board. It also writes `.meta.json` (lane roles, sections, key). |
 | `render.py` | `render.py SONG.mixjam OUT [--fit-gain DBFS] [--jobs N] [--no-master] [--cache DIR \| --no-cache]` | Renders each lane alone, up to 4 at a time by default, and the master once. Renders run below normal priority. On Windows, they stop when the tool stops. The premaster and the role stems are sums of the lane renders. The tool derives `audible.txt` from those renders. `--fit-gain` sets the master gain from the peak of the premaster. It rescales the lane files, the premaster, and the stems to that gain. Unchanged lanes come from the cache that this file describes below, when they are eligible. |
-| `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, stems, and targets. |
+| `measure.py` | `measure.py SONG.mixjam OUT [--key "A minor"] > report.md` | The mechanical gate and the measurement report: sections, levels, tone, stereo, harmony, arrangement, phrase cuts, harmonic fit, stems, and targets. The gate includes the artist profile's working rules that a tool can check: faders at whole dB and whole phrases on tonal lanes. The report lists clip gains other than 0 dB for review. |
+| `phrase.py` | `phrase.py SONG.mixjam [--all]` | Clips that cut their loop's phrase: they start or end inside the loop, and the lane does not continue the figure there. Repeated figures, starts in time on the phrase grid, and approved devices (`cuts` in the lane's metadata) pass; a fade out inside the phrase is still a cut. The gate runs it on tonal lanes, pads and atmospheres included. `--all` adds effects and drums. |
+| `clash.py` | `clash.py SONG.mixjam OUT [--lanes 36,46] [--alt] [--drop 0.15]` | Harmonic fit per bar of each tonal lane against the rest of the mix, from the lane renders. Lists the weak bars, where a lane may leave the bed's chord. `--alt` scores the lane's other files at the same place in the phrase, to find the file that fits there. |
+| `trim.py` | `trim.py IN.wav OUT.wav [--floor -90] [--tail 0.25]` | Cuts a render's near-silent FX tail for delivery, with a short fade. Keeps 16-, 24-, or 32-bit PCM. Use `--tail 0` for no fade. Replaces the output after a successful write, so other hard links keep their audio. |
 | `audible.py` | `audible.py SONG.mixjam OUT_DIR [--jobs N]` | Marks lanes that the rest of the mix drowns. `render.py` writes the same table as `audible.txt`. Run `audible.py` alone only for a song that `render.py` did not render. |
 | `master.py` | `master.py PREMASTER.wav BOARD.json OUT_DIR [--song SONG] [--bpm N] [--fit DB \| --no-render] [--quiet]` | Renders a board over a premaster and compares it with the reference profile. `--no-render` measures the `master.wav` that is already in `OUT_DIR`. `--quiet` prints only the summary line. The board uses the format-16 keys `boosterEq`, `boosterCompressor`, and `boosterWide`. A board from a format-15 song has the earlier keys. It fails to render until you rename them. |
 | `master.py --album` | `master.py --album [DIR] [--track NAME ...] [--out PROFILE.json]` | Measures a reference album and writes the reference profile. |
@@ -219,14 +222,25 @@ BPM when none is available. A missing section list leaves out the section
 table.
 
 The mechanical report checks the source duration of WAV files linked in
-`samples`. It checks phrase endings only on lanes with a melodic role in the
-`.meta.json` of the song: `pad`, `lead`, `keys`, `arp`, `fx`, `vocal`, or
-`atmos`. Without that file, it assigns generic `trackN` roles and does not
-check phrase endings. `render.py` also needs the metadata to make role stems.
+`samples`. It checks abrupt endings on lanes with a melodic role in the
+`.meta.json`: `pad`, `lead`, `keys`, `arp`, `fx`, `vocal`, or `atmos`.
+The separate phrase check gates `lead`, `keys`, `arp`, `bass`, `vocal`, `pad`,
+and `atmos`. Both checks follow Pitch automation and reversed slices.
+An approved `cuts` span exempts only clips fully inside that span.
+Without metadata, the report assigns generic `trackN` roles and cannot gate
+these role-specific checks. `render.py` also needs metadata to make role stems.
 
 Catalog-only sources need the library resolver of the application. The report
 marks those source checks as unavailable and does not pass the gate. Missing
 and catalog sources still appear in the arrangement report.
+
+Harmonic fit needs the lane renders and the premaster at the same sample rate.
+Dry-source alternatives need linked WAV files. The comparison excludes
+reversed clips, lanes with Pitch automation, and simultaneous clips in a
+rendered lane. It cannot model their source positions separately.
+It does not model EQ or drive. The report marks unavailable comparisons.
+A candidate needs a new render before acceptance. Tracks with the same lane
+name, including `(twin)` tracks, share the renderer's lane file and candidates.
 
 ## Reference profile
 

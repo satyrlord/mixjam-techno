@@ -52,6 +52,11 @@ Role rules. If you are a role, obey all of these:
 - When you name a lane, also give its track number and the names of its
   sounds, for example "track 22 (Starshine Seq A 1, A 7)". The owner sees track
   numbers and sound names, not the lane names in `.meta.json`.
+- Read the song's [standing notes](REFERENCE.md#standing-notes), if your brief
+  names them. Do not challenge a settled judgement. Report mechanical faults
+  in a noted area under "Conflicts with standing notes", with the note number.
+- Give each finding its [kind](REFERENCE.md#finding-kinds): correctness, taste,
+  or identity.
 - Write your output to the output path in your brief. Return it as your final
   message.
 
@@ -63,7 +68,9 @@ Evaluation rules:
 - Launch each requested critic as a fresh agent (step 4). For a general
   review, use the composition critic and the mix critic.
 - If the user asks for a rating, launch the blind rater as a fresh agent
-  (step 6).
+  (step 4), at the same time as the requested critics.
+- Record the requested rating in step 5.1. If more than one role reports, use
+  the merged list of step 5.2.
 - Give each role its inputs from [Role inputs](REFERENCE.md#role-inputs) and
   the gate findings of step 3.
 - If there is no usable render, report the blocker. Do not invent a rating.
@@ -107,6 +114,11 @@ blocker.
    sources. Each missing source or unconfirmed sample conflict is in your
    report as a blocker. Do not use a different sound in its place. Keep the
    data folder while the converted song needs its files.
+7. Find the song's [standing notes](REFERENCE.md#standing-notes). If the owner
+   has given judgements on the song and there is no file, make it from the
+   round log or the handoff.
+   Completion criterion: Each brief names the standing notes file, or the song
+   has no owner judgements yet.
 
 Obey the applicable creative, review, and delivery rules of the artist
 profile. They outrank a critic finding and the generic targets. The current
@@ -138,6 +150,17 @@ Use headless renders for all measurement.
    the profile sets one.
    Completion criterion: Each lane over that limit is a gate failure. Without
    a profile limit, the table goes to the critics only.
+5. Read the report's "Harmonic fit (tonal lanes)" section.
+   In the Improvement loop, try each "better file" within the permitted repair
+   scope.
+   Do not change a part against a standing note or an artist rule.
+   `clash.py SONG OUT --lanes N --alt` lists all candidates.
+   Keep a replacement only if its fit improves and the mechanical gate still
+   passes.
+   In other branches, report candidates without a replacement.
+   Completion criterion: Each candidate is tried, reverted, or reported with its
+   scope limit.
+   Send weak bars without a better file to the critics as possible clashes.
 
 In the Improvement loop and the Recommendation branch, do not give a pass that
 fails the gate to a role. In the Evaluation branch, tell each role and the
@@ -159,76 +182,120 @@ Keep repair rounds short:
 
 ## 4. Get the critiques
 
-1. Write a brief for each critic. Give it its role, its inputs from
-   [Role inputs](REFERENCE.md#role-inputs), the review folder, and the output
-   path from [Round log](REFERENCE.md#round-log).
+Run the critics at a milestone only:
+
+- the end of a build stage, such as the bed, the drums, or the placement of a
+  new instrument through the song;
+- the pass before a master or before the owner masters by hand;
+- a request from the owner.
+
+Between milestones, repair with the gate and the owner's notes only. Do not
+launch a critic for one small change.
+
+1. Select the primary roles for this branch.
+   The Improvement loop needs composition, mix, and blind rating.
+   Evaluation needs only the requested primary roles.
+   Steps 3 and 5 add rhythm and Devil's advocate reviews when requested.
+   Write a brief for each selected role. Give it its role,
+   its inputs from [Role inputs](REFERENCE.md#role-inputs), the standing
+   notes, the review folder, and the output path from
+   [Round log](REFERENCE.md#round-log).
    Completion criterion: Each brief names each path that its row of the role
    inputs table needs, and the source of each target.
-2. Launch the composition critic (`song-composition-critic`) and the mix critic
-   (`song-mix-critic`) at the same time, each as a fresh agent.
-   Completion criterion: Both critics run in parallel, and neither gets the
-   output of the other.
+2. Launch the selected roles as fresh agents on the same pass.
+   Use `song-composition-critic`, `song-mix-critic`, and `song-rater` for the
+   corresponding roles.
+   Run independent roles in parallel within the harness capacity.
+   Completion criterion: Each selected role runs once. No role gets another
+   role's output.
 3. If the user or the artist profile asks for a rhythm review, and the song
    has drums, glitches, or ratchets, also launch the rhythm critic
-   (`song-rhythm-critic`) as a fresh agent beside the other two.
-   Completion criterion: The rhythm critic runs, or no rhythm review was asked for.
+   (`song-rhythm-critic`) as a fresh agent beside the others.
+   Completion criterion: The rhythm critic runs, or no rhythm review was asked
+   for.
 4. Check each critique against its role file.
    Completion criterion: Each composition and mix critique has at most 8
-   findings with bars, tracks, evidence, a fix, and a severity, at most 5
-   things to keep, and no score. The rhythm critique has each part that
+   findings with a kind, bars, tracks, evidence, a fix, and a severity, at most
+   5 things to keep, and no score. The rhythm critique has each part that
    `RHYTHM-CRITIC.md` lists.
 5. If the user or the artist profile asks for a Devil's advocate review,
    launch the Devil's advocate (`song-devils-advocate`) as a fresh agent. Do
    this after all other critiques of the round are written.
    Completion criterion: Its output follows `DEVILS-ADVOCATE.md`, and no
-   proposal goes against an owner decision.
+   proposal goes against an owner decision or a standing note.
 
 The agents are in `.claude/agents/` for Claude Code and in `.codex/agents/` for
 Codex. The Codex names use underscores, for example `song_composition_critic`.
 If the harness has no named agents, launch a fresh general agent. Tell it to
 follow this skill in the named role.
 
-## 5. Integrate the findings
+## 5. Record the rating and merge the findings
 
-1. Give the owner the audition plan of the rhythm critic and the proposals of
-   the Devil's advocate. Do not apply one of these proposals until the owner
-   selects it.
-   Completion criterion: Each applied proposal of these two roles has the
-   owner's choice in the round log.
-2. Accept or reject each finding of the composition and mix critiques, and
-   each fix that the owner selected. Give a reason for each decision.
-   Completion criterion: The round log has each finding in the accepted table
-   or in the rejected table.
-3. Reject a finding that breaks a rule of the artist profile, undoes an
-   accepted fix, or repeats a rejected finding without new evidence.
-   Completion criterion: Each of these rejections names the rule or the earlier
-   round.
-4. Build the next pass with the accepted fixes.
-   Completion criterion: The accepted table states each change as built, with
-   bars and tracks.
-5. Pass the mechanical gate (step 3) on the new pass.
-   Completion criterion: The gate passes.
+1. If a rater ran, record its score and three reasons in the round log.
+   Name the reviewed pass. Do not launch a second rater for that pass.
+   Completion criterion: Each score names its pass and has no later song changes
+   attributed to it.
+2. Merge the outputs of all roles of the milestone into one
+   [merged list](REFERENCE.md#merged-list), `roundN-merged.md`. Merge the
+   findings that name the same fault, sort them by
+   [kind](REFERENCE.md#finding-kinds) and severity, and move each finding that
+   goes against a standing note, breaks a rule of the artist profile, undoes an
+   accepted fix, or repeats a rejected finding without new evidence to
+   "Conflicts" with its reason. Keep measured faults in noted areas visible
+   for the owner's decision. Do not silently discard them.
+   Completion criterion: Each finding of each role is in one item of the list
+   or under "Conflicts".
+3. Give the owner the merged list. Mark unapplied correctness items as proposed.
+   In Evaluation, do not apply any item. In the Improvement loop, proceed to
+   step 6.
+   Completion criterion: The list states each item's status and the pass that
+   its score describes.
 
-## 6. Get a blind rating
+## 6. Apply the stop rules
 
-1. Launch the rater (`song-rater`) as a fresh agent. Give it only the rater's
-   inputs from [Role inputs](REFERENCE.md#role-inputs).
-   Completion criterion: The brief has no round log, critique, earlier rating,
-   rating target, or score.
-2. Record the score and the three reasons in the round log.
-   Completion criterion: The round log has the score of this pass.
-
-## 7. Apply the stop rules
+Apply these rules in the Improvement loop before you change the reviewed pass.
 
 1. Stop when the score reaches the target score.
 2. Stop after the maximum number of rounds.
 3. Stop when the score does not rise for 2 rounds.
-4. Stop when the owner's notes say that the song is done, or change its direction.
-5. If no stop rule applies, start the next round at step 4.
+4. Stop when the owner's notes say that the song is done, or change its
+   direction.
+5. If a stop rule applies, keep the reviewed pass. Skip step 7.
+   Continue at step 8 only if the user asked for a master. Otherwise, continue
+   at step 9.
+6. If no stop rule applies, continue at step 7.
 
-Completion criterion: The round log states the stop rule that stopped the loop,
-or the next round started. The defaults for a song without a profile are in the
-[generic targets](REFERENCE.md#generic-targets).
+Completion criterion: The round log names the reviewed pass and its stop
+decision.
+For defaults without a profile, use [Generic targets](REFERENCE.md#generic-targets).
+
+## 7. Integrate the findings
+
+1. Apply each correctness item without asking the owner. Verify each one with
+   the tool that measured it, and keep it only if the measurement improved and
+   the gate passes.
+   Completion criterion: Each correctness item is built and verified, or
+   reverted with its reason, in one line of the merged list.
+2. Update the merged list: the correctness items as done, then the
+   taste items, the auditions, and the conflicts. Do not apply a taste item or
+   an audition until the owner selects it. The owner can select "all" and then
+   keep or reject each change by ear on the version's A/B page (step 9.2).
+   Completion criterion: Each applied taste item and audition has the owner's
+   choice in the round log.
+3. Record each decided item of the merged list in the accepted table or in the
+   rejected table of the round log, with a reason.
+   Keep undecided owner choices pending.
+   Completion criterion: Each rejection of a conflict names the note, the rule,
+   or the earlier round.
+4. Build the next pass with the accepted items.
+   Completion criterion: The accepted table states each change as built, with
+   bars and tracks.
+5. Pass the mechanical gate (step 3) on the new pass.
+   Completion criterion: The gate passes.
+6. Start the next round at step 4 at the next milestone.
+   Do not apply a previous pass's score to the new pass.
+   Completion criterion: The next round reviews the new pass, or the report
+   names the pending milestone.
 
 ## 8. Master the song
 
@@ -268,19 +335,27 @@ Improvement loop, use the last master render that passed the gate for delivery.
    name.
    Completion criterion: `SONG_FOLDER` has the song, the WAV, the available
    metadata, and each other output that the artist profile requires.
-2. Search the sample and library paths of the delivered song for paths in the
+2. If the artist profile names an A/B listening tool, make the page that
+   compares this pass with the last delivered one, with one row for each
+   change, and give the owner its path. Do not open the page or play it
+   yourself.
+   Completion criterion: The owner has the page's path, or the profile names
+   no tool.
+3. Search the sample and library paths of the delivered song for paths in the
    review folder.
    Completion criterion: No path points into the review folder, or you keep
    those files and your report names the dependency.
-3. If the owner gives notes, record them in the round log before the next round.
-   Completion criterion: Each note is a rule in the next critic briefs or in
+4. If the owner gives notes, record them in the round log before the next
+   round. Put each judgement that outlasts the next version in the standing
+   notes. Apply the owner's keep and reject choices from the A/B page.
+   Completion criterion: Each note is in the round log, the standing notes, or
    the artist profile, or your report says that listening is pending.
 
 ## 10. Report
 
 1. Report each pass, its gate result, each score, the stop rule, and the open
-   questions that need ears. If a score is from a pass before the last board
-   change, say so.
+   questions that need ears. Name the pass for each score.
+   If the song changed after that rating, state that the final pass is unrated.
    Completion criterion: The owner can decide the next step without the logs.
 
 ## Completion criterion

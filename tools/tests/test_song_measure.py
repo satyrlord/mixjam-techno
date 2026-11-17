@@ -29,6 +29,24 @@ from midichords import shift_for  # noqa: E402
 
 
 class MeasureTests(unittest.TestCase):
+    def test_whole_db_gate_accepts_silence_and_whole_levels(self):
+        song = mixjam.Song('fader levels')
+        song.lanes[0]['gain'] = mixjam.gain(-6)
+        song.lanes[1]['gain'] = 0
+        song.lanes[2]['gain'] = mixjam.gain(-6.5)
+        problems = measure.mechanical(song.document(), {})
+        self.assertEqual(len(problems), 1)
+        self.assertIn('track 3 is at -6.50 dB', problems[0])
+
+    def test_clip_gain_report_keeps_changes_separate_from_the_gate(self):
+        song = mixjam.Song('clip levels').document()
+        song['lanes'][0]['placements'] = [dict(gain=mixjam.gain(-6)), dict(gain=0), dict()]
+        rows = []
+        measure.clip_gains(song, rows.append)
+        report = '\n'.join(rows)
+        self.assertIn('track 1: -inf dB x1, -6 dB x1', report)
+        self.assertIn('section\'s dynamics or a level match', report)
+
     def short_song_report(self, frames=18900, sections=()):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

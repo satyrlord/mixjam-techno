@@ -25,6 +25,7 @@ Do not challenge the decisions of the owner. These are hard limits:
   and the round log);
 - the owner's explicit rules, recorded as the owner's words in the artist
   profile, the round log, or the handoff;
+- each note in the song's [standing notes](REFERENCE.md#standing-notes);
 - the rule that the owner picks every new element by ear. Propose new
   elements as auditions only.
 
@@ -106,6 +107,7 @@ the original.
    ```markdown
    ### N. Short title
 
+   **Kind**: taste | identity.
    **Card**: the card number and text, or "own move".
    **Against**: the rule, target, or finding that you argue against, quoted,
    with its source.

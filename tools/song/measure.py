@@ -5,7 +5,9 @@ python -I tools/song/measure.py SONG.mixjam RENDER_DIR [--key "A minor"] > repor
 The tool reads the song and its `.meta.json`, if present. The metadata gives lane
 roles, sections, and key. The tool reads master.wav, premaster.wav, and any
 stem-*.wav files in RENDER_DIR. It writes a Markdown report with mechanical
-checks, section levels, tone, stereo, harmony, arrangement, stems, and targets.
+checks, section levels, tone, stereo, harmony, arrangement, phrase cuts on
+ungated lanes, the harmonic fit of tonal lanes (when RENDER_DIR holds the
+lane-NN.wav files, see clash.py), stems, and targets.
 
 The key comes from --key, or from the metadata when --key is absent. Without a
 key, the report has no out-of-key values. Targets come from REFERENCE_PROFILE
@@ -14,7 +16,9 @@ targets. Without metadata, each used track has a generic role and the report
 uses 32-bar sections.
 
 The gate reports missing files, missing sounds that play as silence, overlapping
-clips, clips longer than their sounds, and some abrupt melodic endings. The
+clips, clips longer than their sounds, faders off a whole dB, clips that cut
+their loop's phrase on tonal lanes (see phrase.py), and some abrupt
+melodic endings. The report lists clip gains other than 0 dB for review. The
 ending check needs a lane role of pad, lead, keys, arp, fx, vocal, or atmos in
 the metadata. It does not run for a generic track role. Catalog-only sources
 also produce a gate problem because this tool cannot check their duration or
@@ -25,14 +29,16 @@ import json
 import math
 import re
 import sys
-from bisect import bisect_right
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import clash  # noqa: E402
 import env  # noqa: E402
+import phrase  # noqa: E402
+from pitch_clock import PitchClock  # noqa: E402
 from harmony import NOTES, scale  # noqa: E402
 from mixjam import MELODIC, TICKS_PER_BAR, Sound, read_wav, ticks_of  # noqa: E402
 
@@ -104,55 +110,6 @@ def sample_names(document):
             sample_id = placement['sampleId']
             names.setdefault(sample_id, f'sample #{sample_id}')
     return names
-
-
-class PitchClock:
-    """The native Pitch lane's integrated speed, in 44.1 kHz output frames."""
-
-    def __init__(self, points, bpm):
-        self.frames_per_tick = 44100 * 240 / bpm / TICKS_PER_BAR
-        self.frames = [self.frame(point['tick']) for point in points]
-        self.cents = [point['value'] for point in points]
-        self.times = [self.frames[0]]
-        for index in range(1, len(points)):
-            length = self.frames[index] - self.frames[index - 1]
-            self.times.append(self.times[-1] + self.segment(index - 1, length))
-
-    def frame(self, tick):
-        # Match Rust f64::round for the nonnegative timeline.
-        return math.floor(tick * self.frames_per_tick + 0.5)
-
-    def segment(self, index, along):
-        speed = 2 ** (self.cents[index] / 1200)
-        if index + 1 == len(self.frames):
-            return speed * along
-        length = self.frames[index + 1] - self.frames[index]
-        rate = (self.cents[index + 1] - self.cents[index]) / length * math.log(2) / 1200
-        return speed * along if abs(rate) < 1e-15 else speed * math.expm1(rate * along) / rate
-
-    def at(self, frame):
-        index = bisect_right(self.frames, frame) - 1
-        return frame if index < 0 else self.times[index] + self.segment(index, frame - self.frames[index])
-
-    def source_ticks(self, placement, sound, bpm):
-        """How long the available source sounds, with reversal anchored at the clip end."""
-        start = self.frame(placement['startTick'])
-        end = self.frame(placement['startTick'] + placement['durationTicks'])
-        step = sound.rate / 44100 * bpm / sound.play_bpm
-        distance = max(0, sound.frames - placement['offsetFrames']) / step
-        reverse = placement.get('reverse', False)
-        origin = self.at(end - 1 if reverse else start)
-        low = start
-        # The admitted Pitch range never runs slower than 1/16 speed.
-        high = end - 1 if reverse else start + math.ceil(distance * 16) + 1
-        while low < high:
-            middle = (low + high) // 2
-            passed = origin - self.at(middle) < distance if reverse else self.at(middle) - origin >= distance
-            if passed:
-                high = middle
-            else:
-                low = middle + 1
-        return (end - low if reverse else low - start) / self.frames_per_tick
 
 
 def mechanical(document, lanes):
@@ -258,6 +215,14 @@ def mechanical(document, lanes):
             if abrupt:
                 problems.append(f"The {name} clip on track {index + 1} ({info['name']}) starts at bar {bar:.2f} "
                                 f"and stops at bar {end / TICKS_PER_BAR + 1:.2f} without a fade out. {reason}")
+    # Artist profile working rule: every fader at a whole dB.
+    for index, lane in enumerate(document['lanes']):
+        level = lane.get('gain', 1.0)
+        if level > 0 and abs(20 * math.log10(level) - round(20 * math.log10(level))) > 0.01:
+            problems.append(f'The fader of track {index + 1} is at {20 * math.log10(level):.2f} dB, '
+                            'not a whole dB.')
+    # Artist profile working rule 10: a clip plays its sample's whole phrase (phrase.py).
+    problems += [phrase.describe(document, c) for c in phrase.cuts(document, lanes, phrase.GATED)]
     return problems
 
 
@@ -341,9 +306,44 @@ def main():
         say(f'Sections at least 4 dB below the loudest: {quiet} of {len(rows)}.\n')
 
     arrangement(document, lanes, sections, total_bars, say)
+    clip_gains(document, say)
+    phrase_counts(document, lanes, say)
+    clash.report(document, lanes, render, say)
     stem_tables(render, rate, bpm, sections, in_key, say)
     targets(say)
     print('\n'.join(out))
+
+
+def clip_gains(document, say):
+    """Lanes with clip gains: the artist profile allows them only for a section's dynamics or a level match."""
+    rows = []
+    for index, lane in enumerate(document['lanes']):
+        values = Counter(round(20 * math.log10(p['gain']), 1) if p['gain'] > 0 else -math.inf
+                         for p in lane['placements'] if abs(p.get('gain', 1.0) - 1.0) > 1e-6)
+        if values:
+            rows.append(f"track {index + 1}: " + ', '.join(f'{v:+g} dB x{n}' for v, n in sorted(values.items())))
+    say('## Clip gains\n')
+    if not rows:
+        say('All clip gains are 0 dB.\n')
+        return
+    say('Clip gains other than 0 dB. Each must be a section\'s dynamics or a level match inside the family; '
+        'otherwise set the level with the fader.\n')
+    say('; '.join(rows) + '\n')
+
+
+def phrase_counts(document, lanes, say):
+    """Phrase cuts on the lanes that the gate does not check (effects, drums)."""
+    found = phrase.cuts(document, lanes, None)
+    found = [c for c in found if c[2] not in phrase.GATED]
+    say('## Phrase cuts on other lanes (not gated)\n')
+    if not found:
+        say('None.\n')
+        return
+    counts = Counter((c[0], c[1], c[2]) for c in found)
+    say('Clips that start or end inside their loop where the lane does not continue it. A cut is a problem unless '
+        'it is a device (a drum slice, an effect hit); list other approved devices as `cuts` in the metadata. '
+        '`phrase.py SONG --all` lists them.\n')
+    say(', '.join(f'track {t} {name} ({role}) {n}' for (t, name, role), n in sorted(counts.items())) + '\n')
 
 
 def arrangement(document, lanes, sections, total_bars, say):
