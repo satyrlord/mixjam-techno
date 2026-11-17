@@ -52,14 +52,6 @@ pub enum Theme {
 
 impl Theme {
     pub const ALL: [Self; 3] = [Self::Studio, Self::Aero, Self::Vintage];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Studio => "Studio",
-            Self::Aero => "Aero",
-            Self::Vintage => "Vintage",
-        }
-    }
 }
 
 /// The height of an arrangement row in points.
@@ -82,14 +74,6 @@ impl LaneHeight {
             Self::Px20 => 20.0,
             Self::Px30 => 30.0,
             Self::Px40 => 40.0,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Px20 => "20 px",
-            Self::Px30 => "30 px",
-            Self::Px40 => "40 px",
         }
     }
 }

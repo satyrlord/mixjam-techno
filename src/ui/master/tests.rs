@@ -19,7 +19,7 @@ fn ink_stays_legible_on_every_enamel_lit_or_off() {
                 assert!(
                     ratio >= 5.0,
                     "{} {} ({on}) gives {ratio:.2}:1",
-                    theme.label(),
+                    options::labels::theme(theme),
                     name(kind)
                 );
             }

@@ -28,6 +28,8 @@ use drag::*;
 mod effects;
 #[path = "ui/eq.rs"]
 mod eq;
+#[path = "ui/form.rs"]
+mod form;
 #[path = "ui/fx.rs"]
 mod fx;
 #[path = "ui/help.rs"]

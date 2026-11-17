@@ -89,6 +89,7 @@ impl MixJamApp {
             (self.help.sample_edit, "Sample editor help"),
             (self.help.master, "Mastering help"),
             (self.options.is_some(), "Options"),
+            (self.sample_libraries_open(), libraries::TITLE),
             (self.sample_import.details_open, "Import details"),
             (self.effects.open, "Effect Studio"),
             (self.board_shown(BottomModule::StepSynth), "Step synth"),

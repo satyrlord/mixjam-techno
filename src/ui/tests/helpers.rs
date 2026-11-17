@@ -62,6 +62,80 @@ pub(super) fn each_theme(mut body: impl FnMut(theme::Theme)) {
     theme::paint_as(theme::Theme::Studio);
 }
 
+/// A fixture with an empty library and a settings folder of its own, so a
+/// test can apply options or adopt library folders without touching another
+/// test's files. Pass the folder to `remove_settings` at the end.
+pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let root = std::env::temp_dir().join(format!(
+        "mixjam-settings-ui-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let session = Session::headless(Arc::new(Library::empty()), Project::default())
+        .unwrap()
+        .with_settings_root(root.clone());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    configure_style(&ctx);
+    let mut app = MixJamApp::from_session(session, "Isolated fixture".into(), false);
+    // An empty library opens Sample libraries at launch; the tests open
+    // what they use.
+    app.options = None;
+    app.libraries.open = false;
+    app.libraries.close_after_scan = false;
+    app.capture.path = None;
+    (ctx, app, root)
+}
+
+/// Remove an `isolated_fixture`'s settings folder, if anything was saved.
+pub(super) fn remove_settings(root: &std::path::Path) {
+    if root.exists() {
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+/// Choose `value` in the choice box named `name`, as a person does: open
+/// it, then click the item that it adds.
+pub(super) fn choose(ctx: &egui::Context, app: &mut MixJamApp, name: &str, value: &str) {
+    let before = frame(ctx, app, vec![], egui::Modifiers::NONE);
+    let known: Vec<_> = screen(&before).nodes().map(|node| node.id()).collect();
+    click_named(ctx, app, name);
+    let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
+    let item = screen(&output)
+        .nodes()
+        .find(|node| node.node().label() == Some(value) && !known.contains(&node.id()))
+        .unwrap_or_else(|| panic!("{name} offers no {value}"))
+        .rect();
+    // A pointer click, so the list closes as it does for a person.
+    click(ctx, app, item.center(), egui::Modifiers::NONE);
+    frame(ctx, app, vec![], egui::Modifiers::NONE);
+}
+
+/// The label of the control that has keyboard focus in `output`.
+pub(super) fn focused_label(output: &egui::FullOutput) -> Option<&str> {
+    let tree = output.platform_output.accesskit_update.as_ref()?;
+    tree.nodes
+        .iter()
+        .find(|(id, _)| *id == tree.focus)
+        .and_then(|(_, node)| node.label())
+}
+
+/// Press `key` once and return the frame that handled it.
+pub(super) fn press(
+    ctx: &egui::Context,
+    app: &mut MixJamApp,
+    key: egui::Key,
+    modifiers: egui::Modifiers,
+) -> egui::FullOutput {
+    frame(
+        ctx,
+        app,
+        vec![key_event(key, modifiers)],
+        egui::Modifiers::NONE,
+    )
+}
+
 /// Each theme in turn. Taking one sets its theme on this test's
 /// thread, and the loop body's fixture then adopts it.
 /// Each new item, and the end of the loop, first checks that the previous

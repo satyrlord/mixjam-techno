@@ -444,7 +444,10 @@ fn mixer_compact_rails_and_inline_resets_fit_in_every_theme() {
                     .then_some(bounds)
                 })
                 .unwrap_or_else(|| {
-                    panic!("Missing {track} fader cap in {}.", theme::current().label())
+                    panic!(
+                        "Missing {track} fader cap in {}.",
+                        options::labels::theme(theme::current())
+                    )
                 });
             assert!(
                 cap.top() - value.bottom() >= 3.0,

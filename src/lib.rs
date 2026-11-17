@@ -43,8 +43,6 @@ mod ui_test_harness {
     mod album_review_tests;
     #[path = "../ui/name_parity_tests.rs"]
     mod name_parity_tests;
-    #[path = "../ui/options_tests/mod.rs"]
-    mod options_tests;
     #[path = "../ui/tests/mod.rs"]
     mod tests;
     #[path = "../ui/window_lifecycle_tests.rs"]

@@ -453,7 +453,7 @@ fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
         let root = std::env::temp_dir().join(format!(
             "mixjam-clip-wave-ui-{}-{}",
             std::process::id(),
-            theme.label()
+            options::labels::theme(theme)
         ));
         let project = app.session.project().clone();
         app.session = Session::headless(

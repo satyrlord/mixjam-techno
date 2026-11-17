@@ -160,17 +160,18 @@ song and never edits it. When neither the strip nor its folded bar fits beside
 the necessary score area, the overview hides until the space is available
 again. It keeps the saved visibility choice.
 
-## Sample libraries in Options
+## Sample libraries
 
 `src/ui/libraries.rs` renders the library management as the Sample libraries
-page of Options. Folder scans and provider changes use their own Session
-operations and storage. A successful scan adopts its folder changes. Add
-library folder and Scan again use the fallback BPM. The options draft and its
-Cancel action cannot commit, stop, or roll back these operations.
+tool window. The Files page of Options opens it. Folder scans and provider
+changes use their own Session operations and storage, so the window has no
+draft and no footer. A successful scan adopts its folder changes. Add library
+folder and Scan again use the fallback BPM. The options draft and its Cancel
+action cannot commit, stop, or roll back these operations.
 
-At startup, Options closes after its initial scan fills the library, if the
-user did not touch it. Manual navigation, a preference draft, or Restore
-options defaults keeps it open.
+With an empty library at startup, the window opens by itself. It closes after
+the initial scan fills the library, unless the scan failed. Opening it by hand
+cancels that close.
 
 When a new fixed song folder is applied, it must be an absolute folder that
 exists. If a configured folder later becomes unavailable, it stays configured.

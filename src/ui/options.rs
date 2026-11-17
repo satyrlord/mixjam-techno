@@ -1,338 +1,111 @@
-//! The Options draft belongs to this window. Session validates, prepares, and
-//! persists it; closing this surface cannot change an active preference.
+//! The Options window. The draft belongs to this window: Session validates,
+//! prepares, and persists it, and closing the window cannot change an active
+//! preference.
+//!
+//! - `draft`: `OptionsDraft`, a plain controller with no egui and no
+//!   Session. `OptionsFacts` in, `Action`s in, `Effect`s out.
+//! - `pages`: the Audio, Workspace, and Files pages as free functions over
+//!   the draft's values and the facts.
+//! - `labels`: every word the window shows or names, shared with the tests.
+//!
+//! This file holds the window shell: the page selector, the fixed footer,
+//! the discard prompt, and the effects that reach the Session.
+#[path = "options/draft.rs"]
+pub(super) mod draft;
+#[path = "options/labels.rs"]
+pub(super) mod labels;
+#[path = "options/pages.rs"]
+pub(super) mod pages;
+
 use super::*;
-use mixjam_techno::application::options::STALE_DRAFT;
-const RELOAD_ACTION: &str = "Reload active options";
-pub(super) const DISCARD: &str = "Discard changes?";
-use mixjam_techno::application::options::{
-    AppOptions, LaneHeight, MeterDisplayRate, Oversampling, PlaybackBufferTarget, SampleQuality,
-    SongFolderMode, StartingModule, Theme,
-};
+pub(super) use draft::{Action, Effect, OptionsDraft, OptionsFacts, Page};
+pub(super) use labels::DISCARD;
+use labels::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub(super) enum Page {
-    #[default]
-    Audio,
-    Workspace,
-    Files,
-    Libraries,
-}
-impl Page {
-    const ALL: [Self; 4] = [Self::Audio, Self::Workspace, Self::Files, Self::Libraries];
-    pub(super) fn from_capture(view: &str) -> Self {
-        match view {
-            "options-workspace" | "options-unapplied" | "options-discard" => Self::Workspace,
-            "options-files" => Self::Files,
-            "options-libraries"
-            | "options-library-tempos"
-            | "options-library-providers"
-            | "options-library-expanded" => Self::Libraries,
-            _ => Self::Audio,
-        }
-    }
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|page| *page == self).unwrap()
-    }
-    fn label(self) -> &'static str {
-        match self {
-            Self::Audio => "Audio",
-            Self::Workspace => "Workspace",
-            Self::Files => "Files",
-            Self::Libraries => "Sample libraries",
-        }
-    }
-}
+/// A page selector button.
+const PAGE_BUTTON: Vec2 = Vec2::new(132.0, 34.0);
+/// The selector's column, with room for the button's focus ring.
+const SELECTOR_WIDTH: f32 = 136.0;
+/// The footer's height and the gap above it.
+const FOOTER: f32 = 38.0;
+const FOOTER_GAP: f32 = 12.0;
 
-pub(super) struct OptionsDraft {
-    pub values: AppOptions,
-    pub(super) revision: u64,
-    pub(super) page: Page,
-    pub(super) restored: bool,
-    error: Option<String>,
-    saved: bool,
+/// The open window: its draft, and where the keyboard goes.
+pub(super) struct OptionsWindow {
+    pub(super) draft: OptionsDraft,
+    /// The focus before the window opened, given back when it closes.
     previous_focus: Option<egui::Id>,
+    /// Focus the selected page's button on the next frame.
     focus_page: bool,
-    focus_order: Vec<egui::Id>,
-    /// Close, Escape, or Cancel found unapplied edits and asks first.
-    pub(super) confirm_discard: bool,
-    /// Each page's last measured content height; the window fits it.
-    content_heights: [Option<f32>; 4],
+    /// The tallest page body seen since the window opened. The window keeps
+    /// this height, so its footer stays in place as the pages change.
+    tallest: Option<f32>,
 }
 
-fn unapplied(count: usize) -> String {
-    match count {
-        1 => "1 unapplied change".into(),
-        _ => format!("{count} unapplied changes"),
+impl std::ops::Deref for OptionsWindow {
+    type Target = OptionsDraft;
+    fn deref(&self) -> &OptionsDraft {
+        &self.draft
     }
 }
 
-/// Unapplied edits per page, in `Page::ALL` order. The destructuring is
-/// exhaustive, so a new option field must be given a page here.
-fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 4] {
-    let AppOptions {
-        schema_version: _,
-        drive_playback_oversampling,
-        master_playback_oversampling,
-        sample_playback_quality,
-        preview_level_db,
-        preview_muted,
-        playback_buffer_target,
-        meter_display_rate,
-        follow_on_startup,
-        show_section_bookmarks,
-        starting_module,
-        show_tooltips,
-        theme,
-        lane_height,
-        song_folder_mode,
-        fixed_song_folder,
-    } = draft;
-    let count = |changes: &[bool]| changes.iter().filter(|changed| **changed).count();
-    [
-        count(&[
-            *drive_playback_oversampling != active.drive_playback_oversampling,
-            *master_playback_oversampling != active.master_playback_oversampling,
-            *sample_playback_quality != active.sample_playback_quality,
-            *preview_level_db != active.preview_level_db,
-            *preview_muted != active.preview_muted,
-            *playback_buffer_target != active.playback_buffer_target,
-            *meter_display_rate != active.meter_display_rate,
-        ]),
-        count(&[
-            *follow_on_startup != active.follow_on_startup,
-            *show_section_bookmarks != active.show_section_bookmarks,
-            *starting_module != active.starting_module,
-            *show_tooltips != active.show_tooltips,
-            *theme != active.theme,
-            *lane_height != active.lane_height,
-        ]),
-        count(&[
-            *song_folder_mode != active.song_folder_mode,
-            *fixed_song_folder != active.fixed_song_folder,
-        ]),
-        0,
-    ]
+impl std::ops::DerefMut for OptionsWindow {
+    fn deref_mut(&mut self) -> &mut OptionsDraft {
+        &mut self.draft
+    }
 }
 
-impl OptionsDraft {
-    /// Apply has work: an edited value, or defaults that replace an invalid file.
-    pub(super) fn pending(&self, session: &Session) -> bool {
-        self.values != *session.options() || (self.restored && session.options_invalid())
-    }
-    pub(super) fn changes(&self, session: &Session) -> [usize; 4] {
-        page_changes(&self.values, session.options())
-    }
-    /// The footer's account of the draft, empty when nothing is pending.
-    fn status(&self, session: &Session) -> String {
-        let count: usize = self.changes(session).iter().sum();
-        match count {
-            0 if self.pending(session) => "Defaults not applied yet".into(),
-            0 if self.saved => "Options applied.".into(),
-            0 => String::new(),
-            _ => unapplied(count),
-        }
-    }
+impl OptionsWindow {
     pub(super) fn new(session: &Session, page: Page) -> Self {
         Self {
-            values: session.options().clone(),
-            revision: session.options_revision(),
-            page,
-            restored: false,
-            error: None,
-            saved: false,
+            draft: OptionsDraft::new(&facts(session), page),
             previous_focus: None,
             focus_page: true,
-            focus_order: Vec::new(),
-            confirm_discard: false,
-            content_heights: [None; 4],
-        }
-    }
-    /// Capture views that show unapplied edits on two pages, and their prompt.
-    pub(super) fn for_capture(mut self, view: &str) -> Self {
-        if matches!(view, "options-unapplied" | "options-discard") {
-            self.values.preview_muted = !self.values.preview_muted;
-            self.values.follow_on_startup = !self.values.follow_on_startup;
-            self.values.starting_module = StartingModule::Mixer;
-            self.confirm_discard = view == "options-discard";
-        }
-        self
-    }
-    fn reload(&mut self, session: &Session) {
-        self.values = session.options().clone();
-        self.revision = session.options_revision();
-        self.restored = false;
-        self.error = None;
-        self.saved = false;
-        self.confirm_discard = false;
-    }
-    fn audio_changed(&self, active: &AppOptions) -> bool {
-        self.values.audio_changed(active)
-    }
-    pub(super) fn cycle_focus(&self, ctx: &egui::Context, reverse: bool) {
-        if self.focus_order.is_empty() {
-            return;
-        }
-        let focused = ctx.memory(|memory| memory.focused());
-        let index = self.focus_order.iter().position(|id| Some(*id) == focused);
-        let next = match (index, reverse) {
-            (Some(0), true) | (None, true) => self.focus_order.len() - 1,
-            (Some(index), true) => index - 1,
-            (Some(index), false) => (index + 1) % self.focus_order.len(),
-            (None, false) => 0,
-        };
-        ctx.memory_mut(|memory| {
-            memory.move_focus(egui::FocusDirection::None);
-            memory.request_focus(self.focus_order[next]);
-        });
-    }
-}
-
-pub(super) fn remember_focus(response: &Response) {
-    if response.enabled() {
-        response.ctx.data_mut(|data| {
-            let key = egui::Id::new("options-focus-order");
-            let mut order = data.get_temp::<Vec<egui::Id>>(key).unwrap_or_default();
-            order.push(response.id);
-            data.insert_temp(key, order);
-        });
-        if response.gained_focus() {
-            response.scroll_to_me(None);
+            tallest: None,
         }
     }
 }
 
-#[derive(Default)]
-pub(super) struct MeterDisplay {
-    shown: MeterReading,
-    pending: MeterReading,
-    next: f64,
-}
-impl MeterDisplay {
-    /// Keep transient peaks between draws. Audio still measures every block.
-    pub(super) fn sample(
-        &mut self,
-        reading: MeterReading,
-        reduced: bool,
-        now: f64,
-    ) -> MeterReading {
-        if reading.run != self.pending.run {
-            self.pending = reading;
-            self.pending.input_peaks = std::array::from_fn(|side| {
-                reading.input_peaks[side] || reading.input_peak_counts[side] > 0
-            });
-            self.shown = reading;
-            self.next = now;
-        } else {
-            let peaks = std::array::from_fn::<_, 2, _>(|side| {
-                self.pending.input_peaks[side]
-                    || self.pending.input_peak_counts[side] != reading.input_peak_counts[side]
-            });
-            let true_peak = self.pending.true_peak;
-            let compressor = self.pending.compressor_reduction;
-            let limiter = self.pending.limiter_reduction;
-            self.pending = reading;
-            self.pending.input_peaks =
-                std::array::from_fn(|side| peaks[side] || reading.input_peaks[side]);
-            self.pending.true_peak = true_peak.max(reading.true_peak);
-            self.pending.compressor_reduction = compressor.max(reading.compressor_reduction);
-            self.pending.limiter_reduction = limiter.max(reading.limiter_reduction);
-        }
-        if !reduced || now >= self.next {
-            self.shown = self.pending;
-            self.pending = reading;
-            self.pending.input_peaks = [false; 2];
-            self.pending.true_peak = f32::NEG_INFINITY;
-            self.pending.compressor_reduction = 0.0;
-            self.pending.limiter_reduction = 0.0;
-            self.next = now + 1.0 / 15.0;
-        }
-        self.shown
-    }
-}
-
-fn choice<T: Copy + PartialEq>(
-    ui: &mut egui::Ui,
-    name: &str,
-    value: &mut T,
-    choices: &[(T, &str)],
-) {
-    ui.push_id(name, |ui| {
-        ui.label(name);
-        let selected = choices
+/// What the Session says this frame, read once.
+pub(super) fn facts(session: &Session) -> OptionsFacts {
+    OptionsFacts {
+        active: session.options().clone(),
+        revision: session.options_revision(),
+        invalid: session.options_invalid(),
+        error: session.options_error().map(str::to_owned),
+        audio_blocked: session.audio_options_blocked_reason().map(str::to_owned),
+        buffer_errors: BUFFER_TARGETS
             .iter()
-            .find(|(item, _)| item == value)
-            .map_or("", |(_, label)| *label);
-        let response = egui::ComboBox::from_id_salt("choice")
-            .width(210.0)
-            .selected_text(selected)
-            .show_ui(ui, |ui| {
-                for (item, label) in choices {
-                    ui.selectable_value(value, *item, *label);
-                }
-            });
-        named(&response.response, egui::WidgetType::ComboBox, name);
-        remember_focus(&response.response);
-        ui.ctx()
-            .accesskit_node_builder(response.response.id, |node| node.set_value(selected));
-    });
-}
-
-/// A page section title in uppercase, with more room above it than below.
-/// The first one clears the bay's top edge.
-pub(super) fn section(ui: &mut egui::Ui, title: &str) {
-    let first = ui.cursor().top() <= ui.min_rect().top() + 0.5;
-    ui.add_space(if first { 4.0 } else { 8.0 });
-    ui.label(heading(title, 15.0).color(roles().legend));
-}
-
-/// One short line of explanation that belongs to the control above it.
-pub(super) fn help(ui: &mut egui::Ui, text: impl Into<String>) {
-    ui.add_space(-4.0);
-    ui.label(egui::RichText::new(text).size(12.0).color(roles().help));
-    // Keep the next control's group apart from this one.
-    ui.add_space(4.0);
-}
-
-/// The shared Folded Metal switch, laid out in the page flow.
-fn switch(ui: &mut egui::Ui, name: &str, value: &mut bool) {
-    let label =
-        ui.painter()
-            .layout_no_wrap(name.into(), FontId::proportional(13.0), roles().legend);
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(label.size().x + 36.0, 24.0), Sense::hover());
-    remember_focus(&controls::toggle_at(ui, rect, name, name, value));
+            .filter_map(|(target, _)| {
+                session
+                    .buffer_target_error(*target)
+                    .map(|error| (*target, error))
+            })
+            .collect(),
+        buffer_status: session.buffer_status(),
+        folder_warning: session.song_folder_warning(),
+    }
 }
 
 impl MixJamApp {
     pub(super) fn open_options(&mut self, ctx: &egui::Context) {
-        self.libraries.close_options_after_scan = false;
-        if let Some(draft) = &mut self.options {
-            draft.focus_page = true;
+        if let Some(window) = &mut self.options {
+            window.focus_page = true;
         } else {
-            let mut draft = OptionsDraft::new(&self.session, Page::Audio);
-            draft.previous_focus = ctx.memory(|memory| memory.focused());
-            self.options = Some(draft);
+            let mut window = OptionsWindow::new(&self.session, Page::Audio);
+            window.previous_focus = ctx.memory(|memory| memory.focused());
+            self.options = Some(window);
         }
-        dialog::expand(ctx, "Options");
+        dialog::expand(ctx, WINDOW);
         ctx.move_to_top(egui::LayerId::new(
             egui::Order::Middle,
-            egui::Id::new("Options"),
+            egui::Id::new(WINDOW),
         ));
     }
 
-    pub(super) fn open_sample_libraries(&mut self, ctx: &egui::Context) {
-        self.open_options(ctx);
-        self.options.as_mut().unwrap().page = Page::Libraries;
-    }
-
-    pub(super) fn sample_libraries_open(&self) -> bool {
-        self.options
-            .as_ref()
-            .is_some_and(|draft| draft.page == Page::Libraries)
-    }
-
     pub(super) fn close_options(&mut self, ctx: &egui::Context) {
-        if let Some(draft) = self.options.take() {
-            if let Some(id) = draft.previous_focus {
+        if let Some(window) = self.options.take() {
+            if let Some(id) = window.previous_focus {
                 ctx.memory_mut(|memory| memory.request_focus(id));
             } else if let Some(id) = ctx.memory(|memory| memory.focused()) {
                 ctx.memory_mut(|memory| memory.surrender_focus(id));
@@ -341,577 +114,289 @@ impl MixJamApp {
     }
 
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
-        let Some(mut draft) = self.options.take() else {
+        let Some(mut window) = self.options.take() else {
             return;
         };
+        let facts = facts(&self.session);
+        let mut actions = Vec::new();
         let mut open = true;
-        let mut cancel = false;
-        let mut apply = false;
-        let mut pick_folder = false;
-        let mut capture = false;
-        let stale = draft.revision != self.session.options_revision();
-        let audio_blocked = draft
-            .audio_changed(self.session.options())
-            .then(|| self.session.audio_options_blocked_reason())
-            .flatten()
-            .map(str::to_owned);
-        let pending = draft.pending(&self.session);
-        let changes = draft.changes(&self.session);
-        let status = draft.status(&self.session);
-        let apply_blocked = if stale {
-            Some(STALE_DRAFT.to_owned())
-        } else if !pending {
-            Some("No unapplied changes.".to_owned())
-        } else {
-            audio_blocked.clone()
-        };
-        ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new("options-focus-order"), Vec::<egui::Id>::new())
-        });
-        let page_index = draft.page.index();
-        // Until the user resizes it, the window follows the page's height up
-        // to the screen; the page scrolls below that.
-        let fitted = !dialog::user_resized(ctx, "Options");
-        dialog::window("Options")
+        form::ring::begin(ctx, WINDOW);
+        let fitted = !dialog::user_resized(ctx, WINDOW);
+        dialog::window(WINDOW)
             .open(&mut open)
             .default_width(760.0)
             .default_height(500.0)
             .scroll(false)
             .fit(true)
-            .focus_controls(remember_focus)
+            .focus_controls(form::register)
             .show(ctx, |ui| {
-                let mut area = ui.available_rect_before_wrap();
-                if fitted && let Some(content) = draft.content_heights[page_index] {
-                    let selector = Page::ALL.len() as f32 * (34.0 + ui.spacing().item_spacing.y);
-                    let wanted = content.max(selector) + 12.0 + 38.0;
-                    // The shell sizes the window from this allocation.
-                    ui.allocate_space(Vec2::new(area.width(), wanted));
-                    area.set_height(wanted.min(area.height()));
-                } else {
-                    ui.advance_cursor_after_rect(area);
-                }
-                let actions =
-                    Rect::from_min_max(Pos2::new(area.left(), area.bottom() - 38.0), area.max);
-                let body =
-                    Rect::from_min_max(area.min, Pos2::new(area.right(), actions.top() - 12.0));
-                let mut body_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("options-body")
-                        .max_rect(body),
-                );
-                body_ui.horizontal_top(|ui| {
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(136.0, body.height()),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            for (page, changed) in Page::ALL.into_iter().zip(changes) {
-                                let response = ui.add_sized(
-                                    [132.0, 34.0],
-                                    egui::Button::selectable(draft.page == page, page.label()),
-                                );
-                                if changed > 0 {
-                                    // Screen readers hear the marker as text.
-                                    ctx.accesskit_node_builder(response.id, |node| {
-                                        node.set_description(unapplied(changed))
-                                    });
-                                    // The selected face is the accent colour.
-                                    ui.painter().circle_filled(
-                                        Pos2::new(
-                                            response.rect.right() - 12.0,
-                                            response.rect.center().y,
-                                        ),
-                                        3.5,
-                                        if draft.page == page {
-                                            roles().ink
-                                        } else {
-                                            roles().tools[0].1
-                                        },
-                                    );
-                                }
-                                remember_focus(&response);
-                                if draft.focus_page && draft.page == page {
-                                    response.request_focus();
-                                    draft.focus_page = false;
-                                }
-                                if response.clicked() {
-                                    draft.page = page;
-                                    self.libraries.close_options_after_scan = false;
-                                }
-                                if response.has_focus() {
-                                    let delta = ui.input_mut(|input| {
-                                        if input.consume_key(
-                                            egui::Modifiers::NONE,
-                                            egui::Key::ArrowDown,
-                                        ) {
-                                            1
-                                        } else if input
-                                            .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
-                                        {
-                                            -1
-                                        } else {
-                                            0
-                                        }
-                                    });
-                                    if delta != 0 {
-                                        ctx.memory_mut(|memory| {
-                                            memory.move_focus(egui::FocusDirection::None)
-                                        });
-                                        let pages = Page::ALL;
-                                        let index = pages
-                                            .iter()
-                                            .position(|current| *current == page)
-                                            .unwrap();
-                                        draft.page = pages[(index as isize + delta)
-                                            .rem_euclid(pages.len() as isize)
-                                            as usize];
-                                        draft.focus_page = true;
-                                        self.libraries.close_options_after_scan = false;
-                                    }
-                                }
-                            }
-                        },
-                    );
-                    ui.separator();
-                    let width = ui.available_width();
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(width, body.height()),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            let scrolled = egui::ScrollArea::vertical()
-                                .id_salt(("options-page", draft.page))
-                                .auto_shrink([false, false])
-                                .max_height(body.height())
-                                .show(ui, |ui| {
-                                    ui.set_width(width - ui.spacing().scroll.allocated_width());
-                                    if stale {
-                                        ui.colored_label(roles().tools[0].1, STALE_DRAFT);
-                                        let reload = controls::button(
-                                            ui,
-                                            RELOAD_ACTION,
-                                            controls::ButtonRole::Secondary,
-                                        );
-                                        remember_focus(&reload);
-                                        if reload.clicked() {
-                                            draft.reload(&self.session);
-                                        }
-                                        ui.separator();
-                                    }
-                                    if let Some(error) = self.session.options_error() {
-                                        ui.colored_label(roles().coral, error);
-                                    }
-                                    if let Some(error) = &draft.error {
-                                        ui.colored_label(roles().coral, error);
-                                    }
-                                    if let Some(reason) = &audio_blocked {
-                                        ui.colored_label(roles().tools[0].1, reason);
-                                    }
-                                    match draft.page {
-                                        Page::Audio => {
-                                            capture = self.audio_options(ui, &mut draft.values);
-                                        }
-                                        Page::Workspace => workspace_options(ui, &mut draft.values),
-                                        Page::Files => {
-                                            pick_folder = self.file_options(ui, &mut draft.values);
-                                        }
-                                        Page::Libraries => self.sample_libraries_page(ui),
-                                    }
-                                });
-                            view::name_scroll_area(
-                                ui,
-                                ("options-page", draft.page),
-                                "Options page",
-                            );
-                            draft.content_heights[draft.page.index()] =
-                                Some(scrolled.content_size.y);
-                        },
-                    );
-                });
-                let mut row = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("options-actions")
-                        .max_rect(actions)
-                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                );
-                // Library actions take effect at once, so their page has no
-                // draft to apply or cancel.
-                let libraries = draft.page == Page::Libraries;
-                if !libraries {
-                    let restore = controls::button(
-                        &mut row,
-                        "Restore options defaults",
-                        controls::ButtonRole::Tertiary,
-                    );
-                    remember_focus(&restore);
-                    if restore.clicked() {
-                        draft.values = AppOptions::default();
-                        draft.restored = true;
-                        draft.error = None;
-                        draft.saved = false;
-                    }
-                }
-                row.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if libraries {
-                        let done = controls::button(ui, "Done", controls::ButtonRole::Primary);
-                        remember_focus(&done);
-                        cancel = done.clicked();
-                    } else {
-                        let cancel_button =
-                            controls::button(ui, "Cancel", controls::ButtonRole::Secondary);
-                        remember_focus(&cancel_button);
-                        cancel = cancel_button.clicked();
-                        ui.add_enabled_ui(apply_blocked.is_none(), |ui| {
-                            let response =
-                                controls::button(ui, "Apply", controls::ButtonRole::Primary);
-                            remember_focus(&response);
-                            apply = response.clicked();
-                            if let Some(reason) = &apply_blocked {
-                                response.disabled_hint(reason);
-                            }
-                        });
-                    }
-                    if !status.is_empty() {
-                        let label = ui.add(
-                            egui::Label::new(egui::RichText::new(&status).color(if pending {
-                                roles().tools[0].1
-                            } else {
-                                roles().legend
-                            }))
-                            .truncate(),
-                        );
-                        // Screen readers hear the count as it changes.
-                        ctx.accesskit_node_builder(label.id, |node| {
-                            node.set_live(egui::accesskit::Live::Polite)
-                        });
-                    }
-                });
+                draw(ui, &mut window, &facts, fitted, &mut actions)
             });
-        let pending = draft.pending(&self.session);
-        if !pending {
-            draft.confirm_discard = false;
+        form::ring::end(ctx);
+        if !open {
+            actions.push(Action::Close);
         }
-        let mut close = !open || cancel;
-        if close && pending {
-            draft.confirm_discard = true;
-            close = false;
-        }
-        if draft.confirm_discard {
-            let count: usize = changes.iter().sum();
+        let mut effects: Vec<Effect> = actions
+            .into_iter()
+            .filter_map(|action| window.update(action, &facts))
+            .collect();
+        window.settle(&facts);
+        if window.confirm_discard {
+            let mut answer = None;
             let response = dialog::modal(ctx, DISCARD, DISCARD, |ui| {
-                ui.label(match count {
-                    0 => "Options defaults are not applied yet.".to_owned(),
-                    _ => format!("Options has {}.", unapplied(count)),
-                });
-                ui.horizontal(|ui| {
-                    let apply_close = ui
-                        .add_enabled_ui(apply_blocked.is_none(), |ui| {
-                            dialog::primary(ui, "Apply changes")
-                        })
-                        .inner;
-                    if let Some(reason) = &apply_blocked {
-                        apply_close.disabled_hint(reason);
-                    } else if apply_close.clicked() {
-                        apply = true;
-                        draft.confirm_discard = false;
-                        close = true;
-                    }
-                    if dialog::danger(ui, "Discard changes").clicked() {
-                        draft.confirm_discard = false;
-                        close = true;
-                    }
-                    if controls::button(ui, "Keep editing", controls::ButtonRole::Secondary)
-                        .clicked()
-                    {
-                        draft.confirm_discard = false;
-                    }
-                });
+                answer = discard_prompt(ui, &window, &facts);
             });
             if response.should_close() {
-                draft.confirm_discard = false;
+                answer = Some(Action::KeepEditing);
             }
+            effects.extend(answer.and_then(|action| window.update(action, &facts)));
         }
-        draft.focus_order = ctx.data(|data| {
-            data.get_temp::<Vec<egui::Id>>(egui::Id::new("options-focus-order"))
-                .unwrap_or_default()
-        });
-        if apply {
-            match self
-                .session
-                .apply_options(draft.values.clone(), draft.revision, draft.restored)
-            {
+        self.options = Some(window);
+        for effect in effects {
+            self.options_effect(ctx, effect);
+        }
+    }
+
+    fn options_effect(&mut self, ctx: &egui::Context, effect: Effect) {
+        match effect {
+            Effect::Apply {
+                values,
+                revision,
+                restored,
+                close,
+            } => match self.session.apply_options(values, revision, restored) {
                 Ok(_) => {
-                    draft.reload(&self.session);
-                    draft.saved = true;
+                    let facts = facts(&self.session);
+                    if let Some(window) = &mut self.options {
+                        window.applied(&facts);
+                    }
                     self.sections.bookmarks = self.session.options().show_section_bookmarks;
-                    self.message("Options applied.");
+                    self.message(APPLIED);
+                    if close {
+                        self.close_options(ctx);
+                    }
                 }
                 Err(error) => {
                     self.error(error.clone());
-                    draft.error = Some(error);
-                    close = false;
-                }
-            }
-        }
-        self.options = Some(draft);
-        if close {
-            self.close_options(ctx);
-        }
-        if pick_folder {
-            self.ask_path(FileRequest::OptionsFolder);
-        }
-        if capture {
-            let _ = self.session.save_playback_capture("Saved from Options");
-        }
-    }
-
-    /// The Audio page. Returns whether Save audio capture was pressed.
-    fn audio_options(&self, ui: &mut egui::Ui, values: &mut AppOptions) -> bool {
-        section(ui, "Playback quality");
-        help(
-            ui,
-            "Lower settings use less CPU during playback. Exports always use full quality.",
-        );
-        choice(
-            ui,
-            "Drive playback oversampling",
-            &mut values.drive_playback_oversampling,
-            &[(Oversampling::FourX, "4x"), (Oversampling::Off, "Off")],
-        );
-        help(
-            ui,
-            "4x keeps track drive saturation clean. Off can sound harsher.",
-        );
-        choice(
-            ui,
-            "Master playback oversampling",
-            &mut values.master_playback_oversampling,
-            &[(Oversampling::FourX, "4x"), (Oversampling::Off, "Off")],
-        );
-        help(
-            ui,
-            "4x keeps Soft clip, Tube, Maximizer, and Tape clean. Off can sound harsher.",
-        );
-        choice(
-            ui,
-            "Sample playback quality",
-            &mut values.sample_playback_quality,
-            &[(SampleQuality::High, "High"), (SampleQuality::Low, "Low")],
-        );
-        help(
-            ui,
-            "High reduces unwanted tones at changed tempo or rate. Low uses less CPU.",
-        );
-        if values.quality_reduced() {
-            ui.colored_label(
-                roles().tools[0].1,
-                "Playback quality reduced; exports use full quality",
-            );
-        }
-        ui.add_space(8.0);
-        ui.label("Playback buffer target");
-        let targets = [
-            (PlaybackBufferTarget::Automatic, "Automatic"),
-            (PlaybackBufferTarget::Ms20, "20 ms"),
-            (PlaybackBufferTarget::Ms40, "40 ms"),
-        ];
-        let selected = targets
-            .iter()
-            .find(|(target, _)| *target == values.playback_buffer_target)
-            .unwrap()
-            .1;
-        let buffer = egui::ComboBox::from_id_salt("playback-buffer-target")
-            .width(210.0)
-            .selected_text(selected)
-            .show_ui(ui, |ui| {
-                for (target, label) in targets {
-                    let reason = self.session.buffer_target_error(target);
-                    let response = ui.add_enabled(
-                        reason.is_none(),
-                        egui::Button::selectable(values.playback_buffer_target == target, label),
-                    );
-                    if response.clicked() {
-                        values.playback_buffer_target = target;
-                    }
-                    if let Some(reason) = reason {
-                        response.disabled_hint(&reason);
-                        ui.small(reason);
+                    if let Some(window) = &mut self.options {
+                        window.failed(error);
                     }
                 }
-            });
-        named(
-            &buffer.response,
-            egui::WidgetType::ComboBox,
-            "Playback buffer target",
-        );
-        remember_focus(&buffer.response);
-        ui.ctx()
-            .accesskit_node_builder(buffer.response.id, |node| node.set_value(selected));
-        if let Some(reason) = self
-            .session
-            .buffer_target_error(values.playback_buffer_target)
-        {
-            ui.colored_label(roles().coral, reason);
-        }
-        help(
-            ui,
-            "A larger buffer absorbs processing bursts but adds delay between a control and its sound.",
-        );
-        // The request and the measured callback, apart from each other (Options
-        // spec), out of the way until someone needs them.
-        let mut capture = false;
-        let details = controls::disclosure("Device details")
-            .default_open(false)
-            .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new(self.session.buffer_status())
-                        .size(12.0)
-                        .color(roles().help),
-                );
-                let save =
-                    controls::button(ui, "Save audio capture", controls::ButtonRole::Secondary);
-                remember_focus(&save);
-                capture = save.clicked();
-                help(
-                    ui,
-                    "Saves the last 30 seconds sent to the audio device, with the song's state, \
-                     to the diagnostics folder in the data folder. F12 does the same anywhere.",
-                );
-            });
-        remember_focus(&details.header_response);
-        ui.separator();
-        section(ui, "Monitoring");
-        ui.horizontal(|ui| {
-            ui.label("Preview level");
-            let level = controls::slider(
-                ui,
-                &mut values.preview_level_db,
-                -30.0..=0.0,
-                "Preview level",
-            );
-            remember_focus(&level);
-            ui.ctx().accesskit_node_builder(level.id, |node| {
-                node.set_description("Preview output level in dB, from -30 to 0.")
-            });
-            ui.label(format!("{:.1} dB", values.preview_level_db));
-        });
-        switch(ui, "Mute previews", &mut values.preview_muted);
-        choice(
-            ui,
-            "Meter display rate",
-            &mut values.meter_display_rate,
-            &[
-                (MeterDisplayRate::Normal, "Normal"),
-                (MeterDisplayRate::Reduced, "Reduced"),
-            ],
-        );
-        help(
-            ui,
-            "Reduced draws meters at most 15 times a second. Measurement and peaks stay exact.",
-        );
-        capture
-    }
-
-    /// Returns whether the fixed song folder picker was requested.
-    fn file_options(&self, ui: &mut egui::Ui, values: &mut AppOptions) -> bool {
-        section(ui, "Song folders");
-        choice(
-            ui,
-            "Song dialog folder",
-            &mut values.song_folder_mode,
-            &[
-                (SongFolderMode::LastUsed, "Last used"),
-                (SongFolderMode::Fixed, "Fixed folder"),
-            ],
-        );
-        help(
-            ui,
-            "Where Open and Save as start. Existing songs stay in place.",
-        );
-        let mut choose = false;
-        if values.song_folder_mode == SongFolderMode::Fixed {
-            ui.label("Fixed song folder");
-            let mut path = values
-                .fixed_song_folder
-                .as_ref()
-                .map(|path| path.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let response =
-                ui.add(egui::TextEdit::singleline(&mut path).desired_width(ui.available_width()));
-            named(&response, egui::WidgetType::TextEdit, "Fixed song folder");
-            remember_focus(&response);
-            if response.changed() {
-                values.fixed_song_folder = (!path.is_empty()).then(|| PathBuf::from(path));
+            },
+            Effect::Close => self.close_options(ctx),
+            Effect::PickFolder => self.ask_path(FileRequest::OptionsFolder),
+            Effect::SaveCapture => {
+                let _ = self.session.save_playback_capture("Saved from Options");
             }
-            let picker = controls::button(
-                ui,
-                "Choose fixed song folder",
-                controls::ButtonRole::Secondary,
-            );
-            remember_focus(&picker);
-            choose = picker.clicked();
-            help(ui, "An existing folder, chosen or typed as a full path.");
+            Effect::OpenLibraries => self.open_sample_libraries(ctx),
         }
-        if let Some(warning) = self.session.song_folder_warning() {
-            ui.colored_label(roles().coral, warning);
-        }
-        choose
     }
 }
 
-fn workspace_options(ui: &mut egui::Ui, values: &mut AppOptions) {
-    section(ui, "Workspace");
-    choice(
-        ui,
-        "Theme",
-        &mut values.theme,
-        &Theme::ALL.map(|theme| (theme, theme.label())),
+/// The window's body: the selector and the page above a fixed footer.
+fn draw(
+    ui: &mut egui::Ui,
+    window: &mut OptionsWindow,
+    facts: &OptionsFacts,
+    fitted: bool,
+    actions: &mut Vec<Action>,
+) {
+    let mut area = ui.available_rect_before_wrap();
+    // Until the user resizes it, the window is as tall as the tallest page
+    // seen, up to the screen; a page scrolls below that.
+    if fitted && let Some(content) = window.tallest {
+        let selector = Page::ALL.len() as f32 * (PAGE_BUTTON.y + ui.spacing().item_spacing.y);
+        let wanted = content.max(selector) + FOOTER_GAP + FOOTER;
+        // The shell sizes the window from this allocation.
+        ui.allocate_space(Vec2::new(area.width(), wanted));
+        area.set_height(wanted.min(area.height()));
+    } else {
+        ui.advance_cursor_after_rect(area);
+    }
+    let footer = Rect::from_min_max(Pos2::new(area.left(), area.bottom() - FOOTER), area.max);
+    let body = Rect::from_min_max(area.min, Pos2::new(area.right(), footer.top() - FOOTER_GAP));
+    let mut body_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("options-body")
+            .max_rect(body),
     );
-    help(
-        ui,
-        "Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted \
-         metal. Layout and controls stay the same. Apply changes it at once, even while a \
-         song plays.",
+    body_ui.horizontal_top(|ui| {
+        ui.allocate_ui_with_layout(
+            Vec2::new(SELECTOR_WIDTH, body.height()),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| selector(ui, window, facts, actions),
+        );
+        ui.separator();
+        let width = ui.available_width();
+        ui.allocate_ui_with_layout(
+            Vec2::new(width, body.height()),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                let page = window.page;
+                let scrolled = egui::ScrollArea::vertical()
+                    .id_salt(("options-page", page))
+                    .auto_shrink([false, false])
+                    .max_height(body.height())
+                    .show(ui, |ui| {
+                        ui.set_width(width - ui.spacing().scroll.allocated_width());
+                        pages::notices(ui, window, facts, actions);
+                        pages::page(ui, page, &mut window.draft.values, facts, actions);
+                    });
+                view::name_scroll_area(ui, ("options-page", page), "Options page");
+                let content = scrolled.content_size.y;
+                window.tallest = Some(window.tallest.map_or(content, |seen| seen.max(content)));
+            },
+        );
+    });
+    let mut row = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("options-actions")
+            .max_rect(footer)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
     );
-    choice(
-        ui,
-        "Lane height",
-        &mut values.lane_height,
-        &LaneHeight::ALL.map(|height| (height, height.label())),
-    );
-    help(
-        ui,
-        "The height of each arrangement row. Apply changes it at once, even while a song \
-         plays.",
-    );
-    switch(
-        ui,
-        "Follow playhead on startup",
-        &mut values.follow_on_startup,
-    );
-    help(
-        ui,
-        "From the next launch. The Follow button sets this session.",
-    );
-    switch(
-        ui,
-        "Show section bookmarks",
-        &mut values.show_section_bookmarks,
-    );
-    help(ui, "The same setting as the Sections button.");
-    choice(
-        ui,
-        "Starting module",
-        &mut values.starting_module,
-        &[
-            (StartingModule::Sounds, "Sounds"),
-            (StartingModule::Mixer, "Mixer"),
-            (StartingModule::Mastering, "Mastering"),
-            (StartingModule::Effects, "FX returns"),
-        ],
-    );
-    help(ui, "At the next launch. Opening a song keeps the module.");
-    switch(ui, "Show tooltips", &mut values.show_tooltips);
-    help(
-        ui,
-        "Hover hints only. Names, focus, and errors stay available.",
-    );
+    actions_row(&mut row, window, facts, actions);
+}
+
+/// The page buttons, each with a marker when its page has unapplied edits.
+/// Up and Down move between pages.
+fn selector(
+    ui: &mut egui::Ui,
+    window: &mut OptionsWindow,
+    facts: &OptionsFacts,
+    actions: &mut Vec<Action>,
+) {
+    let changes = window.changes(facts);
+    // The page whose button takes the focus this frame. An arrow key moves
+    // it at once, so a second key in the next frame starts from the new page.
+    let mut focus = window.focus_page.then_some(window.page);
+    let mut ids = [egui::Id::NULL; Page::ALL.len()];
+    for (page, changed) in Page::ALL.into_iter().zip(changes) {
+        let selected = window.page == page;
+        let response = ui.add_sized(
+            PAGE_BUTTON,
+            egui::Button::selectable(selected, labels::page(page)),
+        );
+        if changed > 0 {
+            // Screen readers hear the marker as text.
+            ui.ctx().accesskit_node_builder(response.id, |node| {
+                node.set_description(unapplied(changed))
+            });
+            // The selected face takes the selection colour, so its marker
+            // takes the ink.
+            ui.painter().circle_filled(
+                Pos2::new(response.rect.right() - 12.0, response.rect.center().y),
+                3.5,
+                if selected {
+                    roles().ink
+                } else {
+                    roles().warning
+                },
+            );
+        }
+        form::register(&response);
+        ids[page.index()] = response.id;
+        if response.clicked() {
+            actions.push(Action::Show(page));
+        }
+        if response.has_focus() {
+            let step = ui.input_mut(|input| {
+                if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                    1
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                    -1
+                } else {
+                    0
+                }
+            });
+            if step != 0 {
+                ui.ctx()
+                    .memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+                let count = Page::ALL.len() as isize;
+                let next = Page::ALL[(page.index() as isize + step).rem_euclid(count) as usize];
+                actions.push(Action::Show(next));
+                focus = Some(next);
+            }
+        }
+    }
+    if let Some(page) = focus {
+        ui.ctx()
+            .memory_mut(|memory| memory.request_focus(ids[page.index()]));
+        window.focus_page = false;
+    }
+}
+
+/// Restore at the left; the status, Cancel, and Apply at the right.
+fn actions_row(
+    ui: &mut egui::Ui,
+    window: &OptionsWindow,
+    facts: &OptionsFacts,
+    actions: &mut Vec<Action>,
+) {
+    if form::button(ui, RESTORE, controls::ButtonRole::Tertiary)
+        .hover_hint("Put the defaults of every page in the draft. Nothing changes until Apply.")
+        .clicked()
+    {
+        actions.push(Action::Restore);
+    }
+    let pending = window.pending(facts);
+    let status = window.status(facts);
+    let blocked = window.apply_blocked(facts);
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if form::button(ui, CANCEL, controls::ButtonRole::Secondary).clicked() {
+            actions.push(Action::Close);
+        }
+        ui.add_enabled_ui(blocked.is_none(), |ui| {
+            let apply = form::button(ui, APPLY, controls::ButtonRole::Primary);
+            if let Some(reason) = &blocked {
+                apply.disabled_hint(reason);
+            } else if apply.clicked() {
+                actions.push(Action::Apply);
+            }
+        });
+        if !status.is_empty() {
+            let color = if pending {
+                roles().warning
+            } else {
+                roles().legend
+            };
+            let label =
+                ui.add(egui::Label::new(egui::RichText::new(&status).color(color)).truncate());
+            // Screen readers hear the count as it changes.
+            ui.ctx().accesskit_node_builder(label.id, |node| {
+                node.set_live(egui::accesskit::Live::Polite)
+            });
+        }
+    });
+}
+
+/// The prompt's text and its three answers.
+fn discard_prompt(
+    ui: &mut egui::Ui,
+    window: &OptionsWindow,
+    facts: &OptionsFacts,
+) -> Option<Action> {
+    let count: usize = window.changes(facts).iter().sum();
+    ui.label(match count {
+        0 => DEFAULTS_PROMPT.to_owned(),
+        _ => format!("Options has {}.", unapplied(count)),
+    });
+    let blocked = window.apply_blocked(facts);
+    let mut answer = None;
+    ui.horizontal(|ui| {
+        let apply = ui
+            .add_enabled_ui(blocked.is_none(), |ui| dialog::primary(ui, APPLY_AND_CLOSE))
+            .inner;
+        if let Some(reason) = &blocked {
+            apply.disabled_hint(reason);
+        } else if apply.clicked() {
+            answer = Some(Action::ApplyAndClose);
+        }
+        if dialog::danger(ui, DISCARD_CHANGES).clicked() {
+            answer = Some(Action::Discard);
+        }
+        if controls::button(ui, KEEP_EDITING, controls::ButtonRole::Secondary).clicked() {
+            answer = Some(Action::KeepEditing);
+        }
+    });
+    answer
 }

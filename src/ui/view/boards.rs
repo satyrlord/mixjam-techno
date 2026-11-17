@@ -24,7 +24,7 @@ const BOARD_GAP: f32 = 8.0;
 #[derive(Default)]
 pub(in super::super) struct BoardsState {
     pub(in super::super) module: BottomModule,
-    pub(in super::super) meter_display: options::MeterDisplay,
+    pub(in super::super) meter_display: MeterDisplay,
     /// A pedal that the Mastering module brings into view on its next frame.
     pub(in super::super) master_reveal: Option<PedalKind>,
     /// Replacing the project invalidates the board's active widget gestures.
@@ -788,5 +788,57 @@ mod tests {
             !heard.is_current(false, 7),
             "A stopped preview has no marker."
         );
+    }
+}
+
+/// What the master meters show. A reduced display rate holds a reading
+/// between draws, and keeps every peak that happened in between.
+#[derive(Default)]
+pub(in super::super) struct MeterDisplay {
+    shown: MeterReading,
+    pending: MeterReading,
+    next: f64,
+}
+
+impl MeterDisplay {
+    /// Keep transient peaks between draws. Audio still measures every block.
+    pub(in super::super) fn sample(
+        &mut self,
+        reading: MeterReading,
+        reduced: bool,
+        now: f64,
+    ) -> MeterReading {
+        if reading.run != self.pending.run {
+            self.pending = reading;
+            self.pending.input_peaks = std::array::from_fn(|side| {
+                reading.input_peaks[side] || reading.input_peak_counts[side] > 0
+            });
+            self.shown = reading;
+            self.next = now;
+        } else {
+            let peaks = std::array::from_fn::<_, 2, _>(|side| {
+                self.pending.input_peaks[side]
+                    || self.pending.input_peak_counts[side] != reading.input_peak_counts[side]
+            });
+            let true_peak = self.pending.true_peak;
+            let compressor = self.pending.compressor_reduction;
+            let limiter = self.pending.limiter_reduction;
+            self.pending = reading;
+            self.pending.input_peaks =
+                std::array::from_fn(|side| peaks[side] || reading.input_peaks[side]);
+            self.pending.true_peak = true_peak.max(reading.true_peak);
+            self.pending.compressor_reduction = compressor.max(reading.compressor_reduction);
+            self.pending.limiter_reduction = limiter.max(reading.limiter_reduction);
+        }
+        if !reduced || now >= self.next {
+            self.shown = self.pending;
+            self.pending = reading;
+            self.pending.input_peaks = [false; 2];
+            self.pending.true_peak = f32::NEG_INFINITY;
+            self.pending.compressor_reduction = 0.0;
+            self.pending.limiter_reduction = 0.0;
+            self.next = now + 1.0 / 15.0;
+        }
+        self.shown
     }
 }

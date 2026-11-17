@@ -175,19 +175,21 @@ selectors show the controls on each page. Use `set` with labels such as these:
 - `Starting module`.
 - `Song dialog folder`.
 
-In `window="Options"`, click `Apply`, `Cancel`, `Restore options defaults`, or
+In `window="Options"`, click `Apply`, `Cancel`, `Restore all defaults`, or
 `Reload active options`. Apply uses the same validation, stopped-audio
 condition, stale-draft check, persistence, and errors as for a person. Inspect
 the disabled reasons and `status` after Apply. A direct change to a settings
 file does not use the UI path.
 
-To manage folders and providers, select `Sample libraries` directly:
+With pending changes, Cancel, Escape, or close opens
+`window="Discard changes?"`, with `Apply changes`, `Discard changes`, and
+`Keep editing`.
 
-- Its Done action closes a clean draft.
-- With pending changes, Cancel, Done, Escape, or close opens
-  `window="Discard changes?"`, with `Apply changes`, `Discard changes`, and
-  `Keep editing`.
-- Library actions run separately, and do not use Apply or Cancel.
+To manage folders and providers, click `Open sample libraries` on the Files
+page. It opens `window="Sample libraries"`:
+
+- Its actions apply at once; it has no Apply, Cancel, or Done.
+- `Close Sample libraries` closes it, and a running scan continues.
 - Add library folder and Scan again use `Tempo for files without one`.
 - `Cancel library scan` cancels a scan.
 - The provider picker is `Choose provider folder`. Its path choice stays a
@@ -203,8 +205,8 @@ available.
 
 `libraries` lists the library folders in order, and the reason when a folder
 did not load. `set_libraries folders='["D:/drums","D:/loops"]'` replaces the
-list with 1 to 9 folders and scans them, as the Sample libraries page in
-Options does. One folder can be text: `folders=D:\drums`. The sounds change
+list with 1 to 9 folders and scans them, as the Sample libraries window
+does. One folder can be text: `folders=D:\drums`. The sounds change
 when the scan ends. Send `wait idle=true` before you use them. `state` also has
 the folders under `song.library`.
 

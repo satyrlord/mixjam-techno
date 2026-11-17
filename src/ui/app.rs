@@ -90,8 +90,8 @@ pub struct MixJamApp {
     pub(super) commands: Option<commands::CommandList>,
     /// The tool rail's icons, once loaded, or why they could not load.
     pub(super) rail_icons: Option<Result<Arc<RailIcons>, String>>,
-    /// The Options window's draft while it is open.
-    pub(super) options: Option<options::OptionsDraft>,
+    /// The Options window and its draft while it is open.
+    pub(super) options: Option<options::OptionsWindow>,
     /// The sample libraries and their scan.
     pub(super) libraries: libraries::LibrariesState,
     /// The Help windows.
@@ -136,6 +136,26 @@ pub(super) fn startup_status(session: &mut Session) -> (String, bool) {
     session
         .take_notice()
         .unwrap_or_else(|| (DEFAULT_STATUS.into(), false))
+}
+
+/// The Options window that a capture view shows, if it shows one. Two of
+/// them add unapplied edits on two pages, and one asks to discard them.
+fn options_for_capture(session: &Session, view: &str) -> Option<options::OptionsWindow> {
+    use mixjam_techno::application::options::StartingModule;
+    let page = match view {
+        "options-audio" => options::Page::Audio,
+        "options-workspace" | "options-unapplied" | "options-discard" => options::Page::Workspace,
+        "options-files" => options::Page::Files,
+        _ => return None,
+    };
+    let mut window = options::OptionsWindow::new(session, page);
+    if matches!(view, "options-unapplied" | "options-discard") {
+        window.values.preview_muted = !window.values.preview_muted;
+        window.values.follow_on_startup = !window.values.follow_on_startup;
+        window.values.starting_module = StartingModule::Mixer;
+        window.confirm_discard = view == "options-discard";
+    }
+    Some(window)
 }
 
 impl MixJamApp {
@@ -319,15 +339,10 @@ impl MixJamApp {
         } else {
             (status, status_error)
         };
-        let options_draft =
-            (capture_view.starts_with("options") || needs_sample_folder).then(|| {
-                let page = if needs_sample_folder && !capture_view.starts_with("options") {
-                    options::Page::Libraries
-                } else {
-                    options::Page::from_capture(&capture_view)
-                };
-                options::OptionsDraft::new(&session, page).for_capture(&capture_view)
-            });
+        let options_window = options_for_capture(&session, &capture_view);
+        // A first launch with no sounds opens the sample libraries.
+        let libraries_open = capture_view.starts_with("librar")
+            || (needs_sample_folder && !capture_view.starts_with("options"));
         // Select the clip whose fades the capture demonstrates, or the clips
         // that the Inspector's pages describe.
         let capture_clips: BTreeSet<u64> = match capture_view.as_str() {
@@ -448,11 +463,10 @@ impl MixJamApp {
             sounds: Default::default(),
             commands: (capture_view == "command-list").then(commands::CommandList::new),
             rail_icons: None,
-            options: options_draft,
+            options: options_window,
             libraries: libraries::LibrariesState {
-                close_options_after_scan: needs_sample_folder
-                    && startup_scan
-                    && capture_view.is_empty(),
+                open: libraries_open,
+                close_after_scan: needs_sample_folder && startup_scan && capture_view.is_empty(),
                 ..Default::default()
             },
             help: modals::HelpWindows {
@@ -596,15 +610,11 @@ impl MixJamApp {
             Some(_) => {}
             None => {
                 self.libraries.scan_status = None;
-                if std::mem::take(&mut self.libraries.close_options_after_scan)
+                if std::mem::take(&mut self.libraries.close_after_scan)
                     && !self.status_error
                     && !self.session.library().samples.is_empty()
-                    && self.sample_libraries_open()
-                    && self.options.as_ref().is_some_and(|draft| {
-                        !draft.restored && draft.values == *self.session.options()
-                    })
                 {
-                    self.close_options(ctx);
+                    self.libraries.open = false;
                 }
             }
         }

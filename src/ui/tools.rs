@@ -198,6 +198,7 @@ impl MixJamApp {
 
     pub(super) fn tool_windows(&mut self, ctx: &egui::Context) {
         self.options_window(ctx);
+        self.sample_libraries_window(ctx);
         self.eq_window(ctx);
         album_review::show(
             ctx,

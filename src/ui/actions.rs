@@ -203,7 +203,7 @@ impl MixJamApp {
     ) -> Result<(), String> {
         self.session.start_wave_scan(&roots, fallback_bpm)?;
         self.libraries.fallback_bpm = fallback_bpm;
-        self.libraries.close_options_after_scan = false;
+        self.libraries.close_after_scan = false;
         self.clear_selection();
         self.message(format!("Scanning {}…", scan_subject(&roots)));
         Ok(())

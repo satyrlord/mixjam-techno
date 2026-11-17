@@ -1,6 +1,10 @@
 use super::*;
 #[path = "view/boards.rs"]
 mod boards;
+/// Only the library's UI tests use it.
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(super) use boards::MeterDisplay;
 pub(super) use boards::{BoardsState, StepSynthBoard};
 #[path = "view/clip_edit.rs"]
 mod clip_edit;

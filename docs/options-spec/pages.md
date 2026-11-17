@@ -84,7 +84,10 @@ the draft does not change.
 
 ### Sample libraries
 
-The Sample libraries page holds the complete library feature:
+Files ends with a Sample libraries section: one help line and
+`Open sample libraries`, which opens the Sample libraries tool window beside
+Options. The draft stays as it is. That window holds the complete library
+feature:
 
 - Folder registration and removal, in the configured order.
 - Scan progress and cancellation.
@@ -93,15 +96,16 @@ The Sample libraries page holds the complete library feature:
 - The messages for skipped WAV files and folders that cannot be read.
 - Optional product-provider management.
 
-There is no separate Sample libraries window or rail action. The Options
-entry is a gear, a prepared PNG, at the left end of the status bar. Use
-`Cancel library scan` to make scan cancellation different from Options Cancel.
+Sample libraries has no rail action. The Options entry is a gear, a prepared
+PNG, at the left end of the status bar. Use `Cancel library scan` to make scan
+cancellation different from Options Cancel.
 
 The folder and provider actions run through the existing Session services and
 storage, not through the options draft. A successful scan adopts its folder
 changes. Add library folder and Scan again use the fallback BPM. Options Apply
 and Cancel do not commit or roll back library changes.
 
-Show `Changes here take effect right away.` Use one Done action on this page.
-Done follows the same draft-close rules as Cancel on the other pages. Keep the
-options preference draft when the user goes to this page.
+The window shows `Changes take effect right away.` It has no Apply, Cancel,
+Restore, or Done. Its close button closes it at once, and a scan that runs
+continues. With an empty library at startup, the window opens by itself and
+closes when the first scan finds sounds.

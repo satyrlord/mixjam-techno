@@ -151,7 +151,7 @@ impl Session {
         }
         if self.options_invalid && !restore_invalid {
             return Err(
-                "The options file is invalid. Select Restore options defaults before Apply.".into(),
+                "The options file is invalid. Select Restore all defaults before Apply.".into(),
             );
         }
         // An already accepted folder can disappear after Apply. Keep its

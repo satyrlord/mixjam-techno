@@ -173,6 +173,7 @@ fn hardware_utility_windows_keep_identity_keyboard_close_and_scoped_style() {
         "Step synth help",
         "Sample editor help",
         "Options",
+        "Sample libraries",
         "Import details",
     ] {
         let (ctx, mut app) = fixture();
@@ -184,7 +185,8 @@ fn hardware_utility_windows_keep_identity_keyboard_close_and_scoped_style() {
             "Effect Studio help" => app.help.effects = true,
             "Step synth help" => app.help.step_synth = true,
             "Sample editor help" => app.help.sample_edit = true,
-            "Options" => app.open_sample_libraries(&ctx),
+            "Options" => app.open_options(&ctx),
+            "Sample libraries" => app.open_sample_libraries(&ctx),
             "Import details" => app.sample_import.details_open = true,
             _ => unreachable!(),
         }
@@ -226,6 +228,7 @@ fn hardware_utility_windows_keep_identity_keyboard_close_and_scoped_style() {
                 "Step synth help" => app.help.step_synth,
                 "Sample editor help" => app.help.sample_edit,
                 "Options" => app.options.is_some(),
+                "Sample libraries" => app.sample_libraries_open(),
                 "Import details" => app.sample_import.details_open,
                 _ => unreachable!(),
             },

@@ -23,7 +23,7 @@ in a different library folder. The page lists the folders in order:
 
 ### Scans
 
-The scan runs in the background. The Sample libraries page shows the progress.
+The scan runs in the background. The Sample libraries window shows the progress.
 To stop a scan, select **Cancel library scan**. You can use Options during the
 scan. The application changes the sounds only when the scan is complete. A
 cancelled scan changes nothing.
@@ -49,7 +49,7 @@ WAV file can be, which is almost 4 GiB. If the audio ends in the middle of its
 last frame, only that partial frame is lost. The scan ignores macOS `._`
 metadata files beside the WAV files.
 
-**Skipped WAVs** on the Sample libraries page lists the files that the
+**Skipped WAVs** on the Sample libraries window lists the files that the
 application cannot use, with the reason:
 
 - An empty or damaged file.
@@ -60,7 +60,7 @@ application cannot use, with the reason:
 
 If the application cannot read a library folder, or the folder has no WAV file
 that it can read, the other folders still load. The status line names the
-folder and the reason. The Sample libraries page shows the reason under the
+folder and the reason. The Sample libraries window shows the reason under the
 folder. The folder stays in the list, but its sounds are not in the Sounds
 panel until a later scan can read it. Songs that use these sounds show them as
 missing. If the application cannot read any folder, the scan fails and the
@@ -95,7 +95,7 @@ lengths to find a tempo. These sources can also set the tempo:
 A folder tempo from authenticated audio overrides these estimates and names.
 
 If the application cannot find a tempo, it uses **Tempo for files without
-one** from the Sample libraries page. The default is 140 BPM. A loop length can
+one** from the Sample libraries window. The default is 140 BPM. A loop length can
 fit half or double its actual tempo. In this case, the application uses the
 tempo from 88 to 176 BPM, unless **Tempo for files without one** is the other
 tempo.
@@ -124,9 +124,9 @@ The settings, the scan cache, and the generated audio are in
 ## Options
 
 To open Options, select the **Options** gear at the left end of the status bar,
-or press **Ctrl+,**. The window has four pages: **Audio**, **Workspace**,
-**Files**, and **Sample libraries**. The window fits the current page, up to
-the height of the screen. A longer page scrolls.
+or press **Ctrl+,**. The window has three pages: **Audio**, **Workspace**, and
+**Files**. The window keeps one height as you change pages, up to the height
+of the screen. A longer page scrolls.
 
 ### Apply, Cancel, and Restore
 
@@ -134,8 +134,8 @@ the height of the screen. A longer page scrolls.
   Apply is available only when there are changes.
 - A dot marks each page that has changes that are not applied. The footer
   shows how many there are.
-- **Restore options defaults** changes only the draft. To save the defaults,
-  select **Apply**.
+- **Restore all defaults** puts the defaults of every page in the draft. To
+  save them, select **Apply**.
 
 If you select **Cancel**, press Escape, or close the window with changes that
 are not applied, the window asks **Discard changes?**:
@@ -231,22 +231,21 @@ not available later, the application keeps its path and shows the problem.
 Open and Save as then use the last-used or default folder. Existing songs do
 not move.
 
-### Sample libraries page
+### Sample libraries window
 
-The library folder, scan, and provider actions on this page apply
-immediately. Thus the page has one **Done** button, not Apply and Cancel.
-Done closes the window. If other pages have changes that are not applied, Done
-asks first.
+To open it, select **Open sample libraries** on the **Files** page of Options.
+The library folder, scan, and provider actions in this window apply
+immediately, so it has no Apply or Cancel. Close it with its close button.
 
 Folder changes apply after a scan is successful. The next **Add library
 folder** or **Scan again** uses **Tempo for files without one**. If you close
-Options, the library scan continues and its changes stay. To stop a scan,
+the window, the library scan continues and its changes stay. To stop a scan,
 select **Cancel library scan**.
 
 ### Options file
 
 Options are stored in `options.json` in the settings folder. If the settings
 are not valid, the application uses safe defaults and shows an error. To
-replace the settings that are not valid, select **Restore options defaults**,
+replace the settings that are not valid, select **Restore all defaults**,
 then **Apply**. This build does not overwrite settings from a newer options
 schema.

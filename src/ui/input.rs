@@ -117,10 +117,16 @@ impl MixJamApp {
             self.commands = Some(commands::CommandList::new());
             return;
         }
-        if let Some(options) = &self.options
-            && !dialog::is_collapsed(ctx, "Options")
-            && dialog::top_window(ctx, "Options")
-        {
+        // A window with a form ring keeps Tab inside it while it is on top.
+        let ringed = [
+            (self.options.is_some(), options::labels::WINDOW),
+            (self.sample_libraries_open(), libraries::TITLE),
+        ]
+        .into_iter()
+        .find(|(open, identity)| {
+            *open && !dialog::is_collapsed(ctx, identity) && dialog::top_window(ctx, identity)
+        });
+        if let Some((_, identity)) = ringed {
             if !egui::Popup::is_any_open(ctx) {
                 let direction = ctx.input_mut(|input| {
                     if input.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab) {
@@ -132,7 +138,7 @@ impl MixJamApp {
                     }
                 });
                 if let Some(reverse) = direction {
-                    options.cycle_focus(ctx, reverse);
+                    form::ring::cycle(ctx, identity, reverse);
                 }
             }
             // The top utility owns its keys. Its shell handles Escape after

@@ -377,6 +377,8 @@ pub(super) fn brand_family() -> egui::FontFamily {
 /// `typography`). The faces come from the theme; the sizes are the same in
 /// every theme.
 pub(super) mod type_size {
+    /// Section titles in a tool window's form.
+    pub(crate) const SECTION: f32 = 15.0;
     /// Fields and explanatory text, and action labels.
     pub(crate) const BODY: f32 = 13.0;
     /// Sample and clip names.
@@ -841,7 +843,7 @@ mod tests {
     fn text_on_painted_surfaces_keeps_its_contrast() {
         for theme in Theme::ALL {
             let r = of(theme);
-            let name = theme.label();
+            let name = format!("{theme:?}");
             let mut pairs = vec![
                 ("text on a raised widget", r.text, r.raised, 4.5),
                 ("legend on danger", r.legend, r.danger, 4.5),
@@ -897,7 +899,7 @@ mod tests {
     fn every_theme_keeps_text_and_state_contrast() {
         for theme in Theme::ALL {
             let r = of(theme);
-            let name = theme.label();
+            let name = format!("{theme:?}");
             for (what, text, fill, minimum) in [
                 ("text on canvas", r.text, r.canvas, 7.0),
                 ("text on panel", r.text, r.panel, 7.0),
@@ -952,12 +954,11 @@ mod tests {
             let r = of(theme);
             for (index, (body, _)) in r.tools.iter().enumerate() {
                 for (other, (next, _)) in r.tools.iter().enumerate() {
-                    assert!(index == other || body != next, "{}", theme.label());
+                    assert!(index == other || body != next, "{theme:?}");
                 }
                 assert!(
                     index == 0 || (*body != r.canvas && *body != r.panel),
-                    "{}",
-                    theme.label()
+                    "{theme:?}"
                 );
             }
         }

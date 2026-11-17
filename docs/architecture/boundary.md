@@ -67,8 +67,25 @@ arrangement, but they do not extend the audio render.
 `src/options.rs` owns the typed schema of the application preferences, their
 defaults, their validation, and their persistence in `options.json` under
 `project_io::data_root()`. `Session` owns the active values, their revision,
-and `apply_options`. `src/ui/options.rs` owns one editable window draft and the
-page selection.
+and `apply_options`. The option values carry no display labels; the frontend
+names them.
+
+The Options frontend has four parts, so its look can change without the
+Session:
+
+- `src/ui/options/draft.rs`: `OptionsDraft`, a plain controller with no egui
+  and no Session. It takes `OptionsFacts`, plain values that the window reads
+  from the Session once per frame, and the person's `Action`s, and returns
+  `Effect`s for the window to carry out.
+- `src/ui/options/pages.rs`: the Audio, Workspace, and Files pages as free
+  functions over the draft's values and the facts.
+- `src/ui/options/labels.rs`: every word the window shows or names, shared
+  with the tests.
+- `src/ui/options.rs`: the window shell, the page selector, the fixed footer,
+  the discard prompt, and the effects that reach the Session.
+
+`src/ui/form.rs` holds the form pieces that tool windows share, and the Tab
+ring that keeps keyboard focus inside one window.
 
 Apply does these steps:
 
@@ -79,7 +96,7 @@ Apply does these steps:
 
 The active values change only after the write succeeds. Cancel and close ask
 before they discard pending changes. A clean draft closes immediately. Restore
-options defaults changes only the draft. An Apply that changes nothing does no
+all defaults changes only the draft. An Apply that changes nothing does no
 write and no audio rebuild. Options do not go into the song history and do not
 change song data.
 
@@ -87,7 +104,7 @@ If `options.json` is missing, the load takes only the section-bookmark
 visibility from `section-bookmarks.json`. The load does not change that file,
 and the application does not write to it. An invalid options file loads safe
 defaults with a visible error. Before the application can replace that file,
-the user must select Restore options defaults. A file with a future schema stays
+the user must select Restore all defaults. A file with a future schema stays
 intact and blocks preference writes.
 
 The library configuration and the last-used song folder have their own

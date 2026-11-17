@@ -891,3 +891,61 @@ fn mastering_knobs_take_the_wheel_once() {
         );
     }
 }
+
+#[test]
+fn reduced_meter_display_holds_values_and_retains_peak_events() {
+    let mut display = view::MeterDisplay::default();
+    let mut reading = MeterReading {
+        run: 1,
+        input_vu: -4.0,
+        ..MeterReading::default()
+    };
+    assert_eq!(display.sample(reading, true, 0.0).input_vu, -4.0);
+    reading.input_vu = -2.0;
+    reading.input_peak_counts = [1, 0];
+    reading.overs = 1;
+    let held = display.sample(reading, true, 0.02);
+    assert_eq!(held.input_vu, -4.0);
+    assert_eq!(held.overs, 0);
+    reading.input_vu = -6.0;
+    let shown = display.sample(reading, true, 0.07);
+    assert_eq!(shown.input_vu, -6.0);
+    assert_eq!(shown.overs, 1);
+    assert_eq!(shown.input_peaks, [true, false]);
+    assert_eq!(display.sample(reading, true, 0.09), shown);
+    assert!(!display.sample(reading, true, 0.14).input_peaks[0]);
+    reading.run = 2;
+    reading.input_peak_counts = [0, 0];
+    reading.overs = 0;
+    let restarted = display.sample(reading, true, 0.15);
+    assert_eq!(restarted.input_peaks, [false, false]);
+    assert_eq!(restarted.overs, 0);
+}
+
+#[test]
+fn reduced_meter_needle_does_not_interpolate_between_display_samples() {
+    let ctx = egui::Context::default();
+    let id = egui::Id::new("reduced-needle-test");
+    for (index, target) in [0.2_f32, 0.8, 0.4, 0.9].into_iter().enumerate() {
+        let _ = ctx.run(
+            egui::RawInput {
+                time: Some(index as f64 * 0.02),
+                ..Default::default()
+            },
+            |ctx| {
+                assert_eq!(master::display_needle(ctx, id, target, true), target);
+            },
+        );
+    }
+    let reduced = master::Metering {
+        reading: MeterReading::default(),
+        playing: true,
+        reduced: true,
+    };
+    assert!(reduced.repaint_delay().as_secs_f64() >= 1.0 / 15.0);
+    let normal = master::Metering {
+        reduced: false,
+        ..reduced
+    };
+    assert_eq!(normal.repaint_delay(), Duration::from_millis(33));
+}

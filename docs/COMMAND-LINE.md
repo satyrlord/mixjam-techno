@@ -14,7 +14,7 @@ They open no window and play no sound.
 
 `--samples PATH` selects a WAV folder. To use more than one library folder,
 give `--samples` up to 9 times. The application merges the folders into one set
-of sounds, as the Sample libraries page in Options does. A folder that cannot be
+of sounds, as the Sample libraries window does. A folder that cannot be
 read is left out, with a warning on standard error. The command fails when no
 folder can be read.
 

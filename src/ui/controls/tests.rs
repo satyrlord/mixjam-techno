@@ -51,11 +51,7 @@ fn hovered_destructive_buttons_keep_text_contrast() {
         assert!(!colors.is_empty(), "The button must paint its face.");
         for color in colors {
             let ratio = contrast(roles().legend, color.blend(gloss));
-            assert!(
-                ratio >= 4.5,
-                "{} hovered danger: {ratio:.2}:1",
-                theme.label()
-            );
+            assert!(ratio >= 4.5, "{theme:?} hovered danger: {ratio:.2}:1");
         }
     }
     theme::paint_as(theme::Theme::Studio);
@@ -153,7 +149,7 @@ fn numeric_text_fits_and_centers_in_its_own_container() {
 fn folded_text_colors_stay_readable_on_their_actual_surfaces() {
     for theme in theme::Theme::ALL {
         theme::paint_as(theme);
-        text_colors_stay_readable(theme.label());
+        text_colors_stay_readable(&format!("{theme:?}"));
     }
     theme::paint_as(theme::Theme::Studio);
 }
@@ -204,8 +200,7 @@ fn focus_rings_stay_visible_against_every_chassis() {
             let ratio = contrast(palette.focus(), palette.body());
             assert!(
                 ratio >= 3.0,
-                "{} {palette:?} focus ring contrast {ratio:.2}:1 must be at least 3:1",
-                theme.label()
+                "{theme:?} {palette:?} focus ring contrast {ratio:.2}:1 must be at least 3:1"
             );
         }
     }

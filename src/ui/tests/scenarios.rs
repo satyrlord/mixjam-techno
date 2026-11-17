@@ -27,7 +27,7 @@ pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutpu
                     .allocated()
                     .any(|(_, meta)| meta.name.starts_with("folded-metal-")),
                 "{} paints its chassis in code.",
-                theme::current().label()
+                options::labels::theme(theme::current())
             );
             assert!(
                 output.shapes.iter().any(|shape| match &shape.shape {
@@ -42,7 +42,7 @@ pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutpu
                     _ => false,
                 }),
                 "The {palette} chassis must paint its {} body.",
-                theme::current().label()
+                options::labels::theme(theme::current())
             );
             return;
         }

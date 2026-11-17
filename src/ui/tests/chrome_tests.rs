@@ -201,10 +201,7 @@ fn titles_are_uppercase_without_changing_saved_text_or_body_font() {
     )
     .unwrap();
     app.set_layout(|layout| layout.sounds = true);
-    app.options = Some(options::OptionsDraft::new(
-        &app.session,
-        options::Page::Libraries,
-    ));
+    app.libraries.open = true;
     frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     // The product name keeps its brand face in every theme; other titles
@@ -214,7 +211,7 @@ fn titles_are_uppercase_without_changing_saved_text_or_body_font() {
         ("TECHNO", theme::brand_family()),
         ("STIINTA SI RITM", theme::heading_family()),
         ("ARRANGEMENT", theme::heading_family()),
-        ("OPTIONS", theme::heading_family()),
+        ("SAMPLE LIBRARIES", theme::heading_family()),
     ] {
         let text = screen(&output)
             .find(label)

@@ -86,6 +86,26 @@ const RENAMED: &[(&str, &str)] = &[
     // 2026-11-15).
     ("button\tListen sequence", "button\tListen"),
     ("button\tSave sequence", "button\tSave sound"),
+    // Sample libraries is its own tool window; Options' Files page opens it,
+    // and Restore names its reach (owner, 2026-11-17).
+    ("button	Done", "button	Close Sample libraries"),
+    ("button	Sample libraries", "button	Open sample libraries"),
+    (
+        "button	Restore options defaults",
+        "button	Restore all defaults",
+    ),
+    (
+        "label	Changes here take effect right away.",
+        "label	Changes take effect right away.",
+    ),
+    (
+        "label	Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted metal. Layout and controls stay the same. Apply changes it at once, even while a song plays.",
+        "label	Studio is plain and flat, Aero is colorful plastic, and Vintage is worn painted metal. Only the look changes. Apply switches it, even while a song plays.",
+    ),
+    (
+        "label	The height of each arrangement row. Apply changes it at once, even while a song plays.",
+        "label	The height of each arrangement row. Apply resizes the rows, even while a song plays.",
+    ),
 ];
 
 fn sample(id: u32, name: &str, group: &str) -> Sample {
@@ -324,16 +344,14 @@ fn every_name() -> BTreeSet<String> {
         *window(&mut app) = false;
     }
 
-    for page in [
-        options::Page::Audio,
-        options::Page::Workspace,
-        options::Page::Files,
-        options::Page::Libraries,
-    ] {
-        app.options = Some(options::OptionsDraft::new(&app.session, page));
+    for page in options::Page::ALL {
+        app.options = Some(options::OptionsWindow::new(&app.session, page));
         names(&context, &mut app, &mut found);
     }
     app.options = None;
+    app.libraries.open = true;
+    names(&context, &mut app, &mut found);
+    app.libraries.open = false;
 
     app.files.pending_action = Some(PendingAction::New);
     names(&context, &mut app, &mut found);

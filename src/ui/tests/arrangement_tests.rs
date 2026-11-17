@@ -171,7 +171,7 @@ fn lane_heights_keep_reversed_clip_names_clear_of_the_marker() {
         let root = std::env::temp_dir().join(format!(
             "mixjam-lane-reverse-ui-{}-{}",
             std::process::id(),
-            theme.label()
+            options::labels::theme(theme)
         ));
         let mut samples = app.session.library().samples.to_vec();
         samples[0].name = "A long sample name that needs an ellipsis".into();
@@ -224,7 +224,7 @@ fn lane_heights_keep_the_new_track_drop_hint_visible() {
         let root = std::env::temp_dir().join(format!(
             "mixjam-lane-drop-ui-{}-{}",
             std::process::id(),
-            theme.label()
+            options::labels::theme(theme)
         ));
         app.session = app.session.with_settings_root(root.clone());
         for lane_height in LaneHeight::ALL {

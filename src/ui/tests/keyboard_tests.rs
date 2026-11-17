@@ -346,7 +346,7 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
     type Setup = Box<dyn Fn(&egui::Context, &mut MixJamApp)>;
     let options = |page: options::Page| -> Setup {
         Box::new(move |_, app| {
-            app.options = Some(options::OptionsDraft::new(&app.session, page));
+            app.options = Some(options::OptionsWindow::new(&app.session, page));
         })
     };
     let all_effects = || EffectsState {
@@ -436,18 +436,19 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
             options(options::Page::Files),
         ),
         (
-            "Options, Sample libraries",
+            "Sample libraries",
             "Add library folder",
-            options(options::Page::Libraries),
+            Box::new(|_, app| app.libraries.open = true),
         ),
         (
             "Discard changes?",
             "Keep editing",
             Box::new(|_, app| {
-                app.options = Some(
-                    options::OptionsDraft::new(&app.session, options::Page::Workspace)
-                        .for_capture("options-discard"),
-                );
+                let mut window =
+                    options::OptionsWindow::new(&app.session, options::Page::Workspace);
+                window.values.follow_on_startup = !window.values.follow_on_startup;
+                window.confirm_discard = true;
+                app.options = Some(window);
             }),
         ),
         (
@@ -593,7 +594,7 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
             "Theme list",
             "Menu",
             Box::new(|ctx, app| {
-                app.options = Some(options::OptionsDraft::new(
+                app.options = Some(options::OptionsWindow::new(
                     &app.session,
                     options::Page::Workspace,
                 ));
@@ -677,11 +678,9 @@ fn short_lists_show_whole_and_do_not_scroll() {
     };
     let step_synth: Setup = |_, app| app.boards.module = BottomModule::StepSynth;
     let providers: Setup = |ctx, app| {
-        app.open_options(ctx);
-        for control in ["Sample libraries", "Optional product providers"] {
-            frame(ctx, app, vec![], egui::Modifiers::NONE);
-            click_named(ctx, app, control);
-        }
+        app.open_sample_libraries(ctx);
+        frame(ctx, app, vec![], egui::Modifiers::NONE);
+        click_named(ctx, app, "Optional product providers");
     };
     for (list, setup) in [
         ("Library filter", sounds),

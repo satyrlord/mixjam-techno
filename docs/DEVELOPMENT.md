@@ -220,7 +220,7 @@ tool. Recorded-take captures check the window layout with a
 synthetic presentation state. They do not record audio.
 
 Through the agent channel of the built application, verify keyboard page
-selection, draft edits, Apply, Cancel, Restore options defaults, and focus
+selection, draft edits, Apply, Cancel, Restore all defaults, and focus
 restoration. Inspect the accessibility tree separately from the capture
 appearance. [Native frontend](architecture/frontend.md) describes the themes,
 the shared shell and controls, and the collapse behavior that the captures

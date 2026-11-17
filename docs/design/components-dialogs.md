@@ -3,30 +3,30 @@
 ## Options
 
 Options uses the Utility Folded Metal shell. A vertical selector with Audio,
-Workspace, Files, and Sample libraries is beside a body that scrolls. Until
-the user resizes the window, it follows the height of the current page, up to
-the height of the screen. A longer page scrolls. A fixed action row holds the
-tertiary Restore options defaults, Apply, and Cancel. Sample libraries has one
-primary Done in place of these, because its actions apply at once. The page
-selection and the scroll position of each page stay through collapse and
-navigation while the window is open.
+Workspace, and Files is beside a body that scrolls. Until the user resizes the
+window, it keeps the height of the tallest page seen since it opened, up to
+the height of the screen, so the footer does not move between pages. A longer
+page scrolls. A fixed action row holds the tertiary Restore all defaults at
+the left, and the status, Apply, and Cancel at the right. The status and the
+page markers use the warning colour while changes wait; the selected page
+takes the selection colour. The page selection and the scroll position of
+each page stay through collapse and navigation while the window is open.
 
 At 960x720, 1024x768, and 1440x1000, all controls and actions must be
 reachable without horizontal scrolling. Ctrl+, opens or focuses the window.
 Section titles use the 15-point uppercase heading face. A section title is
 4 points below the edge of the bay, or 8 points after an earlier section. On
-Workspace, Files, and Sample libraries, each control has a maximum of one help
-line. Switches, such as Mute previews and Show tooltips, use the shared
-switch.
+Workspace and Files, each control has a maximum of one help line. Switches,
+such as Mute previews and Show tooltips, use the shared switch.
 
 Apply is enabled only while the draft is different from the active options,
 or while restored defaults must replace a file that is not valid. Each page
 with edits that are not applied shows a dot on its selector button. The dot
-is ink on the selected Accent face, and Accent on the other buttons. The
-footer shows the count in Accent. Screen readers get the count as the button
-description and as a polite live footer.
+is ink on the selected face, and the warning colour on the other buttons. The
+footer shows the count in the warning colour. Screen readers get the count as
+the button description and as a polite live footer.
 
-Escape, close, Cancel, and Done close a clean draft at once. With edits that
+Escape, close, and Cancel close a clean draft at once. With edits that
 are not applied, they open the blocking Discard changes? confirmation. It
 holds:
 
@@ -63,14 +63,21 @@ and recording stop. Workspace and Files changes stay available during
 playback. When the preferences change outside the window, show stale-draft
 feedback with Reload active options. Keep the edits that are not saved until
 the user selects it. Show persistence and validation errors in the window.
-Restore options defaults edits only the draft.
+Restore all defaults edits only the draft, on every page.
+
+Each colour has one meaning: coral for an error or a value that blocks Apply,
+the warning colour for a state that waits or is reduced, and the help colour
+for guidance. The fixed song folder is checked where it is typed, with the
+same words that keep Apply disabled.
 
 ### Files and Sample libraries
 
-Files holds only the song folder choice. Its fixed-folder field and picker
-show only in Fixed folder mode.
+Files holds the song folder choice. Its fixed-folder field and picker show
+only in Fixed folder mode. A Sample libraries section under it opens the
+Sample libraries tool window.
 
-Sample libraries holds all library management:
+The Sample libraries tool window holds all library management. It has no
+footer, because its actions apply at once:
 
 - folder registration and removal,
 - progress and scan cancellation,
@@ -82,7 +89,7 @@ Sample libraries holds all library management:
 These operations use the Session operations. A scan applies the folder
 changes when it is complete. The next Add library folder and Scan again use
 the fallback tempo. Library and provider paths wrap in full. An enabled Remove
-describes its path. The page scrolls vertically inside the shared window. A
+describes its path. The window scrolls vertically. A
 large expanded Folder tempos list must keep the provider controls reachable.
 The provider product list shows all its rows and does not scroll.
 

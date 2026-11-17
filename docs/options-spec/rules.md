@@ -15,9 +15,9 @@
      changes, and Keep editing. Apply changes uses the same validation as Apply
      and closes the window only on success. Escape or close on the
      confirmation keeps editing.
-   - Restore defaults changes only the draft. Label it
-     `Restore options defaults`. It does not reset songs, libraries, or
-     caches.
+   - Restore defaults puts the defaults of every page in the draft, not only
+     the page on show. Label it `Restore all defaults`. It changes only the
+     draft, and does not reset songs, libraries, or caches.
 3. Audio changes can be drafted during playback, preview, or recording. They
    cannot be applied until all three stop. Show `Stop playback, previews, and
    recording to apply audio options.` Do not stop them automatically. Changes
@@ -100,7 +100,7 @@ stopped, so no live quality crossfade is necessary.
   owners.
 - If the settings are not valid, load safe defaults with a visible error that
   does not block. Do not overwrite the original file at startup. An explicit
-  Restore options defaults, followed by Apply, can replace the settings that
+  Restore all defaults, followed by Apply, can replace the settings that
   are not valid. A file with an unsupported future schema must stay as it is.
   Report the incompatibility and block persistent writes.
 - Apply must validate the full draft and prepare all fallible resources before
@@ -147,5 +147,5 @@ Schema policy:
 
 The cost of this policy is on downgrades. A build that is older than a field
 rejects a file that holds that field as an unknown field. That build then runs
-on defaults and treats the file as not valid, until Restore options defaults
+on defaults and treats the file as not valid, until Restore all defaults
 replaces it.

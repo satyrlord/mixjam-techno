@@ -85,10 +85,7 @@ fn sample_libraries_name_each_library_folder_control() {
         let library = Library::open_wav_folders_with(roots, 140.0, None, None).unwrap();
         let session = Session::headless(Arc::new(library), Project::default()).unwrap();
         let mut app = MixJamApp::from_session(session, String::new(), false);
-        app.options = Some(options::OptionsDraft::new(
-            &app.session,
-            options::Page::Libraries,
-        ));
+        app.libraries.open = true;
         let context = egui::Context::default();
         configure_style(&context);
         context.enable_accesskit();
@@ -134,10 +131,7 @@ fn folder_tempo_list_scrolls_to_provider_controls_at_compact_size() {
     assert_eq!(library.folder_tempos().len(), 60);
     let session = Session::headless(Arc::new(library), Project::default()).unwrap();
     let mut app = MixJamApp::from_session(session, String::new(), false);
-    app.options = Some(options::OptionsDraft::new(
-        &app.session,
-        options::Page::Libraries,
-    ));
+    app.libraries.open = true;
     let context = egui::Context::default();
     configure_style(&context);
     let size = Vec2::new(960.0, 720.0);
@@ -318,4 +312,110 @@ fn adoption_status_and_import_notice_survive_the_next_application_poll() {
     app.poll_application(&context);
     assert_eq!(app.status, status);
     std::fs::remove_file(path).unwrap();
+}
+
+/// Wait for the library scan to finish and take its result.
+fn finish_scan(ctx: &egui::Context, app: &mut MixJamApp) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while app.session.wave_scan().is_some() {
+        assert!(std::time::Instant::now() < deadline);
+        app.poll_application(ctx);
+        std::thread::yield_now();
+    }
+    app.poll_application(ctx);
+}
+
+/// A one-sound folder at `folder`.
+fn sound_folder(folder: &std::path::Path) {
+    std::fs::create_dir_all(folder).unwrap();
+    Pcm {
+        sample_rate: 44100,
+        channels: 1,
+        samples: vec![0.25; 441],
+    }
+    .write_wav(&folder.join("sound.wav"))
+    .unwrap();
+}
+
+#[test]
+fn closing_sample_libraries_keeps_its_scan_and_the_adopted_folders() {
+    let (ctx, mut app, root) = isolated_fixture();
+    let folder = root.join("samples");
+    sound_folder(&folder);
+    app.open_sample_libraries(&ctx);
+    // Let the native Area finish its initial sizing before input.
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    assert!(app.sample_libraries_open());
+    app.try_scan_library_folders(vec![folder.clone()], 140.0)
+        .unwrap();
+    click_named(&ctx, &mut app, "Close Sample libraries");
+    assert!(!app.sample_libraries_open());
+    finish_scan(&ctx, &mut app);
+    assert_eq!(
+        app.session.library().wav_roots(),
+        &[std::fs::canonicalize(folder).unwrap()]
+    );
+    assert_eq!(app.session.library().samples.len(), 1);
+    assert!(!app.session.has_history_step(false));
+    remove_settings(&root);
+}
+
+#[test]
+fn sample_libraries_window_acts_at_once_with_a_plain_fallback_tempo() {
+    let (ctx, mut app, root) = isolated_fixture();
+    app.open_sample_libraries(&ctx);
+    let mut output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    for _ in 0..2 {
+        output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+    }
+    // No draft, so no Apply, Cancel, Restore, or Done.
+    for name in [
+        "Apply",
+        "Cancel",
+        "Restore all defaults",
+        "Done",
+        "Fallback BPM",
+    ] {
+        assert!(!has_control(&output, name), "{name} is in Sample libraries");
+    }
+    assert!(has_control(&output, "Tempo for files without one"));
+    assert!(shows_text(&output, "Changes take effect right away."));
+    assert!(shows_text(
+        &output,
+        "Applies to the next Add library folder or Scan again."
+    ));
+    assert!(app.options.is_none(), "Sample libraries opens alone");
+    click_named(&ctx, &mut app, "Close Sample libraries");
+    assert!(!app.sample_libraries_open());
+    remove_settings(&root);
+}
+
+#[test]
+fn long_library_paths_wrap_in_full_without_a_hover() {
+    let (ctx, mut app, root) = isolated_fixture();
+    let folder = root
+        .join("a library folder with a deliberately long name for wrapping checks")
+        .join("another nested folder whose name keeps the path wider than the window");
+    sound_folder(&folder);
+    app.try_scan_library_folders(vec![folder.clone()], 140.0)
+        .unwrap();
+    finish_scan(&ctx, &mut app);
+    app.open_sample_libraries(&ctx);
+    let size = Vec2::new(960.0, 720.0);
+    let mut output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    for _ in 0..3 {
+        output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+    }
+    let path = display_paths(&app.session.library().wav_roots()[0].to_string_lossy());
+    let label = screen(&output)
+        .nodes()
+        .find(|node| node.value() == Some(path.as_str()))
+        .expect("The full library path is shown")
+        .rect();
+    // More than one line, inside the window.
+    assert!(label.height() > 24.0, "{label:?}");
+    assert!(label.right() <= size.x, "{label:?}");
+    remove_settings(&root);
 }

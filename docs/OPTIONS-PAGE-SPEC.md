@@ -13,8 +13,10 @@ application preferences. The defaults keep the full sound quality. A lower CPU
 mode is available for a project that does not play reliably on the user's
 computer.
 
-Options is a native window with four pages: Audio, Workspace, Files, and Sample
-libraries. It uses the shared Utility shell and controls in the current theme.
+Options is a native window with three pages: Audio, Workspace, and Files. It
+uses the shared Utility shell and controls in the current theme. Library
+management is in the separate Sample libraries tool window, which the Files
+page opens.
 It is not a web page, a replacement for the Mixer, or a new song editor.
 
 In scope: the controls in [Options pages](options-spec/pages.md), preference
