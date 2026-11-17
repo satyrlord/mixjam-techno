@@ -82,12 +82,7 @@ fn escape_hides_unconfirmed_sample_conflicts_without_an_edit_until_reopened() {
     assert!(app.status.contains("not confirmed"));
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
-        !output.shapes.iter().any(|shape| {
-            matches!(
-                &shape.shape,
-                egui::Shape::Text(text) if text.galley.job.text == "SAMPLE CONFLICTS"
-            )
-        }),
+        !screen(&output).shows("SAMPLE CONFLICTS"),
         "A dismissed resolver must stay hidden until it is reopened."
     );
     let reopen = text_rect(&output, "Sample conflicts");
@@ -374,10 +369,11 @@ fn missing_sample_details_are_accessible_and_processing_explains_silence() {
     click(&context, &mut app, button.center(), egui::Modifiers::NONE);
     assert!(app.sample_import.details_open);
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-    assert!(output.shapes.iter().any(|shape| matches!(
-        &shape.shape,
-        egui::Shape::Text(text) if text.galley.job.text.contains("Native sample ID: 42")
-    )));
+    assert!(
+        screen(&output)
+            .texts()
+            .any(|text| text.label().contains("Native sample ID: 42"))
+    );
     app.sample_import.details_open = false;
     app.select_clip(1, false);
     app.sample_edit.open = true;

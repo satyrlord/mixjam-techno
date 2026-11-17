@@ -43,10 +43,11 @@ fn mixer_master_stays_visible_while_scrolling_all_tracks_at_supported_sizes() {
         assert_eq!(text_rect(&output, "Master"), master, "Window: {size:?}");
         let last = text_rect(&output, "Track 64");
         assert!(last.right() < master.left(), "Window: {size:?}; {last:?}");
-        assert!(output.shapes.iter().any(|shape| {
-            matches!(&shape.shape, egui::Shape::Text(text)
-                if text.galley.job.text == "Track 64" && shape.clip_rect.contains_rect(last))
-        }));
+        assert!(
+            screen(&output)
+                .texts()
+                .any(|text| text.label() == "Track 64" && text.clip().contains_rect(last))
+        );
         let bounds = accessible_node(&output, "Master gain").1.bounds().unwrap();
         let pos = Pos2::new((bounds.x0 + bounds.x1) as f32 / 2.0, bounds.y0 as f32 + 2.0);
         for pressed in [true, false] {
@@ -79,9 +80,9 @@ fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
                 format!("Arrangement track {track} {}", switch.name()),
                 format!("Track {track} {}", switch.name()),
             ] {
-                let (_, node) = accessible_node(output, &label);
+                let node = screen(output).node(&label);
                 assert_eq!(
-                    node.toggled(),
+                    node.node().toggled(),
                     Some(if enabled {
                         egui::accesskit::Toggled::True
                     } else {
@@ -89,26 +90,15 @@ fn arrangement_and_mixer_switches_mirror_states_edits_and_history() {
                     }),
                     "{label}"
                 );
-                let bounds = node.bounds().unwrap();
-                let rect = Rect::from_min_max(
-                    Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-                    Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-                );
-                let painted = output
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(painted)
-                            if painted.galley.job.text == switch.letter()
-                                && rect.contains(painted.pos) =>
-                        {
-                            Some(painted)
-                        }
-                        _ => None,
+                let rect = node.rect();
+                let painted = screen(output)
+                    .texts()
+                    .find(|painted| {
+                        painted.label() == switch.letter() && rect.contains(painted.rect().min)
                     })
                     .unwrap_or_else(|| panic!("Missing painted state for {label}"));
                 assert_eq!(
-                    painted.galley.job.sections[0].format.color,
+                    painted.format().color,
                     if enabled {
                         roles().accent
                     } else {
@@ -242,25 +232,13 @@ fn mixer_status_names_why_a_track_is_silent() {
 #[test]
 fn muted_and_solo_silenced_lanes_dim_their_track_numbers() {
     fn number_color(output: &egui::FullOutput, track: usize) -> egui::Color32 {
-        let bounds = accessible_node(output, &format!("Record on track {track}"))
-            .1
-            .bounds()
-            .unwrap();
-        let rect = Rect::from_min_max(
-            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-        );
-        output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text)
-                    if text.galley.job.text == track.to_string() && rect.contains(text.pos) =>
-                {
-                    Some(text.galley.job.sections[0].format.color)
-                }
-                _ => None,
-            })
+        let rect = screen(output)
+            .node(&format!("Record on track {track}"))
+            .rect();
+        screen(output)
+            .texts()
+            .find(|text| text.label() == track.to_string() && rect.contains(text.rect().min))
+            .map(|text| text.format().color)
             .unwrap_or_else(|| panic!("Missing track number {track}"))
     }
     let (ctx, mut app) = fixture();

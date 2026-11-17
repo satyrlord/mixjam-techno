@@ -2,7 +2,7 @@
 use super::gesture::Gesture;
 use super::{
     Fades, MAX_PITCH_CENTS, MasterChain, Product, Project, Section, Session, TICKS_PER_BAR,
-    TRACK_COUNT, Track, duration_ticks,
+    TRACK_COUNT, Track, TrackMix, duration_ticks,
 };
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -21,6 +21,13 @@ pub enum EditCommand {
     SetTrack {
         index: usize,
         track: Box<Track>,
+    },
+    /// Replace the settings of one track that a mixer row edits: level,
+    /// polarity, pan, the switches, and the sends. Its processing and
+    /// automation stay. Undo and live playback treat it as a `SetTrack`.
+    SetTrackMix {
+        index: usize,
+        mix: TrackMix,
     },
     /// Fades that do not fit the new length are shortened, the fade out first.
     /// A trim of the clip's left edge changes its start, trim, and length.
@@ -133,6 +140,24 @@ impl Session {
         result
     }
     pub fn edit(&mut self, command: EditCommand) -> Result<(), String> {
+        // A mix edit is a track edit that keeps the rest of the track.
+        let command = match command {
+            EditCommand::SetTrackMix { index, mix } => {
+                let mut track = self
+                    .project()
+                    .tracks
+                    .get(index)
+                    .filter(|_| index < TRACK_COUNT)
+                    .ok_or("The track is outside the project.")?
+                    .clone();
+                track.set_mix(mix);
+                EditCommand::SetTrack {
+                    index,
+                    track: Box::new(track),
+                }
+            }
+            command => command,
+        };
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
         match &command {
             EditCommand::SetClip {
@@ -271,6 +296,7 @@ impl Session {
                 project.master_gain = master_gain;
             }
             EditCommand::SetTrack { index, track } => project.tracks[index] = *track,
+            EditCommand::SetTrackMix { .. } => unreachable!("normalised to SetTrack above"),
             EditCommand::SetClip {
                 id,
                 start_tick,

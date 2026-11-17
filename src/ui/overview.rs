@@ -233,7 +233,7 @@ impl MixJamApp {
                     .filter(|_| self.session.missing_sample(clip.sample_id).is_none())
                     .map_or(roles().raised, |sample| group_color(&sample.group_name))
             });
-            if !project.tracks[clip.track].audible(any_solo) {
+            if !project.tracks[clip.track].sounds(any_solo) {
                 color = roles().canvas.lerp_to_gamma(color, 0.3);
             }
             let left = x(clip.start_tick as f32);

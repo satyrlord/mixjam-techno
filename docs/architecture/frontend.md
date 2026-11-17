@@ -144,10 +144,12 @@ saved layout.
 `src/ui/inspector.rs` draws the Inspector. Its page follows the clip and track
 selection. Its fields use the Mixer controls and the clip menu fields under
 their own names, and edit through `SetTrack` and `SetClip`. `SetTrack` replaces
-one track. Thus a view that edits one track copies only that track in each
-frame, not all tracks. The page and control identities include the selection
-and the frontend generation. Thus pending value entries and held controls
-cannot edit another selection or a replacement project.
+one track with its processing. The Mixer and the Mix view send `SetTrackMix`,
+which replaces only the mixer settings of one track. Thus a view that edits one
+track copies only that track in each frame, not all tracks. The page and
+control identities include the selection and the frontend generation. Thus
+pending value entries and held controls cannot edit another selection or a
+replacement project.
 
 `src/ui/overview.rs` draws the song overview above the score. Its layout comes
 before the score toolbar, so a click moves the scroll offset of this frame. It

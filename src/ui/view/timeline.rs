@@ -505,12 +505,11 @@ impl MixJamApp {
             ui.ctx().request_repaint();
         }
         if let Some((index, gain)) = headers.gain {
-            let mut track = self.session.project().tracks[index].clone();
-            track.gain = gain;
-            let result = self.session.edit(EditCommand::SetTrack {
-                index,
-                track: Box::new(track),
-            });
+            let mix = TrackMix {
+                gain,
+                ..self.session.project().tracks[index].mix()
+            };
+            let result = self.session.edit(EditCommand::SetTrackMix { index, mix });
             self.apply(result);
             ui.ctx().request_repaint();
         }

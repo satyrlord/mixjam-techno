@@ -60,14 +60,9 @@ fn ctrl_k_lists_every_command_in_groups_filters_and_runs_on_enter() {
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(app.commands.is_some());
     let labels = |output: &egui::FullOutput| -> Vec<String> {
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .filter_map(|(_, node)| node.label().or(node.value()).map(str::to_owned))
+        screen(output)
+            .nodes()
+            .filter_map(|node| node.node().label().or(node.value()).map(str::to_owned))
             .collect()
     };
     let shown = labels(&output);
@@ -291,24 +286,15 @@ fn command_list_search_reveals_the_first_match_after_scrolling() {
         .unwrap();
     assert_eq!(search.text.as_deref(), Some("a"));
     let first = commands::matching("a")[0].name();
-    let shape = output
-        .shapes
-        .iter()
-        .find(|shape| match &shape.shape {
-            egui::Shape::Text(text) => text.galley.job.text == first && text.pos.x > 300.0,
-            _ => false,
-        })
+    let text = screen(&output)
+        .texts()
+        .find(|text| text.label() == first && text.rect().min.x > 300.0)
         .expect("The first match must be painted");
-    let egui::Shape::Text(text) = &shape.shape else {
-        unreachable!()
-    };
     assert!(
-        shape
-            .clip_rect
-            .contains(text.pos + text.galley.size() / 2.0),
+        text.clip().contains(text.rect().center()),
         "The match at {:?} must be inside {:?}",
-        text.pos,
-        shape.clip_rect
+        text.rect().min,
+        text.clip()
     );
 }
 
@@ -326,12 +312,7 @@ fn every_command_row_says_what_it_does_after_its_name() {
     }
     // The row paints the description after the name and gives it to the
     // screen reader; the accessible name stays the command's name.
-    let painted = |wanted: &str| {
-        output.shapes.iter().find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text == wanted => Some(text.pos.x),
-            _ => None,
-        })
-    };
+    let painted = |wanted: &str| screen(&output).find(wanted).map(|text| text.rect().min.x);
     let name = painted("New").expect("New is painted");
     let description = painted("Start an empty song").expect("its description is painted");
     assert!(description > name, "The description follows the name");

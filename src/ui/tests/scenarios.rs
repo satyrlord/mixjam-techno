@@ -172,14 +172,12 @@ pub(super) fn assert_folded_assets(ctx: &egui::Context, output: &egui::FullOutpu
 }
 
 pub(super) fn effects_text_mesh_bounds(output: &egui::FullOutput, text: &str) -> Rect {
-    output
-        .shapes
-        .iter()
-        .filter_map(|shape| match &shape.shape {
-            egui::Shape::Text(shape) if shape.galley.job.text == text => {
-                Some(shape.galley.mesh_bounds.translate(shape.pos.to_vec2()))
-            }
-            _ => None,
+    screen(output)
+        .texts()
+        .filter(|shown| shown.label() == text)
+        .map(|shown| {
+            let shape = shown.shape();
+            shape.galley.mesh_bounds.translate(shape.pos.to_vec2())
         })
         .reduce(|bounds, next| bounds.union(next))
         .unwrap_or_else(|| panic!("Missing glyph mesh: {text}"))
@@ -187,21 +185,18 @@ pub(super) fn effects_text_mesh_bounds(output: &egui::FullOutput, text: &str) ->
 
 pub(super) fn assert_full_recovery_caption(output: &egui::FullOutput) {
     let button = effects_control_rect(output, "Import details");
-    let text = output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text)
-                if text.galley.job.text == "Import details"
-                    && button.contains(text.visual_bounding_rect().center()) =>
-            {
-                Some((
-                    shape.clip_rect,
-                    text.visual_bounding_rect(),
-                    text.galley.elided,
-                ))
-            }
-            _ => None,
+    let text = screen(output)
+        .texts()
+        .find(|text| {
+            text.label() == "Import details"
+                && button.contains(text.shape().visual_bounding_rect().center())
+        })
+        .map(|text| {
+            (
+                text.clip(),
+                text.shape().visual_bounding_rect(),
+                text.shape().galley.elided,
+            )
         })
         .expect("Recovery button must paint the complete Import details caption.");
     assert!(!text.2, "Recovery button must not abbreviate its action.");
@@ -459,17 +454,13 @@ pub(super) fn activate_control(
 pub(super) fn step_synth_board_node(
     output: &egui::FullOutput,
 ) -> (egui::accesskit::NodeId, &egui::accesskit::Node) {
-    output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .expect("Accessibility must be enabled for this test.")
-        .nodes
-        .iter()
-        .find(|(_, node)| {
-            node.role() == egui::accesskit::Role::TabPanel && node.label() == Some("Step synth")
+    screen(output)
+        .nodes()
+        .find(|node| {
+            node.role() == egui::accesskit::Role::TabPanel
+                && node.node().label() == Some("Step synth")
         })
-        .map(|(id, node)| (*id, node))
+        .map(|node| (node.id(), node.node()))
         .expect("The Step synth board must show.")
 }
 
@@ -583,14 +574,9 @@ pub(super) fn choose_automation_lane(ctx: &egui::Context, app: &mut MixJamApp, l
     };
     let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
     let nodes = |output: &egui::FullOutput| -> Vec<(egui::accesskit::NodeId, Option<String>)> {
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .map(|(id, node)| (*id, node.label().map(str::to_owned)))
+        screen(output)
+            .nodes()
+            .map(|node| (node.id(), node.node().label().map(str::to_owned)))
             .collect()
     };
     let known: Vec<_> = nodes(&output).into_iter().map(|(id, _)| id).collect();

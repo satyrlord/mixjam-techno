@@ -225,32 +225,27 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
         } else {
             message.unwrap_or("Duration +33%. Pitch preservation is approximate.")
         };
-        let painted = output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == status => Some((shape, text)),
-                _ => None,
-            })
+        let painted = screen(&output)
+            .find(status)
             .unwrap_or_else(|| panic!("Missing footer message: {status}"));
-        let text_bounds = painted.1.visual_bounding_rect();
+        let text_bounds = painted.shape().visual_bounding_rect();
         assert!(
-            footer.contains_rect(painted.0.clip_rect),
+            footer.contains_rect(painted.clip()),
             "Message clip leaves its footer: {:?} / {footer:?}",
-            painted.0.clip_rect
+            painted.clip()
         );
         assert!(
-            footer.contains_rect(text_bounds.intersect(painted.0.clip_rect)),
+            footer.contains_rect(text_bounds.intersect(painted.clip())),
             "Visible status leaves its footer"
         );
         if status.len() > 200 {
-            assert!(painted.1.galley.rows.len() > 1, "Long messages must wrap");
+            assert!(painted.rows() > 1, "Long messages must wrap");
             assert!(
-                text_bounds.bottom() > painted.0.clip_rect.bottom(),
+                text_bounds.bottom() > painted.clip().bottom(),
                 "Long message must be clipped to its scroll region"
             );
         } else {
-            let offset = text_bounds.center() - painted.0.clip_rect.center();
+            let offset = text_bounds.center() - painted.clip().center();
             assert!(
                 offset.x.abs() <= 1.0 && offset.y.abs() <= 1.0,
                 "Footer message is not visibly centered: {offset:?}"
@@ -258,35 +253,22 @@ fn stretch_status_and_error_messages_are_confined_to_the_footer_below_the_skin()
         }
         if missing {
             assert_full_recovery_caption(&output);
-            let details = accessible_node(&output, "Import details")
-                .1
-                .bounds()
-                .unwrap();
-            let details = Rect::from_min_max(
-                Pos2::new(details.x0 as f32, details.y0 as f32),
-                Pos2::new(details.x1 as f32, details.y1 as f32),
-            );
+            let details = screen(&output).node("Import details").rect();
             assert!(
                 footer.contains_rect(details),
                 "Recovery control leaves its footer"
             );
             assert!((details.center().y - footer.center().y).abs() <= 1.0);
-            let text = output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == "Import details" => {
-                        Some(text.visual_bounding_rect())
-                    }
-                    _ => None,
-                })
-                .unwrap();
+            let text = screen(&output)
+                .text("Import details")
+                .shape()
+                .visual_bounding_rect();
             assert!(
                 (text.center() - (details.center() - Vec2::new(0.0, 1.0))).length() <= 3.0,
                 "Shared button text must be centered in its raised face."
             );
             assert!(
-                painted.0.clip_rect.right() < details.left(),
+                painted.clip().right() < details.left(),
                 "Missing audio message overlaps recovery control"
             );
         }

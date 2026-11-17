@@ -384,14 +384,7 @@ fn clip_fades_pitch_and_automation_points_edit_from_the_arrangement() {
         egui::Modifiers::NONE,
     );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    let open = output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .any(|(_, node)| node.label() == Some("Clip gain"));
+    let open = screen(&output).find_node("Clip gain").is_some();
     assert!(!open, "Escape closes the clip menu.");
     // Each frame is 1/60 s. Let the double-click time of the right-click pass.
     for _ in 0..20 {

@@ -266,17 +266,10 @@ fn retitle(app: &mut MixJamApp, title: &str) {
 fn song_name_text(output: &egui::FullOutput, title: &str) -> (Rect, Arc<egui::Galley>) {
     let text = title_text(title);
     // The top bar's; the Inspector's song page shows it too.
-    let mut names = output.shapes.iter().filter_map(|shape| match &shape.shape {
-        egui::Shape::Text(shape)
-            if shape.galley.job.text == text && shape.pos.y < TOP_BAR_HEIGHT =>
-        {
-            Some((
-                Rect::from_min_size(shape.pos, shape.galley.size()),
-                shape.galley.clone(),
-            ))
-        }
-        _ => None,
-    });
+    let mut names = screen(output)
+        .texts()
+        .filter(|name| name.label() == text && name.rect().min.y < TOP_BAR_HEIGHT)
+        .map(|name| (name.rect(), name.shape().galley.clone()));
     let name = names
         .next()
         .unwrap_or_else(|| panic!("Missing song name: {text}"));
@@ -367,10 +360,7 @@ fn position_readout_keeps_its_place_in_the_top_bar_and_shows_bar_and_beat_when_w
                 (digits.center().x - readout.center().x).abs() <= 0.5,
                 "{digits:?}"
             );
-            let beside = output.shapes.iter().any(|shape| match &shape.shape {
-                egui::Shape::Text(text) => text.galley.job.text == "1 . 1",
-                _ => false,
-            });
+            let beside = screen(&output).shows("1 . 1");
             assert_eq!(beside, !compact, "{width}: bar and beat beside the time");
         }
     }
@@ -458,13 +448,7 @@ fn song_name_has_no_tooltip_and_its_mark_does_not_move_the_transport() {
     let title = "Reality (Vocal Guide, Proposals)";
     retitle(&mut app, title);
     // A tooltip adds text to the frame.
-    let texts = |output: &egui::FullOutput| {
-        output
-            .shapes
-            .iter()
-            .filter(|shape| matches!(shape.shape, egui::Shape::Text(_)))
-            .count()
-    };
+    let texts = |output: &egui::FullOutput| screen(output).texts().count();
     let hover = |app: &mut MixJamApp, at: Pos2| {
         frame_at_size(
             &ctx,
@@ -482,10 +466,11 @@ fn song_name_has_no_tooltip_and_its_mark_does_not_move_the_transport() {
     let readout = accessible_label(&output, "00 : 00");
     let hovered = hover(&mut app, readout.center());
     assert!(texts(&hovered) > resting);
-    assert!(hovered.shapes.iter().any(|shape| matches!(
-        &shape.shape,
-        egui::Shape::Text(text) if text.galley.job.text.contains("minutes : seconds")
-    )));
+    assert!(
+        screen(&hovered)
+            .texts()
+            .any(|text| text.label().contains("minutes : seconds"))
+    );
     let output = hover(&mut app, name.center());
     assert_eq!(
         texts(&output),

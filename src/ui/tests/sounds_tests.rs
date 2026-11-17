@@ -27,24 +27,13 @@ fn sound_tooltip_retains_identity_timing_audio_metadata_and_full_unicode_name() 
     frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     // The Sounds panel's row, which elides the long name it is named by.
-    let tile = output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .filter(|(_, node)| {
+    let tile = screen(&output)
+        .nodes()
+        .filter(|node| {
             node.role() == egui::accesskit::Role::Button
-                && node.label() == Some(sample.name.as_str())
+                && node.node().label() == Some(sample.name.as_str())
         })
-        .filter_map(|(_, node)| node.bounds())
-        .map(|b| {
-            Rect::from_min_max(
-                Pos2::new(b.x0 as f32, b.y0 as f32),
-                Pos2::new(b.x1 as f32, b.y1 as f32),
-            )
-        })
+        .filter_map(|node| node.bounds())
         .min_by(|a, b| a.left().total_cmp(&b.left()))
         .expect("The Sounds panel must list the sound.");
     context.style_mut(|style| style.interaction.tooltip_delay = 0.0);
@@ -55,15 +44,10 @@ fn sound_tooltip_retains_identity_timing_audio_metadata_and_full_unicode_name() 
         egui::Modifiers::NONE,
     );
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-    let tooltip = output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text.contains("ORIGINAL42") => {
-                Some(&text.galley.job.text)
-            }
-            _ => None,
-        })
+    let tooltip = screen(&output)
+        .texts()
+        .map(|text| text.label())
+        .find(|label| label.contains("ORIGINAL42"))
         .expect("Hovering a sound must expose its metadata.");
     for value in [
         sample.name.as_str(),
@@ -133,22 +117,14 @@ fn sound_rows_tint_the_full_surface_and_keep_metadata_and_selection_visible() {
             }),
             "Sound rows must not carry a category dot."
         );
-        let metadata = output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text)
-                    if text.galley.job.text.contains(&sample.group_name)
-                        && text.galley.job.text.contains("1 bar") =>
-                {
-                    Some((shape, text))
-                }
-                _ => None,
+        let metadata = screen(&output)
+            .texts()
+            .find(|text| {
+                text.label().contains(&sample.group_name) && text.label().contains("1 bar")
             })
             .expect("The category and bar count must remain visible.");
-        let metadata_bounds = Rect::from_min_size(metadata.1.pos, metadata.1.galley.size());
-        assert!(tile.contains_rect(metadata_bounds));
-        assert!(metadata.0.clip_rect.contains_rect(metadata_bounds));
+        assert!(tile.contains_rect(metadata.rect()));
+        assert!(metadata.whole());
         if selected {
             let selection_index = output
                 .shapes
@@ -329,15 +305,9 @@ fn full_catalog_frame_paints_only_visible_sample_rows() {
     .unwrap();
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    let painted_samples = output
-        .shapes
-        .iter()
-        .filter(|shape| {
-            matches!(
-                &shape.shape,
-                egui::Shape::Text(text) if text.galley.job.text.starts_with("Corpus")
-            )
-        })
+    let painted_samples = screen(&output)
+        .texts()
+        .filter(|text| text.label().starts_with("Corpus"))
         .count();
     assert_eq!(app.palette_indices().len(), 31_620);
     assert!(

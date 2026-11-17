@@ -19,8 +19,8 @@ pub use timeline::{
     Clip, Fade, FadeCurve, Fades, MAX_PITCH_CENTS, MAX_SECTION_NAME, Section, sections_error,
 };
 pub use timing::{nearest_supported_bpm, playback_bpm};
-pub use track::Track;
 pub(crate) use track::optional_bool;
+pub use track::{Silence, Track, TrackMix};
 
 pub const PROJECT_SCHEMA_VERSION: u32 = 4;
 pub const TRACK_COUNT: usize = 64;

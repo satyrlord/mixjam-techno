@@ -6,8 +6,8 @@ pub use crate::{
     engine::{
         Clip, Fade, FadeCurve, Fades, MAX_MIXER_GAIN_DB, MAX_PITCH_CENTS, MAX_SECTION_NAME,
         MAX_TICKS, MissingReference, MissingSample, Project, SUPPORTED_BPMS, SampleConflict,
-        Section, TICKS_PER_BAR, TRACK_COUNT, TRACK_WIDTH, Track, amplitude_to_db, db_to_amplitude,
-        playback_bpm,
+        Section, Silence, TICKS_PER_BAR, TRACK_COUNT, TRACK_WIDTH, Track, TrackMix,
+        amplitude_to_db, db_to_amplitude, playback_bpm,
     },
     library::{MAX_LIBRARY_FOLDERS, Sample},
     master::{

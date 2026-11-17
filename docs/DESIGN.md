@@ -284,7 +284,7 @@ The implementation is native Windows Rust with eframe/egui:
   status bar, score, clips, and the boards of the lower panel.
 - `src/ui/theme.rs` holds the theme roles.
 - `src/ui/mixer/` paints the Mixer.
-- `sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view.rs`, and
+- `sounds.rs`, `inspector.rs`, `overview.rs`, `mix_view/`, and
   `commands.rs` hold the side panels, the song overview, the Mix view, and the
   command list. `room.rs` decides which panels fit.
 - `src/ui/dialog.rs` owns every floating shell and its lifecycle.

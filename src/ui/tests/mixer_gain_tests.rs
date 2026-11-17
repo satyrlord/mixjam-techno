@@ -34,14 +34,9 @@ fn mixer_db_gain_labels_do_not_change_saved_amplitude_precision() {
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     // The edit text has one decimal, like the label (0.3333 is -9.54 dB).
     assert!(
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .any(|(_, node)| node.value() == Some("-9.5")),
+        screen(&output)
+            .nodes()
+            .any(|node| node.value() == Some("-9.5")),
         "The focused gain value reads -9.5."
     );
     focus_control(&ctx, &mut app, &output, "Master gain value");

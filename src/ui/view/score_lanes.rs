@@ -218,11 +218,12 @@ impl MixJamApp {
     ) {
         let bar_width = frame.bar_width;
         let row_height = frame.row_height;
-        // Dim the lanes that Mute or another track's solo silences.
+        // Dim the lanes that the mix cannot hear: muted, without an output, or
+        // silenced by another track's solo.
         let project = self.session.project();
         let any_solo = project.any_solo();
         for (row, &track) in frame.tracks.iter().enumerate().take(frame.occupied_count) {
-            if !project.tracks[track].audible(any_solo) {
+            if !project.tracks[track].sounds(any_solo) {
                 painter.rect_filled(
                     Rect::from_min_size(
                         Pos2::new(rect.left(), rect.top() + row as f32 * row_height),

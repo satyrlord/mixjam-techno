@@ -1,11 +1,7 @@
 //! The lower panel and its boards: the top row, the toolbars, and the Mixer,
-//! Mastering, FX returns, and Step synth boards, with the Mix view's block of
-//! Master and return rows below the lanes.
+//! Mastering, FX returns, and Step synth boards.
 use super::*;
-use mixjam_techno::application::{
-    fx::{BUSES, FxBuses},
-    options::WorkspaceLayout,
-};
+use mixjam_techno::application::{fx::FxBuses, options::WorkspaceLayout};
 
 /// The lower panel's margins. The bottom margin is smaller than the top one
 /// because the boards end in their own scroll bar or inset.
@@ -106,43 +102,6 @@ impl StepSynthAudition {
 }
 
 impl MixJamApp {
-    /// Show the score's Mix view or its Arrange view. The Mix view and the
-    /// Mixer board never show at once, so the lower panel leaves Mixer for
-    /// Mastering. The Mix view is its own mode: it folds the lower panel so
-    /// its rows take the whole score, and leaving it opens the panel again
-    /// unless the panel was opened or folded in between.
-    pub(in super::super) fn set_mix_view(&mut self, on: bool) {
-        if on && self.boards.module == BottomModule::Mixer {
-            self.boards.module = BottomModule::Mastering;
-        }
-        if on == self.mix.shown {
-            return;
-        }
-        self.mix.shown = on;
-        if on && !std::mem::replace(&mut self.mix.hinted, true) {
-            self.message(mix_view::FIRST_OPEN_HINT);
-        }
-        if on {
-            let open = self.session.layout().boards;
-            if open {
-                self.set_layout(|layout| layout.boards = false);
-            }
-            self.mix.restore_boards = open;
-        } else if std::mem::take(&mut self.mix.restore_boards) && !self.session.layout().boards {
-            self.set_layout(|layout| layout.boards = true);
-        }
-    }
-
-    /// The height the score keeps below its lanes: the Mix view's Master and
-    /// returns rows, which stay in view while the tracks scroll.
-    pub(in super::super) fn score_block_height(&self) -> f32 {
-        if self.mix.shown {
-            mix_view::BLOCK_HEIGHT
-        } else {
-            0.0
-        }
-    }
-
     /// The lower panel's least height for the open board in a content area
     /// `available` points high, with the room the score keeps below its lanes.
     pub(in super::super) fn board_minimum(&self, module: BottomModule, available: f32) -> f32 {
@@ -595,11 +554,11 @@ impl MixJamApp {
     /// The Mixer's toolbar: Export tracks, which writes each track and FX
     /// return to its own WAV file for mixing elsewhere.
     fn mixer_toolbar(&mut self, ui: &mut egui::Ui) {
-        self.export_tracks_button(ui, 13.0);
+        self.export_tracks_button(ui, theme::type_size::BODY);
     }
 
     /// Export tracks…, in the Mixer's toolbar and the Mix view's Master row.
-    fn export_tracks_button(&mut self, ui: &mut egui::Ui, size: f32) {
+    pub(in super::super) fn export_tracks_button(&mut self, ui: &mut egui::Ui, size: f32) {
         let response = ui.add_enabled(
             !self.session.is_exporting(),
             egui::Button::new(egui::RichText::new("Export tracks…").size(size)),
@@ -653,19 +612,14 @@ impl MixJamApp {
         // track in a frame, stays one undo step through the whole mixer.
         let command = match changes.tracks.len() {
             0 if !changes.master => None,
-            1 if !changes.master => {
-                changes
-                    .tracks
-                    .pop()
-                    .map(|(index, track)| EditCommand::SetTrack {
-                        index,
-                        track: Box::new(track),
-                    })
-            }
+            1 if !changes.master => changes
+                .tracks
+                .pop()
+                .map(|(index, mix)| EditCommand::SetTrackMix { index, mix }),
             _ => {
                 let mut tracks = self.session.project().tracks.clone();
-                for (index, track) in changes.tracks.drain(..) {
-                    tracks[index] = track;
+                for (index, mix) in changes.tracks.drain(..) {
+                    tracks[index].set_mix(mix);
                 }
                 Some(EditCommand::SetMixer {
                     tracks,
@@ -797,102 +751,6 @@ impl MixJamApp {
             let result = self.session.edit(EditCommand::SetMaster(chain));
             self.apply(result);
         }
-    }
-
-    /// The Mix view's parts outside the lanes: the column captions in the
-    /// ruler strip, the Master and returns rows below the lanes, the "No
-    /// tracks" note, the columns' scrolling, and the rows' edits.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn mix_block(
-        &mut self,
-        ui: &mut egui::Ui,
-        captions: Rect,
-        block: Rect,
-        (offset, empty, wheel): (f32, bool, f32),
-        mut changes: mixer::Changes,
-    ) {
-        let column = captions.width();
-        let mut new_offset = mix_view::captions(ui, captions, offset) - wheel;
-        let mut master = self.session.project().master_gain;
-        let mut buses = self.session.project().fx;
-        let mut board = self.session.project().master;
-        let automated: [bool; BUSES] =
-            std::array::from_fn(|bus| !self.session.project().return_automation[bus].is_empty());
-        let master_rect = Rect::from_min_size(block.min, Vec2::new(column, mix_view::BLOCK_ROW));
-        let returns_rect = master_rect.translate(Vec2::new(0.0, mix_view::BLOCK_ROW + 2.0));
-        let row = mix_view::master_row(ui, master_rect, offset, &mut master, &mut board.bypass);
-        changes.master |= row.changed;
-        changes.bypass = row.bypass;
-        let mut export = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(row.export)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        );
-        export.set_clip_rect(
-            Rect::from_min_max(
-                Pos2::new(master_rect.left() + mix_view::PINNED, master_rect.top()),
-                master_rect.max,
-            )
-            .intersect(ui.clip_rect()),
-        );
-        export.spacing_mut().interact_size.y = row.export.height();
-        self.export_tracks_button(&mut export, 12.0);
-        let on_board = self.board_shown(BottomModule::FxReturns);
-        let (fx, open) =
-            mix_view::returns_row(ui, returns_rect, offset, &mut buses, automated, on_board);
-        mix_view::edge_fade(ui, master_rect, master_rect, offset, false);
-        mix_view::edge_fade(ui, returns_rect, returns_rect, offset, true);
-        changes.fx = fx;
-        changes.open = open;
-        if empty {
-            let mut note = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(
-                captions.left_bottom() + Vec2::new(mix_view::PINNED + 4.0, 34.0),
-                Vec2::new((column - mix_view::PINNED - 8.0).max(80.0), 48.0),
-            )));
-            note.label(heading("No tracks", 15.0));
-            note.label("Place a sound in the arrangement.");
-        }
-        // Shift and the wheel over the rows scroll the columns, after any
-        // control under the pointer has taken the wheel.
-        let rows = Rect::from_min_max(
-            Pos2::new(captions.left(), captions.top()),
-            Pos2::new(captions.right(), block.bottom()),
-        );
-        if ui.rect_contains_pointer(rows) {
-            let delta = ui.input(|input| input.smooth_scroll_delta.x);
-            if delta != 0.0 {
-                new_offset -= delta;
-                ui.input_mut(|input| input.smooth_scroll_delta.x = 0.0);
-            }
-        }
-        // A control reached with the keyboard scrolls into view.
-        let focused = ui.memory(|memory| memory.focused());
-        if focused != self.mix.revealed {
-            self.mix.revealed = focused;
-            let visible = captions.left() + mix_view::PINNED..=captions.right();
-            if let Some(response) = focused.and_then(|id| ui.ctx().read_response(id))
-                && response.interact_rect != response.rect
-                && response.rect.width() < 200.0
-                && (rows.top()..=rows.bottom()).contains(&response.rect.center().y)
-            {
-                let content = response.rect.left() - captions.left() + offset;
-                if content >= mix_view::PINNED - 0.5
-                    && content + response.rect.width() <= mix_view::CONTENT_WIDTH + 0.5
-                {
-                    if response.rect.left() < *visible.start() {
-                        new_offset -= *visible.start() - response.rect.left() + 4.0;
-                    } else if response.rect.right() > *visible.end() {
-                        new_offset += response.rect.right() - *visible.end() + 4.0;
-                    }
-                }
-            }
-        }
-        let new_offset = new_offset.clamp(0.0, mix_view::max_offset(column));
-        if new_offset != self.mix.scroll {
-            self.mix.scroll = new_offset;
-            ui.ctx().request_repaint();
-        }
-        self.apply_mixer_changes(ui, changes, master, buses, board);
     }
 }
 

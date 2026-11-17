@@ -87,32 +87,26 @@ fn step_synth_board_rect(output: &egui::FullOutput) -> Rect {
 
 /// The rail's Step synth button, which opens and folds the board.
 fn step_synth_rail_button(output: &egui::FullOutput) -> egui::accesskit::NodeId {
-    output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes
-        .iter()
-        .find(|(_, node)| {
-            node.role() == egui::accesskit::Role::Button && node.label() == Some("Step synth")
+    screen(output)
+        .nodes()
+        .find(|node| {
+            node.role() == egui::accesskit::Role::Button
+                && node.node().label() == Some("Step synth")
         })
-        .map(|(id, _)| *id)
+        .map(|node| node.id())
         .expect("The rail must have Step synth.")
 }
 
 fn step_synth_text_mesh_bounds(output: &egui::FullOutput, label: &str) -> Rect {
     // Glyphs that the board clips, whether or not they are scrolled into view.
     let window = step_synth_board_rect(output);
-    output
-        .shapes
-        .iter()
-        .filter_map(|clipped| match &clipped.shape {
-            egui::Shape::Text(shape) if shape.galley.job.text == label => {
-                let bounds = shape.galley.mesh_bounds.translate(shape.pos.to_vec2());
-                window.contains_rect(clipped.clip_rect).then_some(bounds)
-            }
-            _ => None,
+    screen(output)
+        .texts()
+        .filter(|text| text.label() == label)
+        .filter_map(|text| {
+            let shape = text.shape();
+            let bounds = shape.galley.mesh_bounds.translate(shape.pos.to_vec2());
+            window.contains_rect(text.clip()).then_some(bounds)
         })
         .reduce(|bounds, next| bounds.union(next))
         .unwrap_or_else(|| panic!("Missing Step synth glyphs: {label}"))

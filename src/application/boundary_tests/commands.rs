@@ -36,6 +36,10 @@ fn invalid_typed_commands_preserve_project_history_and_dirty_state() {
             index: TRACK_COUNT,
             track: Box::default(),
         },
+        EditCommand::SetTrackMix {
+            index: TRACK_COUNT,
+            mix: Track::default().mix(),
+        },
         EditCommand::DeleteClips(vec![5]),
     ] {
         assert!(session.edit(command).is_err());
@@ -112,6 +116,71 @@ fn one_track_edits_join_a_drag_and_a_switch_is_its_own_step() {
     assert_eq!(session.project().tracks[3].gain, 0.7);
     assert!(session.history_step(false).unwrap());
     assert_eq!(session.project(), &before);
+}
+#[test]
+fn mix_edits_keep_the_track_processing_and_join_a_drag_like_track_edits() {
+    let mut project = Project::default();
+    project.tracks[3].eq.on = true;
+    project.tracks[3].width = 150.0;
+    let mut session = Session::headless(Arc::new(Library::empty()), project).unwrap();
+    let before = session.project().clone();
+    let with = |session: &Session, change: &dyn Fn(&mut TrackMix)| {
+        let mut mix = session.project().tracks[3].mix();
+        change(&mut mix);
+        EditCommand::SetTrackMix { index: 3, mix }
+    };
+    for gain in [0.9, 0.8, 0.7] {
+        let command = with(&session, &|mix| mix.gain = gain);
+        session.edit(command).unwrap();
+    }
+    let command = with(&session, &|mix| mix.sends[1] = 0.5);
+    session.edit(command).unwrap();
+    let track = &session.project().tracks[3];
+    assert_eq!((track.gain, track.sends[1]), (0.7, 0.5));
+    assert!(track.eq.on);
+    assert_eq!(track.width, 150.0);
+    assert!(track.processing_on());
+    assert_eq!(session.project().tracks[2], before.tracks[2]);
+    let command = with(&session, &|mix| mix.muted = true);
+    session.edit(command).unwrap();
+    assert_eq!(
+        session.project().tracks[3].silence(false),
+        Some(Silence::Muted)
+    );
+    assert!(session.history_step(false).unwrap());
+    assert!(!session.project().tracks[3].muted);
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project().tracks[3].gain, 0.7);
+    assert_eq!(session.project().tracks[3].sends[1], 0.0);
+    assert!(session.history_step(false).unwrap());
+    assert_eq!(session.project(), &before);
+}
+#[test]
+fn a_track_is_silent_for_its_mute_then_its_outputs_then_another_solo() {
+    let mix = Track::default().mix();
+    assert_eq!(mix.silence(false), None);
+    assert_eq!(mix.silence(true), Some(Silence::SoloElsewhere));
+    let no_output = TrackMix {
+        left_enabled: false,
+        right_enabled: false,
+        ..mix
+    };
+    assert_eq!(no_output.silence(true), Some(Silence::NoOutput));
+    let one_output = TrackMix {
+        left_enabled: false,
+        ..mix
+    };
+    assert_eq!(one_output.silence(false), None);
+    let muted = TrackMix {
+        muted: true,
+        solo: true,
+        ..no_output
+    };
+    assert_eq!(muted.silence(true), Some(Silence::Muted));
+    assert!(Silence::Muted.is_own() && Silence::NoOutput.is_own());
+    assert!(!Silence::SoloElsewhere.is_own());
+    let soloed = TrackMix { solo: true, ..mix };
+    assert_eq!(soloed.silence(true), None);
 }
 #[test]
 fn accepted_commands_that_change_nothing_are_not_edits() {

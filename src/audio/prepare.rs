@@ -41,9 +41,7 @@ impl Mix {
         // A ducker works when its own track sounds; its key may be silent.
         let ducking = |index: usize| {
             let track = &project.tracks[index];
-            track.ducker.on
-                && track.audible(any_solo)
-                && (track.left_enabled || track.right_enabled)
+            track.ducker.on && track.sounds(any_solo)
         };
         let mut keys: Vec<TrackChain> = Vec::new();
         let side_keys = project.side_keys();
@@ -68,7 +66,7 @@ impl Mix {
                 .get(&(clip.sample_id, clip.pitch_cents))
                 .ok_or_else(|| format!("Sample {} is missing.", clip.sample_id))?;
             let track = &project.tracks[clip.track];
-            if !track.audible(any_solo) || !track.left_enabled && !track.right_enabled {
+            if !track.sounds(any_solo) {
                 continue;
             }
             let start = (clip.start_tick as f64 * frames_per_tick).round() as u64;

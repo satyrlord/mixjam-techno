@@ -33,7 +33,7 @@ impl MixJamApp {
                 .rect_filled(rect.shrink(1.0), 4.0, roles().panel);
         }
         let project = self.session.project();
-        let silenced = !project.tracks[index].audible(project.any_solo());
+        let silenced = !project.tracks[index].sounds(project.any_solo());
         self.lane_number(ui, frame, rect, index, silenced);
         if frame.mix {
             let (summary, detail) = headers
@@ -46,7 +46,7 @@ impl MixJamApp {
                 .and_then(|id| self.session.library().sample_by_id(id))
                 .map(|sample| group_color(&sample.group_name));
             let facts = mix_view::RowFacts::of(track, frame.any_solo, category);
-            let before = mix_view::RowMix::of(track);
+            let before = track.mix();
             let mut mix = before;
             let outcome = mix_view::track_row(
                 ui,
@@ -58,10 +58,8 @@ impl MixJamApp {
                 &mut mix,
             );
             mix_view::edge_fade(ui, rect, rect.shrink(1.0), frame.mix_offset, false);
-            // The track is copied only when its row changed it.
             if outcome.changed && mix != before {
-                let track = mix.applied(&self.session.project().tracks[index]);
-                headers.mix.tracks.push((index, track));
+                headers.mix.tracks.push((index, mix));
             }
             if outcome.open_eq {
                 headers.mix.eq = Some(index);

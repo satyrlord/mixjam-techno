@@ -252,17 +252,7 @@ fn sparse_tracks_keep_model_ids_for_drag_copy_selection_and_mixer() {
             egui::CentralPanel::default().show(ctx, |ui| app.mixer(ui));
         },
     );
-    let labels: BTreeSet<_> = output
-        .shapes
-        .iter()
-        .filter_map(|shape| {
-            if let egui::Shape::Text(text) = &shape.shape {
-                Some(text.galley.job.text.as_str())
-            } else {
-                None
-            }
-        })
-        .collect();
+    let labels: BTreeSet<_> = screen(&output).texts().map(|text| text.label()).collect();
     assert!(labels.contains("Track 1") && labels.contains("Track 64"));
     assert!(!labels.contains("Track 2") && !labels.contains("Track 32"));
     frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -341,19 +331,7 @@ fn empty_project_record_chooser_can_create_track_64_without_empty_rows() {
     menu(mouse(rect.center(), true));
     menu(mouse(rect.center(), false));
     let (output, _) = menu(vec![]);
-    let first = output
-        .shapes
-        .iter()
-        .find_map(|shape| {
-            if let egui::Shape::Text(text) = &shape.shape
-                && text.galley.job.text == "New track 1"
-            {
-                Some(Rect::from_min_size(text.pos, text.galley.size()).center())
-            } else {
-                None
-            }
-        })
-        .unwrap();
+    let first = screen(&output).find("New track 1").unwrap().rect().center();
     menu(vec![
         egui::Event::PointerMoved(first),
         egui::Event::MouseWheel {
@@ -366,18 +344,11 @@ fn empty_project_record_chooser_can_create_track_64_without_empty_rows() {
         menu(vec![]);
     }
     let (output, _) = menu(vec![]);
-    let last = output
-        .shapes
-        .iter()
-        .find_map(|shape| {
-            if let egui::Shape::Text(text) = &shape.shape
-                && text.galley.job.text == "New track 64"
-            {
-                let pos = Rect::from_min_size(text.pos, text.galley.size()).center();
-                shape.clip_rect.contains(pos).then_some(pos)
-            } else {
-                None
-            }
+    let last = screen(&output)
+        .texts()
+        .find_map(|text| {
+            let pos = text.rect().center();
+            (text.label() == "New track 64" && text.clip().contains(pos)).then_some(pos)
         })
         .expect("The recording chooser must reach unused track 64.");
     menu(vec![egui::Event::PointerMoved(last)]);
@@ -459,12 +430,7 @@ fn a_group_drag_onto_a_track_without_a_row_names_it_and_cancels() {
         );
         frame(ctx, app, vec![], egui::Modifiers::NONE)
     };
-    let shows = |output: &egui::FullOutput, label: &str| {
-        output.shapes.iter().any(|shape| match &shape.shape {
-            egui::Shape::Text(text) => text.galley.job.text == label,
-            _ => false,
-        })
-    };
+    let shows = |output: &egui::FullOutput, label: &str| screen(output).shows(label);
     let first = grip(&app, 0);
     pointer(&ctx, &mut app, first, true, egui::Modifiers::NONE);
     // One row down, the second clip lands on the Add row: both have ghosts.

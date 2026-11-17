@@ -478,18 +478,11 @@ fn clips_paint_their_waveform_below_the_name_at_every_lane_height() {
             let wave = waves[0];
             // One bar of sound fills the one-bar clip.
             assert!(wave.width() > clip.width() - 6.0, "{wave:?} in {clip:?}");
-            let name = output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text)
-                        if text.galley.job.text == "good grasp 2" && clip.contains(text.pos) =>
-                    {
-                        Some(text.galley.rect.translate(text.pos.to_vec2()))
-                    }
-                    _ => None,
-                })
-                .unwrap();
+            let name = screen(&output)
+                .texts()
+                .find(|text| text.label() == "good grasp 2" && clip.contains(text.rect().min))
+                .unwrap()
+                .bounds();
             if lane_height != LaneHeight::Px20 {
                 assert!(
                     wave.top() >= name.bottom() - 0.5,

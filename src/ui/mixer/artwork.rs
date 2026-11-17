@@ -42,14 +42,26 @@ impl Artwork {
     }
 
     pub(super) fn tile(&self, ui: &egui::Ui, index: usize, rect: Rect) {
-        let ppp = ui.ctx().pixels_per_point();
+        self.tile_on(ui.painter(), index, rect);
+    }
+
+    /// Tiles `rect` with texture `index`, from its pixel-aligned top left.
+    /// Tiles outside the painter's clip are skipped, so a thin slice of a
+    /// wide row paints only the tiles under it.
+    fn tile_on(&self, painter: &egui::Painter, index: usize, rect: Rect) {
+        let ppp = painter.ctx().pixels_per_point();
         let size = self.textures[index].size_vec2() / ppp;
         let min = (rect.min.to_vec2() * ppp).round() / ppp;
-        let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
-        let mut y = min.y;
-        while y < rect.bottom() {
-            let mut x = min.x;
-            while x < rect.right() {
+        let painter = painter.with_clip_rect(painter.clip_rect().intersect(rect));
+        let clip = painter.clip_rect();
+        // The first tile row and column that reach the clip.
+        let first = |start: f32, edge: f32, step: f32| {
+            start + ((edge - start) / step).floor().max(0.0) * step
+        };
+        let mut y = first(min.y, clip.top(), size.y);
+        while y < rect.bottom().min(clip.bottom()) {
+            let mut x = first(min.x, clip.left(), size.x);
+            while x < rect.right().min(clip.right()) {
                 painter.image(
                     self.textures[index].id(),
                     Rect::from_min_size(Pos2::new(x, y), size),
@@ -78,14 +90,20 @@ impl Artwork {
 /// Paints a Mix view row in the strips' material: the ivory, or for a return
 /// the graphite, tiles in Vintage, and the theme's strip colors elsewhere.
 pub(crate) fn row_surface(ui: &egui::Ui, rect: Rect, is_return: bool) {
+    row_surface_on(ui.painter(), rect, is_return);
+}
+
+/// `row_surface` with `painter`, for a part of a row painted on its own,
+/// such as a faded edge.
+pub(crate) fn row_surface_on(painter: &egui::Painter, rect: Rect, is_return: bool) {
     let art = (roles().material == theme::Material::Metal)
-        .then(|| Artwork::load(ui.ctx()).ok())
+        .then(|| Artwork::load(painter.ctx()).ok())
         .flatten();
     if let Some(art) = art {
-        art.tile(ui, usize::from(is_return), rect);
+        art.tile_on(painter, usize::from(is_return), rect);
     } else {
         theme::surface(
-            ui.painter(),
+            painter,
             rect,
             roles().corner(3.0),
             if is_return {
@@ -95,7 +113,7 @@ pub(crate) fn row_surface(ui: &egui::Ui, rect: Rect, is_return: bool) {
             },
         );
     }
-    ui.painter().rect_stroke(
+    painter.rect_stroke(
         rect,
         3.0,
         Stroke::new(1.0_f32, roles().strip_edge),

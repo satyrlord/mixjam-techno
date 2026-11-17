@@ -1,6 +1,7 @@
 //! UI behavior tests that drive the window through its accessible controls, grouped by
-//! the part of the window they exercise. Shared drivers live in `helpers`, and fixtures
-//! and assertions that several groups use live in `scenarios`.
+//! the part of the window they exercise. Shared drivers live in `helpers`, queries over
+//! a painted frame live in `screen`, and fixtures and assertions that several groups use
+//! live in `scenarios`.
 
 use super::*;
 use crate::{
@@ -10,8 +11,10 @@ use crate::{
 
 mod helpers;
 mod scenarios;
+mod screen;
 use helpers::*;
 use scenarios::*;
+use screen::*;
 
 mod agent_tests;
 mod arrangement_drag_tests;
@@ -31,6 +34,7 @@ mod layout_tests;
 mod libraries_tests;
 mod mastering_board_tests;
 mod mastering_tests;
+mod mix_view_row_tests;
 mod mix_view_tests;
 mod mixer_gain_tests;
 mod mixer_tests;

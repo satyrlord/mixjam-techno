@@ -68,15 +68,14 @@ fn step_synth_loop_source_label_fits_its_clip_at_supported_sizes() {
             no_animation(&ctx);
             app.selection.sample = Some(1);
             let output = settle_at(&ctx, &mut app, 4, size);
-            let label = output
-                .shapes
-                .iter()
-                .find_map(|clipped| match &clipped.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == "Loop source" => {
-                        let bounds = text.galley.mesh_bounds.translate(text.pos.to_vec2());
-                        Some((bounds, clipped.clip_rect))
-                    }
-                    _ => None,
+            let label = screen(&output)
+                .find("Loop source")
+                .map(|text| {
+                    let shape = text.shape();
+                    (
+                        shape.galley.mesh_bounds.translate(shape.pos.to_vec2()),
+                        text.clip(),
+                    )
                 })
                 .expect("The board must paint its Loop source label.");
             assert!(

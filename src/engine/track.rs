@@ -29,6 +29,57 @@ pub struct Track {
     /// Lowers the track while its key track sounds, after the level.
     pub ducker: crate::ducker::Ducker,
 }
+
+/// The part of a track that a mixer row edits: level, polarity, pan, the
+/// switches, and the sends. It is small and `Copy`, so a view can edit it
+/// each frame without copying the track's automation and processing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrackMix {
+    pub gain: f32,
+    pub pan: f32,
+    pub polarity_inverted: bool,
+    pub muted: bool,
+    pub solo: bool,
+    pub left_enabled: bool,
+    pub right_enabled: bool,
+    pub sends: [f32; crate::fx::BUSES],
+}
+
+impl TrackMix {
+    /// Why the mix cannot hear a track with these settings, if it cannot:
+    /// its Mute, then its outputs, then another track's solo. `any_solo` is
+    /// whether any track of the song is soloed.
+    pub fn silence(&self, any_solo: bool) -> Option<Silence> {
+        if self.muted {
+            Some(Silence::Muted)
+        } else if !self.left_enabled && !self.right_enabled {
+            Some(Silence::NoOutput)
+        } else if any_solo && !self.solo {
+            Some(Silence::SoloElsewhere)
+        } else {
+            None
+        }
+    }
+}
+
+/// Why the mix cannot hear a track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Silence {
+    Muted,
+    /// Both the left and the right output are off.
+    NoOutput,
+    /// Another track is soloed.
+    SoloElsewhere,
+}
+
+impl Silence {
+    /// Whether the cause is a setting of the track itself, not of another
+    /// track.
+    pub fn is_own(self) -> bool {
+        !matches!(self, Self::SoloElsewhere)
+    }
+}
+
 impl Default for Track {
     fn default() -> Self {
         Self {
@@ -63,6 +114,65 @@ impl Track {
     /// only soloed tracks play; Mute wins over Solo, as in the original.
     pub fn audible(&self, any_solo: bool) -> bool {
         !self.muted && (!any_solo || self.solo)
+    }
+
+    /// Why the mix cannot hear this track, if it cannot. See
+    /// [`TrackMix::silence`].
+    pub fn silence(&self, any_solo: bool) -> Option<Silence> {
+        self.mix().silence(any_solo)
+    }
+
+    /// Whether the mix hears this track: it is audible and has an output.
+    /// The render leaves out a track that does not sound, sends included.
+    pub fn sounds(&self, any_solo: bool) -> bool {
+        self.silence(any_solo).is_none()
+    }
+
+    /// Whether the channel EQ, drive, compressor, or ducker is on, or the
+    /// width is not 100%: whether the track's channel processing differs
+    /// from a plain track.
+    pub fn processing_on(&self) -> bool {
+        self.eq.on
+            || self.drive.on
+            || self.compressor.on
+            || self.width != TRACK_WIDTH.default
+            || self.ducker.on
+    }
+
+    /// The settings that a mixer row edits.
+    pub fn mix(&self) -> TrackMix {
+        TrackMix {
+            gain: self.gain,
+            pan: self.pan,
+            polarity_inverted: self.polarity_inverted,
+            muted: self.muted,
+            solo: self.solo,
+            left_enabled: self.left_enabled,
+            right_enabled: self.right_enabled,
+            sends: self.sends,
+        }
+    }
+
+    /// Replace the settings that a mixer row edits, and keep the rest.
+    pub fn set_mix(&mut self, mix: TrackMix) {
+        let TrackMix {
+            gain,
+            pan,
+            polarity_inverted,
+            muted,
+            solo,
+            left_enabled,
+            right_enabled,
+            sends,
+        } = mix;
+        self.gain = gain;
+        self.pan = pan;
+        self.polarity_inverted = polarity_inverted;
+        self.muted = muted;
+        self.solo = solo;
+        self.left_enabled = left_enabled;
+        self.right_enabled = right_enabled;
+        self.sends = sends;
     }
 
     /// Preserve the effective amplitude of an older signed gain, including -0.0.

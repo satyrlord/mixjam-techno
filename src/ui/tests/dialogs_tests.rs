@@ -379,12 +379,10 @@ fn hardware_utility_short_and_tall_dialogs_fit_and_keep_content_reachable_in_eve
                 "The first instruction must fit."
             );
             let visible = |output: &egui::FullOutput| {
-                output.shapes.iter().any(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == "Last action" => {
-                        let bounds = Rect::from_min_size(text.pos, text.galley.size());
-                        viewport.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds)
-                    }
-                    _ => false,
+                screen(output).texts().any(|text| {
+                    text.label() == "Last action"
+                        && viewport.contains_rect(text.rect())
+                        && text.whole()
                 })
             };
             for _ in 0..30 {
@@ -479,19 +477,17 @@ fn resized_musical_content_keeps_nested_grid_effects_and_status_inside_the_chass
         );
         for phase in 0..2 {
             let mut found = 0;
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape {
-                    let label = text.galley.job.text.as_str();
-                    if shape.clip_rect.is_positive()
-                        && ["Cutoff", "Filter", "Pitch", "Original BPM", status].contains(&label)
-                    {
-                        found += 1;
-                        assert!(
-                            body.expand(0.1).contains_rect(shape.clip_rect),
-                            "{tool} {label} clip must stay in body after resize and scroll: {:?}/{body:?}",
-                            shape.clip_rect
-                        );
-                    }
+            for text in screen(&output).texts() {
+                let label = text.label();
+                if text.clip().is_positive()
+                    && ["Cutoff", "Filter", "Pitch", "Original BPM", status].contains(&label)
+                {
+                    found += 1;
+                    assert!(
+                        body.expand(0.1).contains_rect(text.clip()),
+                        "{tool} {label} clip must stay in body after resize and scroll: {:?}/{body:?}",
+                        text.clip()
+                    );
                 }
             }
             assert!(found > 0, "Expected musical body paint in phase {phase}.");
@@ -514,17 +510,10 @@ fn resized_musical_content_keeps_nested_grid_effects_and_status_inside_the_chass
                 }
             }
         }
-        let message = output
-            .shapes
-            .iter()
-            .find(|shape| {
-                matches!(
-                    &shape.shape,
-                    egui::Shape::Text(text) if text.galley.job.text == status
-                )
-            })
+        let message = screen(&output)
+            .find(status)
             .expect("Scrolling the shell must reach the status footer.");
-        assert!(body.intersects(message.clip_rect));
+        assert!(body.intersects(message.clip()));
     }
 }
 

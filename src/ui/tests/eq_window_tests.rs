@@ -193,10 +193,11 @@ fn compressor_and_ducker_labels_are_visible_at_the_bottom_of_the_eq_window() {
             "Release",
         ] {
             assert!(
-                output.shapes.iter().any(|shape| {
-                    matches!(&shape.shape, egui::Shape::Text(text)
-                        if text.galley.job.text == label
-                        && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
+                screen(&output).texts().any(|text| {
+                    text.label() == label
+                        && text
+                            .clip()
+                            .contains_rect(text.shape().visual_bounding_rect())
                 }),
                 "{label} is clipped at {size:?}"
             );
@@ -396,14 +397,10 @@ fn the_strip_eq_button_names_channel_processing_not_the_eq_alone() {
     for _ in 0..4 {
         let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
         tooltip = tooltip.or_else(|| {
-            output.shapes.iter().find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text)
-                    if text.galley.job.text.contains("Open the channel EQ window") =>
-                {
-                    Some(text.galley.job.text.clone())
-                }
-                _ => None,
-            })
+            screen(&output)
+                .texts()
+                .find(|text| text.label().contains("Open the channel EQ window"))
+                .map(|text| text.label().to_owned())
         });
     }
     let tooltip = tooltip.expect("The EQ button must explain itself on hover.");

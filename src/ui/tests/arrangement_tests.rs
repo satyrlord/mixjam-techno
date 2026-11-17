@@ -191,21 +191,16 @@ fn lane_heights_keep_reversed_clip_names_clear_of_the_marker() {
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let clip = app.clip_rect(&app.session.project().clips[0], app.score.rect.unwrap());
             let text = |label: &str| {
-                output
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Text(text)
-                            if text.galley.job.text == label && clip.contains(text.pos) =>
-                        {
-                            Some(
-                                text.galley
-                                    .mesh_bounds
-                                    .translate(text.pos.to_vec2())
-                                    .intersect(shape.clip_rect),
-                            )
-                        }
-                        _ => None,
+                screen(&output)
+                    .texts()
+                    .find(|text| text.label() == label && clip.contains(text.rect().min))
+                    .map(|text| {
+                        let shape = text.shape();
+                        shape
+                            .galley
+                            .mesh_bounds
+                            .translate(shape.pos.to_vec2())
+                            .intersect(text.clip())
                     })
                     .unwrap_or_else(|| panic!("Missing clip text: {label}"))
             };
@@ -241,19 +236,14 @@ fn lane_heights_keep_the_new_track_drop_hint_visible() {
                 .unwrap();
             frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
             let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-            let hint = output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text)
-                        if text.galley.job.text == "Drop a sound here for a new track" =>
-                    {
-                        Some((
-                            text.galley.mesh_bounds.translate(text.pos.to_vec2()),
-                            shape.clip_rect,
-                        ))
-                    }
-                    _ => None,
+            let hint = screen(&output)
+                .find("Drop a sound here for a new track")
+                .map(|text| {
+                    let shape = text.shape();
+                    (
+                        shape.galley.mesh_bounds.translate(shape.pos.to_vec2()),
+                        text.clip(),
+                    )
                 })
                 .unwrap_or_else(|| panic!("{theme:?} {lane_height:?}: missing drop hint"));
             assert!(

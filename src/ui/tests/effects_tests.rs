@@ -23,14 +23,8 @@ fn effects_disabled_actions_explain_themselves_on_hover() {
         );
         let mut shown = false;
         for _ in 0..4 {
-            shown |= frame(&ctx, &mut app, vec![], egui::Modifiers::NONE)
-                .shapes
-                .iter()
-                .any(|shape| {
-                    matches!(&shape.shape,
-                egui::Shape::Text(text) if text.galley.job.text == "Select an available sound \
-                                                                    to process it.")
-                });
+            shown |= screen(&frame(&ctx, &mut app, vec![], egui::Modifiers::NONE))
+                .shows("Select an available sound to process it.");
         }
         assert!(
             shown,
@@ -140,30 +134,18 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
             let slot = effects_control_rect(&output, &format!("{name} value"));
             // Only the window's own text, painted from its title on: the
             // arrangement's track numbers can lie beneath the slot.
-            let first = output
-                .shapes
-                .iter()
-                .position(|shape| match &shape.shape {
-                    egui::Shape::Text(text) => text.galley.job.text == "EFFECT STUDIO",
-                    _ => false,
-                })
-                .expect("The window paints its title.");
-            let number = output.shapes[first..]
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text)
-                        if text
-                            .galley
-                            .job
-                            .text
-                            .trim_end_matches(" Hz")
-                            .parse::<f64>()
-                            .is_ok() =>
-                    {
-                        let bounds = text.galley.mesh_bounds.translate(text.pos.to_vec2());
-                        slot.contains(bounds.center()).then_some(bounds)
-                    }
-                    _ => None,
+            assert!(
+                screen(&output).shows("EFFECT STUDIO"),
+                "The window paints its title."
+            );
+            let number = screen(&output)
+                .texts()
+                .skip_while(|text| text.label() != "EFFECT STUDIO")
+                .filter(|text| text.label().trim_end_matches(" Hz").parse::<f64>().is_ok())
+                .filter_map(|text| {
+                    let shape = text.shape();
+                    let bounds = shape.galley.mesh_bounds.translate(shape.pos.to_vec2());
+                    slot.contains(bounds.center()).then_some(bounds)
                 })
                 .reduce(|bounds, next| bounds.union(next))
                 .unwrap_or_else(|| panic!("Missing numeric glyphs for {name}."));
@@ -213,8 +195,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
                 assert!(marks > 0, "{name} must have a native scale to check.");
             }
         }
-        assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
-            egui::Shape::Text(text) if text.galley.job.text == "Help")));
+        assert!(!screen(&output).shows("Help"));
         focus_control(&ctx, &mut app, &output, "Collapse Effect Studio");
         frame(
             &ctx,
@@ -232,14 +213,7 @@ fn effects_compact_skin_fits_the_minimum_window_and_collapses_without_losing_set
         assert_eq!(collapsed.width(), window.width());
         for hidden in ["Source sound", "Cutoff", "Listen", "Effect Studio status"] {
             assert!(
-                !output
-                    .platform_output
-                    .accesskit_update
-                    .as_ref()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.label() == Some(hidden)),
+                screen(&output).find_node(hidden).is_none(),
                 "{hidden} must hide when collapsed."
             );
         }
@@ -618,19 +592,11 @@ fn effects_missing_audio_keeps_processing_disabled_and_details_reachable() {
     // the window's status line.
     let status = effects_control_rect(&output, "Effect Studio status");
     assert!(
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .filter(|(_, node)| node.label() == Some("Import details"))
-            .filter_map(|(_, node)| node.bounds())
-            .any(|bounds| status.contains_rect(Rect::from_min_max(
-                Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-                Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-            )))
+        screen(&output)
+            .nodes()
+            .filter(|node| node.node().label() == Some("Import details"))
+            .filter_map(|node| node.bounds())
+            .any(|bounds| status.contains_rect(bounds))
     );
     assert_full_recovery_caption(&output);
     text_rect(

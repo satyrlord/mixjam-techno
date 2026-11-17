@@ -100,13 +100,13 @@ fn sample_editor_readiness_keeps_actions_visible_and_offers_missing_source_recov
                 "End frame must be greater than Start frame and within the source."
             };
             let copies = |output: &egui::FullOutput| {
-                output
-                    .shapes
-                    .iter()
-                    .filter(|shape| {
-                        matches!(&shape.shape, egui::Shape::Text(text)
-                    if text.galley.job.text == reason
-                        && shape.clip_rect.contains_rect(text.visual_bounding_rect()))
+                screen(output)
+                    .texts()
+                    .filter(|text| {
+                        text.label() == reason
+                            && text
+                                .clip()
+                                .contains_rect(text.shape().visual_bounding_rect())
                     })
                     .count()
             };
@@ -302,18 +302,11 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
         for name in ["Start frame", "End frame", "Pitch value"] {
             let value = accessible_node(&output, name).1.value().unwrap();
             let container = effects_control_rect(&output, name);
-            let glyph = output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text)
-                        if text.galley.job.text == value
-                            && container.contains(text.visual_bounding_rect().center()) =>
-                    {
-                        Some(text.visual_bounding_rect())
-                    }
-                    _ => None,
-                })
+            let glyph = screen(&output)
+                .texts()
+                .map(|text| (text.label(), text.shape().visual_bounding_rect()))
+                .find(|(label, glyph)| *label == value && container.contains(glyph.center()))
+                .map(|(_, glyph)| glyph)
                 .expect("Numeric field must paint its value inside its own container.");
             let offset = (glyph.center() - container.center()).abs();
             assert!(
@@ -380,14 +373,7 @@ fn sample_editor_compact_layout_uses_complete_assets_and_preserves_collapsed_edi
             "Sample editor status",
         ] {
             assert!(
-                !output
-                    .platform_output
-                    .accesskit_update
-                    .as_ref()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.label() == Some(label)),
+                screen(&output).find_node(label).is_none(),
                 "{label} must hide while collapsed."
             );
         }

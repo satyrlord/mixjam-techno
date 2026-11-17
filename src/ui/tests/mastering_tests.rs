@@ -211,14 +211,9 @@ fn mastering_switches_and_knobs_edit_the_pedalboard_with_undo() {
                 .1
                 .is_disabled()
         );
-        let labels: Vec<&str> = output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .filter_map(|(_, node)| node.label())
+        let labels: Vec<&str> = screen(&output)
+            .nodes()
+            .filter_map(|node| node.node().label())
             .collect();
         for absent in ["Move Limiter left", "Move Limiter right", "Drag Limiter"] {
             assert!(!labels.contains(&absent), "{absent} must not exist.");

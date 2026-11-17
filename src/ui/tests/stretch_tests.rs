@@ -232,8 +232,7 @@ fn stretch_header_controls_use_corner_positions_and_a_complete_collapsed_skin() 
             (effects_control_rect(&output, name).center().x - expanded.left() - x).abs() <= 1.0
         );
     }
-    assert!(!output.shapes.iter().any(|shape| matches!(&shape.shape,
-        egui::Shape::Text(text) if text.galley.job.text == "Help")));
+    assert!(!screen(&output).shows("Help"));
     focus_control(&ctx, &mut app, &output, "Collapse Time Stretcher");
     frame(
         &ctx,
@@ -255,14 +254,7 @@ fn stretch_header_controls_use_corner_positions_and_a_complete_collapsed_skin() 
         "Time Stretcher status",
     ] {
         assert!(
-            !output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(|(_, node)| node.label() == Some(hidden)),
+            screen(&output).find_node(hidden).is_none(),
             "{hidden} must hide when collapsed."
         );
     }
@@ -721,13 +713,7 @@ fn stretch_source_search_refreshes_after_same_size_library_scan() {
     std::fs::remove_dir_all(dir).unwrap();
     accessible_node(&output, "b needle");
     assert!(
-        !output
-            .platform_output
-            .accesskit_update
-            .unwrap()
-            .nodes
-            .iter()
-            .any(|(_, node)| node.label() == Some("a other")),
+        screen(&output).find_node("a other").is_none(),
         "The open source search must use the replacement library."
     );
 }
@@ -768,19 +754,11 @@ fn stretch_target_notches_are_even_and_resets_use_140_and_source_tempo() {
             Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
         );
         let caption = format!("{bpm:.0}");
-        let labels: Vec<_> = output
-            .shapes
-            .iter()
-            .filter_map(|shape| {
-                if let egui::Shape::Text(text) = &shape.shape
-                    && text.galley.job.text == caption
-                {
-                    let rect = Rect::from_min_size(text.pos, text.galley.size());
-                    target.contains(rect.center()).then_some(rect)
-                } else {
-                    None
-                }
-            })
+        let labels: Vec<_> = screen(&output)
+            .texts()
+            .filter(|text| text.label() == caption)
+            .map(|text| text.rect())
+            .filter(|rect| target.contains(rect.center()))
             .collect();
         assert_eq!(labels.len(), 1, "Target BPM must have one {bpm} caption");
         assert!(
@@ -892,24 +870,12 @@ fn stretch_action_labels_remain_centered_in_every_playback_state() {
             ),
             ("Save stretched sound", "Save stretched sound"),
         ] {
-            let bounds = accessible_node(&output, accessible_name)
-                .1
-                .bounds()
-                .unwrap();
-            let button = Rect::from_min_max(
-                Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-                Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-            );
+            let button = screen(&output).node(accessible_name).rect();
             // Measure visible glyph meshes, including the one-pixel shadow.
-            let painted = output
-                .shapes
-                .iter()
-                .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == visible_text => {
-                        Some(text.visual_bounding_rect())
-                    }
-                    _ => None,
-                })
+            let painted = screen(&output)
+                .texts()
+                .filter(|text| text.label() == visible_text)
+                .map(|text| text.shape().visual_bounding_rect())
                 .reduce(|bounds, text| bounds.union(text))
                 .unwrap_or_else(|| panic!("Missing action label: {visible_text}"));
             assert!(

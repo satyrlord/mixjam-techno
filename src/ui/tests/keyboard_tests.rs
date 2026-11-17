@@ -397,22 +397,22 @@ fn every_tab_stop_of_every_window_modal_and_menu_has_a_name() {
                 app.album_review.open = true;
                 frame(ctx, app, vec![], egui::Modifiers::NONE);
                 let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
-                let update = output.platform_output.accesskit_update.as_ref().unwrap();
-                let (target, _) = update
-                    .nodes
-                    .iter()
-                    .find(|(_, node)| {
-                        node.label()
+                let target = screen(&output)
+                    .nodes()
+                    .find(|node| {
+                        node.node()
+                            .label()
                             .is_some_and(|label| label.starts_with("Open review: "))
                     })
-                    .expect("a review");
+                    .expect("a review")
+                    .id();
                 frame(
                     ctx,
                     app,
                     vec![egui::Event::AccessKitActionRequest(
                         egui::accesskit::ActionRequest {
                             action: egui::accesskit::Action::Click,
-                            target: *target,
+                            target,
                             data: None,
                         },
                     )],
@@ -702,9 +702,9 @@ fn short_lists_show_whole_and_do_not_scroll() {
             "The {list} list stays in the window: {menu:?}."
         );
         // egui adds the scroll parts only when the rows do not fit.
-        let update = output.platform_output.accesskit_update.as_ref().unwrap();
-        let scrolls = update.nodes.iter().any(|(_, node)| {
-            node.label()
+        let scrolls = screen(&output).nodes().any(|node| {
+            node.node()
+                .label()
                 .is_some_and(|label| label.starts_with("Menu ") && label.contains("scroll"))
         });
         assert!(!scrolls, "The {list} list must show all its rows.");
@@ -1004,16 +1004,10 @@ fn step_grid_is_one_tab_stop_with_arrow_key_navigation() {
         frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     }
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    let nodes = &output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .unwrap()
-        .nodes;
-    let cells = nodes
-        .iter()
-        .filter(|(_, node)| {
-            node.label().is_some_and(|label| {
+    let cells = screen(&output)
+        .nodes()
+        .filter(|node| {
+            node.node().label().is_some_and(|label| {
                 label.starts_with("Step ")
                     && (label.ends_with("semitones") || label.ends_with("semitone"))
             })

@@ -21,40 +21,24 @@ fn mix_view_captions_stay_whole_at_both_scrolled_edges() {
                 },
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        mix_view::captions(ui, strip, offset);
+                        mix_view::block::captions(ui, strip, offset);
                     });
                 },
             );
             if let Some(expected) = expected {
-                text_rect(&output, expected);
+                screen(&output).text(expected);
             }
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape {
-                    let bounds = Rect::from_min_size(text.pos, text.galley.size());
-                    assert!(
-                        shape.clip_rect.contains_rect(bounds),
-                        "Caption {} is clipped at offset {offset}: {bounds:?}, {:?}",
-                        text.galley.job.text,
-                        shape.clip_rect,
-                    );
-                }
+            for text in screen(&output).texts() {
+                assert!(
+                    text.whole(),
+                    "Caption {} is clipped at offset {offset}: {:?}, {:?}",
+                    text.label(),
+                    text.rect(),
+                    text.clip(),
+                );
             }
         }
     });
-}
-
-/// The colour of `label` painted from inside `rows`.
-fn text_color(output: &egui::FullOutput, label: &str, rows: Rect) -> egui::Color32 {
-    output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text == label && rows.contains(text.pos) => {
-                Some(text.galley.job.sections[0].format.color)
-            }
-            _ => None,
-        })
-        .unwrap_or_else(|| panic!("Missing text: {label}"))
 }
 
 #[test]
@@ -88,14 +72,7 @@ fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
             accessible_node(&output, &format!("Record on track {track}"));
         }
         assert!(
-            output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .all(|(_, node)| node.label() != Some("Track 3 gain")),
+            screen(&output).find_node("Track 3 gain").is_none(),
             "An empty lane has no mixer row."
         );
         accessible_label(&output, "good grasp 2");
@@ -124,7 +101,7 @@ fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
                 accessible_node(&output, &name);
             }
         }
-        text_rect(&output, "Return 100%");
+        text_rect(&output, "FX 1 · Return 100%");
         for caption in ["TRACK", "OUT", "LEVEL", "PAN", "FX 1", "FX 4", "EQ"] {
             text_rect(&output, caption);
         }
@@ -139,22 +116,24 @@ fn mix_view_rows_carry_every_mixer_control_under_the_strip_names() {
         };
         let row = left("Track 1 gain", 10.0);
         let master = left("Master gain", 16.0);
-        assert_eq!(
-            text_color(&output, "Stereo output", master),
-            roles().strip_text
-        );
-        assert_eq!(text_color(&output, "good grasp 2", row), roles().strip_text);
+        for (label, area) in [("Stereo output", master), ("good grasp 2", row)] {
+            assert_eq!(
+                screen(&output).within(area).text(label).color(),
+                roles().strip_text,
+                "{theme:?}: {label}"
+            );
+        }
     });
 }
 
 /// Whether `label` is painted in the track rows, above the Master row.
 fn painted(output: &egui::FullOutput, label: &str) -> bool {
-    let rows = effects_control_rect(output, "Track 1 gain").top() - 8.0
-        ..effects_control_rect(output, "Master gain").top() - 8.0;
-    output.shapes.iter().any(|shape| {
-        matches!(&shape.shape, egui::Shape::Text(text)
-            if text.galley.job.text == label && rows.contains(&text.pos.y))
-    })
+    let rows = Rect::from_x_y_ranges(
+        Rect::EVERYTHING.x_range(),
+        effects_control_rect(output, "Track 1 gain").top() - 8.0
+            ..=effects_control_rect(output, "Master gain").top() - 8.0,
+    );
+    screen(output).within(rows).shows(label)
 }
 
 #[test]
@@ -190,6 +169,34 @@ fn mix_view_rows_at_their_defaults_stay_quiet_and_name_what_differs() {
 }
 
 #[test]
+fn mix_view_silent_rows_keep_their_level_in_the_strip_ink() {
+    each_theme(|theme| {
+        let (ctx, mut app, _) = mix_view_fixture(Vec2::new(1440.0, 1000.0));
+        let mut tracks = app.session.project().tracks.clone();
+        tracks[0].muted = true;
+        let master_gain = app.session.project().master_gain;
+        app.session
+            .edit(EditCommand::SetMixer {
+                tracks,
+                master_gain,
+            })
+            .unwrap();
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        let value = effects_control_rect(&output, "Track 1 gain value");
+        let ink = screen(&output)
+            .within(value)
+            .texts()
+            .find(|text| text.label().ends_with("dB"))
+            .unwrap_or_else(|| panic!("{theme:?}: Track 1 has no dB text."))
+            .color();
+        // The outlined value sits on the strip, so it takes the strip's ink,
+        // dark on Vintage's ivory and light on the dark strips.
+        assert_eq!(ink, roles().strip_text, "{theme:?}");
+    });
+}
+
+#[test]
 fn mix_view_names_a_track_by_its_first_sound_and_counts_the_rest() {
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
@@ -216,7 +223,7 @@ fn mix_view_names_a_track_by_its_first_sound_and_counts_the_rest() {
 fn the_first_opening_of_the_mix_view_names_its_shortcuts_once() {
     let (_ctx, mut app) = fixture();
     app.set_mix_view(true);
-    assert_eq!(app.status, mix_view::FIRST_OPEN_HINT);
+    assert_eq!(app.status, mix_view::state::FIRST_OPEN_HINT);
     app.set_mix_view(false);
     app.message("Other");
     app.set_mix_view(true);
@@ -268,28 +275,16 @@ fn mix_view_keeps_sections_after_the_audio_visible_on_the_ruler() {
         }
         let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
         let ruler = app.score.ruler_rect.unwrap();
-        let name = output
-            .shapes
-            .iter()
-            .find_map(|shape| {
-                if let egui::Shape::Text(text) = &shape.shape
-                    && text.galley.job.text == "Later"
-                {
-                    let name = Rect::from_min_size(text.pos, text.galley.size());
-                    assert!(
-                        shape
-                            .clip_rect
-                            .intersect(ruler)
-                            .expand(0.5)
-                            .contains_rect(name),
-                        "The full section name must fit at tick {start_tick}: {name:?}, {ruler:?}"
-                    );
-                    Some(name)
-                } else {
-                    None
-                }
-            })
-            .expect("The last section paints its name.");
+        let later = screen(&output).text("Later");
+        let name = later.rect();
+        assert!(
+            later
+                .clip()
+                .intersect(ruler)
+                .expand(0.5)
+                .contains_rect(name),
+            "The full section name must fit at tick {start_tick}: {name:?}, {ruler:?}"
+        );
         let pos = name.center();
         for pressed in [true, false] {
             frame_at_size(
@@ -331,20 +326,12 @@ fn mix_view_long_song_ruler_numbers_have_room_between_them() {
             }
             let output = frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
             let ruler = app.score.ruler_rect.unwrap();
-            let mut numbers: Vec<Rect> = output
-                .shapes
-                .iter()
-                .filter_map(|shape| {
-                    if let egui::Shape::Text(text) = &shape.shape
-                        && text.galley.job.text.chars().all(|c| c.is_ascii_digit())
-                    {
-                        let rect = Rect::from_min_size(text.pos, text.galley.size());
-                        if rect.intersect(shape.clip_rect).intersects(ruler) {
-                            return Some(rect);
-                        }
-                    }
-                    None
-                })
+            let mut numbers: Vec<Rect> = screen(&output)
+                .texts()
+                .filter(|text| text.label().chars().all(|c| c.is_ascii_digit()))
+                .map(|text| (text.rect(), text.clip()))
+                .filter(|(rect, clip)| rect.intersect(*clip).intersects(ruler))
+                .map(|(rect, _)| rect)
                 .collect();
             numbers.sort_by(|a, b| a.left().total_cmp(&b.left()));
             assert!(numbers.len() >= 2, "The ruler must still show bar numbers.");
@@ -408,20 +395,12 @@ fn mix_view_edits_levels_pan_outputs_and_polarity_with_one_undo_each() {
     // M5: polarity, lit while inverted.
     let output = press(&ctx, &mut app, "Track 1 polarity invert", egui::Key::Space);
     assert!(app.session.project().tracks[0].polarity_inverted);
-    assert_eq!(
-        accessible_node(&output, "Track 1 polarity invert")
-            .1
-            .toggled(),
-        Some(egui::accesskit::Toggled::True)
-    );
+    assert!(screen(&output).node("Track 1 polarity invert").toggled());
     // M6 and M7: the outputs and switches, and the state they leave.
     press(&ctx, &mut app, "Track 2 solo", egui::Key::Space);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     // One solo leaves the other rows dimmed, without a column of its name.
-    assert!(!output.shapes.iter().any(|shape| matches!(
-        &shape.shape,
-        egui::Shape::Text(text) if text.galley.job.text == "Solo elsewhere"
-    )));
+    assert!(!screen(&output).shows("Solo elsewhere"));
     press(&ctx, &mut app, "Track 1 left output", egui::Key::Space);
     let output = press(&ctx, &mut app, "Track 1 right output", egui::Key::Space);
     assert!(!app.session.project().tracks[0].left_enabled);
@@ -511,7 +490,7 @@ fn mix_view_marks_automation_and_opens_the_eq_and_the_returns() {
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     // M4 and M12: the automation marks.
     text_rect(&output, "Pan automated");
-    text_rect(&output, "Return automated");
+    text_rect(&output, "FX 2 · Return automated");
     // M9: an automated send is ringed.
     let knob = effects_control_rect(&output, "Track 1 send FX 1");
     let ringed = |rect: Rect| {
@@ -541,10 +520,7 @@ fn mix_view_marks_automation_and_opens_the_eq_and_the_returns() {
         .unwrap();
     frame(&context, &mut app, vec![], egui::Modifiers::NONE);
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(
-        accessible_node(&output, "Track 1 EQ").1.toggled(),
-        Some(egui::accesskit::Toggled::True)
-    );
+    assert!(screen(&output).node("Track 1 EQ").toggled());
     send(&mut app, &["click", "target=Track 1 EQ"]);
     assert_eq!(app.eq_track, Some(0));
     app.eq_track = None;
@@ -903,10 +879,7 @@ fn mix_view_and_the_mixer_board_never_show_at_once() {
     assert!(app.mix.shown);
     assert_eq!(app.boards.module, BottomModule::Mastering);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(
-        accessible_node(&output, "Mix view").1.toggled(),
-        Some(egui::accesskit::Toggled::True)
-    );
+    assert!(screen(&output).node("Mix view").toggled());
     // The rail's Mixer returns the score to Arrange and shows the board.
     click_named(&ctx, &mut app, "Mixer");
     assert!(

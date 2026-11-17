@@ -66,9 +66,9 @@ pub(crate) fn show(
                                         |ui| {
                                             let (summary, detail) =
                                                 std::mem::take(&mut summaries[index]);
-                                            let mut edited = project.tracks[index].clone();
-                                            let track = &mut edited;
-                                            let eq_on = processing_on(track);
+                                            let track = &project.tracks[index];
+                                            let mut mix = track.mix();
+                                            let mut gain = mix.gain;
                                             let mut open_eq = false;
                                             let changed = strip(
                                                 ui,
@@ -80,27 +80,22 @@ pub(crate) fn show(
                                                     &summary,
                                                     &detail,
                                                 ),
-                                                &mut track.gain,
+                                                &mut gain,
                                                 Some(TrackControls {
                                                     index,
-                                                    inverted: &mut track.polarity_inverted,
-                                                    pan: &mut track.pan,
-                                                    left: &mut track.left_enabled,
-                                                    right: &mut track.right_enabled,
-                                                    muted: &mut track.muted,
-                                                    solo: &mut track.solo,
+                                                    mix: &mut mix,
                                                     automated: std::array::from_fn(|bus| {
                                                         !track.automation.sends[bus].is_empty()
                                                     }),
                                                     pan_automated: !track.automation.pan.is_empty(),
-                                                    sends: &mut track.sends,
                                                     any_solo,
-                                                    eq_on,
+                                                    eq_on: track.processing_on(),
                                                     open_eq: &mut open_eq,
                                                 }),
                                             );
+                                            mix.gain = gain;
                                             if changed {
-                                                result.tracks.push((index, edited));
+                                                result.tracks.push((index, mix));
                                             }
                                             if open_eq {
                                                 result.eq = Some(index);
@@ -158,13 +153,8 @@ pub(crate) fn show(
 
 struct TrackControls<'a> {
     index: usize,
-    inverted: &'a mut bool,
-    pan: &'a mut f32,
-    left: &'a mut bool,
-    right: &'a mut bool,
-    muted: &'a mut bool,
-    solo: &'a mut bool,
-    sends: &'a mut [f32; BUSES],
+    /// The track's mix; the strip edits its gain through its own argument.
+    mix: &'a mut TrackMix,
     /// Which sends an automation lane moves instead of the knob.
     automated: [bool; BUSES],
     /// Whether the pan lane moves the pan instead of the knob.
@@ -267,7 +257,7 @@ fn strip(
             Pos2::new(rect.left() + 79.0 * scale, zero_y),
             Vec2::new(44.0, 16.0) * scale,
         ),
-        scale,
+        Look::Strip(scale),
         name,
     ) {
         changed |= *gain != 1.0;
@@ -275,13 +265,7 @@ fn strip(
     }
     if let Some(TrackControls {
         index,
-        inverted,
-        pan,
-        left,
-        right,
-        muted,
-        solo,
-        sends,
+        mix,
         automated,
         pan_automated,
         any_solo,
@@ -291,12 +275,12 @@ fn strip(
     {
         // The sends to FX 1 to 4, from left to right, in the gap between the
         // rail and the pan.
-        for (bus, send) in sends.iter_mut().enumerate() {
+        for (bus, send) in mix.sends.iter_mut().enumerate() {
             let x = 15.0 + bus as f32 * 26.0;
             changed |= send_knob(
                 ui,
                 Rect::from_center_size(at(x, height / scale - 123.0), Vec2::splat(13.0 * scale)),
-                scale,
+                Look::Strip(scale),
                 &format!("{name} send FX {}", bus + 1),
                 send,
                 automated[bus],
@@ -309,9 +293,9 @@ fn strip(
         changed |= pan_slider(
             ui,
             pan_rect,
-            scale,
+            Look::Strip(scale),
             &format!("Track {}", index + 1),
-            pan,
+            &mut mix.pan,
             pan_automated,
         );
         if center_button(
@@ -320,22 +304,16 @@ fn strip(
                 at(54.0, height / scale - 90.0),
                 Vec2::new(40.0, 14.0) * scale,
             ),
-            scale,
+            Look::Strip(scale),
             name,
         ) {
-            changed |= *pan != 0.0;
-            *pan = 0.0;
+            changed |= mix.pan != 0.0;
+            mix.pan = 0.0;
         }
         text(
             ui,
             at(54.0, height / scale - 72.0),
-            &track_state(
-                *muted,
-                *left || *right,
-                any_solo && !*solo,
-                pan_automated,
-                *pan,
-            ),
+            &track_state(mix.silence(any_solo), pan_automated, mix.pan),
             11.0 * scale,
             roles().strip_text,
         );
@@ -346,20 +324,21 @@ fn strip(
                 at(8.0, height / scale - 56.0),
                 Vec2::new(26.0, 24.0) * scale,
             ),
-            scale,
+            Look::Strip(scale),
             name,
             eq_on,
+            false,
         ) {
             *open_eq = true;
         }
         for (switch, x, on) in [
-            (TrackSwitch::Mute, 40.0, muted),
-            (TrackSwitch::Solo, 72.0, solo),
+            (TrackSwitch::Mute, 40.0, &mut mix.muted),
+            (TrackSwitch::Solo, 72.0, &mut mix.solo),
         ] {
             changed |= switch_button(
                 ui,
                 Rect::from_min_size(at(x, height / scale - 56.0), Vec2::new(28.0, 24.0) * scale),
-                scale,
+                Look::Strip(scale),
                 name,
                 switch,
                 on,
@@ -371,18 +350,18 @@ fn strip(
                 at(8.0, height / scale - 28.0),
                 Vec2::new(26.0, 24.0) * scale,
             ),
-            scale,
+            Look::Strip(scale),
             name,
-            inverted,
+            &mut mix.polarity_inverted,
         );
         for (switch, x, on) in [
-            (TrackSwitch::Left, 40.0, left),
-            (TrackSwitch::Right, 72.0, right),
+            (TrackSwitch::Left, 40.0, &mut mix.left_enabled),
+            (TrackSwitch::Right, 72.0, &mut mix.right_enabled),
         ] {
             changed |= switch_button(
                 ui,
                 Rect::from_min_size(at(x, height / scale - 28.0), Vec2::new(28.0, 24.0) * scale),
-                scale,
+                Look::Strip(scale),
                 name,
                 switch,
                 on,
@@ -453,7 +432,7 @@ fn return_strip(
     send_knob(
         ui,
         Rect::from_center_size(at(54.0, 82.0), Vec2::splat(44.0 * scale)),
-        scale,
+        Look::Strip(scale),
         &format!("{name} return level"),
         &mut level,
         automated,
@@ -472,7 +451,7 @@ fn return_strip(
             Rect::from_min_size(at(14.0, 136.0), Vec2::new(80.0, 22.0) * scale),
             Rect::from_min_size(at(14.0, 164.0), Vec2::new(80.0, 22.0) * scale),
         ],
-        scale,
+        Look::Strip(scale),
         &name,
         bus,
     );
@@ -498,34 +477,14 @@ pub(crate) fn return_state(bus: &FxBus, automated: bool) -> String {
     }
 }
 
-/// Whether a track's channel EQ, drive, compressor, or ducker is on, or its
-/// width is not 100%: what lights its EQ button.
-pub(crate) fn processing_on(track: &Track) -> bool {
-    track.eq.on
-        || track.drive.on
-        || track.compressor.on
-        || track.width != TRACK_WIDTH.default
-        || track.ducker.on
-}
-
-/// Why a track is silent, with causes on the track first, else its pan:
-/// Muted, No output, Solo elsewhere, Pan automated, or the pan position.
-pub(crate) fn track_state(
-    muted: bool,
-    any_output: bool,
-    solo_elsewhere: bool,
-    pan_automated: bool,
-    pan: f32,
-) -> String {
-    if muted {
-        "Muted".into()
-    } else if !any_output {
-        "No output".into()
-    } else if solo_elsewhere {
-        "Solo elsewhere".into()
-    } else if pan_automated {
-        "Pan automated".into()
-    } else {
-        pan_description(pan)
+/// A track's state: why it is silent, else its pan: Muted, No output,
+/// Solo elsewhere, Pan automated, or the pan position.
+pub(crate) fn track_state(silence: Option<Silence>, pan_automated: bool, pan: f32) -> String {
+    match silence {
+        Some(Silence::Muted) => "Muted".into(),
+        Some(Silence::NoOutput) => "No output".into(),
+        Some(Silence::SoloElsewhere) => "Solo elsewhere".into(),
+        None if pan_automated => "Pan automated".into(),
+        None => pan_description(pan),
     }
 }

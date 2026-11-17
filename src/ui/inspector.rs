@@ -5,8 +5,8 @@
 //! names ("Inspector track ...", "Inspector clip ..."), so they never share a
 //! name with the Mixer, the Mix view, or the clip menu shown beside them.
 use super::mixer::{
-    center_button, eq_button, gain_value, pan_slider, polarity_button, row_surface, send_knob,
-    switch_button, unity_button,
+    Look, center_button, eq_button, gain_value, pan_slider, polarity_button, row_surface,
+    send_knob, switch_button, unity_button,
 };
 use super::room::Panel;
 use super::sounds::{fold_button, panel_strip};
@@ -331,18 +331,23 @@ impl MixJamApp {
             TRACK,
             &mut track.gain,
         );
-        if unity_button(ui, row(8.0, 204.0, width - 6.0, 18.0), 1.0, TRACK) {
+        if unity_button(
+            ui,
+            row(8.0, 204.0, width - 6.0, 18.0),
+            Look::Strip(1.0),
+            TRACK,
+        ) {
             track.gain = 1.0;
         }
         pan_slider(
             ui,
             row(36.0, 8.0, 124.0, 22.0),
-            1.0,
+            Look::Strip(1.0),
             TRACK,
             &mut track.pan,
             !track.automation.pan.is_empty(),
         );
-        if center_button(ui, row(38.0, 130.0, 182.0, 18.0), 1.0, TRACK) {
+        if center_button(ui, row(38.0, 130.0, 182.0, 18.0), Look::Strip(1.0), TRACK) {
             track.pan = 0.0;
         }
         ui.painter().text(
@@ -374,12 +379,12 @@ impl MixJamApp {
                 TrackSwitch::Left => &mut track.left_enabled,
                 TrackSwitch::Right => &mut track.right_enabled,
             };
-            switched |= switch_button(ui, cell(x, 24.0), 1.0, TRACK, switch, on);
+            switched |= switch_button(ui, cell(x, 24.0), Look::Strip(1.0), TRACK, switch, on);
         }
         switched |= polarity_button(
             ui,
             cell(126.0, 24.0),
-            1.0,
+            Look::Strip(1.0),
             TRACK,
             &mut track.polarity_inverted,
         );
@@ -387,9 +392,7 @@ impl MixJamApp {
             Pos2::new(rect.left() + 148.0, rect.center().y),
             Align2::LEFT_CENTER,
             mixer::track_state(
-                track.muted,
-                track.left_enabled || track.right_enabled,
-                any_solo && !track.solo,
+                track.silence(any_solo),
                 !track.automation.pan.is_empty(),
                 track.pan,
             ),
@@ -406,7 +409,7 @@ impl MixJamApp {
             send_knob(
                 ui,
                 Rect::from_center_size(Pos2::new(x, rect.top() + 18.0), Vec2::splat(24.0)),
-                1.0,
+                Look::Strip(1.0),
                 &format!("{TRACK} send FX {}", bus + 1),
                 &mut track.sends[bus],
                 !track.automation.sends[bus].is_empty(),
@@ -453,9 +456,10 @@ impl MixJamApp {
         open_eq |= eq_button(
             ui,
             Rect::from_min_size(rect.min, Vec2::new(64.0, 24.0)),
-            1.0,
+            Look::Strip(1.0),
             TRACK,
-            mixer::processing_on(track),
+            track.processing_on(),
+            false,
         );
         ui.painter().text(
             rect.min + Vec2::new(72.0, 12.0),

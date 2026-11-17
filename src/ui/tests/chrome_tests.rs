@@ -19,22 +19,16 @@ fn app_version_stays_at_the_bottom_right_with_long_status_and_notices() {
         frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
         let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
         let bounds = |label: &str| {
-            output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == label => {
-                        let rect = text.galley.rect.translate(text.pos.to_vec2());
-                        assert!(
-                            shape.clip_rect.contains_rect(rect),
-                            "Clipped {label}: {rect:?} in {:?}",
-                            shape.clip_rect
-                        );
-                        Some(rect)
-                    }
-                    _ => None,
-                })
-                .unwrap_or_else(|| panic!("Missing status label: {label}"))
+            let text = screen(&output)
+                .find(label)
+                .unwrap_or_else(|| panic!("Missing status label: {label}"));
+            let rect = text.bounds();
+            assert!(
+                text.clip().contains_rect(rect),
+                "Clipped {label}: {rect:?} in {:?}",
+                text.clip()
+            );
+            rect
         };
         let version = bounds(&format!("v{}", mixjam_techno::APP_VERSION));
         // The status bar spans the window, under the rail.
@@ -78,19 +72,17 @@ fn status_notices_stay_clear_of_panel_switches() {
             frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
             let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
             let tools = effects_control_rect(&output, "Tools");
-            for shape in &output.shapes {
-                if let egui::Shape::Text(text) = &shape.shape {
-                    let rect = text.galley.rect.translate(text.pos.to_vec2());
-                    if rect.top() >= size.y - 30.0
-                        && text.galley.job.text != "PANELS"
-                        && rect.left() < tools.left()
-                    {
-                        assert!(
-                            rect.intersect(shape.clip_rect).right() < tools.left(),
-                            "Status text overlaps Tools at {size:?}: {:?} {rect:?}.",
-                            text.galley.job.text
-                        );
-                    }
+            for text in screen(&output).texts() {
+                let rect = text.bounds();
+                if rect.top() >= size.y - 30.0
+                    && text.label() != "PANELS"
+                    && rect.left() < tools.left()
+                {
+                    assert!(
+                        text.visible().right() < tools.left(),
+                        "Status text overlaps Tools at {size:?}: {:?} {rect:?}.",
+                        text.label()
+                    );
                 }
             }
         }
@@ -125,20 +117,25 @@ fn an_error_keeps_its_room_beside_every_notice() {
     let size = Vec2::new(960.0, 720.0);
     frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
     let output = frame_at_size(&context, &mut app, vec![], egui::Modifiers::NONE, size);
-    let width = output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text == message => {
-                let rect = text.galley.rect.translate(text.pos.to_vec2());
-                Some(rect.intersect(shape.clip_rect).width())
-            }
-            _ => None,
-        })
+    let view = screen(&output);
+    // The notices take their shortest forms first.
+    for long in ["Sample conflicts", "Import details", "Reduced quality"] {
+        assert!(!view.shows(long), "{long} keeps its long form.");
+    }
+    let error = view
+        .find(message)
         .expect("The error must show beside the notices.");
-    // The history mark before it takes its 14 points and a gap.
+    // Then the error fills the line up to the panel switches. It loses only
+    // the gap before them and the end that its ellipsis cuts. The version
+    // link's width moves the switches, so the room is measured, not fixed.
+    let room = view.text("PANELS").rect().left() - error.rect().left();
+    let width = error.visible().width();
     assert!(
-        width >= 165.0,
+        width >= room - 20.0,
+        "The error leaves room unused: {width} of {room}"
+    );
+    assert!(
+        width >= 150.0,
         "The notices shorten before the error loses its room: {width}"
     );
     std::fs::remove_dir_all(root).unwrap();
@@ -148,26 +145,20 @@ fn an_error_keeps_its_room_beside_every_notice() {
 fn version_link_opens_the_repository_through_the_system_browser() {
     let (context, mut app) = fixture();
     let output = frame(&context, &mut app, vec![], egui::Modifiers::NONE);
-    let version = output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text)
-                if text.galley.job.text == format!("v{}", mixjam_techno::APP_VERSION) =>
-            {
-                assert!(
-                    text.galley
-                        .job
-                        .sections
-                        .iter()
-                        .all(|section| section.format.color == roles().muted),
-                    "The version link is muted at rest; the accent marks hover and focus."
-                );
-                Some(text.galley.rect.translate(text.pos.to_vec2()))
-            }
-            _ => None,
-        })
+    let version = screen(&output)
+        .find(&format!("v{}", mixjam_techno::APP_VERSION))
         .expect("The version link must be visible.");
+    assert!(
+        version
+            .shape()
+            .galley
+            .job
+            .sections
+            .iter()
+            .all(|section| section.format.color == roles().muted),
+        "The version link is muted at rest; the accent marks hover and focus."
+    );
+    let version = version.bounds();
     pointer(
         &context,
         &mut app,
@@ -225,32 +216,24 @@ fn titles_are_uppercase_without_changing_saved_text_or_body_font() {
         ("ARRANGEMENT", theme::heading_family()),
         ("OPTIONS", theme::heading_family()),
     ] {
-        let text = output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == label => Some(text),
-                _ => None,
-            })
+        let text = screen(&output)
+            .find(label)
             .unwrap_or_else(|| panic!("Missing title: {label}"));
         assert!(
-            text.galley
+            text.shape()
+                .galley
                 .job
                 .sections
                 .iter()
                 .all(|section| section.format.font_id.family == family)
         );
     }
-    let body = output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text == "Find a sound" => Some(text),
-            _ => None,
-        })
+    let body = screen(&output)
+        .find("Find a sound")
         .expect("The sound search must keep its body font.");
     assert!(
-        body.galley
+        body.shape()
+            .galley
             .job
             .sections
             .iter()
@@ -282,28 +265,15 @@ fn window_text(
     label: &str,
 ) -> Option<Rect> {
     let window = dialog::window_rect(context, identity)?;
-    output.shapes.iter().find_map(|shape| match &shape.shape {
-        egui::Shape::Text(text) if text.galley.job.text == label => {
-            let bounds = Rect::from_min_size(text.pos, text.galley.size());
-            (window.contains_rect(bounds) && shape.clip_rect.contains_rect(bounds))
-                .then_some(bounds)
-        }
-        _ => None,
+    screen(output).texts().find_map(|text| {
+        let bounds = text.rect();
+        (text.label() == label && window.contains_rect(bounds) && text.whole()).then_some(bounds)
     })
 }
 
 /// The number of lines `label` takes where it is drawn.
 fn text_rows(output: &egui::FullOutput, label: &str) -> usize {
-    output
-        .shapes
-        .iter()
-        .find_map(|shape| match &shape.shape {
-            egui::Shape::Text(text) if text.galley.job.text == label => {
-                Some(text.galley.rows.len())
-            }
-            _ => None,
-        })
-        .unwrap_or(0)
+    screen(output).find(label).map_or(0, |text| text.rows())
 }
 
 fn release(context: &egui::Context, app: &mut MixJamApp, pos: Pos2, size: Vec2) {
@@ -783,16 +753,7 @@ fn tool_status_text_scrolls_inside_a_short_footer() {
         }
         let before = render(vec![egui::Event::PointerMoved(rect.center())]);
         accessible_label(&before, message);
-        let top = |output: &egui::FullOutput| {
-            output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == message => Some(text.pos.y),
-                    _ => None,
-                })
-                .unwrap()
-        };
+        let top = |output: &egui::FullOutput| screen(output).find(message).unwrap().rect().min.y;
         render(vec![egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
             delta: Vec2::new(0.0, -200.0),

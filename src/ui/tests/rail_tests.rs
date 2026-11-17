@@ -8,17 +8,12 @@ fn the_rail_mastering_and_step_synth_buttons_show_their_board_and_fold_the_lower
     let (ctx, mut app) = fixture();
     ctx.enable_accesskit();
     let rail = |output: &egui::FullOutput, name: &str| {
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .find(|(_, node)| {
-                node.role() == egui::accesskit::Role::Button && node.label() == Some(name)
+        screen(output)
+            .nodes()
+            .find(|node| {
+                node.role() == egui::accesskit::Role::Button && node.node().label() == Some(name)
             })
-            .map(|(id, node)| (*id, node.toggled()))
+            .map(|node| (node.id(), node.node().toggled()))
             .unwrap_or_else(|| panic!("Missing rail button {name}"))
     };
     for (name, module) in [
@@ -178,27 +173,13 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
         // The rail's board buttons, found by their role: board controls
         // can share a name.
         let rail_button = |output: &egui::FullOutput, module: BottomModule| {
-            output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .find(|(_, node)| {
+            screen(output)
+                .nodes()
+                .find(|node| {
                     node.role() == egui::accesskit::Role::Button
-                        && node.label() == Some(module.label())
+                        && node.node().label() == Some(module.label())
                 })
-                .map(|(id, node)| {
-                    let bounds = node.bounds().unwrap();
-                    (
-                        *id,
-                        Rect::from_min_max(
-                            Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-                            Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-                        ),
-                    )
-                })
+                .map(|node| (node.id(), node.rect()))
                 .unwrap_or_else(|| panic!("Missing rail button {module:?}"))
         };
         let panel = egui::containers::panel::PanelState::load(&ctx, egui::Id::new("sounds"))
@@ -268,11 +249,10 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
                 "Method {method}, viewport {size:?}."
             );
             let title = view::title_text(module.label());
-            let painted = output.shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text)
-                    if text.galley.job.text == title
-                        && !text.galley.elided
-                        && panel.contains(text.pos))
+            let painted = screen(&output).texts().any(|text| {
+                text.label() == title
+                    && !text.shape().galley.elided
+                    && panel.contains(text.rect().min)
             });
             assert!(painted, "The lower panel's title must name {title} whole.");
             assert_eq!(
@@ -287,20 +267,12 @@ fn rail_board_buttons_keep_the_panel_and_sound_state_across_input_methods() {
             assert_eq!(app.sounds.product, None);
             assert_eq!(app.sounds.sort, PaletteSort::Name);
             assert_eq!(app.selection.sample, Some(1));
-            let nodes = &output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes;
             assert!(
-                !nodes
-                    .iter()
-                    .any(|(_, node)| node.label() == Some("Show Mixer")
-                        || node.label() == Some("Bottom module")),
+                screen(&output).find_node("Show Mixer").is_none()
+                    && screen(&output).find_node("Bottom module").is_none(),
                 "The rail replaces the former module selector and swap buttons."
             );
-            let shown = |name: &str| nodes.iter().any(|(_, node)| node.label() == Some(name));
+            let shown = |name: &str| screen(&output).find_node(name).is_some();
             let expected = match module {
                 BottomModule::Mixer => "Master gain",
                 BottomModule::Mastering => "Trim",
@@ -588,25 +560,17 @@ fn rail_names_share_one_size_and_fit_their_targets() {
         .collect();
     for (label, name) in tools {
         let target = effects_control_rect(&output, label);
-        let text = output
-            .shapes
-            .iter()
-            .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text)
-                    if text.galley.job.text == name && target.contains(text.pos) =>
-                {
-                    Some(text)
-                }
-                _ => None,
-            })
+        let text = screen(&output)
+            .texts()
+            .find(|text| text.label() == name && target.contains(text.rect().min))
             .unwrap_or_else(|| panic!("{label} must print its rail name {name:?}."));
-        for section in &text.galley.job.sections {
+        for section in &text.shape().galley.job.sections {
             assert_eq!(
                 section.format.font_id.size, 10.5,
                 "{label}: every rail name uses one size."
             );
         }
-        let bounds = text.visual_bounding_rect();
+        let bounds = text.shape().visual_bounding_rect();
         assert!(
             bounds.left() >= target.left() + 4.0 && bounds.right() <= target.right() - 4.0,
             "{label}: the name {name:?} must clear its target's edges: {bounds:?} in {target:?}."
@@ -648,18 +612,12 @@ fn the_names_switch_stays_in_the_rail_clear_of_the_first_title_and_tool() {
                 continue;
             }
             // With names, it shares the first heading's row, at the right.
-            let title = output
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text)
-                        if text.galley.job.text == "FILE" && rail.contains(text.pos) =>
-                    {
-                        Some(text.visual_bounding_rect())
-                    }
-                    _ => None,
-                })
-                .expect("The first heading must be painted.");
+            let title = screen(&output)
+                .texts()
+                .find(|text| text.label() == "FILE" && rail.contains(text.rect().min))
+                .expect("The first heading must be painted.")
+                .shape()
+                .visual_bounding_rect();
             assert!(
                 (switch.right() - new.right()).abs() < 0.01
                     && switch.left() > title.right()
@@ -894,16 +852,7 @@ fn rail_toggles_close_windows_and_keep_highlights_in_sync() {
         click(&ctx, &mut app, center, egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
         assert_active(&output, false);
-        assert!(
-            !output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(|(_, node)| node.label() == Some(title_text(window).as_str()))
-        );
+        assert!(screen(&output).find_node(&title_text(window)).is_none());
         // Closing through the header must also clear the rail state.
         click(&ctx, &mut app, center, egui::Modifiers::NONE);
         let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
@@ -948,16 +897,12 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
     };
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
-        !output.shapes.iter().any(|shape| {
-            if let egui::Shape::Text(text) = &shape.shape {
-                let label = text.galley.job.text.as_str();
-                text.pos.x < rail_width(false)
-                    && text.pos.y > 66.0
-                    && (RailIcon::ALL.iter().any(|icon| icon.label() == label)
-                        || matches!(label, "MIX" | "Record"))
-            } else {
-                false
-            }
+        !screen(&output).texts().any(|text| {
+            let label = text.label();
+            text.rect().min.x < rail_width(false)
+                && text.rect().min.y > 66.0
+                && (RailIcon::ALL.iter().any(|icon| icon.label() == label)
+                    || matches!(label, "MIX" | "Record"))
         }),
         "Rail action names must not be painted beside the icons."
     );
@@ -971,12 +916,9 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
     );
     let hovered = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
-        hovered.shapes.iter().any(|shape| {
-            matches!(
-                &shape.shape,
-                egui::Shape::Text(text) if text.galley.job.text.starts_with("Mixer")
-            )
-        }),
+        screen(&hovered)
+            .texts()
+            .any(|text| text.label().starts_with("Mixer")),
         "The icon must preserve its action name in a hover tooltip."
     );
     ctx.enable_accesskit();
@@ -993,12 +935,9 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
     }
     let hovered_undo = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
     assert!(
-        hovered_undo.shapes.iter().any(|shape| {
-            matches!(
-                &shape.shape,
-                egui::Shape::Text(text) if text.galley.job.text.starts_with("Undo")
-            )
-        }),
+        screen(&hovered_undo)
+            .texts()
+            .any(|text| text.label().starts_with("Undo")),
         "The header icon must preserve its action name in a hover tooltip."
     );
     for label in ["Undo", "Redo", "Help"] {
@@ -1034,10 +973,7 @@ fn rail_icons_keep_tooltips_accessible_actions_and_cached_textures() {
         "The icon must expose its action name to accessibility output."
     );
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    assert_eq!(
-        accessible_node(&output, "Mixer").1.toggled(),
-        Some(egui::accesskit::Toggled::True)
-    );
+    assert!(screen(&output).node("Mixer").toggled());
     click(&ctx, &mut app, mixer, egui::Modifiers::NONE);
     assert!(
         !app.mix.shown && !app.session.layout().boards,

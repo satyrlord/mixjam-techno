@@ -114,11 +114,16 @@ pub(crate) fn gain_value_in(
             .max_rect(rect),
         |ui| {
             ui.spacing_mut().interact_size = rect.size();
-            ui.spacing_mut().button_padding = Vec2::ZERO;
+            // The value starts a little inside its face, so its sign clears
+            // the edge.
+            ui.spacing_mut().button_padding = Vec2::new(4.0 * scale, 0.0);
             ui.style_mut().override_text_style = Some(egui::TextStyle::Body);
             ui.style_mut()
                 .text_styles
                 .insert(egui::TextStyle::Body, FontId::proportional(12.0 * scale));
+            // The workspace style overrides every text colour with the theme's
+            // text; the value takes the ink of its own face or outline instead.
+            ui.visuals_mut().override_text_color = Some(ink);
             let widgets = &mut ui.style_mut().visuals.widgets;
             for widget in [
                 &mut widgets.inactive,

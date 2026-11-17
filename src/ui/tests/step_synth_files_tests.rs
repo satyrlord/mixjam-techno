@@ -179,17 +179,10 @@ fn step_synth_status_bar_announces_full_messages_and_labels_errors() {
             message
         };
         assert!(
-            output
-                .platform_output
-                .accesskit_update
-                .as_ref()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(
-                    |(_, node)| [node.label(), node.value()].contains(&Some(spoken.as_str()))
-                        && node.live() == Some(egui::accesskit::Live::Polite)
-                ),
+            screen(&output).nodes().any(|node| {
+                [node.node().label(), node.value()].contains(&Some(spoken.as_str()))
+                    && node.node().live() == Some(egui::accesskit::Live::Polite)
+            }),
             "The full message must be a polite live status, with errors labelled: {spoken}"
         );
     }
@@ -291,14 +284,9 @@ fn step_synth_feedback_is_dropped_when_the_source_changes_but_kept_for_its_own_r
         "A new palette source must take the old message off the status line."
     );
     assert!(
-        output
-            .platform_output
-            .accesskit_update
-            .as_ref()
-            .unwrap()
-            .nodes
-            .iter()
-            .any(|(_, node)| [node.label(), node.value()].contains(&Some(
+        screen(&output)
+            .nodes()
+            .any(|node| [node.node().label(), node.value()].contains(&Some(
                 "Missing audio. Choose a source file or open Import details."
             ))),
         "The status bar must return to the missing-audio guidance."
@@ -450,17 +438,9 @@ fn step_synth_pane_switch_keeps_keyboard_focus_and_disabled_actions_explain_them
     let listen = step_synth_control_rect(&output, "Listen");
     // Count the tooltip as an added copy of the sentence.
     let copies = |output: &egui::FullOutput| {
-        output
-            .shapes
-            .iter()
-            .filter(|shape| {
-                matches!(
-                    &shape.shape,
-                    egui::Shape::Text(text)
-                        if text.galley.job.text
-                            == "Choose an available source file or palette sound."
-                )
-            })
+        screen(output)
+            .texts()
+            .filter(|text| text.label() == "Choose an available source file or palette sound.")
             .count()
     };
     let before = copies(&output);

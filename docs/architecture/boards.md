@@ -23,30 +23,48 @@ through `ask_path`.
 
 ## Mix view
 
-`src/ui/mix_view.rs` owns the Mix view of the score. The `MixViewState::shown`
-flag of the frontend turns the header of each used lane into a row of fixed
-columns. The clips keep the remainder of the lane, and `score_frame` fits the
-whole song to the lanes. The row uses the control helpers of `src/ui/mixer/`
-(`quiet_switch`, `quiet_polarity_button`, `gain_value_in`, `quiet_unity_button`,
-`well_pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button_in`,
-`track_state`, and `row_surface`) and `strip_fader`, the lane fader on the
-strip's rail roles. The quiet helpers paint a row at its
-defaults without lit faces and keep the names, states, and hints of
-`switch_button`, `polarity_button`, `send_knob`, `unity_button`, and
-`center_button`. Thus the accessible names
-and the operations are the same as those of the strips. After the last row, a
-block that stays at the foot of the score holds the Master row (Bypass, level,
-Export tracks) and the returns row (`return_state`, `quiet_bus_switches`,
-`edit_button`). While columns remain to the right, `edge_fade` paints each
-row's surface again over its last 24 points with rising opacity.
+`src/ui/mix_view.rs` and its modules in `src/ui/mix_view/` own the Mix view
+of the score:
+
+- `layout.rs` holds the column table. Each column is a `Column` constant, and
+  the rows, the captions, the Master and returns rows, and the tests read the
+  same table. `Columns` places a column on screen for a row, its scroll
+  offset, and the extra room of a wide header. `return_parts` divides the
+  returns row among the buses, and `reveal` gives the scroll that shows a
+  focused control. This module has no Ui and no session.
+- `rows.rs` paints a track's row from plain values: `RowFacts`, the
+  `TrackMix` that it edits, and the row's names. It reports an `Outcome`.
+- `block.rs` holds the captions, the Master row (Bypass, level, Export
+  tracks), the returns row (the effect, its bus and `return_state`, the
+  return knob, Input, Limiter, and `edit_button`), and `mix_block`, which
+  places them below the lanes and sends their edits.
+- `state.rs` holds `MixViewState`, `set_mix_view`, and `score_block_height`.
+
+The `MixViewState::shown` flag of the frontend turns the header of each used
+lane into a row of fixed columns. The clips keep the remainder of the lane,
+and `score_frame` fits the whole song to the lanes. The rows use the widgets
+of `src/ui/mixer/` (`switch_button`, `polarity_button`, `gain_value_in`,
+`unity_button`, `pan_slider`, `center_button`, `send_knob`, `eq_button`, and
+`bus_switches`) in `Look::Quiet`, and `strip_fader`, the lane fader on the
+strip's rail roles. A quiet widget paints a row at its defaults without lit
+faces. It keeps the name, keys, state, and hint of the strip's widget, so the
+accessible names and the operations are the same as those of the strips.
+While columns remain to the right, `edge_fade` paints each row's surface
+again over its last 24 points with rising opacity, through `row_surface_on`
+and a clipped painter.
 
 Each change goes back to `apply_mixer_changes` in `src/ui/view/boards.rs`, the
-same path that the Mixer board uses. A strip copies only its own track, and
-gives it back when it changed. A Mix view row edits a small `RowMix` copy and
-clones its track only when the row changed it. The edits go to the session as
-follows:
+same path that the Mixer board uses. A strip and a Mix view row edit the
+`TrackMix` of their track: the level, polarity, pan, switches, and sends. It
+is small and `Copy`, so no view clones a track each frame. `TrackMix::silence`
+gives why the mix cannot hear a track (Muted, No output, or Solo elsewhere),
+and `Track::processing_on` lights the EQ button. The render, the lanes, the
+overview, and the rows all use these backend rules. The edits go to the
+session as follows:
 
-- One changed track goes as `EditCommand::SetTrack`.
+- One changed track goes as `EditCommand::SetTrackMix`. The session applies it
+  as a `SetTrack` that keeps the processing and automation of the track, so
+  undo steps and live levels are the same.
 - The master level, or more than one track in a frame, goes as one
   `SetMixer`.
 - The buses go as `SetEffects`, and the board goes as `SetMaster`.

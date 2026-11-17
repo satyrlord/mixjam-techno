@@ -130,10 +130,11 @@ the viewport shows whole rows only. From the left, a row holds:
 
 A row at its defaults stays quiet. M, S, L, R, and polarity rest as Muted
 marks on dark faces. Mute fills its face Coral, Solo fills its face Accent,
-and an inverted polarity lights its face while on, and an output that is off
-turns its letter to the warning lamp colour. Unity and Center have no face and
-show their label only on hover or focus, since the dB value and the pan state
-already show a moved value; they stay in the Tab order with their names. A row
+and an inverted polarity lights its face while on. Off gives no light: an
+output that is off keeps its Muted letter and strikes it through. Unity and
+Center have no face and show their label only on hover or focus, since the dB
+value and the pan state already show a moved value; they stay in the Tab order
+with their names. A row
 that cannot be heard (muted, soloed elsewhere, or with no output) keeps its
 switches clear and dims the rest to 45%. Muted or No output, a cause on the
 row itself, keeps its words at full strength. The dB value and an EQ that is
@@ -172,12 +173,14 @@ while more rows scroll. It holds two rows:
   level, and Export tracks….
 - The returns row: four groups that share the width of the columns, with a
   Strip slot rule between them. Each
-  group holds the bus name and its effect, the return state ("Return 88%" or
-  "Return automated"), the return level knob, Input, Limiter, and Edit. Input
-  and Limiter rest as Muted labels with a lit lamp; off, the label turns to
-  the warning lamp colour. A bus with the Empty effect returns silence, so its
-  knob, Input, and Limiter dim to 45%; they keep their names, and Edit stays
-  at full strength.
+  group holds the effect in 11 points, then the bus and the return state in
+  10 points ("FX 1 · Return 88%" or "FX 2 · Return automated"), the return
+  level knob, Input ("In"), Limiter ("Lim"), and Edit. The controls keep
+  their widths at the right of the group, and the name takes the rest, so a
+  wider column shows more of it. Input and Limiter rest as Muted labels with
+  a lit lamp; off gives no light: a hollow lamp and a struck label. A bus
+  with the Empty effect returns silence, so its knob, Input, and Limiter dim
+  to 45%; they keep their names, and Edit stays at full strength.
 
 While the FX returns board shows, each group keeps its name, state, and Edit,
 and reads "On the board below" in place of the knob and switches. Thus no

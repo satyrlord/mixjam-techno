@@ -373,6 +373,20 @@ pub(super) fn brand_family() -> egui::FontFamily {
     egui::FontFamily::Name(BRAND.into())
 }
 
+/// The type scale of the design's text roles, in points (DESIGN.md
+/// `typography`). The faces come from the theme; the sizes are the same in
+/// every theme.
+pub(super) mod type_size {
+    /// Fields and explanatory text, and action labels.
+    pub(crate) const BODY: f32 = 13.0;
+    /// Sample and clip names.
+    pub(crate) const CLIP: f32 = 12.0;
+    /// Compact native controls.
+    pub(crate) const SMALL: f32 = 11.0;
+    /// Sample details and dense clip labels.
+    pub(crate) const METADATA: f32 = 10.0;
+}
+
 /// Every heading row is this many ems high in every theme: the line box of
 /// Syncopate, which the shared layout was measured with. Heading faces have
 /// taller natural line boxes, which would move the layout.

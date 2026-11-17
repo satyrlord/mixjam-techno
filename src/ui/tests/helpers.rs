@@ -97,11 +97,7 @@ pub(super) fn themes_in_turn() -> impl Iterator<Item = theme::Theme> {
 }
 
 pub(super) fn effects_control_rect(output: &egui::FullOutput, name: &str) -> Rect {
-    let bounds = accessible_node(output, name).1.bounds().unwrap();
-    Rect::from_min_max(
-        Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-        Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-    )
+    screen(output).node(name).rect()
 }
 
 /// Click a control through accessibility, as the agent channel does.
@@ -112,20 +108,16 @@ pub(super) fn click_named(
 ) -> egui::FullOutput {
     let output = frame(ctx, app, vec![], egui::Modifiers::NONE);
     // A board and its toolbar row carry the board's name; click the control.
-    let target = output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .and_then(|update| {
-            update.nodes.iter().find(|(_, node)| {
-                node.label() == Some(name)
-                    && !matches!(
-                        node.role(),
-                        egui::accesskit::Role::Toolbar | egui::accesskit::Role::TabPanel
-                    )
-            })
+    let target = screen(&output)
+        .nodes()
+        .find(|node| {
+            node.node().label() == Some(name)
+                && !matches!(
+                    node.role(),
+                    egui::accesskit::Role::Toolbar | egui::accesskit::Role::TabPanel
+                )
         })
-        .map_or_else(|| accessible_node(&output, name).0, |(id, _)| *id);
+        .map_or_else(|| accessible_node(&output, name).0, |node| node.id());
     frame(
         ctx,
         app,
@@ -207,54 +199,34 @@ pub(super) fn click(
     pointer(context, app, pos, false, modifiers);
 }
 
+/// The colour a text shape's glyphs are drawn in: its override, else its
+/// first section's colour, with a placeholder resolved to the fallback.
+pub(super) fn drawn_text_color(text: &egui::epaint::TextShape) -> egui::Color32 {
+    text.override_text_color.unwrap_or_else(|| {
+        let color = text.galley.job.sections[0].format.color;
+        if color == egui::Color32::PLACEHOLDER {
+            text.fallback_color
+        } else {
+            color
+        }
+    })
+}
+
 pub(super) fn text_rect(output: &egui::FullOutput, label: &str) -> Rect {
-    output
-        .shapes
-        .iter()
-        .find_map(|shape| {
-            if let egui::Shape::Text(text) = &shape.shape
-                && text.galley.job.text == label
-            {
-                Some(Rect::from_min_size(text.pos, text.galley.size()))
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| panic!("Missing text: {label}"))
+    screen(output).text(label).rect()
 }
 
 pub(super) fn accessible_node<'a>(
     output: &'a egui::FullOutput,
     label: &str,
 ) -> (egui::accesskit::NodeId, &'a egui::accesskit::Node) {
-    output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .expect("Accessibility must be enabled for this test.")
-        .nodes
-        .iter()
-        .find(|(_, node)| node.label() == Some(label))
-        .map(|(id, node)| (*id, node))
-        .unwrap_or_else(|| panic!("Missing accessible control: {label}"))
+    let node = screen(output).node(label);
+    (node.id(), node.node())
 }
 
 /// The bounds of a painted label, whose text egui stores as its value.
 pub(super) fn accessible_label(output: &egui::FullOutput, text: &str) -> Rect {
-    let bounds = output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .expect("Accessibility must be enabled for this test.")
-        .nodes
-        .iter()
-        .find(|(_, node)| node.role() == egui::accesskit::Role::Label && node.value() == Some(text))
-        .and_then(|(_, node)| node.bounds())
-        .unwrap_or_else(|| panic!("Missing accessible label: {text}"));
-    Rect::from_min_max(
-        Pos2::new(bounds.x0 as f32, bounds.y0 as f32),
-        Pos2::new(bounds.x1 as f32, bounds.y1 as f32),
-    )
+    screen(output).label(text).rect()
 }
 
 pub(super) fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
@@ -326,33 +298,15 @@ pub(super) fn drag(
 
 /// Whether any accessible node carries this name.
 pub(super) fn has_control(output: &egui::FullOutput, name: &str) -> bool {
-    output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .expect("Accessibility must be enabled for this test.")
-        .nodes
-        .iter()
-        .any(|(_, node)| node.label() == Some(name))
+    screen(output).find_node(name).is_some()
 }
 
 /// How many accessible nodes carry this name.
 pub(super) fn named_count(output: &egui::FullOutput, name: &str) -> usize {
-    output
-        .platform_output
-        .accesskit_update
-        .as_ref()
-        .expect("Accessibility must be enabled for this test.")
-        .nodes
-        .iter()
-        .filter(|(_, node)| node.label() == Some(name))
-        .count()
+    screen(output).named_count(name)
 }
 
 /// Whether a frame painted `text` anywhere.
 pub(super) fn shows_text(output: &egui::FullOutput, text: &str) -> bool {
-    output.shapes.iter().any(|shape| match &shape.shape {
-        egui::Shape::Text(shown) => shown.galley.job.text == text,
-        _ => false,
-    })
+    screen(output).shows(text)
 }
