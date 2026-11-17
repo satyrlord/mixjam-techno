@@ -3,9 +3,9 @@
 //! rows use the Mixer strips' names and edits, so the two views differ in
 //! layout and in how quietly a row at its defaults reads.
 use super::mixer::{
-    bypass_button, edit_button, eq_button, gain_value, quiet_bus_switches, quiet_center_button,
-    quiet_polarity_button, quiet_send_knob, quiet_switch, quiet_unity_button, return_state,
-    row_surface, send_knob, track_state, well_pan_slider,
+    bypass_button, edit_button, eq_button_in, gain_value_in, quiet_bus_switches,
+    quiet_center_button, quiet_polarity_button, quiet_send_knob, quiet_switch, quiet_unity_button,
+    return_state, row_surface, send_knob, track_state, well_pan_slider,
 };
 use super::*;
 use mixjam_techno::application::Track;
@@ -369,7 +369,11 @@ pub(super) fn track_row(
     }
     let any_output = mix.left_enabled || mix.right_enabled;
     let solo_elsewhere = facts.any_solo && !mix.solo;
-    if mix.muted || solo_elsewhere || !any_output {
+    let silent = mix.muted || solo_elsewhere || !any_output;
+    // A cause on the row itself keeps its words at full strength.
+    let own_cause = mix.muted || !any_output;
+    let full = ui.opacity();
+    if silent {
         ui.multiply_opacity(SILENT_OPACITY);
     }
     if let Some(category) = facts.category {
@@ -387,14 +391,21 @@ pub(super) fn track_row(
             CLIP_TEXT
         },
     )
-    .hover_hint(detail);
+    .hover_hint(if solo_elsewhere && !own_cause {
+        format!(
+            "{detail}
+Solo elsewhere"
+        )
+    } else {
+        detail.to_owned()
+    });
     outcome.changed |= quiet_polarity_button(
         ui,
         centred(rect, offset, POLARITY_X, Vec2::new(SWITCH, height)),
         &name,
         &mut mix.polarity_inverted,
     );
-    outcome.changed |= level(ui, rect, offset, height, &name, &mut mix.gain);
+    outcome.changed |= level(ui, rect, offset, height, &name, &mut mix.gain, silent);
     outcome.changed |= well_pan_slider(
         ui,
         span(rect, offset, PAN, 16.0),
@@ -406,25 +417,24 @@ pub(super) fn track_row(
         outcome.changed |= mix.pan != 0.0;
         mix.pan = 0.0;
     }
-    // Only what differs from a plain track: a silencing cause, an automated
-    // pan, or a pan off center.
-    let exception = mix.muted || !any_output || solo_elsewhere || facts.pan_automated;
-    if exception || mix.pan != 0.0 {
+    // Only what differs from a plain track: a cause on the row, an automated
+    // pan, or a pan off center. Solo elsewhere is left to the dimming, the
+    // lit Solo, and the sounds' hint, so one solo does not fill the column.
+    if own_cause || facts.pan_automated || mix.pan != 0.0 {
         let state = span(rect, offset, STATE, height);
+        let dimmed = ui.opacity();
+        if own_cause {
+            ui.set_opacity(full);
+        }
         clipped_text(
             ui,
             state,
             state.left_center() + Vec2::new(4.0, 0.0),
-            &track_state(
-                mix.muted,
-                any_output,
-                solo_elsewhere,
-                facts.pan_automated,
-                mix.pan,
-            ),
+            &track_state(mix.muted, any_output, false, facts.pan_automated, mix.pan),
             SMALL_TEXT,
             roles().strip_text,
         );
+        ui.set_opacity(dimmed);
     }
     let knob = height.min(KNOB);
     for bus in 0..BUSES {
@@ -453,17 +463,19 @@ pub(super) fn track_row(
         rect.left()..=center.right().clamp(rect.left() + PINNED, rect.right()),
         rect.y_range(),
     ));
-    outcome.open_eq = eq_button(
+    outcome.open_eq = eq_button_in(
         ui,
         span(rect, offset, EQ, height),
         1.0,
         &name,
         facts.processing,
+        silent,
     );
     outcome
 }
 
-/// The fader, exact dB entry, and Unity of `name`'s gain.
+/// The fader, exact dB entry, and Unity of `name`'s gain. A `silent` row
+/// draws the dB entry as an outline on its own surface.
 fn level(
     ui: &mut egui::Ui,
     rect: Rect,
@@ -471,9 +483,17 @@ fn level(
     height: f32,
     name: &str,
     gain: &mut f32,
+    silent: bool,
 ) -> bool {
     let mut changed = lanes::strip_fader(ui, span(rect, offset, FADER, height), name, gain);
-    changed |= gain_value(ui, span(rect, offset, VALUE, height), 1.0, name, gain);
+    changed |= gain_value_in(
+        ui,
+        span(rect, offset, VALUE, height),
+        1.0,
+        name,
+        gain,
+        silent,
+    );
     if quiet_unity_button(ui, span(rect, offset, UNITY, height.min(18.0)), name) {
         changed |= *gain != 1.0;
         *gain = 1.0;
@@ -534,7 +554,7 @@ pub(super) fn master_row(
         1.0,
         bypass,
     );
-    let changed = level(ui, rect, offset, height, "Master", gain);
+    let changed = level(ui, rect, offset, height, "Master", gain, false);
     MasterOutcome {
         changed,
         bypass,

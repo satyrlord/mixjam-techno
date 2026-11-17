@@ -81,7 +81,31 @@ pub(crate) fn gain_value(
     name: &str,
     gain: &mut f32,
 ) -> bool {
-    ui.painter().rect_filled(rect, 3.0, roles().strip_face);
+    gain_value_in(ui, rect, scale, name, gain, false)
+}
+
+/// `gain_value`, or with `outline` a Strip edge outline and strip ink on the
+/// row's own surface, for a silent Mix view row.
+pub(crate) fn gain_value_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    gain: &mut f32,
+    outline: bool,
+) -> bool {
+    let ink = if outline {
+        ui.painter().rect_stroke(
+            rect,
+            3.0,
+            Stroke::new(1.0 * scale, roles().strip_edge),
+            egui::StrokeKind::Inside,
+        );
+        roles().strip_text
+    } else {
+        ui.painter().rect_filled(rect, 3.0, roles().strip_face);
+        roles().legend
+    };
     let before = *gain;
     let db = amplitude_to_db(before);
     ui.scope_builder(
@@ -104,10 +128,10 @@ pub(crate) fn gain_value(
                 widget.bg_fill = Color32::TRANSPARENT;
                 widget.weak_bg_fill = Color32::TRANSPARENT;
                 widget.bg_stroke = Stroke::NONE;
-                widget.fg_stroke.color = roles().legend;
+                widget.fg_stroke.color = ink;
             }
             // A focused value shows an edge before it is typed in.
-            widgets.active.bg_stroke = Stroke::new(1.0 * scale, roles().legend);
+            widgets.active.bg_stroke = Stroke::new(1.0 * scale, ink);
             let id = ui.next_auto_id();
             let context = ui.ctx().clone();
             // DragValue needs a finite origin for relative edits. Keep silence's

@@ -417,7 +417,11 @@ fn mix_view_edits_levels_pan_outputs_and_polarity_with_one_undo_each() {
     // M6 and M7: the outputs and switches, and the state they leave.
     press(&ctx, &mut app, "Track 2 solo", egui::Key::Space);
     let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
-    text_rect(&output, "Solo elsewhere");
+    // One solo leaves the other rows dimmed, without a column of its name.
+    assert!(!output.shapes.iter().any(|shape| matches!(
+        &shape.shape,
+        egui::Shape::Text(text) if text.galley.job.text == "Solo elsewhere"
+    )));
     press(&ctx, &mut app, "Track 1 left output", egui::Key::Space);
     let output = press(&ctx, &mut app, "Track 1 right output", egui::Key::Space);
     assert!(!app.session.project().tracks[0].left_enabled);

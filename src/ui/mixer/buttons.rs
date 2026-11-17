@@ -498,8 +498,25 @@ fn pan_slider_in(
 /// "{name} EQ", lit while `on`: opens the channel EQ window. Returns whether
 /// it was pressed.
 pub(crate) fn eq_button(ui: &mut egui::Ui, rect: Rect, scale: f32, name: &str, on: bool) -> bool {
+    eq_button_in(ui, rect, scale, name, on, false)
+}
+
+/// `eq_button`, or with `outline` and off a Strip edge outline with strip
+/// ink on the row's own surface, for a silent Mix view row.
+pub(crate) fn eq_button_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    scale: f32,
+    name: &str,
+    on: bool,
+    outline: bool,
+) -> bool {
     let eq_name = format!("{name} EQ");
-    let response = button(ui, rect, "EQ", &eq_name, scale, on);
+    let response = if outline && !on {
+        outline_button(ui, rect, "EQ", &eq_name, scale)
+    } else {
+        button(ui, rect, "EQ", &eq_name, scale, on)
+    };
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, response.enabled(), on, &eq_name)
     });
@@ -634,6 +651,31 @@ fn button(
             roles().legend
         },
     );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
+    });
+    response
+}
+
+/// A strip button without a face: a Strip edge outline, strip ink on hover
+/// or the lit edge with focus, and its label in strip ink.
+fn outline_button(ui: &mut egui::Ui, rect: Rect, label: &str, name: &str, scale: f32) -> Response {
+    let response = ui.interact(rect, ui.id().with(name), Sense::click());
+    let edge = if response.has_focus() {
+        roles().strip_lit
+    } else if response.hovered() {
+        roles().strip_text
+    } else {
+        roles().strip_edge
+    };
+    ui.painter().rect_stroke(
+        rect,
+        2.0,
+        Stroke::new(1.0 * scale, edge),
+        egui::StrokeKind::Inside,
+    );
+    focus_ring(ui, &response, rect, scale);
+    text(ui, rect.center(), label, 10.0 * scale, roles().strip_text);
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name)
     });

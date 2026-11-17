@@ -27,8 +27,8 @@ through `ask_path`.
 flag of the frontend turns the header of each used lane into a row of fixed
 columns. The clips keep the remainder of the lane, and `score_frame` fits the
 whole song to the lanes. The row uses the control helpers of `src/ui/mixer/`
-(`quiet_switch`, `quiet_polarity_button`, `gain_value`, `quiet_unity_button`,
-`well_pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button`,
+(`quiet_switch`, `quiet_polarity_button`, `gain_value_in`, `quiet_unity_button`,
+`well_pan_slider`, `quiet_center_button`, `quiet_send_knob`, `eq_button_in`,
 `track_state`, and `row_surface`) and `strip_fader`, the lane fader on the
 strip's rail roles. The quiet helpers paint a row at its
 defaults without lit faces and keep the names, states, and hints of

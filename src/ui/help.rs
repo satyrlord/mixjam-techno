@@ -13,6 +13,7 @@ pub(super) enum Topic {
     Automation,
     Recording,
     Mixer,
+    MixView,
     Mastering,
     FxReturns,
     Workspace,
@@ -24,12 +25,13 @@ pub(super) enum Topic {
 }
 
 impl Topic {
-    pub(super) const ALL: [Topic; 13] = [
+    pub(super) const ALL: [Topic; 14] = [
         Topic::Shortcuts,
         Topic::Arrange,
         Topic::Automation,
         Topic::Recording,
         Topic::Mixer,
+        Topic::MixView,
         Topic::Mastering,
         Topic::FxReturns,
         Topic::Workspace,
@@ -47,6 +49,7 @@ impl Topic {
             Topic::Automation => "Automation",
             Topic::Recording => "Recording",
             Topic::Mixer => "Mixer",
+            Topic::MixView => "Mix view",
             Topic::Mastering => "Mastering",
             Topic::FxReturns => "FX returns",
             Topic::Workspace => "Workspace",
@@ -100,6 +103,7 @@ impl Topic {
             Topic::Automation => AUTOMATION,
             Topic::Recording => RECORDING,
             Topic::Mixer => MIXER,
+            Topic::MixView => MIX_VIEW,
             Topic::Mastering => MASTERING,
             Topic::FxReturns => FX_RETURNS,
             Topic::Workspace => WORKSPACE,
@@ -337,6 +341,35 @@ const RECORDING: &[Block] = &[
     Facts(&[
         "The take stays in memory until you save it. Before a new or opened song replaces it, the app asks whether to save it.",
         "Discarding a take asks once more, because it cannot be undone.",
+    ]),
+];
+
+const MIX_VIEW: &[Block] = &[
+    Facts(&[
+        "Mix, in the score toolbar, turns each lane header into a mixer row beside its clips. The lower panel folds so the rows take the score. Arrange, or the rail's Mixer, returns to the lanes.",
+        "The lanes fit the whole song, so the clips show where each track plays without scrolling.",
+    ]),
+    Heading("A row"),
+    Facts(&[
+        "From the left: the track number, the sounds, M, S, L, R, polarity, the level and its dB value, pan, the state, four sends, and EQ.",
+        "A row at its defaults stays quiet. The state names only what differs: Muted, No output, Pan automated, or a pan off center.",
+        "A track that cannot be heard is dimmed. While another track is soloed, the dimming and that track's lit S say why, and the hint on the sounds names Solo elsewhere.",
+        "A send at 0 rests as a thin ring; its amount shows while it sends.",
+        "EQ opens the track's channel window beside its row; the Mixer page explains the window.",
+    ]),
+    Keys(&[
+        ("Reset", &[], "Double-click a fader or a send knob"),
+        (
+            "More columns",
+            &["Shift+Wheel"],
+            "when the rows are wider than the column",
+        ),
+    ]),
+    Heading("Master and returns"),
+    Facts(&[
+        "Under the last row, Master holds Bypass, the master level, and Export tracks….",
+        "The returns row holds the four FX buses: the effect, the return level, Input, Limiter, and Edit, which shows the bus on the FX returns board.",
+        "A bus with the Empty effect returns silence, so its controls are dimmed.",
     ]),
 ];
 

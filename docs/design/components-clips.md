@@ -120,8 +120,10 @@ the viewport shows whole rows only. From the left, a row holds:
   well with a dark fill on Vintage's ivory, so the level reads from the left
   on every strip; the pan handle keeps a 1.5-point ring of strip ink at rest
   and in use, so it shows on the cream well),
-- the state text in 11 points, only for an exception: Muted, No output, Solo
-  elsewhere, Pan automated, or a pan off center,
+- the state text in 11 points, only for an exception: Muted, No output, Pan
+  automated, or a pan off center (Solo elsewhere has no text: the dimming and
+  the lit Solo of the other track say it, and the sounds' hint names it, so
+  one solo does not fill the column),
 - the four send cells: each knob, and its amount in 10 points while it sends
   (a send at 0 rests as a thin ring until hover or focus),
 - EQ.
@@ -133,7 +135,11 @@ turns its letter to the warning lamp colour. Unity and Center have no face and
 show their label only on hover or focus, since the dB value and the pan state
 already show a moved value; they stay in the Tab order with their names. A row
 that cannot be heard (muted, soloed elsewhere, or with no output) keeps its
-switches clear and dims the rest to 45%.
+switches clear and dims the rest to 45%. Muted or No output, a cause on the
+row itself, keeps its words at full strength. The dB value and an EQ that is
+off lose their dark faces on such a row: a 1-point Strip edge outline with
+strip ink, so a silent row's boxes stay lighter than a live row's, also on
+Vintage's ivory.
 
 The header column is the width of the score less 160 points, from 250 to
 984 points. The content of the rows is 944 points wide; a wider column gives
@@ -156,7 +162,8 @@ The first switch to the Mix view in a session puts its shortcuts in the
 status bar: a double-click resets a fader or knob, and Shift with the wheel scrolls
 the columns. From the Mix view, a track's channel EQ window first opens beside
 its row's number through Pan, or above or below the row when the window does
-not fit beside it, so the row's level and pan stay in view.
+not fit beside it, so the row's level and pan stay in view. That window stays
+above the status bar. Help has a Mix view page after the Mixer page.
 
 A 70-point block follows the last row, and stays at the foot of the score
 while more rows scroll. It holds two rows:

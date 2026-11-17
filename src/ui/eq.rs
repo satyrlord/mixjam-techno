@@ -257,14 +257,21 @@ impl MixJamApp {
         // Reserve the solid vertical scrollbar too, so a short viewport
         // does not also force the fixed-width controls to scroll sideways.
         let scrollbar = egui::style::ScrollStyle::solid().allocated_width();
+        let anchor = self.mix.shown.then_some(self.mix.eq_row).flatten();
+        let mut bounds = ctx.viewport_rect().shrink(12.0);
+        if anchor.is_some() {
+            // Beside a Mix view row, the window keeps the 30-point status
+            // bar and its messages in view.
+            bounds.max.y -= 30.0;
+        }
         dialog::window(&title)
             .open(&mut open)
             .default_width(WIDTH + 40.0 + scrollbar)
             .default_height(HEIGHT + 16.0)
             .max_height((ctx.viewport_rect().height() - 40.0).max(240.0))
-            .constrain_to(ctx.viewport_rect().shrink(12.0))
+            .constrain_to(bounds)
             // From the Mix view, the window first opens beside its row.
-            .anchor(self.mix.shown.then_some(self.mix.eq_row).flatten())
+            .anchor(anchor)
             .show(ctx, |ui| {
                 action = ui
                     .push_id(generation, |ui| show(ui, &title, track, &channel))
