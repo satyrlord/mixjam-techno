@@ -13,10 +13,16 @@ These cases are not cuts:
 - A start or end on a repeat point. When the halves of a loop play the same
   notes (ALIKE), the loop repeats a shorter figure. A 4-bar loop can repeat a
   2-bar figure, and so on.
-- A start in time: the clip starts on a bar line at its place on the phrase
-  grid, so the figure resumes after a rest. The grid starts at bar 1, or at
-  the lane's `anchor` bar in the metadata.
+- A start in time: the clip starts on a bar or half-bar line at its place on
+  the phrase grid, so the figure resumes after a rest. The grid starts at
+  bar 1, or at the lane's `anchor` bar in the metadata.
+- An in-time crossfade: a clip in time on the phrase grid starts or ends
+  inside another clip of the lane or its twin that is also in time. Both play
+  the same place in the phrase, so the figure continues across the files,
+  for example from one chord's file into the next.
 - A sound that is not a loop of whole bars (one-shots and hits).
+- A lane with `"field": true` in the metadata: a field recording (crickets,
+  traffic) is not a phrase.
 - Clips inside a span of the lane's `cuts` entry in the metadata: approved
   devices, such as retriggered runs, and cuts with a serious reason (the
   owner asked, or no other tool fixes that part of the sample), as
@@ -146,14 +152,15 @@ def cuts(document, lanes, roles=None):
     for index, lane in enumerate(document['lanes']):
         info = lanes.get(str(index + 1)) or {}
         role = info.get('role', 'generic')
-        if roles is not None and role not in roles:
+        if (roles is not None and role not in roles) or info.get('field'):
             continue
         devices = [(first, last) for first, last, *_ in info.get('cuts', [])]
         anchor = info.get('anchor', 1)
         placements = sorted(lane['placements'], key=lambda p: p['startTick'])
         clock = clock_of(index)
         group = info.get('name', '').replace(' (twin)', '')
-        neighbours = [(q, clock_of(other_index)) for other_index, other in enumerate(document['lanes'])
+        neighbours = [(q, clock_of(other_index), (lanes.get(str(other_index + 1)) or {}).get('anchor', 1))
+                      for other_index, other in enumerate(document['lanes'])
                       if other_index == index or (group and
                           (lanes.get(str(other_index + 1)) or {}).get('name', '').replace(' (twin)', '') == group)
                       for q in other['placements']]
@@ -161,6 +168,19 @@ def cuts(document, lanes, roles=None):
         def source(p):
             src = loop(p['sampleId'])
             return source_span(p, src, clock)
+
+        def grid_distance(q, q_clock, q_anchor):
+            """Ticks between a clip's source start and its place on the lane's phrase grid."""
+            src = loop(q['sampleId'])
+            grid = ((q['startTick'] - (q_anchor - 1) * TICKS_PER_BAR) % src.ticks) if src.ticks else 0
+            if q_clock:
+                grid = ((q_clock.at(q_clock.frame(q['startTick']))
+                         - q_clock.at(q_clock.frame((q_anchor - 1) * TICKS_PER_BAR)))
+                        / q_clock.frames_per_tick) % src.ticks
+            if q.get('reverse', False):
+                grid = -grid % src.ticks
+            distance = abs(grid - source_span(q, src, q_clock)[0]) % src.ticks
+            return min(distance, src.ticks - distance)
 
         for k, p in enumerate(placements):
             src = loop(p['sampleId'])
@@ -171,10 +191,10 @@ def cuts(document, lanes, roles=None):
             if any(first <= bar and end_tick <= last * TICKS_PER_BAR for first, last in devices):
                 continue
             start, stop = source(p)
-            before = [(q, other_clock) for q, other_clock in neighbours if q is not p
+            before = [(q, other_clock) for q, other_clock, _ in neighbours if q is not p
                       and abs(q['startTick'] + q['durationTicks'] - p['startTick']) <= SLACK
                       and loop(q['sampleId']) and loop(q['sampleId']).figure]
-            after = [(q, other_clock) for q, other_clock in neighbours if q is not p
+            after = [(q, other_clock) for q, other_clock, _ in neighbours if q is not p
                      and abs(q['startTick'] - end_tick) <= SLACK
                      and loop(q['sampleId']) and loop(q['sampleId']).figure]
             led_in = any(abs(source_span(q, loop(q['sampleId']), other_clock)[1] - start) <= SLACK
@@ -182,15 +202,17 @@ def cuts(document, lanes, roles=None):
             led_on = any(abs(source_span(q, loop(q['sampleId']), other_clock)[0] - stop) <= SLACK
                          for q, other_clock in after)
             # A figure that resumes in time after a rest starts at its place on the phrase grid.
-            grid = ((p['startTick'] - (anchor - 1) * TICKS_PER_BAR) % src.ticks) if src.ticks else 0
-            if clock:
-                grid = ((clock.at(clock.frame(p['startTick']))
-                         - clock.at(clock.frame((anchor - 1) * TICKS_PER_BAR)))
-                        / clock.frames_per_tick) % src.ticks
-            if p.get('reverse', False):
-                grid = -grid % src.ticks
-            distance = abs(grid - start) % src.ticks
-            in_time = p['startTick'] % TICKS_PER_BAR == 0 and min(distance, src.ticks - distance) <= SLACK
+            on_grid = grid_distance(p, clock, anchor) <= SLACK
+            in_time = p['startTick'] % (TICKS_PER_BAR // 2) == 0 and on_grid
+            # An in-time crossfade: another in-time clip of the lane or its twin plays across this edge.
+            if on_grid:
+                crossing = [q for q, q_clock, q_anchor in neighbours if q is not p
+                            and loop(q['sampleId']) and loop(q['sampleId']).figure
+                            and grid_distance(q, q_clock, q_anchor) <= SLACK]
+                led_in = led_in or any(q['startTick'] < p['startTick'] < q['startTick'] + q['durationTicks']
+                                       for q in crossing)
+                led_on = led_on or any(q['startTick'] < end_tick < q['startTick'] + q['durationTicks']
+                                       for q in crossing)
             what = []
             if not src.on_edge(start) and not led_in and not in_time:
                 what.append('start')
