@@ -63,6 +63,11 @@ fn describe_path(response: &Response, path: &str) {
 
 impl MixJamApp {
     pub(super) fn open_sample_libraries(&mut self, ctx: &egui::Context) {
+        if !self.libraries.open && self.options.is_some() {
+            // A previous standalone opening must not keep its centered
+            // position when the Files page opens this window beside Options.
+            dialog::forget_geometry(ctx, TITLE);
+        }
         self.libraries.open = true;
         self.libraries.close_after_scan = false;
         dialog::expand(ctx, TITLE);
@@ -81,9 +86,14 @@ impl MixJamApp {
             return;
         }
         let mut open = true;
+        let anchor = self
+            .options
+            .as_ref()
+            .and_then(|_| dialog::window_rect(ctx, options::labels::WINDOW));
         form::ring::begin(ctx, TITLE);
         dialog::window(TITLE)
             .open(&mut open)
+            .anchor(anchor)
             .default_width(560.0)
             .default_height(420.0)
             .fit(true)
@@ -217,33 +227,37 @@ impl MixJamApp {
             ui.add_space(4.0);
         }
         if !library.folder_tempos().is_empty() {
-            let tempos =
+            form::disclosure(
+                ui,
                 controls::disclosure(format!("Folder tempos ({})", library.folder_tempos().len()))
-                    .default_open(self.capture_view_is("library-tempos"))
-                    .show(ui, |ui| {
-                        for (folder, bpm, count) in library.folder_tempos() {
-                            let name = library_relative(library, folder);
-                            ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
-                        }
-                    });
-            form::register(&tempos.header_response);
+                    .default_open(self.capture_view_is("library-tempos")),
+                |ui| {
+                    for (folder, bpm, count) in library.folder_tempos() {
+                        let name = library_relative(library, folder);
+                        ui.small(format!("{name}: {bpm} BPM, {count} WAVs"));
+                    }
+                },
+            );
         }
         if !library.skipped_waves().is_empty() {
-            let skipped =
-                controls::disclosure(format!("Skipped WAVs ({})", library.skipped_waves().len()))
-                    .show(ui, |ui| {
-                        for (path, error) in library.skipped_waves() {
-                            ui.small(format!("{}: {error}", library_relative(library, path)));
-                        }
-                    });
-            form::register(&skipped.header_response);
+            form::disclosure(
+                ui,
+                controls::disclosure(format!("Skipped WAVs ({})", library.skipped_waves().len())),
+                |ui| {
+                    for (path, error) in library.skipped_waves() {
+                        ui.small(format!("{}: {error}", library_relative(library, path)));
+                    }
+                },
+            );
         }
         if let Some(index) = remove {
             self.remove_library_folder(index);
         }
-        let providers = controls::disclosure("Optional product providers")
-            .default_open(self.capture_view_is("library-providers"))
-            .show(ui, |ui| {
+        form::disclosure(
+            ui,
+            controls::disclosure("Optional product providers")
+                .default_open(self.capture_view_is("library-providers")),
+            |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let products = egui::ComboBox::from_id_salt("library_product")
                         .selected_text(self.libraries.product.label())
@@ -291,7 +305,7 @@ impl MixJamApp {
                     ui.add(egui::Label::new(&path).wrap());
                     ui.add_space(6.0);
                 }
-            });
-        form::register(&providers.header_response);
+            },
+        );
     }
 }

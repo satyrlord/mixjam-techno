@@ -4,7 +4,7 @@
 //! page can be drawn and tested on a bare context.
 use super::super::form::{self, choice, help, section, switch};
 use super::super::*;
-use super::draft::{Action, OptionsDraft, OptionsFacts, Page};
+use super::draft::{Action, OptionsDraft, OptionsFacts, Page, validation_error};
 use super::labels::*;
 use mixjam_techno::application::options::{AppOptions, SongFolderMode, Theme};
 
@@ -101,9 +101,10 @@ pub(crate) fn audio(
     );
     // The request and the measured callback, apart from each other (Options
     // spec), out of the way until someone needs them.
-    let details = controls::disclosure(DEVICE_DETAILS)
-        .default_open(false)
-        .show(ui, |ui| {
+    form::disclosure(
+        ui,
+        controls::disclosure(DEVICE_DETAILS).default_open(false),
+        |ui| {
             ui.label(
                 egui::RichText::new(&facts.buffer_status)
                     .size(theme::type_size::CLIP)
@@ -117,8 +118,8 @@ pub(crate) fn audio(
                 "Saves the last 30 seconds sent to the audio device, with the song's state, \
                  to the diagnostics folder in the data folder. F12 does the same anywhere.",
             );
-        });
-    form::register(&details.header_response);
+        },
+    );
     ui.separator();
     section(ui, MONITORING);
     ui.horizontal(|ui| {
@@ -247,9 +248,9 @@ pub(crate) fn files(
             actions.push(Action::PickFolder);
         }
         // The same check that keeps Apply disabled, where the folder is typed.
-        match values.validate() {
-            Err(reason) => form::error(ui, reason),
-            Ok(()) => help(ui, "An existing folder, chosen or typed as a full path."),
+        match validation_error(values, &facts.active) {
+            Some(reason) => form::error(ui, reason),
+            None => help(ui, "An existing folder, chosen or typed as a full path."),
         }
     }
     if let Some(warning) = &facts.folder_warning {

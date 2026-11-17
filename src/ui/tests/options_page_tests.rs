@@ -155,6 +155,33 @@ fn files_buttons_report_their_actions() {
 }
 
 #[test]
+fn files_checks_that_a_new_fixed_folder_exists_before_apply() {
+    let ctx = context();
+    let facts = OptionsFacts::default();
+    let missing = std::env::temp_dir().join(format!(
+        "mixjam-missing-options-page-folder-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    assert!(!missing.exists());
+    let mut values = AppOptions {
+        song_folder_mode: SongFolderMode::Fixed,
+        fixed_song_folder: Some(missing),
+        ..AppOptions::default()
+    };
+    let reason = values.validate_apply().unwrap_err();
+    let output = settled(&ctx, Page::Files, &mut values, &facts);
+    assert_eq!(screen(&output).text(&reason).color(), roles().coral);
+    assert!(!shows_text(
+        &output,
+        "An existing folder, chosen or typed as a full path."
+    ));
+}
+
+#[test]
 fn reduced_quality_is_a_warning_not_an_error() {
     let ctx = context();
     let facts = OptionsFacts::default();

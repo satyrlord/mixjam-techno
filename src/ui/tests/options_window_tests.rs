@@ -73,6 +73,19 @@ fn options_keyboard_edits_applies_restores_and_cancels() {
 }
 
 #[test]
+fn expanded_device_details_tabs_from_its_header_into_its_body() {
+    let (ctx, mut app, root) = isolated_fixture();
+    open_on(&ctx, &mut app, Page::Audio);
+    click_named(&ctx, &mut app, DEVICE_DETAILS);
+    focus(&ctx, &mut app, BUFFER_TARGET);
+    for name in [DEVICE_DETAILS, SAVE_CAPTURE, PREVIEW_LEVEL] {
+        let output = press(&ctx, &mut app, egui::Key::Tab, NONE);
+        assert_eq!(focused_label(&output), Some(name));
+    }
+    remove_settings(&root);
+}
+
+#[test]
 fn options_escape_respects_a_higher_utility_window() {
     let (ctx, mut app, root) = isolated_fixture();
     app.open_options(&ctx);

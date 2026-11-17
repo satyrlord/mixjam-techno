@@ -10,9 +10,10 @@ it verified.
 The checks below confirm these points of the contract:
 
 - Options opens from the gear at the left end of the status bar, or with
-  Ctrl+,. Audio, Workspace, Files, and Sample libraries share one window.
-- The preferences share one draft, with Apply, Cancel, Restore options
-  defaults, and Reload for a stale draft. Options do not enter the song
+  Ctrl+,. Audio, Workspace, and Files share one window. Files opens the
+  separate Sample libraries window.
+- The preferences share one draft, with Apply, Cancel, Restore all defaults,
+  and Reload for a stale draft. Options do not enter the song
   history.
 - Exports always prepare full quality. The preview level changes only preview
   playback.
@@ -21,7 +22,7 @@ The checks below confirm these points of the contract:
 - A fixed folder must exist when the user selects it. If the folder is not
   available later, the application keeps its path and uses the fallback. This
   does not block changes to other preferences.
-- The folder and provider actions of the Sample libraries page use their own
+- The folder and provider actions of the Sample libraries window use their own
   operations. Apply and Cancel change only the options draft.
 - Buffer Apply prepares a silent stream on the same device and format, writes
   the settings, and then adopts the stream. A preparation or write failure

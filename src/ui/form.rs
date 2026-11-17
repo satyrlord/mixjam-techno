@@ -96,6 +96,31 @@ pub(super) fn button(ui: &mut egui::Ui, label: &str, role: controls::ButtonRole)
     response
 }
 
+/// A disclosure whose header takes focus before the controls in its body.
+pub(super) fn disclosure<R>(
+    ui: &mut egui::Ui,
+    header: egui::CollapsingHeader,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::CollapsingResponse<R> {
+    let position = ui.ctx().data(|data| {
+        let ring = data.get_temp::<egui::Id>(egui::Id::new(CURRENT))?;
+        let order = data.get_temp::<Vec<egui::Id>>(ring)?;
+        Some((ring, order.len()))
+    });
+    let response = header.show(ui, contents);
+    register(&response.header_response);
+    if response.header_response.enabled()
+        && let Some((ring, index)) = position
+    {
+        // egui returns the header response after drawing the body. Put it
+        // before the controls that the body added, including nested groups.
+        ui.ctx().data_mut(|data| {
+            data.get_temp_mut_or_default::<Vec<egui::Id>>(ring)[index..].rotate_right(1);
+        });
+    }
+    response
+}
+
 /// Add an enabled control to the ring of the window being drawn, and keep a
 /// newly focused control in view.
 pub(super) fn register(response: &Response) {

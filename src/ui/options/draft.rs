@@ -156,6 +156,18 @@ fn page_changes(draft: &AppOptions, active: &AppOptions) -> [usize; 3] {
     ]
 }
 
+/// Check a draft as Apply does. A newly selected folder must exist; an
+/// unchanged accepted folder keeps its fallback if it later disappears.
+pub(super) fn validation_error(values: &AppOptions, active: &AppOptions) -> Option<String> {
+    if values.song_folder_mode != active.song_folder_mode
+        || values.fixed_song_folder != active.fixed_song_folder
+    {
+        values.validate_apply().err()
+    } else {
+        values.validate().err()
+    }
+}
+
 impl OptionsDraft {
     pub(crate) fn new(facts: &OptionsFacts, page: Page) -> Self {
         Self {
@@ -194,8 +206,8 @@ impl OptionsDraft {
 
     /// Why the values cannot be saved as they are, such as a relative fixed
     /// folder.
-    pub(crate) fn invalid(&self) -> Option<String> {
-        self.values.validate().err()
+    pub(crate) fn invalid(&self, facts: &OptionsFacts) -> Option<String> {
+        validation_error(&self.values, &facts.active)
     }
 
     /// Why Apply is disabled, if it is.
@@ -204,7 +216,7 @@ impl OptionsDraft {
             Some(STALE_DRAFT.to_owned())
         } else if !self.pending(facts) {
             Some(labels::NOTHING_TO_APPLY.to_owned())
-        } else if let Some(reason) = self.invalid() {
+        } else if let Some(reason) = self.invalid(facts) {
             Some(reason)
         } else {
             self.audio_blocked(facts).map(str::to_owned)

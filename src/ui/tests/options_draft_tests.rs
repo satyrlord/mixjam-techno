@@ -60,7 +60,7 @@ fn apply_is_blocked_by_a_stale_draft_an_invalid_value_and_a_busy_device() {
     draft.values.song_folder_mode = SongFolderMode::Fixed;
     draft.values.fixed_song_folder = Some(PathBuf::from("relative"));
     let invalid = draft.values.validate().unwrap_err();
-    assert_eq!(draft.invalid().as_ref(), Some(&invalid));
+    assert_eq!(draft.invalid(&facts).as_ref(), Some(&invalid));
     assert_eq!(draft.apply_blocked(&facts), Some(invalid));
     assert_eq!(draft.update(Action::Apply, &facts), None);
     // Audio settings wait while the device is busy, others do not.
@@ -194,4 +194,33 @@ fn a_buffer_target_error_belongs_to_its_target() {
         Some("Too short.")
     );
     assert_eq!(facts.buffer_error(PlaybackBufferTarget::Ms40), None);
+}
+
+#[test]
+fn a_new_unavailable_fixed_folder_blocks_apply_but_an_accepted_one_keeps_its_fallback() {
+    let mut facts = facts();
+    let missing = std::env::temp_dir().join(format!(
+        "mixjam-missing-options-folder-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    assert!(!missing.exists());
+    let mut draft = OptionsDraft::new(&facts, Page::Files);
+    draft.values.song_folder_mode = SongFolderMode::Fixed;
+    draft.values.fixed_song_folder = Some(missing);
+    let reason = draft.values.validate_apply().unwrap_err();
+    assert_eq!(draft.apply_blocked(&facts), Some(reason));
+    assert_eq!(draft.update(Action::Apply, &facts), None);
+    // An accepted folder can disappear. Its unchanged path must not block
+    // unrelated edits, since the Session keeps its dialog-folder fallback.
+    facts.active = draft.values.clone();
+    draft.values.show_tooltips = !facts.active.show_tooltips;
+    assert_eq!(draft.apply_blocked(&facts), None);
+    assert!(matches!(
+        draft.update(Action::Apply, &facts),
+        Some(Effect::Apply { .. })
+    ));
 }

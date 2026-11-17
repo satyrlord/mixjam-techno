@@ -419,3 +419,99 @@ fn long_library_paths_wrap_in_full_without_a_hover() {
     assert!(label.right() <= size.x, "{label:?}");
     remove_settings(&root);
 }
+
+#[test]
+fn sample_libraries_opens_beside_options_when_room_and_stays_inside_compact_windows() {
+    for size in [
+        Vec2::new(1440.0, 1000.0),
+        Vec2::new(1024.0, 768.0),
+        Vec2::new(960.0, 720.0),
+    ] {
+        let (ctx, mut app, root) = isolated_fixture();
+        // First paint the startup window without Options, so its centered
+        // geometry is cached before the Files page opens it again.
+        app.open_sample_libraries(&ctx);
+        for _ in 0..4 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![key_event(egui::Key::Escape, egui::Modifiers::NONE)],
+            egui::Modifiers::NONE,
+            size,
+        );
+        assert!(!app.sample_libraries_open());
+        app.options = Some(options::OptionsWindow::new(
+            &app.session,
+            options::Page::Files,
+        ));
+        for _ in 0..4 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        if size.x == 1440.0 {
+            // Move Options to the left so both windows fit side by side.
+            let before = dialog::window_rect(&ctx, options::labels::WINDOW).unwrap();
+            let start = Pos2::new(before.center().x, before.top() + 22.0);
+            pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(start - Vec2::new(8.0, 0.0))],
+                egui::Modifiers::NONE,
+            );
+            let end = start - Vec2::new(before.left(), 0.0);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(end)],
+                egui::Modifiers::NONE,
+            );
+            pointer(&ctx, &mut app, end, false, egui::Modifiers::NONE);
+        }
+        app.open_sample_libraries(&ctx);
+        for _ in 0..4 {
+            frame_at_size(&ctx, &mut app, vec![], egui::Modifiers::NONE, size);
+        }
+        let options = dialog::window_rect(&ctx, options::labels::WINDOW).unwrap();
+        let libraries = dialog::window_rect(&ctx, libraries::TITLE).unwrap();
+        let viewport = Rect::from_min_size(Pos2::ZERO, size).shrink(8.0);
+        assert!(viewport.contains_rect(libraries), "{size}: {libraries:?}");
+        if size.x == 1440.0 {
+            assert!(
+                viewport.right() - options.right() >= libraries.width() + 8.0,
+                "The fixture must leave room beside Options: {options:?}"
+            );
+            assert!(
+                !options.intersects(libraries),
+                "Sample libraries must open beside Options: {options:?} / {libraries:?}"
+            );
+            // Repeated activation expands and focuses the existing window;
+            // it must preserve the person's position and size.
+            let start = Pos2::new(libraries.center().x, libraries.top() + 22.0);
+            pointer(&ctx, &mut app, start, true, egui::Modifiers::NONE);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(start + Vec2::new(8.0, 0.0))],
+                egui::Modifiers::NONE,
+            );
+            let end = start + Vec2::new(32.0, 0.0);
+            frame(
+                &ctx,
+                &mut app,
+                vec![egui::Event::PointerMoved(end)],
+                egui::Modifiers::NONE,
+            );
+            pointer(&ctx, &mut app, end, false, egui::Modifiers::NONE);
+            let moved = dialog::window_rect(&ctx, libraries::TITLE).unwrap();
+            assert!(moved.left() > libraries.left(), "The window must move.");
+            app.open_sample_libraries(&ctx);
+            for _ in 0..3 {
+                frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+            }
+            assert_eq!(dialog::window_rect(&ctx, libraries::TITLE), Some(moved));
+        }
+        remove_settings(&root);
+    }
+}

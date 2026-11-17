@@ -163,8 +163,8 @@ its EQ window. To open it, click `Track N EQ` in the Mixer or the Mix view, or
 ## Options
 
 To open or focus the Options Utility window, click `Options`, or send Ctrl+,
-through `key`. Its named `Audio`, `Workspace`, `Files`, and `Sample libraries`
-selectors show the controls on each page. Use `set` with labels such as these:
+through `key`. Its named `Audio`, `Workspace`, and `Files` selectors show the
+controls on each page. Use `set` with labels such as these:
 
 - `Drive playback oversampling`: `4x` or `Off`.
 - `Sample playback quality`: `High` or `Low`.

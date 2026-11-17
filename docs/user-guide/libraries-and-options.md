@@ -2,19 +2,18 @@
 
 ## Sample libraries
 
-At the first start, Options opens on its **Sample libraries** page. To add a
-library:
+At the first start, the **Sample libraries** window opens. To add a library:
 
 1. Select **Add library folder**.
 2. Select a folder of WAV files. The WAV files can be in subfolders.
 
-To open the page later, select the **Options** gear, then **Sample
-libraries**. If the Sounds panel has no sounds, **Open sample libraries** in
-the panel also opens the page.
+To open the window later, select the **Options** gear, then **Files**, then
+**Open sample libraries**. If the Sounds panel has no sounds, **Open sample
+libraries** in the panel also opens the window.
 
 You can add a maximum of 9 library folders. The application scans all of them
 and shows their sounds together in the Sounds panel. A library folder cannot be
-in a different library folder. The page lists the folders in order:
+in a different library folder. The window lists the folders in order:
 
 - **Remove**, next to a folder, removes it from the list. The list always keeps
   one folder or more.

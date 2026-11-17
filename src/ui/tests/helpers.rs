@@ -67,11 +67,7 @@ pub(super) fn each_theme(mut body: impl FnMut(theme::Theme)) {
 /// test's files. Pass the folder to `remove_settings` at the end.
 pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let root = std::env::temp_dir().join(format!(
-        "mixjam-settings-ui-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
+    let root = settings_fixture_dir(&std::env::temp_dir(), &NEXT);
     let session = Session::headless(Arc::new(Library::empty()), Project::default())
         .unwrap()
         .with_settings_root(root.clone());
@@ -86,6 +82,49 @@ pub(super) fn isolated_fixture() -> (egui::Context, MixJamApp, PathBuf) {
     app.libraries.close_after_scan = false;
     app.capture.path = None;
     (ctx, app, root)
+}
+
+fn settings_fixture_dir(root: &std::path::Path, next: &std::sync::atomic::AtomicU64) -> PathBuf {
+    loop {
+        let path = root.join(format!(
+            "mixjam-settings-ui-{}-{}",
+            std::process::id(),
+            next.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        match std::fs::create_dir(&path) {
+            Ok(()) => return path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!(
+                "Cannot create test settings folder {}: {error}",
+                path.display()
+            ),
+        }
+    }
+}
+
+#[test]
+fn settings_fixtures_preserve_existing_directories() {
+    use std::sync::atomic::AtomicU64;
+    let base = std::env::temp_dir().join(format!(
+        "mixjam-settings-reservation-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&base).unwrap();
+    let stale = base.join(format!("mixjam-settings-ui-{}-0", std::process::id()));
+    std::fs::create_dir(&stale).unwrap();
+    std::fs::write(stale.join("options.json"), b"existing settings").unwrap();
+    let fresh = settings_fixture_dir(&base, &AtomicU64::new(0));
+    assert_ne!(fresh, stale);
+    assert!(std::fs::read_dir(fresh).unwrap().next().is_none());
+    assert_eq!(
+        std::fs::read(stale.join("options.json")).unwrap(),
+        b"existing settings"
+    );
+    std::fs::remove_dir_all(base).unwrap();
 }
 
 /// Remove an `isolated_fixture`'s settings folder, if anything was saved.
