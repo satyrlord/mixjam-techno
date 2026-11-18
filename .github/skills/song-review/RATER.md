@@ -71,7 +71,8 @@ Evidence read: the files.
 
 ## Possibly missed by ear
 1. Short title (kind: correctness | taste | identity). Bars, tracks. The
-   measurement, and the fix in the tool's terms.
+   measurement, and the fix in the tool's terms, with each value inside its
+   [control range](REFERENCE.md#control-ranges).
 
 ## Conflicts with standing notes
 - Note N: the mechanical fault and its measurement. Leave out the heading if

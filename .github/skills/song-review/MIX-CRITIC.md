@@ -42,4 +42,5 @@ is in the master. The board settings are the work of the mastering engineer.
 
 Use the [finding format](REFERENCE.md#finding-format): at most 8 findings, then
 at most 5 things to keep. Give fixes in dB, pan, send amounts, filter points,
-EQ settings, and fades. Give no score.
+EQ settings, and fades, each inside its
+[control range](REFERENCE.md#control-ranges). Give no score.

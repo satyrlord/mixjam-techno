@@ -139,6 +139,12 @@ of the lane, so small speakers can play a held bass. Set `focus` to about twice
 the lowest note of the lane to keep the fundamental clean. `on=False` at the
 default settings removes the drive, as the app saves it.
 
+The ranges of the drive are `amount` 0 to 24 dB, `character` and `mix` 0 to
+100 percent, `focus` 20 to 2000 Hz, and `output` -12 to 12 dB. The library and
+the application reject a lane setting outside the range of its control. The
+ranges of all lane, clip, and automation controls are in
+[Control ranges](../../.github/skills/song-review/REFERENCE.md#control-ranges).
+
 ## Earlier songs
 
 The song tools expect format 25. Formats 18 to 24 also work. `render.py` does

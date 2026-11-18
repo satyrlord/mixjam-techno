@@ -49,6 +49,10 @@ Role rules. If you are a role, obey all of these:
 - Do not open the application window. Do not play sound.
 - Base each claim on a measurement or on the song file. Say where it is, in
   bars and tracks. Say which judgements need ears.
+- Give each proposed setting inside its
+  [control range](REFERENCE.md#control-ranges). Quote a current setting with
+  the name of its control. If a control is at its limit, say so, and propose a
+  different control.
 - When you name a lane, also give its track number and the names of its
   sounds, for example "track 22 (Starshine Seq A 1, A 7)". The owner sees track
   numbers and sound names, not the lane names in `.meta.json`.
@@ -199,9 +203,10 @@ launch a critic for one small change.
    Write a brief for each selected role. Give it its role,
    its inputs from [Role inputs](REFERENCE.md#role-inputs), the standing
    notes, the review folder, and the output path from
-   [Round log](REFERENCE.md#round-log).
+   [Round log](REFERENCE.md#round-log). Tell it to keep each proposed setting
+   inside the [control ranges](REFERENCE.md#control-ranges).
    Completion criterion: Each brief names each path that its row of the role
-   inputs table needs, and the source of each target.
+   inputs table needs, the source of each target, and the control ranges.
 2. Launch the selected roles as fresh agents on the same pass.
    Use `song-composition-critic`, `song-mix-critic`, and `song-rater` for the
    corresponding roles.
@@ -217,7 +222,9 @@ launch a critic for one small change.
    Completion criterion: Each composition and mix critique has at most 8
    findings with a kind, bars, tracks, evidence, a fix, and a severity, at most
    5 things to keep, and no score. The rhythm critique has each part that
-   `RHYTHM-CRITIC.md` lists.
+   `RHYTHM-CRITIC.md` lists. Each proposed setting of each role is inside its
+   [control range](REFERENCE.md#control-ranges), or the merged list names the
+   limit.
 5. If the user or the artist profile asks for a Devil's advocate review,
    launch the Devil's advocate (`song-devils-advocate`) as a fresh agent. Do
    this after all other critiques of the round are written.
