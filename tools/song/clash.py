@@ -36,7 +36,7 @@ from harmony import NOTES  # noqa: E402
 from mixjam import TICKS_PER_BAR, loop_bars, playback_bpm, read_wav  # noqa: E402
 from render import lane_groups  # noqa: E402
 
-TONAL = {'lead', 'keys', 'arp', 'bass', 'pad', 'vocal'}
+TONAL = {'lead', 'keys', 'arp', 'bass', 'pad', 'vocal', 'atmos'}  # field recordings are skipped
 SIZE, HOP = 8192, 4096
 LOW, HIGH = 150.0, 4000.0
 DROP = 0.15
@@ -153,7 +153,8 @@ def rendered_groups(document, lanes):
 
 def tonal_tracks(document, lanes):
     return [min(tracks) for tracks in rendered_groups(document, lanes).values()
-            if (lanes.get(str(min(tracks))) or {}).get('role') in TONAL]
+            if (lanes.get(str(min(tracks))) or {}).get('role') in TONAL
+            and not (lanes.get(str(min(tracks))) or {}).get('field')]
 
 
 class Sources:

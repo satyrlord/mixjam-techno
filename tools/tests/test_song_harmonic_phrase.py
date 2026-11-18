@@ -106,6 +106,10 @@ class HarmonicTests(unittest.TestCase):
             metadata = {'1': dict(name='Lead', role='lead'),
                         '2': dict(name='Lead (twin)', role='lead')}
             self.assertEqual(clash.tonal_tracks(document, metadata), [1])
+            # Atmospheres are checked; field recordings are not.
+            for role, field, expected in (('atmos', False, [1]), ('atmos', True, []), ('fx', False, [])):
+                other = {'1': dict(name='Air', role=role, field=field), '2': dict(name='Air (twin)', role=role)}
+                self.assertEqual(clash.tonal_tracks(document, other), expected)
             candidates = clash.alternatives(document, 1, 3, fits[3][1], clash.Sources(document, metadata))
             self.assertEqual(candidates[0][1], 'better')
             lines = []
