@@ -16,24 +16,44 @@ scrolls. The selection chooses the page:
     never moves the playhead.
 - A track: a click on its name in the Arrange lane header selects it. The
   click also opens a folded Inspector, and the name then has Raised fill and a
-  2-point accent edge. The page shows:
-  - LEVEL: the fader, dB field, Unity, the pan slider, Center, and the pan.
-  - OUTPUTS: Mute, Solo, Left, Right, polarity, and why the track is silent.
-  - SENDS: the four send knobs.
-  - CHANNEL PROCESSING: the EQ response curve, the EQ, Drive, Compressor, and
-    Ducker switches, and the EQ button that opens the channel EQ window with
-    every dial.
-- One clip: its sound, category, bars, and track, then its start in bars and
-  the fields of the clip menu: gain, trim, length, both fades with their
-  curves, pitch, and Reverse.
-- Several clips: their count, span, and tracks, and their category counts.
+  2-point accent edge. If the Inspector is open on the track, a second click
+  on the name shows the song. The page shows:
+  - CHANNEL PROCESSING: the EQ response curve and the EQ, Drive, Compressor,
+    and Ducker switches. The curve is the button that opens the channel EQ
+    window with every dial: "Open EQ" in its corner, and an accent edge on
+    hover.
+  - CHANNEL: one strip card of three rows. The strip fader, dB field, and
+    Unity; the pan slider, Center, and the pan, or "Automated" while a lane
+    drives it; Mute, Solo, Left, Right, polarity, and, only for a silent
+    track, why it is silent. A single row would not fit the 256-point column,
+    so the rows stack in one card.
+  - SENDS: the four send knobs, each with its return's effect and the send
+    amount below it. The knob of an empty or switched-off return is dimmed.
+- One clip: the sound's name, then two lines: its category, and its bars and
+  track. Below them, a picture of the clip at the panel's width: its category
+  fill and waveform, its fades shaded, its gain line, a tick at each bar, and
+  the two fade handles, which drag as on the clip in the score. The arrow
+  keys also adjust a focused handle. Then three strip cards of fields, each
+  label at the left and each value in one column:
+  - FADES (BEATS): each fade length and its curve as a drop-down list.
+  - SOUND: the gain as a strip fader and a dB field, the pitch in semitones
+    and cents, and Reverse as a switch.
+  - POSITION: the start bar, the length in bars, and the trim start in beats
+    at the song's tempo.
+  A clip whose sound is missing shows a note and "Locate the sound...", which
+  asks for the file, as the clip menu's Resolve manually does.
+- Several clips: their count, span, and tracks, the FADES and SOUND cards,
+  and their category counts. A change in a card sets every selected clip, as
+  one undo step. A dash marks mixed numbers and fade curves. Reverse shows
+  "Some play backwards" for a mixed selection. The two pitch fields adjust
+  semitones and cents separately, within the clip's pitch limits.
 
 The controls are named "Inspector track ..." and "Inspector clip ...", so
 that they never share a name with the Mixer, the Mix view, or the clip menu.
-Every edit uses the same operations, so each edit is one undo step, and the
-handles on the clips stay. The folded strip is 28 points wide, with a chevron
-and INSPECTOR read top to bottom. A click anywhere on the strip opens the
-Inspector. A maximised score hides both.
+Every edit is one undo step, and the handles on the clips stay. The scroll bar
+takes its own room, so it never covers a card. The folded strip is 28 points
+wide, with a chevron and INSPECTOR read top to bottom. A click anywhere on the
+strip opens the Inspector. A maximised score hides both.
 
 ## Room for the panels
 

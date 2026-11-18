@@ -146,11 +146,16 @@ The Inspector at the right of the score shows the selected item:
 
 - **Nothing selected**: the song, with its tempo and length, a clip count for
   each category, and its sections. Click a section to scroll the score to it.
-- **A track**: click the name of a track in its lane header. The Inspector
-  shows the level, pan, outputs, sends, EQ curve, and processing switches of
-  the track. **EQ** opens the channel EQ window.
-- **One clip**: its start, gain, trim, length, fades, pitch, and Reverse.
-- **Several clips**: a summary.
+- **A track**: click the name of a track in its lane header. This opens a
+  folded Inspector. The track page shows the EQ curve, processing switches,
+  level, pan, outputs, and sends. Click the EQ curve to open the channel EQ
+  window. While the track page is open, click the name again to see the song.
+- **One clip**: a picture of the clip, where you can drag its fade handles,
+  and its fades, gain, pitch, Reverse, start, length, and trim start. If its
+  sound is missing, **Locate the sound** asks for the file.
+- **Several clips**: their shared fades, gain, pitch, and Reverse. A change
+  sets every selected clip. A dash marks mixed numbers and fade curves.
+  Reverse shows **Some play backwards** when the selection is mixed.
 
 You can undo all changes that you make in the Inspector. To fold the Inspector
 to a strip, select the chevron at its top, or the **Inspector** switch in the

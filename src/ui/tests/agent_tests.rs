@@ -160,6 +160,55 @@ fn agent_selects_radio_buttons_and_rejects_clearing_the_active_choice() {
 }
 
 #[test]
+fn agent_can_set_mixed_clip_reverse_either_way() {
+    let (context, mut app, port) = agent_fixture();
+    let clip = app.session.project().clips[1].clone();
+    app.session
+        .edit_discrete(EditCommand::SetClip {
+            id: clip.id,
+            start_tick: clip.start_tick,
+            gain: clip.gain,
+            offset_frames: clip.offset_frames,
+            length_ticks: clip.length_ticks,
+            fades: clip.fades,
+            pitch_cents: clip.pitch_cents,
+            reverse: true,
+        })
+        .unwrap();
+    let before = app.session.project().clone();
+    app.open_inspector();
+    app.select_clip(before.clips[0].id, false);
+    app.select_clip(clip.id, true);
+    let name = "Inspector clip reverse";
+    let target = format!("target={name}");
+
+    for (value, reverse) in [("value=false", false), ("value=true", true)] {
+        let ui = agent(&context, &mut app, &port, &["ui"]);
+        let node = ui["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["label"] == name)
+            .unwrap();
+        assert_eq!(node["role"], "checkbox");
+        assert!(node.get("checked").is_none(), "{node}");
+        assert_eq!(node["description"], "Some selected clips play backwards.");
+
+        let reply = agent(&context, &mut app, &port, &["set", &target, value]);
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert!(
+            app.session
+                .project()
+                .clips
+                .iter()
+                .all(|clip| clip.reverse == reverse)
+        );
+        app.history_step(false);
+        assert_eq!(app.session.project(), &before);
+    }
+}
+
+#[test]
 fn agent_operates_windows_sliders_toggles_text_and_combo_boxes_by_name() {
     let (context, mut app, port) = agent_fixture();
     let send = |app: &mut MixJamApp, words: &[&str]| agent(&context, app, &port, words);

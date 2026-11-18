@@ -1,7 +1,7 @@
 //! The lane header's own parts in the Arrange view: the derived lane name
 //! and the short level fader. The song stores no lane names, so a lane is
 //! named after the sound family of its first clip.
-use super::mixer::{fraction_gain, gain_fraction, gain_keys, gain_semantics};
+use super::mixer::{FaderRange, gain_keys, gain_semantics};
 use super::*;
 use mixjam_techno::application::LibraryView;
 
@@ -67,6 +67,7 @@ pub(super) fn lane_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f
         rect,
         name,
         gain,
+        FaderRange::Mixer,
         (roles().canvas, roles().muted, roles().text),
     )
 }
@@ -75,12 +76,29 @@ pub(super) fn lane_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f
 /// use the strip's rail roles, so it reads the right way round on Vintage's
 /// ivory.
 pub(super) fn strip_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
+    strip_fader_in(ui, rect, name, gain, FaderRange::Mixer)
+}
+
+/// A clip gain fader reports explicit edits even at its current value. The
+/// displayed value can stand for a selection with different saved gains.
+pub(super) fn clip_fader(ui: &mut egui::Ui, rect: Rect, name: &str, gain: &mut f32) -> bool {
+    strip_fader_in(ui, rect, name, gain, FaderRange::Clip)
+}
+
+fn strip_fader_in(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    name: &str,
+    gain: &mut f32,
+    range: FaderRange,
+) -> bool {
     let roles = roles();
     fader_in(
         ui,
         rect,
         name,
         gain,
+        range,
         (roles.strip_well, roles.strip_fill, roles.strip_text),
     )
 }
@@ -92,6 +110,7 @@ fn fader_in(
     rect: Rect,
     name: &str,
     gain: &mut f32,
+    range: FaderRange,
     (well, fill, active): (Color32, Color32, Color32),
 ) -> bool {
     let before = *gain;
@@ -101,22 +120,23 @@ fn fader_in(
         Sense::click_and_drag(),
     );
     let rail = rect.shrink2(Vec2::new(4.0, 0.0));
-    if (response.clicked() || response.dragged())
-        && let Some(pos) = response.interact_pointer_pos()
-    {
+    let pointer = response
+        .interact_pointer_pos()
+        .filter(|_| response.clicked() || response.dragged());
+    if let Some(pos) = pointer {
         let fine = ui.input(|input| input.modifiers.shift);
         let fraction = if fine && response.dragged() {
-            gain_fraction(*gain) + ui.input(|input| input.pointer.delta().x) / rail.width() * 0.1
+            range.fraction(*gain) + ui.input(|input| input.pointer.delta().x) / rail.width() * 0.1
         } else {
             (pos.x - rail.left()) / rail.width()
         };
-        *gain = fraction_gain(fraction);
+        *gain = range.gain(fraction);
     }
-    gain_keys(ui, &response, gain);
+    let adjusted = gain_keys(ui, &response, gain, range);
     let painter = ui.painter();
     let slot = Rect::from_center_size(rail.center(), Vec2::new(rail.width(), 4.0));
     painter.rect_filled(slot, 2.0, well);
-    let fraction = gain_fraction(*gain).clamp(0.0, 1.0);
+    let fraction = range.fraction(*gain);
     let x = egui::lerp(rail.left()..=rail.right(), fraction);
     painter.rect_filled(
         Rect::from_min_max(slot.min, Pos2::new(x, slot.bottom())),
@@ -128,7 +148,7 @@ fn fader_in(
         },
     );
     // Unity gain is marked on the slot.
-    let unity = egui::lerp(rail.left()..=rail.right(), gain_fraction(1.0));
+    let unity = egui::lerp(rail.left()..=rail.right(), range.fraction(1.0));
     painter.line_segment(
         [
             Pos2::new(unity, slot.top() - 2.0),
@@ -155,8 +175,8 @@ fn fader_in(
             egui::StrokeKind::Inside,
         );
     }
-    gain_semantics(ui, response, name, before, *gain);
-    before != *gain
+    gain_semantics(ui, response, name, before, *gain, range);
+    before != *gain || matches!(range, FaderRange::Clip) && (pointer.is_some() || adjusted)
 }
 
 #[cfg(test)]

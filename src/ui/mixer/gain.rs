@@ -15,6 +15,57 @@ const TAPER: [(f32, f32); 6] = [
     (1.0, 12.0),
 ];
 
+#[derive(Clone, Copy)]
+pub(crate) enum FaderRange {
+    Mixer,
+    Clip,
+}
+
+impl FaderRange {
+    fn silence_db(self) -> f32 {
+        match self {
+            Self::Mixer => SILENCE_DB,
+            Self::Clip => super::super::view::CLIP_SILENCE_DB,
+        }
+    }
+
+    fn maximum_db(self) -> f32 {
+        match self {
+            Self::Mixer => MAX_MIXER_GAIN_DB,
+            Self::Clip => amplitude_to_db(2.0),
+        }
+    }
+
+    fn travel(self) -> std::ops::RangeInclusive<f32> {
+        match self {
+            Self::Mixer => 0.0..=1.0,
+            Self::Clip => gain_fraction(db_to_amplitude(self.silence_db()))..=gain_fraction(2.0),
+        }
+    }
+
+    pub(crate) fn fraction(self, gain: f32) -> f32 {
+        let travel = self.travel();
+        ((gain_fraction(gain) - travel.start()) / (travel.end() - travel.start())).clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn gain(self, fraction: f32) -> f32 {
+        if fraction <= 0.0 {
+            0.0
+        } else if matches!(self, Self::Clip) && fraction >= 1.0 {
+            2.0
+        } else {
+            fraction_gain(egui::lerp(self.travel(), fraction.clamp(0.0, 1.0)))
+        }
+    }
+
+    fn gain_at_db(self, db: f32) -> f32 {
+        match self {
+            Self::Mixer => db_to_amplitude(db.min(self.maximum_db())),
+            Self::Clip => super::super::view::clip_gain_from_db(db),
+        }
+    }
+}
+
 pub(crate) fn gain_fraction(gain: f32) -> f32 {
     let low = db_to_amplitude(TAPER[0].1);
     if gain <= low {
@@ -279,7 +330,7 @@ pub(super) fn gain_rail(
         };
         *gain = fraction_gain(fraction);
     }
-    gain_keys(ui, &response, gain);
+    gain_keys(ui, &response, gain, FaderRange::Mixer);
     let cap = Pos2::new(
         rect.center().x,
         egui::lerp(rect.bottom()..=rect.top(), gain_fraction(*gain)),
@@ -297,14 +348,21 @@ pub(super) fn gain_rail(
         theme::fader_cap(ui.painter(), cap, size * scale);
     }
     focus_ring(ui, &response, rect, scale);
-    gain_semantics(ui, response, name, before, *gain);
+    gain_semantics(ui, response, name, before, *gain, FaderRange::Mixer);
     before != *gain
 }
 
 /// The edits every gain fader takes besides the pointer: the wheel, the
 /// arrow keys, Home and End, the accessibility actions, and a double-click.
-pub(crate) fn gain_keys(ui: &egui::Ui, response: &Response, gain: &mut f32) {
+/// Returns whether the user set a value, including the current one.
+pub(crate) fn gain_keys(
+    ui: &egui::Ui,
+    response: &Response,
+    gain: &mut f32,
+    range: FaderRange,
+) -> bool {
     let mut step = controls::wheel(ui, response);
+    let mut edited = false;
     if response.has_focus() {
         controls::keep_transport_key(ui.ctx(), response.id);
         ui.memory_mut(|memory| {
@@ -331,9 +389,11 @@ pub(crate) fn gain_keys(ui: &egui::Ui, response: &Response, gain: &mut f32) {
             }
             if input.consume_key(modifiers, egui::Key::Home) {
                 *gain = 0.0;
+                edited = true;
             }
             if input.consume_key(modifiers, egui::Key::End) {
-                *gain = db_to_amplitude(MAX_MIXER_GAIN_DB);
+                *gain = range.gain_at_db(range.maximum_db());
+                edited = true;
             }
         });
     }
@@ -343,11 +403,12 @@ pub(crate) fn gain_keys(ui: &egui::Ui, response: &Response, gain: &mut f32) {
             if let Some(ActionData::NumericValue(value)) = request.data
                 && value.is_finite()
             {
-                *gain = if value <= f64::from(SILENCE_DB) {
+                *gain = if value <= f64::from(range.silence_db()) {
                     0.0
                 } else {
-                    db_to_amplitude((value as f32).min(MAX_MIXER_GAIN_DB))
+                    range.gain_at_db(value as f32)
                 };
+                edited = true;
             }
         }
         step += input.num_accesskit_action_requests(response.id, Action::Increment) as f32
@@ -358,26 +419,34 @@ pub(crate) fn gain_keys(ui: &egui::Ui, response: &Response, gain: &mut f32) {
             ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
         }
         let previous_db = amplitude_to_db(*gain);
-        let db = if *gain == 0.0 {
-            if step > 0.0 { -60.0 } else { f32::NEG_INFINITY }
-        } else {
-            previous_db
-                + step
-                    * if ui.input(|input| input.modifiers.shift) {
-                        0.1
-                    } else {
-                        0.5
-                    }
+        let increment = step
+            * if ui.input(|input| input.modifiers.shift) {
+                0.1
+            } else {
+                0.5
+            };
+        let db = match range {
+            FaderRange::Clip => previous_db.max(range.silence_db()) + increment,
+            FaderRange::Mixer if *gain == 0.0 => {
+                if step > 0.0 {
+                    -60.0
+                } else {
+                    f32::NEG_INFINITY
+                }
+            }
+            FaderRange::Mixer => previous_db + increment,
         };
-        *gain = if step < 0.0 && previous_db >= SILENCE_DB && db <= SILENCE_DB {
+        *gain = if step < 0.0 && previous_db >= range.silence_db() && db <= range.silence_db() {
             0.0
         } else {
-            db_to_amplitude(db.min(MAX_MIXER_GAIN_DB))
+            range.gain_at_db(db)
         };
     }
     if response.double_clicked() {
         *gain = 1.0;
+        edited = true;
     }
+    edited || step != 0.0
 }
 
 /// A gain fader's accessible name, value, range, and hint: "{name} gain".
@@ -387,12 +456,13 @@ pub(crate) fn gain_semantics(
     name: &str,
     before: f32,
     gain: f32,
+    range: FaderRange,
 ) -> Response {
     let db = amplitude_to_db(gain);
     response.widget_info(|| {
         let mut info = egui::WidgetInfo::slider(
             response.enabled(),
-            f64::from(db.max(SILENCE_DB)),
+            f64::from(db.max(range.silence_db())),
             format!("{name} gain"),
         );
         info.current_text_value = Some(db_text(db));
@@ -400,8 +470,8 @@ pub(crate) fn gain_semantics(
     });
     ui.ctx().accesskit_node_builder(response.id, |node| {
         use egui::accesskit::Action;
-        node.set_min_numeric_value(f64::from(SILENCE_DB));
-        node.set_max_numeric_value(f64::from(MAX_MIXER_GAIN_DB));
+        node.set_min_numeric_value(f64::from(range.silence_db()));
+        node.set_max_numeric_value(f64::from(range.maximum_db()));
         node.set_numeric_value_step(0.5);
         node.add_action(Action::SetValue);
         node.add_action(Action::Increment);
@@ -413,8 +483,9 @@ pub(crate) fn gain_semantics(
     response.hover_hint(format!(
         "{name} gain: {}. Drag to adjust; Shift gives fine movement. \
          The wheel and arrow keys change 0.5 dB \
-         (Shift: 0.1 dB). Home silences, End sets +12 dB. Double-click for unity. Negative dB \
+         (Shift: 0.1 dB). Home silences, End sets +{:.0} dB. Double-click for unity. Negative dB \
          only reduces level.",
-        db_text(db)
+        db_text(db),
+        range.maximum_db(),
     ))
 }

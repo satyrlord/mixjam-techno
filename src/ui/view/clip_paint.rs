@@ -2,12 +2,15 @@
 //! readouts of a handle drag, and the Step synth patterns that a clip draws as
 //! notes instead of a waveform.
 use super::*;
+use mixjam_techno::application::PeakState;
 
 /// What the score's clips paint, kept between frames.
 #[derive(Default)]
 pub(in super::super) struct ClipPaintCache {
     /// Each clip's waveform at the zoom it was last drawn at.
     pub(in super::super) waves: std::collections::HashMap<u64, waveform::ClipWave>,
+    /// The last clip the Inspector drew, at the Inspector's width.
+    pub(in super::super) inspector_waves: std::collections::HashMap<u64, waveform::ClipWave>,
     /// The pattern saved beside each Step synth sound the song uses, or None
     /// when it has none, read once per catalog revision.
     pub(in super::super) step_patterns: std::collections::HashMap<u32, Option<Arc<StepSynthState>>>,
@@ -78,7 +81,7 @@ fn draw_reverse_mark(painter: &egui::Painter, rect: Rect, plate: Option<Color32>
 
 /// Shade a clip's fades above their curves. The fade out ends where the
 /// clip's sound ends, which can be before the clip's end.
-pub(super) fn draw_fades(
+pub(in super::super) fn draw_fades(
     painter: &egui::Painter,
     rect: Rect,
     clip: &Clip,
@@ -142,12 +145,12 @@ pub(super) fn draw_fades(
 }
 
 /// Source frames in one tick at the project's effective source tempo.
-pub(super) fn frames_per_tick(sample: &Sample, bpm: f64) -> f64 {
+pub(in super::super) fn frames_per_tick(sample: &Sample, bpm: f64) -> f64 {
     f64::from(sample.sample_rate) * 240.0 / bpm / f64::from(TICKS_PER_BAR)
 }
 
 /// The ticks from a clip's start to where its sound ends, at most its length.
-pub(super) fn sound_ticks(clip: &Clip, sample: &Sample, bpm: f64) -> u32 {
+pub(in super::super) fn sound_ticks(clip: &Clip, sample: &Sample, bpm: f64) -> u32 {
     // Reversed, the sound ends with the clip.
     if sample.sample_rate == 0 || clip.reverse {
         return clip.length_ticks;
@@ -163,7 +166,13 @@ fn gain_y(rect: Rect, gain: f32) -> f32 {
 
 /// The centers of a clip's fade handles on its top edge: where the fade in
 /// ends and where the fade out starts. A handle without a fade sits in its corner.
-fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32, bpm: f64) -> [Pos2; 2] {
+pub(in super::super) fn fade_handles(
+    rect: Rect,
+    clip: &Clip,
+    sample: &Sample,
+    bar_width: f32,
+    bpm: f64,
+) -> [Pos2; 2] {
     let tick_width = bar_width / TICKS_PER_BAR as f32;
     let sound_end =
         (rect.left() + sound_ticks(clip, sample, bpm) as f32 * tick_width).min(rect.right());
@@ -184,7 +193,7 @@ fn fade_handles(rect: Rect, clip: &Clip, sample: &Sample, bar_width: f32, bpm: f
 }
 
 /// The side of a fade handle's square.
-const FADE_HANDLE: f32 = 9.0;
+pub(in super::super) const FADE_HANDLE: f32 = 9.0;
 
 /// The vertical travel of one gain step: one dB, or a tenth with Ctrl.
 pub(super) const GAIN_PIXELS: f32 = 4.0;
@@ -265,7 +274,7 @@ pub(super) fn draw_gain_handle(painter: &egui::Painter, rect: Rect, visible: Rec
     );
 }
 
-pub(super) fn draw_fade_handles(
+pub(in super::super) fn draw_fade_handles(
     painter: &egui::Painter,
     rect: Rect,
     clip: &Clip,
@@ -434,7 +443,7 @@ pub(in super::super) fn clip_radius(rect: Rect) -> f32 {
 }
 
 /// The gain line of a selected or hovered clip. Its handle drags it.
-pub(super) fn draw_gain_line(painter: &egui::Painter, rect: Rect, gain: f32) {
+pub(in super::super) fn draw_gain_line(painter: &egui::Painter, rect: Rect, gain: f32) {
     let y = gain_y(rect, gain);
     painter
         .with_clip_rect(painter.clip_rect().intersect(rect.shrink(2.0)))
@@ -528,4 +537,35 @@ pub(in super::super) fn elided(
     job.wrap.max_rows = rows;
     job.wrap.break_anywhere = rows == 1;
     job
+}
+
+/// The waveform of an on-screen clip, kept per clip and rebuilt only when its
+/// key changes. None while the sound's peaks are pending or unavailable.
+pub(in super::super) fn clip_wave<'a>(
+    waves: &'a mut std::collections::HashMap<u64, waveform::ClipWave>,
+    session: &Session,
+    clip: &Clip,
+    sample: &Sample,
+    tick_width: f32,
+    bpm: f64,
+) -> Option<&'a waveform::ClipWave> {
+    match session.sample_peaks(sample.id) {
+        PeakState::Ready(peaks) => {
+            let key = waveform::ClipWaveKey::new(
+                clip,
+                &peaks,
+                session.catalog_revision(),
+                tick_width,
+                frames_per_tick(sample, bpm),
+            );
+            let wave = waves
+                .entry(clip.id)
+                .or_insert_with(|| waveform::ClipWave::new(key, &peaks));
+            if wave.key != key {
+                *wave = waveform::ClipWave::new(key, &peaks);
+            }
+            Some(&*wave)
+        }
+        PeakState::Pending | PeakState::Unavailable => None,
+    }
 }

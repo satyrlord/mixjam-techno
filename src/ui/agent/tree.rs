@@ -72,9 +72,11 @@ pub(crate) fn nodes(update: &accesskit::TreeUpdate) -> Vec<UiNode> {
                 description: node.description().map(str::to_owned),
                 text: text.map(str::to_string),
                 number: node.numeric_value(),
-                checked: node
-                    .toggled()
-                    .map(|toggled| toggled == accesskit::Toggled::True),
+                checked: match node.toggled() {
+                    Some(accesskit::Toggled::True) => Some(true),
+                    Some(accesskit::Toggled::False) => Some(false),
+                    Some(accesskit::Toggled::Mixed) | None => None,
+                },
                 enabled: !node.is_disabled(),
                 clickable: node.supports_action(accesskit::Action::Click),
                 window: window_of(id),

@@ -44,9 +44,8 @@ fn automation_drags_include_additions_and_pauses_but_end_on_release() {
     session.begin_automation_gesture(0, lane).unwrap();
     set(&mut session, -12.0);
     // A held pointer can pause for longer than the ordinary gesture timeout.
-    session.gesture = session
-        .gesture
-        .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
+    let (_, at) = session.gesture.as_mut().unwrap();
+    *at -= GESTURE_GAP;
     set(&mut session, -9.0);
     session.end_automation_gesture();
     // The next drag starts immediately, but remains a separate step.
@@ -453,9 +452,8 @@ fn one_control_drag_is_one_undo_step_and_keeps_earlier_history() {
     // Another control, and the same control after a pause, start new steps.
     let command = mixer(&session, 3, 2.5, 0.5);
     session.edit(command).unwrap();
-    session.gesture = session
-        .gesture
-        .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
+    let (_, at) = session.gesture.as_mut().unwrap();
+    *at -= GESTURE_GAP;
     let command = mixer(&session, 3, 2.5, -0.5);
     session.edit(command).unwrap();
     assert!(session.history_step(false).unwrap());
@@ -483,15 +481,11 @@ fn a_held_pointer_keeps_one_step_and_a_new_press_starts_another() {
             })
             .unwrap();
     };
-    let pause = |session: &mut Session| {
-        session.gesture = session
-            .gesture
-            .map(|(gesture, at)| (gesture, at - GESTURE_GAP));
-    };
     // A drag held still past the pause is still one step.
     session.pointer_gesture(true, true);
     gain(&mut session, 0.8);
-    pause(&mut session);
+    let (_, at) = session.gesture.as_mut().unwrap();
+    *at -= GESTURE_GAP;
     session.pointer_gesture(false, true);
     gain(&mut session, 0.6);
     // Unity pressed at once after it is a step of its own.

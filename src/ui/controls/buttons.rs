@@ -324,15 +324,21 @@ pub(crate) fn toggle_at(
         response.mark_changed();
     }
     let center = Pos2::new(rect.left() + 14.0, rect.center().y);
+    // On, the whole track lights, so the state reads at a glance; off, the
+    // knob rests dim on the dark track.
     ui.painter().rect_filled(
         Rect::from_center_size(center, Vec2::new(26.0, 14.0)),
         7.0,
-        roles().ink,
+        if *value { print_color(ui) } else { roles().ink },
     );
     ui.painter().circle_filled(
         center + Vec2::new(if *value { 6.0 } else { -6.0 }, -0.5),
         5.5,
-        if *value { print_color(ui) } else { roles().cap },
+        if *value {
+            roles().cap
+        } else {
+            roles().cap.gamma_multiply(0.6)
+        },
     );
     ui.painter().text(
         Pos2::new(rect.left() + 34.0, rect.center().y),

@@ -30,6 +30,9 @@ selects the port.
 `set` take that name. `set` works for these controls: sliders, number fields,
 text fields, checkboxes, toggles, and combo boxes. When more than one control
 has the same name, `window=`, `role=`, and `index=` select one control.
+The Inspector describes a mixed Reverse selection in the checkbox's
+`description`. `set` accepts `true` or `false` and applies it to every
+selected clip.
 
 `key`, `type`, `pointer`, and `scroll` send keyboard and mouse input to a
 position. `state` gives the position of the arrangement and of each clip.

@@ -5,14 +5,17 @@
 //! names ("Inspector track ...", "Inspector clip ..."), so they never share a
 //! name with the Mixer, the Mix view, or the clip menu shown beside them.
 use super::mixer::{
-    Look, center_button, eq_button, gain_value, pan_slider, polarity_button, row_surface,
-    send_knob, switch_button, unity_button,
+    Look, center_button, gain_value, pan_slider, polarity_button, row_surface, send_knob,
+    switch_button, unity_button,
 };
 use super::room::Panel;
 use super::sounds::{fold_button, panel_strip};
 use super::view::{GROUPS, group_color, section_color, title_text};
 use super::*;
 use mixjam_techno::application::fx::BUSES;
+
+#[path = "inspector/clip.rs"]
+mod clip;
 
 /// The open panel's width, and the folded strip's.
 pub(super) const INSPECTOR_WIDTH: f32 = 280.0;
@@ -109,7 +112,13 @@ impl MixJamApp {
                     });
                 });
                 let page = self.inspector_page();
-                ui.push_id((self.boards.master_view_generation, page), |ui| {
+                let mut page_id = ui.id().with((self.boards.master_view_generation, page));
+                if matches!(page, Page::Clips(_)) {
+                    page_id = page_id.with(&self.selection.clips);
+                }
+                ui.push_id(page_id, |ui| {
+                    // The bar takes its own room, so it never covers a card.
+                    ui.spacing_mut().scroll.floating = false;
                     egui::ScrollArea::vertical()
                         .id_salt("inspector-page")
                         .auto_shrink([false, false])
@@ -133,7 +142,7 @@ impl MixJamApp {
         title(
             ui,
             &project.title,
-            &format!("{:.0} BPM  ·  {meta}", project.bpm),
+            &[&format!("{:.0} BPM  ·  {meta}", project.bpm)],
         );
         let clips: Vec<&Clip> = project.clips.iter().collect();
         self.category_counts(ui, &clips);
@@ -251,18 +260,27 @@ impl MixJamApp {
         let rows = counts
             .into_iter()
             .map(|(name, count)| (group_color(&name), name, count))
-            .chain((missing > 0).then(|| (roles().raised, "Missing sound".to_owned(), missing)));
-        for (color, name, count) in rows {
+            .map(|(color, name, count)| (color, name, count, false))
+            .chain(
+                (missing > 0).then(|| (roles().raised, "Missing sound".to_owned(), missing, true)),
+            );
+        for (color, name, count, is_missing) in rows {
             let (rect, _) =
                 ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
-            ui.painter().rect_filled(
-                Rect::from_center_size(
-                    rect.left_center() + Vec2::new(7.0, 0.0),
-                    Vec2::new(14.0, 10.0),
-                ),
-                2.0,
-                color,
+            let swatch = Rect::from_center_size(
+                rect.left_center() + Vec2::new(7.0, 0.0),
+                Vec2::new(14.0, 10.0),
             );
+            ui.painter().rect_filled(swatch, 2.0, color);
+            // As on a missing clip in the score: a coral edge.
+            if is_missing {
+                ui.painter().rect_stroke(
+                    swatch,
+                    2.0,
+                    Stroke::new(1.0_f32, roles().coral),
+                    egui::StrokeKind::Inside,
+                );
+            }
             ui.painter().text(
                 rect.left_center() + Vec2::new(22.0, 0.0),
                 Align2::LEFT_CENTER,
@@ -301,131 +319,63 @@ impl MixJamApp {
         title(
             ui,
             &name,
-            &format!(
+            &[&format!(
                 "Track {}  ·  {count} {}",
                 index + 1,
                 if count == 1 { "clip" } else { "clips" }
-            ),
+            )],
         );
         let any_solo = project.any_solo();
+        let returns: Vec<(&'static str, bool)> = project
+            .fx
+            .buses
+            .iter()
+            .map(|bus| {
+                let label = bus.module.label();
+                (
+                    // "Echoform Delay" reads "Delay" under a small knob.
+                    label.rsplit(' ').next().unwrap_or(label),
+                    !bus.module.is_empty() && bus.powered,
+                )
+            })
+            .collect();
         let mut edited = project.tracks[index].clone();
         let track = &mut edited;
         let width = ui.available_width();
-        let mut open_eq = false;
         let mut switched = false;
 
-        section_heading(ui, "Level");
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 64.0), Sense::hover());
-        row_surface(ui, rect, false);
-        let row = |top: f32, left: f32, right: f32, height: f32| {
-            Rect::from_x_y_ranges(
-                rect.left() + left..=rect.left() + right,
-                rect.top() + top..=rect.top() + top + height,
-            )
-        };
-        lanes::lane_fader(ui, row(6.0, 8.0, 132.0, 22.0), TRACK, &mut track.gain);
-        gain_value(
-            ui,
-            row(6.0, 136.0, 200.0, 22.0),
-            1.0,
-            TRACK,
-            &mut track.gain,
-        );
-        if unity_button(
-            ui,
-            row(8.0, 204.0, width - 6.0, 18.0),
-            Look::Strip(1.0),
-            TRACK,
-        ) {
-            track.gain = 1.0;
-        }
-        pan_slider(
-            ui,
-            row(36.0, 8.0, 124.0, 22.0),
-            Look::Strip(1.0),
-            TRACK,
-            &mut track.pan,
-            !track.automation.pan.is_empty(),
-        );
-        if center_button(ui, row(38.0, 130.0, 182.0, 18.0), Look::Strip(1.0), TRACK) {
-            track.pan = 0.0;
-        }
-        ui.painter().text(
-            Pos2::new(rect.left() + 190.0, rect.top() + 47.0),
-            Align2::LEFT_CENTER,
-            // While its lane drives the pan, the stored value is not what plays.
-            if track.automation.pan.is_empty() {
-                view::pan_description(track.pan)
-            } else {
-                "Automated".into()
-            },
-            FontId::proportional(11.0),
-            roles().strip_text,
-        );
-
-        section_heading(ui, "Outputs");
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 34.0), Sense::hover());
-        row_surface(ui, rect, false);
-        let cell = |x: f32, w: f32| {
-            Rect::from_center_size(
-                Pos2::new(rect.left() + x, rect.center().y),
-                Vec2::new(w, 24.0),
-            )
-        };
-        for (switch, x) in TrackSwitch::ALL.into_iter().zip([20.0, 46.0, 72.0, 98.0]) {
-            let on = match switch {
-                TrackSwitch::Mute => &mut track.muted,
-                TrackSwitch::Solo => &mut track.solo,
-                TrackSwitch::Left => &mut track.left_enabled,
-                TrackSwitch::Right => &mut track.right_enabled,
-            };
-            switched |= switch_button(ui, cell(x, 24.0), Look::Strip(1.0), TRACK, switch, on);
-        }
-        switched |= polarity_button(
-            ui,
-            cell(126.0, 24.0),
-            Look::Strip(1.0),
-            TRACK,
-            &mut track.polarity_inverted,
-        );
-        ui.painter().text(
-            Pos2::new(rect.left() + 148.0, rect.center().y),
-            Align2::LEFT_CENTER,
-            mixer::track_state(
-                track.silence(any_solo),
-                !track.automation.pan.is_empty(),
-                track.pan,
-            ),
-            FontId::proportional(11.0),
-            roles().strip_text,
-        );
-
-        section_heading(ui, "Sends");
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 52.0), Sense::hover());
-        row_surface(ui, rect, false);
-        let step = rect.width() / BUSES as f32;
-        for bus in 0..BUSES {
-            let x = rect.left() + step * (bus as f32 + 0.5);
-            send_knob(
-                ui,
-                Rect::from_center_size(Pos2::new(x, rect.top() + 18.0), Vec2::splat(24.0)),
-                Look::Strip(1.0),
-                &format!("{TRACK} send FX {}", bus + 1),
-                &mut track.sends[bus],
-                !track.automation.sends[bus].is_empty(),
-            );
-            ui.painter().text(
-                Pos2::new(x, rect.bottom() - 9.0),
-                Align2::CENTER_CENTER,
-                format!("FX {}  {:.0}%", bus + 1, track.sends[bus] * 100.0),
-                FontId::proportional(10.0),
-                roles().strip_text,
-            );
-        }
-
         section_heading(ui, "Channel processing");
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 96.0), Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 80.0), Sense::hover());
         eq::response_curve(ui, rect, &track.eq, &format!("{TRACK} EQ"));
+        // The curve opens the channel EQ window, where every dial is.
+        let eq_name = format!("{TRACK} EQ");
+        let response = ui.interact(rect, ui.id().with(&eq_name), Sense::click());
+        let lit = response.hovered() || response.has_focus();
+        if lit {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            ui.painter().rect_stroke(
+                rect,
+                3.0,
+                Stroke::new(1.0_f32, roles().accent),
+                egui::StrokeKind::Inside,
+            );
+        }
+        view::focus_outline(ui, &response, roles().accent);
+        ui.painter().text(
+            rect.right_top() + Vec2::new(-6.0, 5.0),
+            Align2::RIGHT_TOP,
+            "Open EQ",
+            FontId::proportional(10.0),
+            if lit { roles().text } else { roles().muted },
+        );
+        view::named(&response, egui::WidgetType::Button, &eq_name);
+        let open_eq = response
+            .hover_hint(format!(
+                "Open the channel EQ window: low and high cuts, shelves, and two peaks; the \
+                 drive; the compressor and the stereo width; and the ducker. Processing is {}.",
+                if track.processing_on() { "on" } else { "off" }
+            ))
+            .clicked();
         let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 56.0), Sense::hover());
         let half = (width - 6.0) / 2.0;
         let inserts: [(&str, &str, &mut bool); 4] = [
@@ -452,22 +402,150 @@ impl MixJamApp {
         if track.ducker.on && usize::from(track.ducker.key) == index + 1 {
             track.ducker.key = if index == 0 { 2 } else { 1 };
         }
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 26.0), Sense::hover());
-        open_eq |= eq_button(
-            ui,
-            Rect::from_min_size(rect.min, Vec2::new(64.0, 24.0)),
+
+        // Level, pan, and outputs share one card, a row each.
+        section_heading(ui, "Channel");
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 98.0), Sense::hover());
+        row_surface(ui, rect, false);
+        // The card sets the page's height. Its positioned controls have their own cursor.
+        let mut channel_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("inspector-channel")
+                .max_rect(rect),
+        );
+        let w = rect.width();
+        let row = |top: f32, left: f32, right: f32, height: f32| {
+            Rect::from_x_y_ranges(
+                rect.left() + left..=rect.left() + right,
+                rect.top() + top..=rect.top() + top + height,
+            )
+        };
+        let pan_automated = !track.automation.pan.is_empty();
+        lanes::strip_fader(
+            &mut channel_ui,
+            row(6.0, 6.0, w - 122.0, 22.0),
+            TRACK,
+            &mut track.gain,
+        );
+        gain_value(
+            &mut channel_ui,
+            row(6.0, w - 118.0, w - 60.0, 22.0),
+            1.0,
+            TRACK,
+            &mut track.gain,
+        );
+        if unity_button(
+            &mut channel_ui,
+            row(8.0, w - 56.0, w - 6.0, 18.0),
             Look::Strip(1.0),
             TRACK,
-            track.processing_on(),
-            false,
+        ) {
+            track.gain = 1.0;
+        }
+        // Inset, so the automation ring stays inside the card.
+        pan_slider(
+            &mut channel_ui,
+            row(38.0, 10.0, w - 126.0, 22.0),
+            Look::Strip(1.0),
+            TRACK,
+            &mut track.pan,
+            pan_automated,
         );
-        ui.painter().text(
-            rect.min + Vec2::new(72.0, 12.0),
+        if center_button(
+            &mut channel_ui,
+            row(40.0, w - 118.0, w - 60.0, 18.0),
+            Look::Strip(1.0),
+            TRACK,
+        ) {
+            track.pan = 0.0;
+        }
+        channel_ui.painter().text(
+            Pos2::new(rect.left() + w - 54.0, rect.top() + 49.0),
             Align2::LEFT_CENTER,
-            "Opens the channel EQ window",
+            // While its lane drives the pan, the stored value is not what plays.
+            if pan_automated {
+                "Automated".into()
+            } else {
+                view::pan_description(track.pan)
+            },
             FontId::proportional(11.0),
-            roles().muted,
+            roles().strip_text,
         );
+        let cell = |x: f32| {
+            Rect::from_center_size(
+                Pos2::new(rect.left() + x, rect.top() + 81.0),
+                Vec2::new(24.0, 22.0),
+            )
+        };
+        for (switch, x) in TrackSwitch::ALL.into_iter().zip([18.0, 44.0, 70.0, 96.0]) {
+            let on = match switch {
+                TrackSwitch::Mute => &mut track.muted,
+                TrackSwitch::Solo => &mut track.solo,
+                TrackSwitch::Left => &mut track.left_enabled,
+                TrackSwitch::Right => &mut track.right_enabled,
+            };
+            switched |= switch_button(
+                &mut channel_ui,
+                cell(x),
+                Look::Strip(1.0),
+                TRACK,
+                switch,
+                on,
+            );
+        }
+        switched |= polarity_button(
+            &mut channel_ui,
+            cell(124.0),
+            Look::Strip(1.0),
+            TRACK,
+            &mut track.polarity_inverted,
+        );
+        // Only a silent track says why here; the pan row says the rest.
+        if let Some(silence) = track.silence(any_solo) {
+            channel_ui.painter().text(
+                Pos2::new(rect.left() + 144.0, rect.top() + 81.0),
+                Align2::LEFT_CENTER,
+                mixer::track_state(Some(silence), pan_automated, track.pan),
+                FontId::proportional(11.0),
+                roles().strip_text,
+            );
+        }
+
+        section_heading(ui, "Sends");
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 64.0), Sense::hover());
+        row_surface(ui, rect, false);
+        let step = rect.width() / BUSES as f32;
+        for (bus, (effect, live)) in returns.into_iter().enumerate().take(BUSES) {
+            let x = rect.left() + step * (bus as f32 + 0.5);
+            ui.scope(|ui| {
+                // A send to an empty or switched-off return sounds nothing.
+                if !live {
+                    ui.multiply_opacity(0.45);
+                }
+                send_knob(
+                    ui,
+                    Rect::from_center_size(Pos2::new(x, rect.top() + 18.0), Vec2::splat(24.0)),
+                    Look::Strip(1.0),
+                    &format!("{TRACK} send FX {}", bus + 1),
+                    &mut track.sends[bus],
+                    !track.automation.sends[bus].is_empty(),
+                );
+                ui.painter().text(
+                    Pos2::new(x, rect.top() + 41.0),
+                    Align2::CENTER_CENTER,
+                    format!("{} {effect}", bus + 1),
+                    FontId::proportional(10.0),
+                    roles().strip_text,
+                );
+                ui.painter().text(
+                    Pos2::new(x, rect.top() + 54.0),
+                    Align2::CENTER_CENTER,
+                    format!("{:.0}%", track.sends[bus] * 100.0),
+                    FontId::proportional(10.0),
+                    roles().strip_text,
+                );
+            });
+        }
 
         if open_eq {
             self.eq_track = Some(index);
@@ -486,96 +564,17 @@ impl MixJamApp {
             ui.ctx().request_repaint();
         }
     }
-
-    fn clip_page(&mut self, ui: &mut egui::Ui, id: u64) {
-        let project = self.session.project();
-        let Some(clip) = project.clips.iter().find(|clip| clip.id == id).cloned() else {
-            return;
-        };
-        let sample = self.session.library().sample_by_id(clip.sample_id);
-        let name = sample.map_or_else(
-            || {
-                self.session
-                    .missing_sample(clip.sample_id)
-                    .map_or_else(|| "Missing sound".to_owned(), |m| m.name.clone())
-            },
-            |sample| sample.name.clone(),
-        );
-        let first = clip.start_tick / TICKS_PER_BAR + 1;
-        let last = (clip.start_tick + clip.length_ticks)
-            .div_ceil(TICKS_PER_BAR)
-            .max(first);
-        let category = sample.map_or("Missing", |sample| sample.group_name.as_str());
-        title(
-            ui,
-            &name,
-            &format!(
-                "{category}  ·  {}  ·  track {}",
-                if first == last {
-                    format!("bar {first}")
-                } else {
-                    format!("bars {first} to {last}")
-                },
-                clip.track + 1
-            ),
-        );
-        section_heading(ui, "Clip");
-        if sample.is_none() {
-            note(
-                ui,
-                "Its sound is missing. Resolve it from the clip's menu, or with Import details \
-                 in the status bar.",
-            );
-            return;
-        }
-        // Tighter than the clip menu, so the fade curves fit the panel.
-        ui.spacing_mut().button_padding.x = 4.0;
-        ui.spacing_mut().item_spacing.x = 4.0;
-        self.clip_properties(ui, id, CLIP);
-    }
-
-    fn clips_page(&mut self, ui: &mut egui::Ui, count: usize) {
-        let project = self.session.project();
-        let clips: Vec<&Clip> = project
-            .clips
-            .iter()
-            .filter(|clip| self.selection.clips.contains(&clip.id))
-            .collect();
-        let start = clips.iter().map(|clip| clip.start_tick).min().unwrap_or(0);
-        let end = clips
-            .iter()
-            .map(|clip| clip.start_tick + clip.length_ticks)
-            .max()
-            .unwrap_or(0);
-        let tracks: BTreeSet<usize> = clips.iter().map(|clip| clip.track).collect();
-        let first = start / TICKS_PER_BAR + 1;
-        let last = end.div_ceil(TICKS_PER_BAR).max(first);
-        title(
-            ui,
-            &format!("{count} clips"),
-            &format!(
-                "bars {first} to {last}  ·  {} {}",
-                tracks.len(),
-                if tracks.len() == 1 { "track" } else { "tracks" }
-            ),
-        );
-        self.category_counts(ui, &clips);
-        note(
-            ui,
-            "Drag any of them to move them together; Delete removes them all. Select one clip \
-             to edit its gain, fades, pitch, and length here.",
-        );
-    }
 }
 
-/// The page's title in the heading face, and a muted line below it.
-fn title(ui: &mut egui::Ui, text: &str, detail: &str) {
-    let width = ui.available_width();
-    ui.add_sized(
-        Vec2::new(width, 22.0),
-        egui::Label::new(view::heading(text, 16.0)).truncate(),
-    );
-    ui.add(egui::Label::new(egui::RichText::new(detail).size(12.0).color(roles().muted)).wrap());
+/// The page's title in the heading face, at the left, and a muted line
+/// below it for each of `lines`.
+fn title(ui: &mut egui::Ui, text: &str, lines: &[&str]) {
+    ui.add(egui::Label::new(view::heading(text, 16.0)).truncate());
+    for line in lines {
+        ui.add(
+            egui::Label::new(egui::RichText::new(*line).size(12.0).color(roles().muted)).truncate(),
+        );
+    }
 }
 
 /// A group heading: small uppercase muted text.

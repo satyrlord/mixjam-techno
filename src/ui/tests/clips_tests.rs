@@ -522,3 +522,23 @@ fn clip_waveforms_are_cached_per_clip_and_zoom() {
         "A deleted clip's waveform is dropped."
     );
 }
+
+#[test]
+fn the_inspector_caches_only_the_current_clip_waveform() {
+    let (ctx, mut app) = fixture();
+    give_fixture_peaks(&app);
+    app.open_inspector();
+    let ids: Vec<_> = app
+        .session
+        .project()
+        .clips
+        .iter()
+        .map(|clip| clip.id)
+        .collect();
+    for id in ids {
+        app.select_clip(id, false);
+        frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        assert_eq!(app.clip_paint.inspector_waves.len(), 1);
+        assert!(app.clip_paint.inspector_waves.contains_key(&id));
+    }
+}

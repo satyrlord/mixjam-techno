@@ -512,32 +512,33 @@ fn mixer_polarity_survives_silence_history_and_project_save() {
 
 #[test]
 fn mixer_gain_taper_reaches_silence_and_favors_musically_useful_levels() {
-    assert_eq!(mixer::fraction_gain(0.0), 0.0);
-    assert_eq!(mixer::gain_fraction(0.0), 0.0);
-    assert!((20.0 * mixer::fraction_gain(1.0).log10() - 12.0).abs() < 0.000_01);
-    let useful_travel = mixer::gain_fraction(10.0_f32.powf(12.0 / 20.0))
-        - mixer::gain_fraction(10.0_f32.powf(-24.0 / 20.0));
+    let range = mixer::FaderRange::Mixer;
+    assert_eq!(range.gain(0.0), 0.0);
+    assert_eq!(range.fraction(0.0), 0.0);
+    assert!((20.0 * range.gain(1.0).log10() - 12.0).abs() < 0.000_01);
+    let useful_travel =
+        range.fraction(10.0_f32.powf(12.0 / 20.0)) - range.fraction(10.0_f32.powf(-24.0 / 20.0));
     assert!(
         useful_travel >= 0.65,
         "Most travel must serve -24 through +12 dB rather than near-silent levels."
     );
     assert!(
-        mixer::gain_fraction(10.0_f32.powf(-60.0 / 20.0)) <= 0.12,
+        range.fraction(10.0_f32.powf(-60.0 / 20.0)) <= 0.12,
         "The near-silent range must use only a short part of the rail."
     );
     let mut previous = 0.0;
     for position in 1..=1000 {
         let fraction = position as f32 / 1000.0;
-        let gain = mixer::fraction_gain(fraction);
+        let gain = range.gain(fraction);
         assert!(
             gain > previous,
             "Increasing the fader must always increase amplitude."
         );
-        assert!((mixer::gain_fraction(gain) - fraction).abs() < 0.000_01);
+        assert!((range.fraction(gain) - fraction).abs() < 0.000_01);
         previous = gain;
     }
     for gain in [0.000_000_01, 0.001, 0.01, 0.1, 0.5, 1.0, 2.0] {
-        let restored = mixer::fraction_gain(mixer::gain_fraction(gain));
+        let restored = range.gain(range.fraction(gain));
         assert!(
             (restored - gain).abs() <= gain * 0.000_01,
             "The rail must round-trip small positive amplitudes without an artificial silence floor."

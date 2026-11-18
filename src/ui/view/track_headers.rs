@@ -210,8 +210,13 @@ impl MixJamApp {
             ui.id().with(("lane-name", index)),
             Sense::click(),
         );
-        let picked = self.selection.track == Some(index);
-        let pick_label = format!("Show track {} in the Inspector", index + 1);
+        let picked = self.inspector_page() == inspector::Page::Track(index);
+        let show_song = picked && self.panels.room.inspector;
+        let pick_label = if show_song {
+            "Show the song in the Inspector".to_owned()
+        } else {
+            format!("Show track {} in the Inspector", index + 1)
+        };
         pick.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
@@ -243,15 +248,22 @@ impl MixJamApp {
         }
         focus_outline(ui, &pick, roles().accent);
         if pick
-            .hover_hint(
-                "Show this track's level, pan, sends, and channel processing \
-                 in the Inspector. The clip selection clears.",
-            )
+            .hover_hint(if show_song {
+                "The Inspector shows this track. Click again to show the song."
+            } else {
+                "Show this track's channel processing, level, pan, and sends in the \
+                 Inspector. The clip selection clears."
+            })
             .clicked()
         {
-            self.select_track(index);
-            if !self.panels.room.inspector {
-                self.open_inspector();
+            if show_song {
+                // A second click returns the Inspector to the song.
+                self.selection.track = None;
+            } else {
+                self.select_track(index);
+                if !self.panels.room.inspector {
+                    self.open_inspector();
+                }
             }
         }
         let name_size = if frame.row_height < 30.0 { 11.0 } else { 12.0 };

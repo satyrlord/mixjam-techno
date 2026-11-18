@@ -184,6 +184,15 @@ impl MixJamApp {
                     vec![action(node, accesskit::Action::Click, None)]
                 }
             }
+            // A mixed checkbox has no single checked value. Send the requested state.
+            "checkbox" => {
+                let value = if truth(value)? { 1.0 } else { 0.0 };
+                vec![action(
+                    node,
+                    accesskit::Action::SetValue,
+                    Some(accesskit::ActionData::NumericValue(value)),
+                )]
+            }
             "combo_box" if node.text.as_deref() == Some(value.text().as_str()) => Vec::new(),
             "combo_box" => vec![
                 action(node, accesskit::Action::Click, None),

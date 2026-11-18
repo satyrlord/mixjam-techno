@@ -529,7 +529,8 @@ const WORKSPACE: &[Block] = &[
     Heading("Inspector"),
     Facts(&[
         "The Inspector, at the right of the score, shows what is selected. With nothing selected, it shows the song: its tempo, its length, a clip count for each category, and its sections.",
-        "Click a track's name in its lane header to see its level, pan, outputs, sends, EQ curve, and switches. One clip shows its start, gain, trim, length, fades, pitch, and Reverse; several clips show a summary.",
+        "Click a track's name in its lane header to see its channel processing, level, pan, outputs, and sends; click the EQ curve to open the channel EQ window, and the name again to see the song.",
+        "One clip shows a picture of its length and fades, whose handles you can drag, and its fades, sound, and position as exact values. Several clips share the fade and sound values: a change sets them all, and a dash marks a value that differs.",
         "Click a section in the Inspector to scroll the score to it. Every change in the Inspector can be undone.",
     ]),
     Heading("Panels"),

@@ -1,14 +1,16 @@
 //! Continuous control gestures: quick edits of one control form one undo step.
-use super::{EditCommand, Knob, Project, Session, TRACK_COUNT, TrackSwitch};
+use super::{ClipSound, EditCommand, Knob, Project, Session, TRACK_COUNT, TrackSwitch};
 
 /// One continuously adjustable control. Edits of the same control in quick
 /// succession, such as the frames of a slider drag, form one undo step.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(PartialEq)]
 pub(super) enum Gesture {
     Tempo,
     Master,
     Track(usize, TrackControl),
     Clip(u64, ClipControl),
+    /// One control of several clips at once, identified by their sorted IDs.
+    Clips(Vec<u64>, ClipControl),
     /// One automation lane, such as the frames of a point drag.
     Automation(usize, crate::automation::Lane),
     /// One FX bus's return lane.
@@ -72,10 +74,16 @@ impl Gesture {
                 if clip.start_tick != *start_tick {
                     controls.push(ClipControl::Start);
                 }
-                if clip.fades.fade_in != fades.fade_in {
+                // A length change can shorten the fades to fit by itself.
+                let (before, after) = if clip.length_ticks == *length_ticks {
+                    (clip.fades, *fades)
+                } else {
+                    (clip.fades.fit(*length_ticks), fades.fit(*length_ticks))
+                };
+                if before.fade_in != after.fade_in {
                     controls.push(ClipControl::FadeIn);
                 }
-                if clip.fades.fade_out != fades.fade_out {
+                if before.fade_out != after.fade_out {
                     controls.push(ClipControl::FadeOut);
                 }
                 if clip.pitch_cents != *pitch_cents {
@@ -106,23 +114,64 @@ impl Gesture {
                 if project.master_gain != *master_gain {
                     controls.push(Self::Master);
                 }
-                match controls[..] {
-                    [control] => Some(control),
-                    _ => None,
+                if controls.len() == 1 {
+                    controls.pop()
+                } else {
+                    None
                 }
             }
             EditCommand::SetTrack { index, track } => {
                 let mut controls = Vec::new();
                 Self::track_controls(*index, project.tracks.get(*index)?, track, &mut controls)?;
-                match controls[..] {
-                    [control] => Some(control),
-                    _ => None,
+                if controls.len() == 1 {
+                    controls.pop()
+                } else {
+                    None
                 }
             }
             EditCommand::SetMaster(chain) => project.master.changed_knob(chain).map(Self::Pedal),
             EditCommand::SetEffects(buses) => Self::fx(&project.fx, buses),
             _ => None,
         }
+    }
+
+    /// The requested control, before fitting the fades to each clip.
+    pub(super) fn clips(
+        sounds: &[ClipSound],
+        indices: &[usize],
+        project: &Project,
+    ) -> Option<Self> {
+        let mut changed = None;
+        for (sound, &index) in sounds.iter().zip(indices) {
+            let clip = &project.clips[index];
+            if clip.reverse != sound.reverse {
+                return None;
+            }
+            let controls = [
+                (clip.gain != sound.gain, ClipControl::Gain),
+                (
+                    clip.fades.fade_in != sound.fades.fade_in,
+                    ClipControl::FadeIn,
+                ),
+                (
+                    clip.fades.fade_out != sound.fades.fade_out,
+                    ClipControl::FadeOut,
+                ),
+                (clip.pitch_cents != sound.pitch_cents, ClipControl::Pitch),
+            ];
+            for (differs, control) in controls {
+                if differs {
+                    if changed.is_some_and(|other| other != control) {
+                        return None;
+                    }
+                    changed = Some(control);
+                }
+            }
+        }
+        let control = changed?;
+        let mut ids: Vec<_> = sounds.iter().map(|sound| sound.id).collect();
+        ids.sort_unstable();
+        Some(Self::Clips(ids, control))
     }
 
     /// Adds the continuous controls that differ between `old` and `new`, the

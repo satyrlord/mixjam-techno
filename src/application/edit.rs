@@ -4,7 +4,10 @@ use super::{
     Fades, MAX_PITCH_CENTS, MasterChain, Product, Project, Section, Session, TICKS_PER_BAR,
     TRACK_COUNT, Track, TrackMix, duration_ticks,
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 #[derive(Clone, Debug)]
 pub enum EditCommand {
@@ -41,6 +44,10 @@ pub enum EditCommand {
         pitch_cents: i32,
         reverse: bool,
     },
+    /// The gain, fades, pitch, and reverse of several clips, as one step.
+    /// Their places, trims, and lengths stay. Fades that do not fit a clip
+    /// are shortened, the fade out first. Give each clip ID once.
+    SetClipSounds(Vec<ClipSound>),
     SetSwitch {
         track: usize,
         switch: TrackSwitch,
@@ -63,6 +70,16 @@ pub enum EditCommand {
         bus: usize,
         points: Vec<crate::automation::Point>,
     },
+}
+
+/// What `EditCommand::SetClipSounds` sets on one clip.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ClipSound {
+    pub id: u64,
+    pub gain: f32,
+    pub fades: Fades,
+    pub pitch_cents: i32,
+    pub reverse: bool,
 }
 
 /// The on/off controls that the arrangement lane and the mixer strip share.
@@ -125,6 +142,32 @@ fn levels_differ_only(old: &Track, new: &Track) -> bool {
     same == *old
 }
 
+/// Resolve the clip indices in the order of the requested edits.
+fn clip_sound_indices(project: &Project, sounds: &[ClipSound]) -> Result<Vec<usize>, String> {
+    let mut requests = HashMap::with_capacity(sounds.len());
+    for (index, sound) in sounds.iter().enumerate() {
+        if requests.insert(sound.id, index).is_some() {
+            return Err("A selected clip appears more than once.".into());
+        }
+        if !(-MAX_PITCH_CENTS..=MAX_PITCH_CENTS).contains(&sound.pitch_cents) {
+            return Err("Clip pitch must be from -24 to 24 semitones.".into());
+        }
+    }
+    let mut indices = vec![None; sounds.len()];
+    for (index, clip) in project.clips.iter().enumerate() {
+        if let Some(request) = requests.remove(&clip.id) {
+            indices[request] = Some(index);
+            if requests.is_empty() {
+                break;
+            }
+        }
+    }
+    indices
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| "A selected clip does not exist.".into())
+}
+
 impl Session {
     /// Cut the ringing tail of one FX bus during playback. This changes no
     /// setting and is not an undo step.
@@ -158,6 +201,7 @@ impl Session {
             }
             command => command,
         };
+        let mut sound_indices = Vec::new();
         // Validate identifiers before a transaction. A stale UI command must fail visibly.
         match &command {
             EditCommand::SetClip {
@@ -234,6 +278,12 @@ impl Session {
                     return Err("A selected clip does not exist.".into());
                 }
             }
+            EditCommand::SetClipSounds(sounds) => {
+                if sounds.is_empty() {
+                    return Ok(());
+                }
+                sound_indices = clip_sound_indices(self.project(), sounds)?;
+            }
             _ => {}
         }
         let explicit_automation = match &command {
@@ -252,13 +302,18 @@ impl Session {
             }
         } else {
             self.end_automation_gesture();
-            Gesture::of(&command, self.project())
+            match &command {
+                EditCommand::SetClipSounds(sounds) => {
+                    Gesture::clips(sounds, &sound_indices, self.project())
+                }
+                _ => Gesture::of(&command, self.project()),
+            }
         };
         let now = std::time::Instant::now();
         let continuing = gesture.is_some()
-            && self.gesture.is_some_and(|(previous, at)| {
-                Some(previous) == gesture
-                    && (explicit_automation || now.duration_since(at) < self.gesture_gap)
+            && self.gesture.as_ref().is_some_and(|(previous, at)| {
+                Some(previous) == gesture.as_ref()
+                    && (explicit_automation || now.duration_since(*at) < self.gesture_gap)
             });
         let generation = self.editor.generation();
         let master_only = matches!(
@@ -315,6 +370,15 @@ impl Session {
                     clip.fades = fades.fit(length_ticks);
                     clip.pitch_cents = pitch_cents;
                     clip.reverse = reverse;
+                }
+            }
+            EditCommand::SetClipSounds(sounds) => {
+                for (sound, index) in sounds.into_iter().zip(sound_indices) {
+                    let clip = &mut project.clips[index];
+                    clip.gain = sound.gain;
+                    clip.fades = sound.fades.fit(clip.length_ticks);
+                    clip.pitch_cents = sound.pitch_cents;
+                    clip.reverse = sound.reverse;
                 }
             }
             EditCommand::SetSwitch { track, switch, on } => {

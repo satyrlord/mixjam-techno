@@ -231,8 +231,8 @@ fn step_synth_compact_layout_preserves_the_draft_and_keeps_both_panes_reachable(
         assert!(
             output.shapes.iter().any(|shape| matches!(
                 &shape.shape,
-                egui::Shape::Circle(circle) if echo.contains(circle.center)
-                    && circle.fill == controls::Palette::Olive.accent()
+                egui::Shape::Rect(track) if echo.contains_rect(track.rect)
+                    && track.fill == controls::Palette::Olive.accent()
             )),
             "Enabled pattern effects must retain the board's olive accent."
         );

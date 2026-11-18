@@ -3,6 +3,125 @@ use super::*;
 use crate::application::render_worker::{RenderRequest, RenderResult};
 use std::sync::mpsc;
 
+fn clip_sound(clip: &Clip) -> ClipSound {
+    ClipSound {
+        id: clip.id,
+        gain: clip.gain,
+        fades: clip.fades,
+        pitch_cents: clip.pitch_cents,
+        reverse: clip.reverse,
+    }
+}
+
+#[test]
+fn clip_sound_fade_in_gesture_includes_the_reduction_of_fade_out() {
+    let mut app = fixture();
+    app.gesture_gap = std::time::Duration::MAX;
+    app.editor
+        .transact(|project| {
+            for clip in &mut project.clips {
+                clip.length_ticks = 16;
+                clip.fades.fade_out.ticks = 8;
+            }
+        })
+        .unwrap();
+    let before = app.project().clone();
+    for ticks in [10, 12] {
+        let sounds = app
+            .project()
+            .clips
+            .iter()
+            .map(|clip| {
+                let mut sound = clip_sound(clip);
+                sound.fades.fade_in.ticks = ticks;
+                sound
+            })
+            .collect();
+        app.edit(EditCommand::SetClipSounds(sounds)).unwrap();
+    }
+    assert!(
+        app.project()
+            .clips
+            .iter()
+            .all(|clip| { clip.fades.fade_in.ticks == 12 && clip.fades.fade_out.ticks == 4 })
+    );
+    let after = app.project().clone();
+    assert!(app.history_step(false).unwrap());
+    assert_eq!(app.project(), &before);
+    assert!(app.history_step(true).unwrap());
+    assert_eq!(app.project(), &after);
+}
+
+#[test]
+fn clip_sound_gestures_use_the_exact_set_of_targets() {
+    let mut app = fixture();
+    app.gesture_gap = std::time::Duration::MAX;
+    app.place(1, 2, 0).unwrap();
+    let before = app.project().clone();
+    let edit_gain = |app: &mut Session, order: [usize; 2], gain: f32| {
+        let sounds = order
+            .into_iter()
+            .map(|index| ClipSound {
+                gain,
+                ..clip_sound(&app.project().clips[index])
+            })
+            .collect();
+        app.edit(EditCommand::SetClipSounds(sounds)).unwrap();
+    };
+    edit_gain(&mut app, [1, 0], 0.8);
+    edit_gain(&mut app, [0, 1], 0.6);
+    let first_selection = app.project().clone();
+    edit_gain(&mut app, [0, 2], 0.4);
+    assert!(app.history_step(false).unwrap());
+    assert_eq!(app.project(), &first_selection);
+    assert!(app.history_step(false).unwrap());
+    assert_eq!(app.project(), &before);
+}
+
+#[test]
+fn clip_sound_edit_rejects_duplicate_targets_atomically() {
+    let mut app = fixture();
+    let before = app.project().clone();
+    let sound = clip_sound(&before.clips[0]);
+    let command = EditCommand::SetClipSounds(vec![ClipSound { gain: 0.5, ..sound }, sound]);
+    assert_eq!(
+        app.edit(command).unwrap_err(),
+        "A selected clip appears more than once."
+    );
+    assert_eq!(app.project(), &before);
+    assert!(!app.has_history_step(false));
+}
+
+#[test]
+fn clip_length_gesture_includes_fades_already_shortened_to_fit() {
+    let mut app = fixture();
+    app.gesture_gap = std::time::Duration::MAX;
+    app.editor
+        .transact(|project| project.clips[0].fades.fade_out.ticks = TICKS_PER_BAR)
+        .unwrap();
+    let before = app.project().clone();
+    for length_ticks in [TICKS_PER_BAR / 2, TICKS_PER_BAR / 4] {
+        let clip = &app.project().clips[0];
+        app.edit(EditCommand::SetClip {
+            id: clip.id,
+            start_tick: clip.start_tick,
+            gain: clip.gain,
+            offset_frames: clip.offset_frames,
+            length_ticks,
+            fades: clip.fades.fit(length_ticks),
+            pitch_cents: clip.pitch_cents,
+            reverse: clip.reverse,
+        })
+        .unwrap();
+    }
+    assert_eq!(
+        app.project().clips[0].fades.fade_out.ticks,
+        TICKS_PER_BAR / 4
+    );
+    assert!(app.history_step(false).unwrap());
+    assert_eq!(app.project(), &before);
+}
+
 #[test]
 #[ignore = "opens the physical audio output for silence"]
 fn idle_audio_keeps_polling_for_capture_notices() {

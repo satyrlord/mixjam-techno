@@ -103,7 +103,7 @@ mod sources;
 mod tests;
 mod transport;
 mod wave_scan;
-pub use edit::{EditCommand, TrackSwitch};
+pub use edit::{ClipSound, EditCommand, TrackSwitch};
 use files::Export;
 use gesture::{GESTURE_GAP, Gesture};
 pub use library::LibraryView;

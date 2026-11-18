@@ -141,9 +141,11 @@ are wanted. The measured window tells which fit together. If there is a tie,
 the order in which they were opened decides. `src/ui/room.rs` never changes the
 saved layout.
 
-`src/ui/inspector.rs` draws the Inspector. Its page follows the clip and track
-selection. Its fields use the Mixer controls and the clip menu fields under
-their own names, and edit through `SetTrack` and `SetClip`. `SetTrack` replaces
+`src/ui/inspector.rs` draws the Inspector, and `src/ui/inspector/clip.rs` its
+clip pages. Its page follows the clip and track selection. Its fields use the
+Mixer controls and the clip painting under their own names, and edit through
+`SetTrack`, `SetClip`, and `SetClipSounds`, which sets the gain, fades, pitch,
+and reverse of several clips as one step. `SetTrack` replaces
 one track with its processing. The Mixer and the Mix view send `SetTrackMix`,
 which replaces only the mixer settings of one track. Thus a view that edits one
 track copies only that track in each frame, not all tracks. The page and

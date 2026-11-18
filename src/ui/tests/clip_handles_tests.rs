@@ -4,6 +4,33 @@
 use super::*;
 
 #[test]
+fn opening_the_clip_menu_keeps_the_saved_length() {
+    for length_ticks in [1, 300 * TICKS_PER_BAR] {
+        let (ctx, mut app) = fixture();
+        ctx.enable_accesskit();
+        let clip = app.session.project().clips[0].clone();
+        app.session
+            .edit(EditCommand::SetClip {
+                id: clip.id,
+                start_tick: clip.start_tick,
+                gain: clip.gain,
+                offset_frames: clip.offset_frames,
+                length_ticks,
+                fades: clip.fades,
+                pitch_cents: clip.pitch_cents,
+                reverse: clip.reverse,
+            })
+            .unwrap();
+        let before = app.session.project().clone();
+        app.select_clip(clip.id, false);
+        app.clip_menu.by_key = true;
+        let output = frame(&ctx, &mut app, vec![], egui::Modifiers::NONE);
+        accessible_node(&output, "Clip length (bars)");
+        assert_eq!(app.session.project(), &before);
+    }
+}
+
+#[test]
 fn clip_fade_handles_and_placement_keep_imported_saved_span_timing() {
     let (ctx, mut app) = fixture();
     let mut sample = app.session.library().samples[0].clone();

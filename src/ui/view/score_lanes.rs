@@ -2,7 +2,6 @@
 //! overlays and the playhead, and the clicks, menus, and drags on the lanes.
 use super::timeline::ScoreFrame;
 use super::*;
-use mixjam_techno::application::PeakState;
 use std::ops::ControlFlow;
 
 impl MixJamApp {
@@ -580,36 +579,5 @@ fn paint_lane_grid(
             painter.rect_filled(area.expand2(Vec2::new(6.0, 1.0)), 0.0, roles().canvas);
             painter.galley(area.min, hint, roles().muted);
         }
-    }
-}
-
-/// The waveform of an on-screen clip, kept per clip and rebuilt only when its
-/// key changes. None while the sound's peaks are pending or unavailable.
-fn clip_wave<'a>(
-    waves: &'a mut std::collections::HashMap<u64, waveform::ClipWave>,
-    session: &Session,
-    clip: &Clip,
-    sample: &Sample,
-    tick_width: f32,
-    bpm: f64,
-) -> Option<&'a waveform::ClipWave> {
-    match session.sample_peaks(sample.id) {
-        PeakState::Ready(peaks) => {
-            let key = waveform::ClipWaveKey::new(
-                clip,
-                &peaks,
-                session.catalog_revision(),
-                tick_width,
-                frames_per_tick(sample, bpm),
-            );
-            let wave = waves
-                .entry(clip.id)
-                .or_insert_with(|| waveform::ClipWave::new(key, &peaks));
-            if wave.key != key {
-                *wave = waveform::ClipWave::new(key, &peaks);
-            }
-            Some(&*wave)
-        }
-        PeakState::Pending | PeakState::Unavailable => None,
     }
 }

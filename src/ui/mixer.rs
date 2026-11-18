@@ -23,9 +23,7 @@ pub(super) use buttons::{
     polarity_button, send_knob, switch_button, unity_button,
 };
 use gain::*;
-pub(super) use gain::{
-    fraction_gain, gain_fraction, gain_keys, gain_semantics, gain_value, gain_value_in,
-};
+pub(super) use gain::{FaderRange, gain_keys, gain_semantics, gain_value, gain_value_in};
 pub(super) use strips::{return_state, show, track_state};
 
 /// What the mixer changed: the mix of each edited track with its index,

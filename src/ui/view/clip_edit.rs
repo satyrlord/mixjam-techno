@@ -6,7 +6,7 @@ use mixjam_techno::application::{
 };
 
 /// A clip gain at or below this level is silence.
-const CLIP_SILENCE_DB: f32 = -60.0;
+pub(in super::super) const CLIP_SILENCE_DB: f32 = -60.0;
 
 /// The lane context menu: what it was opened on, and where.
 #[derive(Default)]
@@ -42,8 +42,7 @@ impl MixJamApp {
     /// Exact values for one clip. Drags on the clip's edges, fade handles, and
     /// gain line change the same values. A clip's gain, trim, length, fades,
     /// pitch, and reverse, as a grid of fields named "{prefix} gain" and so on:
-    /// "Clip" in the clip menu, "Inspector clip" in the Inspector, which also
-    /// shows its start.
+    /// "Clip" in the clip menu. The Inspector has its own clip page.
     pub(in super::super) fn clip_properties(&mut self, ui: &mut egui::Ui, id: u64, prefix: &str) {
         let Some(clip) = self
             .session
@@ -71,36 +70,12 @@ impl MixJamApp {
         let mut length = clip.length_ticks;
         let mut pitch = clip.pitch_cents;
         let mut reverse = clip.reverse;
-        let mut start = clip.start_tick;
         let mut change = false;
         let mut fades = clip.fades;
         egui::Grid::new("clip_properties")
             .num_columns(2)
-            .spacing(Vec2::new(if prefix == "Clip" { 10.0 } else { 6.0 }, 6.0))
+            .spacing(Vec2::new(10.0, 6.0))
             .show(ui, |ui| {
-                if prefix != "Clip" {
-                    ui.label("Start (bar)");
-                    let mut bar = f64::from(start) / f64::from(TICKS_PER_BAR) + 1.0;
-                    if name_control(
-                        ui.add(
-                            egui::DragValue::new(&mut bar)
-                                .range(1.0..=f64::INFINITY)
-                                .speed(1.0 / 16.0)
-                                .max_decimals(3),
-                        ),
-                        &format!("{prefix} start (bar)"),
-                    )
-                    .hover_hint(
-                        "The bar the clip starts on; 1.5 is halfway through bar 1. Its lane \
-                         stays the same.",
-                    )
-                    .changed()
-                    {
-                        start = ((bar - 1.0) * f64::from(TICKS_PER_BAR)).round().max(0.0) as u32;
-                        change = true;
-                    }
-                    ui.end_row();
-                }
                 // The mixer shows dB, so the clip does too. An untouched value
                 // keeps its exact saved amplitude.
                 ui.label("Gain (dB)");
@@ -149,18 +124,21 @@ impl MixJamApp {
                 .changed();
                 ui.end_row();
                 ui.label("Length (bars)");
-                let mut bars = length as f64 / TICKS_PER_BAR as f64;
+                let longest = MAX_TICKS - clip.start_tick;
+                let ticks_per_bar = f64::from(TICKS_PER_BAR);
+                let mut bars = f64::from(length) / ticks_per_bar;
                 if name_control(
                     ui.add(
                         egui::DragValue::new(&mut bars)
-                            .range(1.0 / 16.0..=256.0)
+                            .range(1.0 / ticks_per_bar..=f64::from(longest) / ticks_per_bar)
+                            .clamp_existing_to_range(false)
                             .speed(1.0 / 16.0),
                     ),
                     &format!("{prefix} length (bars)"),
                 )
                 .changed()
                 {
-                    length = (bars * TICKS_PER_BAR as f64).round().max(1.0) as u32;
+                    length = ((bars * ticks_per_bar).round() as u32).clamp(1, longest);
                     change = true;
                 }
                 ui.end_row();
@@ -190,7 +168,7 @@ impl MixJamApp {
         if change {
             let result = self.session.edit(EditCommand::SetClip {
                 id,
-                start_tick: start,
+                start_tick: clip.start_tick,
                 gain,
                 offset_frames: offset,
                 length_ticks: length,
@@ -492,7 +470,7 @@ impl MixJamApp {
 }
 
 /// Ticks in one beat, the unit of the fade controls.
-pub(super) const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
+pub(in super::super) const TICKS_PER_BEAT: u32 = TICKS_PER_BAR / 4;
 
 /// A clip fade's length in beats, at most `room` ticks, and its curve: one
 /// row of the clip properties grid.
